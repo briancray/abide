@@ -2,12 +2,12 @@
 // from the M1 cache context (that one backs cell caching; this one is user scratch space).
 // Throws outside a request scope.
 
-import { currentScope } from "./internal/scope.ts";
+import { currentScope } from './internal/scope.ts'
 
 export function context(): Record<string, unknown> {
-  const scope = currentScope();
-  if (scope === undefined) {
-    throw new Error("context(): no active request scope — call it inside a request handler.");
-  }
-  return scope.bag;
+    const scope = currentScope()
+    if (scope === undefined) {
+        throw new Error('context(): no active request scope — call it inside a request handler.')
+    }
+    return scope.bag
 }

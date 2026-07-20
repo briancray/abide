@@ -1,0 +1,59 @@
+<script module>
+  import benchFrontend from "../../../server/rpc/benchFrontend"
+
+  // Format a nanosecond mean into the tightest readable unit — mirrors the CLI bench's `fmtNs`.
+  function fmtNs(ns) {
+    if (ns >= 1e6) return (ns / 1e6).toFixed(2) + " ms"
+    if (ns >= 1e3) return (ns / 1e3).toFixed(2) + " µs"
+    return ns.toFixed(0) + " ns"
+  }
+</script>
+
+<main class="page">
+  <h1>Frontend render bench (live)</h1>
+  <p class="lead">
+    The same corpus the CLI <code>bun run bench</code> measures, run <em>here, on this request</em>. A
+    streaming <code>GET</code> compiles each <code>.abide</code> template with the AOT emitter and times
+    its SSR <code>render</code> path, then <code>jsonl</code> streams one row per scenario — so the table
+    below fills in live via <code>&#123;#for await&#125;</code>. Hit refresh to re-run the whole corpus.
+  </p>
+
+  <p class="lead">
+    This measures <code>render</code> only: the pure server-side string build, which is genuinely
+    abide-bound. Notice the <strong>ns/row</strong> column holds roughly flat as the list grows
+    100&nbsp;→&nbsp;1000&nbsp;→&nbsp;10000 — render is O(n) in element count. (Client <code>mount</code>
+    is excluded here: in a JS DOM its large-list cost is dominated by the DOM backend's O(n)
+    <code>insertBefore</code>, not by abide.)
+  </p>
+
+  <button
+    data-testid="rerun"
+    class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white"
+    onclick={() => benchFrontend.refresh()}
+  >
+    Re-run bench
+  </button>
+
+  <table class="w-full border-collapse text-sm" data-testid="bench-table">
+    <thead>
+      <tr class="border-b border-slate-300 text-left">
+        <th class="py-1.5 pr-4">scenario</th>
+        <th class="py-1.5 pr-4 text-right">render (ns/op)</th>
+        <th class="py-1.5 pr-4 text-right">ns/row</th>
+        <th class="py-1.5 text-right">iters</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#for await row of benchFrontend()}
+        <tr class="border-b border-slate-100" data-testid="bench-row">
+          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+          <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+        </tr>
+      {:catch}
+        <tr><td colspan="4" class="py-2 text-red-600">bench failed</td></tr>
+      {/for}
+    </tbody>
+  </table>
+</main>

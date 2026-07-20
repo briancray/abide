@@ -1,46 +1,49 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
-  "vcs": {
-    "enabled": false,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
-  "files": {
-    "includes": [
-      "packages/docs/src/**/*.ts",
-      "packages/docs/e2e/**/*.ts",
-      "packages/docs/scripts/**/*.ts",
-      "packages/docs/*.ts",
-      "!**/node_modules",
-      "!**/dist",
-      "!**/.abide",
-      "!**/*.abide"
-    ]
-  },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 4,
-    "lineWidth": 100
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "preset": "recommended"
-    }
-  },
-  "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
-  },
-  "javascript": {
+    "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
+    "vcs": {
+        "enabled": false,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "files": {
+        "includes": [
+            "packages/docs/src/**/*.ts",
+            "packages/docs/e2e/**/*.ts",
+            "packages/docs/scripts/**/*.ts",
+            "packages/docs/*.ts",
+            "packages/abide/src/**/*.ts",
+            "packages/abide/bench/**/*.ts",
+            "!**/node_modules",
+            "!**/dist",
+            "!**/.abide",
+            "!**/*.abide",
+            "!**/__fixtures__"
+        ]
+    },
     "formatter": {
-      "quoteStyle": "single",
-      "semicolons": "asNeeded"
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended"
+        }
+    },
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "semicolons": "asNeeded"
+        }
     }
-  }
 }

@@ -1,4 +1,4 @@
-import { GET } from "abide/server/GET"
+import { GET } from 'abide/server/GET'
 
 // A SHARED read tagged "docs". Declaring `tags` on a shared read registers this cell in the
 // server-side tag registry, so the global `invalidate({ tags: ["docs"] })` / `refresh({ tags })`
@@ -7,10 +7,10 @@ import { GET } from "abide/server/GET"
 let runs = 0
 
 export default GET(
-  async ({ tag = "a" }: { tag?: string }) => {
-    await Bun.sleep(150)
-    runs++
-    return { tag, runs }
-  },
-  { cache: { shared: true, tags: ["docs"] } },
+    async ({ tag = 'a' }: { tag?: string }) => {
+        await Bun.sleep(150)
+        runs++
+        return { tag, runs }
+    },
+    { cache: { shared: true, tags: ['docs'] } },
 )

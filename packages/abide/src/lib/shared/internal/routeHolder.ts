@@ -9,22 +9,22 @@
 // code, keeping the server↔client split clean. It is inert on the server (nothing ever calls
 // setClientRoute there).
 
-import { signal } from "./reactive.ts";
-import type { RouteInfo } from "../../server/internal/scope.ts";
+import type { RouteInfo } from '../../server/internal/scope.ts'
+import { signal } from './reactive.ts'
 
-const clientRoute = signal<RouteInfo | undefined>(undefined);
+const clientRoute = signal<RouteInfo | undefined>(undefined)
 
 // Reactive read of the current client route. Tracks when called inside an effect/computed.
 export function readClientRoute(): RouteInfo | undefined {
-  return clientRoute();
+    return clientRoute()
 }
 
 // Replace the current client route (a fresh object each nav), waking every route()-dependent binding.
 export function setClientRoute(info: RouteInfo): void {
-  clientRoute.set(info);
+    clientRoute.set(info)
 }
 
 // Reset the holder to "no client route" (used by tests to clear leaked module state between runs).
 export function clearClientRoute(): void {
-  clientRoute.set(undefined);
+    clientRoute.set(undefined)
 }

@@ -54,6 +54,9 @@
     { title: "Machines", items: [
       { href: "/machines", label: "Agents & MCP" },
     ] },
+    { title: "Performance", items: [
+      { href: "/bench", label: "Live render bench" },
+    ] },
   ]
 
   // Clickable breadcrumb trail from the current path — each segment links to its cumulative path,

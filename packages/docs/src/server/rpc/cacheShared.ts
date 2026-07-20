@@ -1,4 +1,4 @@
-import { GET } from "abide/server/GET"
+import { GET } from 'abide/server/GET'
 
 // A SHARED read: its cache slot lives in the process-global shared store (not the per-request
 // context), so the handler runs ONCE and every later request — any tab, any identity — is served
@@ -8,9 +8,9 @@ import { GET } from "abide/server/GET"
 let runs = 0
 
 export default GET(
-  ({ tag = "s" }: { tag?: string }) => {
-    runs++
-    return { tag, runs }
-  },
-  { cache: { shared: true } },
+    ({ tag = 's' }: { tag?: string }) => {
+        runs++
+        return { tag, runs }
+    },
+    { cache: { shared: true } },
 )

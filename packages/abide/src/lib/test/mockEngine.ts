@@ -8,31 +8,41 @@
 // `turns` records the transcript the loop passed into each turn, so a test can assert the loop
 // appended tool-use / tool-result messages before the next turn.
 
-import type { AgentEngine, AgentFrame, AgentOptions, AgentTool, NeutralMessage } from "../server/internal/agentTypes.ts";
+import type {
+    AgentEngine,
+    AgentFrame,
+    AgentOptions,
+    AgentTool,
+    NeutralMessage,
+} from '../server/internal/agentTypes.ts'
 
 export interface MockEngine extends AgentEngine {
-  turns: NeutralMessage[][];
+    turns: NeutralMessage[][]
 }
 
 export function mockEngine(script: AgentFrame[][]): MockEngine {
-  let turn = 0;
-  const turns: NeutralMessage[][] = [];
+    let turn = 0
+    const turns: NeutralMessage[][] = []
 
-  const engine: MockEngine = {
-    turns,
-    async *stream(messages: NeutralMessage[], _tools: AgentTool[], _options: AgentOptions): AsyncIterable<AgentFrame> {
-      // Snapshot the transcript the loop handed us for this turn.
-      turns.push(messages.slice());
-      const plan = script[turn];
-      turn++;
-      if (plan !== undefined) {
-        for (const frame of plan) {
-          if (frame.type === "message-stop") continue; // the mock owns the boundary
-          yield frame;
-        }
-      }
-      yield { type: "message-stop" };
-    },
-  };
-  return engine;
+    const engine: MockEngine = {
+        turns,
+        async *stream(
+            messages: NeutralMessage[],
+            _tools: AgentTool[],
+            _options: AgentOptions,
+        ): AsyncIterable<AgentFrame> {
+            // Snapshot the transcript the loop handed us for this turn.
+            turns.push(messages.slice())
+            const plan = script[turn]
+            turn++
+            if (plan !== undefined) {
+                for (const frame of plan) {
+                    if (frame.type === 'message-stop') continue // the mock owns the boundary
+                    yield frame
+                }
+            }
+            yield { type: 'message-stop' }
+        },
+    }
+    return engine
 }

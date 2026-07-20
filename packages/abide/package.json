@@ -18,7 +18,9 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bench": "bun run bench/run.ts",
+    "bench:delta": "bun run bench/delta.ts"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.10.6",

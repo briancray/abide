@@ -4,8 +4,8 @@
 // of the registry that `onMenu` consumes: dispatch runs every handler registered for `name` plus
 // every all-emits handler.
 
-import { dispatchMenu } from "./internal/menuRegistry.ts";
+import { dispatchMenu } from './internal/menuRegistry.ts'
 
 export function emitMenu(name: string): void {
-  dispatchMenu(name);
+    dispatchMenu(name)
 }

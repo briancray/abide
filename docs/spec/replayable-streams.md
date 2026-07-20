@@ -2,8 +2,9 @@
 
 **Status:** design of record. The SSR streaming substrate (per-request `{#await}` / `{#for await}`
 streaming) is shipped (`streaming-ssr-plan.md` PR1–6). The `ReplayableStream` primitive, unified verb
-routing, and client-attach handoff described here are **built through step 4** (the SSR→client handoff,
-§5, landed as the client half of 4b — see *Build order* step 4); **steps 5–6 remain**. Every decision
+routing, and client-attach handoff described here are **built through step 5** (the SSR→client handoff,
+§5, landed as the client half of 4b — see *Build order* step 4; the source-derived SSR budget, §6, is
+step 5); **only step 6 (optional socket-core convergence) remains**. Every decision
 below is grounded against the code it was designed against (anchors are `file:line` as of writing). This spec supersedes two earlier `rpc-core.md` decisions — §14.1 (mutations
 not-coalesced/cached "today") and §12.2–3 (a stream bypasses the value cache; no replay buffer by
 default) — both recorded under *Superseded prior decisions* with the exact prior wording.
@@ -72,9 +73,10 @@ An implementer must know the starting point; the spec is honest about the gap.
   `channelAuth.ts:61`), which re-runs the RPC's middleware chain and passes only if it reaches the
   terminal sentinel.
 - **PR6 SSR streaming** consumes a *raw* iterator (`forAwaitStream` → `toIterator`,
-  `streamScope.ts:134-149,162-236`), renders each item as an **HTML string**, and applies one flat
-  global budget `ABIDE_SSR_STREAM_BUDGET` (default 30 000 ms, `streamScope.ts:50-51`) to every source
-  regardless of type. It emits `<abide-list id="ab-l:N">` and sets `data-ab-done` on close — but
+  `streamScope.ts:134-149,162-236`), renders each item as an **HTML string**. It once applied one flat
+  global budget `ABIDE_SSR_STREAM_BUDGET` to every source regardless of type; **step 5 made this
+  source-derived** (§6) — an abide RPC source gets no cap, only a non-abide source is bounded by the
+  now-last-resort default (300 000 ms, `streamScope.ts:50-53`). It emits `<abide-list id="ab-l:N">` and sets `data-ab-done` on close — but
   `data-ab-done` is **dead output**: no client file reads it, and the client always re-iterates.
 - **The `{#await}` claim path works** and is the precedent to mirror: `unwrapStreamSlot` + `claimAwait`
   adopt the server-resolved branch in place because the tail seed primed the read (`runtime.ts:857-903`).
@@ -293,7 +295,11 @@ known-RPC head under `src/server/rpc/`), and the `forBlock` hydrate reorder (`ru
 `begin/endStreamHandoff` + `attachForAwait` — adopt-from-`values` (A) / resume-`?from=<count>` (B) /
 attach-miss-`fresh`-replace / offline-defer) wired through `bootstrap.ts` (`emitStreamAttach.test.ts`
 proves the invariant: an RPC `{#for await}` source is never re-invoked on the client; a non-RPC source
-still re-iterates; the `{#await}` claim path is unregressed). Steps 5–6 remain.
+still re-iterates; the `{#await}` claim path is unregressed). **Step 5 (source-derived SSR budget, §6) is now built** — the
+streamer races the global `ABIDE_SSR_STREAM_BUDGET` (default raised to 300 000 ms, last-resort) ONLY for a
+non-abide source; an abide RPC source (`attachable`) awaits its items with no global cap, bounded by its
+own bilateral timeout. The budget timer is LAZILY armed (memoized `scope.budget()`), so an all-abide-source
+page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`). Only step 6 remains.
 
 - The **first** consumer starts the source (owned by the slot, §3). Each chunk is `chunks.push(chunk)`,
   `bytes += measureBytes(chunk)`, then the `waiters` are drained (resolve-and-clear). `done`/`error`/
@@ -422,13 +428,17 @@ timeout?: number }` (it already knows whether the head resolves to an RPC import
   `clearBetween` (analogous to `unwrapStreamSlot` for `{#await}`, `runtime.ts:857`) when a
   `StreamHandle` is present; only with no handle does it fall back to the current clear-and-re-run.
 
-### 6. The SSR stream budget is source-derived, not a global constant
+### 6. The SSR stream budget is source-derived, not a global constant — ✅ BUILT (step 5)
 The bound past which SSR stops waiting on a stream is the **source's own deadline**. Using the emit-time
-source tag (§5), `forAwaitStream` receives `{ abide, timeout }` per source:
-- **abide RPC source** → **no SSR cap**; the RPC's bilateral `timeout` (`ABIDE_RPC_TIMEOUT` / per-RPC
-  `timeout`), which already self-terminates the stream, is the budget.
-- **non-abide source** (raw `fetch`, unbounded local generator) → the global `ABIDE_SSR_STREAM_BUDGET`
-  cap (the PR6 30 s placeholder, `streamScope.ts:51`) — the only thing abide can't otherwise bound.
+source tag (§5), `forAwaitStream` keys the budget on whether the source is an abide RPC (the `attachable`
+tag — the same tag that gates the §5 handoff, so one tag serves both):
+- **abide RPC source** → **no SSR cap**; the streamer awaits each item directly. The RPC's bilateral
+  `timeout` (`ABIDE_RPC_TIMEOUT` / per-RPC `timeout`), which already self-terminates the stream, is the
+  budget — so no numeric timeout needs plumbing into `forAwaitStream`; it simply skips the budget race.
+- **non-abide source** (raw `fetch`, unbounded local generator) → races the global `ABIDE_SSR_STREAM_BUDGET`
+  cap (default raised from the PR6 30 s placeholder to a **last-resort 300 000 ms**, `streamScope.ts:50-53`)
+  — the only thing abide can't otherwise bound. The timer is **lazily armed** (memoized `scope.budget()`),
+  so a page whose streaming sources are all abide RPCs never schedules it.
 
 For today's single-source `{#for await}` the budget is simply that source's timeout; the earlier
 "`max(timeout)` across the block's abide sources" wording is reserved for a future multi-source block
@@ -495,7 +505,7 @@ implementation unmodified. A socket remains the right tool for an **unbounded, a
 | --- | --- |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | per-stream transcript cap in bytes (default **unbounded**, operator-set); ≤ `ABIDE_MAX_SHARED_CACHE_SIZE`; exceed → OVERFLOWED (§4) |
 | `ABIDE_ATTACH_GRACE` | retention window (ms, default 10 000) an open attachable stream is pinned awaiting the client's replay request (§5) |
-| `ABIDE_SSR_STREAM_BUDGET` | global SSR wait cap for **non-abide** sources only (§6); abide sources use their own `timeout` |
+| `ABIDE_SSR_STREAM_BUDGET` | last-resort global SSR wait cap for **non-abide** sources only (default **300 000 ms**; §6); abide sources use their own `timeout` and get no cap |
 | `ABIDE_MAX_SHARED_CACHE_SIZE` | unchanged; now fed incrementally-measured stream bytes (§4) |
 
 ## Build order (independently shippable, each with its test matrix)
@@ -568,9 +578,16 @@ wired through `bootstrap.ts`. Tests (`emitStreamAttach.test.ts`):
 - offline at hydrate → open stream defers, resumes on `online()`; completed adopts with no network.
 - regression: `{#await}` claim path (`unwrapStreamSlot`/`claimAwait`) still works. ✅
 
-**5. Source-derived SSR budget** (§6) — emit-time `{ abide, timeout }` tag; abide source → no cap,
-non-abide → global cap. Tests: an abide stream past 30 s but within its `timeout` is not cut off; a raw
-generator past `ABIDE_SSR_STREAM_BUDGET` is.
+**5. Source-derived SSR budget** (§6) ✅ **built** — the streamer keys the budget on the `attachable`
+source tag: an abide RPC source awaits its items with no global cap (bounded by its own bilateral
+`timeout`); only a non-abide source races the last-resort global `ABIDE_SSR_STREAM_BUDGET` (default raised
+to 300 000 ms). The budget timer is lazily armed (memoized `scope.budget()`) → an all-abide page schedules
+none. Tests (`streamBudget.test.ts`, deterministic — manual source + budget, no wall-clock racing):
+- an abide source with the budget fired immediately still streams every item to `complete` (not cut off),
+  and finalizes a mode-A handoff record (`done`, full `values`).
+- a non-abide source is cut off the moment the budget fires (generator returns, no `complete` frame).
+Refs: `ui/internal/streamScope.ts` (`forAwaitStream` race + lazy `budget()`), `shared/internal/context.ts`
+(`StreamScope.budget`).
 
 **6. (Optional) Socket-core convergence** — extract the shared append-only buffer + subscriber set with
 two read disciplines. **Gated behind a socket-parity regression suite** (tail:N replay, drop-oldest

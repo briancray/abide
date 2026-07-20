@@ -8,11 +8,11 @@
 // Factored out of the mux/proxy wiring so the mapping is unit-testable against a real client cell
 // without a live WebSocket.
 
-import type { Cell } from "../../shared/cell.ts";
-import type { CacheFrame } from "../../server/internal/cacheChannels.ts";
+import type { CacheFrame } from '../../server/internal/cacheChannels.ts'
+import type { Cell } from '../../shared/cell.ts'
 
 export function applyCacheFrame<Args, T>(cell: Cell<Args, T>, args: Args, frame: CacheFrame): void {
-  if (frame.verb === "invalidate") cell.invalidate(args);
-  else if (frame.verb === "refresh") cell.refresh(args);
-  else if (frame.verb === "amend") cell.amend(args, frame.value as T);
+    if (frame.verb === 'invalidate') cell.invalidate(args)
+    else if (frame.verb === 'refresh') cell.refresh(args)
+    else if (frame.verb === 'amend') cell.amend(args, frame.value as T)
 }

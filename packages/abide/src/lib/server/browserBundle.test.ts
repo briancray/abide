@@ -9,7 +9,7 @@
 // SUBPROCESS so setting global `window` can't pollute the shared test process (which would flip the
 // isomorphic side-detection and break other tests).
 
-import { test, expect } from "bun:test";
+import { expect, test } from 'bun:test'
 
 const HELPER = (dir: string, servePath: string) => `
 import { Window } from "happy-dom";
@@ -50,24 +50,29 @@ if (!sameNode) { console.log("RESULT: recreated-not-claimed"); process.exit(4); 
 if (!notCleared) { console.log("RESULT: container-cleared"); process.exit(5); }
 if (before === "Count: 0" && after === "Count: 1") { console.log("RESULT: attached-interactive"); process.exit(0); }
 console.log("RESULT: not-interactive before=" + before + " after=" + after); process.exit(2);
-`;
+`
 
-test("built client bundle ATTACH-hydrates the SSR DOM (same node, no clear) + stays interactive", async () => {
-  const dir = `/tmp/abide-bt-${crypto.randomUUID()}`;
-  const servePath = `${import.meta.dir}/../cli/serve.ts`;
-  const helperPath = `${dir}/run.ts`;
-  await Bun.write(helperPath, HELPER(dir, servePath));
-  // abide package root (so `happy-dom` resolves) is three dirs up from src/lib/server.
-  const pkgRoot = `${import.meta.dir}/../../..`;
-  const proc = Bun.spawnSync(["bun", "run", helperPath], { cwd: pkgRoot, stdout: "pipe", stderr: "pipe" });
-  const out = proc.stdout.toString() + proc.stderr.toString();
-  await Bun.$`rm -rf ${dir}`.quiet().nothrow();
-  // "attached-interactive" == the server button was the SAME node after hydrate (sameNode), the
-  // container was never cleared (notCleared), AND the counter still increments on that claimed node.
-  if (!out.includes("RESULT: attached-interactive")) throw new Error("browser attach-hydration failed:\n" + out);
-  expect(out).toContain("RESULT: attached-interactive");
-  expect(proc.exitCode).toBe(0);
-}, 30000);
+test('built client bundle ATTACH-hydrates the SSR DOM (same node, no clear) + stays interactive', async () => {
+    const dir = `/tmp/abide-bt-${crypto.randomUUID()}`
+    const servePath = `${import.meta.dir}/../cli/serve.ts`
+    const helperPath = `${dir}/run.ts`
+    await Bun.write(helperPath, HELPER(dir, servePath))
+    // abide package root (so `happy-dom` resolves) is three dirs up from src/lib/server.
+    const pkgRoot = `${import.meta.dir}/../../..`
+    const proc = Bun.spawnSync(['bun', 'run', helperPath], {
+        cwd: pkgRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    const out = proc.stdout.toString() + proc.stderr.toString()
+    await Bun.$`rm -rf ${dir}`.quiet().nothrow()
+    // "attached-interactive" == the server button was the SAME node after hydrate (sameNode), the
+    // container was never cleared (notCleared), AND the counter still increments on that claimed node.
+    if (!out.includes('RESULT: attached-interactive'))
+        throw new Error(`browser attach-hydration failed:\n${out}`)
+    expect(out).toContain('RESULT: attached-interactive')
+    expect(proc.exitCode).toBe(0)
+}, 30000)
 
 // TODO #6 — a PRODUCTION build (`abide start`/`abide build`, i.e. `serve({ dev: false })`) MINIFIES
 // the client bundle; dev does not. Prove (a) minification actually engaged (the prod bundle is
@@ -105,21 +110,26 @@ const after = (win.document.body.textContent.match(/Count:\\s*\\d+/)||[])[0];
 if (!sameNode) { console.log("RESULT: recreated-not-claimed"); process.exit(4); }
 if (before === "Count: 0" && after === "Count: 1") { console.log("RESULT: minified-attached-interactive"); process.exit(0); }
 console.log("RESULT: not-interactive before=" + before + " after=" + after); process.exit(2);
-`;
+`
 
-test("production (minified) client bundle is smaller AND still attach-hydrates + stays interactive", async () => {
-  const dir = `/tmp/abide-min-${crypto.randomUUID()}`;
-  const servePath = `${import.meta.dir}/../cli/serve.ts`;
-  const helperPath = `${dir}/run.ts`;
-  await Bun.write(helperPath, MINIFY_HELPER(dir, servePath));
-  const pkgRoot = `${import.meta.dir}/../../..`;
-  const proc = Bun.spawnSync(["bun", "run", helperPath], { cwd: pkgRoot, stdout: "pipe", stderr: "pipe" });
-  const out = proc.stdout.toString() + proc.stderr.toString();
-  await Bun.$`rm -rf ${dir}`.quiet().nothrow();
-  if (!out.includes("RESULT: minified-attached-interactive")) throw new Error("minified bundle hydration failed:\n" + out);
-  expect(out).toContain("RESULT: minified-attached-interactive");
-  expect(proc.exitCode).toBe(0);
-}, 30000);
+test('production (minified) client bundle is smaller AND still attach-hydrates + stays interactive', async () => {
+    const dir = `/tmp/abide-min-${crypto.randomUUID()}`
+    const servePath = `${import.meta.dir}/../cli/serve.ts`
+    const helperPath = `${dir}/run.ts`
+    await Bun.write(helperPath, MINIFY_HELPER(dir, servePath))
+    const pkgRoot = `${import.meta.dir}/../../..`
+    const proc = Bun.spawnSync(['bun', 'run', helperPath], {
+        cwd: pkgRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    const out = proc.stdout.toString() + proc.stderr.toString()
+    await Bun.$`rm -rf ${dir}`.quiet().nothrow()
+    if (!out.includes('RESULT: minified-attached-interactive'))
+        throw new Error(`minified bundle hydration failed:\n${out}`)
+    expect(out).toContain('RESULT: minified-attached-interactive')
+    expect(proc.exitCode).toBe(0)
+}, 30000)
 
 // §5 hydration seed replay in a REAL browser env: an SSR'd `{await greet(...)}` records its value
 // into the seed, and the client replays it on hydration so the RPC is NOT re-fetched. The fetch spy
@@ -151,19 +161,23 @@ if (threw) { console.log("THREW: " + threw); process.exit(1); }
 const text = win.document.body.textContent;
 if (rpcCalls === 0 && text.includes("hi ada") && !text.includes("REFETCHED")) { console.log("RESULT: replayed"); process.exit(0); }
 console.log("RESULT: refetched rpcCalls=" + rpcCalls + " text=" + JSON.stringify(text)); process.exit(2);
-`;
+`
 
-test("client replays the SSR seed on hydration without re-fetching the RPC", async () => {
-  const dir = `/tmp/abide-seed-${crypto.randomUUID()}`;
-  const servePath = `${import.meta.dir}/../cli/serve.ts`;
-  const getPath = `${import.meta.dir}/GET.ts`;
-  const helperPath = `${dir}/run.ts`;
-  await Bun.write(helperPath, SEED_HELPER(dir, servePath, getPath));
-  const pkgRoot = `${import.meta.dir}/../../..`;
-  const proc = Bun.spawnSync(["bun", "run", helperPath], { cwd: pkgRoot, stdout: "pipe", stderr: "pipe" });
-  const out = proc.stdout.toString() + proc.stderr.toString();
-  await Bun.$`rm -rf ${dir}`.quiet().nothrow();
-  if (!out.includes("RESULT: replayed")) throw new Error("seed-replay failed:\n" + out);
-  expect(out).toContain("RESULT: replayed");
-  expect(proc.exitCode).toBe(0);
-}, 30000);
+test('client replays the SSR seed on hydration without re-fetching the RPC', async () => {
+    const dir = `/tmp/abide-seed-${crypto.randomUUID()}`
+    const servePath = `${import.meta.dir}/../cli/serve.ts`
+    const getPath = `${import.meta.dir}/GET.ts`
+    const helperPath = `${dir}/run.ts`
+    await Bun.write(helperPath, SEED_HELPER(dir, servePath, getPath))
+    const pkgRoot = `${import.meta.dir}/../../..`
+    const proc = Bun.spawnSync(['bun', 'run', helperPath], {
+        cwd: pkgRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    const out = proc.stdout.toString() + proc.stderr.toString()
+    await Bun.$`rm -rf ${dir}`.quiet().nothrow()
+    if (!out.includes('RESULT: replayed')) throw new Error(`seed-replay failed:\n${out}`)
+    expect(out).toContain('RESULT: replayed')
+    expect(proc.exitCode).toBe(0)
+}, 30000)

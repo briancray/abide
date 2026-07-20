@@ -5,14 +5,14 @@
 // into the client bundle. The server and the client MUST compute the identical name so an auto-
 // subscribing browser cell joins exactly the channel the server publishes on.
 
-import { canonicalKey } from "./codec.ts";
+import { canonicalKey } from './codec.ts'
 
 // Reserved `@rpc:` namespace keeps a cache channel distinct from a bare user-socket name (which
 // never carries `@`/`:`). Kept in lockstep with the server prefix in cacheChannels.ts / channelAuth.ts.
-const RPC_CHANNEL_PREFIX = "@rpc:";
+const RPC_CHANNEL_PREFIX = '@rpc:'
 
 // Deterministic channel name for a `(rpc,args)` pair. Stable for canonically-equal args, distinct
 // for different args or a different rpc.
 export function cacheChannelName(rpcName: string, args: unknown): string {
-  return RPC_CHANNEL_PREFIX + rpcName + ":" + canonicalKey(args);
+    return `${RPC_CHANNEL_PREFIX + rpcName}:${canonicalKey(args)}`
 }

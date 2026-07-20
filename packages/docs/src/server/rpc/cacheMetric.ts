@@ -1,4 +1,4 @@
-import { GET } from "abide/server/GET"
+import { GET } from 'abide/server/GET'
 
 // A read keyed by the WHOLE args object `{ team, id }`. Each distinct pair is its own cache slot, so
 // a partial selector like `invalidate({ team: "red" })` matches every superset slot (both red rows)
@@ -6,6 +6,6 @@ import { GET } from "abide/server/GET"
 let runs = 0
 
 export default GET(({ team, id }: { team: string; id: number }) => {
-  runs++
-  return { team, id, runs }
+    runs++
+    return { team, id, runs }
 })

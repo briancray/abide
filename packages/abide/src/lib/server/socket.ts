@@ -7,46 +7,47 @@
 // One socket per file in `src/server/sockets/<name>.ts`; the name comes from the filename. This
 // core is single-process (S3.3) — tail buffer + fanout live in one server process.
 
-import { SocketHub, DROP } from "./internal/socketHub.ts";
+import { type DROP, SocketHub } from './internal/socketHub.ts'
 
 // A mediating handler may return the transformed value to publish, or `void`/`DROP` to suppress
 // the client publish. `DROP` is the explicit drop signal; a bare `void`/`undefined` return drops
 // too.
 export interface SocketOptions<T> {
-  tail?: number;
-  ttl?: number;
-  clientPublish?: boolean;
-  schema?: unknown;
-  clients?: unknown;
-  handler?: (message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>;
-  crossOrigin?: unknown;
+    tail?: number
+    ttl?: number
+    clientPublish?: boolean
+    schema?: unknown
+    clients?: unknown
+    // biome-ignore lint/suspicious/noConfusingVoidType: void lets a side-effect-only handler (returns nothing) be assignable; undefined would force an explicit return
+    handler?: (message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>
+    crossOrigin?: unknown
 }
 
 // Internal handle carried on `__socket`: the resolved options plus the transport ingress path.
 export interface SocketInternals<T> {
-  options: SocketOptions<T>;
-  ingressPublish(message: T): Promise<void>;
-  tailSnapshot(): T[];
+    options: SocketOptions<T>
+    ingressPublish(message: T): Promise<void>
+    tailSnapshot(): T[]
 }
 
 export interface Socket<T> extends AsyncIterable<T> {
-  publish(message: T): void;
-  readonly __socket: SocketInternals<T>;
+    publish(message: T): void
+    readonly __socket: SocketInternals<T>
 }
 
 export function socket<T>(options?: SocketOptions<T>): Socket<T> {
-  const hub = new SocketHub<T>(options ?? {});
-  return {
-    publish(message: T): void {
-      hub.publish(message);
-    },
-    [Symbol.asyncIterator](): AsyncIterator<T> {
-      return hub.subscribe();
-    },
-    __socket: {
-      options: hub.options,
-      ingressPublish: (message: T): Promise<void> => hub.ingressPublish(message),
-      tailSnapshot: (): T[] => hub.tailSnapshot(),
-    },
-  };
+    const hub = new SocketHub<T>(options ?? {})
+    return {
+        publish(message: T): void {
+            hub.publish(message)
+        },
+        [Symbol.asyncIterator](): AsyncIterator<T> {
+            return hub.subscribe()
+        },
+        __socket: {
+            options: hub.options,
+            ingressPublish: (message: T): Promise<void> => hub.ingressPublish(message),
+            tailSnapshot: (): T[] => hub.tailSnapshot(),
+        },
+    }
 }

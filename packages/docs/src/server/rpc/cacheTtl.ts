@@ -1,4 +1,4 @@
-import { GET } from "abide/server/GET"
+import { GET } from 'abide/server/GET'
 
 // A SHARED read with a TTL: the process-global slot is served from cache until it is `ttl` ms old,
 // then the next read re-runs the handler. `runs` counts real executions, so two `raw()` fetches
@@ -7,9 +7,9 @@ import { GET } from "abide/server/GET"
 let runs = 0
 
 export default GET(
-  ({ tag = "t" }: { tag?: string }) => {
-    runs++
-    return { tag, runs }
-  },
-  { cache: { shared: true, ttl: 700 } },
+    ({ tag = 't' }: { tag?: string }) => {
+        runs++
+        return { tag, runs }
+    },
+    { cache: { shared: true, ttl: 700 } },
 )

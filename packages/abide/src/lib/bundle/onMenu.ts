@@ -6,14 +6,14 @@
 // Returns an unsubscribe function. The native shell / launcher drives the other side by calling
 // `emitMenu(name)` when a menu item is chosen.
 
-import { registerAll, registerNamed, type MenuHandler } from "./internal/menuRegistry.ts";
+import { type MenuHandler, registerAll, registerNamed } from './internal/menuRegistry.ts'
 
-export function onMenu(name: string, handler: MenuHandler): () => void;
-export function onMenu(handler: MenuHandler): () => void;
+export function onMenu(name: string, handler: MenuHandler): () => void
+export function onMenu(handler: MenuHandler): () => void
 export function onMenu(nameOrHandler: string | MenuHandler, handler?: MenuHandler): () => void {
-  if (typeof nameOrHandler === "string") {
-    if (handler === undefined) throw new TypeError("onMenu(name, handler): handler is required");
-    return registerNamed(nameOrHandler, handler);
-  }
-  return registerAll(nameOrHandler);
+    if (typeof nameOrHandler === 'string') {
+        if (handler === undefined) throw new TypeError('onMenu(name, handler): handler is required')
+        return registerNamed(nameOrHandler, handler)
+    }
+    return registerAll(nameOrHandler)
 }

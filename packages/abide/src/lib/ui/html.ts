@@ -10,14 +10,14 @@
 // A branded pre-escaped HTML string. The brand lets a renderer distinguish trusted markup from a
 // plain string without re-escaping it.
 export interface RawHtml {
-  readonly __abideRawHtml: string;
+    readonly __abideRawHtml: string
 }
 
 export function html(strings: TemplateStringsArray | string, ...values: unknown[]): RawHtml {
-  if (typeof strings === "string") return { __abideRawHtml: strings };
-  let out = strings[0] ?? "";
-  for (let index = 0; index < values.length; index++) {
-    out += String(values[index]) + (strings[index + 1] ?? "");
-  }
-  return { __abideRawHtml: out };
+    if (typeof strings === 'string') return { __abideRawHtml: strings }
+    let out = strings[0] ?? ''
+    for (let index = 0; index < values.length; index++) {
+        out += String(values[index]) + (strings[index + 1] ?? '')
+    }
+    return { __abideRawHtml: out }
 }

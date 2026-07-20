@@ -13,18 +13,22 @@
 // compose([outer, ..., inner], handler) builds the onion so the FIRST middleware is the
 // outermost layer: it runs first on the way in and last on the way out.
 
-export type Middleware = (next: () => Response | Promise<Response>) => Response | Promise<Response>;
+export type Middleware = (next: () => Response | Promise<Response>) => Response | Promise<Response>
 
-export function compose(mws: Middleware[], handler: () => Response | Promise<Response>): () => Promise<Response> {
-  return async (): Promise<Response> => {
-    // Fold from the innermost middleware outward so each layer closes over the layer
-    // beneath it. Start with the bare handler as the deepest `next`.
-    let next: () => Response | Promise<Response> = handler;
-    for (let i = mws.length - 1; i >= 0; i--) {
-      const middleware = mws[i]!;
-      const inner = next;
-      next = () => middleware(inner);
+export function compose(
+    mws: Middleware[],
+    handler: () => Response | Promise<Response>,
+): () => Promise<Response> {
+    return async (): Promise<Response> => {
+        // Fold from the innermost middleware outward so each layer closes over the layer
+        // beneath it. Start with the bare handler as the deepest `next`.
+        let next: () => Response | Promise<Response> = handler
+        for (let i = mws.length - 1; i >= 0; i--) {
+            const middleware = mws[i]
+            if (middleware === undefined) continue
+            const inner = next
+            next = () => middleware(inner)
+        }
+        return next()
     }
-    return next();
-  };
 }

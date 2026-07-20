@@ -7,6 +7,6 @@
 // `emit`/`navigate` items carry an optional platform `shortcut` (e.g. "Cmd+N").
 
 export type BundleMenuItem =
-  | { separator: true }
-  | { label: string; emit: string; shortcut?: string }
-  | { label: string; navigate: string; shortcut?: string };
+    | { separator: true }
+    | { label: string; emit: string; shortcut?: string }
+    | { label: string; navigate: string; shortcut?: string }

@@ -465,7 +465,22 @@ the known shortcuts and gaps. Ordered by impact.
     the source's own RPC timeout** (global cap only for non-abide sources). Limits: single-process
     (backplane parked), buffer bound for infinite streams. PR6 is the shipped SSR substrate underneath.
     Spec supersedes rpc-core §14.1 (mutations never coalesced) + §12.2–3 (no HTTP-stream replay); CLAUDE.md
-    cache opt updated. **Build order in the spec; not yet implemented.**
+    cache opt updated. **Build order in the spec.** Steps 1a–4 (primitive, cell integration, mutation
+    routing, shared streaming, client attach + resume transport) shipped previously.
+    **STEP 5 LANDED — source-derived SSR budget (§6):** the `{#for await}` SSR streamer no longer applies
+    one flat global cap to every source. An abide RPC source (the emitter's `attachable` tag) awaits its
+    items with NO global cap — bounded by its own bilateral RPC `timeout`, which already self-terminates
+    the stream; only a NON-abide source (raw generator / `fetch().body`) races the global
+    `ABIDE_SSR_STREAM_BUDGET`, whose default was raised from 30 s to a **last-resort 300 000 ms**. The
+    budget timer is **lazily armed** (memoized `scope.budget()` on the `StreamScope`), so a page whose
+    streaming sources are all abide RPCs never schedules the timer at all. Verified: 2 deterministic unit
+    tests (`streamBudget.test.ts` — a manual source + manually-fired budget, no wall-clock racing: an abide
+    source with the budget fired immediately still streams to `complete` + finalizes a mode-A handoff; a
+    non-abide source is cut off the instant the budget fires) + 962 unit + tsc green. Refs:
+    `ui/internal/streamScope.ts` (`forAwaitStream` race + lazy `budget()`), `shared/internal/context.ts`
+    (`StreamScope.budget`). **Remaining: only step 6 (OPTIONAL socket-core convergence — extract the shared
+    append-only buffer + subscriber set with two read disciplines; gated behind a socket-parity regression
+    suite; explicitly OFF the critical path since step 4 ships its own replay transport).**
 
 ## Tier 3 — polish / smaller shortcuts
 

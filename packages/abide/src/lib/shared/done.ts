@@ -4,8 +4,8 @@
 // completed within the single SSR pass; otherwise it becomes true reactively on the client once the
 // stream drains. Isomorphic — safe to call in a `.abide` template (imported via `abide/shared/done`).
 
-import { iterableDone } from "./internal/iterableDone.ts";
+import { iterableDone } from './internal/iterableDone.ts'
 
 export function done(iterable: unknown): boolean {
-  return iterableDone(iterable);
+    return iterableDone(iterable)
 }

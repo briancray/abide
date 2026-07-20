@@ -6,23 +6,24 @@
 //
 // Returns a disposer that tears down the underlying effect.
 
-import { effect, untrack } from "../shared/internal/reactive.ts";
+import { effect, untrack } from '../shared/internal/reactive.ts'
 
 export function watch<T>(source: () => T, handler?: (next: T, previous: T) => void): () => void {
-  if (handler === undefined) {
-    return effect(source as () => void | (() => void));
-  }
-  let first = true;
-  let previous: T;
-  return effect(() => {
-    const next = source();
-    if (first) {
-      first = false;
-      previous = next;
-      return;
+    if (handler === undefined) {
+        // biome-ignore lint/suspicious/noConfusingVoidType: mirrors effect()'s param — the thunk returns nothing or a cleanup fn
+        return effect(source as () => void | (() => void))
     }
-    const prior = previous;
-    previous = next;
-    untrack(() => handler(next, prior));
-  });
+    let first = true
+    let previous: T
+    return effect(() => {
+        const next = source()
+        if (first) {
+            first = false
+            previous = next
+            return
+        }
+        const prior = previous
+        previous = next
+        untrack(() => handler(next, prior))
+    })
 }

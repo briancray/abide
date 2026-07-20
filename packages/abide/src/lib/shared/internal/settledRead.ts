@@ -8,23 +8,31 @@
 // symbol property); the public type stays a clean `Promise<T>`. A genuinely-pending / non-cell promise
 // carries no hint and correctly falls back to create-mount.
 
-const SETTLED: unique symbol = Symbol.for("abide.settledRead");
+const SETTLED: unique symbol = Symbol.for('abide.settledRead')
 
 interface Settled {
-  value: unknown;
+    value: unknown
 }
 
 // Tag an already-resolved coalesced-load promise with its synchronous value, then return it unchanged.
 // Non-enumerable so the marker never rides along in an object spread of the promise.
 export function markSettled<T>(promise: Promise<T>, value: T): Promise<T> {
-  Object.defineProperty(promise, SETTLED, { value: { value } as Settled, enumerable: false, configurable: true });
-  return promise;
+    Object.defineProperty(promise, SETTLED, {
+        value: { value } as Settled,
+        enumerable: false,
+        configurable: true,
+    })
+    return promise
 }
 
 // The synchronous settled value of a hinted promise, or undefined (real pending / not a promise).
 export function peekSettled(candidate: unknown): Settled | undefined {
-  if (candidate !== null && (typeof candidate === "object" || typeof candidate === "function") && SETTLED in (candidate as object)) {
-    return (candidate as Record<symbol, Settled>)[SETTLED];
-  }
-  return undefined;
+    if (
+        candidate !== null &&
+        (typeof candidate === 'object' || typeof candidate === 'function') &&
+        SETTLED in (candidate as object)
+    ) {
+        return (candidate as Record<symbol, Settled>)[SETTLED]
+    }
+    return undefined
 }

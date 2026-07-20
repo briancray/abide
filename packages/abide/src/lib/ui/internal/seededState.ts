@@ -13,21 +13,24 @@
 // are passed through untouched — they never consumed a seed slot on the server, so they must not
 // advance the ordinal here (keeping the count aligned with the server recording).
 
-import { state } from "../state.ts";
-import type { State, StateCell } from "../state.ts";
-import type { HydrationSeed } from "../../server/internal/pages.ts";
+import type { HydrationSeed } from '../../server/internal/pages.ts'
+import type { State, StateCell } from '../state.ts'
+import { state } from '../state.ts'
 
 export function makeSeededState(seed: HydrationSeed): State {
-  const seedStates = Array.isArray(seed.states) ? seed.states : undefined;
-  let ordinal = 0;
-  return Object.assign(
-    function seededState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
-      const index = ordinal++;
-      const value = seedStates !== undefined && index < seedStates.length ? (seedStates[index] as T) : initial;
-      return state(value, transform);
-    } as State,
-    // `.computed`/`.linked`/`.shared` never consumed a server seed slot (`.shared` is keyed, not
-    // ordinal), so they pass through untouched and must NOT advance the ordinal.
-    { computed: state.computed, linked: state.linked, shared: state.shared },
-  );
+    const seedStates = Array.isArray(seed.states) ? seed.states : undefined
+    let ordinal = 0
+    return Object.assign(
+        function seededState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
+            const index = ordinal++
+            const value =
+                seedStates !== undefined && index < seedStates.length
+                    ? (seedStates[index] as T)
+                    : initial
+            return state(value, transform)
+        } as State,
+        // `.computed`/`.linked`/`.shared` never consumed a server seed slot (`.shared` is keyed, not
+        // ordinal), so they pass through untouched and must NOT advance the ordinal.
+        { computed: state.computed, linked: state.linked, shared: state.shared },
+    )
 }

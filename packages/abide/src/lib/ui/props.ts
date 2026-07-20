@@ -10,5 +10,5 @@
 // instance) it yields an empty object — mirroring the emitted module-scope `props: () => ({})`.
 
 export function props<T = Record<string, unknown>>(): T {
-  return {} as T;
+    return {} as T
 }

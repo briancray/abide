@@ -4,8 +4,8 @@
 //
 // Server concept: inert on the client (the tag registry is populated only by server shared cells).
 
-import { refreshTags } from "../server/internal/cacheTags.ts";
+import { refreshTags } from '../server/internal/cacheTags.ts'
 
 export function refresh(selector: { tags: string[] }): void {
-  refreshTags(selector.tags);
+    refreshTags(selector.tags)
 }

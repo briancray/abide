@@ -4,12 +4,12 @@
 // Schema to the machine surfaces (OpenAPI 3.1 / MCP tool props) — without abide having to guess the
 // schema back from a validator. Isomorphic (pure); safe on either side.
 
-import { asStandardSchema, type JSONSchema } from "./internal/jsonSchema.ts";
-import type { StandardSchemaV1 } from "./StandardSchema.ts";
+import { asStandardSchema, type JSONSchema } from './internal/jsonSchema.ts'
+import type { StandardSchemaV1 } from './StandardSchema.ts'
 
-export type SchemaWithJsonSchema = StandardSchemaV1 & { toJSONSchema(): JSONSchema };
+export type SchemaWithJsonSchema = StandardSchemaV1 & { toJSONSchema(): JSONSchema }
 
 export function withJsonSchema(schema: JSONSchema): SchemaWithJsonSchema {
-  const standard = asStandardSchema(schema);
-  return Object.assign(standard, { toJSONSchema: (): JSONSchema => schema });
+    const standard = asStandardSchema(schema)
+    return Object.assign(standard, { toJSONSchema: (): JSONSchema => schema })
 }

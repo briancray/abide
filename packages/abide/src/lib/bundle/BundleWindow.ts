@@ -5,12 +5,12 @@
 // is an opaque bag reserved for platform-shell options — deliberately `unknown` so the shape can
 // grow without a breaking change.
 
-import type { BundleMenu } from "./BundleMenu.ts";
+import type { BundleMenu } from './BundleMenu.ts'
 
 export interface BundleWindow {
-  title?: string;
-  width?: number;
-  height?: number;
-  menu?: BundleMenu;
-  config?: unknown;
+    title?: string
+    width?: number
+    height?: number
+    menu?: BundleMenu
+    config?: unknown
 }

@@ -11,7 +11,7 @@
 // returns false.
 
 export function bundled(): boolean {
-  if ((globalThis as { __ABIDE_BUNDLED__?: unknown }).__ABIDE_BUNDLED__ === true) return true;
-  if (typeof Bun !== "undefined" && Bun.env.ABIDE_BUNDLED === "1") return true;
-  return false;
+    if ((globalThis as { __ABIDE_BUNDLED__?: unknown }).__ABIDE_BUNDLED__ === true) return true
+    if (typeof Bun !== 'undefined' && Bun.env.ABIDE_BUNDLED === '1') return true
+    return false
 }
