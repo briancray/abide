@@ -200,8 +200,10 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
         case 'static':
             return `  $out += ${JSON.stringify(chunk.text)};\n`
         case 'interp':
-            // Trailing `<!---->` mirrors the client skeleton's per-leaf anchor (templatePlan.pushLeaf).
-            return `  $out += $rt.renderValue(await (${chunk.expr})) + "<!---->";\n`
+            // A scalar value gets the trailing `<!---->` leaf anchor (mirrors templatePlan.pushLeaf); a Raw
+            // (snippet call / `{children()}`) is bracketed with `<!--[-->…<!--]-->` so the hydrate walk skips
+            // the whole mountable subtree as a unit. `renderLeaf` picks the form at render time.
+            return `  $out += $rt.renderLeaf(await (${chunk.expr}));\n`
         case 'html':
             return `  $out += $rt.rawValue(await (${chunk.expr})) + "<!---->";\n`
         case 'await':

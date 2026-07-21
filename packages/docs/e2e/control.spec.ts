@@ -4,16 +4,8 @@ import { expect, test } from '@playwright/test'
 // reactivity of every `.abide` control-flow block in the "control" capability bucket. Each block
 // has interactive controls, and each test asserts the DOM reacts to a click.
 
-test('control hub links to every control-flow demo', async ({ page }) => {
-    await page.goto('/control')
-    await expect(page.locator('h1')).toHaveText('Control flow')
-    await expect(page.getByRole('link', { name: 'Conditionals' }).first()).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Lists' }).first()).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Components & snippets' })).toBeVisible()
-})
-
 test('{#if}/{:else if}/{:else} swaps branches as state crosses thresholds', async ({ page }) => {
-    await page.goto('/control/conditionals')
+    await page.goto('/templating/conditionals')
 
     const branch = page.getByTestId('if-branch')
     await expect(branch).toHaveText('zero')
@@ -31,7 +23,7 @@ test('{#if}/{:else if}/{:else} swaps branches as state crosses thresholds', asyn
 })
 
 test('{#switch}/{:case}/{:default} matches the active case', async ({ page }) => {
-    await page.goto('/control/conditionals')
+    await page.goto('/templating/conditionals')
 
     const branch = page.getByTestId('switch-branch')
     await expect(branch).toHaveText('Waiting to start.')
@@ -48,7 +40,7 @@ test('{#switch}/{:case}/{:default} matches the active case', async ({ page }) =>
 })
 
 test('{#for … by key} adds, removes, and reorders keyed items', async ({ page }) => {
-    await page.goto('/control/lists')
+    await page.goto('/templating/lists')
 
     const items = page.getByTestId('keyed-item')
     await expect(items).toHaveCount(3)
@@ -73,7 +65,7 @@ test('{#for … by key} adds, removes, and reorders keyed items', async ({ page 
 })
 
 test('keyless positional {#for} maps a plain value list', async ({ page }) => {
-    await page.goto('/control/lists')
+    await page.goto('/templating/lists')
 
     const nums = page.getByTestId('keyless-item')
     await expect(nums).toHaveCount(3)
@@ -88,7 +80,7 @@ test('keyless positional {#for} maps a plain value list', async ({ page }) => {
 })
 
 test('{#await}/{:then}/{:catch}/{:finally} tracks a promise through settle', async ({ page }) => {
-    await page.goto('/control/async')
+    await page.goto('/templating/async')
 
     // The RPC-backed {#await} resolves during SSR — its value is in the initial HTML.
     await expect(page.getByTestId('rpc-await')).toContainText('Hello, control flow')
@@ -108,7 +100,7 @@ test('{#await}/{:then}/{:catch}/{:finally} tracks a promise through settle', asy
 })
 
 test('{#for await} streams chunks and falls to {:catch} on stream error', async ({ page }) => {
-    await page.goto('/control/async')
+    await page.goto('/templating/async')
 
     // Initial stream (seeded on mount) yields three chunks.
     await expect(page.getByTestId('feed-item')).toHaveCount(3)
@@ -125,7 +117,7 @@ test('{#for await} streams chunks and falls to {:catch} on stream error', async 
 })
 
 test('done(stream): the completion probe flips true once the stream drains', async ({ page }) => {
-    await page.goto('/control/async')
+    await page.goto('/templating/async')
 
     // Nothing until the stream is started.
     await expect(page.getByTestId('done-status')).toHaveCount(0)
@@ -145,7 +137,7 @@ test('done(stream): the completion probe flips true once the stream drains', asy
 })
 
 test('{#try}/{:catch}/{:finally} catches a throw and recovers', async ({ page }) => {
-    await page.goto('/control/errors')
+    await page.goto('/templating/errors')
 
     await expect(page.getByTestId('try-body')).toContainText('computed successfully')
     await expect(page.getByTestId('try-finally')).toBeVisible()
@@ -165,7 +157,7 @@ test('{#try}/{:catch}/{:finally} catches a throw and recovers', async ({ page })
 test('component renders {children()} + reactive props; snippets and render-props work', async ({
     page,
 }) => {
-    await page.goto('/control/components')
+    await page.goto('/templating/components')
 
     // Component with a single {children()} slot and a reactive title prop.
     await expect(page.getByTestId('card-title')).toHaveText('Original title')

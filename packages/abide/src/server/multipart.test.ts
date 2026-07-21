@@ -65,7 +65,7 @@ describe('multipart RPC upload (TODO #8)', () => {
                 form.set('caption', 'x')
                 form.set('avatar', new File(['y'], 'y.txt'))
                 // Raw fetch, no x-abide header — a cross-site <form> can send multipart but cannot set it.
-                const response = await app.fetch('/rpc/upload', { method: 'POST', body: form })
+                const response = await app.fetch('/__abide/rpc/upload', { method: 'POST', body: form })
                 expect(response.status).toBe(403)
             } finally {
                 await app.stop()
@@ -78,7 +78,7 @@ describe('multipart RPC upload (TODO #8)', () => {
                 const form = new FormData()
                 form.set('caption', 'x')
                 form.set('avatar', new File(['y'], 'y.txt'))
-                const response = await app.fetch('/rpc/upload', {
+                const response = await app.fetch('/__abide/rpc/upload', {
                     method: 'POST',
                     headers: { 'x-abide': '1' },
                     body: form,
@@ -108,7 +108,7 @@ describe('multipart RPC upload (TODO #8)', () => {
             try {
                 const form = new FormData()
                 form.set('caption', 'no file attached')
-                const response = await app.fetch('/rpc/upload', {
+                const response = await app.fetch('/__abide/rpc/upload', {
                     method: 'POST',
                     headers: { 'x-abide': '1' },
                     body: form,
@@ -144,7 +144,7 @@ describe('multipart RPC upload (TODO #8)', () => {
             try {
                 const form = new FormData()
                 form.set('avatar', new File(['<svg>'], 'a.svg', { type: 'image/svg+xml' }))
-                const response = await app.fetch('/rpc/upload', {
+                const response = await app.fetch('/__abide/rpc/upload', {
                     method: 'POST',
                     headers: { 'x-abide': '1' },
                     body: form,
@@ -181,7 +181,7 @@ describe('multipart RPC upload (TODO #8)', () => {
             try {
                 const form = new FormData()
                 form.set('avatar', new File(['y'], 'y.txt')) // file present, but no `caption` text field
-                const response = await app.fetch('/rpc/upload', {
+                const response = await app.fetch('/__abide/rpc/upload', {
                     method: 'POST',
                     headers: { 'x-abide': '1' },
                     body: form,
@@ -224,7 +224,7 @@ describe('multipart RPC upload (TODO #8)', () => {
                 ok.set('avatar', new File(['y'], 'y.txt'))
                 expect(
                     (
-                        await app.fetch('/rpc/upload', {
+                        await app.fetch('/__abide/rpc/upload', {
                             method: 'POST',
                             headers: { 'x-abide': '1' },
                             body: ok,
@@ -238,7 +238,7 @@ describe('multipart RPC upload (TODO #8)', () => {
                 bad.set('avatar', new File(['y'], 'y.txt'))
                 expect(
                     (
-                        await app.fetch('/rpc/upload', {
+                        await app.fetch('/__abide/rpc/upload', {
                             method: 'POST',
                             headers: { 'x-abide': '1' },
                             body: bad,
@@ -257,7 +257,7 @@ describe('multipart RPC upload (TODO #8)', () => {
                 const form = new FormData()
                 form.set('caption', 'c')
                 form.set('avatar', new File(['y'], 'y.txt'))
-                const response = await app.fetch('/rpc/upload', {
+                const response = await app.fetch('/__abide/rpc/upload', {
                     method: 'POST',
                     headers: { 'x-abide': '1' },
                     body: form,
@@ -280,7 +280,7 @@ describe('multipart RPC upload (TODO #8)', () => {
             form.set('avatar', new File(['x'.repeat(500)], 'big.txt', { type: 'text/plain' }))
             // Serialize the FormData to a Blob so fetch sends a concrete Content-Length the guard reads.
             const serialized = await new Response(form).blob()
-            const response = await app.fetch('/rpc/upload', {
+            const response = await app.fetch('/__abide/rpc/upload', {
                 method: 'POST',
                 headers: { 'x-abide': '1', 'content-type': serialized.type },
                 body: serialized,

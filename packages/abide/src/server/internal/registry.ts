@@ -28,6 +28,13 @@ export interface RpcEntry {
     // Opt-in server cross-request cache (rpc-core §2). Surfaced so the client bundle can flag the read
     // proxy as `shared` — a shared read auto-subscribes to its broadcast channel (shared-cache-plan §2.5).
     shared: boolean
+    // Whether the route routes through a cell (`cache !== false`). The client proxy mirrors it: `false`
+    // means the bare call bypasses the client cell (direct fetch, at-least-once) — matters for mutations.
+    cache: boolean
+    // Retained-value TTL the client cell should use (ms). `null` = Infinity (retain until invalidate) —
+    // a read's default; a mutation defaults to `0` (coalesce concurrent, retain nothing). Symmetry: an
+    // author who sets `cache: { ttl }` gets that retention on both sides.
+    ttl: number | null
     inputSchema?: JSONSchema
     outputSchema?: JSONSchema
     clients: Clients
@@ -67,11 +74,18 @@ function rpcEntry(name: string, route: Route): RpcEntry {
     const options = meta.options
     const schemas = options.schemas
 
+    // TTL default mirrors the runtime: a read retains (∞ → null), a mutation coalesces-only (0).
+    const cacheOpt = options.cache === false ? undefined : options.cache
+    const celled = options.cache !== false
+    const ttl = cacheOpt?.ttl ?? (meta.read ? null : 0)
+
     const entry: RpcEntry = {
         name,
         method: meta.method,
         read: meta.read,
-        shared: options.cache !== false && options.cache?.shared === true,
+        shared: cacheOpt?.shared === true,
+        cache: celled,
+        ttl,
         clients: resolveClients(options.clients),
     }
 

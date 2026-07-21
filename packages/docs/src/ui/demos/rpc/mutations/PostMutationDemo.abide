@@ -1,0 +1,18 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcCreateNote from "$server/rpc/rpcCreateNote"
+
+  // POST — a creating mutation. `bind:value={text}` two-way-binds the field; the arg rides in the JSON
+  // body and the handler runs on every click (mutations default to no retention; opt in with a `cache` TTL).
+  let text = state("first draft")
+  let result = state(null)
+  async function post() { result = await rpcCreateNote({ text }) }
+</script>
+
+<label class="verb-text">Note text: <input data-testid="post-input" bind:value={text} /></label>
+<button data-testid="post-btn" onclick={post}>POST rpcCreateNote</button>
+{#if result}
+  <pre class="out" data-testid="post-result">verb: {result.verb}
+id: {result.id}
+text: {result.text ?? "(none)"}</pre>
+{/if}

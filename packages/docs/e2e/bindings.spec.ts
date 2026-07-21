@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-// Drives the /bindings page in a real browser: every template binding and directive is exercised
+// Drives the /templating/bindings page in a real browser: every template binding and directive is exercised
 // through live inputs, and the two-way binds are asserted in both directions after hydration.
 
 test.beforeEach(async ({ page }) => {
-    await page.goto('/bindings')
+    await page.goto('/templating/bindings')
     await expect(page.locator('h1')).toHaveText('Bindings & directives')
 })
 

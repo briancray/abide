@@ -33,6 +33,11 @@ adjacent text**. `Hi {name}!` → skeleton `Hi <!---->!` clones to `["Hi ", <!--
 Resolution (keeps decision 4's single `<!---->`): the interp/await/html slot carries `prefixLen` =
 byte length of the immediately-preceding static text (0 if prev sibling is comment/element/none). The
 claim splits deterministically:
+
+> This `prefixLen`/`claimText` mechanism is the SCALAR-value leaf path. A *mountable* interpolation
+> value (a `{#snippet}` call / `{children()}`) is a later refinement: the server brackets its subtree
+> with `<!--[-->…<!--]-->` (decision 4 refinement) and it is claimed by `hydrateInterpLeaf` (peek
+> `<!--[-->` → `findBlockClose` → adopt the region), NOT by `prefixLen`.
 ```
 claimText(anchor, prefixLen): Text|null
   p = anchor.previousSibling
@@ -51,7 +56,9 @@ claimText(anchor, prefixLen): Text|null
 **PR1 — Server anchors matching the skeleton.** Highest churn, lowest logic risk; first. ✅
 - `emitServer.genChunk` (`emitServer.ts:108-218`): emit `<!---->` after interp/html/await; wrap
   if/for/awaitBlock/switch/try/component in `<!--[-->`…`<!--]-->`, driven off the SAME plan (anchors
-  match client by construction, decision 3).
+  match client by construction, decision 3). (Later refinement: the `interp` chunk now goes through
+  `$rt.renderLeaf`, which brackets a *mountable* value — snippet call / `{children()}` — with
+  `<!--[-->…<!--]-->` and keeps the single `<!---->` for scalars; see decision 4 refinement.)
 - Update `emit.oracle.test.ts.snap` (every dynamic fixture's server string changes),
   `emitCapabilities.test.ts` (has `stripAnchors :20-22`; audit), and interp-wrapping `toContain`s:
   `emitSsr.test.ts:27,40,53`, `pages.test.ts:26,40` (prefer `stripAnchors` helper).
@@ -143,6 +150,12 @@ claimText(anchor, prefixLen): Text|null
 > `log` surface, which would drag `node:async_hooks` into the bundle). 731/0, tsc clean, bundle still
 > async_hooks/typescript-free. Documented uncaught-by-design: same-tag wrong-content, wrong-tag on a
 > purely-static container — decision-5 cheap-check cost.)
+>
+> SUPERSEDED (observability channels work): the mismatch warning now rides the isomorphic `log` on the
+> DEBUG-gated `abide:hydrate` channel, not `console.warn`. `log` is bundle-safe — bun's browser target
+> strips `node:async_hooks` (never constructed on the client; `scope.ts` guards it), so the client
+> bundle stays async_hooks-free. Gating replaces the old `NODE_ENV` dev-gate: `localStorage.debug=abide:hydrate`
+> surfaces it in any environment. See `config-observability.md` CO2.2.
 
 **PR6 — Localized mismatch recovery + guards** (decision 5). ✅
 - Emit `if ($rt.hydrating) $rt.assertTag($node, "button")` at dynamic-element slots + anchor-presence

@@ -1,0 +1,22 @@
+<script>
+  import { state } from "abide/ui/state"
+  import lifecycleThrow from "$server/rpc/lifecycleThrow"
+
+  // Browser-only: call the throwing RPC and show the response onError SHAPED. `.raw()` bypasses the
+  // cell and returns the untouched Response (no parse, no !ok throw), so the exact HTTP status + body
+  // the server produced is visible — the mutation proxy still sends the body + CSRF header for us.
+  let result = state(null)
+
+  async function run() {
+    const response = await lifecycleThrow.raw({})
+    const body = await response.json()
+    result = response.status + " — " + (body.message ?? "")
+  }
+</script>
+
+<button id="lifecycle-error-btn" onclick={run}>Call the throwing RPC</button>
+{#if result}
+  <pre class="out" id="lifecycle-error-out">{result}</pre>
+{:else}
+  <p id="lifecycle-error-out">not called yet</p>
+{/if}

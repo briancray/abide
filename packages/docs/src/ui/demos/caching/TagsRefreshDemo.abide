@@ -1,0 +1,31 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheTagA from "$server/rpc/cacheTagA"
+  import cacheTagB from "$server/rpc/cacheTagB"
+  import cacheTagRefresh from "$server/rpc/cacheTagRefresh"
+
+  // The eager sibling of invalidate({tags}). One global refresh({ tags: ["docs"] }) — run server-side
+  // via a POST RPC — eagerly revalidates BOTH "docs" slots, retaining each stale value while it
+  // re-runs, so a re-read of each returns a freshly climbed run count.
+  let result = state(null)
+  async function load() {
+    const a = await (await cacheTagA.raw({ tag: "a" })).json()
+    const b = await (await cacheTagB.raw({ tag: "b" })).json()
+    result = { a: a.runs, b: b.runs }
+  }
+  async function refreshTags() {
+    await cacheTagRefresh({}) // server: refresh({ tags: ["docs"] }) → eager revalidate both
+    await load()
+  }
+</script>
+
+{#if result}
+  <ul class="grid">
+    <li>cacheTagA runs: <strong data-testid="tags-refresh-a">{result.a}</strong></li>
+    <li>cacheTagB runs: <strong data-testid="tags-refresh-b">{result.b}</strong></li>
+  </ul>
+{/if}
+<div class="row">
+  <button data-testid="tags-refresh-load" onclick={load}>Load both</button>
+  <button data-testid="tags-refresh" onclick={refreshTags}>refresh({'{'}tags{'}'})</button>
+</div>

@@ -1,0 +1,9 @@
+<script>
+  import { online } from "abide/shared/online"
+
+  // online() — a reactive isomorphic connectivity boolean. True on the server; on the client it
+  // tracks `navigator.onLine`, so this line re-renders the moment you go offline. Called straight in
+  // the template — no RPC, no accessor plumbing.
+</script>
+
+<p id="online-block">online = <strong id="online-flag">{online() ? "true" : "false"}</strong></p>

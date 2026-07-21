@@ -26,7 +26,10 @@ export interface PageEntry {
 // the chunk's content-hashed `/__abide/chunk/<name>-<hash>.js` URL at build time.
 export type PageLoader = () => Promise<{ default: PageEntry }>
 
-export type RpcSpecs = Record<string, { method: string; read: boolean; shared?: boolean }>
+export type RpcSpecs = Record<
+    string,
+    { method: string; read: boolean; shared?: boolean; cache?: boolean; ttl?: number | null }
+>
 
 export type SocketSpecs = Record<string, SocketSpec>
 

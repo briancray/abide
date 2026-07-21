@@ -230,7 +230,7 @@ export async function navigate(target: string | URL, options?: NavigateOptions):
 }
 
 // Whether a pathname matches a known in-app page pattern. Used to decide if a link/history entry is
-// abide's to soft-navigate, or a plain browser navigation (e.g. /openapi.json, /rpc/*, static files).
+// abide's to soft-navigate, or a plain browser navigation (e.g. /openapi.json, /__abide/rpc/*, static files).
 export function isKnownPage(pathname: string): boolean {
     return matchRoute(pagePatterns(), pathname) !== null
 }

@@ -7,8 +7,10 @@
 // Key management: with ABIDE_IDENTITY_SECRET set, the AES key is SHA-256(secret) — stable across
 // restarts / instances, and rotating the secret invalidates every token and cookie at once
 // (AU9.6 "nuclear"). Without it, a process-ephemeral key is generated once (dev/anonymous only,
-// not restart- or multi-instance-stable) and a one-time warning is logged.
+// not restart- or multi-instance-stable) and a one-time warning is logged to the `abide:identity`
+// channel (off unless `DEBUG=abide:identity`).
 
+import { log } from '../../shared/log.ts'
 import type { Principal } from './scope.ts'
 
 const TTL_DEFAULT_MS = 30 * 24 * 60 * 60 * 1000 // 30 days (AU5.4 / AU9.3)
@@ -57,8 +59,8 @@ function currentKey(): Promise<CryptoKey> {
     }
     if (ephemeralKey === undefined) {
         if (!ephemeralWarned) {
-            console.warn(
-                'abide: ABIDE_IDENTITY_SECRET is not set — using a process-ephemeral identity key. Sealed identities will not survive a restart and are not stable across instances. Set ABIDE_IDENTITY_SECRET for secure authenticated identity in production.',
+            log.channel('abide:identity').warn(
+                'ABIDE_IDENTITY_SECRET is not set — using a process-ephemeral identity key. Sealed identities will not survive a restart and are not stable across instances. Set ABIDE_IDENTITY_SECRET for secure authenticated identity in production.',
             )
             ephemeralWarned = true
         }
@@ -102,12 +104,17 @@ export async function unseal(token: string): Promise<Principal | undefined> {
         const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)
         const payload = JSON.parse(new TextDecoder().decode(plaintext)) as SealedPayload
         if (payload === null || typeof payload !== 'object') return undefined
-        if (typeof payload.exp !== 'number' || payload.exp < Date.now()) return undefined
+        if (typeof payload.exp !== 'number' || payload.exp < Date.now()) {
+            log.channel('abide:identity').trace('unseal rejected — token expired')
+            return undefined
+        }
         if (payload.p === null || typeof payload.p !== 'object') return undefined
         return payload.p
     } catch {
         // Tampered ciphertext (GCM tag mismatch), malformed base64, or non-JSON plaintext all land
-        // here — a sealed blob we cannot trust resolves to "no identity".
+        // here — a sealed blob we cannot trust resolves to "no identity". Log the outcome only, never
+        // the token or its plaintext.
+        log.channel('abide:identity').trace('unseal rejected — tampered or malformed token')
         return undefined
     }
 }

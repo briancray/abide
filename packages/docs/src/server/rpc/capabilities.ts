@@ -17,27 +17,27 @@ export default GET((): Capability[] => [
     },
     {
         name: 'Cache verbs & probes',
-        path: '/cache',
+        path: '/caching',
         blurb: 'invalidate / refresh, pending / peek / error / watch, reachable.',
     },
     {
         name: 'Reactivity',
-        path: '/reactivity',
+        path: '/templating/reactivity',
         blurb: 'state + state.computed + state.linked drive fine-grained DOM updates.',
     },
     {
         name: 'Bindings & directives',
-        path: '/bindings',
+        path: '/templating/bindings',
         blurb: 'bind:value/checked/group, class:/style:, spread, node refs.',
     },
     {
         name: 'Control flow',
-        path: '/control',
+        path: '/templating/conditionals',
         blurb: '{#if}, {#for}, {#await}, {#switch}, {#try}, snippets, components.',
     },
     {
         name: 'File-based routing',
-        path: '/routing',
+        path: '/pages/routing',
         blurb: 'Pages are files; folders are URLs; [name] captures params.',
     },
     {
@@ -52,7 +52,7 @@ export default GET((): Capability[] => [
     },
     {
         name: 'Machine surfaces',
-        path: '/machines',
+        path: '/platform/machines',
         blurb: 'The same RPCs are OpenAPI operations and MCP tools.',
     },
 ])

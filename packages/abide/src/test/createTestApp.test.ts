@@ -39,7 +39,7 @@ describe('createTestApp routing', () => {
     test('GET rpc via raw fetch returns 200 + json', async () => {
         const app = start({ routes: { greet } })
         const response = await app.fetch(
-            `/rpc/greet?args=${encodeURIComponent(JSON.stringify({ name: 'x' }))}`,
+            `/__abide/rpc/greet?args=${encodeURIComponent(JSON.stringify({ name: 'x' }))}`,
         )
         expect(response.status).toBe(200)
         expect(response.headers.get('content-type')).toContain('application/json')
@@ -65,7 +65,7 @@ describe('createTestApp routing', () => {
     test('POST mutation via raw fetch reads args from the body', async () => {
         counter = 0
         const app = start({ routes: { bump } })
-        const response = await app.fetch('/rpc/bump', {
+        const response = await app.fetch('/__abide/rpc/bump', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ by: 4 }),
@@ -76,7 +76,7 @@ describe('createTestApp routing', () => {
 
     test('unknown rpc 404s', async () => {
         const app = start({ routes: { greet } })
-        const response = await app.fetch('/rpc/nope?args=%7B%7D')
+        const response = await app.fetch('/__abide/rpc/nope?args=%7B%7D')
         expect(response.status).toBe(404)
     })
 
@@ -96,7 +96,7 @@ describe('middleware', () => {
             return { ok: true }
         })
         const app = start({ routes: { guarded }, middleware: [guard] })
-        const response = await app.fetch('/rpc/guarded?args=%7B%7D')
+        const response = await app.fetch('/__abide/rpc/guarded?args=%7B%7D')
         expect(response.status).toBe(403)
         expect(handlerRan).toBe(false)
     })
@@ -123,7 +123,7 @@ describe('middleware', () => {
             { middleware: [localMw] },
         )
         const app = start({ routes: { handler }, middleware: [globalMw] })
-        await app.fetch('/rpc/handler?args=%7B%7D')
+        await app.fetch('/__abide/rpc/handler?args=%7B%7D')
         expect(order).toEqual(['global-in', 'local-in', 'handler', 'local-out', 'global-out'])
     })
 })
@@ -166,7 +166,7 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
     test('(a) login sets an abide-identity cookie a follow-up request authenticates with', async () => {
         const app = start({ routes: { login, whoami } })
 
-        const loginResponse = await app.fetch('/rpc/login', {
+        const loginResponse = await app.fetch('/__abide/rpc/login', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: '{}',
@@ -177,7 +177,7 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
         expect(cookie).toStartWith('abide-identity=')
         if (cookie === undefined) throw new Error('expected an identity cookie')
 
-        const follow = await app.fetch(`/rpc/whoami?args=%7B%7D`, { headers: { cookie } })
+        const follow = await app.fetch(`/__abide/rpc/whoami?args=%7B%7D`, { headers: { cookie } })
         const seen = (await follow.json()) as { id: string; authenticated: boolean }
         expect(seen.authenticated).toBe(true)
         expect(seen.id).toBe('u1')
@@ -198,14 +198,14 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
     test('(c) an anonymous request is authenticated:false with a stable-per-cookie id', async () => {
         const app = start({ routes: { whoami } })
 
-        const first = await app.fetch('/rpc/whoami?args=%7B%7D')
+        const first = await app.fetch('/__abide/rpc/whoami?args=%7B%7D')
         const firstBody = (await first.json()) as { id: string; authenticated: boolean }
         expect(firstBody.authenticated).toBe(false)
         const cookie = identityCookie(first)
         expect(cookie).toBeDefined()
         if (cookie === undefined) throw new Error('expected an identity cookie')
 
-        const second = await app.fetch('/rpc/whoami?args=%7B%7D', { headers: { cookie } })
+        const second = await app.fetch('/__abide/rpc/whoami?args=%7B%7D', { headers: { cookie } })
         const secondBody = (await second.json()) as { id: string }
         expect(secondBody.id).toBe(firstBody.id) // stable across requests carrying the cookie
     })
@@ -213,14 +213,14 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
     test('(d) a mutation with a simple Content-Type is rejected 403 (CSRF); application/json passes', async () => {
         const app = start({ routes: { login } })
 
-        const blocked = await app.fetch('/rpc/login', {
+        const blocked = await app.fetch('/__abide/rpc/login', {
             method: 'POST',
             headers: { 'content-type': 'text/plain' },
             body: '{}',
         })
         expect(blocked.status).toBe(403)
 
-        const allowed = await app.fetch('/rpc/login', {
+        const allowed = await app.fetch('/__abide/rpc/login', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: '{}',
@@ -232,7 +232,7 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
         Bun.env.ABIDE_APP_TOKEN = 'test-app-token-value'
         const owner = GET(async () => ({ ...identity() }))
         const app = start({ routes: { owner } })
-        const response = await app.fetch('/rpc/owner?args=%7B%7D', {
+        const response = await app.fetch('/__abide/rpc/owner?args=%7B%7D', {
             headers: { authorization: 'Bearer test-app-token-value' },
         })
         const principal = (await response.json()) as {
@@ -248,11 +248,15 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
 })
 
 describe('health + lifecycle', () => {
-    test('/__abide/health returns { reachable: true }', async () => {
+    test('/__abide/health reports reachable + version + lifetime fields', async () => {
         const app = start()
         const response = await app.health()
         expect(response.status).toBe(200)
-        expect(await response.json()).toEqual({ reachable: true })
+        const body = (await response.json()) as Record<string, unknown>
+        expect(body.reachable).toBe(true)
+        expect(typeof body.version).toBe('string')
+        expect(typeof body.startedAt).toBe('string')
+        expect(typeof body.uptime).toBe('number')
     })
 
     test('stop() closes the server so further fetches fail', async () => {

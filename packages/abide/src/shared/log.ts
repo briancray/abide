@@ -3,9 +3,16 @@
 //
 // Server: structured lines to stdout (info/trace/log) and stderr (warn/error) — JSON when
 // `ABIDE_LOG_FORMAT=json`, else a compact tab-separated line (level, time, [channel], traceparent,
-// message). Client: plain `console`. Named channels are gated by the `DEBUG` env var following the
-// debug-npm pattern (`DEBUG=cache,rpc` or `DEBUG=*`), so framework internals stay quiet until asked
-// for. The active request's `traceparent` (CO2.3) is auto-correlated into each server line.
+// message). Client: plain `console`. The active request's `traceparent` (CO2.3) is auto-correlated
+// into each server line.
+//
+// CHANNELS + GATING. Every line carries a channel label. The root `log(...)` uses the DEFAULT
+// channel — the app name (`ABIDE_APP_NAME`, else the `__ABIDE_APP_NAME__` global, else "abide") —
+// and is always on: it is the app's own stream. `.channel(name)` produces a NAMED channel gated by
+// the `debug`-npm pattern (server: `DEBUG=cache,rpc` / `DEBUG=*`; browser: `localStorage.debug`),
+// so framework internals — all under the `abide:*` namespace — stay quiet until `DEBUG=abide:*`
+// asks for them. ONE exception: `error` always emits regardless of gating, so operational failures
+// surface even on a silent channel.
 //
 // `trace` is referenced only inside the emit path (never at module load) so this module never
 // participates in an import cycle with the request scope.
@@ -35,10 +42,35 @@ function readEnv(name: string): string | undefined {
     return proc?.env?.[name]
 }
 
+// The DEFAULT channel label — the app's own stream. Server boot sets `ABIDE_APP_NAME` from the
+// project's package.json (loadApp); the client bootstrap may seed the `__ABIDE_APP_NAME__` global.
+// Falls back to "abide" for bare scripts and un-named contexts.
+function defaultChannel(): string {
+    const fromEnv = readEnv('ABIDE_APP_NAME')
+    if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv
+    const fromGlobal = (globalThis as { __ABIDE_APP_NAME__?: string }).__ABIDE_APP_NAME__
+    if (typeof fromGlobal === 'string' && fromGlobal.length > 0) return fromGlobal
+    return 'abide'
+}
+
+// The active debug spec: `DEBUG` on the server, `localStorage.debug` in the browser (the debug-npm
+// browser convention) so `abide:*` channels are enable-able on both sides of the isomorphism.
+function debugSpec(): string | undefined {
+    const fromEnv = readEnv('DEBUG')
+    if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv
+    const store = (globalThis as { localStorage?: { getItem(key: string): string | null } })
+        .localStorage
+    if (store !== undefined) {
+        const fromStore = store.getItem('debug') ?? store.getItem('DEBUG')
+        if (fromStore !== null && fromStore.length > 0) return fromStore
+    }
+    return undefined
+}
+
 // The debug-npm gate: a channel emits when DEBUG names it (exact), when DEBUG is `*`, or when a
 // listed pattern ends in `*` and prefixes the channel name (e.g. `abide:*` lights `abide:cache`).
 function channelEnabled(channel: string): boolean {
-    const debug = readEnv('DEBUG')
+    const debug = debugSpec()
     if (debug === undefined || debug.length === 0) return false
     const patterns = debug.split(',')
     for (const raw of patterns) {
@@ -62,7 +94,11 @@ function formatArg(arg: unknown): string {
 }
 
 function emit(level: LogLevel, channel: string | undefined, args: unknown[]): void {
-    if (channel !== undefined && !channelEnabled(channel)) return
+    // A named channel is gated by the debug spec; `error` bypasses gating so failures always
+    // surface. The default channel (undefined) is the app's own stream and always emits.
+    if (channel !== undefined && level !== 'error' && !channelEnabled(channel)) return
+
+    const label = channel ?? defaultChannel()
 
     if (isBrowser) {
         const console = (
@@ -73,8 +109,7 @@ function emit(level: LogLevel, channel: string | undefined, args: unknown[]): vo
         if (console === undefined) return
         const method = console[level] ?? console.log
         if (method === undefined) return
-        if (channel !== undefined) method(`[${channel}]`, ...args)
-        else method(...args)
+        method(`[${label}]`, ...args)
         return
     }
 
@@ -87,20 +122,19 @@ function emit(level: LogLevel, channel: string | undefined, args: unknown[]): vo
         const record: {
             level: string
             time: string
-            channel?: string
+            channel: string
             traceparent?: string
             message: string
         } = {
             level,
             time,
+            channel: label,
             message,
         }
-        if (channel !== undefined) record.channel = channel
         if (traceparent !== undefined) record.traceparent = traceparent
         line = JSON.stringify(record)
     } else {
-        const parts = [level, time]
-        if (channel !== undefined) parts.push(`[${channel}]`)
+        const parts = [level, time, `[${label}]`]
         if (traceparent !== undefined) parts.push(traceparent)
         parts.push(message)
         line = parts.join('\t')

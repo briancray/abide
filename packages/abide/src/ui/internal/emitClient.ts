@@ -286,7 +286,15 @@ class ClientEmitter {
             if (skip > 0) code += `$rt.hydrateSkip(${skip});\n`
             if (entry.kind === 'leaf') {
                 const varName = `$n${[...prefix, entry.index].join('_')}`
-                const claim = entry.leafKind === 'html' ? 'hydrateHtmlAnchor' : 'hydrateValueLeaf'
+                // `interpolation` may resolve to a mountable (snippet call / `{children()}`) whose server
+                // output is bracketed — `hydrateInterpLeaf` skips the whole region; `html` scans to its
+                // anchor; a scalar `await`/interp value is a plain text leaf.
+                const claim =
+                    entry.leafKind === 'html'
+                        ? 'hydrateHtmlAnchor'
+                        : entry.leafKind === 'interpolation'
+                          ? 'hydrateInterpLeaf'
+                          : 'hydrateValueLeaf'
                 code += `${varName} = $rt.${claim}();\n`
                 expected = entry.index + 1
             } else if (entry.kind === 'element') {

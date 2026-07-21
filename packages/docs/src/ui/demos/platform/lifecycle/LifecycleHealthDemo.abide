@@ -1,0 +1,26 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { health } from "abide/shared/health"
+
+  // health() is ISOMORPHIC: `await health()` fetches the live /__abide/health on the client, so the
+  // full merged document shows here — the framework stub (reachable, version, startedAt, uptime) plus
+  // the fields onHealth merged in (app, bootId). A present, non-empty bootId proves onStart ran and
+  // seeded it before the server bound.
+  let doc = state(null)
+
+  async function loadHealth() {
+    doc = await health()
+  }
+</script>
+
+<button id="lifecycle-health-btn" onclick={loadHealth}>Fetch /__abide/health</button>
+{#if doc}
+  <pre class="out" id="lifecycle-health-out">reachable  = {doc.reachable ? "true" : "false"}
+version    = {doc.version}
+uptime     = {doc.uptime} ms
+startedAt  = {doc.startedAt}
+app        = {doc.app}
+bootId     = {doc.bootId}</pre>
+{:else}
+  <p id="lifecycle-health-out">not fetched yet</p>
+{/if}

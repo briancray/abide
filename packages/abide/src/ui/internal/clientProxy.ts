@@ -49,7 +49,7 @@ class HttpErrorLike extends Error {
 
 function readUrl(base: string, name: string, args: unknown): string {
     const query = args !== undefined ? `?args=${encodeURIComponent(JSON.stringify(args))}` : ''
-    return `${base}/rpc/${name}${query}`
+    return `${base}/__abide/rpc/${name}${query}`
 }
 
 // Turn a non-2xx Response into an HttpError-like. The abide error body is
@@ -75,115 +75,138 @@ function isRead(method: string): boolean {
     return method === 'GET' || method === 'HEAD'
 }
 
+// The mutation request shape (client → `/rpc/<name>`): a plain-object arg is JSON (`content-type:
+// application/json` satisfies the CSRF gate); a FormData arg is sent raw (the browser sets the
+// multipart boundary) with the `x-abide` header a cross-site form can't forge (TODO #8 upload).
+function mutationInit(method: string, args: unknown): RequestInit {
+    const isFormData = typeof FormData !== 'undefined' && args instanceof FormData
+    return {
+        method,
+        headers: isFormData
+            ? { 'x-abide': '1' }
+            : { 'content-type': 'application/json', 'x-abide': '1' },
+        body: isFormData ? (args as FormData) : JSON.stringify(args ?? {}),
+    }
+}
+
+// A single client proxy for BOTH reads and mutations — full symmetry with the server. The only
+// differences are transport (a read GETs with `?args=`; a mutation POSTs the body + CSRF header) and
+// the default cache policy (carried by the spec's `ttl`: reads retain, mutations coalesce-only). Every
+// probe/verb (peek/pending/refreshing/refresh/invalidate/amend/watch/chunks/done/raw) is attached for
+// both, so an author who caches a mutation (`cache: { ttl }`) gets the identical reactive surface.
 export function clientProxy<Args = unknown, T = unknown>(
     name: string,
     method: string,
-    opts?: { base?: string; shared?: boolean },
+    opts?: { base?: string; shared?: boolean; cache?: boolean; ttl?: number | null },
 ): Rpc<Args, T> | Mutation<Args, T> {
     const base = opts?.base ?? ''
+    const read = isRead(method)
+    // A mutation whose author set `cache: false` bypasses the client cell on the bare call (direct
+    // fetch, at-least-once), mirroring the server. Reads (and default mutations) are celled.
+    const celled = opts?.cache !== false
 
-    if (isRead(method)) {
-        const backing = cell<Args, T>(async (args: Args): Promise<T> => {
-            const response = await fetch(readUrl(base, name, args), { method })
-            if (!response.ok) throw await toHttpError(response)
-            // A streaming read (jsonl/sse response) decodes to an AsyncIterable of chunks; `cell` sees it
-            // as a stream source and stores a ReplayableStream, so the browser consumes it exactly like
-            // the server (`{#for await x of rpc()}`). A value read parses JSON as before.
-            if (isStreamContentType(response.headers.get('content-type'))) {
-                return decodeStreamResponse(response) as unknown as T
-            }
-            return (await response.json()) as T
-        })
-
-        // A `shared` server read broadcasts cache verbs on its `(rpc,args)` channel (rpc-core §8). On the
-        // FIRST read for a given args the browser cell auto-joins that channel and mirrors inbound frames
-        // through its own local verbs. Dedup by canonicalKey so a reactive re-read never re-subscribes; a
-        // non-shared read never subscribes. No-op under SSR (the mux guards on `window`/`WebSocket`).
-        const shared = opts?.shared === true
-        const subscribed = new Set<string>()
-        const ensureSubscribed = (args: Args): void => {
-            if (!shared) return
-            const key = canonicalKey(args)
-            if (subscribed.has(key)) return
-            subscribed.add(key)
-            subscribeCacheChannel(
-                cacheChannelName(name, args),
-                args,
-                (frame) => applyCacheFrame(backing, args, frame),
-                base,
-            )
+    // Transport + decode: a jsonl/sse response decodes to an AsyncIterable (ReplayableStream) so a
+    // streaming handler is consumed identically on both sides (`{#for await x of rpc()}`); a value
+    // response parses JSON. Same for reads and mutations — only the request differs.
+    const load = async (args: Args | FormData): Promise<T> => {
+        const response = read
+            ? await fetch(readUrl(base, name, args), { method })
+            : await fetch(`${base}/__abide/rpc/${name}`, mutationInit(method, args))
+        if (!response.ok) throw await toHttpError(response)
+        if (isStreamContentType(response.headers.get('content-type'))) {
+            return decodeStreamResponse(response) as unknown as T
         }
-
-        // THE READ (Promise-read model): the bare call is the coalesced load promise AND subscribes the
-        // reactive context (so `{await fn()}` re-awaits on invalidate); `.peek()` is the sync snapshot.
-        const rpc = ((args: Args): Promise<T> => {
-            ensureSubscribed(args)
-            return backing(args)
-        }) as Rpc<Args, T>
-        rpc.peek = (args: Args): T | undefined => {
-            ensureSubscribed(args)
-            return backing.peek(args)
-        }
-        rpc.load = (args: Args): Promise<T> => {
-            ensureSubscribed(args)
-            return backing.load(args)
-        }
-        rpc.pending = (args: Args): boolean => backing.pending(args)
-        rpc.refreshing = (args: Args): boolean => backing.refreshing(args)
-        rpc.error = (args: Args): unknown => backing.error(args)
-        // STREAMING-read chunk probes (the `StreamRead<Args, C>` surface): `peek` above is already
-        // stream-aware (latest chunk) via the cell; forward `chunks` (transcript) + `done` (closed?) too.
-        // A scalar read never calls these; only the StreamRead type surfaces them. Attached loosely — the
-        // consumer sees them through the inferred StreamRead type, the proxy object is dynamic.
-        const streamRpc = rpc as unknown as {
-            chunks: (args: Args) => unknown[] | undefined
-            done: (args: Args) => boolean
-        }
-        streamRpc.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
-        streamRpc.done = (args: Args): boolean => backing.done(args)
-        rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
-            backing.watch(args, handler)
-        // Raw fetch, full bypass of the cell — returns the untouched `Response` (no parse, no error throw).
-        rpc.raw = (args: Args, init?: RequestInit): Promise<Response> =>
-            fetch(readUrl(base, name, args), { method, ...(init ?? {}) })
-        rpc.isError = (e: unknown, name: string): boolean =>
-            e !== null &&
-            typeof e === 'object' &&
-            ((e as Record<string, unknown>).kind === name ||
-                (e as Record<string, unknown>).name === name)
-        rpc.refresh = (args?: Args): void => backing.refresh(args)
-        rpc.invalidate = (args?: Args): void => backing.invalidate(args)
-        rpc.amend = (args: Args, next: T | ((current: T | undefined) => T)): void =>
-            backing.amend(args, next)
-        rpc.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
-        rpc.seed = (args: Args, value: T): void => backing.seed(args, value)
-        rpc.bindBroadcast = (): void => {} // server-only seam; inert on the client proxy
-        return rpc
+        return (await response.json()) as T
     }
 
-    const mutation = (async (args: Args | FormData): Promise<T> => {
-        // TODO #8 multipart upload: a `FormData` arg is sent as the raw body with NO content-type header
-        // — the browser sets the `multipart/form-data` boundary — plus `x-abide` to pass the CSRF gate
-        // (multipart is a CORS-simple content type, so the header is what a cross-site form can't forge).
-        // A plain-object arg keeps the JSON path (content-type: application/json also satisfies CSRF).
-        const isFormData = typeof FormData !== 'undefined' && args instanceof FormData
-        const response = await fetch(`${base}/rpc/${name}`, {
-            method,
-            headers: isFormData
-                ? { 'x-abide': '1' }
-                : { 'content-type': 'application/json', 'x-abide': '1' },
-            body: isFormData ? args : JSON.stringify(args ?? {}),
-        })
-        if (!response.ok) throw await toHttpError(response)
-        return (await response.json()) as T
-    }) as Mutation<Args, T>
-    return mutation
+    // `ttl: null`/undefined → the cell default (Infinity, retain until invalidate) — a read's policy. A
+    // mutation's spec carries `ttl: 0` by default (coalesce concurrent, retain nothing); `cache: { ttl }`
+    // carries the author's value so a cached mutation retains on the client too.
+    const ttl = opts?.ttl
+    const loadForCell = load as (args: Args) => Promise<T>
+    const backing =
+        ttl === null || ttl === undefined
+            ? cell<Args, T>(loadForCell)
+            : cell<Args, T>(loadForCell, { ttl })
+
+    // A `shared` route broadcasts cache verbs on its `(rpc,args)` channel (rpc-core §8). On the FIRST
+    // read for a given args the browser cell auto-joins that channel and mirrors inbound frames through
+    // its own verbs. Dedup by canonicalKey; a non-shared route never subscribes. No-op under SSR.
+    const shared = opts?.shared === true
+    const subscribed = new Set<string>()
+    const ensureSubscribed = (args: Args): void => {
+        if (!shared) return
+        const key = canonicalKey(args)
+        if (subscribed.has(key)) return
+        subscribed.add(key)
+        subscribeCacheChannel(
+            cacheChannelName(name, args),
+            args,
+            (frame) => applyCacheFrame(backing, args, frame),
+            base,
+        )
+    }
+
+    // THE CALL (Promise-read model): a read or celled mutation routes through the cell (coalesce +
+    // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `cache: false`
+    // mutation or a FormData body bypasses the cell (direct fetch, at-least-once).
+    const rpc = ((args: Args | FormData): Promise<T> => {
+        if (!read && (!celled || (typeof FormData !== 'undefined' && args instanceof FormData))) {
+            return load(args)
+        }
+        ensureSubscribed(args as Args)
+        return backing(args as Args)
+    }) as Rpc<Args, T>
+    rpc.peek = (args: Args): T | undefined => {
+        ensureSubscribed(args)
+        return backing.peek(args)
+    }
+    rpc.load = (args: Args): Promise<T> => {
+        ensureSubscribed(args)
+        return backing.load(args)
+    }
+    rpc.pending = (args: Args): boolean => backing.pending(args)
+    rpc.refreshing = (args: Args): boolean => backing.refreshing(args)
+    rpc.error = (args: Args): unknown => backing.error(args)
+    // Streaming chunk probes (the `StreamRead`/`StreamMutation` surface): `peek` above is already
+    // stream-aware (latest chunk); forward `chunks` (transcript) + `done` (closed?) too. A scalar route
+    // never calls these; only the streaming type surfaces them.
+    const streamRpc = rpc as unknown as {
+        chunks: (args: Args) => unknown[] | undefined
+        done: (args: Args) => boolean
+    }
+    streamRpc.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
+    streamRpc.done = (args: Args): boolean => backing.done(args)
+    rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
+        backing.watch(args, handler)
+    // Raw fetch, full bypass of the cell — the untouched `Response` (no parse, no `!ok` throw). A read
+    // GETs `?args=`; a mutation POSTs the body + CSRF header. `init` overrides wholesale.
+    rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> =>
+        read
+            ? fetch(readUrl(base, name, args), { method, ...(init ?? {}) })
+            : fetch(`${base}/__abide/rpc/${name}`, { ...mutationInit(method, args), ...(init ?? {}) })
+    rpc.isError = (e: unknown, name: string): boolean =>
+        e !== null &&
+        typeof e === 'object' &&
+        ((e as Record<string, unknown>).kind === name ||
+            (e as Record<string, unknown>).name === name)
+    rpc.refresh = (args?: Args): void => backing.refresh(args)
+    rpc.invalidate = (args?: Args): void => backing.invalidate(args)
+    rpc.amend = (args: Args, next: T | ((current: T | undefined) => T)): void =>
+        backing.amend(args, next)
+    rpc.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
+    rpc.seed = (args: Args, value: T): void => backing.seed(args, value)
+    rpc.bindBroadcast = (): void => {} // server-only seam; inert on the client proxy
+    return rpc
 }
 
 // Build the imports map injected into a page's client mount: RPC name -> its client proxy. Each
-// spec carries the verb and read/mutation kind harvested from the server module's `__rpc` meta.
+// spec carries the verb, kind, and cache policy harvested from the server module's `__rpc` meta.
 export function makeClientImports(
-    specs: Record<string, { method: string; read: boolean; shared?: boolean }>,
+    specs: Record<
+        string,
+        { method: string; read: boolean; shared?: boolean; cache?: boolean; ttl?: number | null }
+    >,
     base?: string,
 ): Record<string, unknown> {
     const imports: Record<string, unknown> = {}
@@ -191,6 +214,9 @@ export function makeClientImports(
         imports[name] = clientProxy(name, spec.method, {
             base: base ?? '',
             shared: spec.shared === true,
+            // Absent → celled (default); only an explicit `false` opts the call out of the cell.
+            cache: spec.cache !== false,
+            ttl: spec.ttl ?? null,
         })
     }
     return imports

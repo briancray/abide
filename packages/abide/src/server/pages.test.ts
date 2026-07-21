@@ -235,7 +235,7 @@ test('an unknown path still 404s; RPC + openapi unaffected', async () => {
     expect(notFound.status).toBe(404)
 
     const rpcResponse = await app.fetch(
-        `/rpc/greet?args=${encodeURIComponent(JSON.stringify({ name: 'z' }))}`,
+        `/__abide/rpc/greet?args=${encodeURIComponent(JSON.stringify({ name: 'z' }))}`,
     )
     expect(rpcResponse.status).toBe(200)
     expect(await rpcResponse.json()).toBe('hi z')

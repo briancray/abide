@@ -72,7 +72,7 @@ Opt-in deliberately crosses requests, so the auth-free property is made *structu
 ## 3. Cache key & TTL
 
 - **Cache key** = `(callSiteId, canonicalKey(args))`. `callSiteId` is the route name for
-  RPC (`/rpc/<name>`); for wrapped third-party `cell`s it is auto-generated (stable enough
+  RPC (`/__abide/rpc/<name>`); for wrapped third-party `cell`s it is auto-generated (stable enough
   for per-request use) or an explicit `key` opt (§6).
 - **TTL** = `ttl: <ms>` option **everywhere**, default **∞** (entries are retained until
   explicitly `invalidate`/`refresh`; SWR-style retained-value store, not time-expiry).
@@ -251,9 +251,15 @@ One imported callable means two things:
    OpenAPI + MCP tool schemas.
 2. **Input:** server **always** validates (trust boundary). Client **never** by default
    (types guard at compile time; avoids bundling the validator). Client validation is
-   opt-in (§12).
+   opt-in (§12). **Schema-first typing:** when `schemas.input` is a Standard Schema, the
+   handler's argument type **flows from it** (its parsed/output type) — so
+   `GET(({ page }) => …, { schemas: { input: z.object({ page: z.number() }) } })` types `page`
+   with no annotation, the schema being the single source of truth. A raw JSON Schema carries
+   no TS type, so the arg still comes from the handler (§11).
 3. **Output:** validate in **dev** (catch contract drift); **prod off** unless explicitly
-   enabled (validating your own output every request is self-distrust + overhead).
+   enabled (validating your own output every request is self-distrust + overhead). When
+   `schemas.output` is a Standard Schema, the handler's **return is also checked against it at
+   compile time** — a drifted return is a type error (surfaced at the call site).
 4. **Files:** server-only. `maxBodySize` is the hard outer bound checked **pre-parse**
    (413 before buffering); then the `files` schema validates count/mime/size. Large files
    spooled/streamed, not fully buffered.
@@ -281,13 +287,21 @@ One imported callable means two things:
 When no schema is given, synthesize input/output JSON Schema from the handler's TS types.
 
 1. **Precedence:** explicit schema wins; absent → derive from types automatically. Derived
-   JSON Schema is first-class: feeds server validation, client opt-in, OpenAPI, MCP.
+   JSON Schema is first-class: feeds server validation, client opt-in, OpenAPI, MCP. The
+   handler arg's type is any of: an **annotation** (`fn({ id }: { id: number })`), an explicit
+   **generic**, or — with no annotation at all — a **destructuring default**
+   (`fn({ page = 1 }) => …` derives `{ page?: number }`, the default both types the field and
+   makes it optional). No annotation is needed when a default already types every field.
 2. **Runtime-enforced:** a handler `fn({ id: number })` with no schema still rejects
    `id: "foo"` server-side. Types become runtime guards.
-3. **Loud on unrepresentable types** (not silent-permissive): types that don't map to JSON
-   Schema (unbounded unions, branded/opaque, `Function`, uninstantiated generics,
+3. **Loud on unrepresentable OR untyped positions** (not silent-permissive): types that don't
+   map to JSON Schema (unbounded unions, branded/opaque, `Function`, uninstantiated generics,
    mapped/conditional) → `abide check`/build **warns loudly** (or errors, configurable),
-   naming type + field. Codec-native types get known mappings (`Date` →
+   naming type + field. A field that resolves to **`any`** (a param with neither an annotation
+   nor a default — the overload contextually types the param, so this slips past
+   `noImplicitAny`) is likewise **loud**: it derives permissive `{}` but names the field. Only
+   a bare **`unknown`** — a zero-arg handler's absent input, or an intentionally-open value —
+   stays silently permissive. Codec-native types get known mappings (`Date` →
    `{ type: 'string', format: 'date-time' }`, etc.) so they're representable.
 4. **Output derivation unwraps the response wrapper:** `TypedResponse<T>`/`json(T)` → `T`;
    `jsonl`/`sse` → element type; `redirect`/`error` union members excluded from success
@@ -339,6 +353,12 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    shouldn't be called, it fails **auth**, not by being hidden.
 
 ## 14. HTTP semantics
+
+**Endpoint + reserved namespace.** Every RPC is served at `/__abide/rpc/<name>`, under the reserved
+`/__abide/*` framework prefix — alongside `/__abide/sockets`, `/__abide/health`, and `/__abide/mcp`.
+`routeInfo()` (`router.ts`) is the single classifier: a path under `/__abide/rpc/` is an RPC, every
+other path is an app page route. So `/rpc/*` (and any non-`/__abide/*` path) is free for application
+pages — nothing is reserved outside `/__abide/*`.
 
 1. **Reads (`GET`/`HEAD`): args object in the URL** (canonical-keyer → compact query
    param; GET has no body). Safe/idempotent, cacheable, coalesced. **Mutations

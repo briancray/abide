@@ -1,0 +1,19 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { health } from "abide/shared/health"
+
+  // health() is ISOMORPHIC: on the client `await health()` fetches the live /__abide/health endpoint
+  // (the same call returns the framework baseline in-proc on the server). No hand-rolled fetch.
+  let doc = state(null)
+
+  async function loadHealth() {
+    doc = await health()
+  }
+</script>
+
+<button id="health-btn" onclick={loadHealth}>Fetch /__abide/health</button>
+{#if doc}
+  <pre class="out" id="health-block">reachable = {doc.reachable ? "true" : "false"}</pre>
+{:else}
+  <p id="health-block">not fetched yet</p>
+{/if}

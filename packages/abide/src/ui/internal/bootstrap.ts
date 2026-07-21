@@ -80,7 +80,7 @@ function replayReads(seed: HydrationSeed, imports: Record<string, unknown>): voi
 // mismatch it fresh-mounts internally.
 export function bootstrapPage(
     hydrate: PageMount,
-    rpcSpecs: Record<string, { method: string; read: boolean; shared?: boolean }>,
+    rpcSpecs: RpcSpecs,
     base?: string,
     seedOverride?: HydrationSeed,
     socketSpecs?: SocketSpecs,

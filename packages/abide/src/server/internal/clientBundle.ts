@@ -31,6 +31,7 @@ import type { BunPlugin } from 'bun'
 import { analyzeScope, type ScopeAnalysis } from '../../ui/internal/analyzeScope.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { parse } from '../../ui/internal/parse.ts'
+import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
@@ -70,11 +71,23 @@ const BUNDLE_CACHE = new WeakMap<AppConfig, Promise<ClientBuild>>()
 function rpcSpecs(
     config: AppConfig,
     importedNames: Set<string>,
-): Record<string, { method: string; read: boolean; shared: boolean }> {
-    const specs: Record<string, { method: string; read: boolean; shared: boolean }> = {}
+): Record<
+    string,
+    { method: string; read: boolean; shared: boolean; cache: boolean; ttl: number | null }
+> {
+    const specs: Record<
+        string,
+        { method: string; read: boolean; shared: boolean; cache: boolean; ttl: number | null }
+    > = {}
     for (const entry of buildRegistry(config).rpcs) {
         if (!importedNames.has(entry.name)) continue
-        specs[entry.name] = { method: entry.method, read: entry.read, shared: entry.shared }
+        specs[entry.name] = {
+            method: entry.method,
+            read: entry.read,
+            shared: entry.shared,
+            cache: entry.cache,
+            ttl: entry.ttl,
+        }
     }
     return specs
 }
@@ -145,8 +158,9 @@ function resolveCssImports(
     if (sourceDir === undefined) return client
     let out = client
     for (const specifier of cssImports) {
-        if (specifier.startsWith('./') || specifier.startsWith('../')) {
-            const absolute = join(sourceDir, specifier)
+        const aliased = resolveTemplateAlias(specifier, sourceDir)
+        if (aliased !== undefined || specifier.startsWith('./') || specifier.startsWith('../')) {
+            const absolute = aliased ?? join(sourceDir, specifier)
             out = out.replace(
                 `import ${JSON.stringify(specifier)};`,
                 `import ${JSON.stringify(absolute)};`,
@@ -215,7 +229,9 @@ async function emitOne(
                 `abide: <${componentImport.local}> imports "${componentImport.specifier}" but the importer's source dir is unknown (needed to resolve .abide components in the client bundle).`,
             )
         }
-        const childPath = join(sourceDir, componentImport.specifier)
+        const childPath =
+            resolveTemplateAlias(componentImport.specifier, sourceDir) ??
+            join(sourceDir, componentImport.specifier)
         const childSource = await Bun.file(childPath).text()
         const childIndex = await emitOne(
             childSource,

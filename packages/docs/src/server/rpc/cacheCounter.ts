@@ -6,7 +6,7 @@ import { GET } from 'abide/server/GET'
 // against a real isomorphic fetch (in-proc on the server, HTTP from the browser).
 const runsByKey = new Map<string, number>()
 
-export default GET(({ key = 'alpha' }: { key?: string }) => {
+export default GET(({ key = 'alpha' }) => {
     const next = (runsByKey.get(key) ?? 0) + 1
     runsByKey.set(key, next)
     return { key, runs: next }

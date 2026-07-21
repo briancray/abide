@@ -115,7 +115,7 @@ describe('RPC input validation (integration)', () => {
         })
         try {
             const response = await app.fetch(
-                `/rpc/read?args=${encodeURIComponent(JSON.stringify({ id: 5 }))}`,
+                `/__abide/rpc/read?args=${encodeURIComponent(JSON.stringify({ id: 5 }))}`,
             )
             expect(response.status).toBe(200)
             expect(await response.json()).toEqual({ doubled: 10 })
@@ -140,7 +140,7 @@ describe('RPC input validation (integration)', () => {
         })
         try {
             const response = await app.fetch(
-                `/rpc/read?args=${encodeURIComponent(JSON.stringify({ id: 'bad' }))}`,
+                `/__abide/rpc/read?args=${encodeURIComponent(JSON.stringify({ id: 'bad' }))}`,
             )
             expect(response.status).toBe(422)
             const body = (await response.json()) as {
@@ -169,7 +169,7 @@ describe('RPC input validation (integration)', () => {
             },
         })
         try {
-            const ok = await app.fetch(`/rpc/write`, {
+            const ok = await app.fetch(`/__abide/rpc/write`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ id: 3 }),
@@ -178,7 +178,7 @@ describe('RPC input validation (integration)', () => {
             expect(await ok.json()).toEqual({ ok: 3 })
             expect(calls).toBe(1)
 
-            const bad = await app.fetch(`/rpc/write`, {
+            const bad = await app.fetch(`/__abide/rpc/write`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ id: null }),
@@ -227,7 +227,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
         try {
             // Valid args → handler runs → 200.
             const ok = await app.fetch(
-                `/rpc/echo?args=${encodeURIComponent(JSON.stringify({ text: 'hi' }))}`,
+                `/__abide/rpc/echo?args=${encodeURIComponent(JSON.stringify({ text: 'hi' }))}`,
             )
             expect(ok.status).toBe(200)
             expect(await ok.json()).toEqual({ echoed: 'hi' })
@@ -235,7 +235,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
 
             // Wrong type for `text` → 422 ValidationError, handler never runs.
             const badType = await app.fetch(
-                `/rpc/echo?args=${encodeURIComponent(JSON.stringify({ text: 123 }))}`,
+                `/__abide/rpc/echo?args=${encodeURIComponent(JSON.stringify({ text: 123 }))}`,
             )
             expect(badType.status).toBe(422)
             const typeBody = (await badType.json()) as {
@@ -248,7 +248,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
 
             // Missing required `text` → 422 ValidationError, handler never runs.
             const missing = await app.fetch(
-                `/rpc/echo?args=${encodeURIComponent(JSON.stringify({}))}`,
+                `/__abide/rpc/echo?args=${encodeURIComponent(JSON.stringify({}))}`,
             )
             expect(missing.status).toBe(422)
             const missingBody = (await missing.json()) as {
@@ -268,11 +268,16 @@ describe('RPC output validation (dev-only)', () => {
     test('output-schema mismatch logs a warning but still returns 200 in dev', async () => {
         const previousEnv = Bun.env.NODE_ENV
         Bun.env.NODE_ENV = 'development'
-        const warnings: unknown[][] = []
-        const originalWarn = console.warn
-        console.warn = (...args: unknown[]): void => {
-            warnings.push(args)
-        }
+        // The drift warning rides the gated `abide:rpc` log channel (server path → stderr). Enable the
+        // channel and tap stderr to observe it.
+        const previousDebug = Bun.env.DEBUG
+        Bun.env.DEBUG = 'abide:rpc'
+        const lines: string[] = []
+        const originalWrite = process.stderr.write
+        process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+            lines.push(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+            return true
+        }) as typeof process.stderr.write
         // Handler returns a string, but the output schema demands a number → contract drift.
         const app = createTestApp({
             routes: {
@@ -282,14 +287,14 @@ describe('RPC output validation (dev-only)', () => {
             },
         })
         try {
-            const response = await app.fetch(`/rpc/drift`)
+            const response = await app.fetch(`/__abide/rpc/drift`)
             expect(response.status).toBe(200)
             expect(await response.json()).toBe('not a number')
-            expect(
-                warnings.some((entry) => String(entry[0]).includes('output schema mismatch')),
-            ).toBe(true)
+            expect(lines.some((line) => line.includes('output schema mismatch'))).toBe(true)
         } finally {
-            console.warn = originalWarn
+            process.stderr.write = originalWrite
+            if (previousDebug === undefined) delete Bun.env.DEBUG
+            else Bun.env.DEBUG = previousDebug
             if (previousEnv === undefined) delete Bun.env.NODE_ENV
             else Bun.env.NODE_ENV = previousEnv
             await app.stop()

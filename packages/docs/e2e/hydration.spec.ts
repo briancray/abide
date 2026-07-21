@@ -6,9 +6,9 @@ import { expect, test } from '@playwright/test'
 // sibling component's seeded `state()` gets a shifted value. Here each Demo's open source tab is a seeded
 // state; a desync left panels with no `active` class (code hidden until you clicked the tab).
 test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded', async ({ page }) => {
-  await page.goto('/reactivity')
-  await page.getByRole('link', { name: 'Await', exact: true }).click() // soft-nav → /control/async
-  await expect(page).toHaveURL(/\/control\/async$/)
+  await page.goto('/templating/reactivity')
+  await page.getByRole('link', { name: 'Async blocks', exact: true }).click() // soft-nav → /templating/async
+  await expect(page).toHaveURL(/\/templating\/async$/)
   // Every sample must have exactly one active source panel (matching its default tab), none hidden.
   const samples = page.locator('.sample')
   const n = await samples.count()

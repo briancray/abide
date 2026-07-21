@@ -203,7 +203,7 @@ for (const k of ["window","document","location","navigator","history","Element",
 g.window = win;
 // Fetch spy: any /rpc/ hit means the client re-fetched instead of using the seed.
 let rpcCalls = 0;
-g.fetch = (u, ...a) => { if (String(u).includes("/rpc/")) { rpcCalls++; return Promise.resolve(new Response('"REFETCHED"', { status: 200, headers: { "content-type": "application/json" } })); } return Promise.reject(new Error("unexpected fetch " + u)); };
+g.fetch = (u, ...a) => { if (String(u).includes("/__abide/rpc/")) { rpcCalls++; return Promise.resolve(new Response('"REFETCHED"', { status: 200, headers: { "content-type": "application/json" } })); } return Promise.reject(new Error("unexpected fetch " + u)); };
 win.document.body.innerHTML = (ssr.match(/<body>([\\s\\S]*)<\\/body>/) || [,ssr])[1];
 let threw = "";
 try { await import(globalThis.__abideLoader); await new Promise(r=>setTimeout(r,60)); }

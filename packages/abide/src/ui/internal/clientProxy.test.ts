@@ -113,7 +113,9 @@ test('makeClientImports builds a name -> proxy map', () => {
     expect(Object.keys(imports).sort()).toEqual(['bump', 'greet'])
     expect(typeof imports.greet).toBe('function')
     expect(typeof imports.bump).toBe('function')
-    // The read proxy carries the reactive surface; the mutation does not.
+    // Both proxies carry the identical reactive surface — full read/mutation symmetry.
     expect(typeof (imports.greet as Rpc<unknown, unknown>).load).toBe('function')
-    expect((imports.bump as { load?: unknown }).load).toBeUndefined()
+    expect(typeof (imports.bump as Rpc<unknown, unknown>).load).toBe('function')
+    expect(typeof (imports.bump as Rpc<unknown, unknown>).refresh).toBe('function')
+    expect(typeof (imports.bump as Rpc<unknown, unknown>).peek).toBe('function')
 })

@@ -42,6 +42,16 @@ export function renderValue(value: unknown): string {
     return escapeHtml(String(value))
 }
 
+// An interpolation LEAF's server HTML. A `Raw` value is a mounted subtree (a `{#snippet}` call or the
+// `{children()}` slot) that can span MANY top-level nodes, so it is wrapped in the paired `<!--[-->…<!--]-->`
+// block anchors (identical to real blocks) instead of the single trailing `<!---->` a scalar leaf carries.
+// The bracket lets the hydrate walk skip the whole mountable region as ONE unit (via `findBlockClose`) —
+// without it the walk mis-reads multi-node output as a single text leaf and desyncs every following sibling.
+export function renderLeaf(value: unknown): string {
+    if (value instanceof Raw) return `<!--[-->${value.value}<!--]-->`
+    return `${renderValue(value)}<!---->`
+}
+
 // `{html(expr)}` value → raw markup (null/undefined → "", Raw → its value, else String).
 export function rawValue(value: unknown): string {
     if (value === null || value === undefined) return ''

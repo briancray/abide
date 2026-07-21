@@ -78,7 +78,7 @@ export async function authorizeChannelJoin(
     // Reconstruct the scope the HTTP GET read of `(rpcName, presentedArgs)` would have run in:
     // identity resolved at upgrade (same cookie/bearer ladder), args reachable both on the request
     // URL query (`?args=` — where a read handler's middleware reads them) AND in route().params.
-    const rpcUrl = new URL(`/rpc/${rpcName}`, new URL(connData.request.url).origin)
+    const rpcUrl = new URL(`/__abide/rpc/${rpcName}`, new URL(connData.request.url).origin)
     rpcUrl.searchParams.set('args', JSON.stringify(presentedArgs))
     const syntheticRequest = new Request(rpcUrl, {
         method: 'GET',

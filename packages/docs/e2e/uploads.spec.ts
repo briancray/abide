@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test'
 const TEXT_FILE = { name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('hello world') }
 
 test('a valid multipart upload (file + caption) succeeds from the browser', async ({ page }) => {
-    await page.goto('/uploads')
+    await page.goto('/rpc/uploads')
 
     await page.getByTestId('upload-caption').fill('my sunset')
     await page.getByTestId('upload-file').setInputFiles(TEXT_FILE)
@@ -22,7 +22,7 @@ test('a valid multipart upload (file + caption) succeeds from the browser', asyn
 test('a valid file with an EMPTY caption is rejected by the input schema (#8 text-field follow-up)', async ({
     page,
 }) => {
-    await page.goto('/uploads')
+    await page.goto('/rpc/uploads')
 
     // Provide a valid file but leave the required text field empty → the TEXT validation (not the file
     // validation) fails. Proves the multipart `input` schema now governs text fields too.

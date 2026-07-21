@@ -1,0 +1,15 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // state(v, transform?) — a writable cell. The optional transform runs on every write; here it
+  // clamps the value into 0..10, so hammering increment never exceeds 10.
+  let count = state(0, (value) => Math.max(0, Math.min(10, value)))
+  function reset() { count = 0 }
+</script>
+
+<div class="row">
+  <button data-testid="dec" onclick={() => count--}>Decrement</button>
+  <button data-testid="inc" onclick={() => count++}>Increment</button>
+  <button data-testid="reset" onclick={reset}>Reset</button>
+</div>
+<p>Count: <strong data-testid="count">{count}</strong> <span class="muted">(writes clamp into 0..10)</span></p>

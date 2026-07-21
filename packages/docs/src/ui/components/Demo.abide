@@ -2,7 +2,7 @@
   import { props } from "abide/ui/props"
   import { html } from "abide/ui/html"
   import { state } from "abide/ui/state"
-  import snippet from "../../server/rpc/snippet"
+  import snippet from "$server/rpc/snippet"
 
   // A self-contained, reproducible demo card. The page renders the live demo as a child and points
   // `client`/`server` at the REAL files that power it. The card shows the demo, then two source tabs

@@ -1,0 +1,78 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import EscapedTextDemo from "$ui/demos/templating/bindings/EscapedTextDemo.abide"
+  import RawHtmlDemo from "$ui/demos/templating/bindings/RawHtmlDemo.abide"
+  import ReactiveAttrDemo from "$ui/demos/templating/bindings/ReactiveAttrDemo.abide"
+  import NativeEventsDemo from "$ui/demos/templating/bindings/NativeEventsDemo.abide"
+  import BindValueDemo from "$ui/demos/templating/bindings/BindValueDemo.abide"
+  import BareStateBindDemo from "$ui/demos/templating/bindings/BareStateBindDemo.abide"
+  import BindCheckedDemo from "$ui/demos/templating/bindings/BindCheckedDemo.abide"
+  import BindGroupDemo from "$ui/demos/templating/bindings/BindGroupDemo.abide"
+  import DerivedAccessorDemo from "$ui/demos/templating/bindings/DerivedAccessorDemo.abide"
+  import NodeRefDemo from "$ui/demos/templating/bindings/NodeRefDemo.abide"
+  import AttachFnDemo from "$ui/demos/templating/bindings/AttachFnDemo.abide"
+  import ClassDirectiveDemo from "$ui/demos/templating/bindings/ClassDirectiveDemo.abide"
+  import StyleDirectiveDemo from "$ui/demos/templating/bindings/StyleDirectiveDemo.abide"
+  import SpreadAttrsDemo from "$ui/demos/templating/bindings/SpreadAttrsDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Bindings & directives</h1>
+  <p class="lead">Every template binding and directive, each wired to a live input so it can be typed, clicked, and checked. The two-way binds stay in sync both directions.</p>
+
+  <Demo id="escaped" title={"<code>{expr}</code> — escaped text"} client="src/ui/demos/templating/bindings/EscapedTextDemo.abide">
+    <EscapedTextDemo />
+  </Demo>
+
+  <Demo id="raw" title={"<code>{html(...)}</code> — raw HTML"} client="src/ui/demos/templating/bindings/RawHtmlDemo.abide">
+    <RawHtmlDemo />
+  </Demo>
+
+  <Demo id="attr" title={"<code>name={expr}</code> — reactive attribute"} client="src/ui/demos/templating/bindings/ReactiveAttrDemo.abide">
+    <ReactiveAttrDemo />
+  </Demo>
+
+  <Demo id="events" title={"<code>on&lt;event&gt;={fn}</code> — native events"} client="src/ui/demos/templating/bindings/NativeEventsDemo.abide">
+    <NativeEventsDemo />
+  </Demo>
+
+  <Demo id="value" title="<code>bind:value</code>" client="src/ui/demos/templating/bindings/BindValueDemo.abide">
+    <BindValueDemo />
+  </Demo>
+
+  <Demo id="barevalue" title={"<code>bind:value={x}</code> — bare state var"} client="src/ui/demos/templating/bindings/BareStateBindDemo.abide">
+    <BareStateBindDemo />
+  </Demo>
+
+  <Demo id="checked" title="<code>bind:checked</code>" client="src/ui/demos/templating/bindings/BindCheckedDemo.abide">
+    <BindCheckedDemo />
+  </Demo>
+
+  <Demo id="group" title="<code>bind:group</code>" client="src/ui/demos/templating/bindings/BindGroupDemo.abide">
+    <BindGroupDemo />
+  </Demo>
+
+  <Demo id="derived" title={"<code>bind:value={{get,set}}</code> — derived accessor"} client="src/ui/demos/templating/bindings/DerivedAccessorDemo.abide">
+    <DerivedAccessorDemo />
+  </Demo>
+
+  <Demo id="noderef" title="<code>bind:element</code> — node ref cell" client="src/ui/demos/templating/bindings/NodeRefDemo.abide">
+    <NodeRefDemo />
+  </Demo>
+
+  <Demo id="attach" title="<code>bind:element</code> — attach fn" client="src/ui/demos/templating/bindings/AttachFnDemo.abide">
+    <AttachFnDemo />
+  </Demo>
+
+  <Demo id="classdir" title={"<code>class:name={cond}</code>"} client="src/ui/demos/templating/bindings/ClassDirectiveDemo.abide">
+    <ClassDirectiveDemo />
+  </Demo>
+
+  <Demo id="styledir" title={"<code>style:prop={value}</code>"} client="src/ui/demos/templating/bindings/StyleDirectiveDemo.abide">
+    <StyleDirectiveDemo />
+  </Demo>
+
+  <Demo id="spread" title={"<code>{...expr}</code> — spread attributes"} client="src/ui/demos/templating/bindings/SpreadAttrsDemo.abide">
+    <SpreadAttrsDemo />
+  </Demo>
+</main>

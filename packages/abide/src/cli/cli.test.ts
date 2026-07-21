@@ -41,7 +41,7 @@ describe('serve — boots a file-based project on a real port', () => {
         expect(stripAnchors(await home.text())).toContain('<h1>hi x</h1>')
 
         const query = `?args=${encodeURIComponent(JSON.stringify({ name: 'world' }))}`
-        const greet = await fetch(`${app.url}/rpc/greet${query}`)
+        const greet = await fetch(`${app.url}/__abide/rpc/greet${query}`)
         expect(greet.status).toBe(200)
         expect(await greet.json()).toBe('hi world')
     })

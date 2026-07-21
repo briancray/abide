@@ -1,18 +1,35 @@
 <script module>
-  import Demo from "../../../components/Demo.abide"
-  import OpenApiDemo from "../../../demos/platform/OpenApiDemo.abide"
-  import McpDemo from "../../../demos/platform/McpDemo.abide"
+  import Demo from "$ui/components/Demo.abide"
+  import OpenApiDemo from "$ui/demos/platform/machines/OpenApiDemo.abide"
+  import McpDemo from "$ui/demos/platform/machines/McpDemo.abide"
+  import CapabilitiesDemo from "$ui/demos/platform/machines/CapabilitiesDemo.abide"
+  import AgentDemo from "$ui/demos/platform/machines/AgentDemo.abide"
 </script>
 
 <main class="page">
   <h1>Machine surfaces</h1>
-  <p class="lead">Every RPC is automatically a machine surface — no second implementation. Fetch the OpenAPI document and call the MCP endpoint's <code>tools/list</code> directly from this browser page and render what a machine would see.</p>
+  <p class="lead">Every RPC is automatically a machine surface — no second implementation. One handler is a browser fetch, an OpenAPI operation, and an MCP tool at once. Fetch each surface live from this browser page and render what a machine would see.</p>
 
-  <Demo id="openapi" title="<code>/openapi.json</code>" client="src/ui/demos/platform/OpenApiDemo.abide">
+  <ul class="surfaces">
+    <li><a href="/openapi.json">/openapi.json</a> — an OpenAPI 3.1 document describing every RPC.</li>
+    <li><code>/__abide/mcp</code> — a Model Context Protocol endpoint exposing RPCs as tools.</li>
+  </ul>
+
+  <Demo id="openapi" title="<code>/openapi.json</code>" client="src/ui/demos/platform/machines/OpenApiDemo.abide">
     <OpenApiDemo />
   </Demo>
 
-  <Demo id="mcp" title="<code>/__abide/mcp</code> — tools/list" client="src/ui/demos/platform/McpDemo.abide">
+  <Demo id="mcp" title="<code>/__abide/mcp</code> — tools/list" client="src/ui/demos/platform/machines/McpDemo.abide">
     <McpDemo />
+  </Demo>
+
+  <p>The surfaces above are only useful because the app's <em>capabilities are data</em>. This list is read from the same <code>capabilities</code> RPC an agent would call over MCP — one <code>GET</code> handler that a browser, an OpenAPI operation, and an MCP tool all share:</p>
+  <Demo id="capabilities" title="Capabilities as data" server="src/server/rpc/capabilities.ts" client="src/ui/demos/platform/machines/CapabilitiesDemo.abide" tab="server">
+    <CapabilitiesDemo />
+  </Demo>
+
+  <p>The third machine consumer is an agent. The same <code>agent(engine, messages, options)</code> loop drives any <code>AgentEngine</code> (the shipped Claude / Claude Code engines, or a scripted one). Here a deterministic scripted engine requests the <code>clock</code> tool; the loop runs it in-process and streams every <code>AgentFrame</code> — consumed live with <code>{'{'}#for await{'}'}</code>:</p>
+  <Demo id="agent" title="The <code>agent()</code> loop — provider-neutral, streamed" server="src/server/rpc/agentDemo.ts" client="src/ui/demos/platform/machines/AgentDemo.abide" tab="server">
+    <AgentDemo />
   </Demo>
 </main>

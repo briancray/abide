@@ -34,7 +34,7 @@ const stamp = (next: () => Response | Promise<Response>) => {
 
 // The handler runs only for authorized requests; it reads back the stamp layer 2 left in context().
 export default GET(
-    ({ allow = 'yes' }: { allow?: string }) => {
+    ({ allow = 'yes' }) => {
         const bag = context()
         return {
             allow,

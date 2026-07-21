@@ -14,6 +14,7 @@ import { analyzeScope } from './analyzeScope.ts'
 import { emitClientModule } from './emitClient.ts'
 import { emitServerModule } from './emitServer.ts'
 import { parse } from './parse.ts'
+import { resolveTemplateAlias } from './resolveTemplateAlias.ts'
 import { buildPlan } from './templatePlan.ts'
 
 export interface EmittedSource {
@@ -63,7 +64,7 @@ const filesystemResolver: TreeResolver = async (specifier, local, fromDir) => {
             `loadEmittedServer: <${local}> imports "${specifier}" but the importer's source dir is unknown`,
         )
     }
-    const absolute = join(fromDir, specifier)
+    const absolute = resolveTemplateAlias(specifier, fromDir) ?? join(fromDir, specifier)
     const source = await Bun.file(absolute).text()
     return { source, dir: dirname(absolute) }
 }

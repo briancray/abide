@@ -1,3 +1,3 @@
-import { GET } from "../../../../../GET.ts";
+import { GET } from 'abide/server/GET'
 
-export default GET(({ name }: { name: string }) => `hi ${name}`);
+export default GET(({ name }: { name: string }) => `hi ${name}`)

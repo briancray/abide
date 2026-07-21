@@ -1,8 +1,8 @@
 <script module>
-  import Demo from "../../../components/Demo.abide"
-  import CookiesDemo from "../../../demos/platform/CookiesDemo.abide"
-  import ContextDemo from "../../../demos/platform/ContextDemo.abide"
-  import GuardDemo from "../../../demos/platform/GuardDemo.abide"
+  import Demo from "$ui/components/Demo.abide"
+  import CookiesDemo from "$ui/demos/platform/scope/CookiesDemo.abide"
+  import ContextDemo from "$ui/demos/platform/scope/ContextDemo.abide"
+  import GuardDemo from "$ui/demos/platform/scope/GuardDemo.abide"
 </script>
 
 <main class="page">
@@ -10,18 +10,18 @@
   <p class="lead">Two per-request accessors. <code>cookies()</code> reads the request's <code>Bun.CookieMap</code>; <code>context()</code> is a free-form carrier bag handed from middleware to handler. Each is shown on its own below.</p>
 
   <p><code>cookies()</code> reads the request cookie jar. The browser sets <code>document.cookie</code>, then the RPC reads it back server-side — the value round-trips through the request scope.</p>
-  <Demo id="cookies" title="cookies()" server="src/server/rpc/platformCookies.ts" client="src/ui/demos/platform/CookiesDemo.abide" tab="server">
+  <Demo id="cookies" title="cookies()" server="src/server/rpc/platformCookies.ts" client="src/ui/demos/platform/scope/CookiesDemo.abide" tab="server">
     <CookiesDemo />
   </Demo>
 
   <p><code>context()</code> is the per-request carrier bag. A per-RPC middleware writes into it; the handler beneath it in the onion reads it back — the hand-off from a middleware layer to the handler.</p>
-  <Demo id="context" title="context()" server="src/server/rpc/platformContext.ts" client="src/ui/demos/platform/ContextDemo.abide" tab="server">
+  <Demo id="context" title="context()" server="src/server/rpc/platformContext.ts" client="src/ui/demos/platform/scope/ContextDemo.abide" tab="server">
     <ContextDemo />
   </Demo>
 
   <p>A per-RPC <code>middleware</code> array composes an onion around the handler. The first layer <em>authorizes</em>: it either returns an <code>error(403)</code> Response to short-circuit (the handler never runs), or calls <code>next()</code> and lets the second layer run. Both calls hit the real router pipeline in the browser:</p>
 
-  <Demo id="guard" title="RPC <code>middleware</code> — onion + short-circuit" server="src/server/rpc/platformGuard.ts" client="src/ui/demos/platform/GuardDemo.abide" tab="server">
+  <Demo id="guard" title="RPC <code>middleware</code> — onion + short-circuit" server="src/server/rpc/platformGuard.ts" client="src/ui/demos/platform/scope/GuardDemo.abide" tab="server">
     <GuardDemo />
   </Demo>
 </main>

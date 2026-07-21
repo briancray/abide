@@ -120,11 +120,11 @@ async function callRpc(rpc: RpcEntry, args: unknown, request: Request): Promise<
     const encoded = JSON.stringify(args ?? {})
     let response: Response
     if (rpc.read) {
-        const target = new URL(`/rpc/${rpc.name}`, request.url)
+        const target = new URL(`/__abide/rpc/${rpc.name}`, request.url)
         target.searchParams.set('args', encoded)
         response = await fetch(target, { method: rpc.method, headers })
     } else {
-        const target = new URL(`/rpc/${rpc.name}`, request.url)
+        const target = new URL(`/__abide/rpc/${rpc.name}`, request.url)
         headers.set('content-type', 'application/json')
         response = await fetch(target, { method: rpc.method, headers, body: encoded })
     }

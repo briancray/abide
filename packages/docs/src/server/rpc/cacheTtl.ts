@@ -7,7 +7,7 @@ import { GET } from 'abide/server/GET'
 let runs = 0
 
 export default GET(
-    ({ tag = 't' }: { tag?: string }) => {
+    ({ tag = 't' }) => {
         runs++
         return { tag, runs }
     },

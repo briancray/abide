@@ -2,5 +2,13 @@
 // a guard is a middleware that returns error(403) instead of calling next().
 export const middleware = []
 
-export function onStart(): void {}
-export function onStop(): void {}
+// onStart/onStop WRAP the real boot/teardown: run setup, then `await start()` to bind the server
+// (returning without it aborts boot); `await stop()` tears it down. onError shapes the reply for an
+// unexpected throw during a request.
+export async function onStart(start: () => Promise<void>): Promise<void> {
+    await start()
+}
+
+export async function onStop(stop: () => Promise<void>): Promise<void> {
+    await stop()
+}

@@ -1,8 +1,8 @@
 import { GET } from 'abide/server/GET'
 import { invalidate } from 'abide/shared/invalidate'
 import { pending } from 'abide/shared/pending'
-import cacheTagA from './cacheTagA'
-import cacheTagB from './cacheTagB'
+import cacheTagA from '$server/rpc/cacheTagA'
+import cacheTagB from '$server/rpc/cacheTagB'
 
 // Surfaces the GLOBAL reactive aggregate `pending({ tags })` — true if ANY shared slot carrying a
 // listed tag is on its first load. Server-only (the tag registry is server-side), so we expose it

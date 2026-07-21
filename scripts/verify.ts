@@ -29,6 +29,7 @@ const steps: Step[] = [
   { name: "fix — biome --write", run: () => $`biome check --write`, fixes: true },
   { name: "lint — biome check", run: () => $`biome check` },
   { name: "typecheck — tsc (all workspaces)", run: () => $`bun run --filter '*' typecheck` },
+  { name: "abide check — framework .abide fixtures", run: () => $`bun run --filter abide abide-check` },
   { name: "abide check — .abide samples + site", run: () => $`bun run --filter docs abide-check` },
   { name: "abide check — scaffold starter", run: () => $`bun run --filter starter abide-check` },
   { name: "test — abide bun test", run: () => $`bun run --filter abide test` },

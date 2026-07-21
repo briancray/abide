@@ -27,9 +27,27 @@ function captureStdout(run: () => void): string[] {
     return writes
 }
 
+// Capture what log writes to stderr (warn/error) for the duration of `run`.
+function captureStderr(run: () => void): string[] {
+    const writes: string[] = []
+    const original = process.stderr.write.bind(process.stderr)
+    ;(process.stderr as { write: (chunk: string) => boolean }).write = (chunk: string): boolean => {
+        writes.push(String(chunk))
+        return true
+    }
+    try {
+        run()
+    } finally {
+        ;(process.stderr as { write: typeof original }).write = original
+    }
+    return writes
+}
+
 afterEach(() => {
     delete Bun.env.DEBUG
     delete Bun.env.ABIDE_LOG_FORMAT
+    delete Bun.env.ABIDE_APP_NAME
+    delete (globalThis as { localStorage?: unknown }).localStorage
 })
 
 describe('log — channel gating by DEBUG', () => {
@@ -58,6 +76,48 @@ describe('log — channel gating by DEBUG', () => {
         })
         expect(writes.length).toBe(1)
         expect(writes[0]).toContain('always')
+    })
+
+    test('error bypasses gating on a named channel (failures always surface)', () => {
+        const writes = captureStderr(() => {
+            delete Bun.env.DEBUG
+            log.channel('abide:rpc').error('boom')
+            log.channel('abide:rpc').warn('quiet') // warn stays gated
+        })
+        expect(writes.length).toBe(1)
+        expect(writes[0]).toContain('boom')
+        expect(writes[0]).toContain('[abide:rpc]')
+    })
+
+    test('a channel emits when localStorage.debug names it (browser gate)', () => {
+        const writes = captureStdout(() => {
+            delete Bun.env.DEBUG
+            ;(globalThis as { localStorage?: { getItem(k: string): string | null } }).localStorage =
+                { getItem: (key) => (key === 'debug' ? 'abide:*' : null) }
+            log.channel('abide:cache')('via localStorage')
+        })
+        expect(writes.length).toBe(1)
+        expect(writes[0]).toContain('via localStorage')
+        expect(writes[0]).toContain('[abide:cache]')
+    })
+})
+
+describe('log — default channel is the app name', () => {
+    test('the un-channeled logger is labeled "abide" by default', () => {
+        const writes = captureStdout(() => {
+            delete Bun.env.ABIDE_APP_NAME
+            log.info('hello')
+        })
+        expect(writes[0]).toContain('[abide]')
+    })
+
+    test('ABIDE_APP_NAME sets the default channel label', () => {
+        const writes = captureStdout(() => {
+            Bun.env.ABIDE_APP_NAME = 'myapp'
+            log.info('hello')
+        })
+        expect(writes[0]).toContain('[myapp]')
+        expect(writes[0]).not.toContain('[abide]')
     })
 })
 
@@ -115,7 +175,7 @@ describe('trace — W3C traceparent within a request', () => {
         const app = createTestApp({ routes: { traceRpc } })
         const incoming = `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`
         try {
-            const response = await app.fetch('/rpc/traceRpc', {
+            const response = await app.fetch('/__abide/rpc/traceRpc', {
                 method: 'GET',
                 headers: { traceparent: incoming },
             })
@@ -129,8 +189,10 @@ describe('trace — W3C traceparent within a request', () => {
 })
 
 describe('health / online / reachable', () => {
-    test('health() reports reachable: true', () => {
-        expect(health().reachable).toBe(true)
+    test('health() reports reachable: true and the abide version (server baseline)', async () => {
+        const doc = await health()
+        expect(doc.reachable).toBe(true)
+        expect(typeof doc.version).toBe('string')
     })
 
     test('online() is true on the server', () => {

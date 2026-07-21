@@ -259,7 +259,7 @@ test('isKnownPage: only real page patterns are soft-nav targets (not /openapi.js
     expect(isKnownPage('/machines')).toBe(true)
     expect(isKnownPage('/topics/hello')).toBe(true)
     expect(isKnownPage('/openapi.json')).toBe(false)
-    expect(isKnownPage('/rpc/greet')).toBe(false)
+    expect(isKnownPage('/__abide/rpc/greet')).toBe(false)
     expect(isKnownPage('/__abide/mcp')).toBe(false)
     expect(isKnownPage('/nope')).toBe(false)
 })

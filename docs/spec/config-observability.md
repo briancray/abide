@@ -49,17 +49,32 @@ Scope: boot-time config (`env(schema)`) and the observability surface
 
 1. **`log` = isomorphic structured logging** (`abide/shared`): levels `.info`/`.warn`/`.error`/
    `.trace` + named channels `.channel(name)`. **Server** writes structured lines to
-   stdout/stderr — **JSON when `ABIDE_LOG_FORMAT=json`, else TSV**. **Client** writes to console
-   (console-only by default; shipping client logs to the server is parked).
-2. **Channels gated by `DEBUG`** (the `debug`-npm pattern) — `log.channel('cache')` emits only if
-   `DEBUG` names it. Framework internals use channels too, so `DEBUG` lights up abide's own
-   diagnostics.
+   stdout/stderr — **JSON when `ABIDE_LOG_FORMAT=json`, else TSV** (`level  time  [channel]
+   traceparent?  message`). **Client** writes to console as `[channel] …` (console-only by
+   default; shipping client logs to the server is parked). Every line carries a **channel label**.
+2. **Default channel = the app name; framework channels = `abide:*`.** The un-channeled root
+   `log(...)` labels lines with the **app name** — `ABIDE_APP_NAME`, else the project
+   `package.json` `name` (seeded at boot by `loadApp`), else `"abide"` — and is **always on** (it
+   is the app's own stream). `.channel(name)` is a **named channel gated by the `debug`-npm
+   pattern**: server reads `DEBUG` (`DEBUG=cache,rpc` / `DEBUG=*`), the browser reads
+   `localStorage.debug`, so a channel is enable-able on **both** sides of the isomorphism. All
+   framework internals log under the **`abide:*`** namespace, so `DEBUG=abide:*` lights up abide's
+   own diagnostics. The current channel set: `abide:rpc`, `abide:cache`, `abide:router`,
+   `abide:ssr`, `abide:socket`, `abide:identity`, `abide:agent`, `abide:mcp`, `abide:hydrate`,
+   `abide:stream`, `abide:bundle`, `abide:cli`.
+   - **Level policy (one rule):** `error` **always emits**, bypassing gating, so operational
+     failures surface even on a silent channel. `warn`/`info`/`trace` emit **only** when their
+     channel is named (the default app channel counts as always-named → always on).
 3. **`trace()` = W3C Trace Context (`traceparent`).** Each server request gets/propagates a
    traceparent; **RPC calls carry it**, so a browser→server(→server) chain shares one trace id.
    **Auto-correlated into log lines.** `trace()` returns the current traceparent or `undefined`.
-4. **`health()` = app-defined health hook, merged into `/__abide/health`** alongside the
-   framework's `{ reachable }`. `/__abide/health` is the probe endpoint (load balancers /
-   monitors).
+4. **`onHealth()` = app-defined health hook (a `src/app.ts` export), merged into `/__abide/health`**
+   over the framework stub `{ reachable, version, startedAt, uptime }` (app fields win). It is
+   **request-scoped** (reads `identity()`/`context()`), and `reachable: false` or a throw answers
+   **503**. `/__abide/health` is the probe endpoint (load balancers / monitors). The isomorphic
+   `health()` (from `abide/shared/health`) is **async**: on the server it resolves the baseline
+   `{ reachable, version }` in-proc (the route composes its stub from it); on the client `await
+   health()` fetches `/__abide/health`, yielding the full merged document.
 5. **Connectivity probes:** `online()` = a **reactive** boolean (navigator.onLine + last-known
    reachability) for driving offline UI; `reachable(host)` = an `await`ed actual reachability
    check.

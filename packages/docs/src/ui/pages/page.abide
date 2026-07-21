@@ -1,11 +1,13 @@
 <script module>
-  import hello from "../../server/rpc/hello"
-  import capabilities from "../../server/rpc/capabilities"
+  import hello from "$server/rpc/hello"
+  import capabilities from "$server/rpc/capabilities"
 </script>
 
 <main class="page">
   <h1>abide</h1>
   <p class="lead">An isomorphic, type-safe framework for async interfaces — for humans <em>and</em> machines — built on Bun and web standards. This documentation site is itself an abide app: every page in the index is a live demo of the capability it describes.</p>
+
+  <p class="structure">Source lives under <code>src/</code>, split three ways — <code>src/server/</code> (RPCs, sockets, config), <code>src/ui/</code> (pages, layouts, components), and <code>src/shared/</code> (isomorphic helpers). Import across them with the path aliases <code>$server</code> / <code>$ui</code> / <code>$shared</code> that <code>abide scaffold</code> writes into <code>tsconfig.json</code>, instead of <code>../../</code> chains — every source tab on this site uses them. They resolve everywhere the same way: the Bun runtime, <code>abide check</code>, the editor, and inside <code>.abide</code> component and RPC imports.</p>
 
   <p class="say">{await hello({ who: "reader" })}</p>
 

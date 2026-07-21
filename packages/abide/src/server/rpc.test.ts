@@ -141,11 +141,26 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
         })
     })
 
-    test('a mutation does not expose the cache surface', async () => {
+    test('a mutation exposes the FULL cache surface (symmetry with a read)', async () => {
         const post = POST(async (n: number) => n)
-        expect((post as unknown as { peek?: unknown }).peek).toBeUndefined()
-        expect((post as unknown as { pending?: unknown }).pending).toBeUndefined()
-        expect((post as unknown as { load?: unknown }).load).toBeUndefined()
+        // Every reactive probe + cache verb + raw is present, exactly like a read.
+        for (const method of [
+            'peek',
+            'pending',
+            'refreshing',
+            'error',
+            'load',
+            'watch',
+            'refresh',
+            'invalidate',
+            'amend',
+            'snapshot',
+            'seed',
+            'raw',
+            'isError',
+        ] as const) {
+            expect(typeof (post as unknown as Record<string, unknown>)[method]).toBe('function')
+        }
     })
 
     test('a mutation call is always a fresh promise resolving to the return value', async () => {
@@ -156,6 +171,49 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
             expect(first).not.toBe(second)
             expect(await first).toBe('deleted:a')
             expect(await second).toBe('deleted:a')
+        })
+    })
+
+    test('an author-cached mutation (cache: { ttl }) RETAINS and its probes reflect it', async () => {
+        let calls = 0
+        const post = POST(
+            async (n: number) => {
+                calls++
+                return n * 10
+            },
+            { cache: { ttl: 60_000 } },
+        )
+        await runInScope(makeScope(), async () => {
+            expect(await post(5)).toBe(50)
+            // Retained: a second identical call within ttl resolves from cache, handler not re-run.
+            expect(await post(5)).toBe(50)
+            expect(calls).toBe(1)
+            // The reactive probe sees the retained value — full symmetry with a read.
+            expect(post.peek(5)).toBe(50)
+            // refresh re-runs the handler.
+            post.refresh(5)
+            expect(await post(5)).toBe(50)
+            expect(calls).toBe(2)
+        })
+    })
+
+    test('cache: false opts the CALL out of the cell (at-least-once) but keeps the surface', async () => {
+        let calls = 0
+        const post = POST(
+            async (n: number) => {
+                calls++
+                return n
+            },
+            { cache: false },
+        )
+        await runInScope(makeScope(), async () => {
+            await post(1)
+            await post(1)
+            // Every call runs — no coalescing/retention.
+            expect(calls).toBe(2)
+            // Surface still present (probes read an empty slot).
+            expect(typeof post.peek).toBe('function')
+            expect(post.peek(1)).toBeUndefined()
         })
     })
 })

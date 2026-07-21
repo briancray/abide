@@ -1,6 +1,6 @@
 <script module>
-  import Demo from "../../../components/Demo.abide"
-  import ConfigDemo from "../../../demos/platform/ConfigDemo.abide"
+  import Demo from "$ui/components/Demo.abide"
+  import ConfigDemo from "$ui/demos/platform/config/ConfigDemo.abide"
 </script>
 
 
@@ -8,12 +8,12 @@
   <h1>Config</h1>
   <p class="lead"><code>env(schema)</code> reads typed, boot-validated config from the environment. Strings are coerced by the schema (<code>"25"</code> → number, <code>"true"</code> → boolean), schema defaults fill missing keys, and it fails fast if a required var is missing or invalid. Below is a live read of an <code>env()</code>-backed RPC.</p>
 
-  <Demo id="config" title="Live config value" server="src/server/rpc/platformConfig.ts" client="src/ui/demos/platform/ConfigDemo.abide" tab="server" replayable={true}>
+  <Demo id="config" title="Live config value" server="src/server/rpc/platformConfig.ts" client="src/ui/demos/platform/config/ConfigDemo.abide" tab="server" replayable={true}>
     <ConfigDemo sampleId="config" />
   </Demo>
 
   <h2 id="env">Environment variables</h2>
-  <p>Beyond your own <code>env()</code> schema, abide reads these built-in variables from the environment. Set them in your process manager or container (see <a href="/deploy">Build &amp; deploy</a>). The one production requirement is <code>ABIDE_IDENTITY_SECRET</code> — without it, authenticated identity does not survive a restart.</p>
+  <p>Beyond your own <code>env()</code> schema, abide reads these built-in variables from the environment. Set them in your process manager or container (see <a href="/platform/deploy">Build &amp; deploy</a>). The one production requirement is <code>ABIDE_IDENTITY_SECRET</code> — without it, authenticated identity does not survive a restart.</p>
   <table class="envtable">
     <thead><tr><th>Variable</th><th>Effect</th></tr></thead>
     <tbody>

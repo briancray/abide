@@ -58,7 +58,7 @@ async function nextOrTimeout<T>(
 
 // Read the args a read handler's middleware would see on the HTTP GET path: from the request URL
 // `?args=` query. Identical on both the real HTTP read AND the synthetic channel-join scope (which
-// reconstructs the same `/rpc/<name>?args=` request), so ONE middleware gates both paths.
+// reconstructs the same `/__abide/rpc/<name>?args=` request), so ONE middleware gates both paths.
 function readArgs(): { id?: string } {
     const url = new URL(request().url)
     const raw = url.searchParams.get('args')

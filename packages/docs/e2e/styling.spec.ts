@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test'
 test('a component-scoped <style> applies to its own element after SSR + hydration', async ({
     page,
 }) => {
-    await page.goto('/styling')
+    await page.goto('/templating/styling')
 
     const swatch = page.getByTestId('scoped-swatch')
     await expect(swatch).toBeVisible()

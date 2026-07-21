@@ -1,31 +1,37 @@
 <script module>
-  import Demo from "../../../components/Demo.abide"
-  import RuntimeProbesDemo from "../../../demos/platform/RuntimeProbesDemo.abide"
-  import ObserveDemo from "../../../demos/platform/ObserveDemo.abide"
-  import HealthFetchDemo from "../../../demos/platform/HealthFetchDemo.abide"
-  import LogDemo from "../../../demos/platform/LogDemo.abide"
+  import Demo from "$ui/components/Demo.abide"
+  import OnlineDemo from "$ui/demos/platform/observability/OnlineDemo.abide"
+  import BundledDemo from "$ui/demos/platform/observability/BundledDemo.abide"
+  import ObserveDemo from "$ui/demos/platform/observability/ObserveDemo.abide"
+  import HealthFetchDemo from "$ui/demos/platform/observability/HealthFetchDemo.abide"
+  import LogDemo from "$ui/demos/platform/observability/LogDemo.abide"
 </script>
 
 
 <main class="page">
   <h1>Observability</h1>
-  <p class="lead"><code>trace()</code> returns the request's W3C traceparent, <code>health()</code> is the framework baseline probe, and <code>log()</code> writes a structured server line. The RPC below reads all three; the health endpoint is also fetched straight from the browser.</p>
+  <p class="lead"><code>trace()</code> returns the request's W3C traceparent, <code>health()</code> is the isomorphic health probe (<code>await health()</code> fetches the live <code>/__abide/health</code> in the browser, returns the framework baseline in-proc on the server), and <code>log()</code> writes a structured server line — each with its own card below, plus the isomorphic <code>online()</code>/<code>bundled()</code> probes.</p>
 
-  <Demo id="runtime" title="online() + bundled() (isomorphic probes, called in the template)" client="src/ui/demos/platform/RuntimeProbesDemo.abide" tab="client">
-    <p><code>online()</code> is a <em>reactive</em> connectivity boolean (true on the server; tracks <code>navigator.onLine</code> on the client, so this line re-renders when you go offline). <code>bundled()</code> is true only inside the desktop bundle. Both are imported straight from <code>abide/shared|ui/*</code> and called in the template — no RPC, no accessor plumbing.</p>
-    <RuntimeProbesDemo />
+  <Demo id="online" title="online() — reactive connectivity probe" client="src/ui/demos/platform/observability/OnlineDemo.abide" tab="client">
+    <p><code>online()</code> is a <em>reactive</em> connectivity boolean (true on the server; tracks <code>navigator.onLine</code> on the client, so this line re-renders when you go offline). Imported straight from <code>abide/shared/online</code> and called in the template — no RPC, no accessor plumbing.</p>
+    <OnlineDemo />
   </Demo>
 
-  <Demo id="observe" title="trace() + health() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/ObserveDemo.abide" tab="server" replayable={true}>
+  <Demo id="bundled" title="bundled() — desktop-bundle probe" client="src/ui/demos/platform/observability/BundledDemo.abide" tab="client">
+    <p><code>bundled()</code> is true only inside the desktop bundle, false in the browser. Imported straight from <code>abide/ui/bundled</code> and called in the template.</p>
+    <BundledDemo />
+  </Demo>
+
+  <Demo id="observe" title="trace() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/observability/ObserveDemo.abide" tab="server" replayable={true}>
     <ObserveDemo sampleId="observe" />
   </Demo>
 
-  <Demo id="health" title="/__abide/health (fetched in-browser)" client="src/ui/demos/platform/HealthFetchDemo.abide" tab="client">
+  <Demo id="health" title="/__abide/health (fetched in-browser)" client="src/ui/demos/platform/observability/HealthFetchDemo.abide" tab="client">
     <HealthFetchDemo />
   </Demo>
 
-  <Demo id="log" title="<code>log.channel(name)</code> + levels" server="src/server/rpc/platformLog.ts" client="src/ui/demos/platform/LogDemo.abide" tab="server">
-    <p><code>log()</code> is server-side only — its structured lines go to the server console, never the browser. The RPC logs an <code>info</code> line on the <code>docs</code> channel plus a <code>warn</code> line, and returns the fact that it logged:</p>
+  <Demo id="log" title="default channel + <code>log.channel(name)</code> gating" server="src/server/rpc/platformLog.ts" client="src/ui/demos/platform/observability/LogDemo.abide" tab="server">
+    <p><code>log</code> is isomorphic structured logging. Every line carries a <strong>channel</strong> label. The bare <code>log()</code> / <code>.info</code> / <code>.warn</code> / <code>.error</code> / <code>.trace</code> uses the <strong>default channel</strong> — the app name (<code>docs</code> here, from <code>package.json</code>) — and is always on. <code>log.channel(name)</code> names a channel gated by <code>DEBUG</code> (debug-npm style; the browser reads <code>localStorage.debug</code>), so framework internals under <code>abide:*</code> and verbose app channels stay quiet until asked for. <code>error</code> always emits, even on a gated channel. This RPC logs server-side (browser never sees the lines) and returns the fact that it logged:</p>
     <LogDemo />
   </Demo>
 </main>

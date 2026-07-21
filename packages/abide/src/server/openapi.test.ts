@@ -3,6 +3,7 @@
 
 import { expect, test } from 'bun:test'
 import type { JSONSchema } from '../shared/internal/jsonSchema.ts'
+import type { StandardSchemaV1 } from '../shared/StandardSchema.ts'
 import { createTestApp, type TestAppConfig } from '../test/createTestApp.ts'
 import { GET } from './GET.ts'
 import { buildOpenApi } from './internal/openapi.ts'
@@ -73,12 +74,16 @@ test('buildRegistry captures rpcs, schemas, clients, and sockets', () => {
 })
 
 test('buildRegistry leaves inputSchema undefined for a Standard Schema', () => {
-    const standardSchema = {
-        '~standard': { version: 1, vendor: 'test', validate: (value: unknown) => ({ value }) },
+    const standardSchema: StandardSchemaV1<{ id: string }, { id: string }> = {
+        '~standard': {
+            version: 1,
+            vendor: 'test',
+            validate: (value: unknown) => ({ value: value as { id: string } }),
+        },
     }
     const registry = buildRegistry({
         routes: {
-            thing: GET(async () => ({}), { schemas: { input: standardSchema as never } }),
+            thing: GET(({ id }) => ({ id }), { schemas: { input: standardSchema } }),
         },
     })
     const thing = registry.rpcs.find((entry) => entry.name === 'thing')
@@ -95,7 +100,7 @@ test('buildOpenApi emits a 3.1 document with GET query param and POST requestBod
 
     const paths = doc.paths as Record<string, Record<string, Record<string, unknown>>>
 
-    const searchPath = paths['/rpc/search']
+    const searchPath = paths['/__abide/rpc/search']
     if (!searchPath) throw new Error('expected a /rpc/search path')
     const searchGet = searchPath.get
     if (!searchGet) throw new Error('expected a GET on /rpc/search')
@@ -108,7 +113,7 @@ test('buildOpenApi emits a 3.1 document with GET query param and POST requestBod
     expect((searchGet.responses as Record<string, unknown>)['422']).toBeDefined()
     expect(searchGet.summary).toBe('Search the index')
 
-    const createPath = paths['/rpc/create']
+    const createPath = paths['/__abide/rpc/create']
     if (!createPath) throw new Error('expected a /rpc/create path')
     const createPost = createPath.post
     if (!createPost) throw new Error('expected a POST on /rpc/create')
@@ -116,7 +121,7 @@ test('buildOpenApi emits a 3.1 document with GET query param and POST requestBod
     expect((createPost.responses as Record<string, unknown>)['200']).toBeDefined()
 
     // browser:false RPC is omitted entirely.
-    expect(paths['/rpc/secret']).toBeUndefined()
+    expect(paths['/__abide/rpc/secret']).toBeUndefined()
 
     const components = doc.components as Record<string, Record<string, unknown>>
     const schemas = components.schemas
@@ -136,14 +141,14 @@ test('GET /openapi.json serves the generated document', async () => {
         const doc = (await response.json()) as Record<string, any>
 
         expect(doc.openapi).toBe('3.1.0')
-        const searchGet = doc.paths['/rpc/search'].get
+        const searchGet = doc.paths['/__abide/rpc/search'].get
         expect(searchGet).toBeDefined()
         // The args object is carried in a single `args` query param whose schema types the q field.
         expect(searchGet.parameters[0].name).toBe('args')
         expect(searchGet.parameters[0].schema.properties.q).toBeDefined()
-        expect(doc.paths['/rpc/create'].post.requestBody).toBeDefined()
-        expect(doc.paths['/rpc/create'].post.responses['422']).toBeDefined()
-        expect(doc.paths['/rpc/secret']).toBeUndefined()
+        expect(doc.paths['/__abide/rpc/create'].post.requestBody).toBeDefined()
+        expect(doc.paths['/__abide/rpc/create'].post.responses['422']).toBeDefined()
+        expect(doc.paths['/__abide/rpc/secret']).toBeUndefined()
     } finally {
         await app.stop()
     }

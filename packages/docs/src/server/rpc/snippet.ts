@@ -1,7 +1,7 @@
 import { resolve, sep } from 'node:path'
 import { error } from 'abide/server/error'
 import { GET } from 'abide/server/GET'
-import { codeBlock } from '../../ui/lib/codeBlock'
+import { codeBlock } from '$ui/lib/codeBlock'
 
 // Reads a docs source file and extracts the region between demo markers, so a docs page can show the
 // REAL demonstrated code (DRY — the snippet is the running source, never a hand-copied duplicate).

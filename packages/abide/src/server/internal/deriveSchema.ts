@@ -222,8 +222,19 @@ function typeToSchema(
 
     const flags = type.flags
 
-    // any / unknown are representable as "anything" — permissive, no warning.
-    if ((flags & (TypeFlags.Any | TypeFlags.Unknown)) !== 0) return {}
+    // `unknown` = "no declared contract" (a zero-arg read's absent input, or an intentionally-open
+    // value) → permissive, silent. `any` is different: it marks an UNTYPED position — a param with
+    // neither an annotation nor an inferable default, or an explicit `any`. Still permissive, but LOUD
+    // (§11.3): left silent it drops the field from every derived contract (OpenAPI/MCP/CLI) with no
+    // trace. Distinguishing the two is what lets an unannotated handler with defaults derive cleanly
+    // while a genuinely untyped param gets called out.
+    if ((flags & TypeFlags.Unknown) !== 0) return {}
+    if ((flags & TypeFlags.Any) !== 0) {
+        warnings.push(
+            `deriveSchema: type at ${where} is \`any\` — no schema constraint derived; annotate it, give it a default, or pass a schema`,
+        )
+        return {}
+    }
     if ((flags & TypeFlags.Null) !== 0) return { type: 'null' }
     // A bare undefined/void where a schema is required maps to permissive (unions filter these out).
     if ((flags & (TypeFlags.Undefined | TypeFlags.Void)) !== 0) return {}

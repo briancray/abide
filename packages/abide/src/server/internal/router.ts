@@ -18,10 +18,12 @@
 // take args from the JSON body and call the handler directly. A handler that already returned
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
+import { health } from '../../shared/health.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
+import { log } from '../../shared/log.ts'
 import { validateStandard } from '../../shared/StandardSchema.ts'
 import { validationError } from '../../shared/ValidationErrorData.ts'
 import { error } from '../error.ts'
@@ -38,7 +40,7 @@ import {
 } from './cacheChannels.ts'
 import { authorizeChannelJoin, isCacheChannel, type SocketConnectionData } from './channelAuth.ts'
 import { type ClientBuild, clientBuildFor } from './clientBundle.ts'
-import type { Mutation, Rpc } from './makeRpc.ts'
+import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
 import { matchRoute } from './matchRoute.ts'
 import { handleMcp } from './mcp.ts'
 import { compose, type Middleware } from './middleware.ts'
@@ -119,10 +121,29 @@ async function applyIdentityCookie(scope: RequestScope, response: Response): Pro
     response.headers.append('set-cookie', header)
 }
 
-// A route is anything carrying `__rpc` metadata — GET/HEAD produce Rpc, the mutation verbs
-// produce Mutation. Both are registerable; the router branches on `__rpc.read`.
+// Last-resort handler for an error that escaped the middleware/dispatch chain (a genuine bug — typed
+// error/redirect responses are returned, not thrown). Runs in request scope, so the app's `onError`
+// can read request()/route()/identity() ambiently. The hook may return a Response to shape the client
+// reply; anything else (or a throwing hook) falls back to a generic 500 that never leaks the detail.
+async function handleUncaught(caught: unknown, config: AppConfig): Promise<Response> {
+    log.channel('abide:router').error('uncaught error in dispatch:', caught)
+    const onError = config.onError
+    if (onError !== undefined) {
+        try {
+            const custom = await onError(caught)
+            if (custom instanceof Response) return custom
+        } catch (hookError) {
+            log.channel('abide:router').error('onError hook threw:', hookError)
+        }
+    }
+    return error(500, 'Internal Server Error')
+}
+
+// A route is anything carrying `__rpc` metadata — a value handler produces Rpc (Mutation extends it),
+// a streaming handler produces StreamRead (StreamMutation extends it). The router branches on
+// `__rpc.read`; `Rpc | StreamRead` covers all four verb surfaces.
 // biome-ignore lint/suspicious/noExplicitAny: existential route type — the registry erases each rpc's concrete Args/T; `unknown` breaks assignability through RpcMeta's invariant Args.
-export type Route = Rpc<any, any> | Mutation<any, any>
+export type Route = Rpc<any, any> | StreamRead<any, any>
 
 export interface AppConfig {
     routes?: Record<string, Route>
@@ -157,6 +178,22 @@ export interface AppConfig {
     // serves these artifacts as-is and NEVER runs `Bun.build` at request time — production serves the
     // exact output of `abide build`. Absent in dev/test → the client is built in-memory on first use.
     clientBuild?: ClientBuild
+    // CO2.4: the app-defined health hook (`src/app.ts` export `onHealth`). Runs INSIDE request scope on
+    // every `GET /__abide/health`, takes no args, and returns fields merged over the framework stub
+    // (`{ reachable, version, startedAt, uptime }`) — app fields win, so it can force `reachable: false`.
+    // A thrown hook (or a returned `reachable: false`) makes the endpoint answer 503. Non-object returns
+    // are ignored (stub passes through). Unlike onStart/onStop this is router-consumed, so it lives here.
+    onHealth?: () => unknown | Promise<unknown>
+    // The app-defined error hook (`src/app.ts` export `onError`). Runs INSIDE request scope when the
+    // middleware/dispatch chain THROWS an unexpected error (a typed `error(...)`/`redirect(...)` return
+    // is a Response, not a throw, so it never reaches here). May return a `Response` to shape what the
+    // client gets; returning nothing falls back to a generic 500. A throwing onError is itself caught
+    // and falls back to 500. This is the outermost net for genuine bugs — not a substitute for
+    // middleware auth or typed errors.
+    // Returns `unknown` (like onHealth) so any handler shape is accepted — return a `Response` to shape
+    // the reply, or nothing to fall back to the generic 500. handleUncaught narrows via `instanceof`.
+    // Runs in request scope, so the request/route/identity are read ambiently (request(), route(), …).
+    onError?: (error: unknown) => unknown
 }
 
 // Per-connection state on the multiplexed socket WS: the set of live subscriptions this client
@@ -232,12 +269,14 @@ function wsSubscribe(
     // `pending()`). `replay: false` is the hydration join — SSR already painted the backlog (CS5).
     const sock = sockets[name]
     if (sock === undefined) {
+        log.channel('abide:socket').warn(`subscribe rejected — unknown socket: ${name}`)
         ws.send(JSON.stringify({ name, error: { message: `unknown socket: ${name}` } }))
         return
     }
     const iterator = sock.__socket.subscribe(replay !== false)
     connection.subscriptions.set(name, iterator)
     ws.send(JSON.stringify({ name, ok: true }))
+    log.channel('abide:socket').info(`subscribe ${name} replay=${replay !== false}`)
     void pumpSocketToWs(ws, connection, name, iterator)
 }
 
@@ -253,13 +292,17 @@ async function subscribeCacheChannel(
     config: AppConfig,
 ): Promise<void> {
     const allowed = await authorizeChannelJoin(name, args, ws.data, config)
-    if (!allowed) return
+    if (!allowed) {
+        log.channel('abide:socket').trace(`cache-channel join denied: ${name}`)
+        return
+    }
     // Re-check across the await: a racing unsub/dup-sub for the same name, or a closed socket,
     // must not leave a dangling join.
     if (connection.subscriptions.has(name)) return
     if (ws.readyState !== 1) return
     const iterator = cacheChannelHub(name).subscribe()
     connection.subscriptions.set(name, iterator)
+    log.channel('abide:socket').trace(`cache-channel join: ${name}`)
     void pumpSocketToWs(ws, connection, name, iterator)
 }
 
@@ -345,18 +388,46 @@ function isRedirectResponse(response: Response): boolean {
 
 function routeInfo(url: URL): { kind: RouteKind; name: string } {
     const pathname = url.pathname
-    if (pathname.startsWith('/rpc/')) {
-        return { kind: 'rpc', name: pathname.slice('/rpc/'.length) }
+    // RPC transport lives under the framework namespace (`/__abide/rpc/<name>`), alongside
+    // `/__abide/sockets`, `/__abide/health`, and `/__abide/mcp` — so the `/rpc/*` URL space is free
+    // for app pages. Checked after the exact `/__abide/*` endpoints in `dispatch`, none of which
+    // share this prefix.
+    if (pathname.startsWith('/__abide/rpc/')) {
+        return { kind: 'rpc', name: pathname.slice('/__abide/rpc/'.length) }
     }
     return { kind: 'nav', name: pathname }
 }
 
-async function dispatch(scope: RequestScope, config: AppConfig): Promise<Response> {
+async function dispatch(
+    scope: RequestScope,
+    config: AppConfig,
+    startedAt: number,
+): Promise<Response> {
     const routes = config.routes ?? {}
     const url = scope.route.url
 
     if (url.pathname === '/__abide/health') {
-        return json({ reachable: true })
+        // Framework stub (CO2.4): the isomorphic baseline (`reachable`, running abide `version`) plus the
+        // server-only lifetime fields. The app's `onHealth` (request-scoped) is merged ON TOP — its fields
+        // win, so it may force `reachable: false`; a thrown hook fails closed to unhealthy.
+        const stub = {
+            ...(await health()),
+            startedAt: new Date(startedAt).toISOString(),
+            uptime: Date.now() - startedAt,
+        }
+        let result: Record<string, unknown> = stub
+        const onHealth = config.onHealth
+        if (onHealth !== undefined) {
+            try {
+                const extra = await onHealth()
+                if (extra !== null && typeof extra === 'object')
+                    result = { ...stub, ...(extra as Record<string, unknown>) }
+            } catch (caught) {
+                log.channel('abide:health').error('onHealth threw:', caught)
+                result = { ...stub, reachable: false }
+            }
+        }
+        return json(result, { status: result.reachable === false ? 503 : 200 })
     }
 
     // Content-addressed client assets (TODO #6): the code-split loader entry + per-route chunks + shared
@@ -408,6 +479,9 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
         const method = scope.request.method.toUpperCase()
         const match = matchRoute(Object.keys(pages), url.pathname)
         if (match !== null && (method === 'GET' || method === 'HEAD')) {
+            log.channel('abide:router').trace(
+                `page ${match.pattern}${scope.route.navigating ? ' (soft-nav)' : ''}`,
+            )
             // Set the matched pattern as the route name and its extracted params before rendering.
             scope.route.name = match.pattern
             scope.route.params = match.params
@@ -462,7 +536,10 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
                     headers: { 'content-type': 'text/html; charset=utf-8' },
                 })
             } catch (caught) {
-                console.error(`[abide] page render failed for "${match.pattern}":`, caught)
+                log.channel('abide:router').error(
+                    `page render failed for "${match.pattern}":`,
+                    caught,
+                )
                 return error(500, 'Page render failed.')
             }
         }
@@ -475,6 +552,7 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
     }
 
     const meta = route.__rpc
+    log.channel('abide:rpc').trace(`dispatch ${meta.method} ${scope.route.name}`)
     let args: unknown
     // A mutation carrying a `multipart/form-data` body is a file upload (TODO #8): the args are a
     // `FormData` (a `File` rides in it, never in a JSON args object), passed straight to the handler.
@@ -587,8 +665,8 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
     if (outputSchema !== undefined && Bun.env.NODE_ENV !== 'production') {
         const checked = await validateStandard(asStandardSchema(outputSchema), result)
         if (!checked.ok) {
-            console.warn(
-                `[abide] output schema mismatch for rpc "${scope.route.name}":`,
+            log.channel('abide:rpc').warn(
+                `output schema mismatch for rpc "${scope.route.name}":`,
                 checked.issues,
             )
         }
@@ -604,6 +682,10 @@ export function createApp(config: AppConfig = {}): App {
     const routes = config.routes ?? {}
     const globalMiddleware = config.middleware ?? []
     const sockets = config.sockets ?? {}
+    // CO2.4: server bind time — the clock for `/__abide/health`'s `startedAt`/`uptime`. Captured here
+    // (not per request) so uptime measures the process, and survives `abide dev`'s in-place config reloads
+    // (the router keeps running; createApp is not re-invoked).
+    const startedAt = Date.now()
 
     // §8 broadcast seam (PR2): bind each SHARED read route's transport-free cell `notify` sink to a
     // publish onto its `(rpc,args)` channel. The route NAME is the `config.routes` key — known only
@@ -685,7 +767,7 @@ export function createApp(config: AppConfig = {}): App {
             const matched = info.kind === 'rpc' ? routes[info.name] : undefined
             const rpcMiddleware = matched?.__rpc.options.middleware ?? []
             const chain = compose([...globalMiddleware, ...rpcMiddleware], () =>
-                dispatch(scope, config),
+                dispatch(scope, config, startedAt),
             )
 
             return runInScope(scope, async () => {
@@ -693,7 +775,12 @@ export function createApp(config: AppConfig = {}): App {
                 // and gets no identity cookie.
                 const rejected = csrfReject(request)
                 if (rejected !== undefined) return rejected
-                let response = await chain()
+                let response: Response
+                try {
+                    response = await chain()
+                } catch (caught) {
+                    response = await handleUncaught(caught, config)
+                }
                 // C6-nav: translate a middleware short-circuit redirect into a soft-nav `{ redirect }`
                 // envelope so the client can follow it (the raw 3xx would be opaque to a fetch soft-nav).
                 if (info.kind === 'nav' && isSoftNav(request) && isRedirectResponse(response)) {

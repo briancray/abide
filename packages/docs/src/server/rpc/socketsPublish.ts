@@ -1,5 +1,5 @@
 import { POST } from 'abide/server/POST'
-import socketsChat, { type ChatMessage } from '../sockets/socketsChat'
+import socketsChat, { type ChatMessage } from '$server/sockets/socketsChat'
 
 // A mutating RPC that publishes to the chat socket from the SERVER. `socket.publish` bypasses the
 // socket handler (unlike a client publish), so the message keeps `via: "server"`. Every live

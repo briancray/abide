@@ -1,7 +1,7 @@
 <script>
   import { state } from "abide/ui/state"
-  import socketsChat, { type ChatMessage } from "../../../server/sockets/socketsChat"
-  import socketsPublish from "../../../server/rpc/socketsPublish"
+  import socketsChat, { type ChatMessage } from "$server/sockets/socketsChat"
+  import socketsPublish from "$server/rpc/socketsPublish"
 
   // Dogfoods the ISOMORPHIC client `Socket` proxy (docs/spec/client-sockets.md): `socketsChat` is the
   // SAME `Socket<ChatMessage>` the server imports — here, in the browser, it is consumed as an

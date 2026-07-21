@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test'
 // appear in the sidebar, and soft-nav between each other like any other in-app page.
 
 test('CLI page renders its command reference', async ({ page }) => {
-    await page.goto('/cli')
+    await page.goto('/platform/cli')
     await expect(page.locator('h1')).toHaveText('CLI')
     // Representative commands from the code blocks are present.
     await expect(page.locator('main.page')).toContainText('abide scaffold my-app')
@@ -15,14 +15,14 @@ test('CLI page renders its command reference', async ({ page }) => {
 })
 
 test('Deploy page documents build → serve with the dist layout', async ({ page }) => {
-    await page.goto('/deploy')
+    await page.goto('/platform/deploy')
     await expect(page.locator('h1')).toHaveText('Build & deploy')
     await expect(page.locator('main.page')).toContainText('manifest.json')
     await expect(page.locator('main.page')).toContainText('immutable')
 })
 
 test('Deploy page shows both Docker options under the deploy tag', async ({ page }) => {
-    await page.goto('/deploy')
+    await page.goto('/platform/deploy')
     // Both container shapes: `abide start` and the `abide compile` standalone binary, tagged `deploy`.
     await expect(page.locator('main.page')).toContainText('docker build -t deploy')
     await expect(page.locator('main.page')).toContainText('bun run abide compile')
@@ -43,7 +43,7 @@ test('Config page lists all built-in env vars', async ({ page }) => {
 })
 
 test('soft-nav from CLI to Deploy swaps content without a full reload', async ({ page }) => {
-    await page.goto('/cli')
+    await page.goto('/platform/cli')
     await page.evaluate(() => ((window as unknown as { __nav: boolean }).__nav = true))
     // The sidebar nav link (the CLI page prose also links to /deploy — scope to the sidebar).
     await page.locator('.sidebar').getByRole('link', { name: 'Build & deploy', exact: true }).click()

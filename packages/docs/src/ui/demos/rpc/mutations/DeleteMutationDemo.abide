@@ -1,0 +1,15 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcDeleteNote from "$server/rpc/rpcDeleteNote"
+
+  // DELETE — a removing mutation, keyed only by id. Args ride in the JSON body; the handler runs on
+  // every click (mutations default to no retention; opt in with a `cache` TTL — see the cached-mutation demo).
+  let result = state(null)
+  async function del() { result = await rpcDeleteNote({ id: "n1" }) }
+</script>
+
+<button data-testid="delete-btn" onclick={del}>DELETE rpcDeleteNote</button>
+{#if result}
+  <pre class="out" data-testid="delete-result">verb: {result.verb}
+id: {result.id}</pre>
+{/if}

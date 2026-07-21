@@ -1,0 +1,24 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcStreamJob from "$server/rpc/rpcStreamJob"
+
+  // A streaming mutation is consumed exactly like a streaming read: the POST yields jsonl, the browser
+  // proxy decodes it into a replay-then-live AsyncIterable, and `{#for await}` iterates it directly — no
+  // fetch/reader/decoder. `.refresh()` re-runs the job. Full read/mutation symmetry, even for streams.
+  let started = state(false)
+  function run() {
+    if (started) rpcStreamJob.refresh({ steps: 3 })
+    else started = true
+  }
+</script>
+
+<button data-testid="stream-mutation-btn" onclick={run}>{started ? "Restart" : "Run"} streaming job</button>
+{#if started}
+  <ul class="stream" data-testid="stream-mutation-list">
+    {#for await step of rpcStreamJob({ steps: 3 })}
+      <li>{step.label}</li>
+    {:catch}
+      <li>job failed</li>
+    {/for}
+  </ul>
+{/if}

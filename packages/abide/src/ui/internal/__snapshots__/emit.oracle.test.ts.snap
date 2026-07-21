@@ -116,15 +116,17 @@ exports[`emit regression — server output component props + children (server) 1
 
 exports[`emit regression — server output component spread (server) 1`] = `"<!--[--><b>1-2</b><!--]-->"`;
 
-exports[`emit regression — server output snippet defined and called 1`] = `"<ul><li>a<!----></li><!----><li>b<!----></li><!----></ul>"`;
+exports[`emit regression — server output snippet defined and called 1`] = `"<ul><!--[--><li>a<!----></li><!--]--><!--[--><li>b<!----></li><!--]--></ul>"`;
 
-exports[`emit regression — server output snippet hoisted 1`] = `"<ul><li>a<!----></li><!----></ul>"`;
+exports[`emit regression — server output snippet hoisted 1`] = `"<ul><!--[--><li>a<!----></li><!--]--></ul>"`;
 
-exports[`emit regression — server output snippet not escaped 1`] = `"<b>hi<!----></b><!---->"`;
+exports[`emit regression — server output snippet not escaped 1`] = `"<!--[--><b>hi<!----></b><!--]-->"`;
 
 exports[`emit regression — server output script emits nothing 1`] = `"<p>5<!----></p>"`;
 
 exports[`emit regression — server output style scoped (#13) 1`] = `"<style>.a[data-ab-4b4057c]{color:red}</style>"`;
+
+exports[`emit regression — server output style scoped element (#13/#20) 1`] = `"<div class="a" data-ab-4b4057c>x</div><style>.a[data-ab-4b4057c]{color:red}</style>"`;
 
 exports[`emit regression — server output state drives text 1`] = `"<h1>Hello world<!----></h1>"`;
 
@@ -254,6 +256,8 @@ exports[`emit regression — client DOM script emits nothing 1`] = `"<p>5<!---->
 
 exports[`emit regression — client DOM style scoped (#13) 1`] = `"<style>.a[data-ab-4b4057c]{color:red}</style>"`;
 
+exports[`emit regression — client DOM style scoped element (#13/#20) 1`] = `"<div class="a" data-ab-4b4057c="">x</div><style>.a[data-ab-4b4057c]{color:red}</style>"`;
+
 exports[`emit regression — client DOM reactive text node 1`] = `"count: 1<!---->"`;
 
 exports[`emit regression — client DOM reactive text node 2`] = `"count: 2<!---->"`;
@@ -325,7 +329,3 @@ exports[`emit regression — client DOM state drives if 2`] = `"<button>go</butt
 exports[`emit regression — client DOM state.linked reseeds 1`] = `"<button>+</button><span>10<!----></span>"`;
 
 exports[`emit regression — client DOM state.linked reseeds 2`] = `"<button>+</button><span>20<!----></span>"`;
-
-exports[`emit regression — server output style scoped element (#13/#20) 1`] = `"<div class="a" data-ab-4b4057c>x</div><style>.a[data-ab-4b4057c]{color:red}</style>"`;
-
-exports[`emit regression — client DOM style scoped element (#13/#20) 1`] = `"<div class="a" data-ab-4b4057c="">x</div><style>.a[data-ab-4b4057c]{color:red}</style>"`;

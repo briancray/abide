@@ -1,26 +1,12 @@
-<script module>
-  import Demo from "../../components/Demo.abide"
-  import HelloReadDemo from "../../demos/rpc/HelloReadDemo.abide"
-  import EchoShapeDemo from "../../demos/rpc/EchoShapeDemo.abide"
-</script>
-
 <main class="page">
   <h1>Isomorphic RPC</h1>
-  <p class="lead">An RPC is defined once on the server and called by the <em>same name</em> everywhere. On the server it runs in-process; in the browser it becomes a fetch — same callable, same intent. Reads are cached and coalesced by the underlying <code>cell</code>, so repeated reads of the same args share one result.</p>
-
-  <Demo id="hello" title="Live read — <code>hello</code>" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/HelloReadDemo.abide" tab="server">
-    <HelloReadDemo />
-  </Demo>
-
-  <p>The <code>echo</code> RPC takes one object argument and returns a derived shape. Its value is awaited during SSR, so it lands directly in the HTML:</p>
-  <Demo id="echo" title="Derived shape — <code>echo</code>" server="src/server/rpc/echo.ts" client="src/ui/demos/rpc/EchoShapeDemo.abide" tab="server">
-    <EchoShapeDemo />
-  </Demo>
-
-  <h2>How it works</h2>
-  <ul>
-    <li><strong>Cache</strong> — a read is memoized by its argument object.</li>
-    <li><strong>Coalesce</strong> — concurrent reads of the same args await one in-flight load.</li>
-    <li><strong>Reactive</strong> — <code>{'{'}fn(args){'}'}</code> is a non-blocking peek; <code>{'{'}await fn(args){'}'}</code> blocks SSR so the value is in the initial HTML.</li>
+  <p class="lead">An RPC is defined once on the server and called by the same name everywhere — in-process on the server, a fetch in the browser. Reads are cached and coalesced by the underlying <code>cell</code>; mutations post their args and run every call. Live, interactive demos of the whole surface follow.</p>
+  <p class="note">Each demo imports its RPC through the <code>$server</code> alias — e.g. <code>import greet from "$server/rpc/greet"</code> resolves to <code>src/server/rpc/greet.ts</code>. The same <code>$server</code> / <code>$ui</code> / <code>$shared</code> aliases work in any <code>.abide</code> or <code>.ts</code> file; see each demo's source tab.</p>
+  <ul class="list">
+    <li><a href="/rpc/reads">Reads</a> — <code>GET</code>/<code>HEAD</code> and the async-read forms in templates (<code>{'{'}await fn(){'}'}</code>, <code>{'{'}fn.peek(){'}'}</code>, <code>{'{'}#await{'}'}</code>) plus raw bypass and probes.</li>
+    <li><a href="/rpc/mutations">Mutations</a> — <code>POST</code>/<code>PUT</code>/<code>PATCH</code>/<code>DELETE</code>, and the full read/mutation symmetry when one opts into caching.</li>
+    <li><a href="/rpc/responses">Responses</a> — <code>json</code>, <code>error</code>, <code>error.typed</code> narrowing, <code>redirect</code>.</li>
+    <li><a href="/rpc/streaming">Streaming</a> — <code>jsonl</code>/<code>sse</code> consumed with <code>{'{'}#for await{'}'}</code>, chunk probes, streaming mutations, and streaming SSR.</li>
+    <li><a href="/rpc/uploads">File uploads</a> — a <code>FormData</code> mutation with file + text validation.</li>
   </ul>
 </main>

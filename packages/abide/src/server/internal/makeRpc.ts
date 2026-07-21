@@ -10,16 +10,21 @@
 // `cache: false` on a read means "don't retain" → the cell runs at ttl:0 (coalesce concurrent, never
 // serve stale) while keeping the reactive surface.
 //
-// MUTATIONS (POST/PUT/PATCH/DELETE) now ALSO route through a cell, but default to `cache: { ttl: 0 }`
-// (replayable-streams.md §1): coalesce identical CONCURRENT in-flight calls, retain nothing after
-// settle. A non-shared mutation's slot is per-request, so this is inert for the normal one-call-per-
-// request case and preserves at-least-once across separate requests; cross-request dedup needs
-// `shared: true`. `cache: false` opts OUT entirely (direct call, no cell) — for a non-idempotent
-// handler where every call must run. A `FormData` body ALWAYS bypasses the cell (it can't be safely
-// keyed — see §1). The public Mutation surface stays call-only + `__rpc` (no peek/amend): the cell is
-// an internal coalescing mechanism, incoherent to expose as reactive probes on a non-retained slot.
+// MUTATIONS (POST/PUT/PATCH/DELETE) route through a cell exactly like reads and expose the SAME
+// surface (`MutationSurface` = `Rpc` for a value handler, `StreamRead` for a streaming one) — full
+// symmetry: `peek`/`pending`/`refreshing`/`error`/`watch`/`refresh`/`invalidate`/`amend`/`snapshot`/
+// `seed`/`raw`/`isError` and the streaming chunk probes all work. The ONLY differences are transport
+// (method + args-in-body + the CSRF gate, enforced by the router off `__rpc.read`) and the default
+// cache policy: a mutation defaults to `cache: { ttl: 0 }` (replayable-streams.md §1) — coalesce
+// identical CONCURRENT in-flight calls, retain nothing after settle — where a read retains (ttl ∞).
+// A non-shared mutation's slot is per-request, so ttl:0 is inert for the normal one-call-per-request
+// case and preserves at-least-once across separate requests; cross-request dedup needs `shared: true`.
+// An author who WANTS a mutation cached sets `cache: { ttl }` and the whole surface reflects it. `cache:
+// false` opts the bare CALL out of the cell (direct run, at-least-once) for a non-idempotent handler;
+// the probe surface stays present but reads an empty slot. A `FormData` body always bypasses the cell
+// (it can't be safely keyed — see §1).
 
-import { type CacheNotify, type CellOptions, cell } from '../../shared/cell.ts'
+import { type CacheNotify, type Cell, type CellOptions, cell } from '../../shared/cell.ts'
 import type { Payload } from '../../shared/internal/responseSource.ts'
 
 export type { Payload } from '../../shared/internal/responseSource.ts'
@@ -67,6 +72,29 @@ export interface RpcOptions {
     cache?: false | { ttl?: number; shared?: boolean; tags?: string[] }
 }
 
+// An `output` schema, when present, must ACCEPT the handler's resolved return payload — its Standard
+// Schema input type is pinned to `Payload<Awaited<R>>` so a drifted return (handler returns a shape the
+// schema can't parse) is a compile error at the `output:` property. A raw JSON Schema stays unchecked
+// (it carries no TS type). Reused by both overload opts shapes below.
+type OutputSchemaFor<R> = StandardSchemaV1<Payload<Awaited<R>>, unknown> | JSONSchema
+
+// Opts for the SCHEMA-FIRST overload: `schemas.input` is a Standard Schema `S`, and the handler's
+// argument type flows FROM it (`InferOutput<S>`) — no annotation needed on the handler. `output` is
+// pinned to the handler's return.
+export type RpcOptionsWithInput<S extends StandardSchemaV1, R> = Omit<RpcOptions, 'schemas'> & {
+    schemas: Omit<RpcSchemas, 'input' | 'output'> & { input: S; output?: OutputSchemaFor<R> }
+}
+
+// Opts for the PLAIN overload: no Standard-Schema input (Args comes from the handler param — an
+// annotation, a generic, or a destructuring default), so `schemas.input` stays a raw/derived JSON
+// Schema at most. `output` is pinned to the handler's return.
+export type RpcOptionsWithOutput<R> = Omit<RpcOptions, 'schemas'> & {
+    schemas?: Omit<RpcSchemas, 'input' | 'output'> & {
+        input?: JSONSchema
+        output?: OutputSchemaFor<R>
+    }
+}
+
 // Router-facing metadata baked onto every Rpc/Mutation. `read` distinguishes cache-backed
 // reads from direct-call mutations; `handler` is the untouched user function (schema
 // validation and client gating wrap it later, at mount time).
@@ -84,6 +112,13 @@ export interface RpcMeta<Args, T> {
 // concrete shape — exactly the discriminator between "no declared input" and "declared input".
 export type RpcCallArgs<Args> = unknown extends Args ? [args?: Args] : [args: Args]
 
+// A mutation-call argument tuple — same zero-arg discriminator as `RpcCallArgs`, but a mutation also
+// accepts a `FormData` in the arg slot. A ZERO-arg mutation (`POST(() => …)`) makes the argument
+// OPTIONAL so a bare `fn()` type-checks (parity with a zero-arg read); a declared arg stays REQUIRED.
+export type MutationCallArgs<Args> = unknown extends Args
+    ? [args?: Args | FormData]
+    : [args: Args | FormData]
+
 export interface Rpc<Args, T> {
     // THE READ (Promise-read model): the bare call is the awaitable, coalesced load; it also subscribes
     // the calling reactive context, so `{await fn()}` / `{#await fn()}` re-await on invalidate. Use
@@ -100,7 +135,7 @@ export interface Rpc<Args, T> {
     // Run `handler` whenever this slot's value changes; returns a dispose function. Reactive probe.
     watch(args: Args, handler: (value: T | undefined) => void): () => void
     // Raw `Response`, full bypass of the cell (rpc-core call surface): on the client a bare fetch to
-    // `/rpc/<name>`; on the server the handler run wrapped in a JSON `Response` (or its own Response).
+    // `/__abide/rpc/<name>`; on the server the handler run wrapped in a JSON `Response` (or its own Response).
     raw(args: Args, init?: RequestInit): Promise<Response>
     // Narrow a caught value to this RPC's typed error by name (`fn.isError(e, "RateLimited")`).
     isError(e: unknown, name: string): boolean
@@ -156,13 +191,26 @@ export type ReadSurface<Args, R> = [Payload<R>] extends [AsyncIterable<infer C>]
     ? StreamRead<Args, C>
     : Rpc<Args, Payload<R>>
 
-export interface Mutation<Args, T> {
-    // Direct call: runs the handler every time, no cache; resolves with its return value. A mutation
-    // also accepts a `FormData` (TODO #8 multipart upload) — the handler receives it as its single
-    // positional argument; a `File` rides in the FormData body, never in the JSON `Args` object.
-    (args: Args | FormData): Promise<T>
-    readonly __rpc: RpcMeta<Args, T>
+// A value MUTATION shares the FULL `Rpc` surface (peek/pending/refreshing/refresh/invalidate/amend/
+// watch/snapshot/seed/raw/isError/…) — full symmetry with a read. It only widens the CALL to also
+// accept a `FormData` body (TODO #8 multipart upload), which bypasses the cell; a zero-arg mutation
+// keeps the argument optional. The `.raw` here still carries the mutation body + CSRF header on the
+// client and returns the untouched `Response` (no parse, no `!ok` throw).
+export interface Mutation<Args, T> extends Rpc<Args, T> {
+    (...args: MutationCallArgs<Args>): Promise<T>
 }
+
+// A streaming MUTATION shares the full `StreamRead` chunk-probe surface (peek=latest chunk / chunks /
+// done / pending / error / refresh / invalidate / raw); only the call widens to accept `FormData`.
+export interface StreamMutation<Args, C> extends StreamRead<Args, C> {
+    (...args: MutationCallArgs<Args>): Promise<AsyncIterable<C>>
+}
+
+// The surface a mutation helper (POST/PUT/PATCH/DELETE) yields — the read-side `ReadSurface`, widened
+// to accept a `FormData` call. A streaming handler gets `StreamMutation`, a value handler `Mutation`.
+export type MutationSurface<Args, R> = [Payload<R>] extends [AsyncIterable<infer C>]
+    ? StreamMutation<Args, C>
+    : Mutation<Args, Payload<R>>
 
 function attachMeta<Args, T>(target: object, meta: RpcMeta<Args, T>): void {
     Object.defineProperty(target, '__rpc', { value: meta, enumerable: false })
@@ -175,6 +223,60 @@ export function isTypedError(e: unknown, name: string): boolean {
     if (e === null || typeof e !== 'object') return false
     const record = e as Record<string, unknown>
     return record.kind === name || record.name === name
+}
+
+// Attach the FULL isomorphic surface (reactive probes + cache verbs + `raw` + stream chunk probes +
+// `__rpc` meta) to a cell-backed callable. Shared by reads and mutations — the only caller-specific
+// pieces are the bare CALL (built by the caller, so a mutation can bypass on FormData/`cache:false`)
+// and the meta `read` flag. `rawSource` is the handler `.raw` runs in-process AND the meta handler
+// (the same function reference the router/OpenAPI/MCP invoke).
+function attachSurface<Args, T>(
+    callable: Rpc<Args, T>,
+    backing: Cell<Args, T>,
+    rawSource: (args: Args) => Promise<T> | T,
+    method: string,
+    options: RpcOptions,
+    read: boolean,
+    setBroadcast: (sink: CacheNotify) => void,
+): void {
+    callable.peek = (args: Args): T | undefined => backing.peek(args)
+    callable.load = (args: Args): Promise<T> => backing.load(args)
+    callable.pending = (args: Args): boolean => backing.pending(args)
+    callable.refreshing = (args: Args): boolean => backing.refreshing(args)
+    callable.error = (args: Args): unknown => backing.error(args)
+    callable.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
+        backing.watch(args, handler)
+    callable.raw = async (args: Args, init?: RequestInit): Promise<Response> => {
+        const value = await Promise.resolve(rawSource(args))
+        if (value instanceof Response) return value
+        return new Response(JSON.stringify(value), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+            ...(init ?? {}),
+        })
+    }
+    callable.isError = (e: unknown, name: string): boolean => isTypedError(e, name)
+    callable.refresh = (args?: Partial<Args> | Args): void => backing.refresh(args)
+    callable.invalidate = (args?: Partial<Args> | Args): void => backing.invalidate(args)
+    callable.amend = (args: Args, next: T | ((current: T | undefined) => T)): void =>
+        backing.amend(args, next)
+    callable.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
+    callable.seed = (args: Args, value: T): void => backing.seed(args, value)
+    callable.bindBroadcast = (sink: CacheNotify): void => setBroadcast(sink)
+    // Stream probes live on the runtime object for ALL routes (they return undefined/false for a value
+    // slot); only the StreamRead/StreamMutation type surfaces them. `peek` is already stream-aware.
+    const streamable = callable as Rpc<Args, T> & {
+        chunks(args: Args): unknown[] | undefined
+        done(args: Args): boolean
+        resumeStream(
+            args: Args,
+            from: number,
+        ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean }
+    }
+    streamable.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
+    streamable.done = (args: Args): boolean => backing.done(args)
+    streamable.resumeStream = (args: Args, from: number) => backing.resumeStream(args, from)
+    attachMeta(callable, { method, handler: rawSource, options, read })
 }
 
 export function makeRead<Args, T>(
@@ -209,47 +311,9 @@ export function makeRead<Args, T>(
     const backing = cell<Args, T>(fn, cellOptions)
 
     const rpc = ((args: Args): Promise<T> => backing(args)) as Rpc<Args, T>
-    rpc.peek = (args: Args): T | undefined => backing.peek(args)
-    rpc.load = (args: Args): Promise<T> => backing.load(args)
-    rpc.pending = (args: Args): boolean => backing.pending(args)
-    rpc.refreshing = (args: Args): boolean => backing.refreshing(args)
-    rpc.error = (args: Args): unknown => backing.error(args)
-    rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
-        backing.watch(args, handler)
-    rpc.raw = async (args: Args, init?: RequestInit): Promise<Response> => {
-        const value = await Promise.resolve(fn(args))
-        if (value instanceof Response) return value
-        return new Response(JSON.stringify(value), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-            ...(init ?? {}),
-        })
-    }
-    rpc.isError = (e: unknown, name: string): boolean => isTypedError(e, name)
-    rpc.refresh = (args?: Partial<Args> | Args): void => backing.refresh(args)
-    rpc.invalidate = (args?: Partial<Args> | Args): void => backing.invalidate(args)
-    rpc.amend = (args: Args, next: T | ((current: T | undefined) => T)): void =>
-        backing.amend(args, next)
-    rpc.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
-    rpc.seed = (args: Args, value: T): void => backing.seed(args, value)
-    rpc.bindBroadcast = (sink: CacheNotify): void => {
+    attachSurface(rpc, backing, fn, method, options, true, (sink) => {
         broadcast = sink
-    }
-    // Stream probes live on the runtime object for ALL reads (they return undefined/false for a value
-    // slot); only the StreamRead type surfaces them. `peek` is already stream-aware via the cell. Kept
-    // off the value-shaped `Rpc` type.
-    const streamable = rpc as Rpc<Args, T> & {
-        chunks(args: Args): unknown[] | undefined
-        done(args: Args): boolean
-        resumeStream(
-            args: Args,
-            from: number,
-        ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean }
-    }
-    streamable.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
-    streamable.done = (args: Args): boolean => backing.done(args)
-    streamable.resumeStream = (args: Args, from: number) => backing.resumeStream(args, from)
-    attachMeta(rpc, { method, handler: fn, options, read: true })
+    })
     return rpc
 }
 
@@ -257,34 +321,40 @@ export function makeMutation<Args, R>(
     method: string,
     fn: (args: Args) => Promise<R> | R,
     opts?: RpcOptions,
-): Mutation<Args, Payload<R>> {
+): MutationSurface<Args, R> {
     const options = opts ?? {}
     type T = Payload<R>
 
-    // `cache: false` → never route through the cell: every call runs the handler directly (the pre-cell
-    // at-least-once behavior), for a genuinely non-idempotent mutation.
     // `fn` returns the (possibly transport-wrapped) `R`; the cell sees through it to the payload `T`.
     const handler = fn as unknown as (args: Args) => Promise<T> | T
-    if (options.cache === false) {
-        const direct = ((args: Args | FormData) =>
-            Promise.resolve(handler(args as Args))) as Mutation<Args, T>
-        attachMeta(direct, { method, handler: fn, options, read: false })
-        return direct
-    }
 
-    // Otherwise route through a cell, defaulting to ttl:0 (coalesce concurrent-identical, retain nothing).
-    const cacheConfig = options.cache
+    // A mutation is a cell + transport exactly like a read — the cell backs BOTH the coalescing call
+    // and the whole probe surface. It differs only in the DEFAULT policy: ttl:0 (coalesce identical
+    // concurrent in-flight calls, retain nothing) where a read retains. `cache: { ttl }` opts a mutation
+    // into retention and the surface reflects it. `cache: false` still builds a cell so the surface
+    // exists (probes read an empty slot), but the bare CALL bypasses it for a direct at-least-once run.
+    const celled = options.cache !== false
+    const cacheConfig = options.cache === false ? undefined : options.cache
     const cellOptions: CellOptions = { ttl: cacheConfig?.ttl ?? 0 }
     if (cacheConfig?.shared === true) cellOptions.shared = true
     if (cacheConfig?.tags !== undefined) cellOptions.tags = cacheConfig.tags
+    let broadcast: CacheNotify | undefined
+    cellOptions.notify = (verb, args, value): void => {
+        if (broadcast !== undefined) broadcast(verb, args, value)
+    }
     const backing = cell<Args, T>(handler, cellOptions)
 
     const mutation = ((args: Args | FormData): Promise<T> => {
         // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw
-        // FormData throws in canonicalKey) → always bypass the cell (replayable-streams.md §1).
-        if (args instanceof FormData) return Promise.resolve(handler(args as Args))
-        return backing(args)
-    }) as Mutation<Args, T>
-    attachMeta(mutation, { method, handler: fn, options, read: false })
-    return mutation
+        // FormData throws in canonicalKey), and `cache: false` opts the call out entirely → run the
+        // handler directly (at-least-once). Otherwise route through the cell (coalesce/retain).
+        if (!celled || (typeof FormData !== 'undefined' && args instanceof FormData)) {
+            return Promise.resolve(handler(args as Args))
+        }
+        return backing(args as Args)
+    }) as Rpc<Args, T>
+    attachSurface(mutation, backing, handler, method, options, false, (sink) => {
+        broadcast = sink
+    })
+    return mutation as unknown as MutationSurface<Args, R>
 }

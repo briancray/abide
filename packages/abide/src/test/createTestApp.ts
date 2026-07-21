@@ -197,17 +197,17 @@ function bind(
                         args !== undefined
                             ? `?args=${encodeURIComponent(JSON.stringify(args))}`
                             : ''
-                    response = await doFetch(`/rpc/${property}${query}`, { method: 'GET' })
+                    response = await doFetch(`/__abide/rpc/${property}${query}`, { method: 'GET' })
                 } else if (args instanceof FormData) {
                     // TODO #8 multipart upload: send the FormData as the raw body (fetch sets the boundary)
                     // with the `x-abide` header so the CSRF gate admits it — no content-type header.
-                    response = await doFetch(`/rpc/${property}`, {
+                    response = await doFetch(`/__abide/rpc/${property}`, {
                         method: 'POST',
                         headers: { 'x-abide': '1' },
                         body: args,
                     })
                 } else {
-                    response = await doFetch(`/rpc/${property}`, {
+                    response = await doFetch(`/__abide/rpc/${property}`, {
                         method: 'POST',
                         headers: { 'content-type': 'application/json' },
                         body: JSON.stringify(args ?? {}),

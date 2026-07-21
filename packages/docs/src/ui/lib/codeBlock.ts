@@ -1,4 +1,4 @@
-import { highlight } from './highlight'
+import { highlight } from '$ui/lib/highlight'
 
 // Wraps highlighted source in `<pre class="code"><code>…</code></pre>` for docs pages to render via
 // `{html(codeBlock(...))}`. Accepts either a raw `(code, lang)` pair or the `{ code, lang }` result

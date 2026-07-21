@@ -118,7 +118,7 @@ a log line twice) where every call must run. `cache: { … }` overrides the per-
 | Option | Enters cell? | Concurrent-identical (same scope) | After settle | Cache verbs | Default for |
 | --- | --- | --- | --- | --- | --- |
 | `cache: { ttl: ∞ }` | yes | coalesce | retain until LRU | full | reads |
-| `cache: { ttl: 0 }` | yes | **coalesce** to one run | dispose on drain | none (Mutation is call-only) | **mutations** |
+| `cache: { ttl: 0 }` | yes | **coalesce** to one run | dispose on drain | full (surface present; slot is transient) | **mutations** |
 | `cache: { ttl: n }` | yes | coalesce | retain n ms after settle | full | opt-in: cacheable POST; late-join replay window |
 | `cache: false` | no | each executes | nothing | none | opt-out: non-idempotent handlers; file-bearing FormData; hand-built `Response` |
 
@@ -141,10 +141,16 @@ files (user A `cat.jpg`, user B `dog.jpg`) is `cache: false` and each executes, 
 hand-built `Response` returned by a handler is likewise `cache: false` (opaque, single-consumption, not
 replayable — see §4).
 
-**Mutation public surface is unchanged.** A cell-backed mutation exposes only `(args)` + `__rpc` +
-`raw` (`makeRpc.ts:110-116`); `peek`/`pending`/`refresh`/`amend`/`snapshot`/`seed` are **not** added
-(they are incoherent for a non-retained slot). Cross-callable invalidation stays as today — a mutation
-handler invalidates *other* reads by calling their verbs (`todos.invalidate()`), which needs no change.
+**Mutation public surface mirrors a read (full symmetry).** A cell-backed mutation exposes the SAME
+surface as a read — `peek`/`pending`/`refreshing`/`refresh`/`invalidate`/`amend`/`watch`/`snapshot`/
+`seed`/`raw`/`isError` plus the streaming chunk probes (`makeRpc.ts` `attachSurface`). POST/PUT/PATCH/
+DELETE return `MutationSurface<Args, R>` (`Mutation extends Rpc` for a value handler, `StreamMutation
+extends StreamRead` for a streaming one). The only differences are transport (method + args-in-body +
+the CSRF gate, keyed off `__rpc.read`) and the default TTL: a mutation defaults to `ttl: 0`, so the slot
+is transient and the probes just report "nothing retained" — until the author opts into `cache: { ttl }`,
+at which point retention + `peek`/`refresh`/`refreshing` behave exactly like a read (on both the server
+and the client cell; `cache: false` bypasses the client cell too). Cross-callable invalidation is
+unchanged — a mutation handler still invalidates *other* reads by calling their verbs (`todos.invalidate()`).
 
 ### 2. TTL semantics: the clock starts at "settled" — resolve for a value, CLOSE for a stream; slots are ref-counted while open
 `ttl` = how long a **settled** slot is retained. For a value, settled = resolved (`loadedAt` at fn
@@ -394,7 +400,7 @@ Two handoff modes, keyed on stream state at flush:
   cross-request slot needed, unaffected by eviction or offline. This is the common path.
 - **(B) Open-at-flush** (SSR flushed a partial or was cut off by the budget): the seed carries a **slot
   handle** `(name, args, count, done: false)`. The client adopts the flushed values as a frozen prefix,
-  then **resumes over a resumable HTTP replay** — `GET /rpc/<name>?args=<json>&from=<count>` returns a
+  then **resumes over a resumable HTTP replay** — `GET /__abide/rpc/<name>?args=<json>&from=<count>` returns a
   stream **re-encoded in the handler's original encoding** (`jsonl` resumes as `jsonl`, `sse` as `sse` —
   the retained cursor carries its `tagStreamEncoding`, and the router mirrors the fresh-run encode) that
   synchronously replays `chunks[count..]` then continues live until close (one deterministic stream, no
@@ -466,7 +472,7 @@ and dropped until then.
 | Frame kind | Shape | Channel / transport | Carries |
 | --- | --- | --- | --- |
 | Cache verb | `CacheFrame { verb, value? }` (`cacheChannels.ts:23`) | `@rpc:<name>:<key>` mux | invalidate/refresh/amend — **verbs only, never chunks** |
-| Stream replay | `jsonl`/`sse` body | `GET /rpc/<name>?args=…&from=<count>` | replay `chunks[from..]` then live |
+| Stream replay | `jsonl`/`sse` body | `GET /__abide/rpc/<name>?args=…&from=<count>` | replay `chunks[from..]` then live — **read-only**: a streaming mutation is consumable client-side via `{#for await}`, but the `?from=` RESUME endpoint stays `GET`-only (`router.ts` gates it on `__rpc.read`), since replaying a POST/PUT/… over a GET would re-trigger the effect. This is the one deliberate read/mutation asymmetry. |
 | Seed (value) | `SeedRead { name, args, value }` (`pages.ts:170`) | hydration payload | a resolved value |
 | Seed (stream) | `StreamHandle { listId, name, args, done, count, values? }` | hydration payload | inline transcript (A) or slot handle (B) |
 
@@ -560,7 +566,11 @@ FormData/hand-built-Response always `cache: false`. Tests:
   coercion (`count="3"` matches `count: 3`), so they coalesce / cache-hit.
 - two distinct concurrent **file** uploads → never collide, both execute (file-bearing FormData is
   `cache: false`).
-- Mutation public surface stays call-only (`peek`/`amend` not present).
+- Mutation public surface mirrors a read (full symmetry): `peek`/`pending`/`refreshing`/`refresh`/
+  `invalidate`/`amend`/`watch`/`snapshot`/`seed`/`raw` all present, plus the streaming chunk probes for
+  a streaming mutation. The default `ttl: 0` slot is transient, so the probes reflect a retained value
+  only when the author opts into `cache: { ttl }`; `__rpc.read` stays `false` (transport still keys off
+  it — args in body + CSRF gate).
 
 **3. Shared streaming reads + byte accounting** ✅ **built** — `cache: { shared }`/`ttl` on a streaming
 read wired to the ReplayableStream; **incremental** per-chunk byte accounting; open streams PINNED

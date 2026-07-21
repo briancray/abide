@@ -1,0 +1,31 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheTagA from "$server/rpc/cacheTagA"
+  import cacheTagB from "$server/rpc/cacheTagB"
+  import cacheTagBust from "$server/rpc/cacheTagBust"
+
+  // Two SHARED reads carry the "docs" tag. One global invalidate({ tags: ["docs"] }) — run server-side
+  // (the tag registry is server-only) through a POST RPC — drops BOTH slots, so a re-read of each
+  // re-fetches and both run counts climb together.
+  let result = state(null)
+  async function load() {
+    const a = await (await cacheTagA.raw({ tag: "a" })).json()
+    const b = await (await cacheTagB.raw({ tag: "b" })).json()
+    result = { a: a.runs, b: b.runs }
+  }
+  async function bust() {
+    await cacheTagBust({}) // server: invalidate({ tags: ["docs"] }) → drops both "docs" slots
+    await load()           // re-read → both climb together
+  }
+</script>
+
+{#if result}
+  <ul class="grid">
+    <li>cacheTagA runs: <strong data-testid="tags-a">{result.a}</strong></li>
+    <li>cacheTagB runs: <strong data-testid="tags-b">{result.b}</strong></li>
+  </ul>
+{/if}
+<div class="row">
+  <button data-testid="tags-load" onclick={load}>Load both</button>
+  <button data-testid="tags-bust" onclick={bust}>invalidate({'{'}tags{'}'})</button>
+</div>

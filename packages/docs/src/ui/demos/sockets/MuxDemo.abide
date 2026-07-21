@@ -1,6 +1,6 @@
 <script>
   import { state } from "abide/ui/state"
-  import socketsPublish from "../../../server/rpc/socketsPublish"
+  import socketsPublish from "$server/rpc/socketsPublish"
 
   // The same chat socket, consumed over the MULTIPLEXED WebSocket mux at `/__abide/sockets` instead of
   // the per-socket HTTP face. One WS carries every named socket; frames are `{ name, msg }`. You

@@ -1,0 +1,13 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import TryDemo from "$ui/demos/templating/errors/TryDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Error boundary — <code>&#123;#try&#125;</code></h1>
+  <p class="lead">A <code>&#123;#try&#125;</code> block renders its body; if any expression throws while the body mounts, the block switches to <code>&#123;:catch&#125;</code>. The <code>&#123;:finally&#125;</code> branch always renders. Here the body re-mounts on each click (keyed by the run id), so you can throw and recover on demand.</p>
+
+  <Demo id="try" title="<code>&#123;#try&#125;</code> / <code>&#123;:catch&#125;</code> / <code>&#123;:finally&#125;</code>" client="src/ui/demos/templating/errors/TryDemo.abide">
+    <TryDemo />
+  </Demo>
+</main>

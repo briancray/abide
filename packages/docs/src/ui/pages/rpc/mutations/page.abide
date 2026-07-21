@@ -1,0 +1,27 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import PostMutationDemo from "$ui/demos/rpc/mutations/PostMutationDemo.abide"
+  import DeleteMutationDemo from "$ui/demos/rpc/mutations/DeleteMutationDemo.abide"
+  import CachedMutationDemo from "$ui/demos/rpc/mutations/CachedMutationDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Mutations</h1>
+  <p class="lead">A mutation is <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, or <code>DELETE</code> — args go in the JSON body and the handler runs on every call by default (<code>ttl: 0</code>: coalesce concurrent, retain nothing). The four verbs are the same callable with the same shape; they differ only in HTTP method and intent — <code>POST</code> creates, <code>PUT</code> replaces, <code>PATCH</code> partially updates, <code>DELETE</code> removes. Two representative shapes are shown below.</p>
+
+  <Demo id="post" title="Mutation — <code>POST</code> (create)" server="src/server/rpc/rpcCreateNote.ts" client="src/ui/demos/rpc/mutations/PostMutationDemo.abide" tab="server">
+    <PostMutationDemo />
+  </Demo>
+
+  <Demo id="delete" title="Mutation — <code>DELETE</code> (remove)" server="src/server/rpc/rpcDeleteNote.ts" client="src/ui/demos/rpc/mutations/DeleteMutationDemo.abide" tab="server">
+    <DeleteMutationDemo />
+  </Demo>
+
+  <h2>Full read/mutation symmetry</h2>
+  <p>A mutation is <code>cell + transport</code> just like a read, so it exposes the <strong>same surface</strong>. The only differences are transport (method + body + CSRF gate) and the default TTL. Opt a mutation into caching with <code>cache</code> and its reactive probes come alive — here a cached <code>POST</code> where a repeat <em>call</em> hits the cache (the run number holds) while <code>.refresh()</code> re-runs the handler, driven entirely through <code>.peek()</code> / <code>.refreshing()</code>:</p>
+  <Demo id="cached-mutation" title="Cached mutation — <code>POST</code> with a <code>cache</code> TTL" server="src/server/rpc/rpcBumpCounter.ts" client="src/ui/demos/rpc/mutations/CachedMutationDemo.abide" tab="server">
+    <CachedMutationDemo />
+  </Demo>
+
+  <p>Streaming reaches mutations too — a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read. See <a href="/rpc/streaming">Streaming</a>.</p>
+</main>

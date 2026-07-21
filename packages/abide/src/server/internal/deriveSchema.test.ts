@@ -117,4 +117,36 @@ describe('deriveSchema', () => {
         const { warnings } = deriveSchema(FIXTURE, 'doesNotExist')
         expect(warnings.some((w) => w.includes('not found'))).toBe(true)
     })
+
+    test('option 5: derives the input schema from destructuring defaults (no annotation)', () => {
+        const { input, warnings } = deriveSchema(FIXTURE, 'defaulted')
+        expect(warnings).toEqual([])
+        if (input === undefined) throw new Error('expected input schema to be derived')
+        expect(input.type).toBe('object')
+        const props = input.properties
+        if (props === undefined) throw new Error('expected input properties')
+        expect(props.message).toEqual({ type: 'string' })
+        expect(props.count).toEqual({ type: 'number' })
+        // `boolean` is modeled as the `false | true` union → enum of both literals.
+        expect(props.flag).toEqual({ enum: [false, true] })
+        // Every field has a default → all optional → no `required`.
+        expect(input.required).toBeUndefined()
+    })
+
+    test('option 5: warns (loud) on a param field that is `any` (no default, no annotation)', () => {
+        const { input, warnings } = deriveSchema(FIXTURE, 'partlyUntyped')
+        // The untyped field is called out by path...
+        expect(warnings.some((w) => w.includes('`any`') && w.includes('"id"'))).toBe(true)
+        // ...while the defaulted sibling still derives cleanly.
+        const props = input?.properties
+        if (props === undefined) throw new Error('expected input properties')
+        expect(props.count).toEqual({ type: 'number' })
+        expect(props.id).toEqual({})
+    })
+
+    test('a zero-arg handler yields no input and no `any` warning', () => {
+        const { input, warnings } = deriveSchema(FIXTURE, 'zeroArg')
+        expect(input).toBeUndefined()
+        expect(warnings).toEqual([])
+    })
 })

@@ -93,7 +93,7 @@ export function buildOpenApi(registry: Registry, opts?: OpenApiOptions): Record<
     for (const entry of registry.rpcs) {
         // MS1.4: `browser: false` withholds the RPC from OpenAPI; absent/true exposes it.
         if (entry.clients.browser === false) continue
-        const path = `/rpc/${entry.name}`
+        const path = `/__abide/rpc/${entry.name}`
         const verb = entry.method.toLowerCase()
         const item = paths[path] ?? {}
         item[verb] = operationForRpc(entry)

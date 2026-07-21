@@ -293,9 +293,9 @@ bespoke checker.
 ## Deferred / parked (rule before implementation)
 
 - **Lazy-mount island triggers** (`on-visible`/`on-idle`/`on-interaction`) — C2.
-- **`src/app.ts`** beyond the per-request middleware chain (boot/shutdown hooks, `health()`,
-  etc.) — only the request/nav middleware chain (`export const middleware = [...]`, FD1) is
-  specced here (C6-nav).
+- **`src/app.ts`** beyond the per-request middleware chain (lifecycle hooks `onStart`/`onStop`/
+  `onHealth`/`onError`, etc.) — only the request/nav middleware chain (`export const middleware =
+  [...]`, FD1) is specced here (C6-nav).
 - **Full socket API** (`tail`/`ttl`/`clientPublish`/`schema`/`clients`) — the multiplexer is
   the §8 broadcast channel; its authoring surface is a later slice.
 - **`abide check`/`lsp` completion/hover/refactor UX depth** (C10 fixes the model — TS-service-

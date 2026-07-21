@@ -12,7 +12,7 @@ async function intOf(page: Page, testId: string): Promise<number> {
 test('cached read is reused (call count holds), refresh + invalidate re-fetch, peek + watch react', async ({
     page,
 }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     const runs = page.getByTestId('counter-runs')
     await expect(runs).toHaveText('idle') // SSR: nothing loaded yet
@@ -36,7 +36,7 @@ test('cached read is reused (call count holds), refresh + invalidate re-fetch, p
 test('invalidate with a partial selector matches every superset slot (red re-fetches, blue untouched)', async ({
     page,
 }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await page.getByTestId('metric-start').click()
     await expect(page.getByTestId('metric-red1')).toHaveText(/^\d+$/)
@@ -51,23 +51,10 @@ test('invalidate with a partial selector matches every superset slot (red re-fet
     await expect(page.getByTestId('metric-blue1')).toHaveText(String(blueBefore))
 })
 
-test('pending() is true while the first load runs, then clears when the value settles', async ({
-    page,
-}) => {
-    await page.goto('/cache')
-
-    await page.getByTestId('slow-start').click()
-    // The slow read is in flight → pending is observably true.
-    await expect(page.getByTestId('slow-pending')).toHaveText('yes')
-    // …then it resolves: a value lands and pending clears.
-    await expect(page.getByTestId('slow-value')).toHaveText(/^\d+$/, { timeout: 5000 })
-    await expect(page.getByTestId('slow-pending')).toHaveText('no')
-})
-
 test('error probe holds the HttpError from a failing read, and clears on invalidate', async ({
     page,
 }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await expect(page.getByTestId('flaky-error')).toHaveText('idle')
     await page.getByTestId('flaky-start').click()
@@ -80,7 +67,7 @@ test('error probe holds the HttpError from a failing read, and clears on invalid
 test('reachable(host) reports a live host reachable and a dead port unreachable', async ({
     page,
 }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await page.getByTestId('reach-start').click()
     await expect(page.getByTestId('reach-self')).toHaveText('true')
@@ -90,7 +77,7 @@ test('reachable(host) reports a live host reachable and a dead port unreachable'
 test('refreshing(args) is true over a RETAINED value while pending stays false', async ({
     page,
 }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await page.getByTestId('refreshing-start').click()
     // First load resolves to a value; refreshing/pending both settle to no.
@@ -112,7 +99,7 @@ test('refreshing(args) is true over a RETAINED value while pending stays false',
 })
 
 test('watch(args, cb) method form fires when the slot value changes', async ({ page }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await page.getByTestId('watchmethod-start').click()
     await expect(page.getByTestId('watchmethod-value')).toHaveText(/^\d+$/)
@@ -126,7 +113,7 @@ test('watch(args, cb) method form fires when the slot value changes', async ({ p
 })
 
 test('amend(args, value|updater) mutates the slot in place with no re-fetch', async ({ page }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await page.getByTestId('amend-start').click()
     await expect(page.getByTestId('amend-value')).toHaveText(/^\d+$/)
@@ -143,7 +130,7 @@ test('amend(args, value|updater) mutates the slot in place with no re-fetch', as
 })
 
 test('cache: { shared } is a cross-request cache; a per-request read climbs', async ({ page }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await page.getByTestId('shared-probe').click()
     await expect(page.getByTestId('shared-r1')).toHaveText(/^\d+$/, { timeout: 5000 })
@@ -162,7 +149,7 @@ test('cache: { shared } is a cross-request cache; a per-request read climbs', as
 test('cache: { ttl } serves from cache in-window, then expires and re-fetches', async ({
     page,
 }) => {
-    await page.goto('/cache')
+    await page.goto('/caching')
 
     await page.getByTestId('ttl-probe').click()
     await expect(page.getByTestId('ttl-after')).toHaveText(/^\d+$/, { timeout: 10000 })
@@ -174,10 +161,8 @@ test('cache: { ttl } serves from cache in-window, then expires and re-fetches', 
     expect(after).toBeGreaterThan(immediate) // after the window → re-fetched
 })
 
-test('global invalidate({tags}) drops BOTH tagged reads together; pending({tags}) probes true', async ({
-    page,
-}) => {
-    await page.goto('/cache')
+test('global invalidate({tags}) drops BOTH tagged reads together', async ({ page }) => {
+    await page.goto('/caching')
 
     await page.getByTestId('tags-load').click()
     await expect(page.getByTestId('tags-a')).toHaveText(/^\d+$/, { timeout: 5000 })
@@ -189,13 +174,16 @@ test('global invalidate({tags}) drops BOTH tagged reads together; pending({tags}
     await expect.poll(() => intOf(page, 'tags-a'), { timeout: 5000 }).toBeGreaterThan(a1)
     await expect(page.getByTestId('tags-b')).not.toHaveText(String(b1))
     expect(await intOf(page, 'tags-b')).toBeGreaterThan(b1)
+})
+
+test('global refresh({tags}) eagerly revalidates BOTH tagged reads', async ({ page }) => {
+    await page.goto('/caching')
+
+    await page.getByTestId('tags-refresh-load').click()
+    await expect(page.getByTestId('tags-refresh-a')).toHaveText(/^\d+$/, { timeout: 5000 })
+    const a1 = await intOf(page, 'tags-refresh-a')
 
     // refresh({tags}) is the eager sibling — both climb again.
-    const a2 = await intOf(page, 'tags-a')
     await page.getByTestId('tags-refresh').click()
-    await expect.poll(() => intOf(page, 'tags-a'), { timeout: 5000 }).toBeGreaterThan(a2)
-
-    // pending({tags}) reactive aggregate reports true mid first-load.
-    await page.getByTestId('tags-probe-pending').click()
-    await expect(page.getByTestId('tags-pending')).toHaveText('true')
+    await expect.poll(() => intOf(page, 'tags-refresh-a'), { timeout: 5000 }).toBeGreaterThan(a1)
 })

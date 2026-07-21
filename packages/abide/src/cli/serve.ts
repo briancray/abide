@@ -1,7 +1,8 @@
 // serve(dir, opts) — boot a file-based abide project on a real port (M-CLI / CL2 / BP2-3).
 //
-// Loads the project at `dir` (loadApp → the createApp config), binds Bun.serve to `opts.port` or an
-// ephemeral one, runs the app's `onStart` lifecycle hook, and returns `{ url, stop }`. The content-
+// Loads the project at `dir` (loadApp → the createApp config), then boots through the app's
+// `onStart(start)` WRAPPER (which binds Bun.serve to `opts.port` or an ephemeral one inside `start()`),
+// and returns `{ url, stop }` whose `stop` runs through the `onStop(stop)` wrapper. The content-
 // hashed client assets (`/__abide/chunk/*`) and page SSR are already served by the router — `serve`
 // only wires the lifecycle and, in dev, the live-reload loop. Production `abide start` passes a
 // `clientBuild` (loaded from `dist`) so the router serves the built artifacts with no bundler at boot.
@@ -19,8 +20,9 @@ import { join } from 'node:path'
 import { type ClientBuild, invalidateClientBundle } from '../server/internal/clientBundle.ts'
 import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
-import { createApp } from '../server/internal/router.ts'
+import { type App, createApp } from '../server/internal/router.ts'
 import { socket } from '../server/socket.ts'
+import { log } from '../shared/log.ts'
 
 // The reserved dev-reload channel name on the socket mux (BP2.3). Not a per-slot cache channel —
 // the dev client subscribes to it by name with no join.
@@ -70,13 +72,24 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
         config.devReloadScript = DEV_RELOAD_SNIPPET
     }
 
-    const app = createApp(config)
-    if (config.onStart !== undefined) await config.onStart()
-
-    // Pre-compile every page/layout before accepting traffic so the first request to each route hits a
-    // warm `SERVER_MODULE_CACHE` instead of racing the on-demand AOT compile (removes first-hit latency
-    // and the e2e `fullyParallel` compile race). Compile-only, so no request scope is needed.
-    await warmPages(config)
+    // onStart is a WRAPPER around the real boot (CL2): it receives a `start()` thunk, may run setup
+    // BEFORE it, and boots by calling (typically returning) it. The socket binds only inside `start()`
+    // (createApp), so no request is accepted until setup completes — closing the old "listening before
+    // onStart" race. Pre-compile every page/layout inside the boot too, so the first request to each
+    // route hits a warm `SERVER_MODULE_CACHE` instead of racing the on-demand AOT compile. Returning
+    // WITHOUT calling `start()` is a deliberate breakout — the app never boots and serve() throws.
+    let app: App | undefined
+    const start = async (): Promise<void> => {
+        if (app !== undefined) return
+        app = createApp(config)
+        await warmPages(config)
+    }
+    if (config.onStart !== undefined) await config.onStart(start)
+    else await start()
+    if (app === undefined) {
+        throw new Error('abide: onStart returned without calling start() — the app did not boot.')
+    }
+    const booted = app
 
     let watcher: FSWatcher | undefined
     if (reloadSocket !== undefined) {
@@ -84,11 +97,24 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
     }
 
     return {
-        url: app.origin,
+        url: booted.origin,
         async stop(): Promise<void> {
             watcher?.close()
-            if (config.onStop !== undefined) await config.onStop()
-            await app.stop()
+            // onStop mirrors onStart: a `stop()` thunk it may wrap (e.g. drain in-flight work first).
+            // Unlike boot, teardown MUST complete — if the hook returns without calling stop(), serve()
+            // calls it as a backstop so the server never strands as a zombie.
+            let stopped = false
+            const stop = async (): Promise<void> => {
+                if (stopped) return
+                stopped = true
+                await booted.stop()
+            }
+            if (config.onStop !== undefined) {
+                await config.onStop(stop)
+                if (!stopped) await stop()
+            } else {
+                await stop()
+            }
         },
     }
 }
@@ -119,10 +145,10 @@ function startWatch(
             syncSockets(config, fresh, reloadSocket)
             await warmPages(config)
             reloadSocket.publish(Date.now())
-            console.info('[abide:dev] reloaded')
+            log.channel('abide:cli').info('reloaded')
         } catch (caught) {
-            console.error(
-                '[abide:dev] rebuild failed:',
+            log.channel('abide:cli').error(
+                'rebuild failed:',
                 caught instanceof Error ? caught.message : String(caught),
             )
         }

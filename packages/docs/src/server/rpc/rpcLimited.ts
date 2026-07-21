@@ -6,7 +6,7 @@ import { POST } from 'abide/server/POST'
 // `kind` is the type name, so callers can narrow the failure ("RateLimited") from any other error.
 const rateLimited = error.typed('RateLimited', 429)
 
-export default POST(({ tokens = 0 }: { tokens?: number }) => {
+export default POST(({ tokens = 0 }) => {
     if (tokens > 0) return { ok: true, tokens }
     return rateLimited({ retryAfter: 30 })
 })

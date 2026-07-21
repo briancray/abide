@@ -22,6 +22,29 @@ function must<T>(value: T | null | undefined, message = 'expected a non-null val
     return value
 }
 
+// The hydration-mismatch diagnostic now rides the gated `abide:hydrate` log channel instead of a bare
+// `console.warn`. Under the window-deleted test preload `isBrowser` is false, so it takes the server
+// path (stderr, TSV). Enable the channel and tap stderr to capture the `[abide:hydrate]` lines emitted
+// while `run` executes.
+function captureHydrateWarnings(run: () => void): string[] {
+    const previousDebug = Bun.env.DEBUG
+    Bun.env.DEBUG = 'abide:hydrate'
+    const lines: string[] = []
+    const originalWrite = process.stderr.write
+    process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+        lines.push(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+        return true
+    }) as typeof process.stderr.write
+    try {
+        run()
+    } finally {
+        process.stderr.write = originalWrite
+        if (previousDebug === undefined) delete Bun.env.DEBUG
+        else Bun.env.DEBUG = previousDebug
+    }
+    return lines.filter((line) => line.includes('[abide:hydrate]'))
+}
+
 const TEXT = 3
 const COMMENT = 8
 
@@ -614,8 +637,10 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
         expect(host.querySelector('button')).toBeNull() // it's a <div> right now
         expect(host.querySelector('div')).not.toBeNull()
 
-        const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
-        const dispose = emitted.hydrate(host, scope)
+        let dispose!: () => void
+        const warnings = captureHydrateWarnings(() => {
+            dispose = emitted.hydrate(host, scope)
+        })
 
         // Localized recovery: only the {#if} subtree was rebuilt.
         // (a) the mismatched region is now the CORRECT <button> with the right content.
@@ -630,8 +655,8 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
         expect(serverSpanText.data).toBe('A') // untouched, not re-rendered
 
         // (c) a dev-warning fired for the mismatch.
-        expect(warnSpy).toHaveBeenCalledTimes(1)
-        expect(String(must(warnSpy.mock.calls[0])[0])).toContain('hydration mismatch')
+        expect(warnings.length).toBe(1)
+        expect(must(warnings[0])).toContain('hydration mismatch')
 
         // (d) the recreated subtree is fully live: listener attached, sibling reactivity intact.
         button.dispatchEvent(new Event('click'))
@@ -643,7 +668,6 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
         expect(serverSpanText.data).toBe('A2')
         expect(must(host.querySelector('span')).firstChild).toBe(serverSpanText) // sibling STILL the same node
 
-        warnSpy.mockRestore()
         dispose()
     })
 
@@ -660,11 +684,13 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
             .replace('</button>', '</div>')
         expect(host.querySelector('button')).toBeNull()
 
-        const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
         // Must NOT throw to the caller (decision 5 — hydration never corrupts / never throws).
         let dispose!: () => void
+        let warnings: string[] = []
         expect(() => {
-            dispose = emitted.hydrate(host, scope)
+            warnings = captureHydrateWarnings(() => {
+                dispose = emitted.hydrate(host, scope)
+            })
         }).not.toThrow()
 
         // Whole-page fallback rebuilt the correct DOM from scratch.
@@ -674,10 +700,8 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
         expect(host.querySelector('div')).toBeNull()
 
         // Warned about the page root specifically.
-        expect(warnSpy).toHaveBeenCalled()
-        expect(String(must(warnSpy.mock.calls[warnSpy.mock.calls.length - 1])[0])).toContain(
-            'page root',
-        )
+        expect(warnings.length).toBeGreaterThan(0)
+        expect(must(warnings[warnings.length - 1])).toContain('page root')
 
         // Fresh mount is fully interactive.
         button.dispatchEvent(new Event('click'))
@@ -686,7 +710,6 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
         await tick()
         expect(must(host.querySelector('button')).textContent).toBe('B2')
 
-        warnSpy.mockRestore()
         dispose()
     })
 
@@ -700,18 +723,19 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
         host.innerHTML = await emitted.render(scope) // NO corruption — server matches the template
         const serverButton = must(host.querySelector('button'))
 
-        const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
-        const dispose = emitted.hydrate(host, scope)
+        let dispose!: () => void
+        const warnings = captureHydrateWarnings(() => {
+            dispose = emitted.hydrate(host, scope)
+        })
 
         // The tag check passes → the SAME element is claimed (not recreated) and NO warning fires.
         expect(host.querySelector('button')).toBe(serverButton)
-        expect(warnSpy).not.toHaveBeenCalled()
+        expect(warnings.length).toBe(0)
         expect(serverButton.textContent).toBe('B') // no write on pass 1
 
         serverButton.dispatchEvent(new Event('click'))
         expect(clicks).toBe(1)
 
-        warnSpy.mockRestore()
         dispose()
     })
 
@@ -726,19 +750,20 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
         host.innerHTML = (await emitted.render(scope)).replace('<!--[-->', '')
         expect(host.querySelector('button')).not.toBeNull()
 
-        const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
         let dispose!: () => void
+        let warnings: string[] = []
         expect(() => {
-            dispose = emitted.hydrate(host, scope)
+            warnings = captureHydrateWarnings(() => {
+                dispose = emitted.hydrate(host, scope)
+            })
         }).not.toThrow()
 
         // Recovered (whole-page here, since the missing open bubbles past the block) → correct DOM with
         // NO duplication (the mis-bounded partial-clear footgun is avoided by verifying the open anchor).
         expect(host.querySelectorAll('button').length).toBe(1)
         expect(must(host.querySelector('button')).textContent).toBe('B')
-        expect(warnSpy).toHaveBeenCalled()
+        expect(warnings.length).toBeGreaterThan(0)
 
-        warnSpy.mockRestore()
         dispose()
     })
 })
@@ -905,5 +930,108 @@ describe('scoped <style> scope attribute survives SSR → hydrate (#13/#20)', ()
         // Same node claimed (not recreated) AND it still carries the scope attr → styles apply.
         expect(host.querySelector('div')).toBe(div)
         expect(div.hasAttribute(scopeAttr)).toBe(true)
+    })
+})
+
+describe('mountable interpolation (snippet call / children) — adopt server subtree, no strand', () => {
+    // A `{#snippet}` call is an ORDINARY interpolation whose value is a Mountable. On the server it renders
+    // the builder's subtree inline; the hydrate pass must ADOPT that subtree (claim it + register its
+    // teardown) instead of trusting-and-forgetting. Before the fix the primed pass returned without a
+    // disposer, so the first reactive re-run MOUNTED A SECOND, LIVE COPY beside the stranded server one —
+    // the SnippetDemo showed "Live count: 6" next to a frozen "Live count: 0". (Regression guard.)
+    function reactiveScope(sig: ReturnType<typeof signal>): Record<string, unknown> {
+        const scope: Record<string, unknown> = {}
+        Object.defineProperty(scope, 'count', { get: () => sig(), enumerable: true })
+        return scope
+    }
+
+    test('a single snippet call re-mounts in place — exactly one badge, no stranded copy', async () => {
+        const count = signal(0)
+        const scope = reactiveScope(count)
+        const src =
+            '{#snippet badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/snippet}' +
+            '<div>{badge("Live count", count)}</div>'
+        const emitted = await loadEmitted(src)
+        const host = document.createElement('div')
+        host.innerHTML = await emitted.render(scope)
+        const serverSpan = must(host.querySelector('.badge'))
+
+        emitted.hydrate(host, scope)
+        // Pass 1 adopts the server span in place (decision 9): SAME node, unchanged text.
+        expect(host.querySelector('.badge')).toBe(serverSpan)
+        expect(serverSpan.textContent).toBe('Live count: 0')
+
+        count.set(6)
+        await tick()
+        // One badge, showing the live value — the server copy was replaced, not left beside a new one.
+        expect(host.querySelectorAll('.badge').length).toBe(1)
+        expect(must(host.querySelector('.badge')).textContent).toBe('Live count: 6')
+    })
+
+    test('two snippet calls (the SnippetDemo shape) both stay singular after an update', async () => {
+        const count = signal(0)
+        const scope = reactiveScope(count)
+        const src =
+            '{#snippet badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/snippet}' +
+            '<div>{badge("Live count", count)}{badge("Doubled", count * 2)}</div>'
+        const emitted = await loadEmitted(src)
+        const host = document.createElement('div')
+        host.innerHTML = await emitted.render(scope)
+        expect(host.querySelectorAll('.badge').length).toBe(2)
+
+        emitted.hydrate(host, scope)
+        expect(host.querySelectorAll('.badge').length).toBe(2)
+
+        count.set(6)
+        await tick()
+        const texts = Array.from(host.querySelectorAll('.badge')).map((b) => b.textContent)
+        expect(texts).toEqual(['Live count: 6', 'Doubled: 12'])
+    })
+
+    test('multi-node snippet body (trailing static) adopts its full extent', async () => {
+        const count = signal(0)
+        const scope = reactiveScope(count)
+        const src = '{#snippet line(n)}Hi {n}!{/snippet}<div data-testid="wrap">{line(count)}</div>'
+        const emitted = await loadEmitted(src)
+        const host = document.createElement('div')
+        host.innerHTML = await emitted.render(scope)
+        const wrap = must(host.querySelector('[data-testid=wrap]'))
+        expect(wrap.textContent).toBe('Hi 0!')
+
+        emitted.hydrate(host, scope)
+        expect(wrap.textContent).toBe('Hi 0!')
+
+        count.set(6)
+        await tick()
+        // The `<!--[-->…<!--]-->` bracket bounds the whole subtree (trailing static "!" included), so the
+        // adopted extent is replaced wholesale — no "Hi 6!!" left behind.
+        expect(wrap.textContent).toBe('Hi 6!')
+    })
+
+    test('a multi-root snippet body does NOT desync a following sibling (no whole-page recover)', async () => {
+        // Regression: a multi-node snippet output used to be walked as a single-node text leaf, so the
+        // cursor landed mid-subtree and the sibling `<span>` claim hit a text node → HydrationMismatch that
+        // bubbled to the PAGE ROOT and re-rendered everything (losing node identity). The server now brackets
+        // the mountable subtree so the walk skips it as a unit; the sibling is claimed in place.
+        const count = signal(0)
+        const scope = reactiveScope(count)
+        const src =
+            '{#snippet line(n)}Hi {n}!{/snippet}' +
+            '<div data-testid="wrap">{line(count)}<span data-testid="sib">S{count}</span></div>'
+        const emitted = await loadEmitted(src)
+        const host = document.createElement('div')
+        host.innerHTML = await emitted.render(scope)
+        const serverSib = must(host.querySelector('[data-testid=sib]'))
+
+        const captured = captureHydrateWarnings(() => emitted.hydrate(host, scope))
+        // SAME sibling node claimed — no mismatch, no whole-page recovery.
+        expect(host.querySelector('[data-testid=sib]')).toBe(serverSib)
+        expect(captured.length).toBe(0)
+
+        count.set(6)
+        await tick()
+        expect(serverSib.textContent).toBe('S6')
+        expect(must(host.querySelector('[data-testid=wrap]')).textContent).toBe('Hi 6!S6')
+        expect(host.querySelectorAll('[data-testid=sib]').length).toBe(1)
     })
 })

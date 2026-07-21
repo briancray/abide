@@ -6,7 +6,7 @@ import { GET } from 'abide/server/GET'
 let runs = 0
 
 export default GET(
-    async ({ tag = 'b' }: { tag?: string }) => {
+    async ({ tag = 'b' }) => {
         await Bun.sleep(150)
         runs++
         return { tag, runs }

@@ -1,0 +1,8 @@
+<script>
+  import { bundled } from "abide/ui/bundled"
+
+  // bundled() — true only when running inside the desktop bundle, false in the browser. An isomorphic
+  // framework probe called straight in the template — no RPC, no accessor plumbing.
+</script>
+
+<p id="bundled-block">bundled = <strong id="bundled-flag">{bundled() ? "true" : "false"}</strong></p>

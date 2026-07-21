@@ -8,57 +8,43 @@
     { title: "Start", items: [
       { href: "/", label: "Home" },
     ] },
-    { title: "Reactivity", items: [
-      { href: "/reactivity", label: "State & computed" },
-      { href: "/reactivity/demo", label: "Reactive primitives" },
+    { title: "Templating", items: [
+      { href: "/templating/reactivity", label: "Reactive primitives" },
+      { href: "/templating/bindings", label: "Bindings & directives" },
+      { href: "/templating/conditionals", label: "Conditionals" },
+      { href: "/templating/lists", label: "Lists" },
+      { href: "/templating/async", label: "Async blocks" },
+      { href: "/templating/errors", label: "Error boundary" },
+      { href: "/templating/components", label: "Components & snippets" },
+      { href: "/templating/styling", label: "Scoped <style>" },
     ] },
     { title: "RPC", items: [
       { href: "/rpc", label: "Isomorphic RPC" },
-      { href: "/rpc-guide/verbs", label: "Verbs" },
-      { href: "/rpc-guide/responses", label: "Responses" },
-      { href: "/rpc-guide/async-reads", label: "Async reads" },
-      { href: "/streaming", label: "Streaming SSR" },
-      { href: "/uploads", label: "File uploads" },
-    ] },
-    { title: "Control flow", items: [
-      { href: "/control/conditionals", label: "Conditionals" },
-      { href: "/control/lists", label: "Lists" },
-      { href: "/control/async", label: "Await" },
-      { href: "/control/errors", label: "Errors" },
-      { href: "/control/components", label: "Components" },
-    ] },
-    { title: "Bindings", items: [
-      { href: "/bindings", label: "Two-way binds" },
-    ] },
-    { title: "Styling", items: [
-      { href: "/styling", label: "Scoped <style>" },
-    ] },
-    { title: "Routing", items: [
-      { href: "/routing", label: "File-based routing" },
-      { href: "/routing-demo", label: "Nav demo" },
-      { href: "/topics/isomorphism", label: "Dynamic param" },
+      { href: "/rpc/reads", label: "Reads" },
+      { href: "/rpc/mutations", label: "Mutations" },
+      { href: "/rpc/responses", label: "Responses" },
+      { href: "/rpc/streaming", label: "Streaming" },
+      { href: "/rpc/uploads", label: "File uploads" },
     ] },
     { title: "Sockets", items: [
       { href: "/sockets", label: "Live publish" },
-      { href: "/sockets/mux", label: "Multiplexed" },
     ] },
-    { title: "Cache", items: [
-      { href: "/cache", label: "Cache verbs" },
+    { title: "Pages", items: [
+      { href: "/pages/routing", label: "Routing & navigation" },
+    ] },
+    { title: "Caching", items: [
+      { href: "/caching", label: "Cache verbs & probes" },
     ] },
     { title: "Platform", items: [
       { href: "/platform/config", label: "Config" },
       { href: "/platform/identity", label: "Identity" },
       { href: "/platform/scope", label: "Request scope" },
       { href: "/platform/observability", label: "Observability" },
+      { href: "/platform/lifecycle", label: "Lifecycle hooks" },
       { href: "/platform/machines", label: "Machine surfaces" },
-      { href: "/cli", label: "CLI" },
-      { href: "/deploy", label: "Build & deploy" },
-    ] },
-    { title: "Machines", items: [
-      { href: "/machines", label: "Beyond the browser" },
-    ] },
-    { title: "Performance", items: [
-      { href: "/bench", label: "Live render bench" },
+      { href: "/platform/cli", label: "CLI" },
+      { href: "/platform/deploy", label: "Build & deploy" },
+      { href: "/platform/bench", label: "Render bench" },
     ] },
   ]
 

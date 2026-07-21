@@ -38,6 +38,7 @@ import {
     sharedCacheUnpin,
     sharedStore,
 } from './internal/sharedCache.ts'
+import { log } from './log.ts'
 
 // `shared` is a SERVER concept (cross-request store + scope isolation). On the client a shared-flagged
 // cell behaves like a normal client cell, so every shared-only branch below is gated on `!isBrowser`.
@@ -655,6 +656,7 @@ export function cell<Args, T>(
 
     c.refresh = (args?: Partial<Args> | Args): void => {
         const slots = selectSlots(args)
+        log.channel('abide:cache').trace(`refresh ${id} (${slots.length} slots)`)
         for (const slot of slots) startLoad(slot, true)
         broadcast('refresh', args)
     }
@@ -677,6 +679,7 @@ export function cell<Args, T>(
 
     c.invalidate = (args?: Partial<Args> | Args): void => {
         const slots = selectSlots(args)
+        log.channel('abide:cache').trace(`invalidate ${id} (${slots.length} slots)`)
         for (const slot of slots) dropSlot(slot)
         broadcast('invalidate', args)
     }
@@ -701,6 +704,7 @@ export function cell<Args, T>(
             value = next
         }
         setState(slot, { status: 'value', value, error: undefined, refreshing: current.refreshing })
+        log.channel('abide:cache').trace(`amend ${id}`)
         // Both forms broadcast the resolved VALUE (value-form frame) on a shared slot.
         broadcast('amend', args, value)
     }

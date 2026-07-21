@@ -1,0 +1,74 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import JsonlStreamDemo from "$ui/demos/rpc/streaming/JsonlStreamDemo.abide"
+  import SseStreamDemo from "$ui/demos/rpc/streaming/SseStreamDemo.abide"
+  import SseEventSourceDemo from "$ui/demos/rpc/streaming/SseEventSourceDemo.abide"
+  import StreamProbesDemo from "$ui/demos/rpc/streaming/StreamProbesDemo.abide"
+  import StreamingMutationDemo from "$ui/demos/rpc/streaming/StreamingMutationDemo.abide"
+</script>
+
+<script>
+  import streamSlow from "$server/rpc/streamSlow"
+  import streamBoom from "$server/rpc/streamBoom"
+</script>
+
+<main class="page">
+  <h1>Streaming</h1>
+  <p class="lead">Any handler — read or mutation — can yield an <code>AsyncIterable</code>. Wrapped in <code>jsonl</code> or <code>sse</code> it becomes a replay-then-live stream: the browser callable decodes it back into an <code>AsyncIterable</code> consumed by <code>{'{'}#for await{'}'}</code>, identical on both sides. The same run is shared across concurrent and late viewers.</p>
+
+  <Demo id="jsonl" title="<code>jsonl(iterable)</code> — newline-delimited stream" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/JsonlStreamDemo.abide" tab="server">
+    <JsonlStreamDemo />
+  </Demo>
+
+  <Demo id="sse" title="<code>sse(iterable)</code> — via the RPC callable (AsyncIterable)" server="src/server/rpc/rpcEvents.ts" client="src/ui/demos/rpc/streaming/SseStreamDemo.abide" tab="server">
+    <SseStreamDemo />
+  </Demo>
+
+  <p>The same <code>sse</code> endpoint is also consumable with the native <code>EventSource</code> DOM API — same frames on the wire, raw-DOM style:</p>
+  <Demo id="sse-eventsource" title="<code>sse(iterable)</code> — via <code>EventSource</code>" server="src/server/rpc/rpcEvents.ts" client="src/ui/demos/rpc/streaming/SseEventSourceDemo.abide" tab="client">
+    <SseEventSourceDemo />
+  </Demo>
+
+  <p>A <strong>streaming</strong> read swaps the value probes for <em>chunk</em> probes: <code>fn.peek(args)</code> is the <strong>latest chunk</strong>, <code>fn.chunks(args)</code> is the transcript so far, and <code>fn.done(args)</code> reports whether the stream has closed.</p>
+  <Demo id="stream-probes" title="Streaming read — <code>peek</code> (latest chunk) · <code>chunks</code> · <code>done</code>" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamProbesDemo.abide" tab="client">
+    <StreamProbesDemo />
+  </Demo>
+
+  <p>Streaming reaches mutations too: a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read, and <code>.refresh()</code> re-runs the job.</p>
+  <Demo id="streaming-mutation" title="Streaming mutation — <code>POST</code> yielding <code>jsonl</code>" server="src/server/rpc/rpcStreamJob.ts" client="src/ui/demos/rpc/streaming/StreamingMutationDemo.abide" tab="server">
+    <StreamingMutationDemo />
+  </Demo>
+
+  <h2>Streaming SSR</h2>
+  <p>A slow <code>{'{'}#await{'}'}</code> read that misses the render deadline flushes the shell with a placeholder, then streams the resolved branch in as an out-of-order patch. Hydration claims the streamed nodes in place, so the block stays reactive — refresh re-fetches and re-renders it.</p>
+
+  <div data-testid="slow-block" class="rounded border border-slate-200 p-4">
+    {#await streamSlow()}
+      <span data-testid="pending">loading…</span>
+    {:then result}
+      <b data-testid="value">runs: {result.runs}</b>
+    {:catch failure}
+      <span data-testid="error">{failure.message}</span>
+    {/await}
+  </div>
+
+  <button
+    data-testid="refresh"
+    class="mt-4 rounded bg-slate-800 px-3 py-1.5 text-white"
+    onclick={() => streamSlow.refresh()}
+  >
+    Refresh
+  </button>
+
+  <p class="mt-8">A streamed read that <em>rejects</em> after the shell flushed streams its <code>{'{'}:catch{'}'}</code> branch as the patch — no 500 (headers are already out), and the client hydrates the catch branch in place.</p>
+
+  <div data-testid="error-block" class="rounded border border-slate-200 p-4">
+    {#await streamBoom()}
+      <span>loading…</span>
+    {:then ok}
+      <b>ok: {ok.ok}</b>
+    {:catch failure}
+      <i data-testid="error-value">{failure.message}</i>
+    {/await}
+  </div>
+</main>

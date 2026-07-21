@@ -40,9 +40,23 @@ left. Builds on §2 (ambient context), CO1/CO2, machine-surfaces.md.
 Distinct from the per-request **middleware chain** (C6-nav/S5). `AppModule` carries the
 process-lifecycle hooks:
 
-- **`onStart`** — once at server boot (open pools, warm shared cache, register cleanup).
-- **`onStop`** — once at graceful shutdown (drain, close).
-- **`health()`** — app health hook merged into `/__abide/health` (CO2.4).
+- **`onStart(start)`** — **wraps** the boot. Do setup (open pools, warm shared cache), then
+  `await start()` to bind the server. The socket binds **only inside `start()`**, so nothing serves
+  until setup finishes (closes the "listening before onStart" race). Returning WITHOUT calling
+  `start()` is a **breakout** — the app never boots and `serve()` throws.
+- **`onStop(stop)`** — **wraps** graceful shutdown (drain, then `await stop()` to close). Teardown is
+  **backstopped**: if the hook returns without calling `stop()`, the runtime calls it anyway so the
+  server never strands as a zombie.
+- **`onError(error)`** — **request-scoped**; runs when a request throws an unexpected error (a typed
+  `error(...)`/`redirect(...)` is a returned Response, not a throw, so it never reaches here). Read
+  `request()`/`route()`/`identity()` ambiently. May return a `Response` to shape the client reply;
+  anything else (or a throwing hook) falls back to a generic 500 that never leaks the detail.
+- **`onHealth()`** — **request-scoped** app health hook run on every `GET /__abide/health`; its
+  returned fields merge over the framework stub `{ reachable, version, startedAt, uptime }` (app
+  fields win). `reachable: false` or a throw → the endpoint answers **503** (CO2.4).
+
+Both `onStart`/`onStop` and `onHealth`/`onError` are async-capable and awaited. `onStart`/`onStop`
+live on the process lifecycle; `onHealth`/`onError` are router-consumed (per request).
 
 The request/nav interceptor is **onion middleware**, not a lifecycle hook: `export const middleware
 = [(next) => Response]`. Each entry is `async (next) => { … return await next() }` — `next()` takes

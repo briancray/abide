@@ -53,7 +53,9 @@ emitted module strings reach the client.
   serverChunks, slots, scopeAttr, scopedCss }`; `DynamicSlot = { kind, path:number[], expr, meta }`
   where `path` is firstChild/nextSibling steps and `expr` is already cell-ref-rewritten. Blocks get
   paired `<!--[-->…<!--]-->`; interp/await/html get one trailing `<!---->` (matches
-  `renderClient.ts:322`).
+  `renderClient.ts:322`). (This is the client *skeleton*, still single-anchor per leaf. Later refinement:
+  a *mountable* interpolation value — a `{#snippet}` call / `{children()}` — is bracketed like a block in
+  the SERVER output; see `attach-hydration-design.md` decision 4.)
 - **`ui/internal/emitClient.ts` / `emitServer.ts`** (NEW) — `emitClientModule(plan, analysis):
   string` / `emitServerModule(...)`. Emit ES-module strings with real
   `import * as $rt from "abide/ui/internal/runtime"` and lexical identifiers.

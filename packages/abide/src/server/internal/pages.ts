@@ -16,6 +16,7 @@
 import type { CacheContext } from '../../shared/internal/context.ts'
 import { getContext, runInContext } from '../../shared/internal/context.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
+import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
@@ -150,6 +151,9 @@ export async function renderPage(
     pattern?: string,
     streaming = false,
 ): Promise<string> {
+    log.channel('abide:ssr').trace(
+        `render ${pattern ?? '(inline)'}${streaming ? ' (streaming)' : ''}`,
+    )
     // Mark this request as a page render for the whole render lifetime (inline + streamed drain), so a
     // socket iterated in a `{#for await}` resolves to snapshot-then-complete instead of a live topic
     // that would hang the render (client-sockets.md CS5). Never cleared — the context dies with the request.
@@ -203,8 +207,8 @@ async function warmLevel(source: string, dir: string | undefined, label: string)
     try {
         await loadEmittedServer(source, dir)
     } catch (caught) {
-        console.error(
-            `[abide] page warmup failed for ${label}:`,
+        log.channel('abide:ssr').error(
+            `page warmup failed for ${label}:`,
             caught instanceof Error ? caught.message : String(caught),
         )
     }
@@ -220,7 +224,7 @@ export interface SeedRead {
 
 // One attachable `{#for await}` stream handed off to the client (replayable-streams.md §5). `listId`
 // matches the `<abide-list id>` the SSR painted; `name`/`args` identify the source RPC for a mode-B
-// resume (`GET /rpc/<name>?args=…&from=<count>`); `done` picks the mode (true → adopt `values`, false
+// resume (`GET /__abide/rpc/<name>?args=…&from=<count>`); `done` picks the mode (true → adopt `values`, false
 // → resume); `count` is the flushed item count (= `values.length`); `values` is the decoded transcript
 // so mode A re-mounts with zero network. `values` is absent only if it wasn't JSON-serializable.
 export interface StreamHandle {
@@ -410,7 +414,7 @@ export function streamPageDocument(
                     })
                 }
             } catch (caught) {
-                console.error('[abide] streaming SSR drain failed:', caught)
+                log.channel('abide:stream').error('streaming SSR drain failed:', caught)
             }
             const seed = runInContext(ctx, () => collectSeed(config))
             enc(documentTail(seed, opts))
@@ -455,7 +459,7 @@ export function streamSoftNav(
                     })
                 }
             } catch (caught) {
-                console.error('[abide] streaming soft-nav drain failed:', caught)
+                log.channel('abide:stream').error('streaming soft-nav drain failed:', caught)
             }
             const seed = runInContext(ctx, () => collectSeed(config))
             frame({ kind: 'seed', seed })

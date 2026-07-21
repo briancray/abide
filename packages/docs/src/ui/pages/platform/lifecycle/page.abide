@@ -1,0 +1,21 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import LifecycleHealthDemo from "$ui/demos/platform/lifecycle/LifecycleHealthDemo.abide"
+  import LifecycleErrorDemo from "$ui/demos/platform/lifecycle/LifecycleErrorDemo.abide"
+</script>
+
+
+<main class="page">
+  <h1>Lifecycle hooks</h1>
+  <p class="lead"><code>src/app.ts</code> exports four lifecycle hooks alongside the middleware onion. <code>onStart(start)</code> and <code>onStop(stop)</code> <em>wrap</em> the real boot/teardown; <code>onHealth()</code> and <code>onError()</code> run per request, inside request scope. The server tab of each card shows this app's real source.</p>
+
+  <Demo id="lifecycle-health" title="onStart + onHealth — boot wrapper &amp; health merge" server="src/app.ts" client="src/ui/demos/platform/lifecycle/LifecycleHealthDemo.abide" tab="client">
+    <p><code>onStart(start)</code> runs setup and then <code>await start()</code> to bind the server — the socket binds only <em>inside</em> <code>start()</code>, so nothing serves until setup finishes (returning without calling it aborts boot). Here it seeds a <code>bootId</code> before booting. <code>onHealth()</code> then runs on every <code>GET /__abide/health</code> and merges its fields over the framework stub of <code>reachable</code>, <code>version</code>, <code>startedAt</code>, and <code>uptime</code> — the <code>app</code> + <code>bootId</code> fields below prove both hooks ran. Return <code>reachable: false</code> (or throw) and the endpoint answers 503. <code>onStop(stop)</code> (also in the <code>app.ts</code> source) mirrors <code>onStart</code> for graceful shutdown — no live UI effect.</p>
+    <LifecycleHealthDemo />
+  </Demo>
+
+  <Demo id="lifecycle-error" title="onError — shape an uncaught throw" server="src/server/rpc/lifecycleThrow.ts" client="src/ui/demos/platform/lifecycle/LifecycleErrorDemo.abide" tab="server">
+    <p>The RPC below <code>throw</code>s an unexpected error — not a typed <code>error()</code> Response. <code>onError(error)</code> (request-scoped) catches it and returns the Response the client sees, instead of an opaque crash. The button posts to it and shows the shaped status + message.</p>
+    <LifecycleErrorDemo />
+  </Demo>
+</main>

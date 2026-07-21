@@ -144,13 +144,16 @@ describe('mutation FormData — always bypasses the cell', () => {
     })
 })
 
-describe('mutation public surface stays call-only', () => {
-    test('no reactive probes are exposed; __rpc.read is false', () => {
+describe('mutation public surface mirrors a read (full symmetry)', () => {
+    test('the reactive probes + cache verbs are exposed; __rpc.read is false', () => {
         const m = POST((_args: { x: number }) => 1) as unknown as Record<string, unknown>
         expect(typeof m).toBe('function')
-        expect(m.peek).toBeUndefined()
-        expect(m.amend).toBeUndefined()
-        expect(m.pending).toBeUndefined()
+        expect(typeof m.peek).toBe('function')
+        expect(typeof m.amend).toBe('function')
+        expect(typeof m.pending).toBe('function')
+        expect(typeof m.refresh).toBe('function')
+        expect(typeof m.refreshing).toBe('function')
+        // The transport still marks it a mutation (URL/body + CSRF gate keyed off this).
         expect((m.__rpc as { read: boolean }).read).toBe(false)
     })
 })

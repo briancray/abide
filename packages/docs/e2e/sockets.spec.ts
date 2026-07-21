@@ -70,7 +70,7 @@ test('tail replay — a published message re-appears after a full page reload', 
 })
 
 test('multiplexed WS mux — server publish reaches a mux subscriber live', async ({ page }) => {
-    await page.goto('/sockets/mux')
+    await page.goto('/sockets')
     await expect(page.getByTestId('mux-status')).toHaveText('live', { timeout: 15_000 })
 
     const text = unique('mux-server')
@@ -83,7 +83,7 @@ test('multiplexed WS mux — server publish reaches a mux subscriber live', asyn
 })
 
 test('multiplexed WS mux — client pub frame reaches the mux subscriber live', async ({ page }) => {
-    await page.goto('/sockets/mux')
+    await page.goto('/sockets')
     await expect(page.getByTestId('mux-status')).toHaveText('live', { timeout: 15_000 })
 
     const text = unique('mux-client')

@@ -25,7 +25,7 @@ describe('streaming read HTTP transport', () => {
                 }),
             },
         })
-        const res = await app.fetch(`/rpc/ticker${argsQuery({})}`)
+        const res = await app.fetch(`/__abide/rpc/ticker${argsQuery({})}`)
         expect(res.status).toBe(200)
         expect(res.headers.get('content-type')).toContain('jsonl')
         const body = await res.text()
@@ -42,7 +42,7 @@ describe('streaming read HTTP transport', () => {
                 }),
             },
         })
-        const res = await app.fetch(`/rpc/toks${argsQuery({})}`, {
+        const res = await app.fetch(`/__abide/rpc/toks${argsQuery({})}`, {
             headers: { accept: 'text/event-stream' },
         })
         expect(res.status).toBe(200)
@@ -69,8 +69,8 @@ describe('streaming read HTTP transport', () => {
         })
 
         const [a, b] = await Promise.all([
-            app.fetch(`/rpc/gen${argsQuery({})}`),
-            app.fetch(`/rpc/gen${argsQuery({})}`),
+            app.fetch(`/__abide/rpc/gen${argsQuery({})}`),
+            app.fetch(`/__abide/rpc/gen${argsQuery({})}`),
         ])
         const [ba, bb] = await Promise.all([a.text(), b.text()])
         expect(ba.trim().split('\n')).toEqual(['0', '1', '2'])
@@ -93,10 +93,10 @@ describe('resumable stream replay (?from=count)', () => {
             },
         })
 
-        const first = await app.fetch(`/rpc/gen${argsQuery({})}`)
+        const first = await app.fetch(`/__abide/rpc/gen${argsQuery({})}`)
         expect((await first.text()).trim().split('\n')).toEqual(['0', '1', '2', '3', '4'])
 
-        const resume = await app.fetch(`/rpc/gen${argsQuery({})}&from=2`)
+        const resume = await app.fetch(`/__abide/rpc/gen${argsQuery({})}&from=2`)
         expect(resume.headers.get('x-abide-stream-resume')).toBe('live')
         expect((await resume.text()).trim().split('\n')).toEqual(['2', '3', '4'])
         await app.stop()
@@ -118,7 +118,7 @@ describe('resumable stream replay (?from=count)', () => {
         })
 
         // Cold slot: resuming from 5 has nothing to replay → a fresh run from 0.
-        const res = await app.fetch(`/rpc/g2${argsQuery({})}&from=5`)
+        const res = await app.fetch(`/__abide/rpc/g2${argsQuery({})}&from=5`)
         expect(res.headers.get('x-abide-stream-resume')).toBe('fresh')
         expect((await res.text()).trim().split('\n')).toEqual(['1', '2'])
         expect(runs).toBe(1)
@@ -131,7 +131,7 @@ describe('transport helpers behave like their raw forms (see-through)', () => {
         const app = createTestApp({
             routes: { info: GET((_a: Record<string, never>) => json({ n: 7 })) },
         })
-        const res = await app.fetch(`/rpc/info${argsQuery({})}`)
+        const res = await app.fetch(`/__abide/rpc/info${argsQuery({})}`)
         expect(res.headers.get('content-type')).toContain('application/json')
         expect(await res.json()).toEqual({ n: 7 })
         await app.stop()
@@ -157,8 +157,8 @@ describe('transport helpers behave like their raw forms (see-through)', () => {
             },
         })
         const [a, b] = await Promise.all([
-            app.fetch(`/rpc/ev${argsQuery({})}`),
-            app.fetch(`/rpc/ev${argsQuery({})}`),
+            app.fetch(`/__abide/rpc/ev${argsQuery({})}`),
+            app.fetch(`/__abide/rpc/ev${argsQuery({})}`),
         ])
         expect((await a.text()).trim().split('\n')).toEqual(['1', '2'])
         expect((await b.text()).trim().split('\n')).toEqual(['1', '2'])
@@ -178,7 +178,7 @@ describe('transport helpers behave like their raw forms (see-through)', () => {
                 ),
             },
         })
-        const res = await app.fetch(`/rpc/s${argsQuery({})}`)
+        const res = await app.fetch(`/__abide/rpc/s${argsQuery({})}`)
         expect(res.headers.get('content-type')).toContain('text/event-stream')
         await res.text()
         await app.stop()

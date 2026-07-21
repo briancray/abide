@@ -166,7 +166,7 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?from=<count> (no cli
 
             expect(clientCalls).toBe(0) // the RPC source was NEVER re-invoked
             expect(fetchUrls.length).toBe(1)
-            expect(fetchUrls[0]).toContain('/rpc/complete?from=2')
+            expect(fetchUrls[0]).toContain('/__abide/rpc/complete?from=2')
             expect(fetchUrls[0]).toContain('args=')
             const lis = host.querySelectorAll('li')
             expect(Array.from(lis).map((li) => li.textContent)).toEqual([

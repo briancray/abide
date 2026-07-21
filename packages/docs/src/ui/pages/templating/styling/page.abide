@@ -1,0 +1,13 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import ScopedStyleDemo from "$ui/demos/templating/styling/ScopedStyleDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Scoped <code>&lt;style&gt;</code></h1>
+  <p class="lead">A component-scoped <code>&lt;style&gt;</code> is rewritten at build time: each selector gains a per-component attribute (<code>.swatch</code> → <code>.swatch[data-ab-*]</code>) and abide stamps that attribute on every element the component renders. The styles apply to <strong>this</strong> component only — on the server-rendered HTML and after hydration, never leaking to the rest of the page. (Tailwind classes still work alongside it.)</p>
+
+  <Demo id="scoped" title="Component-scoped <code>&lt;style&gt;</code>" client="src/ui/demos/templating/styling/ScopedStyleDemo.abide">
+    <ScopedStyleDemo />
+  </Demo>
+</main>

@@ -4,7 +4,7 @@
 // The filesystem is the source of truth (abide-compiler C6): one RPC per file under
 // `src/server/rpc/**`, one socket per file under `src/server/sockets/*`, pages under
 // `src/ui/pages/**/page.abide`, and the process-lifecycle module at `src/app.ts` (middleware +
-// onStart/onStop/health, CL3). `src/server/config.ts` is imported for its boot-time `env(...)`
+// onStart/onStop/onHealth, CL3). `src/server/config.ts` is imported for its boot-time `env(...)`
 // side effect (CO1). Missing directories/files are skipped — a project need not have every kind.
 //
 // Route-name derivation mirrors the URL surface: rpc path under `rpc/` without extension
@@ -21,14 +21,20 @@ import { routePrefixFromRelative } from './routePrefixFromRelative.ts'
 import type { AppConfig, Route } from './router.ts'
 
 // The process-lifecycle hooks a project's `src/app.ts` may export alongside `middleware` (CL3).
+// `onHealth` is NOT here — it is consumed by the router per request, so it rides on `AppConfig`.
+//
+// Both are WRAPPERS around the real boot/teardown (CL2): each receives a thunk (`start`/`stop`) and
+// runs it to proceed. `onStart` may do setup BEFORE calling `start()` — the socket binds only inside
+// it — and returning without calling `start()` is a breakout (the app never boots). `onStop` may drain
+// before `stop()`; teardown is guaranteed (serve() calls `stop()` as a backstop if the hook doesn't).
 export interface AppLifecycle {
-    onStart?: () => void | Promise<void>
-    onStop?: () => void | Promise<void>
-    health?: () => unknown | Promise<unknown>
+    onStart?: (start: () => Promise<void>) => void | Promise<void>
+    onStop?: (stop: () => Promise<void>) => void | Promise<void>
 }
 
-// What `loadApp` hands back: the router's AppConfig plus the captured lifecycle hooks. The caller
-// feeds the AppConfig fields to `createApp` and drives onStart/onStop/health itself (CL2/CO2.4).
+// What `loadApp` hands back: the router's AppConfig (which now carries `onHealth`) plus the captured
+// process-lifecycle hooks. The caller feeds the AppConfig fields to `createApp` and drives
+// onStart/onStop itself (CL2/CO2.4); the router drives `onHealth`.
 export interface LoadedApp extends AppConfig, AppLifecycle {}
 
 // Pull the single meaningful export from an imported module: prefer `default`, else the sole named
@@ -144,9 +150,12 @@ async function loadLayouts(
 
 // Import `src/app.ts` (if present) for its middleware array + lifecycle hooks. A middleware export
 // that isn't an array is ignored (defensive); each hook is carried only when it is a function.
-async function loadAppModule(
-    dir: string,
-): Promise<{ middleware: Middleware[]; lifecycle: AppLifecycle }> {
+async function loadAppModule(dir: string): Promise<{
+    middleware: Middleware[]
+    lifecycle: AppLifecycle
+    onHealth?: AppConfig['onHealth']
+    onError?: AppConfig['onError']
+}> {
     const appPath = join(dir, 'src/app.ts')
     if (!(await Bun.file(appPath).exists())) return { middleware: [], lifecycle: {} }
 
@@ -154,12 +163,21 @@ async function loadAppModule(
     const middleware = Array.isArray(module.middleware) ? (module.middleware as Middleware[]) : []
     const lifecycle: AppLifecycle = {}
     if (typeof module.onStart === 'function')
-        lifecycle.onStart = module.onStart as () => void | Promise<void>
+        lifecycle.onStart = module.onStart as (start: () => Promise<void>) => void | Promise<void>
     if (typeof module.onStop === 'function')
-        lifecycle.onStop = module.onStop as () => void | Promise<void>
-    if (typeof module.health === 'function')
-        lifecycle.health = module.health as () => unknown | Promise<unknown>
-    return { middleware, lifecycle }
+        lifecycle.onStop = module.onStop as (stop: () => Promise<void>) => void | Promise<void>
+    // onHealth/onError ride on AppConfig (router-consumed per request), not AppLifecycle.
+    const result: {
+        middleware: Middleware[]
+        lifecycle: AppLifecycle
+        onHealth?: AppConfig['onHealth']
+        onError?: AppConfig['onError']
+    } = { middleware, lifecycle }
+    if (typeof module.onHealth === 'function')
+        result.onHealth = module.onHealth as AppConfig['onHealth']
+    if (typeof module.onError === 'function')
+        result.onError = module.onError as AppConfig['onError']
+    return result
 }
 
 // Import `src/server/config.ts` (if present) for its boot-time `env(...)` side effect (CO1). The
@@ -170,9 +188,27 @@ async function loadConfig(dir: string): Promise<void> {
     await import(configPath)
 }
 
+// Seed the default log channel (CO2.2) from the project's package.json `name`, so `log(...)` lines
+// are labeled with the app name rather than the "abide" fallback. An explicit `ABIDE_APP_NAME`
+// wins (operator override); a missing/nameless package.json leaves the fallback in place.
+async function seedAppName(dir: string): Promise<void> {
+    if (process.env.ABIDE_APP_NAME !== undefined && process.env.ABIDE_APP_NAME.length > 0) return
+    const pkgFile = Bun.file(join(dir, 'package.json'))
+    if (!(await pkgFile.exists())) return
+    try {
+        const pkg = (await pkgFile.json()) as { name?: unknown }
+        if (typeof pkg.name === 'string' && pkg.name.length > 0) {
+            process.env.ABIDE_APP_NAME = pkg.name
+        }
+    } catch {
+        // A malformed package.json is not fatal to boot — keep the "abide" fallback label.
+    }
+}
+
 // Scan `dir` (a project root) and build the createApp config by importing its modules. Directories
 // that don't exist are simply skipped, so partial projects load fine.
 export async function loadApp(dir: string): Promise<LoadedApp> {
+    await seedAppName(dir)
     await loadConfig(dir)
 
     const routes = await loadRoutes(dir)
@@ -192,6 +228,7 @@ export async function loadApp(dir: string): Promise<LoadedApp> {
     }
     if (app.lifecycle.onStart !== undefined) loaded.onStart = app.lifecycle.onStart
     if (app.lifecycle.onStop !== undefined) loaded.onStop = app.lifecycle.onStop
-    if (app.lifecycle.health !== undefined) loaded.health = app.lifecycle.health
+    if (app.onHealth !== undefined) loaded.onHealth = app.onHealth
+    if (app.onError !== undefined) loaded.onError = app.onError
     return loaded
 }

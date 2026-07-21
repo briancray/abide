@@ -15,6 +15,7 @@ import type { StreamHandle } from '../../server/internal/pages.ts'
 import { markIterableDone } from '../../shared/internal/iterableDone.ts'
 import { effect, signal, untrack } from '../../shared/internal/reactive.ts'
 import { peekSettled } from '../../shared/internal/settledRead.ts'
+import { log } from '../../shared/log.ts'
 import { online } from '../../shared/online.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
@@ -186,9 +187,11 @@ const COMMENT_NODE = 8
 // cursor via these helpers INSTEAD of positional nav; the clone (mount) path never touches it.
 //
 // Comment-anchor conventions (emitted identically by `templatePlan`/`emitServer`):
-//   • `<!---->`    (empty data)  — a leaf slot anchor (interp / await / html).
-//   • `<!--[-->`   (data "[")    — a block/component OPEN anchor.
-//   • `<!--]-->`   (data "]")    — a block/component CLOSE anchor.
+//   • `<!---->`    (empty data)  — a leaf slot anchor (scalar interp / await / html).
+//   • `<!--[-->`   (data "[")    — a block/component OPEN anchor, AND the OPEN of a mountable interpolation
+//                                  (a `{#snippet}` call / `{children()}`), whose subtree the server brackets
+//                                  so the walk can skip/adopt it as a unit (serverRuntime.renderLeaf).
+//   • `<!--]-->`   (data "]")    — the matching CLOSE anchor.
 const BLOCK_OPEN = '['
 const BLOCK_CLOSE = ']'
 
@@ -225,6 +228,29 @@ export function hydrateValueLeaf(): Node | null {
         hydrateCursor = node.nextSibling !== null ? node.nextSibling.nextSibling : null
     } else {
         // the `<!---->` anchor itself (empty value or merged prefix) → step past it
+        hydrateCursor = node.nextSibling
+    }
+    return node
+}
+
+// Consume an INTERPOLATION leaf, which the server renders in one of two shapes (see serverRuntime.renderLeaf):
+//   • a scalar value → `<text><!---->` (or a bare `<!---->` when empty) — identical to `hydrateValueLeaf`.
+//   • a mountable (a `{#snippet}` call / `{children()}`) → the whole subtree bracketed by `<!--[-->…<!--]-->`.
+// A leading `<!--[-->` means the mountable form: skip the ENTIRE bracketed region (depth-honoring, so nested
+// snippet calls are handled) and hand the OPEN anchor back — `interpolate` derives the close + subtree from
+// it to adopt the region. Skipping the region as a unit is what keeps following siblings in sync (the
+// desync `hydrateValueLeaf` caused by advancing a single node past a multi-node subtree).
+export function hydrateInterpLeaf(): Node | null {
+    const node = hydrateCursor
+    if (node !== null && node.nodeType === COMMENT_NODE && node.nodeValue === BLOCK_OPEN) {
+        const close = findBlockClose(node)
+        hydrateCursor = close !== null ? close.nextSibling : null
+        return node
+    }
+    if (node === null) return null
+    if (node.nodeType === TEXT_NODE) {
+        hydrateCursor = node.nextSibling !== null ? node.nextSibling.nextSibling : null
+    } else {
         hydrateCursor = node.nextSibling
     }
     return node
@@ -377,25 +403,14 @@ export function claimElement(node: Node | null, tag: string): Node | null {
     return node
 }
 
-// Dev-only mismatch warning. Uses `console.warn` (not the isomorphic `log`, which transitively imports
-// the server request scope and would drag `node:async_hooks` into the browser bundle — the exact bug
-// `browserBundle.test.ts` guards). Gated on `NODE_ENV` like `router.ts`'s output-drift warning; the
-// RECOVERY itself runs in all environments so prod never corrupts — only this text is dev-gated.
+// Mismatch warning on the isomorphic `log` — the `abide:hydrate` channel, quiet unless
+// `localStorage.debug` names it (so a prod user can surface it to debug without a rebuild). The
+// RECOVERY itself runs unconditionally in the caller; only this diagnostic line is channel-gated.
 export function warnHydrationMismatch(where: string, error: unknown): void {
-    if (!isHydrationDev()) return
     const message = error instanceof Error ? error.message : String(error)
-    console.warn(
-        `[abide] hydration mismatch in ${where}: ${message} — recovering by re-rendering that subtree from scratch.`,
+    log.channel('abide:hydrate').warn(
+        `hydration mismatch in ${where}: ${message} — recovering by re-rendering that subtree from scratch.`,
     )
-}
-
-function isHydrationDev(): boolean {
-    const global = globalThis as {
-        Bun?: { env?: Record<string, string | undefined> }
-        process?: { env?: Record<string, string | undefined> }
-    }
-    const nodeEnv = global.Bun?.env?.NODE_ENV ?? global.process?.env?.NODE_ENV
-    return nodeEnv !== 'production'
 }
 
 // Run a block's claim `body` under hydration; on a nested `HydrationMismatch`, remove the block's
@@ -444,6 +459,10 @@ export function interpolate(
     prefixLen: number = 0,
 ): Disposer {
     let textNode: Text | null = null
+    // Stable insertion point for created/re-mounted content. Starts at `end`; when a server-rendered
+    // mountable is ADOPTED during hydration (see below), `end` is a CONTENT node, so `anchor` is re-parked
+    // on the trailing `<!---->` the adoption lands on — the stable point future re-mounts insert before.
+    let anchor = end
     let thenGeneration = 0
     let primed = false
 
@@ -453,22 +472,45 @@ export function interpolate(
         primed = true
     }
 
+    // Adopt a server-rendered mountable subtree (a `{#snippet}` call or `{children()}`) on the hydrate
+    // pass. The server brackets such a value with `<!--[-->…<!--]-->` (serverRuntime.renderLeaf), and the
+    // walk (`hydrateInterpLeaf`) hands `end` back as that OPEN anchor. Re-seek the claim cursor onto the
+    // subtree's first node (`open.nextSibling`), mount the builder in CLAIM mode bounded by the CLOSE anchor
+    // — so it reuses + wires the exact server nodes (whole extent, trailing statics included) instead of
+    // leaving them stranded — and park the stable insertion `anchor` on the close. The disposer is returned
+    // as the effect cleanup so a later reactive re-run REPLACES this subtree instead of appending a second,
+    // live copy beside the stranded one.
+    const adoptServerMount = (value: Mountable): Disposer => {
+        if (!(end.nodeType === COMMENT_NODE && end.nodeValue === BLOCK_OPEN)) {
+            // Defensive: no bracket (shouldn't happen for a mountable) → mount fresh at `end`.
+            return value.mount(parent, end)
+        }
+        const close = findBlockClose(end)
+        anchor = close ?? end
+        const saved = hydrateNode()
+        hydrateSeek(nextSibling(end))
+        const disposer = value.mount(parent, close)
+        hydrateSeek(saved)
+        return disposer
+    }
+
     const dispose = effect(() => {
         const value = read()
         if (primed) {
             // First pass under hydration: `read()` above subscribed us, so trust the server's output — no
             // DOM write (decision 9). EXCEPTION: a client-only value (e.g. a `bind:element` node ref set
             // during mount, before this effect first ran) can already diverge from what the server printed
-            // — detect that mismatch against the claimed node and correct it in place. Thenable/mountable
-            // values keep the server output (the async value resolves / mounts on a later pass).
+            // — detect that mismatch against the claimed node and correct it in place. A thenable keeps the
+            // server output (resolves on a later pass); a mountable is adopted from the server DOM.
             primed = false
-            if (!isThenable(value) && !isMountable(value)) {
+            if (isMountable(value)) return adoptServerMount(value)
+            if (!isThenable(value)) {
                 const shown = text(value)
                 if (textNode !== null) {
                     if (textNode.data !== shown) textNode.data = shown
                 } else if (shown !== '') {
                     textNode = document.createTextNode(shown)
-                    insert(parent, textNode, end)
+                    insert(parent, textNode, anchor)
                 }
             }
             return
@@ -478,11 +520,11 @@ export function interpolate(
                 remove(textNode)
                 textNode = null
             }
-            return value.mount(parent, end)
+            return value.mount(parent, anchor)
         }
         if (textNode === null) {
             textNode = document.createTextNode('')
-            insert(parent, textNode, end)
+            insert(parent, textNode, anchor)
         }
         if (isThenable(value)) {
             const generation = ++thenGeneration
@@ -1264,7 +1306,7 @@ function matchStreamHandoff(open: Node): StreamHandle | null {
 // exactly like a normal read; a zero-arg source omits them.
 function resumeUrl(base: string, name: string, args: unknown, from: number): string {
     const argsQuery = args !== undefined ? `&args=${encodeURIComponent(JSON.stringify(args))}` : ''
-    return `${base}/rpc/${name}?from=${from}${argsQuery}`
+    return `${base}/__abide/rpc/${name}?from=${from}${argsQuery}`
 }
 
 interface ResumeCallbacks {

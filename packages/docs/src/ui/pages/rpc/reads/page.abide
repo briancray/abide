@@ -1,0 +1,54 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import GetReadDemo from "$ui/demos/rpc/reads/GetReadDemo.abide"
+  import HeadPingDemo from "$ui/demos/rpc/reads/HeadPingDemo.abide"
+  import AwaitReadDemo from "$ui/demos/rpc/reads/AwaitReadDemo.abide"
+  import PeekReadDemo from "$ui/demos/rpc/reads/PeekReadDemo.abide"
+  import AwaitBlockDemo from "$ui/demos/rpc/reads/AwaitBlockDemo.abide"
+  import AwaitInlineDemo from "$ui/demos/rpc/reads/AwaitInlineDemo.abide"
+  import RawDemo from "$ui/demos/rpc/reads/RawDemo.abide"
+  import ProbesDemo from "$ui/demos/rpc/reads/ProbesDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Reads</h1>
+  <p class="lead">A read is <code>GET</code> or <code>HEAD</code> — args go in the URL, the result is cached and coalesced. In a template its bare call is the awaitable, coalesced load (<code>Promise&lt;T&gt;</code>); <code>fn.peek(args)</code> is the non-blocking <code>T | undefined</code> snapshot. On the server the blocking forms land the value in SSR HTML; in the browser the peek is non-blocking while the blocking forms suspend.</p>
+
+  <p>A GET read blocks SSR so its value is already in this HTML:</p>
+  <Demo id="get" title="Read — <code>GET</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/GetReadDemo.abide" tab="server">
+    <GetReadDemo />
+  </Demo>
+
+  <p>Identical semantics to GET; a HEAD carries headers only. This raw fetch reports its status line:</p>
+  <Demo id="head" title="Read — <code>HEAD</code>" server="src/server/rpc/rpcPing.ts" client="src/ui/demos/rpc/reads/HeadPingDemo.abide" tab="server">
+    <HeadPingDemo />
+  </Demo>
+
+  <p>Awaited during SSR; the string is already in this HTML:</p>
+  <Demo id="await-read" title="<code>{'{'}await fn(){'}'}</code> — blocking read" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/AwaitReadDemo.abide" tab="client">
+    <AwaitReadDemo />
+  </Demo>
+
+  <p>The peek is <code>undefined</code> while pending in the browser (it subscribes and kicks the load), the value once loaded:</p>
+  <Demo id="peek-read" title="<code>{'{'}fn.peek(args){'}'}</code> — non-blocking snapshot" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/PeekReadDemo.abide" tab="client">
+    <PeekReadDemo />
+  </Demo>
+
+  <Demo id="await-block" title="<code>{'{'}#await{'}'}</code> / <code>{'{'}:then{'}'}</code> / <code>{'{'}:catch{'}'}</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/AwaitBlockDemo.abide" tab="client">
+    <AwaitBlockDemo />
+  </Demo>
+
+  <p>The <code>then</code> binding folds into the opener: no pending branch, <code>v</code> is the resolved value (<code>T</code>), and the body renders once the read settles.</p>
+  <Demo id="await-inline" title="<code>{'{'}#await fn() then v{'}'}</code> — inline blocking form" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/AwaitInlineDemo.abide" tab="client">
+    <AwaitInlineDemo />
+  </Demo>
+
+  <Demo id="raw" title="Raw bypass — untouched <code>Response</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/RawDemo.abide" tab="client">
+    <RawDemo />
+  </Demo>
+
+  <p>The reactive probes are usable directly in the template. <code>{'{'}rpcGreet.peek(args){'}'}</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves:</p>
+  <Demo id="probes" title="In-template <code>fn.pending()</code> / <code>fn.error()</code> probes" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/ProbesDemo.abide" tab="client">
+    <ProbesDemo />
+  </Demo>
+</main>

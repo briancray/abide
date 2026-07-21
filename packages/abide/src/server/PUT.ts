@@ -1,10 +1,25 @@
 // PUT — mutating RPC helper, identical semantics to POST (no cache, direct call).
 
-import { type Mutation, makeMutation, type Payload, type RpcOptions } from './internal/makeRpc.ts'
+import type { StandardSchemaV1 } from '../shared/StandardSchema.ts'
+import {
+    type MutationSurface,
+    makeMutation,
+    type RpcOptions,
+    type RpcOptionsWithInput,
+    type RpcOptionsWithOutput,
+} from './internal/makeRpc.ts'
 
+export function PUT<S extends StandardSchemaV1, R>(
+    fn: (args: StandardSchemaV1.InferOutput<S>) => Promise<R> | R,
+    opts: RpcOptionsWithInput<S, R>,
+): MutationSurface<StandardSchemaV1.InferOutput<S>, R>
+export function PUT<Args, R>(
+    fn: (args: Args) => Promise<R> | R,
+    opts?: RpcOptionsWithOutput<R>,
+): MutationSurface<Args, R>
 export function PUT<Args, R>(
     fn: (args: Args) => Promise<R> | R,
     opts?: RpcOptions,
-): Mutation<Args, Payload<R>> {
+): MutationSurface<Args, R> {
     return makeMutation<Args, R>('PUT', fn, opts)
 }

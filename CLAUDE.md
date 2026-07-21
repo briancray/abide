@@ -54,20 +54,29 @@ return a stream (`jsonl`/`sse`). Reads put args in the URL, mutations in the bod
 **RPC `opts`**: `{ schemas?: { input?, output?, files? }, clients?: { browser?, mcp?, cli? },
 middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, shared?, tags? } }`.
 - **No schema** → input/output JSON Schema is **type-derived** (TS7), runtime-enforced, loud on
-  unrepresentable types.
+  unrepresentable types. The handler arg needs no annotation when a destructuring **default** types it
+  (`GET(({ n = 0 }) => …)` derives `{ n?: number }`); an annotation or explicit generic still works. A
+  param field left `any` (no default, no annotation) still derives permissive `{}` but is now **loud**
+  (a `deriveSchema` warning) — only a zero-arg handler or bare `unknown` stays silent.
+- **Schema-first input** → passing a Standard Schema as `schemas.input` makes the handler arg type
+  **flow from the schema's parsed output** (`GET(({ n }) => …, { schemas: { input: z.object(…) } })`;
+  `n` is typed, no annotation). `schemas.output`, when a Standard Schema, is type-checked against the
+  handler's return payload (a drifted return is a compile error at the call).
 - **`clients`** = *reachability only* (which surfaces reach it; `true`/`false`/`{…}`). **Not
   authorization** — auth is `middleware`. `{ browser: { validate: false | true } }`; `true` ships
   the real validator client-side for parity.
 - **`middleware`**: `Array<(next) => Response>` run for this RPC (composed inside the global chain).
 - **`cache`** (unified across verbs; `docs/spec/replayable-streams.md`): `ttl` (ms; **reads** default ∞,
-  **mutations** default `0` = coalesce identical concurrent in-flight calls, retain nothing), `shared`
-  (opt-in cross-request server cache; ambient-scope reads fail-closed; pure-over-args), `tags`.
+  **mutations** default `0` = coalesce identical concurrent in-flight calls, retain nothing — a mutation
+  that sets `cache: { ttl }` retains like a read on **both** the server and client cell, so its
+  `peek`/`refresh`/`refreshing` probes come alive), `shared` (opt-in cross-request server cache;
+  ambient-scope reads fail-closed; pure-over-args), `tags`.
   `cache: false` opts a call OUT of the cell entirely (every call runs; a mutation's at-least-once). A
   `FormData` mutation body always bypasses (can't be keyed). A streaming handler that yields an
   `AsyncIterable` (or `jsonl(gen())`, which sees through to it) is stored as a **ReplayableStream**
   (replay-then-live; ttl clock from stream CLOSE; open streams pinned; per-stream cap
   `ABIDE_MAX_STREAM_BUFFER_SIZE`, default unbounded) so concurrent/late viewers share one run. Resume a
-  retained transcript over `GET /rpc/<name>?args=…&from=<count>` (re-encoded in the handler's ORIGINAL
+  retained transcript over `GET /__abide/rpc/<name>?args=…&from=<count>` (re-encoded in the handler's ORIGINAL
   encoding — jsonl resumes as jsonl, sse as sse). **Built:** primitive + cell + verb routing + shared
   streaming + json/jsonl/**sse** see-through (all lazy) + resumable endpoint + the **SSR→client hydration
   handoff** — a `{#for await}` over a known-RPC source seeds its decoded transcript (a `StreamHandle`) so
@@ -157,8 +166,8 @@ Partial args match every superset slot.
 | `abide/shared/ValidationErrorData` | `{ issues, fields }` |
 | `abide/shared/route` | `route()` (see above) |
 | `abide/shared/url` | `url(path \| URL, params?, query?)` — in-app href resolver; `params` fill `[name]` segments (typed from the path literal), `query` appends a query string. No-`[name]` path (or a `URL`) collapses to `url(target, query?)` |
-| `abide/shared/health` | `health()` → `{ reachable, ... }` |
-| `abide/shared/log` | `log(...)`, `.info/.warn/.error/.trace`, `.channel(name)` |
+| `abide/shared/health` | `health()` → `Promise<{ reachable, version, ... }>` — isomorphic: server returns the baseline in-proc, client `await`s a fetch of `/__abide/health` (full merged doc) |
+| `abide/shared/log` | `log(...)`, `.info/.warn/.error/.trace`, `.channel(name)`. Every line carries a channel label — the un-channeled `log(...)` uses the **app name** (`ABIDE_APP_NAME`/package.json/`"abide"`, always on); `.channel('abide:…')` names a framework channel gated by `DEBUG` (server) / `localStorage.debug` (browser). `error` always emits; `warn/info/trace` gated. Channels: `abide:{rpc,cache,router,ssr,socket,identity,agent,mcp,hydrate,stream,bundle,cli}` |
 | `abide/shared/trace` | `trace()` → W3C traceparent \| undefined |
 
 ## UI — `abide/ui/*` (client-only)
@@ -181,16 +190,22 @@ Partial args match every superset slot.
 | `abide/test/createTestApp` | `createTestApp()` → `TestApp` (`origin`, `fetch`, `rpc`, `sockets`, `health`, `stop`, `as(identity)`) — real in-process app, not mocks |
 
 ## isometric RPC consumption (call surface)
+This surface is **identical for reads and mutations** (full symmetry). A read (`GET`/`HEAD`) is an `Rpc`/
+`StreamRead`; a mutation (`POST`/`PUT`/`PATCH`/`DELETE`) is a `MutationSurface` = `Mutation extends Rpc`
+(value) or `StreamMutation extends StreamRead` (streaming) — every probe/verb below is present on both.
+Mutations differ only in transport (args in body + CSRF gate) and the default TTL (`0` vs a read's ∞), so
+`peek`/`refresh`/`refreshing` reflect a retained value only when a mutation opts into `cache: { ttl }`.
+
 | Form | Meaning |
 | --- | --- |
-| `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate |
+| `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate. A mutation call is the same, but posts args in the body (default `ttl:0` retains nothing) |
 | `fn.peek(args)` | reactive `T \| undefined` snapshot — subscribes + kicks a coalesced load; the non-blocking display read |
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
 | `fn.refresh(args?)` / `fn.invalidate(args?)` / `fn.amend(args, v)` | cache verbs (partial match) |
 | `fn.peek` / `fn.pending` / `fn.refreshing` / `fn.error` / `fn.watch` | reactive probes |
 | `fn.isError(e, name)` | narrow a typed error |
 | bare call on a streaming handler | resolves to a fresh replay-then-live `AsyncIterable<C>` cursor (per caller, over one shared run) |
-| **streaming read** `StreamRead<Args, C>` | `GET`/`HEAD` whose handler yields an `AsyncIterable<C>`; replaces the value verbs with reactive chunk probes: `fn.peek(args): C\|undefined` (the **latest chunk** — the "current value"), `fn.chunks(args): C[]\|undefined` (transcript snapshot), `fn.done(args)`, `fn.error(args)` |
+| **streaming read/mutation** `StreamRead<Args, C>` / `StreamMutation<Args, C>` | any handler (read OR mutation) that yields an `AsyncIterable<C>`; replaces the value verbs with reactive chunk probes: `fn.peek(args): C\|undefined` (the **latest chunk** — the "current value"), `fn.chunks(args): C[]\|undefined` (transcript snapshot), `fn.done(args)`, `fn.error(args)`. A streaming mutation is consumed client-side via `{#for await x of fn()}` identically; only the `?from=` HTTP RESUME endpoint stays read-only |
 
 ## `.abide` template grammar
 
@@ -247,8 +262,16 @@ Partial args match every superset slot.
 
 ## App module — `src/app.ts`
 `export const middleware = [(next) => Response, …]` (onion; `next()` needs no args; return a
-`Response` to short-circuit — **auth is middleware**). Plus lifecycle `onStart` / `onStop` /
-`health()`.
+`Response` to short-circuit — **auth is middleware**). Plus lifecycle hooks (async-capable, awaited):
+`onStart(start)` / `onStop(stop)` **wrap** the real boot/teardown — do setup, then `await start()`
+(the socket binds only inside it, so nothing serves until setup finishes); returning without calling
+`start()` is a breakout (app never boots). `onStop(stop)` mirrors it (drain, then `await stop()`;
+teardown is backstopped). `onError(error)` — request-scoped; runs when a request
+throws an unexpected error (typed `error(...)`/`redirect(...)` are Responses, not throws, so they don't
+reach it); read `request()`/`route()`/`identity()` ambiently; may return a `Response` to shape the
+reply, else a generic 500. `onHealth()` — request-scoped,
+runs on every `GET /__abide/health`; returns fields merged over the framework stub `{ reachable, version,
+startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503).
 
 ## CLI
 | Command | Does |
@@ -268,7 +291,7 @@ Partial args match every superset slot.
 ## File-based conventions
 | Path | Meaning |
 | --- | --- |
-| `src/server/rpc/<name>.ts` | one RPC per file; URL `/rpc/<name>` |
+| `src/server/rpc/<name>.ts` | one RPC per file; URL `/__abide/rpc/<name>` |
 | `src/server/sockets/<name>.ts` | one `socket(...)` per file |
 | `src/mcp/prompts/<name>.md` / `src/mcp/resources/<name>` | MCP prompt (`{{arg}}`) / resource |
 | `src/server/config.ts` | boot-time `env(...)` schema |
@@ -280,7 +303,8 @@ Partial args match every superset slot.
 | `$server/*` · `$ui/*` · `$shared/*` | tsconfig-path import aliases for `src/server/*` · `src/ui/*` · `src/shared/*` (scaffolded into the app `tsconfig.json`; resolved by the Bun runtime and `abide check`). A local `.ts` imported into an `.abide` client script stays unsupported client-side (aliased or relative) — share client state via `state.shared(key)`. |
 
 ## Generated routes
-`/openapi.json` (OpenAPI 3.1) · `/__abide/mcp` (MCP; socket → tail/publish tools) · `/__abide/sockets`
+`/__abide/rpc/<name>` (per-RPC transport; `+ ?from=<count>` stream resume) · `/openapi.json` (OpenAPI
+3.1) · `/__abide/mcp` (MCP; socket → tail/publish tools) · `/__abide/sockets`
 (multiplexed WS + per-socket HTTP face) · `/__abide/health` · `/__abide/cli` (per-user install) ·
 `/__abide/inspector` (gated) · `/__abide/chunk/<name>-<hash>.(js|css)` (content-hashed, code-split client
 assets — the loader entry + per-route chunks + shared chunks + CSS; served immutable/long-cache).
@@ -290,6 +314,7 @@ assets — the loader entry + per-route chunks + shared chunks + CSS; served imm
 | --- | --- |
 | `PORT` / `APP_URL` | listen port / public URL (mount base) |
 | `ABIDE_APP_DIR` / `ABIDE_DATA_DIR` | override built app dir / per-user data dir |
+| `ABIDE_APP_NAME` | default `log` channel label (falls back to package.json `name`, then `abide`) |
 | `ABIDE_IDENTITY_SECRET` | seals the `abide-identity` cookie + tokens (required in prod for authenticated `identity.set()`) |
 | `ABIDE_IDENTITY_TTL` | identity cookie/token TTL ms (default 30d, rolling) |
 | `ABIDE_APP_TOKEN` / `ABIDE_APP_URL` | bearer token / app URL for remote CLI & bundle |

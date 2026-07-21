@@ -8,6 +8,8 @@
 // reactive state. Handlers fire in registration order; a throwing handler is isolated so one bad
 // listener can't swallow the rest.
 
+import { log } from '../../shared/log.ts'
+
 export type MenuHandler = () => void
 
 // name -> handlers listening for that specific emit.
@@ -54,8 +56,8 @@ function runIsolated(handler: MenuHandler): void {
     try {
         handler()
     } catch (caught) {
-        console.error(
-            '[abide:bundle] onMenu handler threw:',
+        log.channel('abide:bundle').error(
+            'onMenu handler threw:',
             caught instanceof Error ? caught.message : String(caught),
         )
     }

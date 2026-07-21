@@ -17,6 +17,7 @@ import type {
 } from '../../shared/internal/context.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { markIterableDone } from '../../shared/internal/iterableDone.ts'
+import { log } from '../../shared/log.ts'
 
 // The race sentinel the deadline resolves to. Identity-compared, so it can never collide with a read
 // value (a read resolving to this exact symbol is impossible — it is module-private).
@@ -132,8 +133,8 @@ export async function awaitStream(config: AwaitStreamConfig): Promise<string> {
             try {
                 return { html: await settle(read, config) }
             } catch (error) {
-                console.error(
-                    '[abide] streamed {#await} subtree threw with no {:catch} — cleared the slot:',
+                log.channel('abide:stream').error(
+                    'streamed {#await} subtree threw with no {:catch} — cleared the slot:',
                     error,
                 )
                 return { html: '' }

@@ -1,0 +1,40 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import StateDemo from "$ui/demos/templating/reactivity/StateDemo.abide"
+  import ComputedDemo from "$ui/demos/templating/reactivity/ComputedDemo.abide"
+  import LinkedDemo from "$ui/demos/templating/reactivity/LinkedDemo.abide"
+  import WatchSourceDemo from "$ui/demos/templating/reactivity/WatchSourceDemo.abide"
+  import WatchThunkDemo from "$ui/demos/templating/reactivity/WatchThunkDemo.abide"
+  import SharedTallyDemo from "$ui/demos/templating/reactivity/SharedTallyDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Reactive primitives</h1>
+  <p class="lead">Every reactive primitive, one concept per card. A <code>state</code> is a writable cell that drives fine-grained updates; a <code>computed</code> derives from it lazily; a <code>linked</code> cell reseeds when its source changes; and two flavours of <code>watch</code> push side effects — one change-only, one auto-tracked. Under each live demo is the exact source that powers it — read live from disk and highlighted on the server.</p>
+
+  <Demo id="state" title="<code>state(v, transform?)</code> — writable cell" client="src/ui/demos/templating/reactivity/StateDemo.abide">
+    <StateDemo />
+  </Demo>
+
+  <Demo id="computed" title="<code>state.computed</code> — derived cell" client="src/ui/demos/templating/reactivity/ComputedDemo.abide">
+    <ComputedDemo />
+  </Demo>
+
+  <Demo id="linked" title="<code>state.linked</code> — reseeding writable cell" client="src/ui/demos/templating/reactivity/LinkedDemo.abide">
+    <LinkedDemo />
+  </Demo>
+
+  <Demo id="watch-source" title="<code>watch(source, handler)</code> — change-only effect" client="src/ui/demos/templating/reactivity/WatchSourceDemo.abide">
+    <WatchSourceDemo />
+  </Demo>
+
+  <Demo id="watch-thunk" title="<code>watch(thunk)</code> — auto-tracked effect" client="src/ui/demos/templating/reactivity/WatchThunkDemo.abide">
+    <WatchThunkDemo />
+  </Demo>
+
+  <p>Two separate component instances call <code>state.shared("reactivity-tally", 0)</code> with the SAME key, so they share one backing signal — bump either and both update. The value also syncs across other open tabs of this app (via a <code>BroadcastChannel</code>).</p>
+
+  <Demo id="shared" title="<code>state.shared(key, initial)</code> — cell shared by key" client="src/ui/demos/templating/reactivity/SharedTallyDemo.abide">
+    <SharedTallyDemo />
+  </Demo>
+</main>

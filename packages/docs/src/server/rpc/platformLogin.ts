@@ -6,7 +6,7 @@ import { POST } from 'abide/server/POST'
 // scope so the router seals a rolling `abide-identity` cookie onto the response. The next request
 // from this browser carries that cookie, so `platformIdentity` then reads back an authenticated
 // principal — the page reflects the logged-in state.
-export default POST(({ name = 'anonymous' }: { name?: string }) => {
+export default POST(({ name = 'anonymous' }) => {
     identity.set({ name })
     const principal = identity()
     return {

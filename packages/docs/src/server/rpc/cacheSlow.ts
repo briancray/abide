@@ -4,7 +4,7 @@ import { GET } from 'abide/server/GET'
 // window) are observable in a real browser. Per-key run counter proves each re-fetch actually ran.
 const runsByKey = new Map<string, number>()
 
-export default GET(async ({ key = 'alpha' }: { key?: string }) => {
+export default GET(async ({ key = 'alpha' }) => {
     await Bun.sleep(500)
     const next = (runsByKey.get(key) ?? 0) + 1
     runsByKey.set(key, next)

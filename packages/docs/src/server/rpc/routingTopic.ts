@@ -6,7 +6,7 @@ export interface RoutingTopic {
     blurb: string
 }
 
-// Read RPC used by the `/routing-demo/[slug]` param route: the captured `slug` becomes this RPC's
+// Read RPC used by the `/pages/routing/[slug]` param route: the captured `slug` becomes this RPC's
 // single argument, proving a route param can flow straight into an isomorphic read.
 // #demo routing-topic
 export default GET(

@@ -33,6 +33,16 @@ soft-nav envelope, replayed into client cells before mount). See `rpc-core.md` �
    data-attributes (useless for text/empty regions), pure-positional (desyncs on merged text /
    empty regions).
 
+   > **Refinement (mountable interpolations).** An interpolation whose value is a *mountable* — a
+   > `{#snippet}` call or the `{children()}` slot — renders a whole subtree, not a scalar. The single
+   > trailing `<!---->` is ambiguous there (the subtree can span many top-level nodes and carry its own
+   > `<!---->` leaf anchors), so the walk would mis-read it as one text node and desync every following
+   > sibling. The server therefore brackets a mountable value with the SAME paired `<!--[-->…<!--]-->`
+   > anchors used for blocks (`serverRuntime.renderLeaf`), chosen at render time by `Raw`-ness; a scalar
+   > keeps its single `<!---->`. The client walk (`hydrateInterpLeaf`) peeks for the leading `<!--[-->`
+   > and, when present, skips/adopts the whole region via `findBlockClose`. The create-path skeleton is
+   > unchanged (`<!---->`); only server-rendered HTML brackets, and hydrate reconciles both.
+
 5. **Mismatch policy: localized recovery.** Cheap verification as the cursor walks (tag name at
    element boundaries, comment-anchor presence at dynamic boundaries — NOT attribute equality, since
    attributes are re-applied on claim). On mismatch, discard that region's server nodes and

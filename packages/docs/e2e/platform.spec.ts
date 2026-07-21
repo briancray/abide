@@ -7,9 +7,8 @@ import { expect, test } from '@playwright/test'
 test('platform hub links the sub-pages and reads config via env()', async ({ page }) => {
     await page.goto('/platform')
     await expect(page.locator('#platform-title')).toContainText('Platform')
-    // The hub's config peek is an SSR'd env()-backed read.
-    await expect(page.locator('#config-peek')).toContainText('abide docs')
     await expect(page.locator('.nav a[href="/platform/machines"]')).toBeVisible()
+    await expect(page.locator('.links a[href="/platform/config"]').first()).toBeVisible()
 })
 
 test('identity(): login promotes the principal and it persists across reads', async ({ page }) => {
@@ -66,26 +65,47 @@ test('env(): a typed config value is coerced and rendered', async ({ page }) => 
     await expect(block).toContainText('featureMachines = on')
 })
 
-test('trace() + health(): observability values render, health also fetched in-browser', async ({
-    page,
-}) => {
+test('trace(): the traceparent renders from the RPC read', async ({ page }) => {
     await page.goto('/platform/observability')
     const observe = page.locator('#observe-block')
     // A W3C traceparent: version-traceid-spanid-flags.
     await expect(observe).toContainText('traceparent = 00-')
-    await expect(observe).toContainText('health.reachable = true')
+})
 
+test('health(): the /__abide/health probe fetched straight in-browser', async ({ page }) => {
+    await page.goto('/platform/observability')
     await page.locator('#health-btn').click()
     await expect(page.locator('#health-block')).toHaveText('reachable = true')
 })
 
-test('online() + bundled(): framework probes called directly in a template (M3b)', async ({
+test('lifecycle onStart + onHealth: /__abide/health merges app fields over the framework stub', async ({
     page,
 }) => {
+    await page.goto('/platform/lifecycle')
+    await page.locator('#lifecycle-health-btn').click()
+    const out = page.locator('#lifecycle-health-out')
+    // Framework stub fields.
+    await expect(out).toContainText(/reachable\s+= true/)
+    await expect(out).toContainText(/version\s+= \d/)
+    // onHealth-merged app fields; a non-empty bootId (UUIDv7 hex) proves onStart ran and seeded it.
+    await expect(out).toContainText(/app\s+= docs/)
+    await expect(out).toContainText(/bootId\s+= [0-9a-f]{8}/)
+})
+
+test('lifecycle onError: an uncaught throw is shaped into a controlled response', async ({
+    page,
+}) => {
+    await page.goto('/platform/lifecycle')
+    await page.locator('#lifecycle-error-btn').click()
+    const out = page.locator('#lifecycle-error-out')
+    await expect(out).toContainText('500 —')
+    await expect(out).toContainText('onError caught it')
+})
+
+test('online(): reactive connectivity probe called directly in a template', async ({ page }) => {
     await page.goto('/platform/observability')
-    // SSR + hydration: online() is true (server + a live browser), bundled() is false (plain tab).
+    // SSR + hydration: online() is true (server + a live browser).
     await expect(page.locator('#online-flag')).toHaveText('true')
-    await expect(page.locator('#bundled-flag')).toHaveText('false')
 
     // online() is REACTIVE: dropping connectivity fires the window `offline` event, the signal flips,
     // and the template re-renders — proving it's the real reactive online(), not an SSR constant.
@@ -93,6 +113,11 @@ test('online() + bundled(): framework probes called directly in a template (M3b)
     await expect(page.locator('#online-flag')).toHaveText('false')
     await page.context().setOffline(false)
     await expect(page.locator('#online-flag')).toHaveText('true')
+})
+
+test('bundled(): desktop-bundle probe is false in a plain browser tab', async ({ page }) => {
+    await page.goto('/platform/observability')
+    await expect(page.locator('#bundled-flag')).toHaveText('false')
 })
 
 test('log(): the RPC logs server-side and reports the channel + levels', async ({ page }) => {
@@ -103,7 +128,7 @@ test('log(): the RPC logs server-side and reports the channel + levels', async (
     const block = page.locator('#log-block')
     await expect(block).toContainText('logged = true')
     await expect(block).toContainText('channel = docs')
-    await expect(block).toContainText('levels = info, warn')
+    await expect(block).toContainText('levels = info, trace')
 })
 
 test('RPC middleware onion: authorized call stamps context, blocked call short-circuits 403', async ({

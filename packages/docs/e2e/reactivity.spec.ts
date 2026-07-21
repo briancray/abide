@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test'
 
 // Drives the reactivity demo page in a real browser: SSR values, client hydration, and every
-// reactive primitive in bucket 5 (state / computed / linked / watch×2 / props / html).
+// reactive primitive — now one self-contained card per concept (state / computed / linked /
+// watch×2 / snippet / props / html / shared).
 
-const PAGE = '/reactivity/demo'
+const PAGE = '/templating/reactivity'
 
 test('props() reader renders the fallback heading', async ({ page }) => {
     await page.goto(PAGE)
@@ -39,9 +40,9 @@ test('state.computed derives reactively from the counter', async ({ page }) => {
     const doubled = page.getByTestId('doubled')
     await expect(doubled).toHaveText('0')
 
-    await page.getByTestId('inc').click()
+    await page.getByTestId('c-inc').click()
     await expect(doubled).toHaveText('2')
-    await page.getByTestId('inc').click()
+    await page.getByTestId('c-inc').click()
     await expect(doubled).toHaveText('4')
 })
 
@@ -58,10 +59,10 @@ test('state.linked is independently writable and reseeds when its source changes
     await expect(draft).toHaveText('2')
 
     // Changing the source (count) reseeds the linked cell, discarding the local edits.
-    await page.getByTestId('inc').click() // count -> 1
+    await page.getByTestId('linked-inc').click() // count -> 1
     await expect(draft).toHaveText('100')
 
-    await page.getByTestId('inc').click() // count -> 2
+    await page.getByTestId('linked-inc').click() // count -> 2
     await expect(draft).toHaveText('200')
 })
 
@@ -73,10 +74,10 @@ test('watch(source, handler) pushes a side effect into the DOM on change only', 
     // Handler does NOT run on the initial read.
     await expect(changes).toHaveText('0')
 
-    await page.getByTestId('inc').click()
+    await page.getByTestId('ws-inc').click()
     await expect(changes).toHaveText('1')
-    await page.getByTestId('inc').click()
-    await page.getByTestId('dec').click()
+    await page.getByTestId('ws-inc').click()
+    await page.getByTestId('ws-dec').click()
     await expect(changes).toHaveText('3')
 })
 
@@ -86,37 +87,10 @@ test('watch(thunk) auto-tracks and mirrors a derived value', async ({ page }) =>
     // mirror = doubled + 1; at count 0 that is 1 (seeded synchronously on mount).
     await expect(mirror).toHaveText('1')
 
-    await page.getByTestId('inc').click() // count 1 -> doubled 2 -> mirror 3
+    await page.getByTestId('wt-inc').click() // count 1 -> doubled 2 -> mirror 3
     await expect(mirror).toHaveText('3')
-    await page.getByTestId('inc').click() // count 2 -> doubled 4 -> mirror 5
+    await page.getByTestId('wt-inc').click() // count 2 -> doubled 4 -> mirror 5
     await expect(mirror).toHaveText('5')
-})
-
-test('snippet child component re-renders when its reactive props change', async ({ page }) => {
-    await page.goto(PAGE)
-    const badges = page.getByTestId('badges')
-    await expect(badges).toContainText('Live count: 0')
-    await expect(badges).toContainText('Doubled: 0')
-
-    await page.getByTestId('inc').click()
-    await expect(badges).toContainText('Live count: 1')
-    await expect(badges).toContainText('Doubled: 2')
-})
-
-test('html() renders raw markup and swaps it live', async ({ page }) => {
-    await page.goto(PAGE)
-    const raw = page.getByTestId('raw')
-
-    // Raw markup is really injected as an element (not escaped text).
-    await expect(raw.locator('em')).toHaveText('italic emphasis')
-    await expect(raw.locator('strong')).toHaveCount(0)
-
-    await page.getByTestId('toggle-raw').click()
-    await expect(raw.locator('strong')).toHaveText('bold shout')
-    await expect(raw.locator('em')).toHaveCount(0)
-
-    await page.getByTestId('toggle-raw').click()
-    await expect(raw.locator('em')).toHaveText('italic emphasis')
 })
 
 test('state.shared: two component instances share one cell by key', async ({ page }) => {

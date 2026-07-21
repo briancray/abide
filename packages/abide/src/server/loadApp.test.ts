@@ -20,7 +20,7 @@ afterEach(async () => {
 })
 
 describe('loadApp — file-based app loader', () => {
-    test('discovers rpc route names, page paths, and the app middleware export', async () => {
+    test('discovers rpc route names, page paths, and defaults middleware when app.ts is absent', async () => {
         const loaded = await loadApp(FIXTURE_DIR)
 
         const routes = loaded.routes
@@ -41,6 +41,8 @@ describe('loadApp — file-based app loader', () => {
         expect(Object.keys(layouts)).toEqual(['/'])
         expect(layouts['/']).toContain('children()')
 
+        // The fixture has no `app.ts` — middleware/lifecycle are optional, so the loader defaults
+        // middleware to `[]` (app.ts absent → the early-return branch in loadAppModule).
         expect(Array.isArray(loaded.middleware)).toBe(true)
         expect(loaded.middleware).toEqual([])
 

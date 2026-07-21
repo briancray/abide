@@ -1,13 +1,13 @@
 <script module>
-  import Demo from "../../../components/Demo.abide"
-  import IdentityDemo from "../../../demos/platform/IdentityDemo.abide"
+  import Demo from "$ui/components/Demo.abide"
+  import IdentityDemo from "$ui/demos/platform/identity/IdentityDemo.abide"
 </script>
 
 <main class="page">
   <h1>Identity</h1>
   <p class="lead"><code>identity()</code> is the current request principal — never null. It starts anonymous; <code>identity.set()</code> promotes it to authenticated and the router seals a rolling cookie so it persists across requests. Log in, then watch the reflected identity flip.</p>
 
-  <Demo id="identity" title="<code>identity()</code> — principal, log in, log out" server="src/server/rpc/platformIdentity.ts" client="src/ui/demos/platform/IdentityDemo.abide" tab="server">
+  <Demo id="identity" title="<code>identity()</code> — principal, log in, log out" server="src/server/rpc/platformIdentity.ts" client="src/ui/demos/platform/identity/IdentityDemo.abide" tab="server">
     <IdentityDemo />
   </Demo>
 </main>

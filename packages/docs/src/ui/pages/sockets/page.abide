@@ -1,6 +1,7 @@
 <script module>
-  import Demo from "../../components/Demo.abide"
-  import SocketsChatDemo from "../../demos/sockets/SocketsChatDemo.abide"
+  import Demo from "$ui/components/Demo.abide"
+  import SocketsChatDemo from "$ui/demos/sockets/SocketsChatDemo.abide"
+  import MuxDemo from "$ui/demos/sockets/MuxDemo.abide"
 </script>
 
 <main class="page">
@@ -12,5 +13,11 @@
   </Demo>
 
   <h2>Tail replay</h2>
-  <p>The socket keeps a <code>tail</code> of recent messages. Reload this page and the subscription replays them immediately — no re-publish needed. The multiplexed WS mux variant of this demo lives at <a href="/sockets/mux" data-testid="mux-link">/sockets/mux</a>.</p>
+  <p>The socket keeps a <code>tail</code> of recent messages. Reload this page and the subscription replays them immediately — no re-publish needed.</p>
+
+  <h2>Over the raw mux</h2>
+  <p>Iterating the socket rides the multiplexed WebSocket at <code>/__abide/sockets</code> under the hood — one connection carries every named socket. Here is the same chat socket driven at the wire level: join with a <code>sub</code> frame and publish with a <code>pub</code> frame, so subscribe, client publish, and server publish all share the one connection.</p>
+  <Demo id="mux" title="<code>socket</code> — subscribe &amp; publish over the raw mux" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/MuxDemo.abide" tab="client">
+    <MuxDemo />
+  </Demo>
 </main>
