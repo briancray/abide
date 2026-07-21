@@ -138,67 +138,37 @@ export async function bundle(dir: string): Promise<string> {
     return outDir
 }
 
-// The single default starter (CL1.2) — minimal but representative: one type-derived GET RPC, one
-// page reading it through the async-read seam, the lifecycle/middleware module, an env config stub,
-// and the package/tsconfig. Returns the project root.
+// The single default starter (CL1.2) lives as a real, dogfooded workspace package — `packages/starter`
+// — so it type-checks, lints, and runs like any authored app instead of hiding in code as strings.
+// `scaffold` copies its src/tsconfig verbatim, swapping only the app name and the `workspace:*` abide
+// dep for a published range. Resolved relative to this file: `src/cli` → up three → `packages/`.
+const STARTER_DIR = join(import.meta.dir, '../../../starter')
+
+// Copy the starter package into a fresh `name/` project. Returns the project root.
 export async function scaffold(dir: string, name: string): Promise<string> {
     const root = join(dir, name)
-    const files: Record<string, string> = {
-        'src/server/rpc/greet.ts':
-            `import { GET } from "abide/server/GET";\n\n` +
-            `// One GET RPC with a type-DERIVED schema (no hand-written schema) — CL1.2.\n` +
-            `export default GET(({ name }: { name: string }) => \`Hello, \${name}!\`);\n`,
-        'src/ui/pages/page.abide': `<h1>{await greet({ name: "world" })}</h1>\n`,
-        'src/server/config.ts':
-            `import { env } from "abide/server/env";\n\n` +
-            `// Boot-time, type-checked configuration (CO1). Add fields as your app needs them.\n` +
-            `export default env({});\n`,
-        'src/app.ts':
-            `// Process-lifecycle hooks + the request/nav middleware onion (CL3). Auth is just middleware:\n` +
-            `// a guard is a middleware that returns error(403) instead of calling next().\n` +
-            `export const middleware = [];\n\n` +
-            `export function onStart(): void {}\n` +
-            `export function onStop(): void {}\n`,
-        'src/abide-env.d.ts':
-            // Pulls in abide's shipped ambient module declarations (`*.css`, `*.abide`) so component/CSS
-            // imports type-check without hand-writing them (TODO #20/#21).
-            `/// <reference types="abide" />\n`,
-        'package.json': `${JSON.stringify(
-            {
-                name,
-                type: 'module',
-                private: true,
-                scripts: { dev: 'abide dev', build: 'abide build', start: 'abide start' },
-                dependencies: { abide: '^0.0.0' },
-            },
-            null,
-            2,
-        )}\n`,
-        'tsconfig.json': `${JSON.stringify(
-            {
-                compilerOptions: {
-                    lib: ['ESNext', 'DOM', 'DOM.Iterable'],
-                    target: 'ESNext',
-                    module: 'Preserve',
-                    moduleResolution: 'bundler',
-                    moduleDetection: 'force',
-                    allowImportingTsExtensions: true,
-                    verbatimModuleSyntax: true,
-                    noEmit: true,
-                    strict: true,
-                    skipLibCheck: true,
-                    types: ['bun'],
-                },
-                include: ['src/**/*.ts'],
-            },
-            null,
-            2,
-        )}\n`,
+
+    // The whole src/ tree verbatim (skip any generated `.abide` output if the template was ever built).
+    const srcDir = join(STARTER_DIR, 'src')
+    const glob = new Bun.Glob('**/*')
+    for await (const relative of glob.scan({ cwd: srcDir, onlyFiles: true, dot: true })) {
+        if (relative.startsWith('.abide/')) continue
+        await Bun.write(join(root, 'src', relative), Bun.file(join(srcDir, relative)))
     }
 
-    for (const [relative, contents] of Object.entries(files)) {
-        await Bun.write(join(root, relative), contents)
-    }
+    // tsconfig verbatim; package.json rewritten with the app name + a published abide range.
+    await Bun.write(join(root, 'tsconfig.json'), Bun.file(join(STARTER_DIR, 'tsconfig.json')))
+    const pkg = await Bun.file(join(STARTER_DIR, 'package.json')).json()
+    pkg.name = name
+    if (pkg.dependencies?.abide) pkg.dependencies.abide = '^0.0.0'
+    // The Playwright e2e harness (playwright.config, e2e/, scripts/serve-e2e) is monorepo-only
+    // dogfooding of the template — serve-e2e imports abide by workspace path and can't ship in an app.
+    // Its files live outside src/ (never copied); strip the matching scripts + dep from the output.
+    delete pkg.scripts?.e2e
+    delete pkg.scripts?.['e2e:ci']
+    delete pkg.devDependencies?.['@playwright/test']
+    await Bun.write(join(root, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`)
+
     return root
 }
 

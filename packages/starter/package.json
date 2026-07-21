@@ -1,0 +1,22 @@
+{
+  "name": "starter",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "abide dev",
+    "build": "abide build",
+    "start": "abide start",
+    "typecheck": "tsc --noEmit",
+    "abide-check": "abide check .",
+    "e2e": "playwright test",
+    "e2e:ci": "playwright test --workers=1 --retries=1"
+  },
+  "dependencies": {
+    "abide": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/bun": "1.3.14",
+    "typescript": "^7.0.0"
+  }
+}

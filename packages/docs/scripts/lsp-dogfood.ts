@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const DOCS = fileURLToPath(new URL('..', import.meta.url))
-const LSP = fileURLToPath(new URL('../../abide/src/lib/cli/lsp.ts', import.meta.url))
+const LSP = fileURLToPath(new URL('../../abide/src/cli/lsp.ts', import.meta.url))
 
 // Real, script-bearing, check-clean pages (cross-file component + RPC usage).
 const CLEAN_PAGES = [

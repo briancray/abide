@@ -13,7 +13,7 @@
 
 # coding guidelines
 
-* src/lib is split three ways: `lib/server/`, `lib/ui/`, and `lib/shared/`
+* src is split three ways: `src/server/`, `src/ui/`, and `src/shared/` (plus `src/cli/`, `src/bundle/`, `src/test/`); import across them with the `$server` / `$ui` / `$shared` tsconfig-path aliases
 * use bun apis - not node apis unless necessary
 * only one export per file named after the export
 * favor imperative/procedural over heavy functional abstractions
@@ -277,6 +277,7 @@ Partial args match every superset slot.
 | `src/bundle/window.ts` | `BundleWindow` config |
 | `src/.abide/*` | generated types + JSON Schema (+ `--dump` proxies) |
 | `dist/_app/<hash>/` | content-addressed code-split client build (hashed chunks + `index.json`; a stable `dist/manifest.json` points `abide start` at it) |
+| `$server/*` · `$ui/*` · `$shared/*` | tsconfig-path import aliases for `src/server/*` · `src/ui/*` · `src/shared/*` (scaffolded into the app `tsconfig.json`; resolved by the Bun runtime and `abide check`). A local `.ts` imported into an `.abide` client script stays unsupported client-side (aliased or relative) — share client state via `state.shared(key)`. |
 
 ## Generated routes
 `/openapi.json` (OpenAPI 3.1) · `/__abide/mcp` (MCP; socket → tail/publish tools) · `/__abide/sockets`

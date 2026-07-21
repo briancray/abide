@@ -7,14 +7,14 @@
   "types": "./ambient.d.ts",
   "exports": {
     ".": { "types": "./ambient.d.ts" },
-    "./server/*": "./src/lib/server/*.ts",
-    "./shared/*": "./src/lib/shared/*.ts",
-    "./ui/*": "./src/lib/ui/*.ts",
-    "./bundle/*": "./src/lib/bundle/*.ts",
-    "./test/*": "./src/lib/test/*.ts"
+    "./server/*": "./src/server/*.ts",
+    "./shared/*": "./src/shared/*.ts",
+    "./ui/*": "./src/ui/*.ts",
+    "./bundle/*": "./src/bundle/*.ts",
+    "./test/*": "./src/test/*.ts"
   },
   "bin": {
-    "abide": "./src/lib/cli/bin.ts"
+    "abide": "./src/cli/bin.ts"
   },
   "scripts": {
     "test": "bun test",

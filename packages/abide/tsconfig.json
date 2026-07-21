@@ -14,11 +14,14 @@
     "exactOptionalPropertyTypes": true,
     "types": ["bun"],
     "paths": {
-      "abide/server/*": ["./src/lib/server/*.ts"],
-      "abide/shared/*": ["./src/lib/shared/*.ts"],
-      "abide/ui/*": ["./src/lib/ui/*.ts"],
-      "abide/bundle/*": ["./src/lib/bundle/*.ts"],
-      "abide/test/*": ["./src/lib/test/*.ts"]
+      "abide/server/*": ["./src/server/*.ts"],
+      "abide/shared/*": ["./src/shared/*.ts"],
+      "abide/ui/*": ["./src/ui/*.ts"],
+      "abide/bundle/*": ["./src/bundle/*.ts"],
+      "abide/test/*": ["./src/test/*.ts"],
+      "$server/*": ["./src/server/*.ts"],
+      "$ui/*": ["./src/ui/*.ts"],
+      "$shared/*": ["./src/shared/*.ts"]
     }
   },
   "include": ["src/**/*.ts"]

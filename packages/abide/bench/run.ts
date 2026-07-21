@@ -11,8 +11,8 @@
 // ABIDE_BENCH_TIME ms and completed ABIDE_BENCH_MIN_ITERS iterations. mount/update rebuild a fresh
 // host (and, for update, a fresh reactive tree) each round so state does not accumulate across ops.
 
-import '../src/lib/test/happydom.ts'
-import { type EmittedModule, loadEmitted } from '../src/lib/ui/internal/emit.ts'
+import '../src/test/happydom.ts'
+import { type EmittedModule, loadEmitted } from '../src/ui/internal/emit.ts'
 import { SCENARIOS, type Scenario } from './SCENARIOS.ts'
 
 const MIN_TIME_MS = Number(process.env.ABIDE_BENCH_TIME ?? 400)

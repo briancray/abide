@@ -4,6 +4,7 @@ node_modules/
 # builds / generated
 dist/
 packages/docs/src/.abide/
+packages/starter/src/.abide/
 
 # test output
 test-results/

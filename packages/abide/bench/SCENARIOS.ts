@@ -12,8 +12,8 @@
 // A `<script>`'s imports are resolved by the page builder into `$scope`, not by the emitted module, so
 // scenarios that use `state`/`watch` must inject them (mirrors the oracle's `scriptScope`).
 
-import { state } from '../src/lib/ui/state.ts'
-import { watch } from '../src/lib/ui/watch.ts'
+import { state } from '../src/ui/state.ts'
+import { watch } from '../src/ui/watch.ts'
 
 export interface Scenario {
     name: string

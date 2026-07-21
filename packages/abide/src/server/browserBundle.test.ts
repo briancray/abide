@@ -85,8 +85,8 @@ test('built client bundle ATTACH-hydrates the SSR DOM (same node, no clear) + st
     const servePath = `${import.meta.dir}/../cli/serve.ts`
     const helperPath = `${dir}/run.ts`
     await Bun.write(helperPath, HELPER(dir, servePath))
-    // abide package root (so `happy-dom` resolves) is three dirs up from src/lib/server.
-    const pkgRoot = `${import.meta.dir}/../../..`
+    // abide package root (so `happy-dom` resolves) is two dirs up from src/server.
+    const pkgRoot = `${import.meta.dir}/../..`
     const proc = Bun.spawnSync(['bun', 'run', helperPath], {
         cwd: pkgRoot,
         stdout: 'pipe',
@@ -156,7 +156,7 @@ test('production (minified) client is smaller AND still attach-hydrates + stays 
     const servePath = `${import.meta.dir}/../cli/serve.ts`
     const helperPath = `${dir}/run.ts`
     await Bun.write(helperPath, MINIFY_HELPER(dir, servePath))
-    const pkgRoot = `${import.meta.dir}/../../..`
+    const pkgRoot = `${import.meta.dir}/../..`
     const proc = Bun.spawnSync(['bun', 'run', helperPath], {
         cwd: pkgRoot,
         stdout: 'pipe',
@@ -220,7 +220,7 @@ test('client replays the SSR seed on hydration without re-fetching the RPC', asy
     const getPath = `${import.meta.dir}/GET.ts`
     const helperPath = `${dir}/run.ts`
     await Bun.write(helperPath, SEED_HELPER(dir, servePath, getPath))
-    const pkgRoot = `${import.meta.dir}/../../..`
+    const pkgRoot = `${import.meta.dir}/../..`
     const proc = Bun.spawnSync(['bun', 'run', helperPath], {
         cwd: pkgRoot,
         stdout: 'pipe',

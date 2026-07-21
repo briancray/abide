@@ -3,9 +3,11 @@
 //   1. fix       — biome --write (format + safe lint fixes)
 //   2. lint      — biome check (fails on anything auto-fix couldn't resolve)
 //   3. typecheck — tsc --noEmit across every workspace
-//   4. abide     — `abide check` on the docs app: type-checks EVERY .abide sample + the site itself
+//   4. abide     — `abide check` on the docs app + the scaffold starter: type-checks EVERY .abide
+//                  sample, the site itself, and the app `abide scaffold` actually emits
 //   5. test      — abide unit + browser-bundle suite (`bun test`)
-//   6. e2e       — docs Playwright suite (serial + 1 retry for stability; browser coverage of samples)
+//   6. e2e       — docs + starter Playwright suites (serial + 1 retry; browser coverage of the
+//                  samples and of the scaffolded app end-to-end)
 //
 // Fails fast on the first hard error and exits non-zero, so it can gate a push (CI job or a git
 // pre-push hook: `bun run verify`). Deterministic — no agents, no network beyond the local test
@@ -28,8 +30,10 @@ const steps: Step[] = [
   { name: "lint — biome check", run: () => $`biome check` },
   { name: "typecheck — tsc (all workspaces)", run: () => $`bun run --filter '*' typecheck` },
   { name: "abide check — .abide samples + site", run: () => $`bun run --filter docs abide-check` },
+  { name: "abide check — scaffold starter", run: () => $`bun run --filter starter abide-check` },
   { name: "test — abide bun test", run: () => $`bun run --filter abide test` },
   { name: "e2e — docs Playwright (serial)", run: () => $`bun run --filter docs e2e:ci` },
+  { name: "e2e — starter Playwright (serial)", run: () => $`bun run --filter starter e2e:ci` },
 ];
 
 const selected = fixOnly ? steps.filter((s) => s.fixes) : steps;

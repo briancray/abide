@@ -91,6 +91,15 @@ describe('scaffold — writes a minimal starter project', () => {
         expect(pkg.scripts.build).toBe('abide build')
         expect(pkg.scripts.start).toBe('abide start')
 
+        // The template's monorepo-only Playwright dogfood harness must NOT leak into a scaffolded app
+        // (its serve-e2e imports abide by workspace path): no e2e scripts, no @playwright/test dep, no
+        // e2e/ files or playwright config copied out.
+        expect(pkg.scripts.e2e).toBeUndefined()
+        expect(pkg.scripts['e2e:ci']).toBeUndefined()
+        expect(pkg.devDependencies?.['@playwright/test']).toBeUndefined()
+        expect(await Bun.file(join(root, 'playwright.config.ts')).exists()).toBe(false)
+        expect(await Bun.file(join(root, 'e2e/smoke.spec.ts')).exists()).toBe(false)
+
         expect(await Bun.file(join(root, 'tsconfig.json')).exists()).toBe(true)
     })
 })
