@@ -31,6 +31,7 @@ export type { Payload } from '../../shared/internal/responseSource.ts'
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import type { StandardSchemaV1 } from '../../shared/StandardSchema.ts'
+import type { CrossOriginOption } from './cors.ts'
 import type { Middleware } from './middleware.ts'
 
 // A minimal, JSON-Schema-ish description of the file fields a multipart mutation accepts (TODO #8).
@@ -63,7 +64,7 @@ export interface RpcOptions {
     // description/title still wins per MS1.2; this fills the gap when the schema carries none.
     doc?: string
     middleware?: Middleware[]
-    crossOrigin?: unknown
+    crossOrigin?: CrossOriginOption
     maxBodySize?: number
     timeout?: number
     // `false` opts a call OUT of the cell entirely (replayable-streams.md §1): a mutation runs every call

@@ -374,7 +374,13 @@ pages — nothing is reserved outside `/__abide/*`.
    defeats per-URL HTTP/CDN caching, hurts visibility; HTTP/2 multiplexing makes N small
    requests cheap.
 3. **`crossOrigin` defaults closed** — RPC endpoints are same-origin only (no CORS);
-   `crossOrigin` opts a specific RPC into CORS with an allowed-origin list.
+   `crossOrigin` opts a specific RPC into CORS. Shape: `true` (any origin) or `{ origin?:
+   string | string[] | boolean, methods?, headers?, credentials?, maxAge? }` (an allowlist;
+   `origin` string/array is exact, `true`/omitted = any). When set, the router answers the
+   `OPTIONS` preflight, stamps `Access-Control-*` (+ `Vary: Origin` on a concrete-origin echo)
+   on the response, and **exempts** an admitted origin from the same-origin CSRF gate;
+   `credentials: true` forces the concrete-origin echo (the `*` wildcard is illegal with
+   credentials). `OPTIONS` to an RPC without `crossOrigin` is a 405.
 4. **`timeout` is bilateral** — both a client-side abort (`AbortSignal`) **and** a
    server-side deadline (handler execution + SSR scalar-read render), default
    `ABIDE_RPC_TIMEOUT`, per-RPC overridable. The server deadline gives SSR peek reads their
@@ -382,7 +388,11 @@ pages — nothing is reserved outside `/__abide/*`.
    = per-RPC override of `ABIDE_MAX_REQUEST_BODY_SIZE`, enforced pre-parse.
 5. **`cache` opt = the value-cache config for that RPC** (`{ ttl, shared, tags, … }`) —
    the in-memory reactive/coalescing cache (§2–§3, §8 tags), **not** HTTP `Cache-Control`.
-   HTTP response caching, if wanted, rides response-init headers separately.
+   HTTP response caching, if wanted, rides response-init headers separately. **Wire default:**
+   the router stamps `Cache-Control: private, no-cache` + `Vary: Cookie` on any response that
+   set no `Cache-Control` of its own — responses are identity-scoped by default, so a shared
+   cache must never hold one. A handler/helper that sets its own `Cache-Control` (e.g. the
+   immutable `/__abide/chunk/` assets) keeps it and is left alone.
 6. **`.raw(args, init?)` → raw `Response`**, full bypass of codec-decode, cache,
    coalescing, and reactivity — escape hatch for custom headers, binary/file downloads,
    hand-driven streams.

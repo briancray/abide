@@ -182,6 +182,7 @@ describe('trace — W3C traceparent within a request', () => {
             const body = (await response.json()) as { value: string }
             expect(body.value).toBe(incoming)
             expect(response.headers.get('traceparent')).toBe(incoming)
+            expect(response.headers.get('traceresponse')).toBe(incoming)
         } finally {
             await app.stop()
         }

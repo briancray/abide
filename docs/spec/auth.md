@@ -195,11 +195,13 @@ user code), exploiting abide's fetch-based RPC model:
    set those; a cross-site `fetch` that tries triggers a **CORS preflight** that fails under
    the crossOrigin-closed default (§14.3). The server **rejects mutations lacking the shape.**
 3. **Origin/Referer verified against `APP_URL` on mutations** — defense-in-depth for SameSite
-   edge cases / older browsers.
+   edge cases / older browsers. A mismatched `Origin` is rejected **unless** the RPC opted into
+   `crossOrigin` and its allowlist admits that origin (CORS is the sanctioned cross-origin path).
 4. **No CSRF tokens** — 1+2+3 fully cover a same-origin fetch app with an abide-controlled
    client; tokens would add ceremony for nothing.
 5. **`crossOrigin` opt-in (§14.3) shifts responsibility to the declared allowlist** — a
-   deliberately-CORS-opened RPC is the user's call; abide still enforces the allowlist.
+   deliberately-CORS-opened RPC is the user's call; abide still enforces the allowlist (and
+   admitted origins are exempt from CX8.3's Origin rejection, per item 3).
 
 **App forms work** because abide forms submit through the proxy (`<form onsubmit={handler}>`
 → `preventDefault()` + RPC call → has the non-simple shape). The **only** blocked path is a
@@ -222,12 +224,38 @@ don't apply. Therefore:
    clients send no `Origin` and authenticate via bearer/app-token (nothing ambient to hijack).
    Rule: a cookie-authenticated WS **demands** a valid same-origin `Origin`; a bearer/app-token
    WS is gated by the token and needs no `Origin`.
-3. **`crossOrigin` socket opt-in** (parallel to §14.3): default closed; cross-origin socket
-   access requires a declared allowlist and the user owns the risk.
+3. **Cross-origin sockets are closed** — a socket is hard-gated to a same-origin `Origin` (WS)
+   or to bearer/app-token auth; there is no per-socket CORS opt-in in the API today. (A
+   `crossOrigin` socket opt-in parallel to §14.3 is **deferred** — the earlier declared-but-
+   unenforced option was removed rather than shipped as a no-op; add it back only with real
+   allowlist enforcement on both the WS upgrade and the HTTP face.)
 4. **HTTP-face asymmetry:** POST-publish is a mutation → full CX8.1–3 protection. **SSE
    subscribe (GET) is protected for free by CORS** — unlike WS, `EventSource` *is* subject to
    CORS, so a cross-site subscribe without CORS headers is browser-blocked under crossOrigin-
    closed. (This is exactly why WS needs a special Origin check and SSE doesn't.)
+
+### Baseline response-header hardening
+
+Independent of CSRF, the router stamps a safe baseline onto **every** outgoing response at one
+choke point, each header set only when the response did not already declare its own (so a
+handler/helper/middleware stays in control):
+
+1. **`X-Content-Type-Options: nosniff`** on all — JSON APIs and served JS/CSS must never be
+   MIME-sniffed.
+2. **`Referrer-Policy: strict-origin-when-cross-origin`** on all — the modern browser default,
+   made explicit.
+3. **`Strict-Transport-Security: max-age=63072000; includeSubDomains`** in **production only**
+   (dev is plain http; sending HSTS there would poison `localhost`).
+4. **`X-Frame-Options: SAMEORIGIN`** on HTML documents (clickjacking) — an app that must be
+   framed overrides it.
+5. **Default cache posture `Cache-Control: private, no-cache` + `Vary: Cookie`** for any
+   response lacking its own `Cache-Control` — content is identity-scoped (the `abide-identity`
+   cookie), so a **shared** cache must never hold it. Content-addressed `/__abide/chunk/` assets
+   opt out by declaring their own immutable long-cache and are left alone.
+
+A restrictive `Content-Security-Policy` / `Permissions-Policy` is **deliberately not** a
+framework default — a wrong policy breaks real apps (external images/fonts/APIs), so it stays an
+app-level middleware concern. Everything above is overridable.
 
 ## AU9. Per-user tokens — sealed identity over bearer (unified with the cookie)
 

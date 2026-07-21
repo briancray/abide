@@ -63,7 +63,10 @@ test('a soft-nav request (Abide-Nav header) returns a streamed JSONL envelope of
     const response = await app.fetch('/users/99', { headers: { 'Abide-Nav': '/' } })
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toContain('application/jsonl')
-    expect(response.headers.get('vary')).toBe('Abide-Nav')
+    // Keys the cache first-load vs soft-nav, and on identity (the default cache posture adds Cookie).
+    const vary = response.headers.get('vary') ?? ''
+    expect(vary).toContain('Abide-Nav')
+    expect(vary).toContain('Cookie')
 
     const envelope = await parseSoftNav(response)
     expect(stripAnchors(envelope.html)).toContain('<span>99</span>')

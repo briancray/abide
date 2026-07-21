@@ -229,7 +229,9 @@ see-through too (built).** The lazy `sse` tags its source like `jsonl` and **def
 idle heartbeat to the FIRST real read**, so a discarded see-through body never opens (no timer leak) while
 the long-lived socket HTTP faces — `router.ts` `sse(sock)`, consumed WS-less by CLI/MCP — keep their
 live-tail behaviour (onopen on connect, idle keep-alive). This makes `sse` fully isomorphic
-(SSR-block/seed/`?from=` resume), on par with `jsonl`.
+(SSR-block/seed/`?from=` resume), on par with `jsonl`. The `sse` response also carries
+`Cache-Control: no-cache` + `X-Accel-Buffering: no` (set unless overridden) so an intermediary
+proxy/browser can't buffer or cache a live event stream.
 
 **Data structure** (lives in the slot; one instance per `(fn, args)`):
 

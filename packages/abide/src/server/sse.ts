@@ -83,6 +83,10 @@ export function sse<C>(
     )
     const headers = new Headers(init?.headers)
     if (!headers.has('content-type')) headers.set('content-type', 'text/event-stream')
+    // Defeat intermediary buffering of a live event stream: `no-cache` keeps proxies/browsers from
+    // holding the stream, and nginx's `X-Accel-Buffering: no` disables its response buffering.
+    if (!headers.has('cache-control')) headers.set('cache-control', 'no-cache')
+    if (!headers.has('x-accel-buffering')) headers.set('x-accel-buffering', 'no')
     // Tag with the pre-encoding source so a cell-backed read is REPLAYABLE (replayable-streams.md §4);
     // the router re-encodes the replayed transcript as sse (its tagged encoding) on `?from=` resume.
     return tagResponseSource(new Response(stream, { ...init, headers }), {

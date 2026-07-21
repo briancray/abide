@@ -186,8 +186,9 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
   `state.shared`'s `BroadcastChannel`) — N tabs = N connect-authed subscriptions, the honest and
   simple model.
 - **Cross-origin.** The proxy only ever dials its **own** app origin (the mount base, like the RPC
-  proxy). `crossOrigin` on the socket relaxes the mux handshake `Origin` check exactly as for RPC
-  (S4 / auth.md AU8-CSWSH); the client proxy needs no cross-origin logic of its own.
+  proxy), so the client proxy needs no cross-origin logic of its own. A per-socket cross-origin
+  opt-in (relaxing the mux handshake `Origin` check, parallel to the RPC `crossOrigin`) is
+  **deferred** — sockets stay same-origin/token-gated today (S4 / auth.md AU8-CSWSH).
 
 ---
 

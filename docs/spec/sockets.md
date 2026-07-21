@@ -112,9 +112,12 @@ replayable*. Declarative by default (validated pass-through relay); server logic
    - **`canSubscribe` PARKED** — default subscribe authz = connect-time auth + exposure
      toggle; per-socket subscribe gating (`admin-feed` vs `public-feed`) is a documented
      future predicate.
-   - **Socket API surface: `{ tail, ttl, clientPublish, schema, clients, handler?, crossOrigin? }`.**
-     `crossOrigin` (default closed, allowlist opt-in) is the cross-origin socket-access gate
-     that auth.md AU8-CSWSH relies on.
+   - **Socket API surface: `{ tail, ttl, clientPublish, schema, clients, handler? }`.**
+     A cross-origin socket-access gate (`crossOrigin`, parallel to the RPC opt-in) is
+     **deferred** — sockets are hard-gated to a same-origin `Origin` (WS) or bearer/app-token
+     auth today; see auth.md AU8-CSWSH. The earlier declared-but-unenforced `crossOrigin` socket
+     option was removed rather than shipped as a no-op; add it back only with real allowlist
+     enforcement on both the WS upgrade and the HTTP face.
 
 ## S5. Middleware & request discrimination (forced by socket auth)
 

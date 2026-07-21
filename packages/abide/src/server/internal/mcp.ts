@@ -255,7 +255,7 @@ function envelope(id: unknown, outcome: Outcome): Record<string, unknown> {
 
 export async function handleMcp(request: Request, config: AppConfig): Promise<Response> {
     if (request.method.toUpperCase() !== 'POST') {
-        return error(405, 'MCP endpoint accepts POST only.')
+        return error(405, 'MCP endpoint accepts POST only.', { headers: { allow: 'POST' } })
     }
 
     let body: unknown

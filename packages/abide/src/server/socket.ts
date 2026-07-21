@@ -24,7 +24,6 @@ export interface SocketOptions<T> {
     clients?: unknown
     // biome-ignore lint/suspicious/noConfusingVoidType: void lets a side-effect-only handler (returns nothing) be assignable; undefined would force an explicit return
     handler?: (message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>
-    crossOrigin?: unknown
 }
 
 // Internal handle carried on `__socket`: the resolved options, the transport ingress path, and the

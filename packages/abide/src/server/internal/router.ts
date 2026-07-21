@@ -31,6 +31,7 @@ import { json } from '../json.ts'
 import { jsonl } from '../jsonl.ts'
 import type { Socket } from '../socket.ts'
 import { sse } from '../sse.ts'
+import { applyResponseHeaders } from './applyResponseHeaders.ts'
 import { clearIdentityCookieHeader, identityCookieHeader, resolveIdentity } from './auth.ts'
 import {
     type CacheFrame,
@@ -40,6 +41,13 @@ import {
 } from './cacheChannels.ts'
 import { authorizeChannelJoin, isCacheChannel, type SocketConnectionData } from './channelAuth.ts'
 import { type ClientBuild, clientBuildFor } from './clientBundle.ts'
+import {
+    applyCors,
+    corsAllowOrigin,
+    type NormalizedCors,
+    normalizeCrossOrigin,
+    preflightResponse,
+} from './cors.ts'
 import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
 import { matchRoute } from './matchRoute.ts'
 import { handleMcp } from './mcp.ts'
@@ -76,7 +84,7 @@ function isMachineBearer(request: Request): boolean {
 
 // AU8 CSRF gate. Returns a 403 Response to reject, or undefined to allow. Only mutating methods
 // are checked; reads are exempt (they cannot mutate, and Lax cookies already ride them safely).
-function csrfReject(request: Request): Response | undefined {
+function csrfReject(request: Request, cors: NormalizedCors | undefined): Response | undefined {
     if (!MUTATING_METHODS.has(request.method.toUpperCase())) return undefined
 
     const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
@@ -103,12 +111,24 @@ function csrfReject(request: Request): Response | undefined {
         } catch {
             return error(403, 'CSRF: could not verify request Origin against APP_URL.')
         }
-        if (originHost !== appHost) {
+        // A mismatched Origin is rejected UNLESS this RPC opted into cross-origin access for it (the
+        // `crossOrigin` allowlist) — CORS is the sanctioned way to admit a foreign origin.
+        if (originHost !== appHost && corsAllowOrigin(cors ?? NO_CORS, origin) === undefined) {
             return error(403, 'CSRF: request Origin does not match APP_URL.')
         }
     }
 
     return undefined
+}
+
+// A closed CORS policy — `corsAllowOrigin` against it admits nothing, so a `crossOrigin`-less RPC keeps
+// the strict same-origin CSRF behaviour without a null-branch at each call.
+const NO_CORS: NormalizedCors = {
+    origins: [],
+    methods: '',
+    headers: '',
+    credentials: false,
+    maxAge: 0,
 }
 
 // After dispatch, refresh (or clear) the rolling abide-identity cookie for browser identities.
@@ -361,7 +381,7 @@ async function socketHttpFace(
         }
         return json({ ok: true })
     }
-    return error(405, `Method not allowed: ${method}`)
+    return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD, POST' } })
 }
 
 export interface App {
@@ -427,7 +447,12 @@ async function dispatch(
                 result = { ...stub, reachable: false }
             }
         }
-        return json(result, { status: result.reachable === false ? 503 : 200 })
+        const unhealthy = result.reachable === false
+        // Give a probing client/proxy a concrete back-off instead of hammering an unhealthy app.
+        return json(result, {
+            status: unhealthy ? 503 : 200,
+            ...(unhealthy ? { headers: { 'retry-after': '30' } } : {}),
+        })
     }
 
     // Content-addressed client assets (TODO #6): the code-split loader entry + per-route chunks + shared
@@ -438,7 +463,7 @@ async function dispatch(
     if (url.pathname.startsWith('/__abide/chunk/')) {
         const method = scope.request.method.toUpperCase()
         if (method !== 'GET' && method !== 'HEAD')
-            return error(405, `Method not allowed: ${method}`)
+            return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD' } })
         const name = url.pathname.slice('/__abide/chunk/'.length)
         const build = await clientBuildFor(config)
         const content = build.files.get(name)
@@ -510,7 +535,7 @@ async function dispatch(
                     return new Response(body, {
                         status: 200,
                         headers: {
-                            'content-type': 'application/jsonl; charset=utf-8',
+                            'content-type': 'application/jsonl',
                             vary: 'Abide-Nav',
                         },
                     })
@@ -721,18 +746,20 @@ export function createApp(config: AppConfig = {}): App {
             // connection so `@rpc:` cache-channel joins can re-authorize against it per subscribe (§2.3).
             if (url.pathname === '/__abide/sockets') {
                 if (!socketOriginAllowed(request)) {
-                    return error(403, 'CSWSH: WebSocket Origin does not match APP_URL.')
+                    return applyResponseHeaders(
+                        error(403, 'CSWSH: WebSocket Origin does not match APP_URL.'),
+                    )
                 }
                 const connData: SocketConnectionData = {
                     request,
                     identity: await resolveIdentity(request),
                 }
                 if (srv.upgrade(request, { data: connData })) return undefined
-                return error(426, 'Expected a WebSocket upgrade request.')
+                return applyResponseHeaders(error(426, 'Expected a WebSocket upgrade request.'))
             }
             // Per-socket HTTP face (sockets.md S3.2).
             if (url.pathname.startsWith('/__abide/sockets/')) {
-                return socketHttpFace(request, url, sockets)
+                return applyResponseHeaders(await socketHttpFace(request, url, sockets))
             }
 
             const info = routeInfo(url)
@@ -765,6 +792,21 @@ export function createApp(config: AppConfig = {}): App {
             }
 
             const matched = info.kind === 'rpc' ? routes[info.name] : undefined
+            const cors =
+                matched !== undefined
+                    ? normalizeCrossOrigin(matched.__rpc.options.crossOrigin)
+                    : undefined
+            // CORS preflight: answer an OPTIONS to an RPC before the middleware onion. A crossOrigin-less
+            // RPC has no CORS policy, so preflight is simply an unsupported method (405 + Allow).
+            if (request.method.toUpperCase() === 'OPTIONS' && info.kind === 'rpc') {
+                return applyResponseHeaders(
+                    cors !== undefined
+                        ? preflightResponse(cors, request)
+                        : error(405, 'Method not allowed: OPTIONS', {
+                              headers: { allow: 'GET, HEAD, POST, PUT, PATCH, DELETE' },
+                          }),
+                )
+            }
             const rpcMiddleware = matched?.__rpc.options.middleware ?? []
             const chain = compose([...globalMiddleware, ...rpcMiddleware], () =>
                 dispatch(scope, config, startedAt),
@@ -772,9 +814,9 @@ export function createApp(config: AppConfig = {}): App {
 
             return runInScope(scope, async () => {
                 // AU8 CSRF gate runs before the middleware onion — a rejected mutation never dispatches
-                // and gets no identity cookie.
-                const rejected = csrfReject(request)
-                if (rejected !== undefined) return rejected
+                // and gets no identity cookie. A crossOrigin-allowed origin is exempt from the gate.
+                const rejected = csrfReject(request, cors)
+                if (rejected !== undefined) return applyResponseHeaders(rejected)
                 let response: Response
                 try {
                     response = await chain()
@@ -790,10 +832,15 @@ export function createApp(config: AppConfig = {}): App {
                     )
                 }
                 await applyIdentityCookie(scope, response)
-                // Echo the request's traceparent so callers can correlate their response with the trace.
-                if (scope.traceparent !== undefined)
+                // Stamp CORS Allow-* headers for a crossOrigin RPC serving an allowed origin.
+                if (cors !== undefined) applyCors(cors, request, response)
+                // Correlate the response with the trace: `traceresponse` (W3C Trace Context Level 2) is
+                // the response-side header; keep echoing `traceparent` for callers that read it.
+                if (scope.traceparent !== undefined) {
                     response.headers.set('traceparent', scope.traceparent)
-                return response
+                    response.headers.set('traceresponse', scope.traceparent)
+                }
+                return applyResponseHeaders(response)
             }) as Promise<Response>
         },
         websocket: {

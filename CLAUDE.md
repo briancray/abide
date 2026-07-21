@@ -86,21 +86,35 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
   the same cell), so `{#for await x of rpc()}` works in the browser identically to SSR; `sse` is also
   consumable via the native `EventSource`.
 - **`timeout`**: bilateral (client abort + server deadline); defaults to `ABIDE_RPC_TIMEOUT`.
-  **`crossOrigin`**: default closed.
+- **`crossOrigin`**: CORS opt-in, **default closed** (no `Access-Control-*`; a cross-origin mutation is
+  CSRF-rejected). `true` = allow any origin; `{ origin?: string | string[] | boolean, methods?, headers?,
+  credentials?, maxAge? }` = an allowlist (`origin` string/array is exact; `true`/omitted = any). When
+  set, the router answers the `OPTIONS` preflight, stamps `Access-Control-*` (+ `Vary: Origin` when the
+  origin is echoed) on the response, and **exempts** an admitted origin from the same-origin CSRF gate.
+  `credentials: true` forces the concrete-origin echo (the `*` wildcard is illegal with credentials).
+  `OPTIONS` to an RPC without `crossOrigin` is a 405.
 
 ### Response
 | Import | Signature |
 | --- | --- |
 | `abide/server/json` | `json(data, init?)` → `TypedResponse<T>` (sees through to `data` in a cell-backed read/mutation) |
 | `abide/server/jsonl` | `jsonl(iterable, init?)` → `StreamResponse<C>`, `application/jsonl` (lazy; sees through to the iterable → ReplayableStream) |
-| `abide/server/sse` | `sse(iterable, init?)` → `StreamResponse<C>`, `text/event-stream` (lazy; sees through to the iterable → ReplayableStream, on par with jsonl; also consumable via `EventSource`) |
-| `abide/server/error` | `error(status, message?, init?)`; `error.typed(name, status, schema?)` |
+| `abide/server/sse` | `sse(iterable, init?)` → `StreamResponse<C>`, `text/event-stream` (lazy; sees through to the iterable → ReplayableStream, on par with jsonl; also consumable via `EventSource`; adds `Cache-Control: no-cache` + `X-Accel-Buffering: no`) |
+| `abide/server/error` | `error(status, message?, init?)`; `error.typed(name, status, schema?)` (a `405` carries `Allow`) |
 | `abide/server/redirect` | `redirect(url, status=302, init?)` |
+
+**Baseline response headers** — the router stamps every response at one choke point, each only when the
+response didn't already set it (so a handler/helper/middleware stays in control): `X-Content-Type-Options:
+nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` on all; `Strict-Transport-Security` in
+production; `X-Frame-Options: SAMEORIGIN` on HTML documents. Any response without its own `Cache-Control`
+defaults to `Cache-Control: private, no-cache` + `Vary: Cookie` (identity-scoped by default) — content-
+addressed `/__abide/chunk/` assets opt out by declaring their own immutable long-cache. A response in a
+traced request also carries `traceresponse` (alongside the echoed `traceparent`).
 
 ### Sockets
 | Import | Signature |
 | --- | --- |
-| `abide/server/socket` | `socket<T>(opts?)`; opts: `{ tail?, ttl?, clientPublish?, schema?, clients?, handler?, crossOrigin? }` |
+| `abide/server/socket` | `socket<T>(opts?)`; opts: `{ tail?, ttl?, clientPublish?, schema?, clients?, handler? }` |
 
 `Socket<T>` is an isomorphic `AsyncIterable<T>` with an **identical surface on both sides** (one
 `.d.ts`): `for await` + `publish(msg): void` + the reactive cell-probe vocabulary — `peek()` (latest,
@@ -271,7 +285,7 @@ throws an unexpected error (typed `error(...)`/`redirect(...)` are Responses, no
 reach it); read `request()`/`route()`/`identity()` ambiently; may return a `Response` to shape the
 reply, else a generic 500. `onHealth()` — request-scoped,
 runs on every `GET /__abide/health`; returns fields merged over the framework stub `{ reachable, version,
-startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503).
+startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, carrying `Retry-After: 30`).
 
 ## CLI
 | Command | Does |

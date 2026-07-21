@@ -68,10 +68,13 @@ Scope: boot-time config (`env(schema)`) and the observability surface
 3. **`trace()` = W3C Trace Context (`traceparent`).** Each server request gets/propagates a
    traceparent; **RPC calls carry it**, so a browser→server(→server) chain shares one trace id.
    **Auto-correlated into log lines.** `trace()` returns the current traceparent or `undefined`.
+   The response echoes both `traceparent` and **`traceresponse`** (W3C Trace Context Level 2, the
+   response-side header) so a caller can correlate its response with the trace.
 4. **`onHealth()` = app-defined health hook (a `src/app.ts` export), merged into `/__abide/health`**
    over the framework stub `{ reachable, version, startedAt, uptime }` (app fields win). It is
    **request-scoped** (reads `identity()`/`context()`), and `reachable: false` or a throw answers
-   **503**. `/__abide/health` is the probe endpoint (load balancers / monitors). The isomorphic
+   **503** (carrying `Retry-After: 30` so a probe backs off instead of hammering an unhealthy app).
+   `/__abide/health` is the probe endpoint (load balancers / monitors). The isomorphic
    `health()` (from `abide/shared/health`) is **async**: on the server it resolves the baseline
    `{ reachable, version }` in-proc (the route composes its stub from it); on the client `await
    health()` fetches `/__abide/health`, yielding the full merged document.

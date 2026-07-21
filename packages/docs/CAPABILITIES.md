@@ -234,7 +234,7 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | `clientPublish` — client publish | PW | [x] (sockets page) |
 | `handler` — mediate client publishes | RT | [x] (sockets page — stamps via:client, drops empty) |
 | `tail` / `ttl` options | RT | [x] (sockets page — tail replay on reload) |
-| `schema` / `clients` / `crossOrigin` options | RT | [ ] |
+| `schema` / `clients` options | RT | [ ] |
 | HTTP face: SSE subscribe / POST publish | RT | [x] (sockets page) |
 | Multiplexed WS mux `/__abide/sockets` | PW+RT | [x] (/sockets — folded in) |
 
