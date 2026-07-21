@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // Drives the reactivity demo page in a real browser: SSR values, client hydration, and every
 // reactive primitive — now one self-contained card per concept (state / computed / linked /
-// watch×2 / snippet / props / html / shared).
+// watch×2 / props / html / shared).
 
 const PAGE = '/templating/reactivity'
 

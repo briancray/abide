@@ -15,7 +15,7 @@
       { href: "/templating/lists", label: "Lists" },
       { href: "/templating/async", label: "Async blocks" },
       { href: "/templating/errors", label: "Error boundary" },
-      { href: "/templating/components", label: "Components & snippets" },
+      { href: "/templating/components", label: "Components" },
       { href: "/templating/styling", label: "Scoped <style>" },
     ] },
     { title: "RPC", items: [
@@ -120,7 +120,7 @@
       <nav class="crumb" aria-label="Breadcrumb">
         <span class="crumb-root">src/ui</span>{#for c of crumbs(route().url.pathname) by c.href}<span class="crumb-sep">/</span><a href={c.href}>{c.label}</a>{/for}
       </nav>
-      {children()}
+      <slot/>
     </div>
   </main>
 </div>

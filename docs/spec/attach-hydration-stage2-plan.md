@@ -35,7 +35,7 @@ byte length of the immediately-preceding static text (0 if prev sibling is comme
 claim splits deterministically:
 
 > This `prefixLen`/`claimText` mechanism is the SCALAR-value leaf path. A *mountable* interpolation
-> value (a `{#snippet}` call / `{children()}`) is a later refinement: the server brackets its subtree
+> value (a `{#component}` call (inline component) / `{children()}`) is a later refinement: the server brackets its subtree
 > with `<!--[-->…<!--]-->` (decision 4 refinement) and it is claimed by `hydrateInterpLeaf` (peek
 > `<!--[-->` → `findBlockClose` → adopt the region), NOT by `prefixLen`.
 ```
@@ -57,7 +57,7 @@ claimText(anchor, prefixLen): Text|null
 - `emitServer.genChunk` (`emitServer.ts:108-218`): emit `<!---->` after interp/html/await; wrap
   if/for/awaitBlock/switch/try/component in `<!--[-->`…`<!--]-->`, driven off the SAME plan (anchors
   match client by construction, decision 3). (Later refinement: the `interp` chunk now goes through
-  `$rt.renderLeaf`, which brackets a *mountable* value — snippet call / `{children()}` — with
+  `$rt.renderLeaf`, which brackets a *mountable* value — inline-component call / `{children()}` — with
   `<!--[-->…<!--]-->` and keeps the single `<!---->` for scalars; see decision 4 refinement.)
 - Update `emit.oracle.test.ts.snap` (every dynamic fixture's server string changes),
   `emitCapabilities.test.ts` (has `stripAnchors :20-22`; audit), and interp-wrapping `toContain`s:

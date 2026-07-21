@@ -34,7 +34,7 @@ soft-nav envelope, replayed into client cells before mount). See `rpc-core.md` �
    empty regions).
 
    > **Refinement (mountable interpolations).** An interpolation whose value is a *mountable* — a
-   > `{#snippet}` call or the `{children()}` slot — renders a whole subtree, not a scalar. The single
+   > `{#component}` call (inline component) or the `{children()}` slot — renders a whole subtree, not a scalar. The single
    > trailing `<!---->` is ambiguous there (the subtree can span many top-level nodes and carry its own
    > `<!---->` leaf anchors), so the walk would mis-read it as one text node and desync every following
    > sibling. The server therefore brackets a mountable value with the SAME paired `<!--[-->…<!--]-->`

@@ -3,7 +3,7 @@
 // Turns a `TemplatePlan` + `ScopeAnalysis` into `import * as $rt from "abide/ui/internal/runtime"`,
 // module-level `$rt.template(...)` skeletons, and `export function mount($target, $scope)` that clones
 // each template, walks a cursor (firstChild/nextSibling steps from the plan's `path`) to every dynamic
-// node, and wires the `$rt.*` helpers with real-identifier thunks. Block/component/snippet bodies are
+// node, and wires the `$rt.*` helpers with real-identifier thunks. Block/component/component bodies are
 // nested mount functions (so lexical `<script>` cells are captured) selected by clone id. Also emits
 // `export function hydrate($container, $scope)` (Stage 2): the same build walk over a cursor seeded on
 // the server DOM — claiming existing nodes with suppress-initial-write, localized mismatch recovery,
@@ -13,7 +13,7 @@
 // `.read()/.write()`, and free/block-bound template identifiers read off `$scope`.
 
 import type { ScopeAnalysis } from './analyzeScope.ts'
-import { reconstructImport } from './analyzeScope.ts'
+import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
@@ -162,12 +162,12 @@ class ClientEmitter {
         for (const entry of plan.elementTags ?? []) tags.set(entry.path.join('_'), entry.tag)
 
         let wiring = ''
-        // Snippet definitions first (hoisted).
+        // Component definitions first (hoisted).
         for (const slot of plan.slots) {
-            if (slot.kind === 'snippet') wiring += this.genSnippet(slot)
+            if (slot.kind === 'componentDef') wiring += this.genComponentDef(slot)
         }
         for (const slot of plan.slots) {
-            if (slot.kind === 'snippet') continue
+            if (slot.kind === 'componentDef') continue
             wiring += this.genSlot(slot, nav, parentOf)
         }
 
@@ -245,7 +245,7 @@ class ClientEmitter {
         const depth = prefix.length
         const groups = new Map<number, DynamicSlot[]>()
         for (const slot of slots) {
-            if (slot.kind === 'snippet' || slot.path.length <= depth) continue
+            if (slot.kind === 'componentDef' || slot.path.length <= depth) continue
             let matches = true
             for (let i = 0; i < depth; i++) {
                 if (slot.path[i] !== prefix[i]) {
@@ -286,7 +286,7 @@ class ClientEmitter {
             if (skip > 0) code += `$rt.hydrateSkip(${skip});\n`
             if (entry.kind === 'leaf') {
                 const varName = `$n${[...prefix, entry.index].join('_')}`
-                // `interpolation` may resolve to a mountable (snippet call / `{children()}`) whose server
+                // `interpolation` may resolve to a mountable (component call / `{children()}`) whose server
                 // output is bracketed — `hydrateInterpLeaf` skips the whole region; `html` scans to its
                 // anchor; a scalar `await`/interp value is a plain text leaf.
                 const claim =
@@ -340,20 +340,24 @@ class ClientEmitter {
         return `({ mount: ${this.blockFn(plan, scopeExpr)} })`
     }
 
-    private genSnippet(slot: DynamicSlot): string {
+    private genComponentDef(slot: DynamicSlot): string {
         const name = slot.meta.name
-        if (name === undefined) throw new Error('snippet slot is missing its name')
+        if (name === undefined) throw new Error('component-def slot is missing its name')
         const params = slot.meta.params ?? ''
         const patterns = params.trim() === '' ? [] : splitParams(params)
         let binds = ''
         for (const [i, pattern] of patterns.entries())
             binds += `    ${bindPattern('$s', pattern, `$args[${i}]`)}\n`
         const body = slot.meta.body
-        if (body === undefined) throw new Error('snippet slot is missing its body')
+        if (body === undefined) throw new Error('component-def slot is missing its body')
         const bodyId = this.idFor(body)
         return (
             `  $scope[${JSON.stringify(name)}] = (...$args) => ({ mount: ($p, $a) => {\n` +
             `    const $s = Object.create($scope);\n` +
+            // The component-invocation convention passes the caller's children factory as the 2nd arg,
+            // so `<slot/>` (which resolves `$scope.children`) is filled automatically — a component need
+            // not declare a `children` param. An explicit param of the same name overrides it below.
+            `    if (typeof $args[1] === "function") $s.children = $args[1];\n` +
             binds +
             `    return $mount${bodyId}($p, $a, $s);\n` +
             `  } });\n`
@@ -602,7 +606,14 @@ class ClientEmitter {
                 throw new Error('component slot with children is missing its body')
             childrenFn = `() => (${this.mountable(body, '$scope')})`
         }
-        props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${componentRef(this.analysis, name)}, $props, ${childrenFn}, $scope));\n`
+        // A cell-named tag (`<C/>` where `const C = state.computed(...)`) is a REACTIVE component: read
+        // it in an effect and re-mount on identity change. Otherwise resolve the component once.
+        if (this.analysis.cellNames.has(name)) {
+            const read = rewriteCellRefs(name, this.analysis.cellNames)
+            props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${read}), $props, ${childrenFn}, $scope));\n`
+        } else {
+            props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${componentRef(this.analysis, name)}, $props, ${childrenFn}, $scope));\n`
+        }
         props += '  }\n'
         return props
     }

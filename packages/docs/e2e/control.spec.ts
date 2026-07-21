@@ -154,12 +154,12 @@ test('{#try}/{:catch}/{:finally} catches a throw and recovers', async ({ page })
     await expect(page.getByTestId('try-caught')).toHaveCount(0)
 })
 
-test('component renders {children()} + reactive props; snippets and render-props work', async ({
+test('inline components: <slot/>, tag invocation, render-props, spread, named slots, reactive', async ({
     page,
 }) => {
     await page.goto('/templating/components')
 
-    // Component with a single {children()} slot and a reactive title prop.
+    // Inline component with a single <slot/> and a reactive title prop.
     await expect(page.getByTestId('card-title')).toHaveText('Original title')
     await expect(page.getByTestId('card-count')).toHaveText('0')
 
@@ -170,15 +170,24 @@ test('component renders {children()} + reactive props; snippets and render-props
     await page.getByTestId('inc').click()
     await expect(page.getByTestId('card-count')).toHaveText('1')
 
-    // A snippet called inline as {name(args)}, repeated.
+    // A component invoked as a tag <Chip text="…"/>, repeated.
     await expect(page.getByTestId('chip')).toHaveCount(3)
     await expect(page.getByTestId('chip').nth(0)).toHaveText('alpha')
 
-    // A snippet passed as a render-prop and called by the component.
+    // A component passed as a prop and invoked by the receiver as a render-prop.
     await expect(page.getByTestId('loud')).toHaveText('RENDERED VIA PROP')
 
     // {...obj} spread into a child component: every key arrives as a prop.
     const child = page.getByTestId('spread-child')
     await expect(child).toHaveAttribute('data-kind', 'metric')
     await expect(child).toHaveText('Requests: 42')
+
+    // A nested {#component} inside <Panel> arrives as Panel's Header prop; <slot/> fills automatically.
+    await expect(page.getByTestId('ns-title')).toHaveText('Nested header')
+    await expect(page.getByTestId('ns-body')).toHaveText('This is the default slot content.')
+
+    // Reactive component: a cell-named tag <Current/> re-mounts when the computed selects a new one.
+    await expect(page.getByTestId('reactive-status')).toHaveText('Pending…')
+    await page.getByTestId('reactive-toggle').click()
+    await expect(page.getByTestId('reactive-status')).toHaveText('Done ✓')
 })

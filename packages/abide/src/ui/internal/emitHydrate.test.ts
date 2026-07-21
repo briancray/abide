@@ -933,24 +933,24 @@ describe('scoped <style> scope attribute survives SSR → hydrate (#13/#20)', ()
     })
 })
 
-describe('mountable interpolation (snippet call / children) — adopt server subtree, no strand', () => {
-    // A `{#snippet}` call is an ORDINARY interpolation whose value is a Mountable. On the server it renders
+describe('mountable interpolation (component call / children) — adopt server subtree, no strand', () => {
+    // A `{#component}` call is an ORDINARY interpolation whose value is a Mountable. On the server it renders
     // the builder's subtree inline; the hydrate pass must ADOPT that subtree (claim it + register its
     // teardown) instead of trusting-and-forgetting. Before the fix the primed pass returned without a
     // disposer, so the first reactive re-run MOUNTED A SECOND, LIVE COPY beside the stranded server one —
-    // the SnippetDemo showed "Live count: 6" next to a frozen "Live count: 0". (Regression guard.)
+    // the ComponentDemo showed "Live count: 6" next to a frozen "Live count: 0". (Regression guard.)
     function reactiveScope(sig: ReturnType<typeof signal>): Record<string, unknown> {
         const scope: Record<string, unknown> = {}
         Object.defineProperty(scope, 'count', { get: () => sig(), enumerable: true })
         return scope
     }
 
-    test('a single snippet call re-mounts in place — exactly one badge, no stranded copy', async () => {
+    test('a single component call re-mounts in place — exactly one badge, no stranded copy', async () => {
         const count = signal(0)
         const scope = reactiveScope(count)
         const src =
-            '{#snippet badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/snippet}' +
-            '<div>{badge("Live count", count)}</div>'
+            '{#component Badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/component}' +
+            '<div>{Badge("Live count", count)}</div>'
         const emitted = await loadEmitted(src)
         const host = document.createElement('div')
         host.innerHTML = await emitted.render(scope)
@@ -968,12 +968,12 @@ describe('mountable interpolation (snippet call / children) — adopt server sub
         expect(must(host.querySelector('.badge')).textContent).toBe('Live count: 6')
     })
 
-    test('two snippet calls (the SnippetDemo shape) both stay singular after an update', async () => {
+    test('two component calls (the ComponentDemo shape) both stay singular after an update', async () => {
         const count = signal(0)
         const scope = reactiveScope(count)
         const src =
-            '{#snippet badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/snippet}' +
-            '<div>{badge("Live count", count)}{badge("Doubled", count * 2)}</div>'
+            '{#component Badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/component}' +
+            '<div>{Badge("Live count", count)}{Badge("Doubled", count * 2)}</div>'
         const emitted = await loadEmitted(src)
         const host = document.createElement('div')
         host.innerHTML = await emitted.render(scope)
@@ -988,10 +988,11 @@ describe('mountable interpolation (snippet call / children) — adopt server sub
         expect(texts).toEqual(['Live count: 6', 'Doubled: 12'])
     })
 
-    test('multi-node snippet body (trailing static) adopts its full extent', async () => {
+    test('multi-node component body (trailing static) adopts its full extent', async () => {
         const count = signal(0)
         const scope = reactiveScope(count)
-        const src = '{#snippet line(n)}Hi {n}!{/snippet}<div data-testid="wrap">{line(count)}</div>'
+        const src =
+            '{#component Line(n)}Hi {n}!{/component}<div data-testid="wrap">{Line(count)}</div>'
         const emitted = await loadEmitted(src)
         const host = document.createElement('div')
         host.innerHTML = await emitted.render(scope)
@@ -1008,7 +1009,7 @@ describe('mountable interpolation (snippet call / children) — adopt server sub
         expect(wrap.textContent).toBe('Hi 6!')
     })
 
-    test('a multi-root snippet body does NOT desync a following sibling (no whole-page recover)', async () => {
+    test('a multi-root component body does NOT desync a following sibling (no whole-page recover)', async () => {
         // Regression: a multi-node snippet output used to be walked as a single-node text leaf, so the
         // cursor landed mid-subtree and the sibling `<span>` claim hit a text node → HydrationMismatch that
         // bubbled to the PAGE ROOT and re-rendered everything (losing node identity). The server now brackets
@@ -1016,8 +1017,8 @@ describe('mountable interpolation (snippet call / children) — adopt server sub
         const count = signal(0)
         const scope = reactiveScope(count)
         const src =
-            '{#snippet line(n)}Hi {n}!{/snippet}' +
-            '<div data-testid="wrap">{line(count)}<span data-testid="sib">S{count}</span></div>'
+            '{#component Line(n)}Hi {n}!{/component}' +
+            '<div data-testid="wrap">{Line(count)}<span data-testid="sib">S{count}</span></div>'
         const emitted = await loadEmitted(src)
         const host = document.createElement('div')
         host.innerHTML = await emitted.render(scope)

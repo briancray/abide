@@ -4,25 +4,37 @@
   import ChipDemo from "$ui/demos/templating/components/ChipDemo.abide"
   import RenderPropDemo from "$ui/demos/templating/components/RenderPropDemo.abide"
   import SpreadPropsDemo from "$ui/demos/templating/components/SpreadPropsDemo.abide"
+  import NamedSlotDemo from "$ui/demos/templating/components/NamedSlotDemo.abide"
+  import ReactiveComponentDemo from "$ui/demos/templating/components/ReactiveComponentDemo.abide"
 </script>
 
 <main class="page">
-  <h1>Components & snippets</h1>
-  <p class="lead">A component is a capitalised <code>&#123;#snippet&#125;</code> taking <code>(props, children)</code>. Snippets are the reusable builder primitive — callable inline as <code>&#123;name(args)&#125;</code> and passable as a render-prop — and behave the same during SSR and after hydration.</p>
+  <h1>Components</h1>
+  <p class="lead">An <strong>inline component</strong> is a TitleCase <code>&#123;#component&#125;</code> taking a single props object — a reusable builder invoked as a tag <code>&lt;Name/&gt;</code>, passable as a first-class value, and identical during SSR and after hydration. Its <code>&lt;slot/&gt;</code> is filled automatically from the markup between its tags.</p>
 
-  <p>The <code>&lt;Card&gt;</code> component receives a reactive <code>title</code> prop and renders whatever sits between its tags as its single slot. Both the prop and the slot stay live after hydration.</p>
-  <Demo id="card" title="Component with <code>&#123;children()&#125;</code>" client="src/ui/demos/templating/components/CardDemo.abide">
+  <p>The <code>&lt;Card&gt;</code> component receives a reactive <code>title</code> prop and renders whatever sits between its tags via its single <code>&lt;slot/&gt;</code>. Both the prop and the slot stay live after hydration.</p>
+  <Demo id="card" title="Component with <code>&lt;slot/&gt;</code>" client="src/ui/demos/templating/components/CardDemo.abide">
     <CardDemo />
   </Demo>
 
-  <p>A snippet is a reusable builder. Call it inline for repeated markup.</p>
-  <Demo id="chip" title="Snippets — <code>&#123;#snippet&#125;</code> called as <code>&#123;name(args)&#125;</code>" client="src/ui/demos/templating/components/ChipDemo.abide">
+  <p>A component is a reusable builder invoked as a tag for repeated markup.</p>
+  <Demo id="chip" title="Components — <code>&#123;#component&#125;</code> invoked as <code>&lt;Chip/&gt;</code>" client="src/ui/demos/templating/components/ChipDemo.abide">
     <ChipDemo />
   </Demo>
 
-  <p>Snippets are first-class: pass one as a component prop and let the component call it.</p>
-  <Demo id="render-prop" title="Snippet passed as a render-prop" client="src/ui/demos/templating/components/RenderPropDemo.abide">
+  <p>Components are first-class values: pass one as a prop and let the receiver invoke it.</p>
+  <Demo id="render-prop" title="Component passed as a render-prop" client="src/ui/demos/templating/components/RenderPropDemo.abide">
     <RenderPropDemo />
+  </Demo>
+
+  <p>A component written <em>inside</em> another component's tags is passed to it as a same-named prop and invoked as a tag — named slots with no new syntax. The leftover markup fills the default <code>&lt;slot/&gt;</code>.</p>
+  <Demo id="named-slot" title="Nested <code>&#123;#component&#125;</code> as a named-slot prop" client="src/ui/demos/templating/components/NamedSlotDemo.abide">
+    <NamedSlotDemo />
+  </Demo>
+
+  <p>A cell can hold a component. <code>&lt;Current/&gt;</code> where <code>Current</code> is a <code>state.computed</code> re-mounts whenever the computed selects a different component — a reactive component.</p>
+  <Demo id="reactive-component" title="Reactive component — a cell-named tag <code>&lt;Current/&gt;</code>" client="src/ui/demos/templating/components/ReactiveComponentDemo.abide">
+    <ReactiveComponentDemo />
   </Demo>
 
   <p>Spreading an object into a component with <code>&#123;...obj&#125;</code> hands every key to the child as a prop — the same object-to-props flow as writing each <code>name=&#123;value&#125;</code> by hand. (Element spread sets attributes instead; see <a href="/templating/bindings#spread">bindings</a>.)</p>

@@ -1,4 +1,4 @@
-// Split a snippet/param list at top-level commas — bracket/brace/paren-depth aware so a destructuring
+// Split a component/param list at top-level commas — bracket/brace/paren-depth aware so a destructuring
 // param (`{ a, b }`) or a default with a comma-bearing initializer stays one part. Empty parts drop.
 export function splitParams(params: string): string[] {
     const parts: string[] = []

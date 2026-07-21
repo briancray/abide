@@ -252,7 +252,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `{#await p}` | `{:then}`, `{:catch}`, `{:finally}`; inline shorthand `{#await p then v}` / `{#await p catch e}` (body = that branch, no pending — the compact blocking form) |
 | `{#switch}` | `{:case}`, `{:default}` |
 | `{#try}` | `{:catch}`, `{:finally}` (JS-semantics error boundary) |
-| `{#snippet name(args)}` | reusable builder, called `{name(args)}`, passable as a prop |
+| `{#component Name(props, children)}` | **inline component** — a reusable builder; name must be **TitleCase** (a lowercase name is a parse error — lowercase is reserved for element tags); invoked as a tag `<Name/>`, passable as a first-class value/prop. A nested `{#component X()}` inside `<Foo>…</Foo>` becomes Foo's `X` prop. |
 
 ### Async reads
 | Form | Meaning |
@@ -267,7 +267,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 ### Components / pages
 | Feature | Notes |
 | --- | --- |
-| Capitalised tags | component invocation · `{children()}` single slot · snippets = named-slot/render-prop |
+| Capitalised tags | component invocation (`<Name/>`) · `<slot/>` renders default children (`{children()}` is the equivalent interpolation form) · nested inline-component defs = named component props (render-prop) · a cell-named tag (`const C = state.computed(…)`; `<C/>`) is a **reactive** component (re-mounts on change) · a component-valued prop types as `Component<Props>` |
 | `<script>` per-instance · `<script module>` once-per-module · nested `<script>` branch-local |
 | `<style>` component-scoped · nested `<style>` subtree-scoped · tailwind optional |
 | `src/ui/pages/**/page.abide` / `layout.abide` | routes; `[name]` → `route().params.name` |

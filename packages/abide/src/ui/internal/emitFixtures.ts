@@ -426,28 +426,28 @@ export const FIXTURES: Fixture[] = [
         scope: () => ({ Card, t: 'Hi', name: 'Bob' }),
     },
 
-    // --- snippets --------------------------------------------------------------
+    // --- components (inline builders) ------------------------------------------
     {
-        name: 'snippet defined and called',
-        src: "{#snippet item(x)}<li>{x}</li>{/snippet}<ul>{item('a')}{item('b')}</ul>",
+        name: 'component defined and called',
+        src: "{#component Item(x)}<li>{x}</li>{/component}<ul>{Item('a')}{Item('b')}</ul>",
         kind: 'template',
         scope: () => ({}),
     },
     {
-        name: 'snippet hoisted',
-        src: "<ul>{item('a')}</ul>{#snippet item(x)}<li>{x}</li>{/snippet}",
+        name: 'component hoisted',
+        src: "<ul>{Item('a')}</ul>{#component Item(x)}<li>{x}</li>{/component}",
         kind: 'template',
         scope: () => ({}),
     },
     {
-        name: 'snippet not escaped',
-        src: "{#snippet raw(v)}<b>{v}</b>{/snippet}{raw('hi')}",
+        name: 'component not escaped',
+        src: "{#component Raw(v)}<b>{v}</b>{/component}{Raw('hi')}",
         kind: 'template',
         scope: () => ({}),
     },
     {
-        name: 'snippet client fragment',
-        src: '{#snippet greeting(n)}Hi {n}!{/snippet}{greeting(name)}',
+        name: 'component client fragment',
+        src: '{#component Greeting(n)}Hi {n}!{/component}{Greeting(name)}',
         kind: 'template',
         server: false,
         scope: () => ({ name: 'Bob' }),

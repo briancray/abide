@@ -11,7 +11,7 @@
 // So a `Segment[]` (verbatim spans, monotonic in BOTH gen and orig offsets) maps positions
 // bidirectionally (gen↔orig) by binary search. `emitCheck` must NEVER rewrite INSIDE a user expression.
 //
-// SCOPE (PR1 = intra-file): interpolation, html, await, if/for/await/try/switch/snippet, element +
+// SCOPE (PR1 = intra-file): interpolation, html, await, if/for/await/try/switch/component, element +
 // component attribute expressions, and control-flow bindings — all typed in the correct lexical scope.
 // Component invocations are checked for VALUE validity (each prop expression) but the component itself
 // is opaque (the `.abide` ambient module types the default import as `any`); CROSS-file typed component
@@ -54,7 +54,10 @@ const HEADER =
     `declare function __abideUnwrap<__T>(value: __T): __T;\n` +
     `declare function __ref(value: unknown): void;\n` +
     `declare function __entries<__T>(list: Iterable<__T> | ArrayLike<__T>): IterableIterator<[number, __T]>;\n` +
-    `declare function children(): unknown;\n`
+    `declare function children(): unknown;\n` +
+    // A component value — the type of a `{#component}`, an imported `.abide`, or a component-valued prop
+    // (`{ Row: Component<{ entry: Item }> }`). Invoked as `<Row entry={x}/>` → checked as `Row({entry:x})`.
+    `type Component<__P = Record<string, unknown>> = (props: __P, children?: () => unknown) => unknown;\n`
 
 export const CHECK_HEADER_LENGTH = HEADER.length
 
@@ -167,6 +170,9 @@ function deriveProps(source: string, root: Root): string {
 // the component's imports deliberately.
 export function componentDts(source: string, root: Root): string {
     return (
+        // Self-contained `Component<P>` so a component-valued prop in `props<{ Row: Component<…> }>()`
+        // resolves in this `.d.ts` companion (mirrors the check HEADER's definition).
+        `type Component<__P = Record<string, unknown>> = (props: __P, children?: () => unknown) => unknown;\n` +
         `type __AbideProps = ${deriveProps(source, root)};\n` +
         `declare const _default: (props: __AbideProps, children?: () => unknown) => unknown;\n` +
         `export default _default;\n`
@@ -204,7 +210,7 @@ function walkNode(node: TemplateNode, e: WalkEmit): void {
         case 'Style':
             return
         case 'Interpolation':
-            // `{children()}` / `{name(args)}` snippet calls are ordinary interpolations — checked as-is.
+            // `{children()}` / `{name(args)}` component calls are ordinary interpolations — checked as-is.
             refExpr(node, node.expression, e)
             return
         case 'Html':
@@ -237,8 +243,8 @@ function walkNode(node: TemplateNode, e: WalkEmit): void {
         case 'TryBlock':
             emitTry(node, e)
             return
-        case 'SnippetBlock':
-            emitSnippet(node, e)
+        case 'ComponentBlock':
+            emitComponentDef(node, e)
             return
     }
 }
@@ -300,12 +306,19 @@ function emitComponentCall(node: Extract<TemplateNode, { type: 'Component' }>, e
                 break
         }
     }
+    // A nested `{#component X()}` inside `<Foo>…</Foo>` is forwarded to Foo as its `X` prop (the runtime
+    // lifts it). Satisfy the prop requirement here; its body is not re-checked at the call site (a v1
+    // limit — precise typing would fight the verbatim source-map monotonicity invariant).
+    const bodyChildren = node.children.filter((n) => n.type !== 'ComponentBlock')
+    for (const child of node.children)
+        if (child.type === 'ComponentBlock')
+            e.emitSynthetic(` ${JSON.stringify(child.name)}: (undefined as any),`)
     e.emitSynthetic(' }')
-    if (node.children.length > 0) {
+    if (bodyChildren.length > 0) {
         // `async` so `{await}` / `{#await}` / `{#for await}` inside the component's children keep their
         // async context (the slot type `() => unknown` accepts an async thunk — it returns a Promise).
         e.emitSynthetic(', async () => {\n')
-        walk(node.children, e)
+        walk(bodyChildren, e)
         e.emitSynthetic('}')
     }
     e.emitSynthetic(');\n')
@@ -449,12 +462,21 @@ function emitTry(node: Extract<TemplateNode, { type: 'TryBlock' }>, e: WalkEmit)
     }
 }
 
-function emitSnippet(node: Extract<TemplateNode, { type: 'SnippetBlock' }>, e: WalkEmit): void {
+function emitComponentDef(
+    node: Extract<TemplateNode, { type: 'ComponentBlock' }>,
+    e: WalkEmit,
+): void {
     e.emitSynthetic('function ')
     e.emitSynthetic(node.name)
     e.emitSynthetic('(')
-    if (node.params.trim().length > 0) e.emitExpr(node.start, node.end, node.params)
-    e.emitSynthetic(') {\n')
+    if (node.params.trim().length > 0) {
+        e.emitExpr(node.start, node.end, node.params)
+        e.emitSynthetic(', ')
+    }
+    // The invocation `<Name …>children</Name>` lowers to `Name(props, () => {…})`; a component need not
+    // declare a `children` param (the runtime fills `<slot/>` automatically), so absorb the trailing
+    // children/scope args here to keep the call arity valid.
+    e.emitSynthetic('...$rest: unknown[]) {\n')
     walk(node.children, e)
     e.emitSynthetic('}\n')
 }

@@ -200,8 +200,10 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `{#await p}` / `{:then}` / `{:catch}` / `{:finally}` | PW | [x] (/templating/async) |
 | `{#switch}` / `{:case}` / `{:default}` | PW | [x] (/templating/conditionals) |
 | `{#try}` / `{:catch}` / `{:finally}` — error boundary | PW | [x] (/templating/errors) |
-| `{#snippet name(args)}` + call `{name(args)}` + pass as prop | PW | [x] (/templating/components) |
-| Components: capitalised tags + `{children()}` single slot | PW | [x] (/templating/components) |
+| Inline component `{#component Name()}` (TitleCase) invoked `<Name/>` + `<slot/>` + pass as prop | PW | [x] (/templating/components) |
+| Nested `{#component}` inside `<Foo>` → Foo's same-named prop (named slot) | PW | [x] (/templating/components) |
+| Reactive component — cell-named tag `<C/>` (`const C = state.computed(…)`) re-mounts on change | PW | [x] (/templating/components) |
+| Component-valued prop typing `Component<Props>` | unit (checkTemplate.test.ts) | [x] |
 | `<script>` / `<script module>` / nested branch-local scripts | PW | [~] |
 | `<style>` component-scoped / nested subtree-scoped | PW | [x] (/templating/styling ScopedStyleDemo + e2e/styling.spec) |
 

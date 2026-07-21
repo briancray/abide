@@ -7,7 +7,7 @@
 //   (2) hydrates by CLAIMING the SAME server nodes (identity `===`, no container clear),
 //   (3) stays interactive (a `state` button in the component updates in place),
 //   (4) is byte-for-byte identical — SSR HTML + claimed-node behavior — to the equivalent inline
-//       `{#snippet}`.
+//       `{#component}`.
 
 import { describe, expect, test } from 'bun:test'
 import { state } from '../state.ts'
@@ -32,7 +32,7 @@ function stripComments(html: string): string {
 // slot, wrapped in a <section>.
 const COMPONENT =
     `<script>import { props } from "abide/ui/props"; const { title } = props()</script>` +
-    `<section>{title}<div>{children()}</div></section>`
+    `<section>{title}<div><slot/></div></section>`
 
 // A page that imports + uses it. `resolve` maps the specifier to the component source.
 const PAGE = `<script>import Card from "./Component.abide"</script><Card title="Hi"><p>slot</p></Card>`
@@ -107,11 +107,11 @@ describe('file-component — interactive state', () => {
     })
 })
 
-describe('PARITY — file-component === inline {#snippet}', () => {
-    // The SAME UI expressed inline: a `{#snippet Card(props, children)}` taking props + the children
-    // factory, in one page — vs the file-component in another.
+describe('PARITY — file-component === inline {#component}', () => {
+    // The SAME UI expressed inline: a `{#component Card(props, children)}` taking props + the children
+    // factory (rendered via `<slot/>`), in one page — vs the file-component in another.
     const INLINE_PAGE =
-        `{#snippet Card(props, children)}<section>{props.title}<div>{children()}</div></section>{/snippet}` +
+        `{#component Card(props, children)}<section>{props.title}<div><slot/></div></section>{/component}` +
         `<Card title="Hi"><p>slot</p></Card>`
 
     test('identical SSR HTML (stripped of anchors)', async () => {

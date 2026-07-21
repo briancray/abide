@@ -2,7 +2,7 @@
 //
 // The single shared walk over a parsed `Root` that decides comment anchors ONCE, so the emitted
 // client and server modules can never drift. It records, per template boundary (the root and each
-// block/component/snippet body):
+// block/component/component body):
 //   • `skeletonClient` — static HTML with comment anchors (`<!---->` for interp/await/html leaves,
 //     paired `<!--[-->…<!--]-->` for blocks/components). Cloned + cursor-walked by emitted client code.
 //   • `slots` — the dynamic wiring points, each with a `path: number[]` of child-index steps from the
@@ -38,7 +38,7 @@ export type SlotKind =
     | 'switch'
     | 'try'
     | 'component'
-    | 'snippet'
+    | 'componentDef'
 
 // The tag name of a DYNAMIC element (one with its own dynamic attrs or dynamic descendants), keyed by
 // its child-index `path` within the template level. Threaded to the client emitter so the hydrate walk
@@ -48,7 +48,7 @@ export interface ElementTag {
     tag: string
 }
 
-// A client sub-plan: its own cloned template + slots (used for a block/component/snippet body).
+// A client sub-plan: its own cloned template + slots (used for a block/component/component body).
 export interface ClientPlan {
     skeleton: string
     slots: DynamicSlot[]
@@ -78,14 +78,14 @@ export interface SlotMeta {
     then?: ClausePlan | null
     catch?: ClausePlan | null
     finally?: ClientPlan | null
-    body?: ClientPlan // component children / try / snippet
+    body?: ClientPlan // component children / try / component-def
     hasChildren?: boolean // component
     await?: boolean // for
     item?: string // for item pattern
     index?: string | null // for index name
     iterable?: string // for iterable (rewritten)
     key?: string | null // for key (rewritten)
-    params?: string // snippet params
+    params?: string // component params
 }
 
 export interface BranchPlan {
@@ -160,7 +160,7 @@ export type ServerChunk =
           catch: { param: string | null; children: ServerChunk[] } | null
           finally: ServerChunk[] | null
       }
-    | { kind: 'snippet'; name: string; params: string; children: ServerChunk[] }
+    | { kind: 'componentDef'; name: string; params: string; children: ServerChunk[] }
     | { kind: 'style'; css: string }
 
 export interface TemplatePlan {
@@ -433,7 +433,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
     let childIndex = 0
     // Whether the position at `childIndex - 1` is a still-"open" static Text node that a subsequent
     // Text emission would MERGE into. The HTML parser coalesces adjacent character data, so two static
-    // text runs separated only by a zero-DOM node (a `{#snippet}` definition, a `<script>`, or an empty
+    // text runs separated only by a zero-DOM node (a `{#component}` definition, a `<script>`, or an empty
     // Text) become ONE DOM text node — the model must count them as one child too, or every later
     // sibling index desyncs from the parsed server DOM (and the cloned skeleton). `textRun` accumulates
     // that merged run's UTF-16 length so a following leaf's `prefixLen` splits the server's
@@ -446,6 +446,33 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
         skeleton += '<!---->'
         slots.push({ kind, path: [childIndex], expr, prefixLen, meta: {} })
         childIndex++
+    }
+
+    // The component's single default-children slot — emitted by both `{children()}` and `<slot>`. A
+    // zero-prop, no-body COMPONENT invocation of a `children` component (resolved off `$scope.children`),
+    // reusing the component emit + `$rt.component` runtime path (paired anchors + claimBlock hydration).
+    const pushChildrenSlot = (): void => {
+        skeleton += '<!--[--><!--]-->'
+        const emptyBody = walkLevel(ctx, [])
+        slots.push({
+            kind: 'component',
+            path: [childIndex + 1],
+            expr: null,
+            meta: {
+                name: 'children',
+                attrs: [],
+                body: toClientPlan(emptyBody),
+                hasChildren: false,
+            },
+        })
+        server.push({
+            kind: 'component',
+            name: 'children',
+            attrs: [],
+            children: [],
+            hasChildren: false,
+        })
+        childIndex += 2
     }
 
     for (const node of nodes) {
@@ -480,27 +507,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                 // block anchors + claimBlock hydration). The composer injects `children` into scope as an
                 // isomorphic component wrapping the next level (server: renders it → Raw; client: mounts it).
                 if (node.expression.trim() === 'children()') {
-                    skeleton += '<!--[--><!--]-->'
-                    const emptyBody = walkLevel(ctx, [])
-                    slots.push({
-                        kind: 'component',
-                        path: [childIndex + 1],
-                        expr: null,
-                        meta: {
-                            name: 'children',
-                            attrs: [],
-                            body: toClientPlan(emptyBody),
-                            hasChildren: false,
-                        },
-                    })
-                    server.push({
-                        kind: 'component',
-                        name: 'children',
-                        attrs: [],
-                        children: [],
-                        hasChildren: false,
-                    })
-                    childIndex += 2
+                    pushChildrenSlot()
                     break
                 }
                 const expr = rewriteExpr(ctx, node.expression)
@@ -521,6 +528,12 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                 break
             }
             case 'Element': {
+                // `<slot/>` is the component's default-children outlet — same emission as `{children()}`.
+                // (Fallback content inside `<slot>…</slot>` is not yet supported and is ignored.)
+                if (node.name === 'slot') {
+                    pushChildrenSlot()
+                    break
+                }
                 const attrPlans = node.attributes.map((attr) => planAttribute(ctx, attr))
                 skeleton += `<${node.name}${staticAttrString(attrPlans, ctx.scopeAttr)}>`
                 const elemPath = [childIndex]
@@ -574,10 +587,33 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             case 'Component': {
                 skeleton += '<!--[--><!--]-->'
                 const attrPlans = node.attributes.map((attr) => planAttribute(ctx, attr))
-                const sub = walkLevel(ctx, node.children)
-                const hasChildren = node.children.some(
-                    (n) => n.type !== 'Script' && n.type !== 'SnippetBlock',
-                )
+                // A top-level `{#component Name()}` inside `<Foo>…</Foo>` is forwarded to Foo as its `Name`
+                // prop. Emit each as a caller-level component def (so it closes over the CALLER's scope) and
+                // add a synthetic `Name={Name}` prop; the remaining children are the body/`<slot/>`.
+                const nestedDefs = node.children.filter((n) => n.type === 'ComponentBlock')
+                const bodyChildren = node.children.filter((n) => n.type !== 'ComponentBlock')
+                for (const def of nestedDefs) {
+                    const defSub = walkLevel(ctx, def.children)
+                    slots.push({
+                        kind: 'componentDef',
+                        path: [],
+                        expr: null,
+                        meta: { name: def.name, params: def.params, body: toClientPlan(defSub) },
+                    })
+                    server.push({
+                        kind: 'componentDef',
+                        name: def.name,
+                        params: def.params,
+                        children: defSub.server,
+                    })
+                    attrPlans.push({
+                        kind: 'expr',
+                        name: def.name,
+                        expr: rewriteExpr(ctx, def.name),
+                    })
+                }
+                const sub = walkLevel(ctx, bodyChildren)
+                const hasChildren = bodyChildren.some((n) => n.type !== 'Script')
                 slots.push({
                     kind: 'component',
                     path: [childIndex + 1],
@@ -768,17 +804,17 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                 childIndex += 2
                 break
             }
-            case 'SnippetBlock': {
-                // Snippet definitions emit no DOM at their site; they register a builder callable on the scope.
+            case 'ComponentBlock': {
+                // Component definitions emit no DOM at their site; they register a builder callable on the scope.
                 const sub = walkLevel(ctx, node.children)
                 slots.push({
-                    kind: 'snippet',
+                    kind: 'componentDef',
                     path: [],
                     expr: null,
                     meta: { name: node.name, params: node.params, body: toClientPlan(sub) },
                 })
                 server.push({
-                    kind: 'snippet',
+                    kind: 'componentDef',
                     name: node.name,
                     params: node.params,
                     children: sub.server,
@@ -795,9 +831,9 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             }
         }
         // Any node that emitted a DOM boundary (element, comment, leaf/block anchor, style) terminates the
-        // open text run. `Text` manages `openText` itself; `Script`/`SnippetBlock` emit no DOM and must
+        // open text run. `Text` manages `openText` itself; `Script`/`ComponentBlock` emit no DOM and must
         // leave it intact so the text runs on either side of them merge (matching the parser).
-        if (node.type !== 'Text' && node.type !== 'Script' && node.type !== 'SnippetBlock') {
+        if (node.type !== 'Text' && node.type !== 'Script' && node.type !== 'ComponentBlock') {
             openText = false
             textRun = 0
         }

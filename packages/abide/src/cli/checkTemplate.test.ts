@@ -153,6 +153,34 @@ test('cross-file: valid props type-check clean; a bare props() component is open
     expect(result.ok).toBe(true)
 })
 
+test('a Component<P>-typed prop is checked at the <Row .../> invoke site', async () => {
+    const files = {
+        'src/lib/props.ts': PROPS_SHIM,
+        'src/ui/components/Menu.abide':
+            "<script>import { props } from '../../lib/props.ts'\n" + // 1
+            'const { Row } = props<{ Row: Component<{ entry: string }> }>()</script>\n' + // 2
+            '<Row entry={123} />\n', // 3  entry:number not string → type error on line 3
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.some((d) => d.line === 3 && d.file.endsWith('Menu.abide'))).toBe(true)
+})
+
+test('a Component<P>-typed prop with correct props type-checks clean', async () => {
+    const files = {
+        'src/lib/props.ts': PROPS_SHIM,
+        'src/ui/components/Menu.abide':
+            "<script>import { props } from '../../lib/props.ts'\n" +
+            'const { Row } = props<{ Row: Component<{ entry: string }> }>()</script>\n' +
+            '<Row entry="hi" />\n',
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
 test('a wrong RPC-style argument in a template call is caught', async () => {
     // A typed function imported into the script, called from the TEMPLATE with a wrong arg type.
     const files = {

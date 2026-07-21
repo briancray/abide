@@ -1,0 +1,17 @@
+<script>
+  // A component defined INSIDE another component's tags is passed to it as a same-named prop — the
+  // named-slot mechanism, no new syntax. `Panel` receives `Header` (a component) as a prop and invokes
+  // it as a tag `<Header/>`; the leftover markup fills the default `<slot/>` automatically.
+</script>
+
+{#component Panel({ Header })}
+  <section class="panel">
+    <header data-testid="ns-header"><Header/></header>
+    <div class="panel-body"><slot/></div>
+  </section>
+{/component}
+
+<Panel>
+  {#component Header()}<h4 data-testid="ns-title">Nested header</h4>{/component}
+  <p data-testid="ns-body">This is the default slot content.</p>
+</Panel>

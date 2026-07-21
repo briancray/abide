@@ -69,7 +69,7 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // module glue + a shared-chunk boilerplate wrapper); 70→78 KB (client sockets: the isomorphic
     // `Socket` proxy + reactive probe surface + the shared reconnecting mux, shipped alongside the RPC
     // proxy for every app); 78→80 KB (`interpolate` adopts server-rendered mountable subtrees on hydrate
-    // — `{#snippet}` call / `{children()}` — instead of stranding them). FUTURE (TODO #3): extract the
+    // — `{#component}` call / `{children()}` — instead of stranding them). FUTURE (TODO #3): extract the
     // server-only byte-accounting/pin/cap + shared-cache path out of the isomorphic cell to shrink the
     // client floor.
     // NOTE: temporarily raised 80 KB → 100 KB while the `rewrite` branch sits over the historical

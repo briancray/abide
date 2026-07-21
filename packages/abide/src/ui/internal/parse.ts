@@ -668,8 +668,8 @@ export function parse(source: string, opts?: { filename?: string }): Root {
                 return parseSwitchBlock(start)
             case 'try':
                 return parseTryBlock(start)
-            case 'snippet':
-                return parseSnippetBlock(start)
+            case 'component':
+                return parseComponentBlock(start)
             default:
                 return fail(`unknown block \`{#${keyword}}\``, start)
         }
@@ -902,21 +902,29 @@ export function parse(source: string, opts?: { filename?: string }): Root {
         }
     }
 
-    function parseSnippetBlock(start: number): TemplateNode {
+    // `{#component Name(...)}`. A component name must be TitleCase — capitalization is the sole
+    // component/element discriminator, so a lowercase name would be indistinguishable from an element
+    // at the `<name>` call site.
+    function parseComponentBlock(start: number): TemplateNode {
         const header = readBraceContents().trim()
         const match = /^([A-Za-z_$][\w$]*)\s*/.exec(header)
-        if (match === null) fail('`{#snippet}` requires a name', start)
+        if (match === null) fail('`{#component}` requires a name', start)
         const name = match[1]
-        if (name === undefined) fail('`{#snippet}` requires a name', start)
+        if (name === undefined) fail('`{#component}` requires a name', start)
+        if (!/[A-Z]/.test(name[0] ?? ''))
+            fail(
+                '`{#component}` name must be TitleCase (lowercase is reserved for element tags)',
+                start,
+            )
         let params = header.slice(match[0].length).trim()
         if (params.startsWith('(') && params.endsWith(')')) {
             params = params.slice(1, -1).trim()
         } else if (params !== '') {
-            fail('`{#snippet}` parameters must be parenthesized', start)
+            fail('`{#component}` parameters must be parenthesized', start)
         }
         const children = parseChildren()
-        consumeBlockClose('snippet')
-        return { type: 'SnippetBlock', name, params, children, start, end: pos }
+        consumeBlockClose('component')
+        return { type: 'ComponentBlock', name, params, children, start, end: pos }
     }
 
     // --- header helpers ----------------------------------------------------

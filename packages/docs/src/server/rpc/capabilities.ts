@@ -33,7 +33,7 @@ export default GET((): Capability[] => [
     {
         name: 'Control flow',
         path: '/templating/conditionals',
-        blurb: '{#if}, {#for}, {#await}, {#switch}, {#try}, snippets, components.',
+        blurb: '{#if}, {#for}, {#await}, {#switch}, {#try}, inline components.',
     },
     {
         name: 'File-based routing',

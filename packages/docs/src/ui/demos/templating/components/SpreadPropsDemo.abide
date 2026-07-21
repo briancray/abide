@@ -4,8 +4,8 @@
   const chipProps = { kind: "metric", label: "Requests", value: 42 }
 </script>
 
-{#snippet Labelled(props)}
+{#component Labelled(props)}
   <span data-testid="spread-child" data-kind={props.kind}>{props.label}: <b>{props.value}</b></span>
-{/snippet}
+{/component}
 
 <Labelled {...chipProps}/>

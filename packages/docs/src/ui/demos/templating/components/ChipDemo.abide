@@ -1,10 +1,10 @@
 <script>
-  // A snippet is a reusable builder. Call it inline as `{name(args)}` for repeated markup — the same
-  // during SSR and after hydration.
+  // A component is a reusable builder invoked as a tag `<Chip .../>` — the same during SSR and after
+  // hydration. Props arrive as one object; destructure them in the header.
 </script>
 
-{#snippet chip(text)}
+{#component Chip({ text })}
   <span data-testid="chip" class="chip">{text}</span>
-{/snippet}
+{/component}
 
-<p class="chips">{chip("alpha")}{chip("beta")}{chip("gamma")}</p>
+<p class="chips"><Chip text="alpha"/><Chip text="beta"/><Chip text="gamma"/></p>

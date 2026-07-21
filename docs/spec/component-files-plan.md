@@ -1,7 +1,7 @@
 # Implementation plan — components as `.abide` files (import + `<Card>`)
 
 Lets a page/layout/component `import Card from "./Card.abide"` and use `<Card prop={x}>…</Card>`,
-exactly like an inline `{#snippet Card(props, children)}` but in a SHARED reusable file. Gates per PR:
+exactly like an inline `{#component Card(props, children)}` but in a SHARED reusable file. Gates per PR:
 `cd packages/abide && bun test` (805) + `bunx tsc --noEmit` clean, docs e2e 72/72.
 
 ## Core design
@@ -27,14 +27,14 @@ exactly like an inline `{#snippet Card(props, children)}` but in a SHARED reusab
   Emitted for EVERY module (pages import `{mount,hydrate}`/`{render}` and ignore the default) — no
   filename-aware flag needed.
 - **`$rt.component` gains a trailing `parentScope` arg** forwarded as the 3rd arg to `componentFn`.
-  Inline snippet factories use rest params (`(...$args)=>`) and ignore it → backward compatible.
-- **Contextual bindings inherit via `Object.create(parentScope)`** (mirrors `genSnippet`'s
+  Inline-component factories use rest params (`(...$args)=>`) and ignore it → backward compatible.
+- **Contextual bindings inherit via `Object.create(parentScope)`** (mirrors `genComponentDef`'s
   `Object.create($scope)` + `compose`'s child scope): the component's `state`/`watch`/RPC proxies/
   `route`/`url` are the SAME seeded/recording wrappers the page uses → hydration-seed `state(...)`
   ordinals stay aligned (document order on both sides).
 - **Hydration works byte-for-byte**: the adapter's `mount(parent, childScope, marker)` runs the
   component's own instance setup then `$mount0`, which branches on `$rt.hydrating` and CLAIMS the
-  server nodes bounded by the component's close marker — structurally identical to an inline snippet
+  server nodes bounded by the component's close marker — structurally identical to an inline-component
   body mount. No new hydration code.
 - **Lazy dir-relative resolution** (from the importer's `pageDirs`/`layoutDirs`, already populated) —
   no eager component scan, no `AppConfig` schema change.
@@ -52,7 +52,7 @@ exactly like an inline `{#snippet Card(props, children)}` but in a SHARED reusab
   to a sibling temp module + rewrite the specifier (same technique as `resolveCssImports`). Add an
   optional resolver param to keep tests hermetic. **Core proof:** a shared `Component.abide` imported
   by two pages — render (SSR), hydrate (claims SAME server nodes, no clear), interactive `state`
-  update; plus a control comparing a file-component page vs the equivalent inline-`{#snippet}` page →
+  update; plus a control comparing a file-component page vs the equivalent inline-`{#component}` page →
   identical SSR HTML + identical claimed nodes.
 - **PR3 — Production client bundle resolution** (`clientBundle.ts`). In `emitOne`/`emitModules`, walk
   each source's `componentImports`, resolve against `sourceDir`, emit the component via `emitOne`
@@ -63,9 +63,9 @@ exactly like an inline `{#snippet Card(props, children)}` but in a SHARED reusab
   gains a `dir` param; `instantiateServer` resolves `.abide` imports relative to `dir` (recursive temp
   modules + specifier rewrite; cache key `source+dir`). `renderLevel` threads a parallel `dirs[]`
   alongside `levels[]` (from `pageDirs` + layout-chain `layoutDirs`).
-- **PR5 — Docs `Sample.abide` migration** (real target + e2e). Extract the `{#snippet Sample}`
+- **PR5 — Docs `Sample.abide` migration** (real target + e2e). Extract the inline `{#component Sample}`
   duplicated across 27 pages into one `packages/docs/src/ui/pages/Sample.abide` (takes `page` as a
-  prop, imports `snippet`/`html` itself). Migrate incrementally, docs e2e (72/72) after each batch.
+  prop, imports the `snippet` source-reader RPC + `html` itself). Migrate incrementally, docs e2e after each batch.
 
 ## Edge cases / deferred
 Nested components + component-imports-component (transitive, cycle-guarded); `<script module>` in a

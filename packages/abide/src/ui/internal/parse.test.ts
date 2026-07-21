@@ -510,16 +510,29 @@ describe('try block', () => {
     })
 })
 
-describe('snippet block', () => {
-    test('snippet with params', () => {
-        const block = at(parse('{#snippet row(item, i)}<td>{item}</td>{/snippet}').children, 0)
-        expect(block.type).toBe('SnippetBlock')
-        expect(block).toMatchObject({ name: 'row', params: 'item, i' })
+describe('component block', () => {
+    test('component with params', () => {
+        const block = at(parse('{#component Row(item, i)}<td>{item}</td>{/component}').children, 0)
+        expect(block.type).toBe('ComponentBlock')
+        expect(block).toMatchObject({ name: 'Row', params: 'item, i' })
     })
 
-    test('snippet without params', () => {
-        const block = at(parse('{#snippet header}<h1>hi</h1>{/snippet}').children, 0)
-        expect(block).toMatchObject({ type: 'SnippetBlock', name: 'header', params: '' })
+    test('component without params', () => {
+        const block = at(parse('{#component Header}<h1>hi</h1>{/component}').children, 0)
+        expect(block).toMatchObject({ type: 'ComponentBlock', name: 'Header', params: '' })
+    })
+
+    test('component with a destructured props object param', () => {
+        const block = at(parse('{#component Row({ item })}<td>{item}</td>{/component}').children, 0)
+        expect(block).toMatchObject({ type: 'ComponentBlock', name: 'Row', params: '{ item }' })
+    })
+
+    test('rejects a lowercase name (it would be an element)', () => {
+        expect(() => parse('{#component row()}<td/>{/component}')).toThrow(ParseError)
+    })
+
+    test('{#snippet} is no longer a block keyword', () => {
+        expect(() => parse('{#snippet row(x)}<td>{x}</td>{/snippet}')).toThrow(ParseError)
     })
 })
 

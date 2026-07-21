@@ -1,14 +1,14 @@
 <script>
-  // Snippets are first-class: pass one as a component prop and let the component call it as a
-  // render-prop.
+  // Components are first-class values: pass one as a prop and invoke it as a tag. Data flows via props —
+  // `Framed` hands its own data to the passed-in `Render` component.
 </script>
 
-{#snippet loud(text)}
+{#component Loud({ text })}
   <b data-testid="loud">{text.toUpperCase()}</b>
-{/snippet}
+{/component}
 
-{#snippet Framed(props)}
-  <div data-testid="framed" class="framed">{props.render("rendered via prop")}</div>
-{/snippet}
+{#component Framed({ Render })}
+  <div data-testid="framed" class="framed"><Render text="rendered via prop"/></div>
+{/component}
 
-<Framed render={loud}/>
+<Framed Render={Loud}/>

@@ -35,7 +35,7 @@
       <button class="sample-replay" data-testid="replay" onclick={runAgain}>Run again ▸</button>
     {/if}
   </div>
-  <div class="sample-demo">{children()}</div>
+  <div class="sample-demo"><slot/></div>
 
   <div class="sample-tabs" role="tablist">
     {#if server}

@@ -16,7 +16,7 @@ const CORPUS = [
     `<div>{#await load()}<span>…</span>{:then value}<b>{value.title}</b>{:catch err}{err.message}{:finally}done{/await}</div>`,
     `<div>{#try}<b>{risky()}</b>{:catch e}{e.message}{/try}</div>`,
     `<div>{#switch kind}{:case "a"}A{:case "b"}B{:default}?{/switch}</div>`,
-    `<div>{#snippet row(x)}<td>{x.cell}</td>{/snippet}{row(item)}</div>`,
+    `<div>{#component Row(x)}<td>{x.cell}</td>{/component}{Row(item)}</div>`,
     `<p title={t} onclick={handler} class:on={active} style:color={hue} {...rest}>{(v as Foo).bar}</p>`,
     `<div>{html(markup)}</div>`,
     `<div>{await fetchThing()}</div>`,

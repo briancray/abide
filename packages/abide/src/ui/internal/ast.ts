@@ -94,7 +94,7 @@ export interface Comment extends Span {
 }
 
 // `{expr}` — escaped reactive interpolation. Also covers `{children()}` slot and `{name(args)}`
-// snippet calls, which are syntactically ordinary interpolations.
+// component calls, which are syntactically ordinary interpolations.
 export interface Interpolation extends Span {
     type: 'Interpolation'
     expression: string
@@ -233,9 +233,9 @@ export interface TryBlock extends Span {
     finally: Clause | null
 }
 
-// `{#snippet name(args)} … {/snippet}` — reusable builder. `params` is the raw parameter list.
-export interface SnippetBlock extends Span {
-    type: 'SnippetBlock'
+// `{#component Name(args)} … {/component}` — reusable builder. `params` is the raw parameter list.
+export interface ComponentBlock extends Span {
+    type: 'ComponentBlock'
     name: string
     params: string
     children: TemplateNode[]
@@ -260,7 +260,7 @@ export type TemplateNode =
     | AwaitBlock
     | SwitchBlock
     | TryBlock
-    | SnippetBlock
+    | ComponentBlock
 
 // The parsed document. `children` is the full ordered node list; the `moduleScript`,
 // `instanceScript`, and `style` fields are convenience references to the root-level `<script

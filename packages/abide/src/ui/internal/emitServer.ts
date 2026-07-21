@@ -6,7 +6,7 @@
 // lexical `<script>` bindings from `emitSetup`. Event attributes are omitted (as `renderServer` does).
 
 import type { ScopeAnalysis, ScriptInfo } from './analyzeScope.ts'
-import { reconstructImport } from './analyzeScope.ts'
+import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
@@ -166,7 +166,11 @@ function genComponent(
                 break // ignored on components (M4b)
         }
     }
-    out += `    const $c = ${componentRef(analysis, name)};\n`
+    // A cell-named tag is a reactive component; SSR is a snapshot, so read its current value once.
+    const componentExpr = analysis.cellNames.has(name)
+        ? rewriteCellRefs(name, analysis.cellNames)
+        : componentRef(analysis, name)
+    out += `    const $c = ${componentExpr};\n`
     out += `    if (typeof $c !== "function") throw new Error(${JSON.stringify(`<${name}> is not a component in scope (expected a render function)`)});\n`
     if (hasChildren)
         out += `    const $children = async () => new $rt.Raw(await ${bodyExpr(analysis, children)}($scope));\n`
@@ -201,7 +205,7 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
             return `  $out += ${JSON.stringify(chunk.text)};\n`
         case 'interp':
             // A scalar value gets the trailing `<!---->` leaf anchor (mirrors templatePlan.pushLeaf); a Raw
-            // (snippet call / `{children()}`) is bracketed with `<!--[-->…<!--]-->` so the hydrate walk skips
+            // (component call / `{children()}`) is bracketed with `<!--[-->…<!--]-->` so the hydrate walk skips
             // the whole mountable subtree as a unit. `renderLeaf` picks the form at render time.
             return `  $out += $rt.renderLeaf(await (${chunk.expr}));\n`
         case 'html':
@@ -351,24 +355,27 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
             out += '    return $out;\n  })($scope);\n'
             return out
         }
-        case 'snippet':
+        case 'componentDef':
             return '' // registered up front by genChunks
     }
 }
 
-// Register snippet builders (hoisted) then emit the non-snippet chunks in order.
+// Register component builders (hoisted) then emit the non-component chunks in order.
 function genChunks(analysis: ScopeAnalysis, chunks: ServerChunk[]): string {
     let out = ''
     for (const chunk of chunks) {
-        if (chunk.kind !== 'snippet') continue
+        if (chunk.kind !== 'componentDef') continue
         const patterns = chunk.params.trim() === '' ? [] : splitParams(chunk.params)
         let binds = ''
         for (const [i, pattern] of patterns.entries())
             binds += `    ${bindPattern('$s', pattern, `$args[${i}]`)}\n`
-        out += `  $scope[${JSON.stringify(chunk.name)}] = async (...$args) => {\n    const $s = Object.create($scope);\n${binds}    return new $rt.Raw(await ${bodyExpr(analysis, chunk.children)}($s));\n  };\n`
+        // The component-invocation convention passes the caller's children factory as the 2nd arg, so
+        // `<slot/>` (which resolves `$scope.children`) is filled automatically — no `children` param
+        // needed. An explicit param of the same name overrides it via `binds`.
+        out += `  $scope[${JSON.stringify(chunk.name)}] = async (...$args) => {\n    const $s = Object.create($scope);\n    if (typeof $args[1] === "function") $s.children = $args[1];\n${binds}    return new $rt.Raw(await ${bodyExpr(analysis, chunk.children)}($s));\n  };\n`
     }
     for (const chunk of chunks) {
-        if (chunk.kind === 'snippet') continue
+        if (chunk.kind === 'componentDef') continue
         out += genChunk(analysis, chunk)
     }
     return out

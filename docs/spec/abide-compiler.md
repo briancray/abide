@@ -76,11 +76,17 @@ navigation**.
 1. **Reactive destructured props.** `const { name = fallback, ...rest } = props()` —
    reads compile to §7 signal reads; parent `name={expr}` change updates the child; defaults
    apply on absent/`undefined`; `...rest` is a reactive collection.
-2. **One slot `{children()}`; no named slots.** Fallback = `{#if children}{children()}
-   {:else}…{/if}`. Named-slot / render-prop needs are met by **snippets passed as props**.
-3. **Snippets** — `{#snippet row(item)}…{/snippet}` called `{row(item)}`; compile to
-   fragment-builder (client) / string-builder (server); **first-class values passable as
-   props** (the render-prop/named-slot mechanism).
+2. **One default slot — `<slot/>`** (renders the default children; `{children()}` is the equivalent
+   interpolation form); **no named slots.** Fallback = `{#if children}<slot/>{:else}…{/if}`. Named-slot /
+   render-prop needs are met by **inline components passed as props** (a nested `{#component}` inside
+   `<Foo>` becomes Foo's same-named prop).
+3. **Inline components** — `{#component Row(props, children)}…{/component}` (TitleCase; a lowercase name
+   is a parse error — lowercase is reserved for element tags) invoked as a tag `<Row/>`; compile to
+   fragment-builder (client) / string-builder
+   (server); **first-class values passable as props**. `<slot/>` renders the default children; a
+   nested `{#component X()}` inside `<Foo>…</Foo>` is forwarded to Foo as its `X` prop (the
+   render-prop/named-slot mechanism). A cell-named tag (`const C = state.computed(…)`) is a **reactive**
+   component that re-mounts on identity change. A component-valued prop types as `Component<Props>`.
 4. **`{...expr}` spread** — props onto components, attributes onto elements; reactive.
 5. **No `onMount`/`onDestroy`.** `<script>` body = setup; effect/`watch`/`bind:element`-fn
    teardown = cleanup.
@@ -104,7 +110,7 @@ navigation**.
 
 1. **File-based routing = filesystem route tree.** `pages/foo/page.abide` → `/foo`;
    `[name]` → `route().params.name`; nested dirs nest routes. `layout.abide` wraps nested
-   routes; **the layout's outlet is `{children()}`** (C4.2).
+   routes; **the layout's outlet is `<slot/>`** (C4.2).
 2. **Layouts persist across same-chain nav** — the layout's effect scope survives; only the
    child outlet subtree remounts. State preserved.
 3. **`route()` is the single isomorphic reactive accessor** (FD2; `page` is retired) —
@@ -277,7 +283,7 @@ bespoke checker.
    input/output via the client-proxy type (§6.2, type-only import) — args checked, awaited value
    typed, **from the server handler's signature, zero manual annotation.**
 4. **Cross-component prop checking.** `<Foo bar={x} />` checks `x` against `Foo`'s `props<T>()`;
-   missing/extra/mismatched props error; snippet params (C4.3) and `bind:` props (C7.3) checked.
+   missing/extra/mismatched props error; inline-component params (C4.3) and `bind:` props (C7.3) checked.
 5. **Control-flow blocks preserve TS narrowing** — `{#if x}` narrows in-branch, `{#await}{:then
    v}` types `v`, `{#for item of list}` types `item`, `{:catch e}` types `e`, `{#switch}{:case}`
    narrows. The generated TS preserves flow narrowing.

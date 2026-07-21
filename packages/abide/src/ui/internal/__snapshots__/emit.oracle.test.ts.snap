@@ -116,11 +116,11 @@ exports[`emit regression — server output component props + children (server) 1
 
 exports[`emit regression — server output component spread (server) 1`] = `"<!--[--><b>1-2</b><!--]-->"`;
 
-exports[`emit regression — server output snippet defined and called 1`] = `"<ul><!--[--><li>a<!----></li><!--]--><!--[--><li>b<!----></li><!--]--></ul>"`;
+exports[`emit regression — server output component defined and called 1`] = `"<ul><!--[--><li>a<!----></li><!--]--><!--[--><li>b<!----></li><!--]--></ul>"`;
 
-exports[`emit regression — server output snippet hoisted 1`] = `"<ul><!--[--><li>a<!----></li><!--]--></ul>"`;
+exports[`emit regression — server output component hoisted 1`] = `"<ul><!--[--><li>a<!----></li><!--]--></ul>"`;
 
-exports[`emit regression — server output snippet not escaped 1`] = `"<!--[--><b>hi<!----></b><!--]-->"`;
+exports[`emit regression — server output component not escaped 1`] = `"<!--[--><b>hi<!----></b><!--]-->"`;
 
 exports[`emit regression — server output script emits nothing 1`] = `"<p>5<!----></p>"`;
 
@@ -244,13 +244,13 @@ exports[`emit regression — client DOM component props (client) 1`] = `"<!--[--
 
 exports[`emit regression — client DOM component children slot (client) 1`] = `"<!--[--><div class="card"><h1>Hi</h1><!--slot-->slotted Bob<!----></div><!--Card--><!--]-->"`;
 
-exports[`emit regression — client DOM snippet defined and called 1`] = `"<ul><li>a<!----></li><!----><li>b<!----></li><!----></ul>"`;
+exports[`emit regression — client DOM component defined and called 1`] = `"<ul><li>a<!----></li><!----><li>b<!----></li><!----></ul>"`;
 
-exports[`emit regression — client DOM snippet hoisted 1`] = `"<ul><li>a<!----></li><!----></ul>"`;
+exports[`emit regression — client DOM component hoisted 1`] = `"<ul><li>a<!----></li><!----></ul>"`;
 
-exports[`emit regression — client DOM snippet not escaped 1`] = `"<b>hi<!----></b><!---->"`;
+exports[`emit regression — client DOM component not escaped 1`] = `"<b>hi<!----></b><!---->"`;
 
-exports[`emit regression — client DOM snippet client fragment 1`] = `"Hi Bob<!---->!<!---->"`;
+exports[`emit regression — client DOM component client fragment 1`] = `"Hi Bob<!---->!<!---->"`;
 
 exports[`emit regression — client DOM script emits nothing 1`] = `"<p>5<!----></p>"`;
 

@@ -57,7 +57,7 @@ the resolved fork at each branch is stated with its rationale.
 3. **Template lowering** — the block tree becomes nested TS so TS's own scoping/narrowing does the
    work. Each `{expr}` → synthetic `__ref(` + **verbatim expr** + `)`. `{#if}`→`if`, `{#for item,i of
    list}`→`for (const [i, item] of __entries(list))`, `{#await p}{:then v}{:catch e}`→`try { const v =
-   await (p); … } catch (e) {…}`, `{#try}`→`try/catch`, `{#snippet foo(a)}`→`function foo(a){}` +
+   await (p); … } catch (e) {…}`, `{#try}`→`try/catch`, `{#component Foo(a)}`→`function Foo(a){}` +
    `{foo(x)}`→`__ref(foo(x))`, cell `{count}`→`count` (already `T` via `__abideUnwrap`). RPC calls,
    type annotations (`as`/`satisfies`/`: T`/`!`/`<T>`), and narrowing all check for free.
 4. **Cross-file component typing — IN v1.** Each `.abide` gets a stable virtual `.ts` path served by
@@ -69,10 +69,10 @@ the resolved fork at each branch is stated with its rationale.
    each destructured key optional; value type **widened** from its default (string/number/boolean
    literal → primitive; `[]`/`{}`/`null`/no-default → `unknown`); extra keys allowed. Near-zero false
    positives on real (bare-props) components; still value-checks what flows in.
-6. **Children/snippets — ride the Q5 gradient.** No new machinery: a slot is "just a prop". Explicit
+6. **Children/inline-components — ride the Q5 gradient.** No new machinery: a slot is "just a prop". Explicit
    `props<{ header: (a: string) => unknown }>()` → precise. Bare props → `{children()}` synthesizes
-   `children?: () => unknown`; snippet slots are opaque `(...args: any[]) => unknown`. No bidirectional
-   snippet-param inference in v1.
+   `children?: () => unknown`; inline-component slots are opaque `(...args: any[]) => unknown`. No bidirectional
+   inline-component-param inference in v1.
 7. **Position map — bidirectional `Segment[]`, verbatim-copy invariant.** Segments monotonic in both
    `genStart` and `origStart` → one array answers gen→orig AND orig→gen by binary search. `emitCheck`
    may only WRAP user expressions in synthetic scaffolding, never rewrite INSIDE them (same rule
@@ -135,6 +135,6 @@ type-position operands. Tracked in TODO.md.
 
 ## 5. Deferred / parked
 
-rename, semantic tokens, formatting (§2), per-route `[name]` param typing, bidirectional snippet-param
+rename, semantic tokens, formatting (§2), per-route `[name]` param typing, bidirectional inline-component-param
 inference, the runtime type-position cleanup (§3). Each has a recorded rationale (write-risk / poor
 cost-value / needs separate machinery).

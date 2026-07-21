@@ -15,7 +15,7 @@ export { markIterableDone } from '../../shared/internal/iterableDone.ts'
 // as they stream). See `streamScope.ts`.
 export { awaitStream, forAwaitStream } from './streamScope.ts'
 
-// Marks already-safe HTML that must NOT be escaped (snippet calls / `{children()}` slot).
+// Marks already-safe HTML that must NOT be escaped (component calls / `{children()}` slot).
 export class Raw {
     constructor(readonly value: string) {}
     toString(): string {
@@ -42,7 +42,7 @@ export function renderValue(value: unknown): string {
     return escapeHtml(String(value))
 }
 
-// An interpolation LEAF's server HTML. A `Raw` value is a mounted subtree (a `{#snippet}` call or the
+// An interpolation LEAF's server HTML. A `Raw` value is a mounted subtree (a `{#component}` call or the
 // `{children()}` slot) that can span MANY top-level nodes, so it is wrapped in the paired `<!--[-->…<!--]-->`
 // block anchors (identical to real blocks) instead of the single trailing `<!---->` a scalar leaf carries.
 // The bracket lets the hydrate walk skip the whole mountable region as ONE unit (via `findBlockClose`) —

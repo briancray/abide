@@ -29,7 +29,7 @@ export type Disposer = () => void
 // a single disposer that tears everything it made back down.
 export type BlockFn = (parent: Node, anchor: Node | null) => Disposer
 
-// A self-contained, re-usable DOM builder — the value produced by `{#snippet}` calls and the
+// A self-contained, re-usable DOM builder — the value produced by `{#component}` calls and the
 // component `{children()}` slot.
 export interface Mountable {
     mount(target: Node, anchor: Node | null): () => void
@@ -189,7 +189,7 @@ const COMMENT_NODE = 8
 // Comment-anchor conventions (emitted identically by `templatePlan`/`emitServer`):
 //   • `<!---->`    (empty data)  — a leaf slot anchor (scalar interp / await / html).
 //   • `<!--[-->`   (data "[")    — a block/component OPEN anchor, AND the OPEN of a mountable interpolation
-//                                  (a `{#snippet}` call / `{children()}`), whose subtree the server brackets
+//                                  (a `{#component}` call / `{children()}`), whose subtree the server brackets
 //                                  so the walk can skip/adopt it as a unit (serverRuntime.renderLeaf).
 //   • `<!--]-->`   (data "]")    — the matching CLOSE anchor.
 const BLOCK_OPEN = '['
@@ -235,9 +235,9 @@ export function hydrateValueLeaf(): Node | null {
 
 // Consume an INTERPOLATION leaf, which the server renders in one of two shapes (see serverRuntime.renderLeaf):
 //   • a scalar value → `<text><!---->` (or a bare `<!---->` when empty) — identical to `hydrateValueLeaf`.
-//   • a mountable (a `{#snippet}` call / `{children()}`) → the whole subtree bracketed by `<!--[-->…<!--]-->`.
+//   • a mountable (a `{#component}` call / `{children()}`) → the whole subtree bracketed by `<!--[-->…<!--]-->`.
 // A leading `<!--[-->` means the mountable form: skip the ENTIRE bracketed region (depth-honoring, so nested
-// snippet calls are handled) and hand the OPEN anchor back — `interpolate` derives the close + subtree from
+// component calls are handled) and hand the OPEN anchor back — `interpolate` derives the close + subtree from
 // it to adopt the region. Skipping the region as a unit is what keeps following siblings in sync (the
 // desync `hydrateValueLeaf` caused by advancing a single node past a multi-node subtree).
 export function hydrateInterpLeaf(): Node | null {
@@ -472,7 +472,7 @@ export function interpolate(
         primed = true
     }
 
-    // Adopt a server-rendered mountable subtree (a `{#snippet}` call or `{children()}`) on the hydrate
+    // Adopt a server-rendered mountable subtree (a `{#component}` call or `{children()}`) on the hydrate
     // pass. The server brackets such a value with `<!--[-->…<!--]-->` (serverRuntime.renderLeaf), and the
     // walk (`hydrateInterpLeaf`) hands `end` back as that OPEN anchor. Re-seek the claim cursor onto the
     // subtree's first node (`open.nextSibling`), mount the builder in CLAIM mode bounded by the CLOSE anchor
@@ -861,7 +861,7 @@ export function component(
     // `{children()}` mount fn claims the server-rendered children in place (rather than re-creating).
     if (hydrating) hydrateSeek(open !== null ? open.nextSibling : null)
     // `parentScope` (3rd arg) lets a `.abide` file-component's default adapter build its child scope
-    // via `Object.create(parentScope)`; inline snippet factories use rest params and ignore it.
+    // via `Object.create(parentScope)`; inline component factories use rest params and ignore it.
     const result = untrack(() => (componentFn as ClientComponent)(props, childrenFn, parentScope))
     // The children mount claims the server region; a mismatch inside it recovers locally (decision 5).
     const inner = isMountable(result)
@@ -870,6 +870,37 @@ export function component(
     return () => {
         if (inner !== null) inner()
         remove(marker)
+    }
+}
+
+// A component whose identity is REACTIVE — the tag name is a cell (e.g. `const C = state.computed(() =>
+// done ? Done : Pending)`, invoked `<C/>`). Reads the componentFn in an effect and, when it changes,
+// disposes the live instance and mounts the new one between the same slot anchors. The first run (under
+// hydration) claims the server nodes exactly like a static `component()`; later runs mount fresh.
+export function dynamicComponent(
+    parent: Node,
+    open: Node | null,
+    anchor: Node | null,
+    name: string,
+    read: () => unknown,
+    props: Record<string, unknown>,
+    childrenFn: (() => Mountable) | null,
+    parentScope?: unknown,
+): Disposer {
+    let dispose: Disposer | null = null
+    const stop = effect(() => {
+        const fn = read()
+        untrack(() => {
+            if (dispose !== null) {
+                dispose()
+                dispose = null
+            }
+            dispose = component(parent, open, anchor, name, fn, props, childrenFn, parentScope)
+        })
+    })
+    return () => {
+        stop()
+        if (dispose !== null) dispose()
     }
 }
 
