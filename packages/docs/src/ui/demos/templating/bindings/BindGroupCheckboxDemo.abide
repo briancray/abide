@@ -1,0 +1,13 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // bind:group over CHECKBOXES — the group value is an ARRAY, and each checked
+  // box adds/removes its own `value`. A bare state array two-way syncs (#14).
+  let toppings = state(["cheese", "mushroom"])
+</script>
+
+<label><input type="checkbox" value="cheese" bind:group={toppings} /> cheese</label>
+<label><input type="checkbox" value="mushroom" bind:group={toppings} /> mushroom</label>
+<label><input type="checkbox" value="onion" bind:group={toppings} /> onion</label>
+<label><input type="checkbox" value="pepper" bind:group={toppings} /> pepper</label>
+<p>Selected: <span id="group-checkbox-out">{toppings.join(", ") || "(none)"}</span></p>

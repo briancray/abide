@@ -8,6 +8,7 @@
   import BareStateBindDemo from "$ui/demos/templating/bindings/BareStateBindDemo.abide"
   import BindCheckedDemo from "$ui/demos/templating/bindings/BindCheckedDemo.abide"
   import BindGroupDemo from "$ui/demos/templating/bindings/BindGroupDemo.abide"
+  import BindGroupCheckboxDemo from "$ui/demos/templating/bindings/BindGroupCheckboxDemo.abide"
   import DerivedAccessorDemo from "$ui/demos/templating/bindings/DerivedAccessorDemo.abide"
   import NodeRefDemo from "$ui/demos/templating/bindings/NodeRefDemo.abide"
   import AttachFnDemo from "$ui/demos/templating/bindings/AttachFnDemo.abide"
@@ -48,8 +49,12 @@
     <BindCheckedDemo />
   </Demo>
 
-  <Demo id="group" title="<code>bind:group</code>" client="src/ui/demos/templating/bindings/BindGroupDemo.abide">
+  <Demo id="group" title="<code>bind:group</code> — radios (single value)" client="src/ui/demos/templating/bindings/BindGroupDemo.abide">
     <BindGroupDemo />
+  </Demo>
+
+  <Demo id="group-checkbox" title="<code>bind:group</code> — checkboxes (array)" client="src/ui/demos/templating/bindings/BindGroupCheckboxDemo.abide">
+    <BindGroupCheckboxDemo />
   </Demo>
 
   <Demo id="derived" title={"<code>bind:value={{get,set}}</code> — derived accessor"} client="src/ui/demos/templating/bindings/DerivedAccessorDemo.abide">

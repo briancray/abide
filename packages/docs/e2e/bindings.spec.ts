@@ -78,6 +78,20 @@ test('bind:group tracks the selected radio', async ({ page }) => {
     await expect(out).toHaveText('blue')
 })
 
+test('bind:group over checkboxes syncs an array', async ({ page }) => {
+    const out = page.locator('#group-checkbox-out')
+    // Two boxes start in the bound array.
+    await expect(out).toHaveText('cheese, mushroom')
+    await expect(page.locator('input[value="cheese"]')).toBeChecked()
+    await expect(page.locator('input[value="mushroom"]')).toBeChecked()
+    await expect(page.locator('input[value="onion"]')).not.toBeChecked()
+    // Adding a box appends its value; removing one splices it out.
+    await page.locator('input[value="onion"]').check()
+    await expect(out).toHaveText('cheese, mushroom, onion')
+    await page.locator('input[value="cheese"]').uncheck()
+    await expect(out).toHaveText('mushroom, onion')
+})
+
 test('bind:value={{get,set}} runs through the derived accessor', async ({ page }) => {
     const input = page.locator('#derived-input')
     const out = page.locator('#derived-out')

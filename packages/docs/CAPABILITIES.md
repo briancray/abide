@@ -183,7 +183,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `on<event>={fn}` — native listener (onclick/oninput/…) | PW | [x] (/templating/bindings) |
 | `bind:value` | PW | [x] (/templating/bindings) |
 | `bind:checked` | PW | [x] (/templating/bindings) |
-| `bind:group` | PW | [x] (/templating/bindings) |
+| `bind:group` | PW | [x] (/templating/bindings — radios + checkbox array) |
 | `bind:value={{get,set}}` | PW | [x] (/templating/bindings) |
 | `bind:element={cell \| fn}` — node ref / attach-teardown | PW | [x] (/templating/bindings) |
 | `class:name={cond}` | PW | [x] (/templating/bindings) |
