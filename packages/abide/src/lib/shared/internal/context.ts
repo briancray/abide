@@ -79,6 +79,11 @@ export interface CacheContext {
     states: unknown[]
     // Set while an SSR page render is streaming (undefined otherwise / on the client).
     stream?: StreamScope | undefined
+    // True for the whole lifetime of a page-render request (set by `renderPage`, never cleared — the
+    // request context is discarded after). A socket's `[Symbol.asyncIterator]` consults this: inside a
+    // render it resolves to snapshot-then-complete (client-sockets.md CS5), so iterating a live topic
+    // can't hang the render; an RPC/socket-transport/background request leaves it false → live subscribe.
+    rendering?: boolean | undefined
 }
 
 export function createContext(): CacheContext {

@@ -22,7 +22,13 @@ import type { HydrationSeed } from '../server/internal/pages.ts'
 import type { RouteInfo } from '../server/internal/scope.ts'
 import { setClientRoute } from '../shared/internal/routeHolder.ts'
 import { bootstrapPage } from './internal/bootstrap.ts'
-import { loadPageEntry, pageBase, pagePatterns, pageSpecs } from './internal/pageRegistry.ts'
+import {
+    loadPageEntry,
+    pageBase,
+    pagePatterns,
+    pageSocketSpecs,
+    pageSpecs,
+} from './internal/pageRegistry.ts'
 
 const CONTAINER_ID = '__abide-app'
 
@@ -75,7 +81,7 @@ export async function mountPathname(pathname: string, seed?: HydrationSeed): Pro
 
     // One hydrate path for first load and soft-nav (decision 6): claim the SSR (initial) or the
     // innerHTML-swapped (soft-nav) server DOM in place rather than fresh-mounting over it.
-    activeCleanup = bootstrapPage(entry.hydrate, pageSpecs(), pageBase(), seed)
+    activeCleanup = bootstrapPage(entry.hydrate, pageSpecs(), pageBase(), seed, pageSocketSpecs())
     return true
 }
 

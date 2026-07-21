@@ -234,6 +234,33 @@ Mechanism:
 5. **Leaf directives:** `class:name={cond}` toggles a class reactively; `style:prop={val}`
    sets one style property reactively; `{html(expr)}` injects raw unescaped HTML (author
    owns XSS — all other `{expr}` is escaped by default); `{...expr}` spread (C4.4).
+6. **Two `<script>` lowerings, one scanner.** The RUNTIME lowering (`analyzeScope` → the emitted
+   `render`/`mount`) runs in-process on the SSR/build hot path; the TYPE-CHECK lowering (C10) runs
+   out-of-process in `tsgo`. Both are **token-scanner-based, not AST-based** — TS7 ships **no
+   in-process parser** (`typescript/unstable/ast` exposes only `createScanner`; the Go port's parse+
+   check live behind the `tsgo` process). So the runtime pass reconstructs imports / cell decls /
+   `state`·`props` calls from the token stream, and carries a few documented sharp edges:
+   - **Type-only imports are erased from the runtime scope** — `import type { T }` and a `{ type T }`
+     specifier are dropped (never aliased to `$scope`); a `{ type as x }` VALUE binding is kept. They
+     stay resolvable in the check pass (which copies the raw `<script>` verbatim).
+   - **Generic call forms are recognised** — `state<Foo[]>(…)`, `state.computed<T>(…)`, `props<T>()`
+     lower as cells/props (a balanced `<…>`, incl. nested `>>` and `=>`, is skipped before the `(`); a
+     `state < 5` comparison is not misread.
+   - **Known limit:** a generic type arg with a TOP-LEVEL COMMA (`state<Map<K, V>>(…)`) is NOT
+     recognised — the `<`/`>` generic-vs-comparison ambiguity is only resolvable by real (typed)
+     parsing, which isn't available in-process. Workaround: a single-arg generic (`Array<T>`) or a cast
+     (`state([] as Map<K, V>)`). Closing it in-process would need a speculative token mini-parser
+     mirroring TS's own backtracking heuristic.
+   - **Migration note (no in-process TS7 parser is coming):** don't wait on TS7 for this. The Go-native
+     port (TS7, GA 2026-07) drops the classic in-process JS compiler API ("Strada" — `createSourceFile`/
+     `forEachChild`); `typescript/unstable/ast` exposes the node model + factory + visitors, but a PARSED
+     tree comes only via `unstable/sync` (the out-of-process `tsgo` bridge — the pipe that doesn't run
+     under Bun). The TS team has publicly leaned toward an **IPC** API and called a public in-process API
+     "unlikely" (microsoft/typescript-go #481). So the runtime lowering stays scanner-based; the only
+     ways to get a real AST are (a) the out-of-proc `tsgo`/`abide check` path (already used for typing,
+     too heavy per-render), or (b) a build-only classic-`typescript@5` dep (against the minimal-deps
+     goal). The speculative token mini-parser is the pragmatic in-process option if the comma case ever
+     matters.
 
 ## C10. Type-checking & tooling (`abide check` / `abide lsp`)
 

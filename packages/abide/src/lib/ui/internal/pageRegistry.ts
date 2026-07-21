@@ -8,6 +8,8 @@
 // imports (and memoizes) a pattern's chunk, deduping concurrent loads so a soft-nav that primes the
 // chunk early doesn't double-fetch it.
 
+import type { SocketSpec } from './socketProxy.ts'
+
 // The emitted client mount for a page: clones its template, wires reactive bindings against the
 // injected `$scope` (RPC proxies + framework bindings, built by bootstrapPage), returns a disposer.
 // `hydrate` has the same shape but CLAIMS the server DOM instead of cloning (Stage 2, PR7); it
@@ -26,22 +28,27 @@ export type PageLoader = () => Promise<{ default: PageEntry }>
 
 export type RpcSpecs = Record<string, { method: string; read: boolean; shared?: boolean }>
 
+export type SocketSpecs = Record<string, SocketSpec>
+
 let loaders: Record<string, PageLoader> = {}
 // One promise per pattern: shared by concurrent loads (e.g. a soft-nav that primes the chunk before
 // mountPathname awaits it) AND kept as the memo once resolved (a re-visit mounts without re-importing).
 // A load that fails/resolves empty deletes its own entry so the next visit retries.
 const loads = new Map<string, Promise<PageEntry | undefined>>()
 let specs: RpcSpecs = {}
+let socketSpecs: SocketSpecs = {}
 let base: string | undefined
 
-// Install the app's per-pattern page LOADERS + RPC specs (+ optional mount base) for client navigation.
+// Install the app's per-pattern page LOADERS + RPC/socket specs (+ optional mount base) for navigation.
 export function registerPages(
     pageLoaders: Record<string, PageLoader>,
     rpcSpecs: RpcSpecs,
     mountBase?: string,
+    pageSocketSpecs?: SocketSpecs,
 ): void {
     loaders = pageLoaders
     specs = rpcSpecs
+    socketSpecs = pageSocketSpecs ?? {}
     base = mountBase
     loads.clear()
 }
@@ -73,6 +80,10 @@ export function loadPageEntry(pattern: string): Promise<PageEntry | undefined> {
 
 export function pageSpecs(): RpcSpecs {
     return specs
+}
+
+export function pageSocketSpecs(): SocketSpecs {
+    return socketSpecs
 }
 
 export function pageBase(): string | undefined {

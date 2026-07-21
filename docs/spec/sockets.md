@@ -86,7 +86,9 @@ replayable*. Declarative by default (validated pass-through relay); server logic
 
 1. **`clients: { browser, mcp, cli }` (same semantics as §13** — default-on all three,
    `false` = not exposed to that surface, uniform auth):
-   - **Browser** → the isomorphic `Socket<T>` over the WS mux (default).
+   - **Browser** → the isomorphic `Socket<T>` over the WS mux (default). **The browser half —
+     the client `Socket<T>` proxy, its module-swap, the reactive probe surface, and the
+     SSR→hydrate handoff — is specified in `docs/spec/client-sockets.md` (Slice 3b).**
    - **CLI** → a streaming subcommand via the HTTP face: subscribe → stdout SSE stream;
      publish → a POST command. Fully defined.
    - **MCP** → **subscribe maps to a "tail" tool** (snapshot-poll baseline, streaming on

@@ -5,9 +5,9 @@
 
 <main class="page">
   <h1>Sockets</h1>
-  <p class="lead">A <code>socket()</code> is a named, typed pub/sub topic — an isomorphic <code>AsyncIterable</code>. This page subscribes to the chat socket over its <strong>HTTP face</strong> (SSE) and publishes to it two ways: from the <strong>server</strong> (a POST RPC that calls <code>socket.publish</code>, arriving with <code>via: "server"</code>) and from the <strong>client</strong> (a direct POST to <code>/__abide/sockets/socketsChat</code>, allowed by <code>clientPublish</code>, mediated by the socket <code>handler</code> which stamps <code>via: "client"</code> and drops empty text). All three feed one live log; "Clear local log" resets it.</p>
+  <p class="lead">A <code>socket()</code> is a named, typed pub/sub topic — an isomorphic <code>AsyncIterable</code>. The client imports the <em>same</em> <code>socketsChat</code> the server does: this demo <strong>subscribes by iterating it</strong> (<code>for await (const m of socketsChat)</code>, over the WS mux), derives its status from the socket's reactive probes (<code>pending()</code> / <code>refreshing()</code> / <code>error()</code>), and publishes two ways: from the <strong>server</strong> (a POST RPC that calls <code>socket.publish</code>, arriving with <code>via: "server"</code>) and from the <strong>client</strong> (the isomorphic <code>socketsChat.publish(...)</code>, allowed by <code>clientPublish</code>, mediated by the socket <code>handler</code> which stamps <code>via: "client"</code> and drops empty text). Both feed one live log; "Clear local log" resets it.</p>
 
-  <Demo id="socket-chat" title="<code>socket()</code> — subscribe (HTTP-face SSE) + publish from server &amp; client" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/SocketsChatDemo.abide" tab="server">
+  <Demo id="socket-chat" title="<code>socket()</code> — iterate (<code>for await</code>) + <code>publish()</code> from server &amp; client" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/SocketsChatDemo.abide" tab="server">
     <SocketsChatDemo />
   </Demo>
 

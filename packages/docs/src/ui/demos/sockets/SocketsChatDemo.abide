@@ -1,42 +1,50 @@
 <script>
   import { state } from "abide/ui/state"
+  import socketsChat, { type ChatMessage } from "../../../server/sockets/socketsChat"
   import socketsPublish from "../../../server/rpc/socketsPublish"
 
-  // One cohesive chat demo: subscribe to the socket over its HTTP face (SSE) and publish to it two
-  // ways — from the server (a POST RPC that calls `socket.publish`) and from the client (a direct
-  // POST, mediated by the socket `handler`). All three share the one live `messages` log, so
-  // "Clear local log" resets what the subscription renders.
-  let messages = state([])
-  let status = state("idle")
+  // Dogfoods the ISOMORPHIC client `Socket` proxy (docs/spec/client-sockets.md): `socketsChat` is the
+  // SAME `Socket<ChatMessage>` the server imports — here, in the browser, it is consumed as an
+  // `AsyncIterable` (`for await`), published to with `.publish()`, and probed with `.pending()` /
+  // `.refreshing()` / `.error()` for status. Same import, same name, same intent on both sides.
+  let messages = state<ChatMessage[]>([])
   let serverDraft = state("hello from the server")
   let clientDraft = state("hello from the client")
-  // Two-way binds over a bare state var — `bind:value={serverDraft}` — sync both ways directly.
 
-  // bind:element attach fn — CLIENT-ONLY (never runs during SSR). Opens the socket's HTTP-face SSE
-  // subscription (`GET /__abide/sockets/socketsChat`); each frame is one ChatMessage and the socket's
-  // `tail` replays recent history on connect. The returned teardown closes the stream on nav-away.
+  // Status straight from the socket's reactive probes — no hand-rolled connection bookkeeping.
+  let status = state.computed(() =>
+    socketsChat.error() ? "error" :
+    socketsChat.refreshing() ? "reconnecting" :
+    socketsChat.pending() ? "connecting" : "live",
+  )
+
+  // bind:element attach fn — CLIENT-ONLY (never runs during SSR). Iterating the socket IS the
+  // subscription: each yielded ChatMessage appends to the live log, and the socket's `tail` replays
+  // recent history to a fresh mount. The teardown breaks the loop (`iterator.return()`) on nav-away.
   function subscribe(el: Element) {
-    const source = new EventSource("/__abide/sockets/socketsChat")
-    source.onopen = () => { status = "live" }
-    source.onmessage = (event) => { messages = [...messages, JSON.parse(event.data)] }
-    source.onerror = () => { status = "reconnecting" }
-    return () => source.close()
+    const iterator = socketsChat[Symbol.asyncIterator]()
+    let live = true
+    ;(async () => {
+      while (live) {
+        const next = await iterator.next()
+        if (next.done) break
+        messages = [...messages, next.value]
+      }
+    })()
+    return () => { live = false; iterator.return?.() }
   }
 
-  // Server publish — call the POST RPC; the server invokes `socket.publish`, which fans the message
-  // (via: "server") back to this subscription.
+  // Server publish — a POST RPC whose handler calls `socket.publish` (bypassing the socket handler, so
+  // the message keeps `via: "server"`); it fans back to this subscription live.
   async function publishFromServer() {
     await socketsPublish({ text: serverDraft })
   }
 
-  // Client publish — POST straight to the socket HTTP face (allowed because `clientPublish` is on).
-  // The socket's `handler` mediates it: it stamps `via: "client"` + a fresh id, or drops it if empty.
-  async function publishFromClient() {
-    await fetch("/__abide/sockets/socketsChat", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: clientDraft }),
-    })
+  // Client publish — the isomorphic `.publish()` (fire-and-forget over the WS mux; allowed because the
+  // socket sets `clientPublish`). The socket `handler` MEDIATES it: it re-stamps a fresh id + `via:
+  // "client"`, or drops it when empty. The id/via we send here are provisional — the server re-stamps.
+  function publishFromClient() {
+    socketsChat.publish({ id: crypto.randomUUID(), text: clientDraft, via: "client" })
   }
 
   function clearLog() { messages = [] }

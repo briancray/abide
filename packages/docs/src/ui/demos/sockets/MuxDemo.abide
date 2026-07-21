@@ -27,7 +27,11 @@
     }
     ws.onmessage = (event) => {
       const frame = JSON.parse(event.data)
-      if (frame && frame.name === SOCKET_NAME) messages = [...messages, frame.msg]
+      // Data frames are `{ name, msg }`; the mux also sends `{ name, ok }` (sub-ack — clears a proxy's
+      // pending()) and `{ name, error }` (sub-error) control frames. A raw consumer filters to data.
+      if (frame && frame.name === SOCKET_NAME && frame.msg !== undefined) {
+        messages = [...messages, frame.msg]
+      }
     }
     ws.onclose = () => { status = "closed" }
     ws.onerror = () => { status = "error" }

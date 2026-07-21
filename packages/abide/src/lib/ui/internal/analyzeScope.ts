@@ -1323,6 +1323,14 @@ function parseImport(rawText: string): ImportBinding | null {
     const clause = rawText
         .slice(rawText.indexOf('import') + 'import'.length, specifierMatch.index)
         .trim()
+
+    // A WHOLE-CLAUSE type-only import (`import type { X }`, `import type Foo`, `import type * as NS`) is
+    // erased at runtime — drop it so it is never aliased to `$scope` (the runtime emitters would emit
+    // `const type X = $scope["type X"]`). The type-check path (`emitCheck`) copies the raw import
+    // verbatim, so the type stays resolvable there. `import type from "x"` (a default binding literally
+    // named `type`) has no trailing token → not matched.
+    if (/^type\s+[{*A-Za-z_$]/.test(clause)) return null
+
     const binding: ImportBinding = {
         specifier,
         defaultLocal: null,
@@ -1338,6 +1346,10 @@ function parseImport(rawText: string): ImportBinding | null {
         for (const entry of bracedInner.split(',')) {
             const trimmed = entry.trim()
             if (trimmed === '') continue
+            // A PER-SPECIFIER type modifier (`{ type X }`, `{ type X as Y }`) is erased at runtime —
+            // skip it. `type` followed by `as` (`{ type as foo }`) is the value binding named `type`
+            // aliased, NOT a modifier, so the negative lookahead keeps it.
+            if (/^type\s+(?!as\b)/.test(trimmed)) continue
             const asMatch = trimmed.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/)
             const imported = asMatch?.[1]
             const local = asMatch?.[2]
@@ -1351,6 +1363,18 @@ function parseImport(rawText: string): ImportBinding | null {
     const defaultLocal = beforeBrace.match(/^\s*([A-Za-z_$][\w$]*)\s*,?/)?.[1]
     if (defaultLocal !== undefined && defaultLocal !== '') binding.defaultLocal = defaultLocal
 
+    // A braced import whose specifiers were ALL type-stripped, with no default/namespace, is fully
+    // erased at runtime — drop it so a passthrough (`abide/*`) type import doesn't degrade to a bare
+    // side-effect `import "spec"`. (A real side-effect import `import "x"` has no braces → kept.)
+    if (
+        bracedInner !== undefined &&
+        binding.named.length === 0 &&
+        binding.defaultLocal === null &&
+        binding.namespaceLocal === null
+    ) {
+        return null
+    }
+
     return binding
 }
 
@@ -1358,21 +1382,53 @@ function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// Recognise a cell initializer (`state(...)`, `state.computed(...)`, `state.linked(...)`) where
-// `stateLocal` is the local name bound to the `abide/ui/state` import.
+// After a callee name, does an (optional) generic argument list lead into a call `(`? Skips a balanced
+// `<...>` (nested generics allowed — `state<Map<K, V>>(…)`; `=>` inside a function-type arg is not a
+// close) so the generic call form `state<Foo[]>(…)` / `props<Bar>()` is recognised, not just the bare
+// `state(…)`. `rest` is the substring immediately after the callee. Returns false on an unbalanced `<`
+// (e.g. a `state < 5` comparison), so a non-call is never misread as a cell.
+function callFollows(rest: string): boolean {
+    let index = 0
+    while (index < rest.length && /\s/.test(rest.charAt(index))) index++
+    if (rest.charAt(index) === '<') {
+        let depth = 0
+        for (; index < rest.length; index++) {
+            const char = rest.charAt(index)
+            if (char === '<') depth++
+            else if (char === '>') {
+                if (rest.charAt(index - 1) === '=') continue // `=>` arrow in a function-type arg
+                depth--
+                if (depth === 0) {
+                    index++
+                    break
+                }
+            }
+        }
+        if (depth !== 0) return false
+        while (index < rest.length && /\s/.test(rest.charAt(index))) index++
+    }
+    return rest.charAt(index) === '('
+}
+
+// Recognise a cell initializer (`state(...)`, `state.computed(...)`, `state.linked(...)`) — including
+// the generic call form (`state<T>(...)`) — where `stateLocal` is the local bound to `abide/ui/state`.
 function cellKind(init: string, stateLocal: string): 'state' | 'computed' | 'linked' | null {
     const esc = escapeRegExp(stateLocal)
-    if (new RegExp(`^${esc}\\s*\\.\\s*computed\\s*\\(`).test(init)) return 'computed'
-    if (new RegExp(`^${esc}\\s*\\.\\s*linked\\s*\\(`).test(init)) return 'linked'
-    // `state.shared(key, initial)` is a writable cell — treated like `state(...)` for the read/write
-    // reference rewrite; its cross-instance/cross-tab sharing is a pure runtime concern.
-    if (new RegExp(`^${esc}\\s*\\.\\s*shared\\s*\\(`).test(init)) return 'state'
-    if (new RegExp(`^${esc}\\s*\\(`).test(init)) return 'state'
+    const method = init.match(new RegExp(`^${esc}\\s*\\.\\s*(computed|linked|shared)\\b`))
+    if (method !== null) {
+        if (!callFollows(init.slice(method[0].length))) return null
+        // `state.shared(key, initial)` is a writable cell — treated like `state(...)` for the read/write
+        // reference rewrite; its cross-instance/cross-tab sharing is a pure runtime concern.
+        return method[1] === 'computed' ? 'computed' : method[1] === 'linked' ? 'linked' : 'state'
+    }
+    const bare = init.match(new RegExp(`^${esc}`))
+    if (bare !== null && callFollows(init.slice(bare[0].length))) return 'state'
     return null
 }
 
 function isPropsInit(init: string, propsLocal: string): boolean {
-    return new RegExp(`^${escapeRegExp(propsLocal)}\\s*\\(`).test(init)
+    const bare = init.match(new RegExp(`^${escapeRegExp(propsLocal)}`))
+    return bare !== null && callFollows(init.slice(bare[0].length))
 }
 
 type StatementRecord =

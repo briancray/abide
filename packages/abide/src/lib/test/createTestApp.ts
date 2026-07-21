@@ -103,13 +103,16 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
             ws = new WebSocket(url)
         }
         ws.addEventListener('message', (event) => {
-            let frame: { name?: unknown; msg?: unknown }
+            let frame: { name?: unknown; msg?: unknown; ok?: unknown; error?: unknown }
             try {
                 frame = JSON.parse(String(event.data))
             } catch {
                 return
             }
             if (typeof frame.name !== 'string') return
+            // Skip user-socket control frames (sub-ack `{name,ok}` / sub-error `{name,error}`,
+            // client-sockets.md CS2) — only data frames `{name,msg}` are delivered to subscribers.
+            if (frame.ok !== undefined || frame.error !== undefined) return
             const list = queues.get(frame.name)
             if (list === undefined) return
             for (const queue of list) queue.push(frame.msg)

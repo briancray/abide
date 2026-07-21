@@ -37,7 +37,7 @@ const DEV_RELOAD_SNIPPET =
     `var proto=location.protocol==="https:"?"wss://":"ws://";` +
     `var ws=new WebSocket(proto+location.host+"/__abide/sockets");` +
     `ws.addEventListener("open",function(){ws.send(JSON.stringify({t:"sub",name:${JSON.stringify(DEV_RELOAD_CHANNEL)}}));});` +
-    `ws.addEventListener("message",function(e){try{var f=JSON.parse(e.data);if(f&&f.name===${JSON.stringify(DEV_RELOAD_CHANNEL)})location.reload();}catch(_){}});` +
+    `ws.addEventListener("message",function(e){try{var f=JSON.parse(e.data);if(f&&f.name===${JSON.stringify(DEV_RELOAD_CHANNEL)}&&f.msg!==undefined)location.reload();}catch(_){}});` +
     `}catch(_){}})();`
 
 export interface ServeOptions {

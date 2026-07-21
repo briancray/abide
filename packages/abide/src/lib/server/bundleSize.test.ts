@@ -66,10 +66,12 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // against the heavy items above (TS7 compiler / `.abide` interpreter), not incidental KBs. History:
     // 50→52 KB (Promise-read settled hint); 52→58 KB (ReplayableStream primitive); 58→62 KB (stream cache
     // accounting/cap); 62→64 KB (biome conformance); 64→70 KB (TODO #6 code-splitting adds per-chunk
-    // module glue + a shared-chunk boilerplate wrapper). FUTURE (TODO #3): extract the server-only
-    // byte-accounting/pin/cap + shared-cache path out of the isomorphic cell to shrink the client floor.
+    // module glue + a shared-chunk boilerplate wrapper); 70→78 KB (client sockets: the isomorphic
+    // `Socket` proxy + reactive probe surface + the shared reconnecting mux, shipped alongside the RPC
+    // proxy for every app). FUTURE (TODO #3): extract the server-only byte-accounting/pin/cap +
+    // shared-cache path out of the isomorphic cell to shrink the client floor.
     const bytes = Buffer.byteLength(body, 'utf8')
-    expect(bytes).toBeLessThan(70_000)
+    expect(bytes).toBeLessThan(78_000)
 
     // Still a real bundle that boots the app and carries the AOT client mount runtime path.
     expect(body).toContain('bootstrapPage')

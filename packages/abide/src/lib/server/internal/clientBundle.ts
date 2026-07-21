@@ -79,6 +79,31 @@ function rpcSpecs(
     return specs
 }
 
+// The socket specs the client proxies need (client-sockets.md CS7). TREE-SHAKING: only sockets some
+// page IMPORTS reach the bundle. REACHABILITY (CS6.1): importing a `clients.browser: false` socket into
+// a UI script is a BUILD ERROR — it has no browser proxy, so a bare `$scope` read would be `undefined`
+// at mount; failing loudly at build time is the contract. `ttl: Infinity` (sticky) serialises to `null`.
+function socketSpecs(
+    config: AppConfig,
+    importedNames: Set<string>,
+): Record<string, { clientPublish: boolean; tail: number; ttl: number | null }> {
+    const specs: Record<string, { clientPublish: boolean; tail: number; ttl: number | null }> = {}
+    for (const entry of buildRegistry(config).sockets) {
+        if (!importedNames.has(entry.name)) continue
+        if (entry.clients.browser === false) {
+            throw new Error(
+                `abide: socket "${entry.name}" is imported into a UI page but is not browser-reachable (clients.browser: false). Remove the import or expose the socket to the browser.`,
+            )
+        }
+        specs[entry.name] = {
+            clientPublish: entry.clientPublish,
+            tail: entry.tail,
+            ttl: Number.isFinite(entry.ttl) ? entry.ttl : null,
+        }
+    }
+    return specs
+}
+
 // The local names a page's `<script>`s import (default/namespace/named), taken from the emit scope
 // analysis. Matched against route names to decide which RPC proxies the bundle needs.
 function importedLocals(analysis: ScopeAnalysis): Set<string> {
@@ -274,7 +299,11 @@ function chainSource(chain: PageChain, modules: EmittedModule[]): string {
 // rewrites each specifier to its content-hashed chunk URL under `publicPath`), plus the tree-shaken
 // RPC specs, then bootstrap the app. Keying by pattern lets `[name]` param routes resolve on first
 // load and every soft-nav (matchRoute). Only the matched route's chunk is fetched — the rest stay lazy.
-function loaderSource(loaders: { pattern: string; file: string }[], specsJson: string): string {
+function loaderSource(
+    loaders: { pattern: string; file: string }[],
+    specsJson: string,
+    socketSpecsJson: string,
+): string {
     let entries = ''
     for (const { pattern, file } of loaders) {
         entries += `${entries === '' ? '' : ', '}${JSON.stringify(pattern)}: () => import(${JSON.stringify(file)})`
@@ -283,7 +312,8 @@ function loaderSource(loaders: { pattern: string; file: string }[], specsJson: s
         `import { bootstrapApp } from ${JSON.stringify(BOOTSTRAP_PATH)};\n` +
         `const LOADERS = { ${entries} };\n` +
         `const RPC_SPECS = ${specsJson};\n` +
-        `bootstrapApp(LOADERS, RPC_SPECS);\n`
+        `const SOCKET_SPECS = ${socketSpecsJson};\n` +
+        `bootstrapApp(LOADERS, RPC_SPECS, undefined, SOCKET_SPECS);\n`
     )
 }
 
@@ -308,6 +338,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
     const importedNames = new Set<string>()
     for (const mod of modules) for (const local of mod.locals) importedNames.add(local)
     const specsJson = JSON.stringify(rpcSpecs(config, importedNames))
+    const socketSpecsJson = JSON.stringify(socketSpecs(config, importedNames))
 
     // Chain modules + the loader entry live in one per-build temp dir so their basenames (`[name]` in
     // the chunk filenames) can be clean + deterministic without a UUID in the served chunk name.
@@ -323,7 +354,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
         chainSlugs.push({ pattern: chain.pattern, slug })
     }
     const loaderPath = join(buildDir, 'loader.ts')
-    await Bun.write(loaderPath, loaderSource(loaders, specsJson))
+    await Bun.write(loaderPath, loaderSource(loaders, specsJson, socketSpecsJson))
 
     try {
         const tailwind = await loadTailwindPlugin()

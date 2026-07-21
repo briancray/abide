@@ -28,9 +28,16 @@ import { url } from '../../shared/url.ts'
 import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
 import { watch } from '../watch.ts'
 import { makeClientImports } from './clientProxy.ts'
-import { type PageLoader, type PageMount, type RpcSpecs, registerPages } from './pageRegistry.ts'
+import {
+    type PageLoader,
+    type PageMount,
+    type RpcSpecs,
+    registerPages,
+    type SocketSpecs,
+} from './pageRegistry.ts'
 import { beginStreamHandoff, endStreamHandoff, isHydrating } from './runtime.ts'
 import { makeSeededState } from './seededState.ts'
+import { makeClientSocketImports } from './socketProxy.ts'
 
 const CONTAINER_ID = '__abide-app'
 const SEED_ID = '__abide-seed'
@@ -76,6 +83,7 @@ export function bootstrapPage(
     rpcSpecs: Record<string, { method: string; read: boolean; shared?: boolean }>,
     base?: string,
     seedOverride?: HydrationSeed,
+    socketSpecs?: SocketSpecs,
 ): () => void {
     if (typeof document === 'undefined') return () => {}
 
@@ -85,7 +93,12 @@ export function bootstrapPage(
     // First load reads the inline seed script; a soft-nav passes its envelope seed as `seedOverride`
     // (the inline script is stale after the initial document).
     const seed = seedOverride ?? readSeed()
-    const imports = makeClientImports(rpcSpecs, base)
+    // RPC proxies AND socket proxies (client-sockets.md CS3) are read off `$scope` by the emitted mount,
+    // each keyed by the local name a page imported from `server/{rpc,sockets}/<name>.ts`.
+    const imports = {
+        ...makeClientImports(rpcSpecs, base),
+        ...makeClientSocketImports(socketSpecs ?? {}, base),
+    }
     // Replay recorded reads into the RPC cells BEFORE mount so the component resolves them from cache.
     // The emitted mount reads these SAME proxy instances off `$scope`, so a seeded read never re-fetches.
     replayReads(seed, imports)
@@ -172,9 +185,10 @@ export function bootstrapApp(
     loaders: Record<string, PageLoader>,
     rpcSpecs: RpcSpecs,
     base?: string,
+    socketSpecs?: SocketSpecs,
 ): () => void {
     if (typeof document === 'undefined') return () => {}
-    registerPages(loaders, rpcSpecs, base)
+    registerPages(loaders, rpcSpecs, base, socketSpecs)
     // `mountPathname` is async now (it imports the current route's code-split chunk); the SSR HTML is
     // already visible, so hydration completes a tick later once the chunk loads. A load failure leaves
     // the page as server-rendered (non-interactive) — graceful degradation, no reload loop.

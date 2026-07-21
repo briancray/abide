@@ -212,6 +212,7 @@ function wsSubscribe(
     connection: SocketConnection,
     name: unknown,
     args: unknown,
+    replay: unknown,
     // biome-ignore lint/suspicious/noExplicitAny: existential socket registry — per-socket message type is erased here; `unknown` breaks assignability through the invariant Socket message type.
     sockets: Record<string, Socket<any>>,
     config: AppConfig,
@@ -219,16 +220,24 @@ function wsSubscribe(
     if (typeof name !== 'string') return
     if (connection.subscriptions.has(name)) return
     // `@rpc:` cache-invalidation channel — the S4.4 exception: per-subscribe authorization against
-    // the connection's identity, re-running the target rpc's read gate for the presented args.
+    // the connection's identity, re-running the target rpc's read gate for the presented args. Cache
+    // channels keep SILENT-DENY (their TTL self-heals a missed frame); user sockets do not (below).
     if (isCacheChannel(name)) {
         void subscribeCacheChannel(ws, connection, name, args, config)
         return
     }
-    // Bare user-socket path — UNCHANGED. Connect-authed (no per-subscribe recheck), matching S4.4.
+    // Bare user-socket path (connect-authed, no per-subscribe recheck; S4.4). Unlike cache channels,
+    // user sockets are OFF silent-deny (client-sockets.md CS2): an unknown socket gets a terminal
+    // sub-error frame (→ client `error()`), a successful join gets a sub-ack (→ clears client
+    // `pending()`). `replay: false` is the hydration join — SSR already painted the backlog (CS5).
     const sock = sockets[name]
-    if (sock === undefined) return
-    const iterator = sock[Symbol.asyncIterator]()
+    if (sock === undefined) {
+        ws.send(JSON.stringify({ name, error: { message: `unknown socket: ${name}` } }))
+        return
+    }
+    const iterator = sock.__socket.subscribe(replay !== false)
     connection.subscriptions.set(name, iterator)
+    ws.send(JSON.stringify({ name, ok: true }))
     void pumpSocketToWs(ws, connection, name, iterator)
 }
 
@@ -707,7 +716,13 @@ export function createApp(config: AppConfig = {}): App {
             message(ws, raw): void {
                 // `args` is only meaningful for an `@rpc:` cache channel (the raw args that must NAME the
                 // channel — the args-spoof defense); it is ignored for bare user-socket subscriptions.
-                let frame: { t?: unknown; name?: unknown; args?: unknown; msg?: unknown }
+                let frame: {
+                    t?: unknown
+                    name?: unknown
+                    args?: unknown
+                    msg?: unknown
+                    replay?: unknown
+                }
                 try {
                     frame = JSON.parse(typeof raw === 'string' ? raw : raw.toString())
                 } catch {
@@ -717,7 +732,15 @@ export function createApp(config: AppConfig = {}): App {
                 const connection = connections.get(ws)
                 if (connection === undefined) return
                 if (frame.t === 'sub')
-                    wsSubscribe(ws, connection, frame.name, frame.args, sockets, config)
+                    wsSubscribe(
+                        ws,
+                        connection,
+                        frame.name,
+                        frame.args,
+                        frame.replay,
+                        sockets,
+                        config,
+                    )
                 else if (frame.t === 'unsub') wsUnsubscribe(connection, frame.name)
                 else if (frame.t === 'pub') void wsPublish(frame.name, frame.msg, sockets)
             },

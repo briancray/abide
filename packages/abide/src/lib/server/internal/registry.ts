@@ -38,6 +38,10 @@ export interface SocketEntry {
     name: string
     messageSchema?: JSONSchema
     clientPublish: boolean
+    // Retention knobs the client proxy needs (client-sockets.md CS7): `tail` sizes the `chunks()` cap,
+    // `ttl` (ms; Infinity = sticky) windows `peek()`.
+    tail: number
+    ttl: number
     clients: Clients
 }
 
@@ -96,6 +100,8 @@ export function buildRegistry(config: AppConfig): Registry {
         const entry: SocketEntry = {
             name,
             clientPublish: options.clientPublish === true,
+            tail: typeof options.tail === 'number' ? options.tail : 0,
+            ttl: typeof options.ttl === 'number' ? options.ttl : Infinity,
             clients: resolveClients(options.clients),
         }
         const messageSchema = jsonSchemaOf(options.schema)

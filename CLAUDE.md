@@ -93,10 +93,18 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
 | --- | --- |
 | `abide/server/socket` | `socket<T>(opts?)`; opts: `{ tail?, ttl?, clientPublish?, schema?, clients?, handler?, crossOrigin? }` |
 
-`Socket<T>` is an isomorphic `AsyncIterable<T>`. Subscribe by iterating; **publish via
-`socket.publish(msg)`** (server always; client when `clientPublish`). `handler` mediates client
-publishes (transform/reject/drop). HTTP face `/__abide/sockets/<name>` (SSE subscribe / POST
-publish). Server-side cache broadcasts ride authorized `(rpc,args)` channels on the mux.
+`Socket<T>` is an isomorphic `AsyncIterable<T>` with an **identical surface on both sides** (one
+`.d.ts`): `for await` + `publish(msg): void` + the reactive cell-probe vocabulary — `peek()` (latest,
+`ttl`-windowed), `chunks()` (session transcript, `tail`-capped), `pending()`/`refreshing()`/`done()`/
+`error()`. A `.abide` that imports a socket from `server/sockets/<name>.ts` gets the real hub on the
+server and a **browser proxy** (the RPC-style module-swap) on the client — same import, same name.
+Subscribe by iterating; **publish via `socket.publish(msg)`** (server always; client when
+`clientPublish`; fire-and-forget). ACTIVE probes (`iterate`/`peek`/`chunks`) open a subscription over
+the shared WS mux; STATUS probes only observe it. `handler` mediates client publishes
+(transform/reject/drop). Under SSR a socket iterates as **tail-snapshot-then-complete** (never hangs
+the render); the client re-subscribes live on hydrate. HTTP face `/__abide/sockets/<name>` (SSE
+subscribe / POST publish). Server-side cache broadcasts ride authorized `(rpc,args)` channels on the
+mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 
 ### Request scope (imported ambient accessors)
 | Import | Signature |

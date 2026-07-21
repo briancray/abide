@@ -27,6 +27,7 @@ import { watch } from '../../ui/watch.ts'
 import { cookies } from '../cookies.ts'
 import { identity } from '../identity.ts'
 import { request } from '../request.ts'
+import type { Socket } from '../socket.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import type { Rpc } from './makeRpc.ts'
 import type { AppConfig, Route } from './router.ts'
@@ -57,12 +58,20 @@ function pageCallable(entry: Route): unknown {
     })
 }
 
-// Build the imports map: RPC callables by route name, then the ambient accessors (added last so a
-// standard accessor name always resolves to the accessor).
-function pageImports(routes: Record<string, Route>): Record<string, unknown> {
+// Build the imports map: RPC callables by route name, socket instances by socket name, then the
+// ambient accessors (added last so a standard accessor name always resolves to the accessor). A
+// `.abide` that imports a socket from `server/sockets/<name>.ts` reads the REAL isomorphic `Socket`
+// off `$scope` during SSR — its `[Symbol.asyncIterator]` is snapshot-then-complete under render (CS5).
+function pageImports(
+    routes: Record<string, Route>,
+    sockets: Record<string, Socket<unknown>>,
+): Record<string, unknown> {
     const imports: Record<string, unknown> = {}
     for (const [name, routeDef] of Object.entries(routes)) {
         imports[name] = pageCallable(routeDef)
+    }
+    for (const [name, sock] of Object.entries(sockets)) {
+        imports[name] = sock
     }
     imports.route = route
     imports.url = url
@@ -141,8 +150,12 @@ export async function renderPage(
     pattern?: string,
     streaming = false,
 ): Promise<string> {
+    // Mark this request as a page render for the whole render lifetime (inline + streamed drain), so a
+    // socket iterated in a `{#for await}` resolves to snapshot-then-complete instead of a live topic
+    // that would hang the render (client-sockets.md CS5). Never cleared — the context dies with the request.
+    getContext().rendering = true
     if (streaming) getContext().stream = createStreamScope()
-    const imports = pageImports(config.routes ?? {})
+    const imports = pageImports(config.routes ?? {}, config.sockets ?? {})
     const layouts = config.layouts ?? {}
     const layoutDirs = config.layoutDirs ?? {}
     const pageDirs = config.pageDirs ?? {}
