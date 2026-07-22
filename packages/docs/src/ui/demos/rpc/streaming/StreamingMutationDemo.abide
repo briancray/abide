@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcStreamJob from "$server/rpc/rpcStreamJob"
 
   // A streaming mutation is consumed exactly like a streaming read: the POST yields jsonl, the browser

@@ -1,6 +1,6 @@
 <script>
-  import { state } from "abide/ui/state"
-  import { watch } from "abide/ui/watch"
+  import { state } from "abide/shared/state"
+  import { watch } from "abide/shared/watch"
   import { props } from "abide/ui/props"
   import cacheShared from "$server/rpc/cacheShared"
   import cacheCounter from "$server/rpc/cacheCounter"

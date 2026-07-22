@@ -1,0 +1,29 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { cell } from "abide/shared/cell"
+
+  // refreshing(args): true only while a re-fetch runs OVER a value that stays on screen — the SWR case.
+  // So during a refresh: value = the stale one, refreshing = yes, pending = no.
+  let started = state(false)
+  let runs = state(0)
+  const slot = cell(async ({ id }: { id: string }) => {
+    runs++
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    return runs
+  })
+  const value = state.computed(() => (started ? (slot.peek({ id: "a" }) ?? "loading") : "idle"))
+  const refreshingFlag = state.computed(() => (slot.refreshing({ id: "a" }) ? "yes" : "no"))
+  const pendingFlag = state.computed(() => (slot.pending({ id: "a" }) ? "yes" : "no"))
+  function read() { started = true }
+  function refresh() { slot.refresh({ id: "a" }) }
+</script>
+
+<ul class="grid">
+  <li>Value (run #): <strong data-testid="cellrefreshing-value">{value}</strong></li>
+  <li><code>refreshing()</code>: <strong data-testid="cellrefreshing-flag">{refreshingFlag}</strong></li>
+  <li><code>pending()</code>: <strong data-testid="cellrefreshing-pending">{pendingFlag}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="cellrefreshing-read" onclick={read}>Load</button>
+  <button data-testid="cellrefreshing-refresh" onclick={refresh}>Refresh</button>
+</div>

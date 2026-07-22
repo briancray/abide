@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import lifecycleThrow from "$server/rpc/lifecycleThrow"
 
   // Browser-only: call the throwing RPC and show the response onError SHAPED. `.raw()` bypasses the

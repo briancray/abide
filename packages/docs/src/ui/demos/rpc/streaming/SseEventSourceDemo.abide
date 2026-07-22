@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // The native DOM API for `text/event-stream`: `EventSource`. Same bytes on the wire as the callable
   // AsyncIterable form — this is the raw-DOM alternative (native frame parsing, auto-reconnect). We

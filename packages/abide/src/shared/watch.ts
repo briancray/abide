@@ -6,7 +6,7 @@
 //
 // Returns a disposer that tears down the underlying effect.
 
-import { effect, untrack } from '../shared/internal/reactive.ts'
+import { effect, untrack } from './internal/reactive.ts'
 
 export function watch<T>(source: () => T, handler?: (next: T, previous: T) => void): () => void {
     if (handler === undefined) {

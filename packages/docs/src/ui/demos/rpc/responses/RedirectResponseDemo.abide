@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // A handler returning `redirect(url, status)` is followed transparently by the browser fetch —
   // the resolved `Response` reports `redirected` and the final `url`.

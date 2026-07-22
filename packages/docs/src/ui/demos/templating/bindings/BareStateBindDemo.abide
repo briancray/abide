@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // bind:value over a BARE state var — the plain sugar (no hand-written accessor) two-way syncs (#14).
   let bare = state("direct")

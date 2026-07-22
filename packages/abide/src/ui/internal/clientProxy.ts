@@ -101,8 +101,9 @@ export function clientProxy<Args = unknown, T = unknown>(
 ): Rpc<Args, T> | Mutation<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
-    // A mutation whose author set `cache: false` bypasses the client cell on the bare call (direct
-    // fetch, at-least-once), mirroring the server. Reads (and default mutations) are celled.
+    // A read OR mutation whose author set `cache: false` bypasses the client cell on the bare call
+    // (direct fetch every time; at-least-once for a mutation), mirroring the server. Default reads and
+    // mutations are celled.
     const celled = opts?.cache !== false
 
     // Transport + decode: a jsonl/sse response decodes to an AsyncIterable (ReplayableStream) so a
@@ -147,11 +148,12 @@ export function clientProxy<Args = unknown, T = unknown>(
         )
     }
 
-    // THE CALL (Promise-read model): a read or celled mutation routes through the cell (coalesce +
-    // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `cache: false`
-    // mutation or a FormData body bypasses the cell (direct fetch, at-least-once).
+    // THE CALL (Promise-read model): a celled read or mutation routes through the cell (coalesce +
+    // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `cache: false` call
+    // (read OR mutation) bypasses the cell — every call runs (direct fetch; at-least-once for a
+    // mutation), mirroring the server. A FormData mutation body always bypasses (can't be keyed).
     const rpc = ((args: Args | FormData): Promise<T> => {
-        if (!read && (!celled || (typeof FormData !== 'undefined' && args instanceof FormData))) {
+        if (!celled || (!read && typeof FormData !== 'undefined' && args instanceof FormData)) {
             return load(args)
         }
         ensureSubscribed(args as Args)
@@ -184,7 +186,10 @@ export function clientProxy<Args = unknown, T = unknown>(
     rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> =>
         read
             ? fetch(readUrl(base, name, args), { method, ...(init ?? {}) })
-            : fetch(`${base}/__abide/rpc/${name}`, { ...mutationInit(method, args), ...(init ?? {}) })
+            : fetch(`${base}/__abide/rpc/${name}`, {
+                  ...mutationInit(method, args),
+                  ...(init ?? {}),
+              })
     rpc.isError = (e: unknown, name: string): boolean =>
         e !== null &&
         typeof e === 'object' &&
@@ -196,6 +201,11 @@ export function clientProxy<Args = unknown, T = unknown>(
         backing.amend(args, next)
     rpc.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
     rpc.seed = (args: Args, value: T): void => backing.seed(args, value)
+    rpc.seedStream = (
+        args: Args,
+        source: readonly unknown[] | AsyncIterable<unknown>,
+        encoding?: 'jsonl' | 'sse',
+    ): void => backing.seedStream(args, source, encoding)
     rpc.bindBroadcast = (): void => {} // server-only seam; inert on the client proxy
     return rpc
 }

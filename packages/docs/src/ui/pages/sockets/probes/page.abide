@@ -1,0 +1,22 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import PeekDemo from "$ui/demos/sockets/PeekDemo.abide"
+  import ChunksDemo from "$ui/demos/sockets/ChunksDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Reactive probes</h1>
+  <p class="lead">A <a href="/sockets">socket</a> is a <a href="/caching/cell">cell</a> over a live topic, so it carries the same reactive read surface — the <strong>probes</strong> — as any cell, adapted to a stream: <code>peek()</code> is the latest message, <code>chunks()</code> is the tail transcript, and <code>pending()</code>/<code>refreshing()</code>/<code>error()</code> report connection status. Same vocabulary as the <a href="/caching/probes">generic-cell</a> and <a href="/rpc/probes">RPC</a> probes. Every demo shares the one <code>socketsChat</code> topic, so a publish anywhere updates all of them.</p>
+
+  <h2><code>peek()</code> — the latest message</h2>
+  <p>The most recent message on the topic, reactive, with no list to maintain. Reading it opens the subscription, so it updates live as messages arrive.</p>
+  <Demo id="socket-peek" title="<code>socketsChat.peek()</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/PeekDemo.abide" tab="client">
+    <PeekDemo />
+  </Demo>
+
+  <h2><code>chunks()</code> — the tail transcript</h2>
+  <p>The recent-message tail as a snapshot array (capped by the socket's <code>tail</code>). Render it directly with a plain <code>{'{'}#for{'}'}</code> instead of appending in a <code>{'{'}#for await{'}'}</code> — same data, snapshot rather than stream.</p>
+  <Demo id="socket-chunks" title="<code>socketsChat.chunks()</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/ChunksDemo.abide" tab="client">
+    <ChunksDemo />
+  </Demo>
+</main>

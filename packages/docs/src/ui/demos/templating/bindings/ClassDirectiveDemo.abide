@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // class:name={cond} toggle.
   let highlight = state(false)

@@ -7,8 +7,8 @@
 // (module `<script module>` before instance `<script>`), so a recorded seed replays by ordinal.
 
 import { expect, test } from 'bun:test'
-import type { State, StateCell } from '../state.ts'
-import { state } from '../state.ts'
+import type { State, StateCell } from '../../shared/state.ts'
+import { state } from '../../shared/state.ts'
 import { loadEmitted } from './emit.ts'
 import { makeSeededState } from './seededState.ts'
 
@@ -69,8 +69,8 @@ test('server records and client replays module + instance state in the SAME orde
     // Unique source → fresh emitted module (its `$module` memo has not run yet), so the module
     // `<script module>` setup runs on both the first server render and the first client mount.
     const source =
-        "<script module>import { state } from 'abide/ui/state'; let g = state('M')</script>" +
-        "<script>import { state } from 'abide/ui/state'; let i = state('I')</script>" +
+        "<script module>import { state } from 'abide/shared/state'; let g = state('M')</script>" +
+        "<script>import { state } from 'abide/shared/state'; let i = state('I')</script>" +
         '<p>{g}-{i}</p>'
     const emitted = await loadEmitted(source)
 

@@ -1,0 +1,10 @@
+<script>
+  import { online } from "abide/shared/online"
+
+  // online(): a reactive connectivity boolean — always true on the server, tracks navigator.onLine in
+  // the browser. A global probe: no args, no slot, just app-wide state you can read in a template.
+</script>
+
+<ul class="grid">
+  <li><code>online()</code>: <strong data-testid="online-value">{String(online())}</strong></li>
+</ul>

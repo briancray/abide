@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // {expr} escaped text — user input echoed as text, never parsed as HTML.
   let escaped = state("<b>not bold</b>")

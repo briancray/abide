@@ -79,12 +79,18 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
   retained transcript over `GET /__abide/rpc/<name>?args=…&from=<count>` (re-encoded in the handler's ORIGINAL
   encoding — jsonl resumes as jsonl, sse as sse). **Built:** primitive + cell + verb routing + shared
   streaming + json/jsonl/**sse** see-through (all lazy) + resumable endpoint + the **SSR→client hydration
-  handoff** — a `{#for await}` over a known-RPC source seeds its decoded transcript (a `StreamHandle`) so
-  hydrate ADOPTS the completed transcript (mode A) or RESUMES an open one over `?from=<count>` (mode B)
-  instead of re-invoking the source; a non-RPC source still re-iterates. **Client-side consumption:** the
-  browser RPC proxy decodes a streaming response by content-type into an `AsyncIterable` (routed through
-  the same cell), so `{#for await x of rpc()}` works in the browser identically to SSR; `sse` is also
-  consumable via the native `EventSource`.
+  handoff** — a `{#for await}` over a known-RPC source seeds its decoded transcript so hydrate re-reads the
+  source with NO client re-invoke: on hydrate `replayStreams` warms the RPC cell via `cell.seedStream` — a
+  completed (mode-A) inline transcript, or an open (mode-B) **prefix + `?from=<count>` resume source** — and
+  the block drains that warm cell (a non-RPC source still re-iterates). There is no separate DOM handoff; the
+  server paint is a discarded placeholder. **`{#for await}` is REACTIVE (not one-shot):** its client mount
+  wraps the drain in an effect subscribed to the cell's state signal (not per-chunk), so a
+  `fn.refresh()`/`.invalidate()` — or a change to any reactive dep in the source expression — tears the list
+  down and re-streams it (clear-and-restream); this holds for BOTH modes, and the chunk probes
+  (`peek`/`chunks`/`done`/`error`) read the adopted transcript. **Client-side consumption:** the browser RPC
+  proxy decodes a streaming response by content-type into an `AsyncIterable` (routed through the same cell),
+  so `{#for await x of rpc()}` works in the browser identically to SSR; `sse` is also consumable via the
+  native `EventSource`.
 - **`timeout`**: bilateral (client abort + server deadline); defaults to `ABIDE_RPC_TIMEOUT`.
 - **`crossOrigin`**: CORS opt-in, **default closed** (no `Access-Control-*`; a cross-origin mutation is
   CSRF-rejected). `true` = allow any origin; `{ origin?: string | string[] | boolean, methods?, headers?,
@@ -153,6 +159,14 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 
 ## Isomorphic — `abide/shared/*`
 
+### Reactive primitives
+| Import | Signature |
+| --- | --- |
+| `abide/shared/state` | `state(initial, transform?)`; `.computed(fn)`, `.linked(src, transform?)`, `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). Scope-free signal wrapper — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`state.computed`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `cell({ shared })`). |
+| `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too |
+
+`state`/`watch` are the sync/owned face of the same signal that `cell` (async/loaded) is built on — RPC and sockets are `cell` + transport. All four are isomorphic: same import, same call, both sides.
+
 ### Cache verbs (method form canonical; globals only for tags)
 | Method (per callable) | Global (tags only) |
 | --- | --- |
@@ -187,8 +201,6 @@ Partial args match every superset slot.
 ## UI — `abide/ui/*` (client-only)
 | Import | Signature |
 | --- | --- |
-| `abide/ui/state` | `state(initial, transform?)`; `.computed(fn)`, `.linked(src, transform?)`, `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`) |
-| `abide/ui/watch` | `watch(source, handler)` / `watch(thunk)` |
 | `abide/ui/props` | `props<T>()` |
 | `abide/ui/html` | `html(str)` / `html\`…\`` |
 | `abide/ui/navigate` | `navigate(path \| URL, { replace?, keepScroll? })` — target is an already-resolved href; compose params/query with `url()` (`navigate(url('/users/[id]', { id }, { tab }))`) |

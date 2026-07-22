@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // Keyed by `item.id`, the {#for} block reconciles by identity: add / remove / reorder move the
   // matching DOM nodes instead of re-creating them.

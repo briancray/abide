@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // {#switch}/{:case}/{:default} — a value is matched against cases; an unmatched value falls
   // through to {:default}.

@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // bind:group over CHECKBOXES — the group value is an ARRAY, and each checked
   // box adds/removes its own `value`. A bare state array two-way syncs (#14).

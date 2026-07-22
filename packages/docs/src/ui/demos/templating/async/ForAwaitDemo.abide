@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // A {#for await} iterates an async iterable, appending each chunk as it arrives. If the stream
   // throws, {:catch} is appended after the chunks already emitted. Each run re-keys the outer {#for}

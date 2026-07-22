@@ -43,7 +43,7 @@ const HELPER = (dir: string, servePath: string) => `
 import { Window } from "happy-dom";
 import { serve } from ${JSON.stringify(servePath)};
 ${MATERIALIZE}
-await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
+await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
 const { url, stop } = await serve(${JSON.stringify(dir)}, { dev: true });
 // Fetch the SSR + client graph BEFORE polluting globals; the server stays up so the graph fetch works.
@@ -120,7 +120,7 @@ async function graphBytes(url, ssr) {
     for (const m of t.matchAll(/\\/__abide\\/chunk\\/[^"'()\\s]+\\.js/g)) queue.push(m[0]); }
   return total;
 }
-await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
+await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
 const dev = await serve(${JSON.stringify(dir)}, { dev: true });
 const devSsr = await (await fetch(dev.url + "/")).text();

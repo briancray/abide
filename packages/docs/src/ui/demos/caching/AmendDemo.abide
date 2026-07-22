@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import cacheCounter from "$server/rpc/cacheCounter"
 
   // amend(args, value | updater) mutates the retained slot value in place — the handler never re-runs.

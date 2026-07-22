@@ -23,10 +23,11 @@
 // any remaining keys become mount props.
 
 import type { HydrationSeed } from '../../server/internal/pages.ts'
+import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
 import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
-import { watch } from '../watch.ts'
+import { watch } from '../../shared/watch.ts'
 import { makeClientImports } from './clientProxy.ts'
 import {
     type PageLoader,
@@ -35,7 +36,7 @@ import {
     registerPages,
     type SocketSpecs,
 } from './pageRegistry.ts'
-import { beginStreamHandoff, endStreamHandoff, isHydrating } from './runtime.ts'
+import { isHydrating } from './runtime.ts'
 import { makeSeededState } from './seededState.ts'
 import { makeClientSocketImports } from './socketProxy.ts'
 
@@ -74,6 +75,61 @@ function replayReads(seed: HydrationSeed, imports: Record<string, unknown>): voi
     }
 }
 
+// Build the mode-B (OPEN handoff) source for `seedStream`: replay the flushed prefix, then RESUME the tail
+// over `GET …?from=<count>` (re-encoded in the handler's original encoding, decoded by content-type). If
+// the server transcript was evicted the endpoint answers `x-abide-stream-resume: fresh` — a full run from 0
+// that REPLACES the prefix. A failed/absent resume (offline, 4xx, no body) leaves the prefix standing and
+// the slot closes; a later `refresh()` (now reactive) re-runs from scratch.
+export async function* resumeStreamSource(
+    base: string,
+    name: string,
+    args: unknown,
+    count: number,
+    prefix: readonly unknown[],
+): AsyncGenerator<unknown> {
+    const argsQuery = args !== undefined ? `&args=${encodeURIComponent(JSON.stringify(args))}` : ''
+    let response: Response
+    try {
+        response = await fetch(`${base}/__abide/rpc/${name}?from=${count}${argsQuery}`)
+    } catch {
+        yield* prefix
+        return
+    }
+    if (!response.ok || response.body === null) {
+        yield* prefix
+        return
+    }
+    // `fresh` = the retained transcript was gone, so this response is a full run from 0 → drop the prefix.
+    if (response.headers.get('x-abide-stream-resume') !== 'fresh') yield* prefix
+    yield* decodeStreamResponse(response)
+}
+
+// Replay the seed's stream handoffs into the client RPC cells so an SSR-adopted `{#for await}` warms its
+// cell without re-invoking the source, and `peek`/`chunks`/`done`/`refresh` all work on the adopted stream
+// (§5). A COMPLETED (mode-A) handle seeds its inline transcript; an OPEN (mode-B) handle seeds a source
+// that replays the flushed prefix then resumes the tail over `?from=<count>`. Unknown names / malformed
+// records are skipped.
+function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, base: string): void {
+    const streams = seed.streams
+    if (!Array.isArray(streams)) return
+    for (const handle of streams) {
+        if (handle === null || typeof handle !== 'object') continue
+        if (handle.name === null || !Array.isArray(handle.values)) continue
+        const proxy = imports[handle.name] as
+            | { seedStream?: (args: unknown, source: unknown) => void }
+            | undefined
+        if (proxy === undefined || typeof proxy.seedStream !== 'function') continue
+        if (handle.done === true) {
+            proxy.seedStream(handle.args, handle.values)
+        } else {
+            proxy.seedStream(
+                handle.args,
+                resumeStreamSource(base, handle.name, handle.args, handle.count, handle.values),
+            )
+        }
+    }
+}
+
 // Bootstrap a page in the browser from its AOT-emitted client `hydrate`. Returns a cleanup function
 // that disposes the mount (unmounts effects). A no-op outside the browser (no `document`), so
 // importing the entry under SSR is safe. `hydrate` claims the server DOM; on an unrecoverable root
@@ -102,6 +158,9 @@ export function bootstrapPage(
     // Replay recorded reads into the RPC cells BEFORE mount so the component resolves them from cache.
     // The emitted mount reads these SAME proxy instances off `$scope`, so a seeded read never re-fetches.
     replayReads(seed, imports)
+    // Warm the cells of SSR-streamed lists (mode A inline transcript / mode B prefix+resume) so an adopted
+    // `{#for await}` re-reads its transcript with no re-invoke, and its chunk probes + `refresh()` work (§5).
+    replayStreams(seed, imports, base ?? '')
     // Remaining seed keys (not the recorded reads) become mount props.
     const { reads: _reads, ...props } = seed
     // Isomorphic runtime bindings a page may `import` and call (`route()`, `url()`, `navigate()`). On
@@ -123,19 +182,12 @@ export function bootstrapPage(
         props: () => props,
     }
 
-    // Install the §5 stream-attach handoffs (`seed.streams`) BEFORE hydrate so a `{#for await}` over a
-    // known-RPC source adopts/resumes its seeded transcript instead of re-invoking the source. Cleared
-    // after the (synchronous) hydrate pass — an in-flight mode-B resume already captured its handle.
-    beginStreamHandoff(seed.streams, base ?? '')
     // Attach-hydration (Stage 2, PR7): CLAIM the SSR DOM in place — no container clear. The emitted
     // `hydrate` seeds its cursor from the server DOM, claims each node (suppressing the initial write —
     // the server already rendered the seeded value), and whole-page-falls-back to a fresh mount if the
-    // root structure is unrecoverable.
-    try {
-        return hydrate(container, scope)
-    } finally {
-        endStreamHandoff()
-    }
+    // root structure is unrecoverable. A streamed `{#for await}` re-reads its cell (warmed above by
+    // `replayStreams`) — no separate DOM handoff.
+    return hydrate(container, scope)
 }
 
 // Left-click on a same-origin internal link, without modifier keys / new-tab intent — the click a

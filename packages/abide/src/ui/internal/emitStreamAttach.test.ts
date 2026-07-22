@@ -8,13 +8,20 @@
 
 import { describe, expect, test } from 'bun:test'
 import { collectSeed, type HydrationSeed } from '../../server/internal/pages.ts'
+import { cell } from '../../shared/cell.ts'
 import { createContext, runInContext } from '../../shared/internal/context.ts'
+import { resumeStreamSource } from './bootstrap.ts'
 import { loadEmitted } from './emit.ts'
-import { beginStreamHandoff, endStreamHandoff } from './runtime.ts'
 import { createStreamScope, drainPatches } from './streamScope.ts'
 
 function tick(): Promise<void> {
     return Promise.resolve()
+}
+
+// Drain all pending microtasks (the seeded-stream pump + the reactive `{#for await}` drain both settle
+// over microtasks) by parking behind a macrotask.
+function flush(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 // SSR a source through the streaming path: install a per-render StreamScope, render the shell, drain
@@ -70,14 +77,19 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
         expect(firstStream.done).toBe(true)
         expect(firstStream.values).toEqual(['t0', 't1', 't2'])
 
-        // Hydrate with a SPY source: it must never be called on the client.
+        // Hydrate with the SOURCE MODELED AS A SEEDED CELL — exactly what `replayStreams` warms it into on
+        // the real client. A read of a warm-seeded stream slot hands back a cursor over the recorded
+        // transcript WITHOUT running the underlying source, so the spy (which counts NETWORK invokes) never
+        // fires. This is the headline invariant: the source is never re-invoked on the client at hydrate.
         let clientCalls = 0
         const bumped: string[] = []
+        const complete = cell((_args: { n: number }): AsyncIterable<string> => {
+            clientCalls++
+            return (async function* () {})()
+        })
+        complete.seedStream({ n: 3 }, ['t0', 't1', 't2'])
         const clientScope = {
-            complete: (): AsyncIterable<string> => {
-                clientCalls++
-                return (async function* () {})()
-            },
+            complete,
             bump: (t: string): void => {
                 bumped.push(t)
             },
@@ -86,12 +98,10 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
         const host = document.createElement('div')
         host.innerHTML = html
         const emitted = await loadEmitted(SRC)
-        beginStreamHandoff(seed.streams, '')
         const dispose = emitted.hydrate(host, clientScope)
-        endStreamHandoff()
-        await tick()
+        await flush()
 
-        // THE INVARIANT: zero client-side source calls.
+        // THE INVARIANT: zero client-side source calls (the seeded transcript was replayed, not re-run).
         expect(clientCalls).toBe(0)
 
         // The transcript was re-mounted from the seed: 3 items with the right text.
@@ -103,6 +113,47 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
         // capturing that item's value.
         ;(lis[1] as HTMLElement).dispatchEvent(new Event('click'))
         expect(bumped).toEqual(['t1'])
+
+        dispose()
+    })
+
+    test('the adopted stream is reactive: chunk probes read the transcript and refresh() re-runs it', async () => {
+        const { html, seed } = await ssrStream(SRC, { complete: makeServerComplete() })
+
+        // On refresh the client source IS run — it yields a DIFFERENT transcript so the repaint is visible.
+        let runs = 0
+        const complete = cell((_args: { n: number }): AsyncIterable<string> => {
+            runs++
+            return (async function* () {
+                yield 'r0'
+                yield 'r1'
+            })()
+        })
+        complete.seedStream({ n: 3 }, ['t0', 't1', 't2'])
+        const clientScope = { complete, bump: (): void => {} }
+
+        const host = document.createElement('div')
+        host.innerHTML = html
+        const emitted = await loadEmitted(SRC)
+        const dispose = emitted.hydrate(host, clientScope)
+        await flush()
+
+        // Adopted from the seed (no source run), and the chunk probes read the seeded transcript.
+        expect(runs).toBe(0)
+        const text = (): (string | null)[] =>
+            Array.from(host.querySelectorAll('li')).map((li) => li.textContent)
+        expect(text()).toEqual(['t0', 't1', 't2'])
+        expect(complete.chunks({ n: 3 })).toEqual(['t0', 't1', 't2'])
+        expect(complete.done({ n: 3 })).toBe(true)
+        // `peek` on a raw cell is typed as the source value (`AsyncIterable`); on a stream slot it returns
+        // the latest CHUNK at runtime (the RPC surface types this as `C` — here it is a bare cell).
+        expect(complete.peek({ n: 3 }) as unknown).toBe('t2')
+
+        // refresh() re-runs the source and the list re-streams from the fresh transcript (clear-and-restream).
+        complete.refresh({ n: 3 })
+        await flush()
+        expect(runs).toBe(1)
+        expect(text()).toEqual(['r0', 'r1'])
 
         dispose()
     })
@@ -126,13 +177,13 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?from=<count> (no cli
         handle.count = 2
         handle.values = ['t0', 't1']
 
+        // The source is modeled as a seeded cell — `replayStreams` warms an OPEN handle with
+        // `resumeStreamSource` (prefix + `?from=` resume). The spy counts NETWORK re-invokes (must stay 0).
         let clientCalls = 0
-        const clientScope = {
-            complete: (): AsyncIterable<string> => {
-                clientCalls++
-                return (async function* () {})()
-            },
-        }
+        const complete = cell((_args: { n: number }): AsyncIterable<string> => {
+            clientCalls++
+            return (async function* () {})()
+        })
 
         // Stub fetch: serve the remaining chunks (t2..t4) as an application/jsonl replay.
         const fetchUrls: string[] = []
@@ -154,15 +205,18 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?from=<count> (no cli
         }) as typeof globalThis.fetch
 
         try {
+            // Seed exactly as `replayStreams` does for an open handle: prefix + `resumeStreamSource`.
+            complete.seedStream(
+                { n: 5 },
+                resumeStreamSource('', 'complete', { n: 5 }, handle.count, handle.values ?? []),
+            )
             const host = document.createElement('div')
             host.innerHTML = html
             const emitted = await loadEmitted(SRC)
-            beginStreamHandoff(seed.streams, '')
-            const dispose = emitted.hydrate(host, clientScope)
-            endStreamHandoff()
+            const dispose = emitted.hydrate(host, { complete })
 
             // Let the resume fetch + jsonl reader drain.
-            for (let i = 0; i < 50 && host.querySelectorAll('li').length < 5; i++) await tick()
+            for (let i = 0; i < 50 && host.querySelectorAll('li').length < 5; i++) await flush()
 
             expect(clientCalls).toBe(0) // the RPC source was NEVER re-invoked
             expect(fetchUrls.length).toBe(1)
@@ -247,9 +301,7 @@ describe("gating — a non-RPC {#for await} source keeps today's re-run behavior
         const host = document.createElement('div')
         host.innerHTML = html
         const emitted = await loadEmitted(SRC)
-        beginStreamHandoff(seed.streams, '')
         const dispose = emitted.hydrate(host, clientScope)
-        endStreamHandoff()
         await tick()
         await tick()
 
@@ -257,5 +309,74 @@ describe("gating — a non-RPC {#for await} source keeps today's re-run behavior
         expect(clientCalls).toBe(1)
 
         dispose()
+    })
+})
+
+describe('resumeStreamSource — mode-B prefix + ?from resume (fresh / failure branches)', () => {
+    async function collect(gen: AsyncIterable<unknown>): Promise<unknown[]> {
+        const out: unknown[] = []
+        for await (const value of gen) out.push(value)
+        return out
+    }
+
+    function jsonlResponse(values: string[], resume: 'live' | 'fresh'): Response {
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                const encoder = new TextEncoder()
+                for (const value of values)
+                    controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`))
+                controller.close()
+            },
+        })
+        return new Response(body, {
+            status: 200,
+            headers: { 'x-abide-stream-resume': resume, 'content-type': 'application/jsonl' },
+        })
+    }
+
+    test('a live resume yields the flushed prefix THEN the resumed tail', async () => {
+        const original = globalThis.fetch
+        globalThis.fetch = (async (_input: RequestInfo | URL): Promise<Response> =>
+            jsonlResponse(['t2', 't3'], 'live')) as typeof globalThis.fetch
+        try {
+            expect(await collect(resumeStreamSource('', 'r', { n: 5 }, 2, ['t0', 't1']))).toEqual([
+                't0',
+                't1',
+                't2',
+                't3',
+            ])
+        } finally {
+            globalThis.fetch = original
+        }
+    })
+
+    test('a `fresh` resume (transcript evicted) DROPS the prefix and yields the full run from 0', async () => {
+        const original = globalThis.fetch
+        globalThis.fetch = (async (_input: RequestInfo | URL): Promise<Response> =>
+            jsonlResponse(['f0', 'f1', 'f2'], 'fresh')) as typeof globalThis.fetch
+        try {
+            expect(await collect(resumeStreamSource('', 'r', { n: 5 }, 2, ['t0', 't1']))).toEqual([
+                'f0',
+                'f1',
+                'f2',
+            ])
+        } finally {
+            globalThis.fetch = original
+        }
+    })
+
+    test('a failed resume leaves the flushed prefix standing (stream then closes)', async () => {
+        const original = globalThis.fetch
+        globalThis.fetch = (async (_input: RequestInfo | URL): Promise<Response> => {
+            throw new Error('offline')
+        }) as typeof globalThis.fetch
+        try {
+            expect(await collect(resumeStreamSource('', 'r', { n: 5 }, 2, ['t0', 't1']))).toEqual([
+                't0',
+                't1',
+            ])
+        } finally {
+            globalThis.fetch = original
+        }
     })
 })

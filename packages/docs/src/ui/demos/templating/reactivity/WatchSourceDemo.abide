@@ -1,6 +1,6 @@
 <script>
-  import { state } from "abide/ui/state"
-  import { watch } from "abide/ui/watch"
+  import { state } from "abide/shared/state"
+  import { watch } from "abide/shared/watch"
 
   // watch(source, handler) — runs the handler on change only (not on the initial read). Here every
   // count change pushes a side effect that increments a separate `changes` cell.

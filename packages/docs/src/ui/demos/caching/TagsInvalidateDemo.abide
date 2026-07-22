@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import cacheTagA from "$server/rpc/cacheTagA"
   import cacheTagB from "$server/rpc/cacheTagB"
   import cacheTagBust from "$server/rpc/cacheTagBust"

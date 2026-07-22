@@ -30,7 +30,7 @@ function readRenderedValue(html: string): string {
 test('SSR records a non-deterministic state initial into #__abide-seed, matching the rendered value', async () => {
     const app = createTestApp({
         pages: {
-            '/': "<script>import { state } from 'abide/ui/state'; let t = state(Date.now())</script><p>{t}</p>",
+            '/': "<script>import { state } from 'abide/shared/state'; let t = state(Date.now())</script><p>{t}</p>",
         },
     })
 
@@ -53,7 +53,7 @@ test('SSR records a non-deterministic state initial into #__abide-seed, matching
 test('the soft-nav envelope carries the recorded state initials', async () => {
     const app = createTestApp({
         pages: {
-            '/': "<script>import { state } from 'abide/ui/state'; let a = state(1); let b = state('two')</script><p>{a}{b}</p>",
+            '/': "<script>import { state } from 'abide/shared/state'; let a = state(1); let b = state('two')</script><p>{a}{b}</p>",
         },
     })
 
@@ -76,7 +76,7 @@ test('a state-free page still emits an empty seed (no additive `states` key)', a
 test('state initials are recorded RAW (pre-transform) so the client re-applies transform to match', async () => {
     const app = createTestApp({
         pages: {
-            '/': "<script>import { state } from 'abide/ui/state'; let n = state(5, (v) => v + 1)</script><p>{n}</p>",
+            '/': "<script>import { state } from 'abide/shared/state'; let n = state(5, (v) => v + 1)</script><p>{n}</p>",
         },
     })
 
@@ -94,7 +94,7 @@ test('a non-JSON-serializable state initial is recorded as null rather than cras
     const app = createTestApp({
         pages: {
             // BigInt is not JSON-serializable; recording it must not throw during seed serialisation.
-            '/': "<script>import { state } from 'abide/ui/state'; let big = state(1n); let ok = state(7)</script><p>{ok}</p>",
+            '/': "<script>import { state } from 'abide/shared/state'; let big = state(1n); let ok = state(7)</script><p>{ok}</p>",
         },
     })
 

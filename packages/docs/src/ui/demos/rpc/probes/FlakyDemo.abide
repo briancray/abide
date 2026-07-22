@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import cacheFlaky from "$server/rpc/cacheFlaky"
 
   // A read that fails returns a 400; the `error` probe holds it as an HttpError.

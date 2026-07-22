@@ -578,14 +578,35 @@ function emitScript(
         copyFrom = uptoRel
     }
 
+    // Drive the scanner one token, re-scanning `${…}` substitutions so the `}` that closes a substitution
+    // reads as a Template{Middle,Tail} (not a CloseBrace) and the trailing backtick text is not mis-lexed
+    // as code. Without this, a template literal in a `const`/`let` initializer corrupts the brace-depth
+    // count and the statement boundary, running away to EOF and swallowing the following statement. Mirrors
+    // `analyzeScope.tokenize()`. `frames` is the caller's brace/template frame stack.
+    const scanTemplateAware = (frames: ('template' | 'brace')[]): SyntaxKind => {
+        let kind = scanner.scan()
+        if (kind === SyntaxKind.CloseBraceToken && frames[frames.length - 1] === 'template') {
+            kind = scanner.reScanTemplateToken(/* isTaggedTemplate */ false)
+            if (kind === SyntaxKind.TemplateTail) frames.pop()
+        } else if (kind === SyntaxKind.TemplateHead) {
+            frames.push('template')
+        } else if (kind === SyntaxKind.OpenBraceToken) {
+            frames.push('brace')
+        } else if (kind === SyntaxKind.CloseBraceToken) {
+            frames.pop()
+        }
+        return kind
+    }
+
     const scanToStatementEnd = (): { rawEnd: number; end: number } => {
         let localDepth = 0
+        const frames: ('template' | 'brace')[] = []
         let prevEnd = scanner.getTokenEnd()
         // Seed with the keyword token (`let`/`const`/`var`) just scanned by the caller: it never trails a
         // continuation, so the first line break is governed only by whatever token follows it.
         let prevToken = scanner.getToken()
         for (;;) {
-            const token = scanner.scan()
+            const token = scanTemplateAware(frames)
             if (token === SyntaxKind.EndOfFile) return { rawEnd: prevEnd, end: prevEnd }
             // A depth-0 line break ends the initializer only when the expression is complete on BOTH sides
             // of it — otherwise it is a mid-expression wrap (`a\n .b()`, `c ?\n x`, `a +\n b`) that JS keeps
@@ -606,8 +627,9 @@ function emitScript(
         }
     }
 
+    const frames: ('template' | 'brace')[] = []
     for (;;) {
-        const token = scanner.scan()
+        const token = scanTemplateAware(frames)
         if (token === SyntaxKind.EndOfFile) break
         if (depth === 0 && scanner.hasPrecedingLineBreak()) atStatementStart = true
         if (depth === 0 && atStatementStart) {

@@ -7,7 +7,6 @@
   import AwaitBlockDemo from "$ui/demos/rpc/reads/AwaitBlockDemo.abide"
   import AwaitInlineDemo from "$ui/demos/rpc/reads/AwaitInlineDemo.abide"
   import RawDemo from "$ui/demos/rpc/reads/RawDemo.abide"
-  import ProbesDemo from "$ui/demos/rpc/reads/ProbesDemo.abide"
 </script>
 
 <main class="page">
@@ -47,8 +46,5 @@
     <RawDemo />
   </Demo>
 
-  <p>The reactive probes are usable directly in the template. <code>{'{'}rpcGreet.peek(args){'}'}</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves:</p>
-  <Demo id="probes" title="In-template <code>fn.pending()</code> / <code>fn.error()</code> probes" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/ProbesDemo.abide" tab="client">
-    <ProbesDemo />
-  </Demo>
+  <p>Beyond <code>peek</code>, a read carries the full reactive probe surface — <code>pending</code>, <code>refreshing</code>, <code>error</code>, <code>watch</code>. They have their own page: <a href="/rpc/probes">Reactive probes</a>.</p>
 </main>

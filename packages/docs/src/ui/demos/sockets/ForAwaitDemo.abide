@@ -1,0 +1,23 @@
+<script>
+  import { state } from "abide/shared/state"
+  import socketsChat from "$server/sockets/socketsChat"
+
+  // The declarative subscription: the template block `{#for await message of socketsChat}` IS the
+  // subscription — it rides the WS mux transparently and appends each message as it arrives. (Contrast
+  // SocketsChatDemo, which hand-drives the async iterator.)
+  let draft = state("hello over the socket")
+  function publish() {
+    socketsChat.publish({ id: crypto.randomUUID(), text: draft, via: "client" })
+  }
+</script>
+
+<ul class="log" data-testid="forawait-log">
+  {#for await message of socketsChat}
+    <li class="msg" data-via={message.via}><span class="via">{message.via}</span> {message.text}</li>
+  {/for}
+</ul>
+
+<div class="controls">
+  <input data-testid="forawait-input" bind:value={draft} />
+  <button data-testid="forawait-publish" onclick={publish}>Publish</button>
+</div>

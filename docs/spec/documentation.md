@@ -14,7 +14,7 @@ generation can't produce.**
 
 1. **Generated reference (TSDoc → docs).** The framework's API reference is **generated from the
    public API's TSDoc + types** (TS7), the same source that feeds OpenAPI/MCP (MS1.2). Each
-   public import (`abide/server/GET`, `abide/ui/state`, …) documents itself; the reference cannot
+   public import (`abide/server/GET`, `abide/shared/state`, …) documents itself; the reference cannot
    drift from the real signatures. Not a hand-maintained parallel API list.
 2. **Two-tier docs:** **generated reference** + **hand-written conceptual guides.** The guides
    cover what generation can't — the isomorphism model, cache scope (§2–3), the async-read seam

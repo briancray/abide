@@ -12,8 +12,8 @@
 // A `<script>`'s imports are resolved by the page builder into `$scope`, not by the emitted module, so
 // scenarios that use `state`/`watch` must inject them (mirrors the oracle's `scriptScope`).
 
-import { state } from '../src/ui/state.ts'
-import { watch } from '../src/ui/watch.ts'
+import { state } from '../src/shared/state.ts'
+import { watch } from '../src/shared/watch.ts'
 
 export interface Scenario {
     name: string
@@ -97,7 +97,7 @@ export const SCENARIOS: Scenario[] = [
     },
     {
         name: 'state-update',
-        src: "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
         scope: () => ({ state, watch }),
         server: false,
         update: async (host) => {
@@ -109,7 +109,7 @@ export const SCENARIOS: Scenario[] = [
     },
     {
         name: 'list-append-update',
-        src: "<script>import { state } from 'abide/ui/state'; let items = state([0])</script><button onclick={() => (items = [...items, items.length])}>add</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
+        src: "<script>import { state } from 'abide/shared/state'; let items = state([0])</script><button onclick={() => (items = [...items, items.length])}>add</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
         scope: () => ({ state, watch }),
         server: false,
         update: async (host) => {

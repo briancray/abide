@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import { done } from "abide/shared/done"
 
   // done(stream): a reactive completion probe. The SAME stream object is handed to both {#for await}

@@ -1,7 +1,7 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
   import SocketsChatDemo from "$ui/demos/sockets/SocketsChatDemo.abide"
-  import MuxDemo from "$ui/demos/sockets/MuxDemo.abide"
+  import ForAwaitDemo from "$ui/demos/sockets/ForAwaitDemo.abide"
 </script>
 
 <main class="page">
@@ -15,9 +15,11 @@
   <h2>Tail replay</h2>
   <p>The socket keeps a <code>tail</code> of recent messages. Reload this page and the subscription replays them immediately — no re-publish needed.</p>
 
-  <h2>Over the raw mux</h2>
-  <p>Iterating the socket rides the multiplexed WebSocket at <code>/__abide/sockets</code> under the hood — one connection carries every named socket. Here is the same chat socket driven at the wire level: join with a <code>sub</code> frame and publish with a <code>pub</code> frame, so subscribe, client publish, and server publish all share the one connection.</p>
-  <Demo id="mux" title="<code>socket</code> — subscribe &amp; publish over the raw mux" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/MuxDemo.abide" tab="client">
-    <MuxDemo />
+  <h2>Reactive subscription — <code>{'{'}#for await{'}'}</code></h2>
+  <p>The template block <code>{'{'}#for await message of socketsChat{'}'}</code> <em>is</em> the subscription — it rides the multiplexed WebSocket at <code>/__abide/sockets</code> transparently (one connection carries every named socket), appending each message as it arrives. No raw connection, no frames.</p>
+  <Demo id="socket-forawait" title="<code>{'{'}#for await message of socketsChat{'}'}</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/ForAwaitDemo.abide" tab="client">
+    <ForAwaitDemo />
   </Demo>
+
+  <p>Beyond iterating, a socket carries the reactive probe surface — <code>peek()</code> (latest message), <code>chunks()</code> (tail transcript), plus <code>pending</code>/<code>refreshing</code>/<code>error</code>. They have their own page: <a href="/sockets/probes">Reactive probes</a>.</p>
 </main>

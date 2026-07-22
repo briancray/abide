@@ -97,7 +97,7 @@ test('a page with no <script> is skipped (no diagnostics)', async () => {
 })
 
 // A `StateCell`-shaped factory (matched structurally by the checker's `__abideUnwrap`) stands in for
-// `abide/ui/state`, so these exercise the real type engine without a workspace-resolution dependency.
+// `abide/shared/state`, so these exercise the real type engine without a workspace-resolution dependency.
 const CELL_MODULE =
     'export interface Cell<T> { read(): T; write(v: T): void; peek(): T }\n' +
     'export function state<T>(initial: T): Cell<T> {\n' +

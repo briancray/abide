@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import platformIdentity from "$server/rpc/platformIdentity"
   import platformLogin from "$server/rpc/platformLogin"
   import platformLogout from "$server/rpc/platformLogout"

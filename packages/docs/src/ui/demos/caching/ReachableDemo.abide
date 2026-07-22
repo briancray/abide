@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import cacheReachable from "$server/rpc/cacheReachable"
 
   // reachable(host) actively probes a host: the app's own origin answers (true), a dead local port

@@ -148,6 +148,15 @@ export interface Cell<Args, T> {
     // Replay a recorded (args, value) into the cache as a settled `value` slot, so a matching read
     // resolves from cache instead of re-loading — the client half of §5 hydration seeding.
     seed(args: Args, value: T): void
+    // The STREAMING analog of `seed` (§5): install a warm stream slot from an SSR handoff so a hydrate read
+    // replays it with NO client re-invoke, and `peek`/`chunks`/`done`/`refresh` reflect it. A finite array
+    // is a completed (mode-A) transcript; an AsyncIterable is the mode-B "prefix then resumed tail" source
+    // (it closes the slot when the resume ends).
+    seedStream(
+        args: Args,
+        source: readonly unknown[] | AsyncIterable<unknown>,
+        encoding?: 'jsonl' | 'sse',
+    ): void
 }
 
 let cellCounter = 0
@@ -724,6 +733,20 @@ export function cell<Args, T>(
         const slot = ensureSlot(args)
         slot.loadedAt = Date.now()
         setState(slot, { status: 'value', value, error: undefined, refreshing: false })
+    }
+
+    c.seedStream = (
+        args: Args,
+        source: readonly unknown[] | AsyncIterable<unknown>,
+        encoding?: 'jsonl' | 'sse',
+    ): void => {
+        // Pump the SSR handoff through `startStream` — it wraps the source in a ReplayableStream and
+        // installs the slot. A finite array (mode A) closes immediately (stamps the close clock); an
+        // AsyncIterable (mode B: prefix then resumed tail) stays open until it ends, then closes. Either
+        // way a later read hands back a cursor with NO source run; `peek`/`chunks`/`done`/`refresh` then
+        // behave exactly as for a client-loaded stream.
+        const slot = ensureSlot(args)
+        startStream(slot, source, encoding)
     }
 
     c.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) => {

@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // A component is a TitleCase `{#component}` taking a single props object. `Card` receives a reactive
   // `title` prop and renders whatever sits between its tags via its single `<slot/>` (filled

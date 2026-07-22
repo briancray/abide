@@ -145,7 +145,7 @@ describe('two-way binding', () => {
         // the ref to a READ, so the bind got the value, not something writable. The plan now wraps a bare
         // cell in the same `{ get, set }` accessor the manual workaround uses — on BOTH emitters.
         const out = emitModuleSource(
-            "<script>import { state } from 'abide/ui/state'; let bare = state('direct')</script><input bind:value={bare}>",
+            "<script>import { state } from 'abide/shared/state'; let bare = state('direct')</script><input bind:value={bare}>",
         )
         const accessor = '{ get: () => bare.read(), set: ($v) => bare.write($v) }'
         expect(out.client).toContain(accessor)
@@ -177,9 +177,9 @@ describe('bind:element', () => {
     test('assigns the node to a bare state() cell (node ref)', async () => {
         // TODO #22: a bare cell in `bind:element` used to collapse to `node.read()` (a value) and never
         // bind. It now wraps to a `{get,set}` accessor, so the element is written INTO the cell.
-        const { state } = await import('../state.ts')
+        const { state } = await import('../../shared/state.ts')
         const { host } = await mount(
-            "<script>import { state } from 'abide/ui/state'\nlet node = state(null)</script><input bind:element={node}><p>{node ? node.tagName : 'none'}</p>",
+            "<script>import { state } from 'abide/shared/state'\nlet node = state(null)</script><input bind:element={node}><p>{node ? node.tagName : 'none'}</p>",
             { state },
         )
         expect(host.querySelector('p')?.textContent).toBe('INPUT')
@@ -432,8 +432,8 @@ describe('<script module> bindings reach the template (regression: docs app SSR)
         // source from seededState.test's fixture so the memoized `$module` isn't shared via loadEmitted's
         // by-source cache.
         const dual =
-            "<script module>import { state } from 'abide/ui/state'; let modCell = state('MOD')</script>" +
-            "<script>import { state } from 'abide/ui/state'; let instCell = state('INST')</script><p>{modCell}/{instCell}</p>"
+            "<script module>import { state } from 'abide/shared/state'; let modCell = state('MOD')</script>" +
+            "<script>import { state } from 'abide/shared/state'; let instCell = state('INST')</script><p>{modCell}/{instCell}</p>"
         const emitted = await loadEmitted(dual)
         expect(
             stripAnchors(await emitted.render({ state: (v: unknown) => ({ read: () => v }) })),
@@ -445,9 +445,9 @@ describe('<script module> bindings reach the template (regression: docs app SSR)
 // component props — `title="Count: {n}"` is a reactive attribute, `{'{'}` yields a literal brace.
 describe('attribute-value interpolation', () => {
     test('mixed literal + interpolation renders and stays reactive on an element', async () => {
-        const { state } = await import('../state.ts')
+        const { state } = await import('../../shared/state.ts')
         const src =
-            "<script>import { state } from 'abide/ui/state'\nlet n = state(3)</script>" +
+            "<script>import { state } from 'abide/shared/state'\nlet n = state(3)</script>" +
             "<div id='d' title='Count: {n}'><button id='b' onclick={() => n++}>x</button></div>"
         const { host, dispose } = await mount(src, { state })
         const d = host.querySelector('#d') as HTMLElement
@@ -471,13 +471,13 @@ describe('attribute-value interpolation', () => {
             "<script>import { props } from 'abide/ui/props'\nconst { label = '' } = props()</script>" +
             '<span data-label={label}>{label}</span>'
         const parent =
-            "<script>import Badge from './Badge.abide'\nimport { state } from 'abide/ui/state'\nlet n = state(2)</script>" +
+            "<script>import Badge from './Badge.abide'\nimport { state } from 'abide/shared/state'\nlet n = state(2)</script>" +
             '<Badge label="n is {n}" />'
         const resolve = (specifier: string): string | undefined =>
             specifier === './Badge.abide' ? child : undefined
         const emitted = await loadEmitted(parent, resolve)
         const host = document.createElement('div')
-        const dispose = emitted.mount(host, { state: (await import('../state.ts')).state })
+        const dispose = emitted.mount(host, { state: (await import('../../shared/state.ts')).state })
         const span = host.querySelector('span[data-label]') as HTMLElement
         expect(span.getAttribute('data-label')).toBe('n is 2')
         dispose()
@@ -499,7 +499,7 @@ describe('M3b pass-through framework imports', () => {
         '<script>' +
         "import { online } from 'abide/shared/online'\n" +
         "import { bundled } from 'abide/ui/bundled'\n" +
-        "import { state } from 'abide/ui/state'\n" +
+        "import { state } from 'abide/shared/state'\n" +
         'let n = state(0)\n' +
         "</script><p>{online() ? 'on' : 'off'}/{bundled() ? 'yes' : 'no'}/{n}</p>"
 
@@ -562,7 +562,7 @@ describe('done() stream-completion probe', () => {
 // key → same backing signal). A write in one instance is observed by another sharing the key.
 describe('state.shared cross-instance cell', () => {
     const SHARED_PAGE =
-        "<script>import { state } from 'abide/ui/state'\n" +
+        "<script>import { state } from 'abide/shared/state'\n" +
         "let n = state.shared('cap-counter', 0)\n" +
         'function bump() { n = n + 1 }\n' +
         "</script><button class='bump' onclick={bump}>bump</button><b class='val'>{n}</b>"
@@ -570,7 +570,7 @@ describe('state.shared cross-instance cell', () => {
     test("two instances sharing a key see each other's writes", async () => {
         // The real bootstrap injects `state` (via makeSeededState, which forwards `.shared`); the harness
         // scope is bare, so provide it here.
-        const { state } = await import('../state.ts')
+        const { state } = await import('../../shared/state.ts')
         const a = await mount(SHARED_PAGE, { state })
         const b = await mount(SHARED_PAGE, { state })
         expect(a.host.querySelector('.val')?.textContent).toBe('0')

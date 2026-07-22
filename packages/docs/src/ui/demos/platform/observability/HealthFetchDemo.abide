@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import { health } from "abide/shared/health"
 
   // health() is ISOMORPHIC: on the client `await health()` fetches the live /__abide/health endpoint

@@ -19,7 +19,7 @@ test('[emit] SSRs a page as a full HTML document with an in-proc RPC read', asyn
     const app = createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
-            '/': "<script>import { state } from 'abide/ui/state'; import greet from '../../server/rpc/greet'; let title = state('Home')</script><main><h1>{title}</h1><p>{await greet({name:'ada'})}</p></main>",
+            '/': "<script>import { state } from 'abide/shared/state'; import greet from '../../server/rpc/greet'; let title = state('Home')</script><main><h1>{title}</h1><p>{await greet({name:'ada'})}</p></main>",
         },
     })
 

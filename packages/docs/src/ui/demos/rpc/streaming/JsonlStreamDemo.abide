@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcTicker from "$server/rpc/rpcTicker"
 
   // `jsonl(iterable)` is see-through, so calling the RPC on the client returns a replay-then-live

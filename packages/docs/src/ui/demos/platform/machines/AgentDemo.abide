@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // Gate the stream behind a click so SSR renders the button (a relative `fetch` can't run server-side),
   // then the agent run streams client-side — matching the jsonl/sse samples.

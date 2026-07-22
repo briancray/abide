@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // The run carries its own `fail` flag, so the try body reads a fixed per-mount value (never a
   // shared mutable that could re-throw into an already-mounted block). Each click bumps `id`, which

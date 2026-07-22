@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcGreet from "$server/rpc/rpcGreet"
   import rpcLimited from "$server/rpc/rpcLimited"
 

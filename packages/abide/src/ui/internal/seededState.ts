@@ -14,8 +14,8 @@
 // advance the ordinal here (keeping the count aligned with the server recording).
 
 import type { HydrationSeed } from '../../server/internal/pages.ts'
-import type { State, StateCell } from '../state.ts'
-import { state } from '../state.ts'
+import type { State, StateCell } from '../../shared/state.ts'
+import { state } from '../../shared/state.ts'
 
 // `isHydrating` reports whether the mount cursor is CLAIMING server nodes right now. `bootstrapPage`
 // passes the live runtime flag; it defaults to always-true for direct callers/tests that replay outside

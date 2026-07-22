@@ -31,7 +31,7 @@ test('the client builds, code-splits, and serves content-hashed chunks', async (
     const config: AppConfig = {
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
-            '/': "<script>import { state } from 'abide/ui/state'; let title = state('Home')</script><h1>{title}</h1>",
+            '/': "<script>import { state } from 'abide/shared/state'; let title = state('Home')</script><h1>{title}</h1>",
         },
     }
 
@@ -78,7 +78,7 @@ test("the SSR'd page HTML injects the content-hashed loader script tag", async (
 
 test("bootstrapPage HYDRATES the SSR'd page into #__abide-app (claims nodes, working reactivity)", async () => {
     const source =
-        "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>"
+        "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>"
     // PR7: bootstrapPage now CLAIMS the server DOM instead of clearing + fresh-mounting. Render the real
     // anchored SSR HTML into the container so hydration has DOM to attach to.
     const { render, hydrate } = await loadEmitted(source)

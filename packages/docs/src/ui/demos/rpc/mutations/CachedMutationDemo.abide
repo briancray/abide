@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcBumpCounter from "$server/rpc/rpcBumpCounter"
 
   // A mutation opted into caching (`cache: { ttl }`) gets the SAME reactive surface as a read. Calling

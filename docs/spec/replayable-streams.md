@@ -314,11 +314,13 @@ docs app). The transport half of step **4** is built — the router transport-en
 `streamHttp.test.ts`). The **client half of 4b is now built** — the `StreamHandle` seed section
 (`pages.ts`, inline `values` + `data-ab-count`), the value capture + handoff records (`streamScope.ts`,
 `context.ts`), the emit-time source tag (`emitServer.ts`, `{ attachable, rpcName?, args }` for a
-known-RPC head under `src/server/rpc/`), and the `forBlock` hydrate reorder (`runtime.ts`:
-`begin/endStreamHandoff` + `attachForAwait` — adopt-from-`values` (A) / resume-`?from=<count>` (B) /
-attach-miss-`fresh`-replace / offline-defer) wired through `bootstrap.ts` (`emitStreamAttach.test.ts`
-proves the invariant: an RPC `{#for await}` source is never re-invoked on the client; a non-RPC source
-still re-iterates; the `{#await}` claim path is unregressed). **Step 5 (source-derived SSR budget, §6) is now built** — the
+known-RPC head under `src/server/rpc/`), and the `forBlock` reactive drain (`runtime.ts`) fed by a
+warm-seeded cell: `bootstrap.replayStreams` warms the cell via `cell.seedStream` — a completed
+(mode-A) `values` transcript, or an open (mode-B) `resumeStreamSource` (prefix + `?from=<count>` resume,
+`fresh`-replace on attach-miss, prefix-stands on offline/failure). There is NO separate DOM handoff any
+more — the block just re-reads the warm cell (`emitStreamAttach.test.ts` proves the invariant: an RPC
+`{#for await}` source is never re-invoked on the client; a non-RPC source still re-iterates; the
+`{#await}` claim path is unregressed). **Step 5 (source-derived SSR budget, §6) is now built** — the
 streamer races the global `ABIDE_SSR_STREAM_BUDGET` (default raised to 300 000 ms, last-resort) ONLY for a
 non-abide source; an abide RPC source (`attachable`) awaits its items with no global cap, bounded by its
 own bilateral timeout. The budget timer is LAZILY armed (memoized `scope.budget()`), so an all-abide-source
@@ -397,17 +399,33 @@ Two handoff modes, keyed on stream state at flush:
 
 - **(A) Completed-before-flush** (the primary finite case, e.g. a completion that finished within the
   SSR window): the seed carries the decoded transcript **inline** (`values: T[]`, same JSON path as a
-  value seed). On hydrate the client discards the server-painted region (`forBlock` already clears it,
-  `runtime.ts:1159`) and re-mounts each item reactively from `values` — **zero network**, no
-  cross-request slot needed, unaffected by eviction or offline. This is the common path.
+  value seed). On hydrate the client `replayStreams` **warms the RPC cell** from the transcript via
+  `cell.seedStream(args, values)` (the streaming analog of `cell.seed` — a closed ReplayableStream slot),
+  then the reactive `{#for await}` drains that warm slot: the server-painted region is discarded and each
+  item is re-mounted reactively — **zero network** (the read hits the seeded slot, the source is never
+  called), no cross-request slot needed, unaffected by eviction or offline. This is the common path.
 - **(B) Open-at-flush** (SSR flushed a partial or was cut off by the budget): the seed carries a **slot
-  handle** `(name, args, count, done: false)`. The client adopts the flushed values as a frozen prefix,
-  then **resumes over a resumable HTTP replay** — `GET /__abide/rpc/<name>?args=<json>&from=<count>` returns a
-  stream **re-encoded in the handler's original encoding** (`jsonl` resumes as `jsonl`, `sse` as `sse` —
-  the retained cursor carries its `tagStreamEncoding`, and the router mirrors the fresh-run encode) that
+  handle** `(name, args, count, done: false)`. `replayStreams` seeds the cell (`cell.seedStream`) with a
+  `resumeStreamSource` (`bootstrap.ts`) — an async source that yields the flushed prefix, then **resumes
+  over a resumable HTTP replay**: `GET /__abide/rpc/<name>?from=<count>&args=<json>` returns a stream
+  **re-encoded in the handler's original encoding** (`jsonl` resumes as `jsonl`, `sse` as `sse` — the
+  retained cursor carries its `tagStreamEncoding`, and the router mirrors the fresh-run encode) that
   synchronously replays `chunks[count..]` then continues live until close (one deterministic stream, no
-  lost window; reuses the initial streaming HTTP transport of rpc-core §5.5).
+  lost window; reuses the initial streaming HTTP transport of rpc-core §5.5). If the retained transcript
+  was evicted the endpoint answers `x-abide-stream-resume: fresh` — a full run from 0 that **replaces** the
+  prefix; a failed/offline resume leaves the prefix standing and closes. The block then drains this warm
+  cell exactly like mode A, so probes + `refresh()` work the same.
   **The `@rpc:` cache mux is never the chunk path** — it carries only verb frames.
+
+**Reactivity (`{#for await}` is not one-shot).** The client `{#for await}` mount wraps its source drain
+in an `effect` (`forBlock`, `runtime.ts`), so it subscribes to the backing cell's **state signal** (but
+NOT the per-chunk `streamTick`, so arriving chunks never restart it). A `fn.refresh()`/`fn.invalidate()`
+— or a change to any reactive dep in the source expression (`{#for await x of fn(count)}`) — tears the
+list down and **re-streams it from the fresh run** (clear-and-restream). This holds for **both** modes:
+since both are warm-seeded into the cell, the block adopts with no re-invoke on hydrate AND
+`fn.peek`/`fn.chunks`/`fn.done`/`fn.error`/`fn.refresh` all reflect the on-screen transcript. (Before this,
+a `{#for await}` was a one-shot mount that re-ran the source server-side on `refresh()` but never
+repainted, and an adopted stream's cell probes were dead.)
 
 Mode (B) requires the slot (and its still-running source) to **outlive the SSR request**, which only the
 process-global `sharedStore()` does. Therefore: a `{#for await}` over an RPC stream that is **open at
@@ -446,12 +464,14 @@ timeout?: number }` (it already knows whether the head resolves to an RPC import
   replay endpoint returns a distinguishable **fresh-from-0** response (vs `200` resuming from `from`),
   and the client drops the painted items and re-renders from the fresh values — the defined degraded
   path (double-bill only on this edge).
-- **Offline at hydrate** (`online() === false`): a completed transcript adopts from `values` with no
-  network. An open stream adopts the flushed prefix and **defers** the replay+subscribe, retrying
-  automatically when `online()` flips true, resuming with `from=count` so no chunk duplicates or skips.
-- **Hydrate reorder.** `{#for await}` hydrate must intercept the streamed `<abide-list>` **before**
-  `clearBetween` (analogous to `unwrapStreamSlot` for `{#await}`, `runtime.ts:857`) when a
-  `StreamHandle` is present; only with no handle does it fall back to the current clear-and-re-run.
+- **Offline at hydrate** (`online() === false`): a completed transcript still warm-seeds from `values`
+  with no network. An open stream's `resumeStreamSource` attempts the `?from=count` resume; if the fetch
+  fails (offline, `4xx`, no body) the flushed **prefix stands** and the seeded slot closes — no
+  `online()`-flip auto-retry. A later (now reactive) `fn.refresh()` re-runs the source from scratch.
+- **No hydrate reorder.** There is no `<abide-list>` interception. `bootstrap.replayStreams` warm-seeds
+  the RPC cell via `cell.seedStream` **before** hydrate (mode-A `values` transcript / mode-B
+  `resumeStreamSource`); the `{#for await}` mount then discards the server-painted placeholder region and
+  re-reads the warm cell — no separate DOM handoff, no source re-invoke.
 
 ### 6. The SSR stream budget is source-derived, not a global constant — ✅ BUILT (step 5)
 The bound past which SSR stops waiting on a stream is the **source's own deadline**. Using the emit-time
@@ -594,10 +614,10 @@ fresh from 0 and sets `x-abide-stream-resume: fresh` so the client REPLACES its 
 (`streamHttp.test.ts`). **Client half (4b)**: the SSR→client handoff — an attachable `{#for await}`
 captures its decoded values + registers a `StreamHandle` (`streamScope.ts`/`context.ts`), `collectSeed`
 emits the `streams` seed section (+ inline `values` / `data-ab-count`; `pages.ts`), the emitter tags a
-known-RPC head `{ attachable, rpcName?, args }` (`emitServer.ts`), and `forBlock`'s hydrate reorder
-intercepts the `<abide-list>` before `clearBetween` and adopts-from-`values` (A) / resumes-`?from` (B) /
-`fresh`-replaces (attach-miss) / defers-on-`online()` (offline) via `attachForAwait` (`runtime.ts`),
-wired through `bootstrap.ts`. Tests (`emitStreamAttach.test.ts`):
+known-RPC head `{ attachable, rpcName?, args }` (`emitServer.ts`), and `bootstrap.replayStreams` warms the
+cell via `cell.seedStream` — the `values` transcript (A) or a `resumeStreamSource` prefix+`?from` resume
+(B, `fresh`-replaces on attach-miss / prefix-stands on offline) — so `forBlock`'s reactive drain re-reads
+the warm cell with no re-invoke (no separate DOM handoff). Tests (`emitStreamAttach.test.ts`):
 - completed SSR stream → client renders identical items, **RPC source spy shows zero client-side
   calls**, an `onclick` inside an item fires (reactive mount proven). ✅
 - cut-off SSR stream → client adopts partial + receives remaining chunks live via `?from=count`, source

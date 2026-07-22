@@ -1,0 +1,25 @@
+<script>
+  import { state } from "abide/shared/state"
+  import cacheOff from "$server/rpc/cacheOff"
+  import cacheOn from "$server/rpc/cacheOn"
+
+  // Read both on each click. The `cache: false` read re-runs every time (its counter CLIMBS); the
+  // default cached read runs once and is reused (its counter HOLDS — the browser doesn't even re-fetch).
+  let reads = state(0)
+  let off = state<number | null>(null)
+  let on = state<number | null>(null)
+  async function read() {
+    reads++
+    off = await cacheOff()
+    on = await cacheOn()
+  }
+</script>
+
+<ul class="grid">
+  <li>Reads requested: <strong data-testid="cf-reads">{reads}</strong></li>
+  <li><code>cache: false</code> — runs (climbs): <strong data-testid="cf-off">{off ?? "—"}</strong></li>
+  <li>default cached — runs (holds): <strong data-testid="cf-on">{on ?? "—"}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="cf-read" onclick={read}>Read both</button>
+</div>

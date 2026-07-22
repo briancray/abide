@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import platformCookies from "$server/rpc/platformCookies"
 
   // Two-way bind over a bare state var — `bind:value={cookieValue}` — syncs both ways directly.
@@ -7,8 +7,7 @@
 
   function setCookie() {
     // The browser owns the cookie; the RPC reads it back server-side via cookies().
-    // NOTE: string concatenation (not a template literal) — the `.abide` script transform mis-parses `${...}` interpolation braces (framework bug).
-    document.cookie = "platform_pref=" + encodeURIComponent(cookieValue) + "; path=/"
+    document.cookie = `platform_pref=${encodeURIComponent(cookieValue)}; path=/`
     platformCookies.refresh({ cookieName: "platform_pref" })
   }
 </script>

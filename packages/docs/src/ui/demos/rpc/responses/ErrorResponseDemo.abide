@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcBoom from "$server/rpc/rpcBoom"
 
   // A handler that returns `error(status, message)` surfaces in the browser as a thrown HttpError —

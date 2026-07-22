@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcCreateNote from "$server/rpc/rpcCreateNote"
 
   // POST — a creating mutation. `bind:value={text}` two-way-binds the field; the arg rides in the JSON

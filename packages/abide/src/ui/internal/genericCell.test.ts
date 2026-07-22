@@ -14,7 +14,7 @@ function emit(script: string, body: string): string {
 
 test('a generic `state<T>(...)` var is a cell — reads rewrite to `.read()`', () => {
     const out = emit(
-        `import { state } from "abide/ui/state"\n  let n = state<number>(0)`,
+        `import { state } from "abide/shared/state"\n  let n = state<number>(0)`,
         '<p>{n}</p>',
     )
     expect(out).toContain('n.read()')
@@ -22,7 +22,7 @@ test('a generic `state<T>(...)` var is a cell — reads rewrite to `.read()`', (
 
 test('a generic `state<T>(...)` var write rewrites to `.write()`', () => {
     const out = emit(
-        `import { state } from "abide/ui/state"\n  let n = state<number>(0)\n  function bump() { n = 5 }`,
+        `import { state } from "abide/shared/state"\n  let n = state<number>(0)\n  function bump() { n = 5 }`,
         '<p>{n}</p>',
     )
     expect(out).toContain('n.write(')
@@ -33,7 +33,7 @@ test('nested-generic `state<Array<number>>(...)` (no top-level comma) is still a
     // comma (`state<Map<K, V>>`) is NOT recognised — `splitTopLevelCommas` can't track `<>` (the
     // generic-vs-comparison ambiguity), so it splits on the comma. Use `Record`/`Array` or a cast there.
     const out = emit(
-        `import { state } from "abide/ui/state"\n  let m = state<Array<number>>([])`,
+        `import { state } from "abide/shared/state"\n  let m = state<Array<number>>([])`,
         '<p>{m.length}</p>',
     )
     expect(out).toContain('m.read()')
@@ -41,7 +41,7 @@ test('nested-generic `state<Array<number>>(...)` (no top-level comma) is still a
 
 test('generic `state.computed<T>(...)` is recognised as a computed cell', () => {
     const out = emit(
-        `import { state } from "abide/ui/state"\n  let d = state.computed<number>(() => 1)`,
+        `import { state } from "abide/shared/state"\n  let d = state.computed<number>(() => 1)`,
         '<p>{d}</p>',
     )
     expect(out).toContain('d.read()')
@@ -61,7 +61,7 @@ test('generic `props<T>()` is recognised (destructured prop reads as a local, no
 
 test('a `state < 5` comparison is NOT misread as a cell', () => {
     const out = emit(
-        `import { state } from "abide/ui/state"\n  let flag = state < 5`,
+        `import { state } from "abide/shared/state"\n  let flag = state < 5`,
         '<p>{flag}</p>',
     )
     // `flag` is a plain boolean binding, not a cell — no `.read()` rewrite on it.

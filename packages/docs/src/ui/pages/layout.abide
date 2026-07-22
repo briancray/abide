@@ -25,15 +25,20 @@
       { href: "/rpc/responses", label: "Responses" },
       { href: "/rpc/streaming", label: "Streaming" },
       { href: "/rpc/uploads", label: "File uploads" },
+      { href: "/rpc/probes", label: "Reactive probes" },
     ] },
     { title: "Sockets", items: [
       { href: "/sockets", label: "Live publish" },
+      { href: "/sockets/probes", label: "Reactive probes" },
     ] },
     { title: "Pages", items: [
       { href: "/pages/routing", label: "Routing & navigation" },
     ] },
-    { title: "Caching", items: [
-      { href: "/caching", label: "Cache verbs & probes" },
+    { title: "Caching & cells", items: [
+      { href: "/caching/cell", label: "The cell primitive" },
+      { href: "/caching", label: "Cache verbs" },
+      { href: "/caching/probes", label: "Reactive probes" },
+      { href: "/caching/global", label: "Global probes" },
     ] },
     { title: "Platform", items: [
       { href: "/platform/config", label: "Config" },

@@ -10,7 +10,7 @@
 // anything from here (keeps the one-export-per-file rule intact). Cells are NOT callable — the
 // `.read()/.write()` rewrite is what makes `count` behave like a plain value.
 
-import { computed, effect, type Signal, signal } from '../shared/internal/reactive.ts'
+import { computed, effect, type Signal, signal } from './internal/reactive.ts'
 
 // Global-registry brand so `analyzeScope.ts` recognises a cell by identity without a shared import.
 const STATE_CELL = Symbol.for('abide.ui.stateCell')

@@ -1,0 +1,21 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { cell } from "abide/shared/cell"
+
+  // peek(args): the non-blocking snapshot — undefined while the first load is in flight, the value once
+  // it resolves. Reading it subscribes the caller and kicks a coalesced load.
+  let started = state(false)
+  const greeting = cell(async ({ id }: { id: string }) => {
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    return `hello ${id}`
+  })
+  const snapshot = state.computed(() => (started ? (greeting.peek({ id: "a" }) ?? "undefined (pending)") : "idle"))
+  function read() { started = true }
+</script>
+
+<ul class="grid">
+  <li><code>peek()</code>: <strong data-testid="cellpeek-value">{snapshot}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="cellpeek-read" onclick={read}>Read</button>
+</div>

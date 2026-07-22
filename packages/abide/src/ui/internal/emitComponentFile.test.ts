@@ -10,7 +10,7 @@
 //       `{#component}`.
 
 import { describe, expect, test } from 'bun:test'
-import { state } from '../state.ts'
+import { state } from '../../shared/state.ts'
 import { type ComponentResolver, loadEmitted } from './emit.ts'
 
 function tick(): Promise<void> {
@@ -84,7 +84,7 @@ describe('file-component — hydration claims the SAME server nodes', () => {
 
 describe('file-component — interactive state', () => {
     const COUNTER =
-        `<script>import { state } from "abide/ui/state"; let count = state(0)</script>` +
+        `<script>import { state } from "abide/shared/state"; let count = state(0)</script>` +
         `<button onclick={() => count++}>{count}</button>`
     const COUNTER_PAGE = `<script>import Counter from "./Counter.abide"</script><Counter />`
     const counterResolve: ComponentResolver = (s) => (s === './Counter.abide' ? COUNTER : undefined)

@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import platformGuard from "$server/rpc/platformGuard"
 
   let allowedOut = state("(not run)")

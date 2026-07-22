@@ -1,0 +1,22 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import CellReuseDemo from "$ui/demos/caching/CellReuseDemo.abide"
+  import ServerStateDemo from "$ui/demos/caching/ServerStateDemo.abide"
+</script>
+
+<main class="page">
+  <h1>The cell primitive</h1>
+  <p class="lead"><code>cell(fn)</code> wraps ANY async function into a memoized slot: cache, in-flight coalescing, and a reactive read surface (<code>peek</code>/<code>pending</code>/<code>refreshing</code>/<code>error</code>/<code>watch</code> + <code>refresh</code>/<code>invalidate</code>/<code>amend</code>). <strong>RPC and sockets are cell + a transport</strong> — the same slot machinery, reached the same way on both sides. Here it runs entirely in the browser over a plain async function.</p>
+
+  <p>The handler counts how many times it actually ran. Load once, then read again and again — the count <strong>holds</strong> because the slot is reused (and concurrent reads coalesce onto one run). <code>invalidate</code> drops the slot, so the next read re-runs and the count <strong>climbs</strong>.</p>
+  <Demo id="cell-reuse" title="<code>cell(fn)</code> — a memoized slot over a plain promise" client="src/ui/demos/caching/CellReuseDemo.abide" tab="client">
+    <CellReuseDemo />
+  </Demo>
+
+  <h2><code>state</code> is isomorphic too — a server-side reactive graph</h2>
+  <p>The same reasoning applies to <a href="/templating/reactivity"><code>state</code></a>. It's the <em>sync, owned</em> face of the same signal <code>cell</code> is built on, and it lives in <code>abide/shared/*</code> — so it isn't client-only. A <strong>server</strong> module can own a <code>state</code>, and other server modules import it, derive from it (<code>state.computed</code>), and subscribe to it (<code>watch</code>): a reactive graph running entirely on the server. Here two RPCs (separate modules) write and read a <code>state</code> in <code>$shared/serverReactive</code>; the write propagates through a server-side <code>computed</code> and fires a server-side <code>watch</code>.</p>
+  <Demo id="server-state" title="<code>state</code> + <code>computed</code> + <code>watch</code> across server modules" server="src/shared/serverReactive.ts" client="src/ui/demos/caching/ServerStateDemo.abide" tab="server">
+    <ServerStateDemo />
+  </Demo>
+  <p class="note">Module-level server <code>state</code> is <strong>process-global</strong> (one value across all requests) — right for a global like this counter; for mutable per-request or per-user state, reach for <code>cache: {'{'} shared {'}'}</code> instead, which is guarded and identity-safe.</p>
+</main>

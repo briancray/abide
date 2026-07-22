@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import platformLog from "$server/rpc/platformLog"
 
   // `log()` writes on the server; the browser can't see those lines. This RPC logs server-side — an

@@ -150,6 +150,14 @@ export interface Rpc<Args, T> {
     // recorded (args, value) into the cache so the client resolves from cache instead of re-fetching.
     snapshot(): Array<{ args: Args; value: T }>
     seed(args: Args, value: T): void
+    // §5 streaming hydration: install a warm stream slot from an SSR `{#for await}` handoff (a mode-A
+    // array transcript, or a mode-B "prefix then resumed tail" AsyncIterable) so the client replays it with
+    // no re-invoke and the chunk probes + refresh work.
+    seedStream(
+        args: Args,
+        source: readonly unknown[] | AsyncIterable<unknown>,
+        encoding?: 'jsonl' | 'sse',
+    ): void
     // SERVER-ONLY broadcast seam (rpc-core §8, PR2). `createApp` calls this on a `shared` read to bind
     // the cell's transport-free `notify` sink to a channel publish. Transport stays out of makeRpc —
     // the sink is supplied by createApp (which alone knows the route NAME). A no-op until bound.
@@ -263,6 +271,11 @@ function attachSurface<Args, T>(
         backing.amend(args, next)
     callable.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
     callable.seed = (args: Args, value: T): void => backing.seed(args, value)
+    callable.seedStream = (
+        args: Args,
+        source: readonly unknown[] | AsyncIterable<unknown>,
+        encoding?: 'jsonl' | 'sse',
+    ): void => backing.seedStream(args, source, encoding)
     callable.bindBroadcast = (sink: CacheNotify): void => setBroadcast(sink)
     // Stream probes live on the runtime object for ALL routes (they return undefined/false for a value
     // slot); only the StreamRead/StreamMutation type surfaces them. `peek` is already stream-aware.

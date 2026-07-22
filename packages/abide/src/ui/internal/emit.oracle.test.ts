@@ -9,8 +9,8 @@
 // `throws` fixtures assert the emitted render/mount rejects/throws as expected instead of snapshotting.
 
 import { describe, expect, test } from 'bun:test'
-import { state } from '../state.ts'
-import { watch } from '../watch.ts'
+import { state } from '../../shared/state.ts'
+import { watch } from '../../shared/watch.ts'
 import { loadEmitted } from './emit.ts'
 import { FIXTURES, type Fixture } from './emitFixtures.ts'
 

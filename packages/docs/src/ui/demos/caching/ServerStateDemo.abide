@@ -1,0 +1,27 @@
+<script>
+  import { state } from "abide/shared/state"
+  import serverReactiveBump from "$server/rpc/serverReactiveBump"
+  import serverReactiveRead from "$server/rpc/serverReactiveRead"
+
+  // The SAME `state()` this component could use for local UI is, on the server, owned by a shared module
+  // ($shared/serverReactive) and driven entirely by server code. These RPCs (two SEPARATE server
+  // modules) write and read it; `doubled` is a server-side `state.computed`, `fires` counts a server-side
+  // `watch`. Bump → the write propagates through the derived value and fires the subscription, all on the
+  // server. Nothing here is client state except this snapshot of the last read.
+  let snap = state<{ total: number; doubled: number; fires: number } | null>(null)
+  // The read is `cache: false`, so each bare call re-fetches the live server value (no client cache). A
+  // read AFTER the bump lands once the server-side `watch` has fired (it's scheduled on a microtask), so
+  // `fires` reflects the write; `doubled` is a pull-based `computed`, always current.
+  async function refresh() { snap = await serverReactiveRead() }
+  async function bump() { await serverReactiveBump({ by: 1 }); await refresh() }
+</script>
+
+<ul class="grid">
+  <li>server <code>state</code> — total: <strong data-testid="sr-total">{snap?.total ?? "—"}</strong></li>
+  <li>server <code>computed</code> — doubled: <strong data-testid="sr-doubled">{snap?.doubled ?? "—"}</strong></li>
+  <li>server <code>watch</code> — fires: <strong data-testid="sr-fires">{snap?.fires ?? "—"}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="sr-bump" onclick={bump}>Bump server state</button>
+  <button data-testid="sr-read" onclick={refresh}>Read</button>
+</div>

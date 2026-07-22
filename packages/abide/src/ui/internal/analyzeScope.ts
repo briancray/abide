@@ -96,9 +96,9 @@ export interface ScopeAnalysis {
 // recording/seeded `state`, per-request `route`/`identity`, the client `navigate`, …) rather than a
 // real module import. Every OTHER `abide/shared|ui/*` import is a pass-through real module (M3b).
 const SCOPE_PROVIDED_SPECIFIERS = new Set<string>([
-    'abide/ui/state',
+    'abide/shared/state',
     'abide/ui/props',
-    'abide/ui/watch',
+    'abide/shared/watch',
     'abide/shared/route',
     'abide/shared/url',
     'abide/ui/navigate',
@@ -1411,7 +1411,7 @@ function callFollows(rest: string): boolean {
 }
 
 // Recognise a cell initializer (`state(...)`, `state.computed(...)`, `state.linked(...)`) — including
-// the generic call form (`state<T>(...)`) — where `stateLocal` is the local bound to `abide/ui/state`.
+// the generic call form (`state<T>(...)`) — where `stateLocal` is the local bound to `abide/shared/state`.
 function cellKind(init: string, stateLocal: string): 'state' | 'computed' | 'linked' | null {
     const esc = escapeRegExp(stateLocal)
     const method = init.match(new RegExp(`^${esc}\\s*\\.\\s*(computed|linked|shared)\\b`))
@@ -1618,7 +1618,7 @@ function analyzeScript(content: string): RawScript {
         }
     }
 
-    const stateLocal = localForSpecifier(imports, 'abide/ui/state', 'state', 'state')
+    const stateLocal = localForSpecifier(imports, 'abide/shared/state', 'state', 'state')
     const propsLocal = localForSpecifier(imports, 'abide/ui/props', 'props', 'props')
 
     const bindings: Binding[] = []

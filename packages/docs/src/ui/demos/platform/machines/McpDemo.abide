@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // Call the MCP endpoint (JSON-RPC 2.0 over HTTP POST) with tools/list and render the tool names.
   // Every RPC reachable by machines is projected as an MCP tool.

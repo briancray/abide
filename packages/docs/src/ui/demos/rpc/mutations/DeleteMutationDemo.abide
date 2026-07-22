@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcDeleteNote from "$server/rpc/rpcDeleteNote"
 
   // DELETE — a removing mutation, keyed only by id. Args ride in the JSON body; the handler runs on

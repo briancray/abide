@@ -56,16 +56,7 @@ test.describe('Reads', () => {
         await expect(result).toContainText('content-type: application/json')
         await expect(result).toContainText('Hello, raw!')
     })
-
-    test('in-template fn.pending()/fn.error() probes reflect the resolving slot', async ({
-        page,
-    }) => {
-        await page.goto('/rpc/reads')
-        // The read resolves: the value branch renders, pending clears to false, error stays none.
-        await expect(page.getByTestId('probe-value')).toHaveText('Hello, probe!')
-        await expect(page.getByTestId('probe-pending-flag')).toHaveText('false')
-        await expect(page.getByTestId('probe-error-flag')).toHaveText('none')
-    })
+    // The in-template pending()/error() probe demo now lives on /rpc/probes (see rpc-probes.spec.ts).
 })
 
 test.describe('Mutations', () => {
@@ -143,6 +134,40 @@ test.describe('Streaming', () => {
         const items = page.getByTestId('jsonl-list').locator('li')
         await expect(items).toHaveCount(4)
         await expect(items.last()).toHaveText('tick 4 of 4')
+    })
+
+    // #52: `{#for await}` is now reactive — clicking "Restart" (which calls `rpcTicker.refresh({ count: 4
+    // })`) re-runs the source AND re-mounts the block (clear-and-restream). The network refetch alone
+    // can't prove the repaint (it fires either way) and the labels are identical across runs, so we pin a
+    // DOM-identity marker on the first row: a genuine re-mount rebuilds the rows and drops it.
+    test('jsonl {#for await} Restart re-mounts the list on refresh() (#52)', async ({ page }) => {
+        const calls: string[] = []
+        page.on('request', (request) => {
+            if (request.url().includes('rpcTicker')) calls.push(request.url())
+        })
+
+        await page.goto('/rpc/streaming')
+        await page.getByTestId('jsonl-btn').click() // Start
+        const items = page.getByTestId('jsonl-list').locator('li')
+        await expect(items).toHaveCount(4)
+
+        // Pin the server-streamed first row; a real re-mount rebuilds the list and this node goes away.
+        await page.evaluate(() =>
+            document
+                .querySelector('[data-testid="jsonl-list"] li')
+                ?.setAttribute('data-restart-probe', '1'),
+        )
+
+        await page.getByTestId('jsonl-btn').click() // Restart → rpcTicker.refresh({ count: 4 })
+
+        // The source re-ran server-side (sanity — this holds even under the bug).
+        await expect.poll(() => calls.length).toBeGreaterThanOrEqual(2)
+
+        // The block re-mounted: the pinned original row is gone and the list rebuilt to 4 fresh rows.
+        await expect(page.locator('[data-testid="jsonl-list"] li[data-restart-probe]')).toHaveCount(
+            0,
+        )
+        await expect(items).toHaveCount(4)
     })
 
     test('sse() stream renders each frame with {#for await}', async ({ page }) => {

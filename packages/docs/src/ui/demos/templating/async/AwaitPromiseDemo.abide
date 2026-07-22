@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // Each click reseeds a promise held in state. The {#await} block shows the pending branch, then the
   // resolved or rejected branch; {:finally} renders once the promise settles either way.

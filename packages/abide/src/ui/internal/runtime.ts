@@ -11,12 +11,10 @@
 // Stage 1 (this PR) only exercises the clone path; Stage 2 reuses the identical calls to walk server
 // DOM during hydration.
 
-import type { StreamHandle } from '../../server/internal/pages.ts'
 import { markIterableDone } from '../../shared/internal/iterableDone.ts'
 import { effect, signal, untrack } from '../../shared/internal/reactive.ts'
 import { peekSettled } from '../../shared/internal/settledRead.ts'
 import { log } from '../../shared/log.ts'
-import { online } from '../../shared/online.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
 export { effect, signal, untrack }
@@ -143,31 +141,10 @@ export function endHydration(): void {
     hydrateForItem = false
 }
 
-// ---------------------------------------------------------------------------
-// Stream attach handoff (replayable-streams.md §5)
-// ---------------------------------------------------------------------------
-//
-// The seed's `streams` section (a `StreamHandle[]`, keyed by `<abide-list id>`) is installed here by
-// `bootstrap` BEFORE `hydrate` runs. `forBlock`'s `{#for await}` hydrate path looks a matching handle
-// up by the painted list's id and ADOPTS the decoded transcript (mode A) or RESUMES it over the
-// resumable HTTP replay (mode B) instead of re-invoking the RPC source — the SSR paint is placeholder
-// only. No handle for a list → today's clear-and-re-run (non-RPC sources, or the handoff seed absent).
-let streamHandoffs = new Map<string, StreamHandle>()
-// The app mount base (e.g. "" or "/app") for a mode-B resume URL, captured at handoff-install time.
-let streamHandoffBase = ''
-
-export function beginStreamHandoff(streams: StreamHandle[] | undefined, base: string): void {
-    streamHandoffs = new Map()
-    streamHandoffBase = base
-    if (streams !== undefined)
-        for (const handle of streams) streamHandoffs.set(handle.listId, handle)
-}
-
-// Clear the installed handoffs after a hydrate pass (a mode-B resume already captured its handle +
-// base into its own closure, so this never disturbs an in-flight resume).
-export function endStreamHandoff(): void {
-    streamHandoffs = new Map()
-}
+// Stream attach handoff (replayable-streams.md §5): the seed's `streams` section warms the client RPC
+// cell in `bootstrap.replayStreams` BEFORE hydrate (a completed mode-A transcript via `cell.seedStream`,
+// or a mode-B prefix+resume source). The `{#for await}` hydrate path then just re-reads the warm cell —
+// no separate DOM handoff, so there is no runtime-side handoff registry any more.
 
 const ELEMENT_NODE = 1
 const TEXT_NODE = 3
@@ -1316,144 +1293,6 @@ function removeListItem(item: ListItem): void {
     remove(item.endMarker)
 }
 
-// The §5 attach-handoff match: the streamed `<abide-list>` sits directly after the block's `open`
-// anchor (analogous to `unwrapStreamSlot` for `{#await}`). Read its id and look up the seeded handle;
-// null when the first node is not an `<abide-list>` or no handle was seeded for it.
-function matchStreamHandoff(open: Node): StreamHandle | null {
-    const first = open.nextSibling
-    if (
-        first === null ||
-        first.nodeType !== ELEMENT_NODE ||
-        (first as Element).tagName !== 'ABIDE-LIST'
-    )
-        return null
-    const listId = (first as Element).getAttribute('id')
-    if (listId === null) return null
-    return streamHandoffs.get(listId) ?? null
-}
-
-// Build the resumable-replay URL for a mode-B handle: `GET <base>/rpc/<name>?from=<count>&args=<json>`
-// (the router replays `chunks[count..]` then continues live; §5, rpc-core §5.5). Args ride the query
-// exactly like a normal read; a zero-arg source omits them.
-function resumeUrl(base: string, name: string, args: unknown, from: number): string {
-    const argsQuery = args !== undefined ? `&args=${encodeURIComponent(JSON.stringify(args))}` : ''
-    return `${base}/__abide/rpc/${name}?from=${from}${argsQuery}`
-}
-
-interface ResumeCallbacks {
-    isDisposed: () => boolean
-    onFresh: () => void // the transcript was gone server-side (`x-abide-stream-resume: fresh`) → REPLACE
-    onChunk: (value: unknown) => void
-    onError: (error: unknown) => void
-}
-
-// Mode-B resume: stream `GET …?from=<count>` and deliver each decoded jsonl chunk. Defers while OFFLINE
-// and retries when `online()` flips true (resuming from the same `count`, so no dup/skip). Best-effort:
-// a network/parse failure surfaces via `onError` (the block's `{:catch}` if any) rather than throwing.
-function resumeStreamHandoff(base: string, handle: StreamHandle, cbs: ResumeCallbacks): void {
-    const name = handle.name
-    if (name === null) return // no route name → can't resume; the adopted prefix stands.
-    const run = async (): Promise<void> => {
-        if (cbs.isDisposed()) return
-        if (!online()) {
-            // Defer until connectivity returns. The effect re-runs on `online()` change; dispose it once it
-            // fires (or if the block was torn down while offline).
-            const dispose = effect(() => {
-                if (cbs.isDisposed()) {
-                    dispose()
-                    return
-                }
-                if (online()) {
-                    dispose()
-                    void run()
-                }
-            })
-            return
-        }
-        try {
-            const response = await fetch(resumeUrl(base, name, handle.args, handle.count))
-            if (cbs.isDisposed()) return
-            if (!response.ok || response.body === null) return // give up quietly — the adopted prefix stands.
-            if (response.headers.get('x-abide-stream-resume') === 'fresh') cbs.onFresh()
-            const reader = response.body.getReader()
-            const decoder = new TextDecoder()
-            let buffer = ''
-            for (;;) {
-                const chunk = await reader.read()
-                if (chunk.done === true) break
-                if (cbs.isDisposed()) {
-                    await reader.cancel()
-                    return
-                }
-                buffer += decoder.decode(chunk.value, { stream: true })
-                let newline = buffer.indexOf('\n')
-                while (newline >= 0) {
-                    const line = buffer.slice(0, newline).trim()
-                    buffer = buffer.slice(newline + 1)
-                    if (line.length > 0) cbs.onChunk(JSON.parse(line))
-                    newline = buffer.indexOf('\n')
-                }
-            }
-        } catch (error) {
-            if (!cbs.isDisposed()) cbs.onError(error)
-        }
-    }
-    void run()
-}
-
-// §5 attach: re-mount the SEEDED transcript reactively (mode A = the whole thing; mode B = the flushed
-// prefix), then, for an OPEN stream, resume the remainder over the resumable HTTP replay. The RPC source
-// is NEVER invoked here — that is the whole point (Why #1). Items mount in CREATE mode: the server paint
-// was discarded (a placeholder), so there is nothing to claim; each item is built fresh from its value,
-// so reactive item bodies (`onclick`/state) work exactly as a client-mounted item.
-function attachForAwait(
-    parent: Node,
-    blockEnd: Node,
-    options: ForOptions,
-    handle: StreamHandle,
-    items: ListItem[],
-): Disposer {
-    let disposed = false
-    let index = 0
-    let catchDispose: Disposer | null = null
-
-    const appendValue = (value: unknown): void => {
-        const key = options.keyFor(value, index)
-        inCreateMode(() =>
-            items.push(createListItem(parent, blockEnd, value, index, key, options.createItem)),
-        )
-        index++
-    }
-    for (const value of handle.values ?? []) appendValue(value)
-
-    if (handle.done !== true) {
-        // Mode B — open at flush: resume from `count`. On a fresh-from-0 response (transcript gone) REPLACE
-        // the painted prefix; otherwise append the live remainder.
-        resumeStreamHandoff(streamHandoffBase, handle, {
-            isDisposed: () => disposed,
-            onFresh: () => {
-                for (const item of items) removeListItem(item)
-                items.length = 0
-                index = 0
-            },
-            onChunk: (value) => {
-                if (!disposed) appendValue(value)
-            },
-            onError: (error) => {
-                if (!disposed && options.catch !== null)
-                    catchDispose = options.catch(error)(parent, blockEnd)
-            },
-        })
-    }
-
-    return () => {
-        disposed = true
-        for (const item of items) removeListItem(item)
-        if (catchDispose !== null) catchDispose()
-        remove(blockEnd)
-    }
-}
-
 export function forBlock(
     parent: Node,
     open: Node | null,
@@ -1461,51 +1300,91 @@ export function forBlock(
     options: ForOptions,
 ): Disposer {
     // Async `{#for await}` hydrate (replayable-streams.md §5). The server streamed the source into an
-    // `<abide-list>`; for a known-RPC source it ALSO seeded the decoded transcript as a `StreamHandle`.
-    // When a handle matches the painted list we ADOPT it (mode A) / RESUME it (mode B) — the source is
-    // NEVER re-invoked on the client. With NO handle (a non-RPC source, or the handoff seed absent) we
-    // keep the documented create-fallback (PR5, decision 5): discard the server region and re-iterate a
-    // FRESH iterator, since a same-node claim is unsound without the per-item cursor the seed carries.
-    // Capture the handle BEFORE `clearBetween` removes the `<abide-list>` it reads.
-    const handoff = hydrating && options.isAwait && open !== null ? matchStreamHandoff(open) : null
+    // `<abide-list>` placeholder; on hydrate the client discards it and re-reads the source. For a
+    // known-RPC source `replayStreams` (bootstrap) has already WARM-SEEDED the cell from the handoff (a
+    // completed mode-A transcript, or a mode-B prefix+resume source), so the read replays with NO client
+    // re-invoke. A non-RPC source simply re-iterates. Clear the server region before the effect re-mounts.
     if (hydrating && options.isAwait && open !== null) clearBetween(open.nextSibling, anchor)
     const blockEnd = document.createComment('for-end')
     insert(parent, blockEnd, anchor)
     let items: ListItem[] = []
 
     if (options.isAwait) {
-        if (handoff !== null) return attachForAwait(parent, blockEnd, options, handoff, items)
-
-        let disposed = false
-        let index = 0
+        // Reactive drain — a warm-seeded SSR-adopted stream (mode A or B), a fresh client mount, or a
+        // non-RPC source on hydrate.
+        // Wrap the drain in an effect so a source `.refresh()`/`.invalidate()` — or any tracked reactive
+        // dep in the source expression — tears the list down and re-streams it (clear-and-restream);
+        // previously a `{#for await}` was a ONE-SHOT mount that ignored every post-mount change (issue
+        // #52). For an SSR-adopted stream the cell was warm-seeded (`replayStreams`), so this first drain
+        // replays the transcript with NO client re-invoke; a fresh/non-RPC source loads as before.
+        let generation = 0
         let catchDispose: Disposer | null = null
-        ;(async () => {
-            // Await the source: a STREAMING RPC read is `Promise<AsyncIterable<C>>` (the cell read is
-            // async), and `for await` cannot iterate a Promise. Awaiting a non-thenable `gen()` is
-            // identity, so a plain async-generator source is unchanged. Mirrors `toIterator`.
-            const source = (await options.read()) as AsyncIterable<unknown>
-            try {
-                for await (const value of source) {
-                    if (disposed) return
-                    const key = options.keyFor(value, index)
-                    items.push(
-                        createListItem(parent, blockEnd, value, index, key, options.createItem),
-                    )
-                    index++
-                }
-                // Stream drained — flip the `done(source)` probe (unless the block was torn down first).
-                if (!disposed) markIterableDone(source)
-            } catch (error) {
-                if (disposed) return
-                // An errored stream is finished too, so `done(source)` observes completion either way.
-                markIterableDone(source)
-                if (options.catch !== null) catchDispose = options.catch(error)(parent, blockEnd)
-            }
-        })()
-        return () => {
-            disposed = true
+        const clearRun = (): void => {
             for (const item of items) removeListItem(item)
-            if (catchDispose !== null) catchDispose()
+            items = []
+            if (catchDispose !== null) {
+                catchDispose()
+                catchDispose = null
+            }
+        }
+        const stop = effect(() => {
+            // Reading the source subscribes this effect to the backing cell's STATE signal (invalidate/
+            // refresh) plus any reactive dep in the args — but NOT to per-chunk growth (the cell keeps
+            // that on a separate `streamTick`), so live chunks arriving never restart the block.
+            const source = options.read()
+            const runGen = ++generation
+            const stale = (): boolean => generation !== runGen
+            untrack(() => {
+                clearRun()
+                let index = 0
+                // A STREAMING RPC read is `Promise<AsyncIterable<C>>` (the cell read is async), and `for
+                // await` cannot iterate a Promise; awaiting a non-thenable `gen()` is identity, so a plain
+                // async-generator source is unchanged. Mirrors `toIterator`.
+                void (async () => {
+                    let iterable: AsyncIterable<unknown>
+                    try {
+                        iterable = (await source) as AsyncIterable<unknown>
+                    } catch (error) {
+                        if (!stale() && options.catch !== null)
+                            catchDispose = options.catch(error)(parent, blockEnd)
+                        return
+                    }
+                    try {
+                        for await (const value of iterable) {
+                            if (stale()) return
+                            const key = options.keyFor(value, index)
+                            items.push(
+                                createListItem(
+                                    parent,
+                                    blockEnd,
+                                    value,
+                                    index,
+                                    key,
+                                    options.createItem,
+                                ),
+                            )
+                            index++
+                        }
+                        // Stream drained — flip the `done(iterable)` probe (unless superseded first).
+                        if (!stale()) markIterableDone(iterable)
+                    } catch (error) {
+                        if (stale()) return
+                        // An errored stream is finished too, so `done(iterable)` observes completion.
+                        markIterableDone(iterable)
+                        if (options.catch !== null)
+                            catchDispose = options.catch(error)(parent, blockEnd)
+                    }
+                })()
+            })
+            // Cleanup: bump the generation so any in-flight drain from this run stops appending. The DOM
+            // teardown runs in the NEXT run's `clearRun` (and in the final dispose below).
+            return () => {
+                generation++
+            }
+        })
+        return () => {
+            stop()
+            clearRun()
             remove(blockEnd)
         }
     }

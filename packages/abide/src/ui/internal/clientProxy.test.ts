@@ -47,6 +47,23 @@ test('read proxy coalesces/caches repeated loads (handler runs once)', async () 
     expect(calls).toBe(1)
 })
 
+test('a cache:false read bypasses the client cell — every bare call re-fetches', async () => {
+    let calls = 0
+    const app = boot({
+        tick: GET(() => ++calls, { cache: false }),
+    })
+    const tick = clientProxy<Record<string, never>, number>('tick', 'GET', {
+        base: app.origin,
+        cache: false,
+    }) as Rpc<Record<string, never>, number>
+
+    // `cache: false` opts out of the cell entirely: each bare call runs the handler fresh.
+    expect(await tick({})).toBe(1)
+    expect(await tick({})).toBe(2)
+    expect(await tick({})).toBe(3)
+    expect(calls).toBe(3)
+})
+
 test('invalidate forces a re-fetch', async () => {
     let calls = 0
     const app = boot({

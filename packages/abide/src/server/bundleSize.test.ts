@@ -46,7 +46,7 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     const app = createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
-            '/': "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
+            '/': "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
         },
     })
 
@@ -97,7 +97,7 @@ test("the SSR'd page injects the content-hashed client loader script tag", async
 
 test('bootstrapPage HYDRATES via the TS7-free path (claims server nodes, working reactivity)', async () => {
     const source =
-        "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>"
+        "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>"
     // PR7: bootstrapPage claims the SSR DOM. Render the real anchored server HTML into the container.
     const { render, hydrate } = await loadEmitted(source)
     const html = await render({ state: (v: unknown) => ({ read: () => v, write() {} }) })

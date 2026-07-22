@@ -604,12 +604,12 @@ export const FIXTURES: Fixture[] = [
     // --- assemble-level (script-bearing) --------------------------------------
     {
         name: 'state drives text',
-        src: "<script>import { state } from 'abide/ui/state'; let name = state('world')</script><h1>Hello {name}</h1>",
+        src: "<script>import { state } from 'abide/shared/state'; let name = state('world')</script><h1>Hello {name}</h1>",
         kind: 'script',
     },
     {
         name: 'numeric state',
-        src: "<script>import { state } from 'abide/ui/state'; let count = state(41)</script><span>{count + 1}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let count = state(41)</script><span>{count + 1}</span>",
         kind: 'script',
     },
     {
@@ -620,7 +620,7 @@ export const FIXTURES: Fixture[] = [
     },
     {
         name: 'computed from state',
-        src: "<script>import { state } from 'abide/ui/state'; let n = state(2); const d = state.computed(()=>n*2)</script><span>{d}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let n = state(2); const d = state.computed(()=>n*2)</script><span>{d}</span>",
         kind: 'script',
     },
     {
@@ -641,12 +641,12 @@ export const FIXTURES: Fixture[] = [
     },
     {
         name: 'multiple state vars',
-        src: "<script>import { state } from 'abide/ui/state'; let a = state(1); let b = state(2)</script><span>{a + b}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let a = state(1); let b = state(2)</script><span>{a + b}</span>",
         kind: 'script',
     },
     {
         name: 'event increments state',
-        src: "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
         kind: 'script',
         server: false,
         interact: async (host) => {
@@ -658,7 +658,7 @@ export const FIXTURES: Fixture[] = [
     },
     {
         name: 'compound assignment',
-        src: "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count += 5}>+</button><span>{count}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count += 5}>+</button><span>{count}</span>",
         kind: 'script',
         server: false,
         interact: async (host) => {
@@ -670,7 +670,7 @@ export const FIXTURES: Fixture[] = [
     },
     {
         name: 'function handler mutates state',
-        src: "<script>import { state } from 'abide/ui/state'\nlet count = state(0)\nfunction inc(){ count++ }</script><button onclick={inc}>+</button><span>{count}</span>",
+        src: "<script>import { state } from 'abide/shared/state'\nlet count = state(0)\nfunction inc(){ count++ }</script><button onclick={inc}>+</button><span>{count}</span>",
         kind: 'script',
         server: false,
         interact: async (host) => {
@@ -682,7 +682,7 @@ export const FIXTURES: Fixture[] = [
     },
     {
         name: 'computed updates on state change',
-        src: "<script>import { state } from 'abide/ui/state'; let n = state(2); const d = state.computed(()=>n*2)</script><button onclick={()=>n++}>+</button><span>{d}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let n = state(2); const d = state.computed(()=>n*2)</script><button onclick={()=>n++}>+</button><span>{d}</span>",
         kind: 'script',
         server: false,
         interact: async (host) => {
@@ -694,7 +694,7 @@ export const FIXTURES: Fixture[] = [
     },
     {
         name: 'state drives if',
-        src: "<script>import { state } from 'abide/ui/state'; let show = state(false)</script><button onclick={()=>show = true}>go</button>{#if show}<p>yes</p>{/if}",
+        src: "<script>import { state } from 'abide/shared/state'; let show = state(false)</script><button onclick={()=>show = true}>go</button>{#if show}<p>yes</p>{/if}",
         kind: 'script',
         server: false,
         interact: async (host) => {
@@ -706,7 +706,7 @@ export const FIXTURES: Fixture[] = [
     },
     {
         name: 'state.linked reseeds',
-        src: "<script>import { state } from 'abide/ui/state'; let a = state(1); let b = state.linked(()=>a * 10)</script><button onclick={()=>a++}>+</button><span>{b}</span>",
+        src: "<script>import { state } from 'abide/shared/state'; let a = state(1); let b = state.linked(()=>a * 10)</script><button onclick={()=>a++}>+</button><span>{b}</span>",
         kind: 'script',
         server: false,
         interact: async (host) => {

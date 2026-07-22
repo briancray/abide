@@ -3,7 +3,7 @@
 // the `<script>`. Proves SSR renders the current branch, and flipping the cell swaps the mounted one.
 
 import { describe, expect, test } from 'bun:test'
-import { state } from '../state.ts'
+import { state } from '../../shared/state.ts'
 import { type ComponentResolver, loadEmitted } from './emit.ts'
 
 function tick(): Promise<void> {
@@ -19,7 +19,7 @@ const DONE = `<span data-testid="d">done</span>`
 
 const PAGE =
     `<script>` +
-    `import { state } from "abide/ui/state"; ` +
+    `import { state } from "abide/shared/state"; ` +
     `import Pending from "./Pending.abide"; ` +
     `import Done from "./Done.abide"; ` +
     `let done = state(false); ` +

@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcGreet from "$server/rpc/rpcGreet"
 
   // Raw bypass: `fn.raw(args, init?)` returns the UNTOUCHED Response — no cell, no cache, no

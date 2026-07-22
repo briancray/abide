@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // {#if}/{:else if}/{:else} — the block picks exactly one branch and swaps the DOM when `level`
   // crosses a threshold. The runtime reconciles fine-grained; nothing is diffed by hand.

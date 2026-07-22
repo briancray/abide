@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import cacheCounter from "$server/rpc/cacheCounter"
 
   // `fn.watch(args, cb)` runs cb whenever THIS slot's value changes (method form, not `watch(thunk)`).

@@ -27,7 +27,7 @@ const PAGE = `<script>import Card from "./Card.abide"</script><Card title="Hello
 // component import + an RPC imported ONLY here (proves the harvest reaches component modules).
 const CARD =
     `<script>` +
-    `import { state } from "abide/ui/state";` +
+    `import { state } from "abide/shared/state";` +
     `import { props } from "abide/ui/props";` +
     `import Badge from "./Badge.abide";` +
     `import cardPing from "../../server/rpc/cardPing";` +

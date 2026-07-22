@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import { html } from "abide/ui/html"
 
   // {html(...)} raw — a trusted HTML string rendered as real nodes.

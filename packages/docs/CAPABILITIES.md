@@ -15,13 +15,14 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 
 ## Coverage summary (verify phase)
 
-- **Total capabilities in this manifest: 130** (~86 browser-facing PW/PW+RT, ~44 runtime-only RT).
-- **Playwright suite: 14 spec files, 106 tests — ALL PASSING.** They drive the real docs app (a real
+- **Total capabilities in this manifest: 135** (~91 browser-facing PW/PW+RT, ~44 runtime-only RT).
+- **Playwright suite: 18 spec files, 122 tests — ALL PASSING.** They drive the real docs app (a real
   abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way binds,
   soft-nav, sockets, and machine surfaces fetched from the browser.
-  - `rpc` (20), `bindings` (14), `platform` (14), `cache` (11), `control` (9), `reactivity` (8),
-    `routing` (8), `sockets` (6), `build-deploy` (5), `smoke` (4), `streaming` (3), `uploads` (2),
-    `hydration` (1), `styling` (1).
+  - `rpc` (20), `bindings` (15), `platform` (14), `control` (9), `reactivity` (8), `routing` (8),
+    `caching-cells` (7), `sockets` (7), `cache` (6), `build-deploy` (5), `caching-global` (5),
+    `rpc-probes` (4), `smoke` (4), `bench` (3), `streaming` (3), `uploads` (2), `hydration` (1),
+    `styling` (1).
 - **Docs example structure:** every live demo is a standalone `src/ui/demos/<section>/<sub>/<Name>.abide`
   component, rendered inside the reusable `components/Demo.abide` card. The card shows the demo, then
   two source tabs in a fixed order — **server** (the full `.ts` RPC/socket) then **client** (the full
@@ -150,25 +151,27 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | Partial-args match (superset slots) | RT | [x] (/caching: invalidate `{team:"red"}`) |
 | Global `invalidate({ tags })` | PW+RT | [x] (/caching TagsInvalidateDemo: `invalidate({tags:["docs"]})` drops both tagged shared reads) |
 | Global `refresh({ tags })` | PW+RT | [x] (/caching TagsRefreshDemo: `refresh({tags:["docs"]})` revalidates both in place) |
-| Probe `fn.pending` | PW | [x] (/caching: slow read) |
-| Probe `fn.refreshing` | PW | [x] (/caching RefreshingDemo: refreshing flips yes over a retained value while pending stays no) |
-| Probe `fn.peek` | PW | [x] (/caching: counter peek) |
-| Probe `fn.error` | PW | [x] (/caching: flaky 400) |
-| Probe `fn.watch` | PW | [x] (/caching: `watch(() => fn.peek(...), …)` tally) |
-| Global `pending({tags})` / `refreshing({tags})` | PW | [~] (/caching shows tag `invalidate`/`refresh`; the aggregate tag probe itself isn't demoed) |
+| Probe `fn.pending` | PW | [x] (/rpc/probes ProbesDemo: slow read) |
+| Probe `fn.refreshing` | PW | [x] (/rpc/probes RefreshingDemo: refreshing flips yes over a retained value while pending stays no) |
+| Probe `fn.peek` | PW | [x] (/rpc/probes ProbesDemo: counter peek) |
+| Probe `fn.error` | PW | [x] (/rpc/probes FlakyDemo: flaky 400) |
+| Probe `fn.watch` | PW | [x] (/rpc/probes WatchMethodDemo: `watch(() => fn.peek(...), …)` tally) |
+| Global `pending({tags})` / `refreshing({tags})` | PW | [x] (/caching/global TagProbesDemo: the aggregate tag probe over slow tagged reads) |
 | `done(iterable)` → boolean | PW+RT | [x] (/templating/async: `done-status` streaming→complete + restart) |
-| `online()` → reactive boolean | PW | [x] (platform/observability: online-flag + offline-toggle reactivity) |
-| `reachable(host)` → await boolean | PW+RT | [x] (/caching: `cacheReachable` RPC, self vs dead port) |
-| `abide/shared/cell` — the memoizer primitive | RT | [x] (RPCs are cell-backed; usable in a template via M3b import) |
+| `online()` → reactive boolean | PW | [x] (/caching/global OnlineDemo + platform/observability: online-flag + offline-toggle reactivity) |
+| `reachable(host)` → await boolean | PW+RT | [x] (/caching/global ReachableDemo: `cacheReachable` RPC, self vs dead port) |
+| `abide/shared/cell` — the memoizer primitive | PW+RT | [x] (/caching/cell CellReuseDemo: repeated reads reuse one slot; ServerStateDemo: an isomorphic server-owned `state`+`watch` graph driven by RPCs) |
+| `cell.*` probes on a bare `cell()` (`peek`/`pending`/`refreshing`/`error`/`watch`) | PW | [x] (/caching/probes Cell{Peek,Pending,Refreshing,Error,Watch}ProbeDemo) |
+| `cache: false` — opt a read/mutation OUT of the cell (every call runs) | PW+RT | [x] (/caching CacheFalseDemo: `cacheOff` climbs every call, `cacheOn` holds) |
 
-## 5. Reactivity (UI — `abide/ui/*`, client-only)
+## 5. Reactivity (isomorphic — `abide/shared/*` state/watch; UI — `abide/ui/*`)
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `state(initial, transform?)` — writable cell | PW | [x] (/templating/reactivity) |
-| `state.computed(...)` — read-only derived | PW | [x] (/templating/reactivity) |
+| `state(initial, transform?)` — writable cell (isomorphic: `abide/shared/state`, server-usable) | PW+RT | [x] (/templating/reactivity; server-side in `src/shared/serverReactive.ts` → /caching/cell ServerStateDemo) |
+| `state.computed(...)` — read-only derived | PW | [x] (/templating/reactivity; also server-side in ServerStateDemo) |
 | `state.linked(src, transform?)` — reseeded writable | PW | [x] (/templating/reactivity) |
 | `state.shared(key, initial)` — cell shared by key (instances + tabs) | PW | [x] (/templating/reactivity: `SharedTally.abide` ×2, cross-instance + cross-tab) |
-| `watch(source, handler)` / `watch(thunk)` | PW | [x] (/templating/reactivity) |
+| `watch(source, handler)` / `watch(thunk)` — isomorphic (`abide/shared/watch`; fires server-side too) | PW+RT | [x] (/templating/reactivity; server-side in ServerStateDemo's `serverReactive.ts`) |
 | `props<T>()` — reactive prop reader | PW | [~] (/templating/components — props read reactively by a child component; the degenerate page-level reader demo was removed) |
 | `html(str)` / `` html`…` `` — raw HTML | PW | [x] (/templating/bindings RawHtmlDemo) |
 | `navigate(target, { replace?, keepScroll? })` — target is a resolved href; compose with `url()` | PW | [x] (/pages/routing navigate() + navigate(url(...)) e2e) |
@@ -237,6 +240,9 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | `handler` — mediate client publishes | RT | [x] (sockets page — stamps via:client, drops empty) |
 | `tail` / `ttl` options | RT | [x] (sockets page — tail replay on reload) |
 | `schema` / `clients` options | RT | [ ] |
+| `{#for await}` over a socket — subscribe-by-iterate in a template | PW | [x] (/sockets ForAwaitDemo) |
+| Socket probe `.peek()` — latest (`ttl`-windowed) | PW | [x] (/sockets/probes PeekDemo) |
+| Socket probe `.chunks()` — session transcript (`tail`-capped) | PW | [x] (/sockets/probes ChunksDemo) |
 | HTTP face: SSE subscribe / POST publish | RT | [x] (sockets page) |
 | Multiplexed WS mux `/__abide/sockets` | PW+RT | [x] (/sockets — folded in) |
 
@@ -315,20 +321,20 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | 1 | RPC helpers — verbs | 13 | 6 | 7 |
 | 2 | Responses | 6 | 5 | 1 |
 | 3 | Call surface | 4 | 4 | 0 |
-| 4 | Cache verbs + probes | 17 | 12 | 5 |
-| 5 | Reactivity (UI) | 9 | 9 | 0 |
+| 4 | Cache verbs + probes | 19 | 14 | 5 |
+| 5 | Reactivity (shared state/watch + UI) | 9 | 9 | 0 |
 | 6 | Template bindings / directives | 12 | 12 | 0 |
 | 7 | Control flow | 11 | 11 | 0 |
 | 8 | Async reads in templates | 4 | 4 | 0 |
 | 9 | Routing / navigation | 7 | 7 | 0 |
-| 10 | Sockets | 8 | 4 | 4 |
+| 10 | Sockets | 11 | 7 | 4 |
 | 11 | Auth / request scope | 6 | 3 | 3 |
 | 12 | Config / observability | 10 | 6 | 4 |
 | 13 | Machine surfaces | 7 | 3 | 4 |
 | 14 | Agent | 6 | 0 | 6 |
 | 15 | CLI / build | 9 | 0 | 9 |
 | 16 | Testing harness | 1 | 0 | 1 |
-| | **Total** | **130** | **~86 browser-facing** | **~44 runtime-only** |
+| | **Total** | **135** | **~91 browser-facing** | **~44 runtime-only** |
 
 Notes:
 - Buckets 5–9 (reactivity, template bindings, control flow, async reads, routing) are the richest

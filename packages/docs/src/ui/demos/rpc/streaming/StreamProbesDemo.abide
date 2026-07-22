@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcTicker from "$server/rpc/rpcTicker"
 
   // A STREAMING read (a GET whose handler yields an AsyncIterable) swaps the value probes for CHUNK

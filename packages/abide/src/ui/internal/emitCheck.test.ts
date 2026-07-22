@@ -116,6 +116,19 @@ describe('multi-line initializer continuation (ASI parity with TS)', () => {
         expect(code).toContain('__abideUnwrap( 1)')
         expect(code).toContain('__abideUnwrap( 2)')
     })
+
+    test('a substitution-template initializer does not swallow the next statement', () => {
+        // Regression: the raw scanner mis-lexed the `}` closing a substitution as a CloseBrace and let the
+        // trailing backtick run away to EOF, merging the following declaration into the __abideUnwrap(...)
+        // call (a TS syntax error on valid `.abide`). Re-scanning template tokens keeps the substitution
+        // and the statement boundary intact.
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal ${…} IS the fixture under test
+        const tmpl = 'return `hi ${name}`'
+        const code = wrapped(`const g = make(() => {\n  ${tmpl}\n})\nconst after = g`)
+        // The template initializer is wrapped on its own; the next statement stays separate.
+        expect(code).toContain(`${tmpl}\n}));`)
+        expect(code).toContain('after = __abideUnwrap( g);')
+    })
 })
 
 // A state var must type as its underlying VALUE, so all three binding shapes get the SAME `bar: T` a

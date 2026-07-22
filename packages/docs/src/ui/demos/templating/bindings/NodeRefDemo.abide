@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // bind:element cell — a bare state cell IS the node ref: abide writes the DOM node into it on mount
   // and clears it on teardown (no attach-fn wrapper needed).

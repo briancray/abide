@@ -21,7 +21,7 @@ describe('resolveTemplateAlias', () => {
     test('non-alias specifiers return undefined (caller falls back to relative)', () => {
         expect(resolveTemplateAlias('./Sibling.abide', from)).toBeUndefined()
         expect(resolveTemplateAlias('../x/Y.abide', from)).toBeUndefined()
-        expect(resolveTemplateAlias('abide/ui/state', from)).toBeUndefined()
+        expect(resolveTemplateAlias('abide/shared/state', from)).toBeUndefined()
         expect(resolveTemplateAlias('$unknown/x', from)).toBeUndefined()
         expect(resolveTemplateAlias('$ui', from)).toBeUndefined() // no subpath
     })

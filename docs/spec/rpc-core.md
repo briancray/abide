@@ -181,9 +181,11 @@ One imported callable means two things:
 3. **Update semantics: push-notify + pull-recompute, microtask-batched, glitch-free
    (topological).** A burst of writes (5 socket amends) → one recompute; no intermediate
    inconsistent state observed.
-4. **Server renders once, but flush effects are re-runnable.** SSR renders once, and ongoing
-   `watch`/effects remain a client-only concept. The one server use of the graph is "flush
-   this subtree's HTML patch + cache entries once its pending reads resolve." That flush
+4. **Server renders once, but flush effects are re-runnable.** SSR paints the DOM once — there is no
+   live re-render of the served HTML after flush. (`watch`/effects themselves are isomorphic and DO fire
+   server-side — a server module can own a `state` and `watch` it — but they don't re-paint an
+   already-flushed page.) The one server use of the render graph is "flush this subtree's HTML patch +
+   cache entries once its pending reads resolve." That flush
    effect is **re-runnable, not one-shot**: a subtree depending on multiple pending reads
    **re-checks on each dependency's arrival and flushes only when all are ready** (a
    fire-once-and-detach model would hang multi-dependency subtrees).

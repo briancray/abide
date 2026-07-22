@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import rpcUpload from "$server/rpc/rpcUpload"
 
   // The upload RPC's single argument is a real FormData: the picked File plus the caption text field.

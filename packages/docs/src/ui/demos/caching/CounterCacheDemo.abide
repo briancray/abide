@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import cacheCounter from "$server/rpc/cacheCounter"
 
   // A cached read is a memoized slot. Repeated reads REUSE it — the server run count holds no matter how

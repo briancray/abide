@@ -1,6 +1,6 @@
 <script>
-  import { state } from "abide/ui/state"
-  import { watch } from "abide/ui/watch"
+  import { state } from "abide/shared/state"
+  import { watch } from "abide/shared/watch"
 
   // watch(thunk) — an auto-tracked effect. It reads `doubled` and mirrors a derived value into a
   // separate cell, so the thunk re-runs whenever its tracked reads change (seeded once on mount).

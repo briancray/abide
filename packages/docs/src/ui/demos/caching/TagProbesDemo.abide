@@ -1,0 +1,24 @@
+<script>
+  import { state } from "abide/shared/state"
+  import tagProbes from "$server/rpc/tagProbes"
+
+  // The global tag probes are SERVER-side aggregates (the tag registry is server-only), so this RPC
+  // captures them across a load and a refresh in one pass and returns the four snapshots.
+  let snap = state<{
+    pendingDuringLoad: boolean
+    pendingAfterLoad: boolean
+    refreshingDuringRefresh: boolean
+    refreshingAfterRefresh: boolean
+  } | null>(null)
+  async function run() { snap = await tagProbes() }
+</script>
+
+<ul class="grid">
+  <li><code>pending({'{'}tags{'}'})</code> during load: <strong data-testid="tp-pending-load">{snap ? String(snap.pendingDuringLoad) : "—"}</strong></li>
+  <li><code>pending({'{'}tags{'}'})</code> after settle: <strong data-testid="tp-pending-after">{snap ? String(snap.pendingAfterLoad) : "—"}</strong></li>
+  <li><code>refreshing({'{'}tags{'}'})</code> during refresh: <strong data-testid="tp-refreshing-load">{snap ? String(snap.refreshingDuringRefresh) : "—"}</strong></li>
+  <li><code>refreshing({'{'}tags{'}'})</code> after settle: <strong data-testid="tp-refreshing-after">{snap ? String(snap.refreshingAfterRefresh) : "—"}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="tp-run" onclick={run}>Run</button>
+</div>

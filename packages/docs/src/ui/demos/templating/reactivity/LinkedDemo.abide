@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // state.linked(source, transform?) — a writable cell reseeded whenever its source changes. A local
   // write holds until the next reseed. Here the draft seeds to count × 100; bumping it edits locally,

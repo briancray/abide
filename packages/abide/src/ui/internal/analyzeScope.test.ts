@@ -377,7 +377,7 @@ describe('rewriteFreeIdentifiers type-position operands', () => {
 describe('analyzeScope cell recognition', () => {
     test('state / computed / linked recognized', () => {
         const root = parse(
-            "<script>import { state } from 'abide/ui/state'; let n = state(0); const d = state.computed(()=>n*2); let e = state.linked(()=>n)</script>{n}",
+            "<script>import { state } from 'abide/shared/state'; let n = state(0); const d = state.computed(()=>n*2); let e = state.linked(()=>n)</script>{n}",
         )
         const analysis = analyzeScope(root)
         expect([...analysis.cellNames].sort()).toEqual(['d', 'e', 'n'])
@@ -391,7 +391,7 @@ describe('analyzeScope cell recognition', () => {
 
     test('aliased state import (import { state as s })', () => {
         const root = parse(
-            "<script>import { state as s } from 'abide/ui/state'; let n = s(0); let d = s.linked(()=>n)</script>{n}",
+            "<script>import { state as s } from 'abide/shared/state'; let n = s(0); let d = s.linked(()=>n)</script>{n}",
         )
         const analysis = analyzeScope(root)
         expect([...analysis.cellNames].sort()).toEqual(['d', 'n'])
@@ -415,7 +415,7 @@ describe('analyzeScope cell recognition', () => {
 
     test('dual-script root: module + instance', () => {
         const root = parse(
-            "<script module>import { state } from 'abide/ui/state'; let g = state(1)</script>" +
+            "<script module>import { state } from 'abide/shared/state'; let g = state(1)</script>" +
                 "<script>import { props } from 'abide/ui/props'; import greet from '../rpc/greet'; let n = state(0); function inc(){ n++ }</script>" +
                 '<p>{n}</p>',
         )
@@ -433,7 +433,7 @@ describe('analyzeScope cell recognition', () => {
         expect(moduleScript.setupCode).not.toContain('import')
         const firstModuleImport = moduleScript.imports[0]
         if (firstModuleImport === undefined) throw new Error('expected a module import')
-        expect(firstModuleImport.specifier).toBe('abide/ui/state')
+        expect(firstModuleImport.specifier).toBe('abide/shared/state')
 
         // instance setup rewrites the cell reference inside the function body; imports stripped.
         const instanceScript = analysis.instance
@@ -454,8 +454,8 @@ describe('analyzeScope cell recognition', () => {
 
     test('module cells do not rewrite instance-only names and vice versa', () => {
         const root = parse(
-            "<script module>import { state } from 'abide/ui/state'; let g = state(1)</script>" +
-                "<script>import { state } from 'abide/ui/state'; let n = state(0)</script>{n}",
+            "<script module>import { state } from 'abide/shared/state'; let g = state(1)</script>" +
+                "<script>import { state } from 'abide/shared/state'; let n = state(0)</script>{n}",
         )
         const analysis = analyzeScope(root)
         // instance can reference module cell g:

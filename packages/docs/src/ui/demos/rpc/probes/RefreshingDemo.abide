@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
   import cacheSlow from "$server/rpc/cacheSlow"
 
   // Distinct from first-load `pending`: `refreshing` is true only while a re-fetch runs over a value

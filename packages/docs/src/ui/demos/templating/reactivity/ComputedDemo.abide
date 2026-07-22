@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // state.computed(fn) — a read-only derived cell, recomputed lazily from whatever it reads. Drive
   // `count` and `doubled` follows with a fine-grained update to only its text node.

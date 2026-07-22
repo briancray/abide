@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // HEAD has identical semantics to GET but carries headers only. This raw HEAD fetch reports the
   // status line with no body.

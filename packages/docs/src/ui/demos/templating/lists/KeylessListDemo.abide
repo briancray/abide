@@ -1,5 +1,5 @@
 <script>
-  import { state } from "abide/ui/state"
+  import { state } from "abide/shared/state"
 
   // Without a `by` clause the block maps by position — perfect for a plain value list.
   let nums = state([10, 20, 30])
