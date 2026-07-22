@@ -49,7 +49,7 @@ async function mcp(app: TestApp, message: unknown): Promise<any> {
 }
 
 test('initialize returns protocol version, tools capability, and serverInfo', async () => {
-    const app = createTestApp(fixtureConfig())
+    const app = await createTestApp(fixtureConfig())
     try {
         const reply = await mcp(app, { jsonrpc: '2.0', id: 1, method: 'initialize' })
         expect(reply.jsonrpc).toBe('2.0')
@@ -63,7 +63,7 @@ test('initialize returns protocol version, tools capability, and serverInfo', as
 })
 
 test('tools/list projects rpcs and socket tail/publish tools; honours clients.mcp:false', async () => {
-    const app = createTestApp(fixtureConfig())
+    const app = await createTestApp(fixtureConfig())
     try {
         const reply = await mcp(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' })
         // biome-ignore lint/suspicious/noExplicitAny: dynamic MCP tool objects from an any-typed JSON-RPC reply
@@ -92,7 +92,7 @@ test('tools/list projects rpcs and socket tail/publish tools; honours clients.mc
 })
 
 test('tools/call on a read rpc returns the handler result as text content', async () => {
-    const app = createTestApp(fixtureConfig())
+    const app = await createTestApp(fixtureConfig())
     try {
         const reply = await mcp(app, {
             jsonrpc: '2.0',
@@ -110,7 +110,7 @@ test('tools/call on a read rpc returns the handler result as text content', asyn
 })
 
 test('tools/call on a mutation rpc runs the handler through the middleware chain', async () => {
-    const app = createTestApp(fixtureConfig())
+    const app = await createTestApp(fixtureConfig())
     try {
         const reply = await mcp(app, {
             jsonrpc: '2.0',
@@ -133,7 +133,7 @@ test('socket tail tool returns the current tail buffer snapshot', async () => {
     if (ticks === undefined) throw new Error('expected ticks socket')
     ticks.publish(41)
     ticks.publish(42)
-    const app = createTestApp(config)
+    const app = await createTestApp(config)
     try {
         const reply = await mcp(app, {
             jsonrpc: '2.0',
@@ -148,7 +148,7 @@ test('socket tail tool returns the current tail buffer snapshot', async () => {
 })
 
 test('tools/call on an unknown tool yields a JSON-RPC error', async () => {
-    const app = createTestApp(fixtureConfig())
+    const app = await createTestApp(fixtureConfig())
     try {
         const reply = await mcp(app, {
             jsonrpc: '2.0',
@@ -165,7 +165,7 @@ test('tools/call on an unknown tool yields a JSON-RPC error', async () => {
 })
 
 test('an unknown method yields a JSON-RPC method-not-found error', async () => {
-    const app = createTestApp(fixtureConfig())
+    const app = await createTestApp(fixtureConfig())
     try {
         const reply = await mcp(app, { jsonrpc: '2.0', id: 7, method: 'bogus/method' })
         expect(reply.error.code).toBe(-32601)

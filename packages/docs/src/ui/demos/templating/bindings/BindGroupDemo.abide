@@ -3,10 +3,9 @@
 
   // bind:group radio group.
   let picked = state("green")
-  const pickedBind = { get: () => picked, set: (next) => { picked = next } }
 </script>
 
-<label><input type="radio" name="hue" value="red" bind:group={pickedBind} /> red</label>
-<label><input type="radio" name="hue" value="green" bind:group={pickedBind} /> green</label>
-<label><input type="radio" name="hue" value="blue" bind:group={pickedBind} /> blue</label>
+<label><input type="radio" name="hue" value="red" bind:group={picked} /> red</label>
+<label><input type="radio" name="hue" value="green" bind:group={picked} /> green</label>
+<label><input type="radio" name="hue" value="blue" bind:group={picked} /> blue</label>
 <p>Picked: <span id="group-out">{picked}</span></p>

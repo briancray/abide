@@ -158,7 +158,7 @@ describe('trace — W3C traceparent within a request', () => {
             const second = trace()
             return { first, stable: first === second }
         })
-        const app = createTestApp({ routes: { traceRpc } })
+        const app = await createTestApp({ routes: { traceRpc } })
         try {
             const traceRpcCall = app.rpc.traceRpc
             if (traceRpcCall === undefined) throw new Error('expected traceRpc on the test app')
@@ -172,7 +172,7 @@ describe('trace — W3C traceparent within a request', () => {
 
     test('propagates an incoming traceparent header', async () => {
         const traceRpc = GET(() => ({ value: trace() }))
-        const app = createTestApp({ routes: { traceRpc } })
+        const app = await createTestApp({ routes: { traceRpc } })
         const incoming = `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`
         try {
             const response = await app.fetch('/__abide/rpc/traceRpc', {
@@ -201,7 +201,7 @@ describe('health / online / reachable', () => {
     })
 
     test('reachable() is true for a live origin and false for a dead one', async () => {
-        const app = createTestApp({})
+        const app = await createTestApp({})
         try {
             expect(await reachable(app.origin)).toBe(true)
             expect(await reachable('http://127.0.0.1:1')).toBe(false)

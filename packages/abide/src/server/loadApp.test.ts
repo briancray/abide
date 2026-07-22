@@ -51,7 +51,7 @@ describe('loadApp — file-based app loader', () => {
 
     test('the loaded config boots a working app: rpc + SSR pages', async () => {
         const loaded = await loadApp(FIXTURE_DIR)
-        const app = createTestApp(loaded)
+        const app = await createTestApp(loaded)
         running = app
 
         // /rpc/greet works via the loaded route.

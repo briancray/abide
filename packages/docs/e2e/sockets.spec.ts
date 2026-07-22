@@ -104,3 +104,14 @@ test('chunks() — the tail-transcript probe grows with a publish', async ({ pag
         timeout: 15_000,
     })
 })
+
+test('done() — the lifecycle probe flips from idle once a subscription opens', async ({ page }) => {
+    await page.goto('/sockets/probes')
+
+    // The pulse topic is untouched by the other demos, so it starts idle → done() reads yes.
+    await expect(page.getByTestId('socket-done-idle')).toHaveText('yes', { timeout: 15_000 })
+
+    // Opening an active read (peek) subscribes the topic → done() flips to no.
+    await page.getByTestId('socket-done-open').click()
+    await expect(page.getByTestId('socket-done-idle')).toHaveText('no', { timeout: 15_000 })
+})

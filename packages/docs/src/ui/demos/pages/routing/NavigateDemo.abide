@@ -1,11 +1,20 @@
 <script>
+  import { url } from "abide/shared/url"
   import { navigate } from "abide/ui/navigate"
 
-  // navigate(path) performs a soft client-side navigation. Exact static routes win over the [slug]
-  // param route, so this resolves to the dedicated `pages/routing/details` page.
+  // navigate(target, options?) performs a soft client-side navigation. `target` is an
+  // already-resolved href — compose params/query with url(), i.e. navigate(url(...)). options:
+  //   replace    — replace the current history entry instead of pushing one (Back skips it)
+  //   keepScroll — keep the current scroll position instead of scrolling to the top
+  // Exact static routes win over the [slug] param route, so "details" resolves to the dedicated
+  // `pages/routing/details` page.
+  const slug = "alpha"
 </script>
 
 <div class="row">
   <a data-testid="details-link" href="/pages/routing/details">Details (link)</a>
   <button data-testid="navigate-details" onclick={() => navigate("/pages/routing/details")}>navigate("/pages/routing/details")</button>
+  <button data-testid="navigate-query" onclick={() => navigate(url("/pages/routing/[slug]", { slug }, { ref: "nav", page: 3 }))}>navigate(url(&hellip;))</button>
+  <button data-testid="navigate-replace" onclick={() => navigate("/pages/routing/details", { replace: true })}>navigate(&hellip;, &#123; replace: true &#125;)</button>
+  <button data-testid="navigate-keepscroll" onclick={() => navigate("/pages/routing/details", { keepScroll: true })}>navigate(&hellip;, &#123; keepScroll: true &#125;)</button>
 </div>

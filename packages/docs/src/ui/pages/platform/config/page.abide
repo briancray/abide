@@ -8,8 +8,8 @@
   <h1>Config</h1>
   <p class="lead"><code>env(schema)</code> reads typed, boot-validated config from the environment. Strings are coerced by the schema (<code>"25"</code> → number, <code>"true"</code> → boolean), schema defaults fill missing keys, and it fails fast if a required var is missing or invalid. Below is a live read of an <code>env()</code>-backed RPC.</p>
 
-  <Demo id="config" title="Live config value" server="src/server/rpc/platformConfig.ts" client="src/ui/demos/platform/config/ConfigDemo.abide" tab="server" replayable={true}>
-    <ConfigDemo sampleId="config" />
+  <Demo id="config" title="Live config value" server="src/server/rpc/platformConfig.ts" client="src/ui/demos/platform/config/ConfigDemo.abide" tab="server">
+    <ConfigDemo />
   </Demo>
 
   <h2 id="env">Environment variables</h2>

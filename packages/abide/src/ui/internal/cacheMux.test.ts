@@ -153,7 +153,7 @@ test('server shared-amend broadcast reaches an authorized subscriber and applies
     const prof = GET(({ id }: { id: string }) => ({ id, secret: `secret-${id}` }), {
         cache: { shared: true },
     })
-    running = createTestApp({ routes: { prof: prof } })
+    running = await createTestApp({ routes: { prof: prof } })
 
     const args = { id: 'A' }
     const socket = running.socket()

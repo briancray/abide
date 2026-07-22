@@ -18,7 +18,7 @@ const uploadHandler = POST(async (form: FormData) => {
 
 describe('multipart RPC upload (TODO #8)', () => {
     test('handler receives the FormData: text field + uploaded file', async () => {
-        const app = createTestApp({ routes: { upload: uploadHandler } })
+        const app = await createTestApp({ routes: { upload: uploadHandler } })
         try {
             const form = new FormData()
             form.set('caption', 'hello world')
@@ -42,7 +42,7 @@ describe('multipart RPC upload (TODO #8)', () => {
     })
 
     test('a plain Blob is received as a File on the server', async () => {
-        const app = createTestApp({ routes: { upload: uploadHandler } })
+        const app = await createTestApp({ routes: { upload: uploadHandler } })
         try {
             const form = new FormData()
             form.set('caption', 'blob')
@@ -59,13 +59,16 @@ describe('multipart RPC upload (TODO #8)', () => {
 
     describe('CSRF gate for multipart', () => {
         test('multipart mutation WITHOUT x-abide is rejected 403', async () => {
-            const app = createTestApp({ routes: { upload: uploadHandler } })
+            const app = await createTestApp({ routes: { upload: uploadHandler } })
             try {
                 const form = new FormData()
                 form.set('caption', 'x')
                 form.set('avatar', new File(['y'], 'y.txt'))
                 // Raw fetch, no x-abide header — a cross-site <form> can send multipart but cannot set it.
-                const response = await app.fetch('/__abide/rpc/upload', { method: 'POST', body: form })
+                const response = await app.fetch('/__abide/rpc/upload', {
+                    method: 'POST',
+                    body: form,
+                })
                 expect(response.status).toBe(403)
             } finally {
                 await app.stop()
@@ -73,7 +76,7 @@ describe('multipart RPC upload (TODO #8)', () => {
         })
 
         test('multipart mutation WITH x-abide is admitted (200)', async () => {
-            const app = createTestApp({ routes: { upload: uploadHandler } })
+            const app = await createTestApp({ routes: { upload: uploadHandler } })
             try {
                 const form = new FormData()
                 form.set('caption', 'x')
@@ -104,7 +107,7 @@ describe('multipart RPC upload (TODO #8)', () => {
         )
 
         test('missing a required file field → 422 validation error', async () => {
-            const app = createTestApp({ routes: { upload: guardedUpload } })
+            const app = await createTestApp({ routes: { upload: guardedUpload } })
             try {
                 const form = new FormData()
                 form.set('caption', 'no file attached')
@@ -126,7 +129,7 @@ describe('multipart RPC upload (TODO #8)', () => {
         })
 
         test('required file present + within constraints → 200', async () => {
-            const app = createTestApp({ routes: { upload: guardedUpload } })
+            const app = await createTestApp({ routes: { upload: guardedUpload } })
             try {
                 const form = new FormData()
                 form.set('avatar', new File(['small'], 'a.txt', { type: 'text/plain' }))
@@ -140,7 +143,7 @@ describe('multipart RPC upload (TODO #8)', () => {
         })
 
         test('wrong MIME type → 422 (accept constraint)', async () => {
-            const app = createTestApp({ routes: { upload: guardedUpload } })
+            const app = await createTestApp({ routes: { upload: guardedUpload } })
             try {
                 const form = new FormData()
                 form.set('avatar', new File(['<svg>'], 'a.svg', { type: 'image/svg+xml' }))
@@ -177,7 +180,7 @@ describe('multipart RPC upload (TODO #8)', () => {
         )
 
         test('missing a required TEXT field → 422 (input schema)', async () => {
-            const app = createTestApp({ routes: { upload: captioned } })
+            const app = await createTestApp({ routes: { upload: captioned } })
             try {
                 const form = new FormData()
                 form.set('avatar', new File(['y'], 'y.txt')) // file present, but no `caption` text field
@@ -199,7 +202,7 @@ describe('multipart RPC upload (TODO #8)', () => {
         })
 
         test('valid text + file → 200 (handler still receives raw FormData)', async () => {
-            const app = createTestApp({ routes: { upload: captioned } })
+            const app = await createTestApp({ routes: { upload: captioned } })
             try {
                 const form = new FormData()
                 form.set('caption', 'a picture')
@@ -216,7 +219,7 @@ describe('multipart RPC upload (TODO #8)', () => {
         })
 
         test('a coercible number-string passes, a non-number 422s (declared {type:number})', async () => {
-            const app = createTestApp({ routes: { upload: captioned } })
+            const app = await createTestApp({ routes: { upload: captioned } })
             try {
                 const ok = new FormData()
                 ok.set('caption', 'c')
@@ -252,7 +255,7 @@ describe('multipart RPC upload (TODO #8)', () => {
 
         test('the file field appearing in FormData does not fail input validation', async () => {
             // `projectFormText` excludes File entries, so `avatar` never reaches the input schema.
-            const app = createTestApp({ routes: { upload: captioned } })
+            const app = await createTestApp({ routes: { upload: captioned } })
             try {
                 const form = new FormData()
                 form.set('caption', 'c')
@@ -274,7 +277,7 @@ describe('multipart RPC upload (TODO #8)', () => {
             async (form: FormData) => ({ got: form.get('avatar') instanceof File }),
             { maxBodySize: 32 },
         )
-        const app = createTestApp({ routes: { upload: bounded } })
+        const app = await createTestApp({ routes: { upload: bounded } })
         try {
             const form = new FormData()
             form.set('avatar', new File(['x'.repeat(500)], 'big.txt', { type: 'text/plain' }))
@@ -293,7 +296,7 @@ describe('multipart RPC upload (TODO #8)', () => {
 
     test('existing JSON mutations are unaffected (back-compat)', async () => {
         const echo = POST(async (args: { value: number }) => ({ doubled: args.value * 2 }))
-        const app = createTestApp({ routes: { echo } })
+        const app = await createTestApp({ routes: { echo } })
         try {
             const echoRpc = app.rpc.echo
             if (echoRpc === undefined) throw new Error('expected echo rpc')

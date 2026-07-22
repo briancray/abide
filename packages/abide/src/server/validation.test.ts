@@ -102,7 +102,7 @@ describe('validateStandard + ValidationErrorData (unit)', () => {
 describe('RPC input validation (integration)', () => {
     test('valid GET args run the handler and return 200', async () => {
         let calls = 0
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 read: GET(
                     (args: { id: number }) => {
@@ -127,7 +127,7 @@ describe('RPC input validation (integration)', () => {
 
     test('invalid GET args return 422 ValidationError and never call the handler', async () => {
         let calls = 0
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 read: GET(
                     (args: { id: number }) => {
@@ -157,7 +157,7 @@ describe('RPC input validation (integration)', () => {
 
     test('valid POST args run the handler; invalid args return 422 without calling it', async () => {
         let calls = 0
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 write: POST(
                     (args: { id: number }) => {
@@ -213,7 +213,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
         if (input === undefined) throw new Error('expected a derived input schema')
 
         let calls = 0
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 echo: GET(
                     (args: { text: string }) => {
@@ -279,7 +279,7 @@ describe('RPC output validation (dev-only)', () => {
             return true
         }) as typeof process.stderr.write
         // Handler returns a string, but the output schema demands a number → contract drift.
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 drift: GET((): unknown => 'not a number', {
                     schemas: { output: outputMustBeNumberSchema },

@@ -5,10 +5,7 @@
   // amend(args, value | updater) mutates the retained slot value in place — the handler never re-runs.
   let amendStarted = state(false)
   const amendValue = state.computed(() => (amendStarted ? String(cacheCounter.peek({ key: "amend-demo" })?.runs ?? "loading") : "idle"))
-  const amendPeek = state.computed(() => {
-    const value = cacheCounter.peek({ key: "amend-demo" })
-    return value ? String(value.runs) : "(none)"
-  })
+  const amendPeek = state.computed(() => String(cacheCounter.peek({ key: "amend-demo" })?.runs ?? "(none)"))
   function startAmend() { amendStarted = true }
   // value-form: replace the retained value in place — the server handler never runs.
   function amendValueForm() { cacheCounter.amend({ key: "amend-demo" }, { key: "amend-demo", runs: 999 }) }

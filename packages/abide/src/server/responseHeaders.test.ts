@@ -11,7 +11,7 @@ const argsQuery = (value: unknown) => `?args=${encodeURIComponent(JSON.stringify
 
 describe('baseline hardening', () => {
     test('an RPC read carries nosniff + the private/no-cache default + Vary: Cookie', async () => {
-        const app = createTestApp({ routes: { ping: GET(() => ({ ok: true })) } })
+        const app = await createTestApp({ routes: { ping: GET(() => ({ ok: true })) } })
         try {
             const response = await app.fetch(`/__abide/rpc/ping${argsQuery({})}`)
             expect(response.headers.get('x-content-type-options')).toBe('nosniff')
@@ -25,7 +25,7 @@ describe('baseline hardening', () => {
     })
 
     test('an SSR HTML page carries X-Frame-Options SAMEORIGIN', async () => {
-        const app = createTestApp({ pages: { '/': '<h1>hi</h1>' } })
+        const app = await createTestApp({ pages: { '/': '<h1>hi</h1>' } })
         try {
             const response = await app.fetch('/')
             expect(response.headers.get('content-type')).toContain('text/html')
@@ -40,7 +40,7 @@ describe('baseline hardening', () => {
 
 describe('405 Allow', () => {
     test('a GET to the POST-only MCP endpoint returns 405 with an Allow header', async () => {
-        const app = createTestApp({ routes: {} })
+        const app = await createTestApp({ routes: {} })
         try {
             const response = await app.fetch('/__abide/mcp', { method: 'GET' })
             expect(response.status).toBe(405)
@@ -73,7 +73,7 @@ describe('CORS via crossOrigin', () => {
     })
 
     test('a crossOrigin RPC answers the OPTIONS preflight and stamps the actual read', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: { open: GET(() => ({ ok: true }), { crossOrigin: true }) },
         })
         try {
@@ -96,7 +96,7 @@ describe('CORS via crossOrigin', () => {
     })
 
     test('an OPTIONS to a same-origin-only RPC is 405 with Allow (no CORS)', async () => {
-        const app = createTestApp({ routes: { closed: GET(() => ({ ok: true })) } })
+        const app = await createTestApp({ routes: { closed: GET(() => ({ ok: true })) } })
         try {
             const response = await app.fetch('/__abide/rpc/closed', {
                 method: 'OPTIONS',
@@ -113,7 +113,7 @@ describe('CORS via crossOrigin', () => {
 
     test('a foreign-origin mutation is CSRF-rejected unless crossOrigin admits the origin', async () => {
         Bun.env.APP_URL = 'https://app.example'
-        const closedApp = createTestApp({
+        const closedApp = await createTestApp({
             routes: { save: POST(() => ({ ok: true })) },
         })
         try {
@@ -128,7 +128,7 @@ describe('CORS via crossOrigin', () => {
             await closedApp.stop()
         }
 
-        const openApp = createTestApp({
+        const openApp = await createTestApp({
             routes: { save: POST(() => ({ ok: true }), { crossOrigin: { origin: FOREIGN } }) },
         })
         try {

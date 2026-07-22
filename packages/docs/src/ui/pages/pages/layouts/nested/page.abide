@@ -1,0 +1,12 @@
+<script module>
+  import { navigate } from "abide/ui/navigate"
+</script>
+
+<main class="page">
+  <h1 data-testid="nested-heading">Child page</h1>
+  <p class="lead">This page is <code>pages/layouts/nested/page.abide</code> → <code>/pages/layouts/nested</code>, inside the SAME <code>pages/layouts/layout.abide</code> — so the section layout renders around it too, with no extra wiring. That's the point of a layout: define the frame once, and every page in the folder is rendered inside it.</p>
+
+  <div class="row">
+    <button data-testid="to-hub" onclick={() => navigate("/pages/layouts")}>← back to the layouts hub</button>
+  </div>
+</main>

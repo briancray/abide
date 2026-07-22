@@ -99,7 +99,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         "baseline — the owner's HTTP read of its own row is 200",
         async () => {
             const profile = guardedProfile()
-            const app = track(createTestApp({ routes: { profile1: profile } }))
+            const app = track(await createTestApp({ routes: { profile1: profile } }))
             const asA = app.as({ id: 'A' })
 
             const profile1 = asA.rpc.profile1
@@ -120,7 +120,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         'denied join is silent — a foreign-row broadcast never reaches the denied subscriber',
         async () => {
             const profile = guardedProfile()
-            const app = track(createTestApp({ routes: { profile2: profile } }))
+            const app = track(await createTestApp({ routes: { profile2: profile } }))
 
             const a = client(app.as({ id: 'A' }))
             const channelB = cacheChannelName('profile2', { id: 'B' })
@@ -141,7 +141,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         "authorized join receives its own channel's broadcast",
         async () => {
             const profile = guardedProfile()
-            const app = track(createTestApp({ routes: { profile3: profile } }))
+            const app = track(await createTestApp({ routes: { profile3: profile } }))
 
             const a = client(app.as({ id: 'A' }))
             const channelA = cacheChannelName('profile3', { id: 'A' })
@@ -164,7 +164,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         'args-spoof — name-for-A with args-for-B is rejected on the channel-name check',
         async () => {
             const profile = guardedProfile()
-            const app = track(createTestApp({ routes: { profile4: profile } }))
+            const app = track(await createTestApp({ routes: { profile4: profile } }))
 
             const a = client(app.as({ id: 'A' }))
             const channelA = cacheChannelName('profile4', { id: 'A' })
@@ -187,7 +187,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         'authorization is re-run per subscribe, not cached on the connection',
         async () => {
             const profile = guardedProfile()
-            const app = track(createTestApp({ routes: { profile5: profile } }))
+            const app = track(await createTestApp({ routes: { profile5: profile } }))
 
             const a = client(app.as({ id: 'A' }))
             const channelA = cacheChannelName('profile5', { id: 'A' })
@@ -217,7 +217,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         async () => {
             const profile = guardedProfile()
             const open = publicProfile()
-            const app = track(createTestApp({ routes: { profile6: profile, open6: open } }))
+            const app = track(await createTestApp({ routes: { profile6: profile, open6: open } }))
 
             const anon = client(app) // base app → no identity → anonymous at upgrade
             const guardedChannel = cacheChannelName('profile6', { id: 'A' })
@@ -247,7 +247,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         "fanout isolation — each channel's subscriber receives only its own slot's frame",
         async () => {
             const profile = guardedProfile()
-            const app = track(createTestApp({ routes: { profile7: profile } }))
+            const app = track(await createTestApp({ routes: { profile7: profile } }))
 
             const a = client(app.as({ id: 'A' }))
             const b = client(app.as({ id: 'B' }))

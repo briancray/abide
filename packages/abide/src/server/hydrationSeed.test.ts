@@ -21,7 +21,7 @@ function readSeedFromDocument(html: string): {
 }
 
 test('SSR document records the resolved read into #__abide-seed', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
             '/': "<script>import greet from '../../server/rpc/greet'</script><p>{await greet({name:'ada'})}</p>",
@@ -36,7 +36,7 @@ test('SSR document records the resolved read into #__abide-seed', async () => {
 })
 
 test('a read-free page still emits an empty seed', async () => {
-    const app = createTestApp({ pages: { '/': '<h1>static</h1>' } })
+    const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
     const html = await (await app.fetch('/')).text()
     expect(readSeedFromDocument(html)).toEqual({})
@@ -45,7 +45,7 @@ test('a read-free page still emits an empty seed', async () => {
 })
 
 test('the soft-nav envelope carries the recorded read', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
             '/': "<script>import greet from '../../server/rpc/greet'</script><p>{await greet({name:'bo'})}</p>",
@@ -62,7 +62,7 @@ test('the soft-nav envelope carries the recorded read', async () => {
 })
 
 test('output-shaping trims the seed value to the declared output schema', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: {
             me: GET(() => ({ id: 1, name: 'ada', passwordHash: 'secret' }), {
                 schemas: {
@@ -87,7 +87,7 @@ test('output-shaping trims the seed value to the declared output schema', async 
 })
 
 test('output-shaping drops undeclared fields on the RPC wire', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: {
             me: GET(() => ({ id: 1, name: 'ada', passwordHash: 'secret' }), {
                 schemas: {
@@ -107,7 +107,7 @@ test('output-shaping drops undeclared fields on the RPC wire', async () => {
 })
 
 test('with no output schema the RPC wire value is unshaped', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { me: GET(() => ({ id: 1, name: 'ada', extra: 'kept' })) },
     })
 

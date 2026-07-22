@@ -43,7 +43,7 @@ async function fetchClientGraph(app: TestApp): Promise<string> {
 }
 
 test('the served client bundle contains no TypeScript compiler and is small', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
             '/': "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
@@ -85,7 +85,7 @@ test('the served client bundle contains no TypeScript compiler and is small', as
 })
 
 test("the SSR'd page injects the content-hashed client loader script tag", async () => {
-    const app = createTestApp({ pages: { '/': '<h1>ok</h1>' } })
+    const app = await createTestApp({ pages: { '/': '<h1>ok</h1>' } })
     const response = await app.fetch('/')
     const body = await response.text()
     // A content-hashed loader entry under /__abide/chunk/ (no longer the fixed /__abide/client.js).

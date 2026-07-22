@@ -564,7 +564,7 @@ export function awaitText(
 // `{html(expr)}` — raw markup before `end`, re-rendered on change.
 export function htmlBlock(
     parent: Node,
-    end: Node,
+    end: Node | null,
     read: () => unknown,
     prefixLen: number = 0,
 ): Disposer {
@@ -577,6 +577,7 @@ export function htmlBlock(
             // Claim the server-rendered raw nodes: re-derive the node count from the same markup and grab
             // that many nodes immediately before `end` (their identities are the server's — no recreate).
             primed = false
+            if (end === null) throw new HydrationMismatch('{html(...)} anchor not found for claim')
             const probe = document.createElement('div')
             probe.innerHTML = markup
             const count = probe.childNodes.length
@@ -1152,11 +1153,14 @@ function runAwaitEffect(
             settled = true
             for (const d of branchDisposers) d()
             branchDisposers = []
+            // Source order — the resolved branch (`then`/`catch`) renders BEFORE `finally`, matching the
+            // template and the hydration-claim path. Both mount before `marker`, so `bodyFn` first puts its
+            // nodes ahead of `finally`'s.
+            if (bodyFn !== null) branchDisposers.push(untrack(() => bodyFn(parent, marker)))
             if (branches.finally !== null) {
                 const finallyFn = branches.finally
                 branchDisposers.push(untrack(() => finallyFn(parent, marker)))
             }
-            if (bodyFn !== null) branchDisposers.push(untrack(() => bodyFn(parent, marker)))
         }
 
         if (threw) {

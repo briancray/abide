@@ -26,6 +26,11 @@
     <code>insertBefore</code>, not by abide.)
   </p>
 
+  <p class="lead">
+    Want the mount numbers anyway? The <a href="/platform/bench/client">in-browser mount bench</a> runs
+    the same corpus through the real <code>mount</code> path, timed live in your own tab.
+  </p>
+
   <button
     data-testid="rerun"
     class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white"

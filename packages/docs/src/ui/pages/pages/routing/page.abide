@@ -11,7 +11,7 @@
   <h1>File-based routing &amp; navigation</h1>
   <p class="lead">Pages are files: a folder chain is the URL, and a <code>[slug]</code> segment captures into <code>route().params</code>. Every page here lives under <code>src/ui/pages/pages/routing/</code> — this hub is <code>pages/routing/page.abide</code> served at <code>/pages/routing</code>. Links and <code>navigate()</code> perform soft client-side navigation: the content swaps in place with no full document reload.</p>
 
-  <Demo id="route-readout" title="Current route" client="src/ui/demos/pages/routing/RouteReadoutDemo.abide" tab="client">
+  <Demo id="route-readout" title="<code>route()</code> — Current route" client="src/ui/demos/pages/routing/RouteReadoutDemo.abide" tab="client">
     <RouteReadoutDemo />
   </Demo>
 
@@ -20,12 +20,12 @@
     <SlugLinksDemo />
   </Demo>
 
-  <p><code>url("/pages/routing/[slug]", &#123; slug &#125;, &#123; ref, page &#125;)</code> also appends a query string; with no <code>[name]</code> segments it collapses to <code>url(path, query)</code>. <code>navigate</code> takes an already-resolved href, so compose the two — <code>navigate(url(&hellip;))</code>.</p>
-  <Demo id="query-links" title="Query strings + <code>navigate(url(…))</code>" client="src/ui/demos/pages/routing/QueryLinksDemo.abide" tab="client">
+  <p><code>url("/pages/routing/[slug]", &#123; slug &#125;, &#123; ref, page &#125;)</code> also appends a query string; with no <code>[name]</code> segments it collapses to <code>url(path, query)</code>. The built href flows straight into an <code>&lt;a href&gt;</code>.</p>
+  <Demo id="query-links" title="<code>url(…)</code> — params &amp; query" client="src/ui/demos/pages/routing/QueryLinksDemo.abide" tab="client">
     <QueryLinksDemo />
   </Demo>
 
-  <p>A sibling static route. Exact routes win over the <code>[slug]</code> param route, so this resolves to the dedicated page.</p>
+  <p>A sibling static route. Exact routes win over the <code>[slug]</code> param route, so this resolves to the dedicated page. <code>navigate</code> takes an already-resolved href, so compose it with <code>url()</code> — <code>navigate(url(&hellip;))</code> — for a params + query target. <code>navigate(target, options?)</code> also takes an optional second argument: <code>&#123; replace &#125;</code> swaps the current history entry instead of pushing a new one (so Back skips it), and <code>&#123; keepScroll &#125;</code> holds the scroll position instead of jumping to the top.</p>
   <Demo id="navigate" title="Programmatic navigation — <code>navigate()</code>" client="src/ui/demos/pages/routing/NavigateDemo.abide" tab="client">
     <NavigateDemo />
   </Demo>

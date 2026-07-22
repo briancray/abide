@@ -1,0 +1,122 @@
+<main class="page">
+  <h1>Testing</h1>
+  <p class="lead"><code>await createTestApp()</code> boots the <strong>real</strong> router in-process on an ephemeral port and hands back a tiny surface — no mocks, no divergent runtime. You test against the same request pipeline that ships: middleware, the CSRF gate, identity sealing, cache cells, sockets, and SSR all run for real. It is <strong>async</strong> — always <code>await</code> it.</p>
+
+  <h2 id="modes">Two modes</h2>
+  <p>How you call it decides what gets registered:</p>
+  <ul class="links">
+    <li><strong>Explicit</strong> — the config names at least one <em>surface</em> (<code>routes</code> / <code>sockets</code> / <code>pages</code> / <code>layouts</code> / <code>middleware</code>). Only what you name is registered — a hermetic app, no filesystem scan, no lifecycle. The classic unit-test shape.</li>
+    <li><strong>Discovery</strong> — the config names <em>no</em> surface (<code>createTestApp()</code>, <code>createTestApp(&#123;&#125;)</code>, or only the control knobs below). The whole project is loaded from disk — every <code>src/server/rpc/**</code>, socket, page, layout, and <code>src/app.ts</code> middleware — and booted through its <code>onStart</code>/<code>onStop</code> hooks. Integration-test against the <em>real</em> app.</li>
+  </ul>
+
+  <h2 id="boot">Explicit — boot a hermetic app</h2>
+  <p>Name the RPCs (and, optionally, middleware, sockets, pages, and layouts) you want under test. Every call listens on a fresh <code>localhost</code> port, so suites stay isolated. Always <code>stop()</code> it — a throw before teardown can leak the harness into other files.</p>
+  <pre class="code" data-lang="ts"><code>import &#123; afterEach, expect, test &#125; from 'bun:test'
+import &#123; GET &#125; from 'abide/server/GET'
+import &#123; POST &#125; from 'abide/server/POST'
+import &#123; createTestApp, type TestApp &#125; from 'abide/test/createTestApp'
+
+const greet = GET(async (&#123; name &#125;: &#123; name: string &#125;) =&gt; (&#123; greeting: `hello $&#123;name&#125;` &#125;))
+
+let running: TestApp | undefined
+afterEach(async () =&gt; &#123;
+  await running?.stop()
+  running = undefined
+&#125;)
+
+test('greet returns a greeting', async () =&gt; &#123;
+  const app = (running = await createTestApp(&#123; routes: &#123; greet &#125; &#125;))
+  expect(app.origin).toMatch(/^http:\/\/localhost:\d+$/)
+&#125;)</code></pre>
+
+  <h2 id="discovery">Discovery — boot the whole app</h2>
+  <p>Call it with no surface and it loads the entire project from <code>process.cwd()</code> and runs its lifecycle — the same wiring <code>abide start</code> boots, so your test exercises the real middleware, config, and every registered RPC. Point <code>dir</code> at another root for monorepo layouts. When a test doesn't need an expensive boot (a DB pool, migrations), skip the hooks with <code>lifecycle: false</code> — discovery still runs, only <code>onStart</code>/<code>onStop</code> are skipped.</p>
+  <pre class="code" data-lang="ts"><code>// whole real app, discovered from cwd, onStart/onStop run
+const app = await createTestApp()
+expect(await app.rpc.greet(&#123; name: 'x' &#125;)).toEqual(&#123; greeting: 'hello x' &#125;)
+
+// same app from a specific project root, skipping the boot hooks
+const fast = await createTestApp(&#123; dir: './packages/api', lifecycle: false &#125;)</code></pre>
+
+  <h2 id="rpc">Call RPCs</h2>
+  <p>The <code>rpc</code> proxy calls a registered route with the right verb and encoding: reads put args in the URL, mutations post JSON in the body with the headers the CSRF gate expects. It returns the decoded JSON payload.</p>
+  <pre class="code" data-lang="ts"><code>const bump = POST(async (&#123; by = 1 &#125;: &#123; by?: number &#125;) =&gt; (&#123; total: (counter += by) &#125;))
+
+const app = await createTestApp(&#123; routes: &#123; greet, bump &#125; &#125;)
+
+// read — args in the query string
+expect(await app.rpc.greet(&#123; name: 'x' &#125;)).toEqual(&#123; greeting: 'hello x' &#125;)
+
+// mutation — args in the body, CSRF-admitted
+expect(await app.rpc.bump(&#123; by: 2 &#125;)).toEqual(&#123; total: 2 &#125;)</code></pre>
+
+  <h2 id="fetch">Raw fetch</h2>
+  <p>Drop to <code>fetch(path, init?)</code> against the live origin when you need to assert status codes, headers, or transport details the proxy hides. This is the same <code>Request</code> → <code>Response</code> path the browser hits.</p>
+  <pre class="code" data-lang="ts"><code>const res = await app.fetch(
+  `/__abide/rpc/greet?args=$&#123;encodeURIComponent(JSON.stringify(&#123; name: 'x' &#125;))&#125;`,
+)
+expect(res.status).toBe(200)
+expect(res.headers.get('content-type')).toContain('application/json')
+
+// SSR a page (register it via `pages`) and assert the HTML
+const page = await app.fetch('/')
+expect(await page.text()).toContain('&lt;main')</code></pre>
+
+  <h2 id="identity">Impersonate an identity</h2>
+  <p><code>app.as(identity)</code> returns a sibling <code>TestApp</code> bound to the same origin that stamps a sealed <code>Authorization: Bearer</code> header onto every request — exercising the real per-user-token rung of the identity ladder. No second server starts, and the base app stays anonymous, so you can compare both in one test.</p>
+  <pre class="code" data-lang="ts"><code>import &#123; identity &#125; from 'abide/server/identity'
+
+const whoami = GET(async () =&gt; (&#123; id: identity().id, authenticated: identity().authenticated &#125;))
+const app = await createTestApp(&#123; routes: &#123; whoami &#125; &#125;)
+
+expect((await app.rpc.whoami()).authenticated).toBe(false)
+
+const asUser = app.as(&#123; id: 'user-1', authenticated: true &#125;)
+expect(await asUser.rpc.whoami()).toEqual(&#123; id: 'user-1', authenticated: true &#125;)</code></pre>
+
+  <h2 id="cookies">Cookie login &amp; replay</h2>
+  <p>To exercise the cookie rung instead of a bearer token, log in through a mutation that calls <code>identity.set()</code>, then read the <code>abide-identity</code> cookie off the response with <code>identityCookie()</code> and replay it on a follow-up request.</p>
+  <pre class="code" data-lang="ts"><code>import &#123; createTestApp, identityCookie &#125; from 'abide/test/createTestApp'
+
+const loginRes = await app.fetch('/__abide/rpc/login', &#123;
+  method: 'POST',
+  headers: &#123; 'content-type': 'application/json' &#125;,
+  body: '&#123;&#125;',
+&#125;)
+const cookie = identityCookie(loginRes) // "abide-identity=…"
+
+const follow = await app.fetch('/__abide/rpc/whoami?args=%7B%7D', &#123; headers: &#123; cookie &#125; &#125;)
+expect((await follow.json()).authenticated).toBe(true)</code></pre>
+
+  <h2 id="sockets">Sockets</h2>
+  <p><code>app.socket()</code> opens a thin client over the multiplexed socket WS. <code>subscribe(name)</code> yields the data frames for that socket, <code>publish(name, msg)</code> sends a client publish, and <code>as(identity).socket()</code> upgrades authenticated. Close the client (or <code>stop()</code> the app) to release the connection.</p>
+  <pre class="code" data-lang="ts"><code>const client = app.socket()
+await client.ready()
+
+const messages = client.subscribe&lt;&#123; text: string &#125;&gt;('chat')
+client.publish('chat', &#123; text: 'hi' &#125;)
+
+for await (const msg of messages) &#123;
+  expect(msg.text).toBe('hi')
+  break
+&#125;
+client.close()</code></pre>
+
+  <h2 id="health">Health</h2>
+  <p><code>app.health()</code> hits <code>GET /__abide/health</code>, running your <code>onHealth()</code> hook against the real merged health document — a fast liveness assertion for your boot wiring.</p>
+  <pre class="code" data-lang="ts"><code>const res = await app.health()
+expect(res.status).toBe(200)
+expect(await res.json()).toMatchObject(&#123; reachable: true &#125;)</code></pre>
+
+  <h2 id="surface">The TestApp surface</h2>
+  <ul class="links">
+    <li><code>origin</code> — the <code>http://localhost:&lt;port&gt;</code> the app is listening on.</li>
+    <li><code>fetch(path, init?)</code> — raw request against the live origin.</li>
+    <li><code>rpc.&lt;name&gt;(args?)</code> — call a registered route with the correct verb; returns the decoded payload.</li>
+    <li><code>socket(name?)</code> — a client over the multiplexed socket WS (<code>subscribe</code> / <code>publish</code> / <code>ready</code> / <code>close</code>).</li>
+    <li><code>health()</code> — <code>GET /__abide/health</code>.</li>
+    <li><code>as(identity)</code> — a sibling app that authenticates every request as <code>identity</code> (shares the same server + teardown, so <code>onStop</code> runs once).</li>
+    <li><code>stop()</code> — shut the server down (runs <code>onStop</code> in discovery mode); always run it in an <code>afterEach</code>.</li>
+  </ul>
+  <p><code>await createTestApp(config?)</code> takes the explicit surfaces <code>&#123; routes, middleware, sockets, pages, layouts &#125;</code> — name only what a test needs — plus the discovery knobs <code>&#123; dir, lifecycle &#125;</code>. Omit every surface (or pass no argument) to load and boot the whole app.</p>
+</main>

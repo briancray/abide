@@ -1,39 +1,18 @@
 <script>
   import { state } from "abide/shared/state"
+  import agentDemo from "$server/rpc/agentDemo"
 
-  // Gate the stream behind a click so SSR renders the button (a relative `fetch` can't run server-side),
-  // then the agent run streams client-side — matching the jsonl/sse samples.
+  // Gate the stream behind a click so SSR renders the button (the run streams client-side), then consume
+  // it declaratively. `agentDemo` is a streaming GET of `agent()` frames mapped to `{ kind, text }`; the
+  // browser RPC proxy decodes its `application/jsonl` response into an AsyncIterable, so `{#for await}`
+  // drains it in the browser identically to SSR — no hand-rolled fetch/reader/decoder (see /rpc/streaming).
   let running = state(false)
-
-  // Consume the `agent()` frame stream (an `application/jsonl` response from /rpc/agentDemo) in the
-  // browser, matching how the docs consume every stream (see /rpc/streaming).
-  // NOTE: const-assigned generator expression — a top-level `async function*` isn't hoisted onto the
-  // template scope by the `.abide` script transform.
-  const agentSteps = async function* (): AsyncGenerator<{ kind: string; text: string }> {
-    const response = await fetch("/__abide/rpc/agentDemo")
-    if (!response.body) return
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ""
-    for (;;) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      buffer += decoder.decode(chunk.value, { stream: true })
-      let newline = buffer.indexOf("\n")
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline).trim()
-        buffer = buffer.slice(newline + 1)
-        if (line.length > 0) yield JSON.parse(line)
-        newline = buffer.indexOf("\n")
-      }
-    }
-  }
 </script>
 
 <button data-testid="agent-btn" onclick={() => running = true}>Run agent</button>
 {#if running}
   <ol class="agent-log" data-testid="agent-log">
-    {#for await step of agentSteps()}
+    {#for await step of agentDemo()}
       <li data-kind={step.kind}><strong>{step.kind}</strong> {step.text}</li>
     {:catch}
       <li>agent run failed</li>

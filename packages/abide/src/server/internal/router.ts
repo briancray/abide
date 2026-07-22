@@ -48,6 +48,7 @@ import {
     normalizeCrossOrigin,
     preflightResponse,
 } from './cors.ts'
+import { sharedLayoutDepth } from './layouts.ts'
 import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
 import { matchRoute } from './matchRoute.ts'
 import { handleMcp } from './mcp.ts'
@@ -525,12 +526,33 @@ async function dispatch(
                 // true)` awaits blocking reads (a throw still 500s below) and returns the SHELL. Vary on the
                 // header so caches key first-load vs soft-nav.
                 if (isSoftNav(scope.request)) {
-                    const shell = await renderPage(source, config, match.pattern, true)
+                    // C6.2: how many outer layouts the client is KEEPING (shared with the route it sent in
+                    // `Abide-Nav`). Render only the diverging suffix; the client grafts + claims it into the
+                    // innermost kept layout's outlet. 0 (no shared layout / unknown origin) renders full.
+                    const fromPath = scope.request.headers.get('abide-nav')
+                    const fromMatch =
+                        fromPath !== null ? matchRoute(Object.keys(pages), fromPath) : null
+                    const sharedLevels =
+                        fromMatch !== null
+                            ? sharedLayoutDepth(
+                                  fromMatch.pattern,
+                                  match.pattern,
+                                  config.layouts ?? {},
+                              )
+                            : 0
+                    const shell = await renderPage(
+                        source,
+                        config,
+                        match.pattern,
+                        true,
+                        sharedLevels,
+                    )
                     const body = streamSoftNav(
                         shell,
                         getContext(),
                         config,
                         url.pathname + url.search,
+                        sharedLevels,
                     )
                     return new Response(body, {
                         status: 200,

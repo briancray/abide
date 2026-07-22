@@ -3,11 +3,22 @@
 // proxy that calls registered routes with the right verb, a `health` probe, `stop`, and `as`
 // for impersonating an identity.
 //
+// TWO MODES (createTestApp is async either way):
+//   • EXPLICIT — the config names at least one SURFACE (`routes`/`sockets`/`pages`/`layouts`/
+//     `middleware`/…). Only what you name is registered — a hermetic app, no filesystem scan, no
+//     lifecycle. This is the classic unit-test shape.
+//   • DISCOVERY — the config names NO surface (`createTestApp()`, `createTestApp({})`, or only the
+//     control knobs `dir`/`lifecycle`). The whole project at `dir` (default `process.cwd()`) is
+//     loaded via `loadApp` — every `src/server/rpc/**`, socket, page, layout, and `src/app.ts`
+//     middleware/lifecycle — and booted through its `onStart`/`onStop` hooks (unless `lifecycle:
+//     false`). Use this to integration-test against the REAL app.
+//
 // `as(identity)` does not start a second server — it returns a sibling TestApp bound to the
 // same origin that stamps an `Authorization: Bearer <sealed identity>` header onto every
 // request, exercising the real per-user-token rung of the identity ladder (AU9). The rpc proxy
 // sends Content-Type: application/json on mutations so they satisfy the CSRF gate (AU8).
 
+import { loadApp } from '../server/internal/loadApp.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
 import { type App, createApp, type Route } from '../server/internal/router.ts'
 import type { Principal } from '../server/internal/scope.ts'
@@ -50,6 +61,27 @@ export interface TestAppConfig {
     // page/layout's relative CSS imports. Normally populated by the file loader; exposed here for tests.
     pageDirs?: Record<string, string>
     layoutDirs?: Record<string, string>
+    // DISCOVERY-mode control knobs (ignored in explicit mode — they are not surfaces, so setting one
+    // alone still triggers discovery). `dir`: project root to scan (default `process.cwd()`).
+    // `lifecycle`: run the discovered app's `onStart`/`onStop` hooks (default `true`; set `false` to
+    // skip an expensive boot that a given test does not exercise).
+    dir?: string
+    lifecycle?: boolean
+}
+
+// A config names an explicit SURFACE (so: no discovery) when it registers any request-facing
+// registry — routes, sockets, pages/layouts (or their dirs), or middleware. `dir`/`lifecycle` are
+// control knobs, not surfaces, so they don't count. An empty `{}` (or no arg) names none → discovery.
+function hasExplicitSurface(config: TestAppConfig): boolean {
+    return (
+        config.routes !== undefined ||
+        config.sockets !== undefined ||
+        config.pages !== undefined ||
+        config.layouts !== undefined ||
+        config.pageDirs !== undefined ||
+        config.layoutDirs !== undefined ||
+        config.middleware !== undefined
+    )
 }
 
 // A minimal pushable async queue: producers `push`/`close`, one consumer iterates. Backs each
@@ -170,6 +202,7 @@ function bind(
     app: App,
     routes: Record<string, Route>,
     identity: Partial<Principal> | undefined,
+    stop: () => Promise<void>,
 ): TestApp {
     const origin = app.origin
 
@@ -224,12 +257,50 @@ function bind(
         rpc,
         socket: (_name?: string): SocketClient => socketClient(origin, identity),
         health: (): Promise<Response> => doFetch('/__abide/health'),
-        stop: (): Promise<void> => app.stop(),
-        as: (asIdentity: Partial<Principal>): TestApp => bind(app, routes, asIdentity),
+        stop,
+        // A sibling shares the same server and the same `stop` — teardown (and any `onStop`) runs once.
+        as: (asIdentity: Partial<Principal>): TestApp => bind(app, routes, asIdentity, stop),
     }
 }
 
-export function createTestApp(config: TestAppConfig = {}): TestApp {
-    const app = createApp(config)
-    return bind(app, config.routes ?? {}, undefined)
+export async function createTestApp(config: TestAppConfig = {}): Promise<TestApp> {
+    // EXPLICIT mode — the config names a surface, so register exactly it (hermetic, no lifecycle).
+    if (hasExplicitSurface(config)) {
+        const app = createApp(config)
+        return bind(app, config.routes ?? {}, undefined, () => app.stop())
+    }
+
+    // DISCOVERY mode — load the whole project at `dir` and boot it through its lifecycle.
+    const loaded = await loadApp(config.dir ?? process.cwd())
+    const runLifecycle = config.lifecycle !== false
+
+    // Mirror serve.ts: `createApp` binds the server inside the `start` thunk so `onStart` can do setup
+    // BEFORE anything listens; returning without calling `start()` is a breakout (the app never boots).
+    let app: App | undefined
+    const start = async (): Promise<void> => {
+        if (app === undefined) app = createApp(loaded)
+    }
+    if (runLifecycle && loaded.onStart !== undefined) await loaded.onStart(start)
+    else await start()
+    if (app === undefined) {
+        throw new Error('abide: onStart returned without calling start() — the app did not boot.')
+    }
+    const booted = app
+
+    // Teardown mirrors onStart: `onStop` wraps the real `stop()`, and it always completes (backstop).
+    let stopped = false
+    const rawStop = async (): Promise<void> => {
+        if (stopped) return
+        stopped = true
+        await booted.stop()
+    }
+    const stop =
+        runLifecycle && loaded.onStop !== undefined
+            ? async (): Promise<void> => {
+                  await loaded.onStop?.(rawStop)
+                  if (!stopped) await rawStop()
+              }
+            : rawStop
+
+    return bind(booted, loaded.routes ?? {}, undefined, stop)
 }

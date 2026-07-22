@@ -1,0 +1,37 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import RouteReadoutDemo from "$ui/demos/pages/routing/RouteReadoutDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Page file structure</h1>
+  <p class="lead">Pages are files under <code>src/ui/pages/</code>. There is no route table and no router config — the folder chain <em>is</em> the URL. A <code>page.abide</code> is a route; a <code>layout.abide</code> wraps its folder and everything below it; a <code>[name]</code> segment captures into <code>route().params.name</code>. This very page is <code>pages/pages/structure/page.abide</code>, served at <code>/pages/structure</code>.</p>
+
+  <h2>The folder chain is the URL</h2>
+  <p>Each <code>page.abide</code>'s route is its directory path with the filename dropped. A <code>[name]</code> folder is a dynamic segment; an exact route always wins over a param route at the same depth.</p>
+  <pre class="filetree">src/ui/pages/
+  layout.abide          → wraps every page (the root layout)
+  page.abide            → /
+  about/page.abide      → /about
+  users/
+    layout.abide        → wraps /users and everything under it
+    page.abide          → /users
+    [id]/page.abide     → /users/:id   (route().params.id)
+    new/page.abide      → /users/new   (exact wins over [id])</pre>
+
+  <h2>What each file is</h2>
+  <dl class="route">
+    <dt><code>page.abide</code></dt><dd>A route. The URL is its folder chain.</dd>
+    <dt><code>layout.abide</code></dt><dd>Wraps its folder subtree; nests outer→inner and renders the page at its <code>&lt;slot/&gt;</code>. See <a href="/pages/layouts">Layouts</a>.</dd>
+    <dt><code>[name]/</code></dt><dd>A dynamic segment, captured into <code>route().params.name</code>. See <a href="/pages/routing">Routing</a>.</dd>
+  </dl>
+
+  <h2>Script &amp; style scoping inside a page</h2>
+  <p>The same scoping rules apply in a page as in any component: a bare <code>&lt;script&gt;</code> runs <strong>per instance</strong>, <code>&lt;script module&gt;</code> runs <strong>once per module</strong> (imports, shared constants), and a <code>&lt;script&gt;</code> nested inside a block is <strong>branch-local</strong>. A <code>&lt;style&gt;</code> is component-scoped; a nested one is subtree-scoped.</p>
+
+  <h2>A page reads its own route</h2>
+  <p>A page has no props — route data arrives through the isomorphic reactive <code>route()</code> accessor (params, url, name, kind). See <a href="/pages/data">Data &amp; props</a> for the full data story.</p>
+  <Demo id="structure-route" title="This page's <code>route()</code>" client="src/ui/demos/pages/routing/RouteReadoutDemo.abide" tab="client">
+    <RouteReadoutDemo />
+  </Demo>
+</main>

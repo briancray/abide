@@ -9,7 +9,10 @@ Through-line: **test against a real in-process app, not mocks** — same runtime
 
 ---
 
-## TE1. `createTestApp()` → `TestApp`
+## TE1. `await createTestApp(config?)` → `Promise<TestApp>`
+
+`createTestApp` is **async** (it may scan the filesystem + dynamically import the app's modules);
+always `await` it.
 
 1. **Boots a *real* app instance in-process** — an actual `Bun.serve` on an ephemeral port
    (`origin`), running the real pipeline: real RPC dispatch, real SSR, real sockets, real
@@ -35,6 +38,19 @@ Through-line: **test against a real in-process app, not mocks** — same runtime
 6. **SSR/render assertions via `fetch`.** `fetch(pagePath)` returns the **real streamed SSR
    HTML** (§5/§6) for string/DOM assertions. abide ships **no** DOM matcher / render DSL — bring
    happy-dom/jsdom for DOM-level queries.
+7. **Two modes, chosen by the config shape.** The config's *surface* keys are
+   `routes`/`sockets`/`pages`/`layouts`/`middleware` (+ the `*Dirs` helpers).
+   - **Explicit** — the config names ≥1 surface → only what is named is registered. A hermetic
+     app, no filesystem scan, no lifecycle. (TE1.3 isolation holds per call.)
+   - **Discovery** — the config names *no* surface (`createTestApp()`, `createTestApp({})`, or
+     only the control knobs) → the whole project at `dir` (default `process.cwd()`) is loaded via
+     the same file-based loader `abide start` uses (every `src/server/rpc/**`, socket, page,
+     layout, and `src/app.ts` middleware), then booted through its `onStart`/`onStop` **hooks**.
+     Integration-test against the real app. **Control knobs** (not surfaces, so setting one alone
+     still triggers discovery): `dir` (project root to scan) and `lifecycle` (default `true`; set
+     `false` to skip an expensive boot the test doesn't exercise — discovery still runs, only the
+     hooks are skipped). `as(identity)` siblings share the one server + teardown, so `onStop`
+     runs exactly once.
 
 ---
 

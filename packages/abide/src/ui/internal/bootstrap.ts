@@ -26,8 +26,8 @@ import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
-import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
 import { watch } from '../../shared/watch.ts'
+import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
 import { makeClientImports } from './clientProxy.ts'
 import {
     type PageLoader,
@@ -130,6 +130,31 @@ function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, ba
     }
 }
 
+// Build the merged `$scope` an emitted mount reads (mirrors the SSR scope in server/internal/pages.ts):
+// the RPC + socket proxies (keyed by the local import name), the seed's recorded reads/streams replayed
+// into those cells BEFORE mount (so a seeded read never re-fetches), plus the framework bindings —
+// `state` (the seed-replaying wrapper; its ordinal resets per call and consumes `seed.states` in order),
+// `watch`, `props()`, and the isomorphic `route`/`url`/`navigate`. Reused for both the whole-page mount
+// and a same-chain soft-nav's diverging-suffix sub-hydrate (C6.2), each with its own (partial) seed.
+export function buildPageScope(
+    seed: HydrationSeed,
+    rpcSpecs: RpcSpecs,
+    base?: string,
+    socketSpecs?: SocketSpecs,
+): Record<string, unknown> {
+    const imports = {
+        ...makeClientImports(rpcSpecs, base),
+        ...makeClientSocketImports(socketSpecs ?? {}, base),
+    }
+    replayReads(seed, imports)
+    replayStreams(seed, imports, base ?? '')
+    const { reads: _reads, ...props } = seed
+    imports.route = route
+    imports.url = url
+    imports.navigate = navigate
+    return { ...imports, state: makeSeededState(seed, isHydrating), watch, props: () => props }
+}
+
 // Bootstrap a page in the browser from its AOT-emitted client `hydrate`. Returns a cleanup function
 // that disposes the mount (unmounts effects). A no-op outside the browser (no `document`), so
 // importing the entry under SSR is safe. `hydrate` claims the server DOM; on an unrecoverable root
@@ -149,38 +174,7 @@ export function bootstrapPage(
     // First load reads the inline seed script; a soft-nav passes its envelope seed as `seedOverride`
     // (the inline script is stale after the initial document).
     const seed = seedOverride ?? readSeed()
-    // RPC proxies AND socket proxies (client-sockets.md CS3) are read off `$scope` by the emitted mount,
-    // each keyed by the local name a page imported from `server/{rpc,sockets}/<name>.ts`.
-    const imports = {
-        ...makeClientImports(rpcSpecs, base),
-        ...makeClientSocketImports(socketSpecs ?? {}, base),
-    }
-    // Replay recorded reads into the RPC cells BEFORE mount so the component resolves them from cache.
-    // The emitted mount reads these SAME proxy instances off `$scope`, so a seeded read never re-fetches.
-    replayReads(seed, imports)
-    // Warm the cells of SSR-streamed lists (mode A inline transcript / mode B prefix+resume) so an adopted
-    // `{#for await}` re-reads its transcript with no re-invoke, and its chunk probes + `refresh()` work (§5).
-    replayStreams(seed, imports, base ?? '')
-    // Remaining seed keys (not the recorded reads) become mount props.
-    const { reads: _reads, ...props } = seed
-    // Isomorphic runtime bindings a page may `import` and call (`route()`, `url()`, `navigate()`). On
-    // the client `route()` reads the reactive client-route holder (set by bootstrap/soft-nav) so it
-    // re-renders on nav. SERVER-ONLY accessors (identity/request/cookies) are absent here — importing
-    // one on the client resolves to undefined, so a page that uses them is server-render-only.
-    imports.route = route
-    imports.url = url
-    imports.navigate = navigate
-
-    // The merged `$scope` the emitted mount reads: RPC proxies + the framework bindings, each keyed by
-    // the local name the page imports (mirrors the SSR scope in server/internal/pages.ts). `props` is
-    // this instance's props behind the `props()` import. `state` is the seed-replaying wrapper: its
-    // ordinal counter is created here, so it resets per mount and consumes `seed.states` in call order.
-    const scope: Record<string, unknown> = {
-        ...imports,
-        state: makeSeededState(seed, isHydrating),
-        watch,
-        props: () => props,
-    }
+    const scope = buildPageScope(seed, rpcSpecs, base, socketSpecs)
 
     // Attach-hydration (Stage 2, PR7): CLAIM the SSR DOM in place — no container clear. The emitted
     // `hydrate` seeds its cursor from the server DOM, claims each node (suppressing the initial write —

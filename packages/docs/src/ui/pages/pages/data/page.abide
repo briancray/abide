@@ -1,0 +1,25 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import RouteReadoutDemo from "$ui/demos/pages/routing/RouteReadoutDemo.abide"
+  import PageReadDemo from "$ui/demos/pages/data/PageReadDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Data &amp; props</h1>
+  <p class="lead">A page and a layout take <strong>no props</strong> — there is no loader convention and no data argument. Everything a page needs comes from two isomorphic sources: <code>route()</code> for the URL and its params, and awaited <strong>reads</strong> for server data. <code>props&lt;T&gt;()</code> belongs to <a href="/templating/components">components</a>, not pages.</p>
+
+  <h2>Route data — <code>route()</code></h2>
+  <p><code>route()</code> is the same reactive accessor on both sides: <code>route().params</code> holds captured <code>[name]</code> segments, plus <code>.url</code>, <code>.name</code>, <code>.kind</code>, and <code>.navigating</code>. Reading a field re-renders on navigation.</p>
+  <Demo id="data-route" title="Route data — <code>route()</code>" client="src/ui/demos/pages/routing/RouteReadoutDemo.abide" tab="client">
+    <RouteReadoutDemo />
+  </Demo>
+
+  <h2>Server data — awaited reads</h2>
+  <p>There is no separate loader. To put server data on a page, <code>await</code> a read in the template: it blocks the SSR render so the value lands in the initial HTML, then seeds hydration so the client doesn't re-fetch. Feed <code>route().params</code> straight in as the read's args when the data depends on the URL.</p>
+  <Demo id="data-read" title="A read, awaited in the page" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/pages/data/PageReadDemo.abide" tab="client">
+    <PageReadDemo />
+  </Demo>
+
+  <h2>What about <code>props()</code>?</h2>
+  <p><code>props&lt;T&gt;()</code> is a <strong>component</strong> mechanism: a <code>&lt;Name/&gt;</code> invocation (or an inline <code>{'{'}#component&#125;</code>) passes props to that component's <code>&lt;script&gt;</code>. A page or layout is the top of the render — nothing invokes it with props, so its <code>props()</code> is always empty. Reach for <code>route()</code> and reads here; use <code>props()</code> when you factor markup out into a <a href="/templating/components">component</a>.</p>
+</main>

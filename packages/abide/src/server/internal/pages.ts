@@ -18,13 +18,13 @@ import { getContext, runInContext } from '../../shared/internal/context.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
+import type { State, StateCell } from '../../shared/state.ts'
+import { state } from '../../shared/state.ts'
 import { url } from '../../shared/url.ts'
+import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
 import { Raw } from '../../ui/internal/serverRuntime.ts'
 import { createStreamScope, documentPatch, drainPatches } from '../../ui/internal/streamScope.ts'
-import type { State, StateCell } from '../../shared/state.ts'
-import { state } from '../../shared/state.ts'
-import { watch } from '../../shared/watch.ts'
 import { cookies } from '../cookies.ts'
 import { identity } from '../identity.ts'
 import { request } from '../request.ts'
@@ -150,6 +150,7 @@ export async function renderPage(
     config: AppConfig,
     pattern?: string,
     streaming = false,
+    sharedLevels = 0,
 ): Promise<string> {
     log.channel('abide:ssr').trace(
         `render ${pattern ?? '(inline)'}${streaming ? ' (streaming)' : ''}`,
@@ -177,7 +178,10 @@ export async function renderPage(
         ...prefixes.map((prefix) => layoutDirs[prefix]),
         pattern !== undefined ? pageDirs[pattern] : undefined,
     ]
-    return renderLevel(levels, dirs, 0, imports)
+    // On a same-chain soft-nav the shared outer layouts (`[0..sharedLevels)`) stay LIVE on the client,
+    // so render only the diverging suffix. `recordingState` records state initials from this render only
+    // — the suffix's states start at ordinal 0, exactly what the client's fresh sub-hydrate seed replays.
+    return renderLevel(levels.slice(sharedLevels), dirs.slice(sharedLevels), 0, imports)
 }
 
 // Pre-compile every page and layout `.abide` source at serve start so the AOT emit (parse → analyze →
@@ -438,6 +442,7 @@ export function streamSoftNav(
     ctx: CacheContext,
     config: AppConfig,
     urlPath: string,
+    sharedLevels = 0,
 ): ReadableStream<Uint8Array> {
     const stream = ctx.stream
     const encoder = new TextEncoder()
@@ -445,7 +450,9 @@ export function streamSoftNav(
         async start(controller) {
             const frame = (obj: unknown): void =>
                 controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
-            frame({ kind: 'shell', html: shell, url: urlPath })
+            // `sharedLevels` > 0: the shell is only the diverging suffix; the client keeps that many outer
+            // layout instances alive and grafts this into the innermost kept layout's outlet (C6.2).
+            frame({ kind: 'shell', html: shell, url: urlPath, sharedLevels })
             try {
                 if (
                     stream !== undefined &&

@@ -11,8 +11,8 @@
   <p class="lead">Async blocks render a branch per promise or stream state. <code>&#123;#await&#125;</code> resolves a value (blocking SSR so it lands in the initial HTML), and <code>&#123;#for await&#125;</code> appends each chunk of an async iterable as it arrives.</p>
 
   <p>This block awaits a real RPC during SSR, so the value is already in the initial HTML.</p>
-  <Demo id="await-rpc" title="Server-resolved <code>&#123;#await&#125;</code> of an RPC" server="src/server/rpc/controlGreet.ts" client="src/ui/demos/templating/async/AwaitRpcDemo.abide" tab="server" replayable={true}>
-    <AwaitRpcDemo sampleId="await-rpc" />
+  <Demo id="await-rpc" title="Server-resolved <code>&#123;#await&#125;</code> of an RPC" server="src/server/rpc/controlGreet.ts" client="src/ui/demos/templating/async/AwaitRpcDemo.abide" tab="server">
+    <AwaitRpcDemo />
   </Demo>
 
   <p>Each click reseeds a promise held in state; the block shows the pending branch, then the resolved or rejected branch. The <code>&#123;:finally&#125;</code> branch renders once the promise settles either way.</p>

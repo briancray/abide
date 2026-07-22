@@ -8,6 +8,7 @@
 // imports (and memoizes) a pattern's chunk, deduping concurrent loads so a soft-nav that primes the
 // chunk early doesn't double-fetch it.
 
+import type { Level } from './compose.ts'
 import type { SocketSpec } from './socketProxy.ts'
 
 // The emitted client mount for a page: clones its template, wires reactive bindings against the
@@ -19,6 +20,11 @@ export type PageMount = (target: Element, scope: Record<string, unknown>) => () 
 export interface PageEntry {
     mount: PageMount
     hydrate: PageMount
+    // The individual composed levels (outermost layout → page) + their applicable layout prefixes. A
+    // same-chain soft-nav uses these to keep the shared layouts alive and re-compose only the diverging
+    // suffix (C6.2). Optional so a hand-built/test PageEntry without them still type-checks.
+    levels?: Level[]
+    prefixes?: string[]
 }
 
 // A per-pattern chunk loader: imports the code-split chunk whose default export is the page's composed

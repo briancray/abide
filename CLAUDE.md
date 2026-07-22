@@ -213,7 +213,7 @@ Partial args match every superset slot.
 ## MCP / testing
 | Import | Signature |
 | --- | --- |
-| `abide/test/createTestApp` | `createTestApp()` → `TestApp` (`origin`, `fetch`, `rpc`, `sockets`, `health`, `stop`, `as(identity)`) — real in-process app, not mocks |
+| `abide/test/createTestApp` | `await createTestApp(config?)` → `Promise<TestApp>` (`origin`, `fetch`, `rpc`, `socket`, `health`, `stop`, `as(identity)`) — real in-process app, not mocks. **Async**, two modes: naming any surface (`routes`/`sockets`/`pages`/`layouts`/`middleware`) = explicit hermetic app (today's behavior); naming none (`createTestApp()`/`{}`/only `{ dir, lifecycle }`) = **discovery** — loads the whole project from `dir` (default `cwd`) and boots its `onStart`/`onStop` (`lifecycle: false` skips the hooks) |
 
 ## isometric RPC consumption (call surface)
 This surface is **identical for reads and mutations** (full symmetry). A read (`GET`/`HEAD`) is an `Rpc`/
@@ -284,7 +284,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `<style>` component-scoped · nested `<style>` subtree-scoped · tailwind optional |
 | `src/ui/pages/**/page.abide` / `layout.abide` | routes; `[name]` → `route().params.name` |
 | `route()` | `route().url`, `.params`, `.name`, `.kind`, `.navigating` |
-| `navigate` / `url` | `url(path, params?, query?)` builds an href; `navigate(target, options?)` moves to one — compose as `navigate(url(...), options)`. Nav always hits the server (middleware); same-route param nav = seeds-only (no DOM swap), cross-route = HTML outlet swap |
+| `navigate` / `url` | `url(path, params?, query?)` builds an href; `navigate(target, options?)` moves to one — compose as `navigate(url(...), options)`. Nav always hits the server (middleware); same-route param/query nav = a pure `route()` republish (reads re-fire reactively in place — no DOM swap, no re-hydrate; scroll/focus preserved; the server round-trip is a background middleware/redirect confirm), a cross-route nav sharing a layout prefix keeps the shared outer layouts alive and grafts/claims only the diverging suffix (fully-disjoint route = whole-outlet swap) |
 
 ## App module — `src/app.ts`
 `export const middleware = [(next) => Response, …]` (onion; `next()` needs no args; return a

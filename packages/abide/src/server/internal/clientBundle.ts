@@ -144,6 +144,9 @@ interface EmittedModule {
 interface PageChain {
     pattern: string
     indices: number[]
+    // The applicable layout PREFIXES (outermost→innermost), so the client can compute the shared depth
+    // vs the current route and keep the shared layouts alive on a same-chain nav (C6.2).
+    prefixes: string[]
 }
 
 // Rewrite the emitted client module's RELATIVE side-effect CSS imports (`import "./styles.css"`) to
@@ -266,7 +269,8 @@ async function emitModules(
     const chains: PageChain[] = []
     for (const pattern of Object.keys(pages)) {
         const indices: number[] = []
-        for (const prefix of applicableLayoutPrefixes(pattern, layouts)) {
+        const prefixes = applicableLayoutPrefixes(pattern, layouts)
+        for (const prefix of prefixes) {
             const layoutSource = layouts[prefix]
             if (layoutSource === undefined)
                 throw new Error(`clientBundle: no layout for prefix ${prefix}`)
@@ -276,7 +280,7 @@ async function emitModules(
         if (pageSource === undefined)
             throw new Error(`clientBundle: no page for pattern ${pattern}`)
         indices.push(await emitOne(pageSource, pageDirs[pattern], visited, modules))
-        chains.push({ pattern, indices })
+        chains.push({ pattern, indices, prefixes })
     }
     return { modules, chains }
 }
@@ -308,7 +312,14 @@ function chainSource(chain: PageChain, modules: EmittedModule[]): string {
         imports += `import { mount as $m${n}, hydrate as $h${n} } from ${JSON.stringify(module.file)};\n`
         levels.push(`{ mount: $m${n}, hydrate: $h${n} }`)
     }
-    return `${imports}export default compose([${levels.join(', ')}]);\n`
+    // Export the composed default (mount/hydrate) PLUS the individual `levels` + layout `prefixes`, so a
+    // same-chain soft-nav can compute the shared depth `k` and re-`compose(levels.slice(k))` the diverging
+    // suffix into the kept layout's outlet (C6.2), instead of rebuilding the whole tree.
+    return (
+        `${imports}const $levels = [${levels.join(', ')}];\n` +
+        `const $chain = compose($levels);\n` +
+        `export default { mount: $chain.mount, hydrate: $chain.hydrate, levels: $levels, prefixes: ${JSON.stringify(chain.prefixes)} };\n`
+    )
 }
 
 // Generate the loader ENTRY: register a per-pattern LAZY loader (`() => import("<chain>")` — Bun

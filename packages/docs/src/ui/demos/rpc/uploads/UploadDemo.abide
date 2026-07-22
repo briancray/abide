@@ -3,28 +3,20 @@
   import rpcUpload from "$server/rpc/rpcUpload"
 
   // The upload RPC's single argument is a real FormData: the picked File plus the caption text field.
-  // The browser calls the SAME callable as the server — the client proxy sends the FormData as the raw
-  // multipart body. A 422 (missing/short caption, or a missing/oversize/wrong-type file) throws an
-  // HttpError we surface below.
-  let caption = state("")
-  let fileNode = state(null)
+  // A native <form> builds that FormData for free — `new FormData(form)` harvests every `name=`d field
+  // (the text `caption` + the `avatar` File) with no manual `.set()` or node capture. The browser then
+  // calls the SAME callable as the server; the client proxy sends the FormData as the raw multipart
+  // body (adding the `x-abide` header the CSRF gate requires — which a bare form submit can't forge, so
+  // we go through the callable, not the form's own `action`). A 422 (missing/short caption, or a
+  // missing/oversize/wrong-type file) throws an HttpError we surface below.
   let result = state(null)
   let errorMsg = state("")
 
-  // Capture the file <input> node on mount (bind:element attach form), so upload() can read its
-  // live `.files` at click time.
-  const bindFile = (el) => {
-    fileNode = el
-    return () => { fileNode = null }
-  }
-
-  async function upload() {
+  async function upload(event) {
+    event.preventDefault()
     errorMsg = ""
     result = null
-    const form = new FormData()
-    form.set("caption", caption)
-    const file = fileNode?.files?.[0]
-    if (file) form.set("avatar", file)
+    const form = new FormData(event.currentTarget)
     try {
       result = await rpcUpload(form)
     } catch (caught) {
@@ -35,11 +27,11 @@
   }
 </script>
 
-<div class="controls">
-  <label>caption <input data-testid="upload-caption" bind:value={caption} placeholder="required, non-empty" /></label>
-  <input data-testid="upload-file" type="file" bind:element={bindFile} />
-  <button data-testid="upload-submit" onclick={upload}>Upload</button>
-</div>
+<form class="controls" onsubmit={upload}>
+  <label>caption <input data-testid="upload-caption" name="caption" placeholder="required, non-empty" /></label>
+  <input data-testid="upload-file" name="avatar" type="file" />
+  <button data-testid="upload-submit" type="submit">Upload</button>
+</form>
 
 {#if result}
   <p data-testid="upload-result" class="out">uploaded <strong>{result.name}</strong> ({result.size} bytes, {result.type}) — caption: "{result.caption}"</p>

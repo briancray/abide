@@ -53,7 +53,7 @@ test('the client builds, code-splits, and serves content-hashed chunks', async (
     expect(js).not.toContain('mountPrepared')
 
     // Served under /__abide/chunk/ with an immutable (content-addressed) cache header.
-    const app = createTestApp(config)
+    const app = await createTestApp(config)
     const response = await app.fetch(`/__abide/chunk/${build.entry}`)
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toContain('text/javascript')
@@ -62,7 +62,7 @@ test('the client builds, code-splits, and serves content-hashed chunks', async (
 })
 
 test("the SSR'd page HTML injects the content-hashed loader script tag", async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: { '/': '<h1>ok</h1>' },
     })
 
@@ -120,7 +120,7 @@ test("a page's CSS import is bundled, served content-hashed under /__abide/chunk
     const dir = `/tmp/abide-css-${crypto.randomUUID()}`
     await Bun.write(`${dir}/page.css`, '.abide-proof { color: rebeccapurple; }\n')
 
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: { '/': '<script>import \'./page.css\'</script><h1 class="abide-proof">hi</h1>' },
         pageDirs: { '/': dir },
     })
@@ -150,7 +150,7 @@ test('no CSS import → no cssFile and no stylesheet link in the document', asyn
     const build = await buildClient(config)
     expect(build.cssFile).toBeUndefined()
 
-    const app = createTestApp(config)
+    const app = await createTestApp(config)
     const doc = await (await app.fetch('/')).text()
     expect(doc).not.toContain('rel="stylesheet"')
     expect(doc).not.toContain('.css')

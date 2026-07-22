@@ -3,13 +3,10 @@
   import JsonlStreamDemo from "$ui/demos/rpc/streaming/JsonlStreamDemo.abide"
   import SseStreamDemo from "$ui/demos/rpc/streaming/SseStreamDemo.abide"
   import SseEventSourceDemo from "$ui/demos/rpc/streaming/SseEventSourceDemo.abide"
-  import StreamProbesDemo from "$ui/demos/rpc/streaming/StreamProbesDemo.abide"
+  import StreamPeekDemo from "$ui/demos/rpc/streaming/StreamPeekDemo.abide"
+  import StreamChunksDemo from "$ui/demos/rpc/streaming/StreamChunksDemo.abide"
+  import StreamDoneDemo from "$ui/demos/rpc/streaming/StreamDoneDemo.abide"
   import StreamingMutationDemo from "$ui/demos/rpc/streaming/StreamingMutationDemo.abide"
-</script>
-
-<script>
-  import streamSlow from "$server/rpc/streamSlow"
-  import streamBoom from "$server/rpc/streamBoom"
 </script>
 
 <main class="page">
@@ -29,9 +26,24 @@
     <SseEventSourceDemo />
   </Demo>
 
-  <p>A <strong>streaming</strong> read swaps the value probes for <em>chunk</em> probes: <code>fn.peek(args)</code> is the <strong>latest chunk</strong>, <code>fn.chunks(args)</code> is the transcript so far, and <code>fn.done(args)</code> reports whether the stream has closed.</p>
-  <Demo id="stream-probes" title="Streaming read — <code>peek</code> (latest chunk) · <code>chunks</code> · <code>done</code>" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamProbesDemo.abide" tab="client">
-    <StreamProbesDemo />
+  <p>A <strong>streaming</strong> read swaps the value probes for <em>chunk</em> probes — one per card below: <code>fn.peek(args)</code> is the latest chunk, <code>fn.chunks(args)</code> is the transcript so far, and <code>fn.done(args)</code> reports whether the stream has closed.</p>
+
+  <h2><code>peek()</code> — the latest chunk</h2>
+  <p>The stream's current value: the most recent chunk, reactive, with no list to maintain. Reading it kicks the run; it advances as each tick lands.</p>
+  <Demo id="stream-peek" title="<code>rpcTicker.peek(args)</code> — latest chunk" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamPeekDemo.abide" tab="client">
+    <StreamPeekDemo />
+  </Demo>
+
+  <h2><code>chunks()</code> — the transcript so far</h2>
+  <p>Every chunk seen, as a snapshot array. Render it directly with a plain <code>{'{'}#for{'}'}</code> — same data as a <code>{'{'}#for await{'}'}</code>, snapshot rather than stream.</p>
+  <Demo id="stream-chunks" title="<code>rpcTicker.chunks(args)</code> — transcript" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamChunksDemo.abide" tab="client">
+    <StreamChunksDemo />
+  </Demo>
+
+  <h2><code>done()</code> — has the stream closed?</h2>
+  <p>A status probe over the run: <strong>no</strong> while chunks are still arriving, <strong>yes</strong> once the stream finishes.</p>
+  <Demo id="stream-done" title="<code>rpcTicker.done(args)</code> — closed" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamDoneDemo.abide" tab="client">
+    <StreamDoneDemo />
   </Demo>
 
   <p>Streaming reaches mutations too: a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read, and <code>.refresh()</code> re-runs the job.</p>
@@ -39,36 +51,5 @@
     <StreamingMutationDemo />
   </Demo>
 
-  <h2>Streaming SSR</h2>
-  <p>A slow <code>{'{'}#await{'}'}</code> read that misses the render deadline flushes the shell with a placeholder, then streams the resolved branch in as an out-of-order patch. Hydration claims the streamed nodes in place, so the block stays reactive — refresh re-fetches and re-renders it.</p>
-
-  <div data-testid="slow-block" class="rounded border border-slate-200 p-4">
-    {#await streamSlow()}
-      <span data-testid="pending">loading…</span>
-    {:then result}
-      <b data-testid="value">runs: {result.runs}</b>
-    {:catch failure}
-      <span data-testid="error">{failure.message}</span>
-    {/await}
-  </div>
-
-  <button
-    data-testid="refresh"
-    class="mt-4 rounded bg-slate-800 px-3 py-1.5 text-white"
-    onclick={() => streamSlow.refresh()}
-  >
-    Refresh
-  </button>
-
-  <p class="mt-8">A streamed read that <em>rejects</em> after the shell flushed streams its <code>{'{'}:catch{'}'}</code> branch as the patch — no 500 (headers are already out), and the client hydrates the catch branch in place.</p>
-
-  <div data-testid="error-block" class="rounded border border-slate-200 p-4">
-    {#await streamBoom()}
-      <span>loading…</span>
-    {:then ok}
-      <b>ok: {ok.ok}</b>
-    {:catch failure}
-      <i data-testid="error-value">{failure.message}</i>
-    {/await}
-  </div>
+  <p class="mt-8">Streaming reaches the page render itself, too: a slow <code>{'{'}#await{'}'}</code> read that misses the SSR deadline flushes the shell then streams its resolved branch in — see <a href="/pages/ssr">Streaming SSR</a>.</p>
 </main>

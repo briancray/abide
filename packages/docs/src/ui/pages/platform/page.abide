@@ -19,7 +19,9 @@
     <li><a href="/platform/lifecycle">Lifecycle hooks</a> — <code>onStart</code>/<code>onStop</code> wrappers, <code>onHealth</code>, <code>onError</code>.</li>
     <li><a href="/platform/machines">Machine surfaces</a> — <code>/openapi.json</code> + <code>/__abide/mcp</code>, capabilities as data, and the <code>agent()</code> loop.</li>
     <li><a href="/platform/cli">CLI</a> — <code>scaffold</code> / <code>dev</code> / <code>build</code> / <code>start</code> and the standalone binaries.</li>
+    <li><a href="/platform/testing">Testing</a> — <code>createTestApp()</code>, the in-process app harness: <code>rpc</code>, <code>fetch</code>, <code>as(identity)</code>, sockets.</li>
     <li><a href="/platform/deploy">Build &amp; deploy</a> — the content-hashed client build and how <code>start</code> serves it.</li>
     <li><a href="/platform/bench">Render bench</a> — the live SSR render benchmark.</li>
+    <li><a href="/platform/bench/client">Mount bench (browser)</a> — the same corpus, timing the real browser <code>mount</code> path in your tab.</li>
   </ul>
 </main>

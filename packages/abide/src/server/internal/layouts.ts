@@ -34,6 +34,22 @@ export function applicableLayoutPrefixes(
     return prefixes
 }
 
+// The number of leading layout levels TWO patterns SHARE (C6.2 nav persistence) — the longest common
+// prefix of their applicable-layout-prefix lists. On a same-chain soft-nav the server re-renders only
+// the diverging suffix `[sharedLayoutDepth..]` and the client keeps the shared layouts' live instances.
+// Layouts only (the page pattern differs on a cross-route nav; an equal pattern shares every layout).
+export function sharedLayoutDepth(
+    fromPattern: string,
+    toPattern: string,
+    layouts: Record<string, string>,
+): number {
+    const from = applicableLayoutPrefixes(fromPattern, layouts)
+    const to = applicableLayoutPrefixes(toPattern, layouts)
+    let depth = 0
+    while (depth < from.length && depth < to.length && from[depth] === to[depth]) depth++
+    return depth
+}
+
 // The layout sources applicable to `pattern`, ordered outermost → innermost (shortest prefix first).
 export function layoutChain(pattern: string, layouts: Record<string, string>): string[] {
     return applicableLayoutPrefixes(pattern, layouts).map((prefix) => {

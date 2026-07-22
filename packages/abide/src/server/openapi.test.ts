@@ -133,7 +133,7 @@ test('buildOpenApi emits a 3.1 document with GET query param and POST requestBod
 })
 
 test('GET /openapi.json serves the generated document', async () => {
-    const app = createTestApp(fixtureConfig())
+    const app = await createTestApp(fixtureConfig())
     try {
         const response = await app.fetch('/openapi.json')
         expect(response.status).toBe(200)

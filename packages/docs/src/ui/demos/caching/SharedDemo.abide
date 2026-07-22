@@ -1,15 +1,11 @@
 <script>
   import { state } from "abide/shared/state"
-  import { watch } from "abide/shared/watch"
-  import { props } from "abide/ui/props"
   import cacheShared from "$server/rpc/cacheShared"
   import cacheCounter from "$server/rpc/cacheCounter"
 
   // Each `raw()` is a separate HTTP request. A SHARED read's slot is process-global, so two requests
   // return the SAME run count; a per-request (non-shared) read re-runs each time and climbs.
-  // `sampleId` lets the card's "Run again" button re-fire this one-shot probe.
-  const { sampleId = "" } = props<{ sampleId?: string }>()
-
+  // The "Probe cross-request" button re-fires this one-shot probe.
   let sharedResult = state(null)
   async function probeShared() {
     const sharedA = await (await cacheShared.raw({ tag: "s" })).json()
@@ -18,9 +14,6 @@
     const plainB = await (await cacheCounter.raw({ key: "shared-contrast" })).json()
     sharedResult = { shared1: sharedA.runs, shared2: sharedB.runs, plain1: plainA.runs, plain2: plainB.runs }
   }
-
-  let replay = state.shared("replay:" + sampleId, 0)
-  watch(() => replay, () => { probeShared() })
 </script>
 
 {#if sharedResult}

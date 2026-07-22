@@ -16,7 +16,7 @@ function stripAnchors(html: string): string {
 }
 
 test('[emit] SSRs a page as a full HTML document with an in-proc RPC read', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
             '/': "<script>import { state } from 'abide/shared/state'; import greet from '../../server/rpc/greet'; let title = state('Home')</script><main><h1>{title}</h1><p>{await greet({name:'ada'})}</p></main>",
@@ -37,7 +37,7 @@ test('[emit] SSRs a page as a full HTML document with an in-proc RPC read', asyn
 })
 
 test('[emit] route() is available inside a page template (kind = nav)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/x': "<script>import { route } from 'abide/shared/route'</script><span>{route().kind}</span>",
         },
@@ -52,7 +52,7 @@ test('[emit] route() is available inside a page template (kind = nav)', async ()
 })
 
 test('[emit] SSRs a param route, filling route().params from the pathname', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/users/[id]':
                 "<script>import { route } from 'abide/shared/route'</script><span>{route().params.id}</span>",
@@ -68,7 +68,7 @@ test('[emit] SSRs a param route, filling route().params from the pathname', asyn
 })
 
 test('[emit] SSR document records the resolved read into #__abide-seed', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
             '/': "<script>import greet from '../../server/rpc/greet'</script><p>{await greet({name:'ada'})}</p>",
@@ -89,7 +89,7 @@ test('[emit] SSR document records the resolved read into #__abide-seed', async (
 })
 
 test('[emit] a read-free page still emits an empty seed', async () => {
-    const app = createTestApp({ pages: { '/': '<h1>static</h1>' } })
+    const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
     const html = await (await app.fetch('/')).text()
     const match = html.match(/<script type="application\/json" id="__abide-seed">(.*?)<\/script>/s)
@@ -102,7 +102,7 @@ test('[emit] a read-free page still emits an empty seed', async () => {
 })
 
 test('[emit] the soft-nav envelope carries the recorded read', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
             '/': "<script>import greet from '../../server/rpc/greet'</script><p>{await greet({name:'bo'})}</p>",
@@ -119,7 +119,7 @@ test('[emit] the soft-nav envelope carries the recorded read', async () => {
 })
 
 test('[emit] output-shaping trims the seed value to the declared output schema', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: {
             me: GET(() => ({ id: 1, name: 'ada', passwordHash: 'secret' }), {
                 schemas: {

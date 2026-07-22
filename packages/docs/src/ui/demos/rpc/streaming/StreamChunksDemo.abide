@@ -1,0 +1,22 @@
+<script>
+  import { state } from "abide/shared/state"
+  import rpcTicker from "$server/rpc/rpcTicker"
+
+  // On a STREAMING read, `chunks(args)` is the transcript so far — every chunk seen, as a snapshot
+  // array. Reading it kicks the run; the array grows as ticks land. Its own key ({ count: 6 }) so this
+  // card owns its stream independently of the other probe demos.
+  let started = state(false)
+  const transcript = state.computed(() => (started ? (rpcTicker.chunks({ count: 6 }) ?? []) : []))
+  function start() { started = true; rpcTicker.chunks({ count: 6 }) }
+</script>
+
+<p><code>chunks()</code> — count so far: <strong data-testid="stream-count">{transcript.length}</strong></p>
+<ul class="log" data-testid="stream-chunks-log">
+  {#for tick of transcript by tick.n}
+    <li>{tick.label}</li>
+  {/for}
+</ul>
+
+<div class="row">
+  <button data-testid="stream-chunks-start" onclick={start}>Start stream</button>
+</div>

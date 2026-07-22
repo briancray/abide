@@ -12,8 +12,8 @@ const TEST_TIMEOUT = 5000
 let running: TestApp | undefined
 const openClients: SocketClient[] = []
 
-function start(config?: Parameters<typeof createTestApp>[0]): TestApp {
-    const app = createTestApp(config)
+async function start(config?: Parameters<typeof createTestApp>[0]): Promise<TestApp> {
+    const app = await createTestApp(config)
     running = app
     return app
 }
@@ -86,7 +86,7 @@ describe('socket transport — WebSocket mux', () => {
         'a WS subscriber receives a server-side publish',
         async () => {
             const ticks = socket<number>({ clientPublish: true, tail: 2 })
-            const app = start({ sockets: { ticks } })
+            const app = await start({ sockets: { ticks } })
 
             const c = client(app)
             const stream = c.subscribe<number>('ticks')
@@ -103,7 +103,7 @@ describe('socket transport — WebSocket mux', () => {
         'tail replay — a late subscriber replays the last N messages',
         async () => {
             const ticks = socket<number>({ clientPublish: true, tail: 2 })
-            const app = start({ sockets: { ticks } })
+            const app = await start({ sockets: { ticks } })
 
             // Publish before anyone subscribes; tail:2 retains the last two.
             ticks.publish(1)
@@ -123,7 +123,7 @@ describe('socket transport — WebSocket mux', () => {
         'client publish over the WS reaches subscribers',
         async () => {
             const ticks = socket<string>({ clientPublish: true, tail: 2 })
-            const app = start({ sockets: { ticks } })
+            const app = await start({ sockets: { ticks } })
 
             const subscriber = client(app)
             const stream = subscriber.subscribe<string>('ticks')
@@ -143,7 +143,7 @@ describe('socket transport — WebSocket mux', () => {
         'client publish is ignored when clientPublish is off',
         async () => {
             const quiet = socket<string>({ clientPublish: false })
-            const app = start({ sockets: { quiet } })
+            const app = await start({ sockets: { quiet } })
 
             const stream = quiet[Symbol.asyncIterator]()
             // Subscribe server-side directly to observe fanout; the WS publish must not reach it.
@@ -167,7 +167,7 @@ describe('socket transport — HTTP face', () => {
         'POST publishes a client message that reaches WS subscribers',
         async () => {
             const ticks = socket<string>({ clientPublish: true, tail: 2 })
-            const app = start({ sockets: { ticks } })
+            const app = await start({ sockets: { ticks } })
 
             const subscriber = client(app)
             const stream = subscriber.subscribe<string>('ticks')
@@ -190,7 +190,7 @@ describe('socket transport — HTTP face', () => {
         'POST is rejected 403 when clientPublish is off',
         async () => {
             const quiet = socket<string>({ clientPublish: false })
-            const app = start({ sockets: { quiet } })
+            const app = await start({ sockets: { quiet } })
 
             const response = await app.fetch('/__abide/sockets/quiet', {
                 method: 'POST',
@@ -206,7 +206,7 @@ describe('socket transport — HTTP face', () => {
         'GET streams messages over SSE',
         async () => {
             const ticks = socket<string>({ clientPublish: true, tail: 2 })
-            const app = start({ sockets: { ticks } })
+            const app = await start({ sockets: { ticks } })
 
             // Seed the tail so the SSE subscribe replays an immediate frame — Bun's client `fetch`
             // resolves a streaming response only once its first body chunk arrives.
@@ -232,7 +232,7 @@ describe('socket transport — HTTP face', () => {
     test(
         'unknown socket 404s on the HTTP face',
         async () => {
-            const app = start({ sockets: {} })
+            const app = await start({ sockets: {} })
             const response = await app.fetch('/__abide/sockets/nope')
             expect(response.status).toBe(404)
         },
@@ -247,7 +247,7 @@ describe('socket transport — CSWSH', () => {
             const original = Bun.env.APP_URL
             Bun.env.APP_URL = 'http://app.example'
             try {
-                const app = start({ sockets: { ticks: socket<number>() } })
+                const app = await start({ sockets: { ticks: socket<number>() } })
                 const response = await app.fetch('/__abide/sockets', {
                     headers: {
                         origin: 'http://evil.example',

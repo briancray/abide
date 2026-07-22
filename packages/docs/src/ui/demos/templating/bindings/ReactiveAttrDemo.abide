@@ -3,8 +3,7 @@
 
   // name={expr} reactive attribute.
   let attr = state("alpha")
-  const attrBind = { get: () => attr, set: (next) => { attr = next } }
 </script>
 
-<input id="attr-input" bind:value={attrBind} />
+<input id="attr-input" bind:value={attr} />
 <div id="attr-target" data-value={attr}>data-value tracks the input</div>

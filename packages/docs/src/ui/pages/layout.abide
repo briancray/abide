@@ -33,6 +33,10 @@
     ] },
     { title: "Pages", items: [
       { href: "/pages/routing", label: "Routing & navigation" },
+      { href: "/pages/structure", label: "Page file structure" },
+      { href: "/pages/layouts", label: "Layouts" },
+      { href: "/pages/data", label: "Data & props" },
+      { href: "/pages/ssr", label: "Streaming SSR" },
     ] },
     { title: "Caching & cells", items: [
       { href: "/caching/cell", label: "The cell primitive" },
@@ -48,8 +52,10 @@
       { href: "/platform/lifecycle", label: "Lifecycle hooks" },
       { href: "/platform/machines", label: "Machine surfaces" },
       { href: "/platform/cli", label: "CLI" },
+      { href: "/platform/testing", label: "Testing" },
       { href: "/platform/deploy", label: "Build & deploy" },
       { href: "/platform/bench", label: "Render bench" },
+      { href: "/platform/bench/client", label: "Mount bench (browser)" },
     ] },
   ]
 
@@ -69,39 +75,61 @@
   // CLIENT-ONLY (attached via bind:element, which never runs on the server): after the page content
   // mounts, list its `<section class="sample" id>` cards in the sidebar under the active page, and
   // scroll-spy the one in view. Pure progressive enhancement — the page works without it.
+  //
+  // A soft-nav recreates this content region (dispose → innerHTML shell swap → hydrate), so bind:element
+  // re-fires per navigation — sometimes while the destination's sample cards or the sidebar's reactive
+  // `idx-active` class haven't settled yet. Reading the DOM synchronously here therefore raced (empty
+  // content wiped the links and never rebuilt). Defer the build to the next frame and re-query then, so
+  // the final settled DOM is what we scrape; a transient empty mount just no-ops.
   function indexSamples(contentNode: Element) {
     if (typeof IntersectionObserver === "undefined") return
-    const active = document.querySelector(".idx-link.idx-active")
-    const samples = Array.from(contentNode.querySelectorAll("section.sample[id]"))
-    if (active === null || samples.length === 0) return
+    let frame = 0
+    let spy: IntersectionObserver | undefined
+    let sub: HTMLDivElement | undefined
 
-    const sub = document.createElement("div")
-    sub.className = "idx-samples"
-    const linkFor = new Map()
-    for (const s of samples) {
-      const heading = s.querySelector("h2, h3")
-      const link = document.createElement("a")
-      link.href = "#" + s.id
-      link.className = "idx-sample"
-      link.textContent = (heading?.textContent ?? s.id).trim()
-      sub.appendChild(link)
-      linkFor.set(s.id, link)
+    function build() {
+      frame = 0
+      const active = document.querySelector(".idx-link.idx-active")
+      const samples = Array.from(contentNode.querySelectorAll("section.sample[id]"))
+      if (active === null || samples.length === 0) return
+
+      // Clear any prior block (a racing mount may have left one anchored under a now-stale link).
+      for (const stale of document.querySelectorAll(".idx-samples")) stale.remove()
+
+      sub = document.createElement("div")
+      sub.className = "idx-samples"
+      const linkFor = new Map()
+      for (const s of samples) {
+        const heading = s.querySelector("h2, h3")
+        const link = document.createElement("a")
+        link.href = "#" + s.id
+        link.className = "idx-sample"
+        link.textContent = (heading?.textContent ?? s.id).trim()
+        sub.appendChild(link)
+        linkFor.set(s.id, link)
+      }
+      active.after(sub)
+
+      spy = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue
+            for (const l of sub!.children) l.classList.remove("idx-sample-active")
+            linkFor.get(entry.target.id)?.classList.add("idx-sample-active")
+          }
+        },
+        { rootMargin: "0px 0px -70% 0px", threshold: 0 },
+      )
+      for (const s of samples) spy.observe(s)
     }
-    active.after(sub)
 
-    const spy = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue
-          for (const l of sub.children) l.classList.remove("idx-sample-active")
-          linkFor.get(entry.target.id)?.classList.add("idx-sample-active")
-        }
-      },
-      { rootMargin: "0px 0px -70% 0px", threshold: 0 },
-    )
-    for (const s of samples) spy.observe(s)
+    frame = requestAnimationFrame(build)
 
-    return () => { spy.disconnect(); sub.remove() }
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame)
+      spy?.disconnect()
+      sub?.remove()
+    }
   }
 </script>
 

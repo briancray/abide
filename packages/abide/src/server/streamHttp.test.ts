@@ -16,7 +16,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 describe('streaming read HTTP transport', () => {
     test('a bare async-generator read is served as application/jsonl (decoded chunks, one per line)', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 ticker: GET(async function* (_args: Record<string, never>) {
                     yield 1
@@ -34,7 +34,7 @@ describe('streaming read HTTP transport', () => {
     })
 
     test('Accept: text/event-stream selects SSE', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 toks: GET(async function* (_args: Record<string, never>) {
                     yield 'a'
@@ -53,7 +53,7 @@ describe('streaming read HTTP transport', () => {
 
     test('a shared streaming read served concurrently over HTTP runs the source ONCE', async () => {
         let runs = 0
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 gen: GET(
                     async function* (_args: Record<string, never>) {
@@ -82,7 +82,7 @@ describe('streaming read HTTP transport', () => {
 
 describe('resumable stream replay (?from=count)', () => {
     test('?from=N resumes a RETAINED transcript from chunk N (replay then end)', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 gen: GET(
                     async function* (_a: Record<string, never>) {
@@ -104,7 +104,7 @@ describe('resumable stream replay (?from=count)', () => {
 
     test("?from=N with no retained transcript runs fresh from 0 and flags 'fresh' (client replaces)", async () => {
         let runs = 0
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 g2: GET(
                     async function* (_a: Record<string, never>) {
@@ -128,7 +128,7 @@ describe('resumable stream replay (?from=count)', () => {
 
 describe('transport helpers behave like their raw forms (see-through)', () => {
     test('json(x) is served as JSON and resolves to the value (like returning x raw)', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: { info: GET((_a: Record<string, never>) => json({ n: 7 })) },
         })
         const res = await app.fetch(`/__abide/rpc/info${argsQuery({})}`)
@@ -139,7 +139,7 @@ describe('transport helpers behave like their raw forms (see-through)', () => {
 
     test('jsonl(gen()) is replayable + coalesced like an async generator', async () => {
         let runs = 0
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 ev: GET(
                     (_a: Record<string, never>) => {
@@ -167,7 +167,7 @@ describe('transport helpers behave like their raw forms (see-through)', () => {
     })
 
     test("sse(gen()) keeps the handler's SSE encoding after see-through", async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: {
                 s: GET((_a: Record<string, never>) =>
                     sse(

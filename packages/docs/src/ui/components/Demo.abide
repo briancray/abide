@@ -8,32 +8,24 @@
   // `client`/`server` at the REAL files that power it. The card shows the demo, then two source tabs
   // in a fixed order — SERVER (the full `.ts`) then CLIENT (the full standalone `.abide` component) —
   // reading both live from disk via the `snippet` RPC. `tab` picks which side opens first (server for
-  // server-centric capabilities, client for UI ones). A one-shot demo (a single read/mutation) sets
-  // `replayable` to get a "Run again" button, which bumps `state.shared("replay:" + id)` for the demo
-  // to re-fire.
-  const { id = "", title = "", server = "", client = "", tab = "", replayable = false } = props<{
+  // server-centric capabilities, client for UI ones). A demo that can re-run owns its own trigger
+  // button — the card stays agnostic about what the demo does.
+  const { id = "", title = "", server = "", client = "", tab = "" } = props<{
     id?: string
     title?: string
     server?: string
     client?: string
     tab?: "" | "server" | "client"
-    replayable?: boolean
   }>()
 
   let active = state(tab === "" ? (server === "" ? "client" : "server") : tab)
   function select(side) { active = side }
-
-  let replay = state.shared("replay:" + id, 0)
-  function runAgain() { replay = replay + 1 }
 </script>
 
 <section class="sample" id={id}>
   <h2>{html(title)}</h2>
   <div class="sample-head">
     <span class="sample-run">live</span>
-    {#if replayable}
-      <button class="sample-replay" data-testid="replay" onclick={runAgain}>Run again ▸</button>
-    {/if}
   </div>
   <div class="sample-demo"><slot/></div>
 

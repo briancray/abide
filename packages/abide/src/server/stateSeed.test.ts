@@ -28,7 +28,7 @@ function readRenderedValue(html: string): string {
 }
 
 test('SSR records a non-deterministic state initial into #__abide-seed, matching the rendered value', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/': "<script>import { state } from 'abide/shared/state'; let t = state(Date.now())</script><p>{t}</p>",
         },
@@ -51,7 +51,7 @@ test('SSR records a non-deterministic state initial into #__abide-seed, matching
 })
 
 test('the soft-nav envelope carries the recorded state initials', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/': "<script>import { state } from 'abide/shared/state'; let a = state(1); let b = state('two')</script><p>{a}{b}</p>",
         },
@@ -65,7 +65,7 @@ test('the soft-nav envelope carries the recorded state initials', async () => {
 })
 
 test('a state-free page still emits an empty seed (no additive `states` key)', async () => {
-    const app = createTestApp({ pages: { '/': '<h1>static</h1>' } })
+    const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
     const html = await (await app.fetch('/')).text()
     expect(readSeedFromDocument(html)).toEqual({})
@@ -74,7 +74,7 @@ test('a state-free page still emits an empty seed (no additive `states` key)', a
 })
 
 test('state initials are recorded RAW (pre-transform) so the client re-applies transform to match', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/': "<script>import { state } from 'abide/shared/state'; let n = state(5, (v) => v + 1)</script><p>{n}</p>",
         },
@@ -91,7 +91,7 @@ test('state initials are recorded RAW (pre-transform) so the client re-applies t
 })
 
 test('a non-JSON-serializable state initial is recorded as null rather than crashing the render', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             // BigInt is not JSON-serializable; recording it must not throw during seed serialisation.
             '/': "<script>import { state } from 'abide/shared/state'; let big = state(1n); let ok = state(7)</script><p>{ok}</p>",

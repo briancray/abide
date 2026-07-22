@@ -1,0 +1,51 @@
+<script module>
+  import { route } from "abide/shared/route"
+  import { url } from "abide/shared/url"
+
+  // A carousel-style param fixture: the active item is driven purely by route().params.item, so a param
+  // nav (a→b→c) only needs to update route() — the page instance stays put, the strip scrolls to the
+  // active item, and nothing else rebuilds. This is the keep-page-alive (C6.3) case for the nav-
+  // persistence work: the whole chain is kept alive on a param nav, so this page's mount survives and the
+  // nav cost stays O(changed bindings) — this page doubles as the keep-alive perf fixture (see nav-perf.spec).
+  const ITEMS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"]
+
+  // Perf-bench filler (hidden), sized by a `?pad=` query read ONCE at mount (a plain const, so it is NOT
+  // reactive). A param nav keeps this page alive → the filler never re-renders → nav cost stays O(changed
+  // bindings), independent of `pad`. route() is isomorphic so SSR + client agree (no hydration mismatch).
+  const pad = Number(route().url.searchParams.get("pad") ?? "0")
+  const FILLER = Array.from({ length: pad }, (_, i) => i)
+</script>
+
+<main class="page">
+  <h1 data-testid="carousel-heading">Item: {route().params.item}</h1>
+  <p class="lead">One file — <code>pages/layouts/[item]/page.abide</code> — serves every item. The active card is chosen by <code>route().params.item</code>; switching items is a <strong>param nav</strong> (same page source, same layout chain), the case the persistence work keeps alive so the strip moves without a rebuild.</p>
+
+  <div class="carousel" data-testid="carousel-strip">
+    {#for item of ITEMS by item}
+      <a
+        href={url("/pages/layouts/[item]", { item })}
+        class="carousel-card"
+        class:active={item === route().params.item}
+        data-testid={"card-" + item}
+        data-active={item === route().params.item}
+      >{item}</a>
+    {/for}
+  </div>
+
+  <div class="row">
+    <a data-testid="to-hub" href="/pages/layouts">← back to the layouts hub</a>
+  </div>
+
+  <div hidden data-testid="carousel-filler">
+    {#for n of FILLER by n}<span>{n}</span>{/for}
+  </div>
+</main>
+
+<style>
+  .carousel { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.5rem 0; }
+  .carousel-card {
+    flex: 0 0 auto; min-width: 6rem; padding: 1.5rem 1rem; text-align: center;
+    border: 1px solid rgb(203 213 225); border-radius: 0.5rem; color: rgb(71 85 105);
+  }
+  .carousel-card.active { border-color: rgb(99 102 241); background: rgb(238 242 255); color: rgb(55 48 163); font-weight: 600; }
+</style>

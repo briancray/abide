@@ -16,7 +16,7 @@ function stripAnchors(html: string): string {
 }
 
 test('SSRs a param route, filling route().params from the pathname', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/users/[id]':
                 "<script>import { route } from 'abide/shared/route'</script><span>{route().params.id}</span>",
@@ -34,7 +34,7 @@ test('SSRs a param route, filling route().params from the pathname', async () =>
 })
 
 test('an exact route beats a param route when both match', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/users/[id]':
                 "<script>import { route } from 'abide/shared/route'</script><span>param:{route().params.id}</span>",
@@ -53,7 +53,7 @@ test('an exact route beats a param route when both match', async () => {
 })
 
 test('a soft-nav request (Abide-Nav header) returns a streamed JSONL envelope of inner HTML + seed', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/users/[id]':
                 "<script>import { route } from 'abide/shared/route'</script><span>{route().params.id}</span>",
@@ -79,7 +79,7 @@ test('a soft-nav request (Abide-Nav header) returns a streamed JSONL envelope of
 })
 
 test('without the Abide-Nav header the same route returns the full document', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/users/[id]':
                 "<script>import { route } from 'abide/shared/route'</script><span>{route().params.id}</span>",

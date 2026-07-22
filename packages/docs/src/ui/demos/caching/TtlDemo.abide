@@ -1,28 +1,18 @@
 <script>
   import { state } from "abide/shared/state"
-  import { watch } from "abide/shared/watch"
-  import { props } from "abide/ui/props"
   import cacheTtl from "$server/rpc/cacheTtl"
 
   // A shared read with a 700ms TTL. Two reads inside the window return the same count (served from
   // cache); after the window elapses the next read re-runs the handler and the count climbs.
-  // `sampleId` lets the card's "Run again" button re-fire this one-shot probe.
-  const { sampleId = "" } = props<{ sampleId?: string }>()
-
+  // The "Probe expiry" button re-fires this one-shot probe.
   let ttlResult = state(null)
-  let ttlBusy = state(false)
   async function probeTtl() {
-    ttlBusy = true
     const first = await (await cacheTtl.raw({ tag: "t" })).json()
     const immediate = await (await cacheTtl.raw({ tag: "t" })).json()
     await new Promise((resolve) => setTimeout(resolve, 900)) // wait out the 700ms ttl
     const afterExpiry = await (await cacheTtl.raw({ tag: "t" })).json()
     ttlResult = { first: first.runs, immediate: immediate.runs, afterExpiry: afterExpiry.runs }
-    ttlBusy = false
   }
-
-  let replay = state.shared("replay:" + sampleId, 0)
-  watch(() => replay, () => { probeTtl() })
 </script>
 
 {#if ttlResult}

@@ -16,11 +16,11 @@ test('a slow {#await} read streams, then hydration claims it in place + it stays
 
     // The RAW first-load HTML actually STREAMED — a placeholder slot AND an out-of-order patch, not an
     // inline render. This proves the deadline classified the 40ms read as streaming.
-    const raw = await (await page.request.get('/rpc/streaming')).text()
+    const raw = await (await page.request.get('/pages/ssr')).text()
     expect(raw).toContain('<abide-slot')
     expect(raw).toContain('data-ab-patch')
 
-    await page.goto('/rpc/streaming')
+    await page.goto('/pages/ssr')
 
     // The streamed resolved branch is present after load.
     const value = page.getByTestId('value')
@@ -49,7 +49,7 @@ test('a slow {#await} read streams, then hydration claims it in place + it stays
 test('a slow {#await} that rejects renders its {:catch} branch (client HTTP-error view)', async ({
     page,
 }) => {
-    await page.goto('/rpc/streaming')
+    await page.goto('/pages/ssr')
 
     const errorValue = page.getByTestId('error-value')
     await expect(errorValue).toBeVisible()
@@ -64,7 +64,7 @@ test('a slow {#await} that rejects renders its {:catch} branch (client HTTP-erro
 // Streaming SOFT-NAV (PR4): an in-app navigation streams too. The soft-nav body is a JSONL frame
 // stream (shell → patches → seed); the client swaps the shell, fills each `<abide-slot>` as its patch
 // frame arrives, then hydrates — so a slow read shows the shell then streams in, WITHOUT a full reload.
-test('an in-app soft-nav to /rpc/streaming streams progressively (shell then patch), no full reload', async ({
+test('an in-app soft-nav to /pages/ssr streams progressively (shell then patch), no full reload', async ({
     page,
 }) => {
     await page.goto('/rpc')
@@ -74,8 +74,8 @@ test('an in-app soft-nav to /rpc/streaming streams progressively (shell then pat
         ;(window as unknown as { __abideNoReload?: boolean }).__abideNoReload = true
     })
 
-    await page.locator('aside.sidebar').getByRole('link', { name: 'Streaming' }).click()
-    await expect(page).toHaveURL(/\/rpc\/streaming$/)
+    await page.locator('aside.sidebar').getByRole('link', { name: 'Streaming SSR' }).click()
+    await expect(page).toHaveURL(/\/pages\/ssr$/)
 
     // Progressive: the shell's pending fallback shows first, then the streamed patch replaces it.
     await expect(page.getByTestId('pending')).toBeVisible()

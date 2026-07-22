@@ -57,7 +57,7 @@ afterAll(async () => {
 })
 
 test('SSR (PR4): a page renders a `.abide` component resolved from disk, with prop + slot + nested component', async () => {
-    const app = createTestApp(config())
+    const app = await createTestApp(config())
     const response = await app.fetch('/')
     expect(response.status).toBe(200)
     const body = await response.text()

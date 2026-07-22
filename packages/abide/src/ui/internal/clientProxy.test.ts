@@ -8,8 +8,8 @@ import { clientProxy, makeClientImports } from './clientProxy.ts'
 
 let running: TestApp | undefined
 
-function boot(routes: Record<string, Route>): TestApp {
-    running = createTestApp({ routes })
+async function boot(routes: Record<string, Route>): Promise<TestApp> {
+    running = await createTestApp({ routes })
     return running
 }
 
@@ -19,7 +19,7 @@ afterEach(async () => {
 })
 
 test('read proxy fetches and returns the handler value', async () => {
-    const app = boot({ greet: GET((args: { name: string }) => `hello ${args.name}`) })
+    const app = await boot({ greet: GET((args: { name: string }) => `hello ${args.name}`) })
     const greet = clientProxy<{ name: string }, string>('greet', 'GET', {
         base: app.origin,
     }) as Rpc<{ name: string }, string>
@@ -29,7 +29,7 @@ test('read proxy fetches and returns the handler value', async () => {
 
 test('read proxy coalesces/caches repeated loads (handler runs once)', async () => {
     let calls = 0
-    const app = boot({
+    const app = await boot({
         greet: GET((args: { name: string }) => {
             calls++
             return `hi ${args.name}`
@@ -49,7 +49,7 @@ test('read proxy coalesces/caches repeated loads (handler runs once)', async () 
 
 test('a cache:false read bypasses the client cell — every bare call re-fetches', async () => {
     let calls = 0
-    const app = boot({
+    const app = await boot({
         tick: GET(() => ++calls, { cache: false }),
     })
     const tick = clientProxy<Record<string, never>, number>('tick', 'GET', {
@@ -66,7 +66,7 @@ test('a cache:false read bypasses the client cell — every bare call re-fetches
 
 test('invalidate forces a re-fetch', async () => {
     let calls = 0
-    const app = boot({
+    const app = await boot({
         greet: GET((args: { name: string }) => {
             calls++
             return `hi ${args.name}#${calls}`
@@ -84,7 +84,7 @@ test('invalidate forces a re-fetch', async () => {
 })
 
 test('mutation proxy posts a JSON body and returns the value', async () => {
-    const app = boot({
+    const app = await boot({
         bump: POST((args: { n: number }) => ({ next: args.n + 1 })),
     })
     const bump = clientProxy<{ n: number }, { next: number }>('bump', 'POST', {
@@ -95,7 +95,7 @@ test('mutation proxy posts a JSON body and returns the value', async () => {
 })
 
 test('read proxy throws HttpError-like on non-2xx (404 unknown rpc)', async () => {
-    const app = boot({ greet: GET(() => 'ok') })
+    const app = await boot({ greet: GET(() => 'ok') })
     const missing = clientProxy<Record<string, never>, string>('nope', 'GET', {
         base: app.origin,
     }) as Rpc<Record<string, never>, string>
@@ -104,7 +104,7 @@ test('read proxy throws HttpError-like on non-2xx (404 unknown rpc)', async () =
 })
 
 test('read proxy throws on 422 validation failure', async () => {
-    const app = boot({
+    const app = await boot({
         greet: GET((args: { name: string }) => `hello ${args.name}`, {
             schemas: {
                 input: {

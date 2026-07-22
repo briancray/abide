@@ -23,7 +23,7 @@ function tick(): Promise<void> {
 
 describe('SSR — layout composition', () => {
     test('a root layout with {children()} wraps a page', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             pages: { '/': '<p>page body</p>' },
             layouts: { '/': '<div class="chrome"><nav>NAV</nav>{children()}</div>' },
         })
@@ -35,7 +35,7 @@ describe('SSR — layout composition', () => {
     })
 
     test('nested layouts compose outermost → innermost around the page', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             pages: { '/admin/users': '<p>USERS</p>' },
             layouts: {
                 '/': '<root>{children()}</root>',
@@ -50,7 +50,7 @@ describe('SSR — layout composition', () => {
     })
 
     test('a directory with no layout still renders the page bare (back-compat)', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             // A layout scoped to /admin must NOT wrap a page outside that subtree.
             pages: { '/other': '<p>OTHER</p>' },
             layouts: { '/admin': '<admin>{children()}</admin>' },
@@ -64,7 +64,7 @@ describe('SSR — layout composition', () => {
     })
 
     test('an RPC read inside a layout is recorded into the hydration seed', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             routes: { banner: GET(() => 'SALE') },
             pages: { '/': '<p>home</p>' },
             layouts: {
@@ -87,7 +87,7 @@ describe('SSR — layout composition', () => {
     })
 
     test('route() params resolve inside a layout', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             pages: { '/users/[id]': '<p>page</p>' },
             layouts: {
                 '/': "<script>import { route } from 'abide/shared/route'</script><crumb>{route().params.id}</crumb>{children()}",
@@ -104,7 +104,7 @@ describe('SSR — layout composition', () => {
 
 describe('layout error boundaries + module parity (TODO #7 follow-ups)', () => {
     test('a layout wrapping {children()} in {#try} contains a throwing inner page (200)', async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             pages: { '/': "<script>throw new Error('page boom')</script><p>never</p>" },
             layouts: {
                 '/': '<root>{#try}{children()}{:catch e}<err>{e.message}</err>{/try}</root>',
@@ -123,7 +123,7 @@ describe('layout error boundaries + module parity (TODO #7 follow-ups)', () => {
     })
 
     test("a throwing page with NO {#try} boundary returns a controlled 500 (not Bun's default)", async () => {
-        const app = createTestApp({
+        const app = await createTestApp({
             pages: { '/': "<script>throw new Error('unhandled')</script><p>never</p>" },
             layouts: { '/': '<root>{children()}</root>' },
         })
@@ -140,7 +140,7 @@ describe('layout error boundaries + module parity (TODO #7 follow-ups)', () => {
         const key = '__abideT7moduleParity'
         ;(globalThis as Record<string, unknown>)[key] = 0
         const layout = `<script module>let STAMP = ((globalThis["${key}"]) = (globalThis["${key}"]) + 1)</script><chrome>{STAMP}</chrome>{children()}`
-        const app = createTestApp({
+        const app = await createTestApp({
             pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
             layouts: { '/': layout },
         })

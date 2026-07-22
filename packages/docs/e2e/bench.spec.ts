@@ -100,3 +100,69 @@ test('reached via soft-nav, the streamed list still adopts and re-runs (seedOver
     await expect(iterCell).not.toHaveText(before)
     await expect(page.getByTestId('bench-table')).not.toContainText('bench failed')
 })
+
+// The measurement gate. Read the raw `jsonl` transcript the page renders and assert the property the
+// page claims and a regression would break: SSR `render` is O(n) in element count, so ns/row holds
+// roughly FLAT across 100 → 1000 → 10000 and total op-time grows ~linearly, never quadratically. The
+// checks are RATIO-based — they compare measurements from the same run on the same machine — so they
+// gate the algorithmic complexity without any absolute-time threshold that would flake across CI
+// hardware. An accidental O(n²) in the render path (e.g. a quadratic list build) blows these out
+// decisively (~100× per decade) while ordinary run-to-run noise (~1.5×) stays comfortably inside.
+interface BenchRow {
+    name: string
+    nsPerOp: number
+    iters: number
+    rows: number | null
+    nsPerRow: number | null
+}
+
+test('render scales linearly with element count (the O(n) gate)', async ({ page }) => {
+    // The page consumes this exact stream; read it straight so the gate is on the numbers, not on parsing
+    // formatted table cells. A direct fetch runs the bench in a plain request scope (no ambient stream).
+    const res = await page.request.get('/__abide/rpc/benchFrontend')
+    expect(res.ok()).toBe(true)
+    const transcript: BenchRow[] = (await res.text())
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as BenchRow)
+
+    // The full, fixed corpus streamed — every scenario measured exactly once, in order.
+    expect(transcript.map((r) => r.name)).toEqual(SCENARIOS)
+    for (const row of transcript) {
+        expect(Number.isFinite(row.nsPerOp)).toBe(true)
+        expect(row.nsPerOp).toBeGreaterThan(0)
+        expect(row.iters).toBeGreaterThan(0)
+    }
+
+    const byName = new Map(transcript.map((r) => [r.name, r]))
+    const at = (name: string): BenchRow => {
+        const row = byName.get(name)
+        if (row === undefined) throw new Error(`missing bench row: ${name}`)
+        return row
+    }
+    const list100 = at('for-list-100')
+    const list1000 = at('for-list-1000')
+    const list10000 = at('for-list-10000')
+
+    // Only the list scenarios carry ns/row; the scalar scenarios report none.
+    for (const row of transcript) {
+        if (row.rows === null) expect(row.nsPerRow).toBeNull()
+        else expect(row.nsPerRow).toBeGreaterThan(0)
+    }
+
+    // Per-op cost rises with the list (10× the rows costs more), but SUB-QUADRATICALLY: each 10× step
+    // is well under a quadratic 100× blow-up. Linear is ~10×; the 30× ceiling leaves ~3× noise headroom
+    // yet still fails hard on any O(n²) regression.
+    expect(list1000.nsPerOp).toBeGreaterThan(list100.nsPerOp)
+    expect(list10000.nsPerOp).toBeGreaterThan(list1000.nsPerOp)
+    expect(list1000.nsPerOp / list100.nsPerOp).toBeLessThan(30)
+    expect(list10000.nsPerOp / list1000.nsPerOp).toBeLessThan(30)
+
+    // The direct statement of O(n): per-row cost stays roughly flat as the list grows two orders of
+    // magnitude. A generous 8× band absorbs fixed-overhead skew on the small list and GC jitter, while
+    // a quadratic path (per-row cost climbing ~100× from 100 → 10000) fails it outright.
+    const perRow = [list100.nsPerRow!, list1000.nsPerRow!, list10000.nsPerRow!]
+    const spread = Math.max(...perRow) / Math.min(...perRow)
+    expect(spread).toBeLessThan(8)
+})

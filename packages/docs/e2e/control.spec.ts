@@ -91,12 +91,15 @@ test('{#await}/{:then}/{:catch}/{:finally} tracks a promise through settle', asy
     await expect(page.getByTestId('job-done')).toBeVisible()
     await expect(page.getByTestId('job-done')).toContainText('resolved after a delay')
     await expect(page.getByTestId('job-finally')).toBeVisible()
+    // Source order: the resolved branch renders BEFORE {:finally} (not the other way around).
+    await expect(page.getByTestId('job')).toHaveText(/done: resolved after a delay\s*·\s*settled/)
 
     // Failure path: pending → catch.
     await page.getByTestId('run-fail').click()
     await expect(page.getByTestId('job-error')).toBeVisible()
     await expect(page.getByTestId('job-error')).toContainText('the job failed')
     await expect(page.getByTestId('job-finally')).toBeVisible()
+    await expect(page.getByTestId('job')).toHaveText(/error: the job failed\s*·\s*settled/)
 })
 
 test('{#for await} streams chunks and falls to {:catch} on stream error', async ({ page }) => {

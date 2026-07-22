@@ -188,14 +188,23 @@ test.describe('Streaming', () => {
         await expect(items.last()).toHaveText('step 3 of 3 done')
     })
 
+    // The chunk probes now live in one card per primitive (peek / chunks / done), each over its own
+    // stream key so the cards are independent. Same probe surface, one primitive at a time.
     test('a streaming read exposes chunk probes — peek (latest), chunks (count), done', async ({
         page,
     }) => {
         await page.goto('/rpc/streaming')
-        await page.getByTestId('stream-start').click()
-        // Chunks accumulate; peek tracks the latest; done flips true once the stream closes.
+
+        // peek tracks the latest chunk (count: 4 → final label "tick 4 of 4").
+        await page.getByTestId('stream-peek-start').click()
         await expect(page.getByTestId('stream-latest')).toHaveText('tick 4 of 4', { timeout: 5000 })
-        await expect(page.getByTestId('stream-count')).toHaveText('4')
-        await expect(page.getByTestId('stream-done')).toHaveText('yes')
+
+        // chunks accumulate the transcript (count: 6).
+        await page.getByTestId('stream-chunks-start').click()
+        await expect(page.getByTestId('stream-count')).toHaveText('6', { timeout: 5000 })
+
+        // done flips yes once the stream closes (count: 3).
+        await page.getByTestId('stream-done-start').click()
+        await expect(page.getByTestId('stream-done')).toHaveText('yes', { timeout: 5000 })
     })
 })

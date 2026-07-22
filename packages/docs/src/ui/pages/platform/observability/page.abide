@@ -22,8 +22,8 @@
     <BundledDemo />
   </Demo>
 
-  <Demo id="observe" title="trace() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/observability/ObserveDemo.abide" tab="server" replayable={true}>
-    <ObserveDemo sampleId="observe" />
+  <Demo id="observe" title="trace() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/observability/ObserveDemo.abide" tab="server">
+    <ObserveDemo />
   </Demo>
 
   <Demo id="health" title="/__abide/health (fetched in-browser)" client="src/ui/demos/platform/observability/HealthFetchDemo.abide" tab="client">

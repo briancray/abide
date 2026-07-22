@@ -1,0 +1,10 @@
+<script>
+  import rpcGreet from "$server/rpc/rpcGreet"
+
+  // Data reaches a page by AWAITING an isomorphic read right in the template — no loader convention,
+  // no props. On SSR the value lands in the initial HTML and seeds hydration; in the browser the same
+  // call is a fetch. `route().params` feeds the args when a read depends on the URL.
+</script>
+
+<p><code>&#123;await rpcGreet(&hellip;)&#125;</code> — awaited in the page, so its value is in the SSR HTML:</p>
+<p data-testid="page-read">{#await rpcGreet({ name: "pages" }) then greeted}{greeted.greeting}{/await}</p>

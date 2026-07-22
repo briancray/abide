@@ -1,0 +1,21 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+</script>
+
+<main class="page">
+  <h1>Layouts</h1>
+  <p class="lead">A <code>layout.abide</code> wraps its folder and everything below it — write the shared frame once and every page in the subtree gets it. Layouts nest <strong>outer→inner</strong> (the root layout, then each section layout), and the page renders wherever a layout places its <code>&lt;slot/&gt;</code>. The indigo frame around this content is <code>pages/layouts/layout.abide</code>, itself nested inside the doc-site root layout.</p>
+
+  <h2>The <code>&lt;slot/&gt;</code> outlet</h2>
+  <p>A layout renders the level below it — the next layout, or the page — at its <code>&lt;slot/&gt;</code> (the interpolation form is <code>{'{'}children(){'}'}</code>). A layout has no props; like a page it reads the current route with <code>route()</code>.</p>
+  <Demo id="section-layout-src" title="The section layout — <code>pages/layouts/layout.abide</code>" client="src/ui/pages/pages/layouts/layout.abide" tab="client">
+    <p>☝ The indigo frame wrapping this whole page is this layout, live. Its <code>&lt;slot/&gt;</code> is where the page renders.</p>
+  </Demo>
+
+  <h2>Layouts stay alive across navigation</h2>
+  <p>A layout isn't re-rendered when you navigate within its subtree — its instance <strong>persists</strong>. Increment the section layout's counter above, then move around: to the <a href="/pages/layouts/nested">child page</a> (cross-route), or into a <a href="/pages/layouts/alpha">carousel item</a> (param nav). The count holds because the framework keeps the shared layouts mounted and grafts only the diverging page into the <code>&lt;slot/&gt;</code>. Its effects don't re-run and a scroll position inside it is preserved; only its <code>route()</code>-driven bits (an active-link highlight, a breadcrumb) update in place.</p>
+  <div class="row">
+    <a data-testid="to-nested" href="/pages/layouts/nested">→ child page (cross-route)</a>
+    <a data-testid="to-carousel" href="/pages/layouts/alpha">→ carousel item (param nav)</a>
+  </div>
+</main>

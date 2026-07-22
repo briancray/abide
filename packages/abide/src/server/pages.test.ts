@@ -52,7 +52,7 @@ function stripAnchors(html: string): string {
 }
 
 test('SSRs a page as a full HTML document with an in-proc RPC read', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: {
             '/': "<script>import { state } from 'abide/shared/state'; import greet from '../../server/rpc/greet'; let title = state('Home')</script><main><h1>{title}</h1><p>{await greet({name:'ada'})}</p></main>",
@@ -73,7 +73,7 @@ test('SSRs a page as a full HTML document with an in-proc RPC read', async () =>
 })
 
 test('a fast {#await} block renders inline — no placeholder/patch (PR2 deadline)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { quick: GET(() => 'INLINE') },
         pages: {
             '/': "<script>import quick from '../../server/rpc/quick'</script><main>{#await quick()}<span>loading</span>{:then v}<b>{v}</b>{/await}</main>",
@@ -91,7 +91,7 @@ test('a fast {#await} block renders inline — no placeholder/patch (PR2 deadlin
 })
 
 test('a slow {#await} block streams as an out-of-order patch (PR2)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: {
             slow: GET(async () => {
                 await new Promise((resolve) => setTimeout(resolve, 15))
@@ -121,7 +121,7 @@ test('a slow {#await} block streams as an out-of-order patch (PR2)', async () =>
 })
 
 test('a fast {#await} error with no {:catch} → controlled 500 before first flush (PR5)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: {
             boom: GET(() => {
                 throw new Error('kaboom')
@@ -141,7 +141,7 @@ test('a fast {#await} error with no {:catch} → controlled 500 before first flu
 })
 
 test('a slow {#await} error WITH {:catch} streams the catch branch as a patch (PR5)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: {
             slowBoom: GET(async () => {
                 await new Promise((resolve) => setTimeout(resolve, 15))
@@ -164,7 +164,7 @@ test('a slow {#await} error WITH {:catch} streams the catch branch as a patch (P
 })
 
 test('a slow {#await} error with NO {:catch} → 200 with an empty patch that clears the slot (PR5)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: {
             slowBoom: GET(async () => {
                 await new Promise((resolve) => setTimeout(resolve, 15))
@@ -191,7 +191,7 @@ test('a slow {#await} error with NO {:catch} → 200 with an empty patch that cl
 // stream. The real app warms pages, so the deadline is meaningful.)
 
 test('a slow {#for await} streams items as append-patches then marks complete (PR6)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/': "<script>const slowGen = async function*(){ for (const l of ['a','b','c']){ await new Promise((r)=>setTimeout(r,15)); yield l } }</script><main>{#for await chunk of slowGen()}<span>{chunk}</span>{/for}</main>",
         },
@@ -211,7 +211,7 @@ test('a slow {#for await} streams items as append-patches then marks complete (P
 })
 
 test('route() is available inside a page template (kind = nav)', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         pages: {
             '/x': "<script>import { route } from 'abide/shared/route'</script><span>{route().kind}</span>",
         },
@@ -226,7 +226,7 @@ test('route() is available inside a page template (kind = nav)', async () => {
 })
 
 test('an unknown path still 404s; RPC + openapi unaffected', async () => {
-    const app = createTestApp({
+    const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
         pages: { '/': '<h1>ok</h1>' },
     })
@@ -282,7 +282,7 @@ test('warmPages is resilient — a broken page is logged and skipped, good pages
 
 test('a short-circuiting middleware blocks the SSR page', async () => {
     const guard: Middleware = () => error(403, 'nope')
-    const app = createTestApp({
+    const app = await createTestApp({
         middleware: [guard],
         pages: { '/': '<h1>secret</h1>' },
     })

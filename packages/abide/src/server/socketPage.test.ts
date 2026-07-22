@@ -14,7 +14,7 @@ import { socket } from './socket.ts'
 test('SSR reads a socket probe off $scope (peek renders the latest published message)', async () => {
     const chat = socket<string>({ tail: 5 })
     chat.publish('newest')
-    const app = createTestApp({
+    const app = await createTestApp({
         sockets: { chat },
         pages: {
             '/': "<script>import { chat } from '../server/sockets/chat.ts'</script><p>{chat.peek()}</p>",
@@ -29,7 +29,7 @@ test('SSR {#for await} over a socket renders the tail snapshot and COMPLETES (CS
     const feed = socket<string>({ tail: 3 })
     feed.publish('a')
     feed.publish('b')
-    const app = createTestApp({
+    const app = await createTestApp({
         sockets: { feed },
         pages: {
             '/': "<script>import { feed } from '../server/sockets/feed.ts'</script><ul>{#for await m of feed}<li>{m}</li>{/for}</ul>",

@@ -1,0 +1,342 @@
+<script module>
+  import benchFrontendClient from "$server/rpc/benchFrontendClient"
+  import { state } from "abide/shared/state"
+
+  // Format a nanosecond mean into the tightest readable unit — mirrors the CLI bench's `fmtNs`.
+  function fmtNs(ns) {
+    if (ns >= 1e6) return (ns / 1e6).toFixed(2) + " ms"
+    if (ns >= 1e3) return (ns / 1e3).toFixed(2) + " µs"
+    return ns.toFixed(0) + " ns"
+  }
+
+  function range(n) {
+    const out = []
+    for (let i = 0; i < n; i++) out.push(i)
+    return out
+  }
+
+  // Per-scenario scope builders, keyed by name (lockstep with the server corpus in
+  // `benchFrontendClient.ts`). A fresh object every call so no state leaks across timed ops. Interactive
+  // scenarios inject `{ state, watch }` (their `<script>` reads them from scope) plus any list `seed`.
+  // Their `state`/`watch` come from the BUNDLE (`mod.state`/`mod.watch`, threaded in per run) — the
+  // page's own copies are a different module instance whose signals the bundled effects can't track.
+  function scopesFor(mod) {
+    return [
+      { name: "static-text", scope: () => ({}) },
+      { name: "interpolation", scope: () => ({ name: "Bob", count: 7 }) },
+      { name: "attributes", scope: () => ({ id: "n1", href: "/x", title: "go", cls: "btn primary" }) },
+      { name: "if-else", scope: () => ({ show: true, msg: "visible" }) },
+      { name: "switch", scope: () => ({ color: "blue" }) },
+      { name: "await-block", scope: () => ({ p: Promise.resolve("ready") }) },
+      { name: "for-list-100", scope: () => ({ items: range(100) }) },
+      { name: "for-list-1000", scope: () => ({ items: range(1000) }) },
+      { name: "for-list-10000", scope: () => ({ items: range(10000) }) },
+      { name: "state-update", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-append-update", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-reverse-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "if-toggle", scope: () => ({ state: mod.state, watch: mod.watch }) },
+    ]
+  }
+
+  const MIN_TIME_MS = 100
+  const MIN_ITERS = 10
+  const WARMUP = 3
+  const UPDATES_PER_ROUND = 20
+
+  // Let the reactive scheduler's queued microtask land the DOM patch before the next timed op.
+  function flush() {
+    return Promise.resolve().then(() => Promise.resolve())
+  }
+
+  // Adaptive mount timing (browser). Build a fresh DETACHED host per op — mount then tear down — so no
+  // state accumulates and no layout/paint is triggered (the host is never in the document). The clock is
+  // read once per iteration; total elapsed is ≥ the budget, so `performance.now`'s coarse resolution is
+  // negligible against the mean. This is the same op the CLI benches with happy-dom.
+  function measureMount(mount, scope) {
+    for (let i = 0; i < WARMUP; i++) mount(document.createElement("div"), scope())()
+    let iters = 0
+    const start = performance.now()
+    let elapsedMs = 0
+    do {
+      const host = document.createElement("div")
+      const cleanup = mount(host, scope())
+      cleanup()
+      iters++
+      elapsedMs = performance.now() - start
+    } while (elapsedMs < MIN_TIME_MS || iters < MIN_ITERS)
+    return { nsPerOp: (elapsedMs * 1e6) / iters, iters }
+  }
+
+  // Hydrate timing (browser). Parse the server-rendered HTML ONCE into a template, then time a batch of
+  // pristine clones — cloning happens OUTSIDE the timed span (so the parse/clone cost never pollutes the
+  // mean), and only `hydrate` is timed: attaching listeners + adopting the existing nodes over the SSR
+  // hydration anchors. This is the real first-load flow (the browser already parsed the SSR markup;
+  // hydrate only wires it). Unlike mount/update, we can't re-run a fresh op cheaply (each needs its own
+  // pristine clone), so instead of an open-ended time loop we CALIBRATE on one hydrate and size a single
+  // batch to ~20ms of work — one clock-pair over `batch` ops blunts the coarse clock while keeping the
+  // clone count (and memory) bounded regardless of how fast a scenario hydrates.
+  function measureHydrate(hydrate, html, scope) {
+    const template = document.createElement("div")
+    template.innerHTML = html
+    for (let i = 0; i < WARMUP; i++) hydrate(template.cloneNode(true), scope())()
+
+    const probe = template.cloneNode(true)
+    const p0 = performance.now()
+    const probeCleanup = hydrate(probe, scope())
+    const oneNs = Math.max(1, (performance.now() - p0) * 1e6)
+    probeCleanup()
+    const batch = Math.max(5, Math.min(2000, Math.ceil(20e6 / oneNs)))
+
+    const clones = []
+    const scopes = []
+    for (let k = 0; k < batch; k++) {
+      clones.push(template.cloneNode(true))
+      scopes.push(scope())
+    }
+    const cleanups = []
+    const t0 = performance.now()
+    for (let k = 0; k < batch; k++) cleanups.push(hydrate(clones[k], scopes[k]))
+    const elapsedMs = performance.now() - t0
+    for (const cleanup of cleanups) cleanup()
+    return { nsPerOp: (elapsedMs * 1e6) / batch, iters: batch }
+  }
+
+  // Adaptive reactive-update timing (browser). A fresh host is mounted OUTSIDE the timed span each round
+  // (so mount cost never pollutes the update mean), then a bounded batch of clicks — each a state change
+  // flushed to the DOM — is timed as one clock-pair (÷ batch) to blunt the coarse clock. Mirrors the
+  // CLI's `benchUpdate` (click the scenario's `<button>`, await the patch).
+  async function measureUpdate(mount, scope) {
+    // Warmup round.
+    {
+      const host = document.createElement("div")
+      const cleanup = mount(host, scope())
+      await flush()
+      const button = host.querySelector("button")
+      for (let i = 0; i < WARMUP; i++) {
+        button?.click()
+        await flush()
+      }
+      cleanup()
+    }
+    let iters = 0
+    let totalMs = 0
+    do {
+      const host = document.createElement("div")
+      const cleanup = mount(host, scope())
+      await flush()
+      const button = host.querySelector("button")
+      const t0 = performance.now()
+      for (let i = 0; i < UPDATES_PER_ROUND; i++) {
+        button?.click()
+        await flush()
+      }
+      totalMs += performance.now() - t0
+      iters += UPDATES_PER_ROUND
+      cleanup()
+    } while (totalMs < MIN_TIME_MS || iters < MIN_ITERS)
+    return { nsPerOp: (totalMs * 1e6) / iters, iters }
+  }
+</script>
+
+<script>
+  let mountRows = state([])
+  let hydrateRows = state([])
+  let updateRows = state([])
+  let running = state(false)
+  let failed = state(false)
+
+  // Fetch the AOT-bundled corpus, blob-import it as a real ES module, and time the browser hot paths:
+  // `mount` (build the DOM) over the pure-render scenarios, then reactive `update` (patch the DOM) over
+  // the interactive ones. Rows stream into their tables one scenario at a time (a paint yield between).
+  async function run() {
+    if (running) return
+    running = true
+    failed = false
+    mountRows = []
+    hydrateRows = []
+    updateRows = []
+    try {
+      const bundle = await benchFrontendClient()
+      const url = URL.createObjectURL(new Blob([bundle.js], { type: "text/javascript" }))
+      let mod
+      try {
+        mod = await import(/* @vite-ignore */ url)
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+      const scopes = scopesFor(mod)
+      const scopeFor = (name) => scopes.find((s) => s.name === name)?.scope
+
+      // Mount pass — build the DOM from scratch (the pure-render corpus).
+      const mounts = []
+      for (const scenario of bundle.scenarios) {
+        if (scenario.update) continue
+        const entry = mod.scenarios[scenario.name]
+        const scope = scopeFor(scenario.name)
+        if (entry === undefined || scope === undefined) continue
+        const { nsPerOp, iters } = measureMount(entry.mount, scope)
+        mounts.push({
+          name: scenario.name,
+          nsPerOp,
+          iters,
+          rows: scenario.rows,
+          nsPerRow: scenario.rows ? nsPerOp / scenario.rows : null,
+        })
+        mountRows = [...mounts]
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+
+      // Hydrate pass — attach to server-rendered HTML (first-load interactivity).
+      const hydrates = []
+      for (const scenario of bundle.scenarios) {
+        if (scenario.html === null) continue
+        const entry = mod.scenarios[scenario.name]
+        const scope = scopeFor(scenario.name)
+        if (entry === undefined || scope === undefined) continue
+        const { nsPerOp, iters } = measureHydrate(entry.hydrate, scenario.html, scope)
+        hydrates.push({
+          name: scenario.name,
+          nsPerOp,
+          iters,
+          rows: scenario.rows,
+          nsPerRow: scenario.rows ? nsPerOp / scenario.rows : null,
+        })
+        hydrateRows = [...hydrates]
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+
+      // Update pass — the interactive corpus (reactive patch cost).
+      const updates = []
+      for (const scenario of bundle.scenarios) {
+        if (!scenario.update) continue
+        const entry = mod.scenarios[scenario.name]
+        const scope = scopeFor(scenario.name)
+        if (entry === undefined || scope === undefined) continue
+        const { nsPerOp, iters } = await measureUpdate(entry.mount, scope)
+        updates.push({ name: scenario.name, nsPerOp, iters })
+        updateRows = [...updates]
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+    } catch {
+      failed = true
+    } finally {
+      running = false
+    }
+  }
+</script>
+
+<main class="page">
+  <h1>Frontend mount/update bench (live, in-browser)</h1>
+  <p class="lead">
+    The companion to the <a href="/platform/bench">SSR render bench</a>. Same corpus, but this one times
+    the <strong>real browser <code>mount</code></strong>, <strong><code>hydrate</code></strong>, and
+    reactive <strong><code>update</code></strong> paths. A <code>GET</code> AOT-compiles each
+    <code>.abide</code> template's client module, <code>Bun.build</code>s the whole corpus into one
+    self-contained ES module, and server-renders each scenario's HTML; the page <code>blob:</code>-imports
+    the module and times each path against a fresh detached host, right here in your browser — the same
+    measurement the CLI <code>bun run bench</code> makes under happy-dom.
+  </p>
+
+  <button
+    data-testid="run"
+    class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white disabled:opacity-50"
+    disabled={running}
+    onclick={() => run()}
+  >
+    {running ? "Running…" : "Run browser bench"}
+  </button>
+
+  {#if failed}
+    <p class="text-red-600" data-testid="bench-failed">bench failed</p>
+  {/if}
+
+  <h2 class="mt-2 mb-1 text-lg font-semibold">mount — build the live DOM</h2>
+  <p class="mb-3 text-sm text-slate-500">
+    Constructing the DOM. Watch <strong>ns/row</strong> as the list grows 100&nbsp;→&nbsp;1000&nbsp;→&nbsp;10000:
+    unlike <code>render</code> (abide-bound, flat), mount's per-row cost is dominated by the DOM backend's
+    O(n) <code>insertBefore</code> — it reflects your browser, not abide.
+  </p>
+  <table class="mb-8 w-full border-collapse text-sm" data-testid="mount-table">
+    <thead>
+      <tr class="border-b border-slate-300 text-left">
+        <th class="py-1.5 pr-4">scenario</th>
+        <th class="py-1.5 pr-4 text-right">mount (ns/op)</th>
+        <th class="py-1.5 pr-4 text-right">ns/row</th>
+        <th class="py-1.5 text-right">iters</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#if mountRows.length === 0 && !running}
+        <tr><td colspan="4" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
+      {/if}
+      {#for row of mountRows by row.name}
+        <tr class="border-b border-slate-100" data-testid="mount-row">
+          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+          <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+        </tr>
+      {/for}
+    </tbody>
+  </table>
+
+  <h2 class="mt-2 mb-1 text-lg font-semibold">hydrate — attach to server-rendered HTML</h2>
+  <p class="mb-3 text-sm text-slate-500">
+    The first-load cost: the browser already parsed the SSR markup, and <code>hydrate</code> walks the
+    hydration anchors to wire listeners and adopt the existing nodes — no DOM built from scratch. Compare
+    each row against its <strong>mount</strong> figure above: skipping node creation makes hydrate the
+    cheaper path for most scenarios, though walking a very large tree (<code>for-list-10000</code>) can
+    rival or exceed a fresh clone-based mount.
+  </p>
+  <table class="mb-8 w-full border-collapse text-sm" data-testid="hydrate-table">
+    <thead>
+      <tr class="border-b border-slate-300 text-left">
+        <th class="py-1.5 pr-4">scenario</th>
+        <th class="py-1.5 pr-4 text-right">hydrate (ns/op)</th>
+        <th class="py-1.5 pr-4 text-right">ns/row</th>
+        <th class="py-1.5 text-right">iters</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#if hydrateRows.length === 0 && !running}
+        <tr><td colspan="4" class="py-2 text-slate-400">—</td></tr>
+      {/if}
+      {#for row of hydrateRows by row.name}
+        <tr class="border-b border-slate-100" data-testid="hydrate-row">
+          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+          <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+        </tr>
+      {/for}
+    </tbody>
+  </table>
+
+  <h2 class="mt-2 mb-1 text-lg font-semibold">update — patch the DOM (fine-grained reactivity)</h2>
+  <p class="mb-3 text-sm text-slate-500">
+    Each op clicks the scenario's <code>&lt;button&gt;</code> — a <code>state</code> change — and awaits the
+    flushed DOM patch. This is where abide's fine-grained reactivity shows: a single text patch touches one
+    node, and even a 1000-row keyed reverse only reconciles, it doesn't rebuild.
+  </p>
+  <table class="w-full border-collapse text-sm" data-testid="update-table">
+    <thead>
+      <tr class="border-b border-slate-300 text-left">
+        <th class="py-1.5 pr-4">scenario</th>
+        <th class="py-1.5 pr-4 text-right">update (ns/op)</th>
+        <th class="py-1.5 text-right">iters</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#if updateRows.length === 0 && !running}
+        <tr><td colspan="3" class="py-2 text-slate-400">—</td></tr>
+      {/if}
+      {#for row of updateRows by row.name}
+        <tr class="border-b border-slate-100" data-testid="update-row">
+          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+          <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+        </tr>
+      {/for}
+    </tbody>
+  </table>
+</main>
