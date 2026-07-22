@@ -96,10 +96,11 @@ Two distinct jobs:
    may be lossy/opaque, never decodes back. `f({a,b})` and `f({b,a})` → same key. Args are
    JSON, so keying is over JSON.
 2. **Rich value codec** — used **ONLY for non-RPC hydrated values**: the wrapped-`cell`
-   `key`-hydration path (§5.2), where a server-computed value travels in the hydration
-   `<script>` and never goes through JSON-Schema validation. Round-trip fidelity,
-   encode-on-server / decode-to-equal-value-on-client. "Codec" = hydration-of-server-values
-   only.
+   `key`-hydration path (§5.2) **and the `state()`-initializer hydration seed** (§5.1), where a
+   server-computed value travels in the hydration `<script>` and never goes through JSON-Schema
+   validation. Round-trip fidelity, encode-on-server / decode-to-equal-value-on-client. "Codec" =
+   hydration-of-server-values only. (The `state()` seed carries the whole per-component bucket
+   structure as **one** `encode(...)` string, decoded client-side on mount.)
 
 Rich codec support (hydration path only):
 
@@ -107,7 +108,10 @@ Rich codec support (hydration path only):
   `TypedArray`/`ArrayBuffer`, and **circular/shared references** (ref table).
 - **`Error`:** a structured error shape (needed for §11 typed errors — which, being RPC I/O,
   ride the JSON wire as a JSON-shaped structured error, not the rich codec).
-- **Out:** class instances (no registry/revival), functions, symbols.
+- **Out:** class instances (no registry/revival), functions, symbols. The strict default **throws**
+  on these. The `state()`-seed path (§5.1) encodes in a **lossy** mode instead: an unsupported
+  initial becomes a `null` node rather than crashing the render (the seed's "never fail the render"
+  guarantee) — its ordinal slot is preserved, the following slots keep their values.
 - **Build vs vendor:** **hand-rolled.** No native JS "JSON-superset → string" codec exists
   (`structuredClone` emits no bytes; `v8.serialize` is Node-only). Must be byte-identical
   and debuggable on both sides.
@@ -122,7 +126,9 @@ Makes the *value* travel with zero SSR/client coordination:
    seeds/reads under the *recorded* args rather than recomputing them (fixes
    non-deterministic key desync). **This extends to `state()` initializers** —
    `state(Date.now())` records the SSR value and replays it on hydration, so the client
-   never diverges from the server.
+   never diverges from the server. The recorded initials ride the **rich value codec**
+   (§4.2, lossy mode) — a `state(new Date())` / `state(new Map())` / `state(9n)` seed
+   round-trips with its type intact instead of JSON-flattening to `null`.
 2. **Third-party `cell`s are server-only** and don't hydrate as themselves (a Stripe call
    can't run in the browser). A server-computed value opts into hydration via an explicit
    `key`; the client can then **read** it (`.peek`) but **never recompute/refresh** it (no

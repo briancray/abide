@@ -1,0 +1,38 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  // A RICH-VALUE hydration-seed probe. Each `state` below is seeded with a value the OLD JSON seed could
+  // not carry with its type intact — a Date, a BigInt past Number.MAX_SAFE_INTEGER, and a Map. The server
+  // records each initializer into #__abide-seed through the RICH value codec; on hydrate the client
+  // DECODES + REPLAYS it (a cleanly-claimed block never re-runs the initializer), so the value arrives
+  // with its TYPE and content intact. Before the codec seed these degraded (BigInt → null, Date → ISO
+  // string, Map → {}) and the hydrated cell desynced from the server paint. The chip is GREEN only when
+  // all three survived the encode → wire → decode round-trip on the client.
+  let at = state(new Date(1700000000000))
+  let big = state(9007199254740993n)
+  let tags = state(new Map([["a", 1], ["b", 2]]))
+
+  const dateOk = state.computed(() => at instanceof Date && at.getTime() === 1700000000000)
+  const bigOk = state.computed(() => typeof big === "bigint" && big === 9007199254740993n)
+  const mapOk = state.computed(() => tags instanceof Map && tags.get("a") === 1 && tags.get("b") === 2)
+  const allOk = state.computed(() => dateOk && bigOk && mapOk)
+</script>
+
+<style>
+  .probe { display: inline-flex; gap: 0.4rem; align-items: baseline; border-radius: 0.25rem; padding: 0.1rem 0.45rem; font-size: 0.72rem; font-weight: 600; }
+  .probe-ok { background: #dcfce7; color: #166534; }
+  .probe-bad { background: #fee2e2; color: #991b1b; }
+  .probe small { font-weight: 500; opacity: 0.75; }
+  .probe code { font-weight: 500; opacity: 0.85; }
+</style>
+
+<span
+  class="probe"
+  class:probe-ok={allOk}
+  class:probe-bad={!allOk}
+  data-testid="rich-probe"
+  data-date-ok={dateOk ? "true" : "false"}
+  data-big-ok={bigOk ? "true" : "false"}
+  data-map-ok={mapOk ? "true" : "false"}
+  data-ok={allOk ? "true" : "false"}
+><small>rich seed</small> <code>Date</code> {dateOk ? "✓" : "✗"} <code>BigInt</code> {bigOk ? "✓" : "✗"} <code>Map</code> {mapOk ? "✓" : "✗"}</span>

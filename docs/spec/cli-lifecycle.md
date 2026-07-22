@@ -45,18 +45,32 @@ process-lifecycle hooks:
   until setup finishes (closes the "listening before onStart" race). Returning WITHOUT calling
   `start()` is a **breakout** — the app never boots and `serve()` throws.
 - **`onStop(stop)`** — **wraps** graceful shutdown (drain, then `await stop()` to close). Teardown is
-  **backstopped**: if the hook returns without calling `stop()`, the runtime calls it anyway so the
-  server never strands as a zombie.
+  **backstopped**: if the hook returns **or throws** without calling `stop()`, the runtime calls it
+  anyway (in a `finally`) so the server never strands as a zombie; a hook that threw then has its
+  original error **re-thrown** to the caller (teardown still completed). Same contract under
+  `createTestApp`.
 - **`onError(error)`** — **request-scoped**; runs when a request throws an unexpected error (a typed
   `error(...)`/`redirect(...)` is a returned Response, not a throw, so it never reaches here). Read
   `request()`/`route()`/`identity()` ambiently. May return a `Response` to shape the client reply;
-  anything else (or a throwing hook) falls back to a generic 500 that never leaks the detail.
+  anything else (or a throwing hook) falls back to a generic 500 that never leaks the detail. The
+  `onError` reply is **finalized like any response** — it still gets the post-dispatch stamping
+  (identity cookie / CORS / `traceparent`+`traceresponse`), so an error response is not a
+  header-stamping hole. A deferred **identity-resolution failure** (a bearer/cookie that *throws* on
+  unseal, AU9) is routed here too, in request scope, rather than escaping as a bare pre-scope 500.
 - **`onHealth()`** — **request-scoped** app health hook run on every `GET /__abide/health`; its
   returned fields merge over the framework stub `{ reachable, version, startedAt, uptime }` (app
   fields win). `reachable: false` or a throw → the endpoint answers **503** (CO2.4).
 
 Both `onStart`/`onStop` and `onHealth`/`onError` are async-capable and awaited. `onStart`/`onStop`
 live on the process lifecycle; `onHealth`/`onError` are router-consumed (per request).
+
+**Signal-driven shutdown (long-lived `abide dev` / `abide start`).** The CLI installs process handlers
+so `onStop` teardown always runs before exit instead of stranding in-flight work — one path, two
+triggers: a **signal** (`SIGINT`/`SIGTERM`, e.g. Ctrl-C or a container stop) → graceful teardown, then
+`exit 0`; a **crash** (`uncaughtException`/`unhandledRejection`) → teardown, then `exit 1`. A
+re-entrancy guard drops a second trigger during teardown, and a **force-exit deadline** (5s) backstops a
+hanging `onStop` so shutdown can never itself hang. This is CLI-only: `serve()` — a library entry the
+test suite boots repeatedly — does **not** install per-boot process handlers.
 
 The request/nav interceptor is **onion middleware**, not a lifecycle hook: `export const middleware
 = [(next) => Response]`. Each entry is `async (next) => { … return await next() }` — `next()` takes

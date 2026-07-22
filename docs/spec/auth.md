@@ -280,6 +280,13 @@ token-auth and cookie-auth into **one mechanism**:
      AU6.2), otherwise a **fresh, untracked anonymous identity** (no cookie to persist on a
      machine surface). This resolves *who the caller is*; **whether they may proceed is your
      middleware** (AU7), not a per-surface abide default.
+   - **Unseal that *throws* (a malformed/tampered token) vs unseal that returns no principal:** a
+     token whose unseal **returns undefined** (expired/invalid but well-formed) resolves as above
+     (anonymous, or rejected under the gate). A token whose unseal **throws** is different — the
+     request still gets a scope with a **fresh anonymous principal** (so `identity()` is never null,
+     AU3.1), but the thrown error is **deferred into request scope** so `onError` sees it (yielding a
+     shaped 500 by default) rather than escaping as a bare pre-scope 500. Auth middleware still
+     decides whether the resulting anonymous caller may proceed.
 5. **Anonymous is a real identity object, not null** (AU3.1). "New user" = `{ id, authenticated:
    false }`. Browser anonymous is persisted (auto cookie); machine anonymous is fresh per
    request (or rejected under the gate).

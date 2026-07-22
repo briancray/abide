@@ -10,4 +10,13 @@ const port = Number(process.env.PORT ?? 4322)
 const dir = new URL('..', import.meta.url).pathname
 
 const { url } = await serve(dir, { dev: true, port })
+
+// `abide dev` hops to the next open port when the requested one is taken. Playwright polls the FIXED
+// `port` from its config, so a silent hop would strand it in a 60s timeout. Fail loud + fast instead.
+const boundPort = Number(new URL(url).port)
+if (boundPort !== port) {
+    throw new Error(
+        `[e2e] port ${port} was busy — dev hopped to ${boundPort}, but Playwright expects ${port}. Free the port and re-run.`,
+    )
+}
 console.info(`[e2e] starter app serving at ${url}`)

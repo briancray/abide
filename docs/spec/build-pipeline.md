@@ -69,6 +69,13 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
 - Static assets from `dist/_app/<hash>/` served **immutable, long-cache** (content-addressed).
 - `APP_URL` sets the public app URL → mount base; `PORT` the listen port (existing `ABIDE_*`
   vars).
+- **Port resolution** (`serve`, both `dev` and `start`): the requested port is `--port` → `PORT`
+  env → **`3000`** default. `abide start` **binds it directly** — a clash surfaces as a hard
+  `EADDRINUSE` (production should fail loud, not silently move). `abide dev` treats it as a
+  **starting point**: if taken, it **hops upward to the next open port** (scan limit 100, then falls
+  back to the OS ephemeral port) so several dev servers coexist. Hand-built configs and
+  `createTestApp` pass no port → `0` (ephemeral); only the `serve` CLI applies the `3000`/hop
+  resolution.
 
 ---
 

@@ -303,9 +303,9 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 | Command | Does |
 | --- | --- |
 | `abide scaffold <name>` | scaffold + install + dev (`--no-install`/`--no-dev`/`--no-git`) |
-| `abide dev` | same pipeline as build + watch + full live-reload (over the socket mux) |
+| `abide dev` | same pipeline as build + watch + full live-reload (over the socket mux); `--port` (default `3000`) hops to the next open port if taken; graceful `onStop` teardown on SIGINT/SIGTERM/crash |
 | `abide build` | code-split client → content-hashed chunks + `manifest.json` into `dist/_app/<hash>/` |
-| `abide start` | serve the app against the built `dist/` client assets (no bundler at boot; builds first if absent) |
+| `abide start` | serve the app against the built `dist/` client assets (no bundler at boot; builds first if absent); `--port` (default `3000`) binds directly (hard `EADDRINUSE` on clash); graceful `onStop` teardown on SIGINT/SIGTERM/crash |
 | `abide run <file> [args...]` | run script under the abide runtime (no HTTP; `onStart`/`onStop` run) |
 | `abide compile [--target] [--out]` | standalone server executable (embeds assets) |
 | `abide cli [--target] [--out] [--platforms]` | dual-mode binary: embeds app, self-hosts or targets `ABIDE_APP_URL`; interactive with no subcommand |
@@ -338,7 +338,7 @@ assets — the loader entry + per-route chunks + shared chunks + CSS; served imm
 ## Environment variables
 | Var | Effect |
 | --- | --- |
-| `PORT` / `APP_URL` | listen port / public URL (mount base) |
+| `PORT` / `APP_URL` | listen port (default `3000`; `--port` overrides; `abide dev` hops to the next open port, `abide start` binds it directly) / public URL (mount base) |
 | `ABIDE_APP_DIR` / `ABIDE_DATA_DIR` | override built app dir / per-user data dir |
 | `ABIDE_APP_NAME` | default `log` channel label (falls back to package.json `name`, then `abide`) |
 | `ABIDE_IDENTITY_SECRET` | seals the `abide-identity` cookie + tokens (required in prod for authenticated `identity.set()`) |

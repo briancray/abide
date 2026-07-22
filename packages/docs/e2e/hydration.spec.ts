@@ -30,6 +30,21 @@ test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded
 // claiming block, "client" for the {#for await} list that re-renders by design. So "zero mismatches"
 // (data-ok="false") is a cross-scenario proof of correct hydration — the eyeball test, asserted.
 const PROBE = '[data-testid="probe"]'
+const RICH_PROBE = '[data-testid="rich-probe"]'
+
+// The rich-seed scenario embeds a RichSeedProbe whose `state` initials are a Date, a BigInt past
+// Number.MAX_SAFE_INTEGER, and a Map — values the OLD JSON hydration seed flattened (BigInt → null, Date
+// → string, Map → {}). The server records them into #__abide-seed through the RICH value codec; on
+// hydrate the client decodes + replays each, so a clean claim keeps every value's TYPE intact. A string
+// survives JSON fine, so the string-only probes above would stay green through a codec regression — this
+// probe is the guard that DOES catch it: its `data-ok` flips false the instant a rich seed loses its type.
+async function expectRichSeedRoundTrips(probe: import('@playwright/test').Locator): Promise<void> {
+  await expect(probe).toHaveCount(1)
+  await expect(probe).toHaveAttribute('data-date-ok', 'true') // Date survived as a Date (same epoch)
+  await expect(probe).toHaveAttribute('data-big-ok', 'true') // BigInt survived as a bigint (not a number)
+  await expect(probe).toHaveAttribute('data-map-ok', 'true') // Map survived with its entries
+  await expect(probe).toHaveAttribute('data-ok', 'true')
+}
 
 test('every hydration scenario hydrates to its contract on a hard load (no mismatched probe)', async ({
   page,
@@ -46,6 +61,8 @@ test('every hydration scenario hydrates to its contract on a hard load (no misma
   await expect(page.locator(`${PROBE}[data-ok="false"]`)).toHaveCount(0)
   // The claiming blocks (all but the 3 {#for await} chunks) genuinely CLAIMED — server-origin.
   await expect(page.locator(`${PROBE}[data-origin="server"]`)).toHaveCount(7)
+  // Rich-typed state() seed initials (Date/BigInt/Map) round-trip through the hydration value codec.
+  await expectRichSeedRoundTrips(page.locator(RICH_PROBE))
   expect(warnings.filter((t) => /hydrat/i.test(t))).toEqual([])
 })
 
@@ -66,4 +83,7 @@ test('every hydration scenario still hydrates to its contract when reached by a 
     'data-origin',
     'server',
   )
+  // The rich-typed state() seed also survives its codec round-trip when the page arrives via a soft-nav
+  // (the seed rides the soft-nav envelope, then decodes into the grafted subtree).
+  await expectRichSeedRoundTrips(page.locator(RICH_PROBE))
 })
