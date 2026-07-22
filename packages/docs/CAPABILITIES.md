@@ -16,13 +16,14 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 ## Coverage summary (verify phase)
 
 - **Total capabilities in this manifest: 135** (~91 browser-facing PW/PW+RT, ~44 runtime-only RT).
-- **Playwright suite: 18 spec files, 122 tests — ALL PASSING.** They drive the real docs app (a real
-  abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way binds,
-  soft-nav, sockets, and machine surfaces fetched from the browser.
-  - `rpc` (20), `bindings` (15), `platform` (14), `control` (9), `reactivity` (8), `routing` (8),
-    `caching-cells` (7), `sockets` (7), `cache` (6), `build-deploy` (5), `caching-global` (5),
-    `rpc-probes` (4), `smoke` (4), `bench` (3), `streaming` (3), `uploads` (2), `hydration` (1),
-    `styling` (1).
+- **Playwright suite: 20 spec files, 134 tests — ALL PASSING (serial).** They drive the real docs app
+  (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
+  binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, and machine surfaces
+  fetched from the browser.
+  - `rpc` (20), `bindings` (15), `routing` (14), `platform` (14), `control` (9), `sockets` (8),
+    `reactivity` (8), `caching-cells` (7), `cache` (6), `caching-global` (5), `build-deploy` (5),
+    `smoke` (4), `rpc-probes` (4), `bench` (4), `streaming` (3), `bench-client` (3), `uploads` (2),
+    `styling` (1), `nav-perf` (1), `hydration` (1).
 - **Docs example structure:** every live demo is a standalone `src/ui/demos/<section>/<sub>/<Name>.abide`
   component, rendered inside the reusable `components/Demo.abide` card. The card shows the demo, then
   two source tabs in a fixed order — **server** (the full `.ts` RPC/socket) then **client** (the full
@@ -310,7 +311,7 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 ## 16. Testing harness
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `createTestApp()` → `TestApp` (real in-process app: origin/fetch/rpc/sockets/health/stop/as) | RT | [ ] |
+| `await createTestApp(config?)` → `Promise<TestApp>` (async; explicit vs discovery mode; origin/fetch/rpc/socket/health/stop/as) | RT | [x] (/platform/testing page + abide `createTestApp.test.ts`: explicit + discovery + lifecycle) |
 
 ---
 
