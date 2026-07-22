@@ -142,14 +142,46 @@ async function* readFrames(
     if (rest.length > 0) yield JSON.parse(rest) as Record<string, unknown>
 }
 
-// Fill a streamed placeholder slot with its patch HTML — the same DOM op the first-load move-script
-// does, but from JS (a `fetch`ed body's inline scripts don't auto-run). Hydration later unwraps it.
-function fillSlot(id: number, html: string): void {
-    const slot = document.getElementById(`ab-p:${id}`)
-    if (slot === null) return
-    const template = document.createElement('template')
-    template.innerHTML = html
-    slot.replaceChildren(template.content)
+// Apply one streamed soft-nav patch frame in JS — the same DOM ops the first-load move-scripts run
+// (`documentPatch` in streamScope.ts), but from JS since a `fetch`ed body's inline scripts don't
+// auto-run. The server emits the op AS the frame `kind`: `fill` replaces a deferred `{#await}` slot's
+// contents (`#ab-p:<id>`), `append` adds one streamed `{#for await}` item to the list anchor
+// (`#ab-l:<id>`), `complete` marks a streamed list finished (`data-ab-done`, read by the `done()`
+// probe). Hydration later unwraps the slots. Returns true when the frame was a patch (so the consumer
+// loops can treat every non-shell/non-seed frame uniformly). A missing anchor is a no-op. Exported for
+// unit testing — the browser end-state is otherwise seed-masked (hydrate re-renders from the seed).
+export function applyPatchFrame(frame: Record<string, unknown>): boolean {
+    const id = frame.id
+    if (frame.kind === 'fill') {
+        if (typeof id === 'number' && typeof frame.html === 'string') {
+            const slot = document.getElementById(`ab-p:${id}`)
+            if (slot !== null) {
+                const template = document.createElement('template')
+                template.innerHTML = frame.html
+                slot.replaceChildren(template.content)
+            }
+        }
+        return true
+    }
+    if (frame.kind === 'append') {
+        if (typeof id === 'number' && typeof frame.html === 'string') {
+            const list = document.getElementById(`ab-l:${id}`)
+            if (list !== null) {
+                const template = document.createElement('template')
+                template.innerHTML = frame.html
+                list.appendChild(template.content)
+            }
+        }
+        return true
+    }
+    if (frame.kind === 'complete') {
+        if (typeof id === 'number') {
+            const list = document.getElementById(`ab-l:${id}`)
+            if (list !== null) list.setAttribute('data-ab-done', '')
+        }
+        return true
+    }
+    return false
 }
 
 // A same-chain CROSS-ROUTE soft-nav: stream the server's diverging-suffix shell, graft it into the kept
@@ -210,11 +242,10 @@ async function partialCrossNav(
                     boundary.graftSuffix?.(typeof frame.html === 'string' ? frame.html : '') ?? null
                 setClientRoute(routeInfoFor(dest.pattern, target, dest.params))
                 grafted = true
-            } else if (frame.kind === 'patch') {
-                if (typeof frame.id === 'number' && typeof frame.html === 'string')
-                    fillSlot(frame.id, frame.html)
             } else if (frame.kind === 'seed') {
                 seed = frame.seed as HydrationSeed
+            } else {
+                applyPatchFrame(frame)
             }
         }
     } catch {
@@ -357,11 +388,10 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
             if (frame.kind === 'shell') {
                 if (typeof frame.html === 'string') container.innerHTML = frame.html
                 if (typeof frame.url === 'string') navUrl = frame.url
-            } else if (frame.kind === 'patch') {
-                if (typeof frame.id === 'number' && typeof frame.html === 'string')
-                    fillSlot(frame.id, frame.html)
             } else if (frame.kind === 'seed') {
                 seed = frame.seed as HydrationSeed
+            } else {
+                applyPatchFrame(frame)
             }
         }
     } catch {

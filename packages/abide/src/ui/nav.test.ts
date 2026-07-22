@@ -12,7 +12,7 @@ import { url } from '../shared/url.ts'
 import { bootstrapApp } from './internal/bootstrap.ts'
 import { loadEmitted } from './internal/emit.ts'
 import type { PageEntry, PageLoader } from './internal/pageRegistry.ts'
-import { mountPathname, navigate } from './navigate.ts'
+import { applyPatchFrame, mountPathname, navigate } from './navigate.ts'
 
 // Wrap a resolved page entry as a code-split LOADER (what the client bundle registers now — TODO #6).
 // Promise.resolve stands in for the chunk import; a mount is thus one microtask late (poll for it).
@@ -262,4 +262,41 @@ test('isKnownPage: only real page patterns are soft-nav targets (not /openapi.js
     expect(isKnownPage('/__abide/rpc/greet')).toBe(false)
     expect(isKnownPage('/__abide/mcp')).toBe(false)
     expect(isKnownPage('/nope')).toBe(false)
+})
+
+// STREAMED SOFT-NAV PATCH FRAMES (regression: the server emits `fill`/`append`/`complete` frame kinds
+// — never `patch` — so the client's frame consumers must apply those exact kinds). `applyPatchFrame`
+// mirrors the first-load move-scripts (`documentPatch`) from JS. Before the fix the consumers branched
+// on a dead `patch` kind, so `append`/`complete` had NO client implementation at all.
+test('applyPatchFrame: `fill` replaces a deferred {#await} slot (#ab-p:<id>) contents', () => {
+    document.body.innerHTML = '<abide-slot id="ab-p:7"><span>loading</span></abide-slot>'
+    const applied = applyPatchFrame({ kind: 'fill', id: 7, html: '<b data-v>runs: 3</b>' })
+    expect(applied).toBe(true)
+    const slot = document.getElementById('ab-p:7')
+    expect(slot?.querySelector('b[data-v]')?.textContent).toBe('runs: 3')
+    expect(slot?.querySelector('span')).toBeNull() // the pending fallback was replaced
+})
+
+test('applyPatchFrame: `append` adds an item into the list anchor (#ab-l:<id>)', () => {
+    document.body.innerHTML = '<abide-list id="ab-l:2"><li>a</li></abide-list>'
+    expect(applyPatchFrame({ kind: 'append', id: 2, html: '<li>b</li>' })).toBe(true)
+    expect(applyPatchFrame({ kind: 'append', id: 2, html: '<li>c</li>' })).toBe(true)
+    const list = document.getElementById('ab-l:2')
+    expect(list?.innerHTML).toBe('<li>a</li><li>b</li><li>c</li>')
+})
+
+test('applyPatchFrame: `complete` stamps data-ab-done on the list anchor (the done() probe)', () => {
+    document.body.innerHTML = '<abide-list id="ab-l:5"><li>x</li></abide-list>'
+    expect(applyPatchFrame({ kind: 'complete', id: 5 })).toBe(true)
+    expect(document.getElementById('ab-l:5')?.hasAttribute('data-ab-done')).toBe(true)
+})
+
+test('applyPatchFrame: a non-patch kind is not a patch, and a missing anchor is a safe no-op', () => {
+    document.body.innerHTML = ''
+    expect(applyPatchFrame({ kind: 'shell', html: '<p/>' })).toBe(false)
+    expect(applyPatchFrame({ kind: 'seed', seed: {} })).toBe(false)
+    // Missing anchor: still classified as a patch (true), but touches nothing / never throws.
+    expect(applyPatchFrame({ kind: 'fill', id: 99, html: '<b/>' })).toBe(true)
+    expect(applyPatchFrame({ kind: 'append', id: 99, html: '<li/>' })).toBe(true)
+    expect(applyPatchFrame({ kind: 'complete', id: 99 })).toBe(true)
 })

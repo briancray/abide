@@ -67,6 +67,15 @@ test('a slow {#await} that rejects renders its {:catch} branch (client HTTP-erro
 test('an in-app soft-nav to /pages/ssr streams progressively (shell then patch), no full reload', async ({
     page,
 }) => {
+    // Soft-nav to a streaming page must CLAIM cleanly. (This is a smoke guard, not the regression lock
+    // for the frame-kind fix — the seed re-renders the value on hydrate, so the final DOM is correct
+    // either way; the `applyPatchFrame` unit tests in abide's nav.test.ts lock the fill/append/complete
+    // application directly. Here we assert no hydration-mismatch warning fires during the streamed nav.)
+    const warnings: string[] = []
+    page.on('console', (msg) => {
+        if (msg.type() === 'warning' || msg.type() === 'error') warnings.push(msg.text())
+    })
+
     await page.goto('/rpc')
 
     // A full reload would wipe this marker; a soft-nav keeps it.
@@ -87,6 +96,9 @@ test('an in-app soft-nav to /pages/ssr streams progressively (shell then patch),
     )
     expect(survived).toBe(true)
     await expect(page.locator('abide-slot')).toHaveCount(0)
+
+    // The applied `fill` patch let hydration CLAIM the streamed subtree in place — no mismatch warning.
+    expect(warnings.filter((text) => /hydrat/i.test(text))).toEqual([])
 
     // Reactive after the streamed soft-nav.
     const before = (await page.getByTestId('value').textContent())?.trim() ?? ''
