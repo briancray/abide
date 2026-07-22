@@ -411,6 +411,9 @@ export function emitServerModule(plan: TemplatePlan, analysis: ScopeAnalysis): s
         // `render`; the result is wrapped in `$rt.Raw` so the caller splices it verbatim.
         `\nexport default async (props, childrenFn, $parent) => {\n` +
         `  const $s = Object.create($parent ?? null);\n` +
+        // Per-component-localized seed (mirror of the client adapter): open this component instance's own
+        // recording bucket so its `state()` initials group separately from the page/siblings.
+        `  if ($parent && $parent.state && $parent.state.forComponent) $s.state = $parent.state.forComponent();\n` +
         `  $s.props = () => props;\n` +
         `  $s.children = childrenFn;\n` +
         `  return new $rt.Raw(await render($s));\n` +

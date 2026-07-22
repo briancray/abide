@@ -132,6 +132,9 @@ class ClientEmitter {
             // (`$mount0` branches on `$rt.hydrating`), so hydration works with no new code.
             `\nexport default (props, childrenFn, $parent) => ({ mount: ($p, $a) => {\n` +
             `  const $s = Object.create($parent ?? null);\n` +
+            // Per-component-localized seed: open THIS component instance's own seed bucket (mount-order id),
+            // so its `state()` calls replay from a bucket isolated from siblings' (no cascade on divergence).
+            `  if ($parent && $parent.state && $parent.state.forComponent) $s.state = $parent.state.forComponent();\n` +
             `  $s.props = () => props;\n` +
             `  $s.children = childrenFn;\n` +
             `  return mount($p, $s, $a);\n` +

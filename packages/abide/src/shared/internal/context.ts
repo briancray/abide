@@ -75,8 +75,10 @@ export interface CacheContext {
     cache: Map<string, unknown>
     // Per-request ordered recorder of `state(initial)` initial values, pushed in call order during
     // SSR (§5 state-initializer record/replay). `collectSeed` drains it into the hydration seed so the
-    // client replays each cell's server-computed initial by ordinal instead of re-evaluating it.
-    states: unknown[]
+    // client replays each cell's server-computed initial by ordinal instead of re-evaluating it. Grouped
+    // into per-component buckets (one array per component instance, mount order) so a component's
+    // `state()`-sequence divergence stays contained to its bucket rather than shifting later components.
+    states: unknown[][]
     // Set while an SSR page render is streaming (undefined otherwise / on the client).
     stream?: StreamScope | undefined
     // True for the whole lifetime of a page-render request (set by `renderPage`, never cleared — the

@@ -90,21 +90,35 @@ function pageImports(
 // so the merged scope is `pageImports` plus the framework bindings a page may import (state/watch/
 // props). RPC callables are the request-scoped `pageCallable`s, so in-proc reads land in the cache
 // during render and `collectSeed` records them.
-// The `state` binding a page sees during SSR: a thin recorder over the real `state`. Each `state(...)`
-// call pushes its RAW initial (pre-transform) onto `getContext().states` IN CALL ORDER, then delegates
-// to the real cell factory (behaviour identical). We record the raw initial — not the post-transform
-// value — because the client replays it as `state(seed, transform)`, so the transform is re-applied
-// there; recording the post-transform value would double-apply it. `.computed`/`.linked` are passed
-// through untouched (they carry no serializable initial and never consume a seed slot on the client),
-// so the ordinal count stays identical on both sides. See §5 / attach-hydration-design decision 10.
-const recordingState: State = Object.assign(
-    function recordState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
-        getContext().states.push(initial)
-        return state(initial, transform)
-    } as State,
-    // `.computed`/`.linked`/`.shared` don't record a seed slot (`.shared` is keyed, not ordinal).
-    { computed: state.computed, linked: state.linked, shared: state.shared },
-)
+// The `state` binding a page sees during SSR: a recorder over the real `state`, PER-COMPONENT-LOCALIZED
+// (the mirror of the client `makeSeededState`). Each `state(...)` call pushes its RAW initial
+// (pre-transform) into the CURRENT component's bucket in call order, then delegates to the real cell
+// factory (behaviour identical). We record the raw initial — not the post-transform value — because the
+// client replays it as `state(seed, transform)`, so the transform is re-applied there; recording the
+// post-transform value would double-apply it. `.computed`/`.linked` are passed through untouched (they
+// carry no serializable initial and never consume a seed slot on the client), so a bucket's local ordinal
+// count stays identical on both sides. `context.states` is `unknown[][]` — one bucket per component
+// instance in mount order; `forComponent()` opens the next bucket and returns a recorder bound to it. The
+// page + its layouts share the root bucket (bucket 0); each `<Component/>` adapter opens its own, so a
+// component's `state()`-sequence divergence stays inside its bucket. See §5 / decision 10.
+function makeRecordingState(): State {
+    const buckets = getContext().states as unknown as unknown[][]
+    function forComponent(): State {
+        const bucket: unknown[] = []
+        buckets.push(bucket)
+        const rec = function recordState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
+            bucket.push(initial)
+            return state(initial, transform)
+        } as State
+        return Object.assign(rec, {
+            computed: state.computed,
+            linked: state.linked,
+            shared: state.shared,
+            forComponent,
+        }) as State
+    }
+    return forComponent() // the page/root = component bucket 0
+}
 
 // Render one composed level (a layout or the page) to its inner SSR HTML. When a deeper level exists,
 // inject `children` into the scope as a server component (`(props, childrenFn) => Raw`) that renders
@@ -125,7 +139,9 @@ async function renderLevel(
     const emitted = await loadEmittedServer(level, dirs[index])
     const scope: Record<string, unknown> = {
         ...imports,
-        state: recordingState,
+        // `imports.state` is the shared ROOT recorder (bucket 0), created once per render in renderPage —
+        // page + all layout levels record into it; `<Component/>` adapters branch off via `.forComponent()`.
+        state: imports.state,
         watch,
         props: () => ({}),
     }
@@ -161,6 +177,9 @@ export async function renderPage(
     getContext().rendering = true
     if (streaming) getContext().stream = createStreamScope()
     const imports = pageImports(config.routes ?? {}, config.sockets ?? {})
+    // The shared ROOT state recorder (bucket 0) for this render — page + layouts record into it; each
+    // `<Component/>` adapter opens its own bucket via `.forComponent()` (per-component-localized seed).
+    imports.state = makeRecordingState()
     const layouts = config.layouts ?? {}
     const layoutDirs = config.layoutDirs ?? {}
     const pageDirs = config.pageDirs ?? {}
@@ -179,8 +198,8 @@ export async function renderPage(
         pattern !== undefined ? pageDirs[pattern] : undefined,
     ]
     // On a same-chain soft-nav the shared outer layouts (`[0..sharedLevels)`) stay LIVE on the client,
-    // so render only the diverging suffix. `recordingState` records state initials from this render only
-    // — the suffix's states start at ordinal 0, exactly what the client's fresh sub-hydrate seed replays.
+    // so render only the diverging suffix. The root recorder records this render only — the suffix's
+    // buckets start at component 0, exactly what the client's fresh sub-hydrate seed replays.
     return renderLevel(levels.slice(sharedLevels), dirs.slice(sharedLevels), 0, imports)
 }
 
@@ -247,7 +266,7 @@ export interface HydrationSeed {
     // value the server rendered (decision 10). Present only when the page declared state. Values must be
     // JSON-serializable (the seed contract); a non-serializable initial is recorded as `null` rather
     // than crashing the render.
-    states?: unknown[]
+    states?: unknown[][]
     // Attachable `{#for await}` handoff records (§5). Present only when the page streamed a known-RPC
     // source; the client adopts/resumes each instead of re-invoking the source on hydrate.
     streams?: StreamHandle[]
@@ -285,11 +304,14 @@ export function collectSeed(config: AppConfig): HydrationSeed {
             })
         }
     }
-    // State initials recorded during this SSR render (same request scope as `renderPage`), in call order.
-    const recorded = getContext().states
+    // State initials recorded during this SSR render (same request scope as `renderPage`), grouped into
+    // per-component buckets in mount order. Keep empty buckets — bucket ids are positional, so a hole
+    // would shift every later component. Skip the whole field only when NO component recorded any state.
+    const recorded = getContext().states as unknown as unknown[][]
     const seed: HydrationSeed = {}
     if (reads.length > 0) seed.reads = reads
-    if (recorded.length > 0) seed.states = recorded.map(jsonSafeState)
+    if (recorded.some((bucket) => bucket.length > 0))
+        seed.states = recorded.map((bucket) => bucket.map(jsonSafeState))
     // Attachable `{#for await}` handoffs recorded during this render (§5). Values/args are JSON-safed
     // like state initials — a non-serializable entry drops to `null` rather than crashing the seed. The
     // decoded values leak nothing the SSR HTML did not already paint.

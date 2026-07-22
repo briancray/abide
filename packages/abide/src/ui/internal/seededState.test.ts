@@ -13,14 +13,14 @@ import { loadEmitted } from './emit.ts'
 import { makeSeededState } from './seededState.ts'
 
 test('consumes seed.states by ordinal, in call order', () => {
-    const s = makeSeededState({ states: [10, 20, 30] })
+    const s = makeSeededState({ states: [[10, 20, 30]] })
     expect(s(1).peek()).toBe(10)
     expect(s(2).peek()).toBe(20)
     expect(s(3).peek()).toBe(30)
 })
 
 test('falls back to the literal initial when the ordinal overflows the seed', () => {
-    const s = makeSeededState({ states: [10] })
+    const s = makeSeededState({ states: [[10]] })
     expect(s(1).peek()).toBe(10)
     expect(s(2).peek()).toBe(2) // no seed slot 1 → literal initial
 })
@@ -33,20 +33,20 @@ test('falls back to the literal initial when the seed carries no states', () => 
 
 test("re-applies the page's transform to the RAW seed value (matches the server cell)", () => {
     // Server recorded the raw initial 5; the client passes transform through, reaching 6 (== server cell).
-    const s = makeSeededState({ states: [5] })
+    const s = makeSeededState({ states: [[5]] })
     const cell = s(0, (v: number) => v + 1)
     expect(cell.peek()).toBe(6)
 })
 
 test('transform still applies to later writes on a seeded cell', () => {
-    const s = makeSeededState({ states: [5] })
+    const s = makeSeededState({ states: [[5]] })
     const cell = s(0, (v: number) => v + 1)
     cell.write(10)
     expect(cell.peek()).toBe(11)
 })
 
 test('.computed / .linked pass through and do NOT advance the ordinal', () => {
-    const s = makeSeededState({ states: [100, 200] })
+    const s = makeSeededState({ states: [[100, 200]] })
     const c = s.computed(() => 1) // must not consume a state slot
     expect(c.peek()).toBe(1)
     // The next plain state() still consumes ordinal 0, proving computed did not advance it.
@@ -81,7 +81,7 @@ test('server records and client replays module + instance state in the SAME orde
 
     // CLIENT: replay a DISTINCT seed by ordinal — module (call 0) → "X", instance (call 1) → "Y".
     const host = document.createElement('div')
-    const dispose = emitted.mount(host, { state: makeSeededState({ states: ['X', 'Y'] }) })
+    const dispose = emitted.mount(host, { state: makeSeededState({ states: [['X', 'Y']] }) })
     expect(host.textContent).toBe('X-Y')
     dispose()
 })

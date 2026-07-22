@@ -69,6 +69,13 @@ claimText(anchor, prefixLen): Text|null
 > replays by ordinal, re-applying transform; module-before-instance order identical by construction
 > via shared `emitInstanceSetup`; non-JSON initials → `null`; 708/0, tsc clean).
 >
+> UPDATE (per-component-localized): `states` is now `unknown[][]` — one bucket per component INSTANCE
+> (mount order), not one flat array. Both `state` wrappers are factories (`recordingState` /
+> `makeSeededState`) whose `.forComponent()` opens the next bucket; the page + layouts share bucket 0,
+> and each `<Component/>` adapter (client + server) opens its own. Within a bucket it is still positional
+> (module-before-instance). This CONTAINS a `state()`-sequence divergence to the offending component
+> instead of cascading wrong seed values into every downstream component on the page.
+>
 > **KNOWN LIMITATION (tracked, deferred):** module-level (`<script module>`) *non-deterministic* state
 > desyncs under a warmed server — module setup memoizes once per process, so warm renders don't
 > re-record its initials and the ordinals misalign vs the client (which runs module setup fresh per

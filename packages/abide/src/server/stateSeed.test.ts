@@ -41,11 +41,12 @@ test('SSR records a non-deterministic state initial into #__abide-seed, matching
     expect(Array.isArray(seed.states)).toBe(true)
     const states = seed.states
     if (states === undefined) throw new Error('seed.states missing')
+    // Per-component buckets: one page bucket (0) holding the one recorded initial.
     expect(states.length).toBe(1)
-    expect(typeof states[0]).toBe('number')
+    expect(typeof states[0][0]).toBe('number')
     // The recorded value is EXACTLY what the server rendered with (no desync): the seed value equals the
     // value the `{t}` leaf produced in the HTML.
-    expect(String(states[0])).toBe(readRenderedValue(html))
+    expect(String(states[0][0])).toBe(readRenderedValue(html))
 
     await app.stop()
 })
@@ -59,7 +60,7 @@ test('the soft-nav envelope carries the recorded state initials', async () => {
 
     const response = await app.fetch('/', { headers: { 'Abide-Nav': '/other' } })
     const envelope = (await parseSoftNav(response)) as { seed: { states?: unknown[] } }
-    expect(envelope.seed.states).toEqual([1, 'two'])
+    expect(envelope.seed.states).toEqual([[1, 'two']])
 
     await app.stop()
 })
@@ -84,7 +85,7 @@ test('state initials are recorded RAW (pre-transform) so the client re-applies t
     const seed = readSeedFromDocument(html)
     // Raw initial (5) is recorded, NOT the post-transform cell value (6) the server rendered — the client
     // calls `state(5, transform)` and re-applies the transform to reach 6.
-    expect(seed.states).toEqual([5])
+    expect(seed.states).toEqual([[5]])
     expect(readRenderedValue(html)).toBe('6')
 
     await app.stop()
@@ -102,7 +103,7 @@ test('a non-JSON-serializable state initial is recorded as null rather than cras
     expect(response.status).toBe(200)
     const seed = readSeedFromDocument(await response.text())
     // Ordinal preserved: the non-serializable slot becomes null, the following slot keeps its value.
-    expect(seed.states).toEqual([null, 7])
+    expect(seed.states).toEqual([[null, 7]])
 
     await app.stop()
 })
