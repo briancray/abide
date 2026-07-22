@@ -9,7 +9,11 @@ test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded
   await page.goto('/templating/reactivity')
   await page.getByRole('link', { name: 'Async blocks', exact: true }).click() // soft-nav → /templating/async
   await expect(page).toHaveURL(/\/templating\/async$/)
-  // Every sample must have exactly one active source panel (matching its default tab), none hidden.
+  // `toHaveURL` resolves on the history push — BEFORE the soft-nav content swap. Wait for the destination
+  // page's own content to be in the DOM before counting `.sample`, else under load we count the OUTGOING
+  // page's samples (a different number) and assert on stale indices. Then: every sample has exactly one
+  // active source panel (matching its default tab), none hidden.
+  await expect(page.locator('h1')).toHaveText('Async control flow')
   const samples = page.locator('.sample')
   const n = await samples.count()
   expect(n).toBeGreaterThan(0)

@@ -24,9 +24,11 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
     `reactivity` (8), `caching-cells` (7), `cache` (6), `caching-global` (5), `build-deploy` (5),
     `smoke` (4), `rpc-probes` (4), `bench` (4), `streaming` (3), `bench-client` (3), `uploads` (2),
     `styling` (1), `nav-perf` (1), `hydration` (3).
-  - ⚠️ Known-FLAKY: `hydration.spec.ts` "soft-nav … keeps every demo tab correctly seeded" (the
-    `{#for await}` create-fallback seed-desync guard) passes intermittently (~1 in 3) — a real timing
-    race in the create-fallback seed-ordinal path, not a docs bug. Worth a framework fix; tracked here.
+  - Note: `hydration.spec.ts` "soft-nav … keeps every demo tab correctly seeded" was flaky under CPU
+    contention — diagnosed as a TEST race (it counted `.sample` after `toHaveURL`, which resolves on the
+    history push BEFORE the soft-nav content swap, so it read the outgoing page's samples). Framework
+    hydration/seed-ordinal replay was correct throughout; the test now waits for the destination `h1`
+    before counting (verified 12/12 under the load that previously failed 11/12).
 - **Docs example structure:** every live demo is a standalone `src/ui/demos/<section>/<sub>/<Name>.abide`
   component, rendered inside the reusable `components/Demo.abide` card. The card shows the demo, then
   two source tabs in a fixed order — **server** (the full `.ts` RPC/socket) then **client** (the full
