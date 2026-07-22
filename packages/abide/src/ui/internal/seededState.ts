@@ -16,8 +16,23 @@
 // counter is created per call to `makeSeededState`, so it resets per page mount.
 
 import type { HydrationSeed } from '../../server/internal/pages.ts'
+import { decode } from '../../shared/internal/codec.ts'
 import type { State, StateCell } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
+
+// `seed.states` is the rich-codec `encode(...)` string of the whole per-component bucket structure (a
+// non-RPC hydrated value — see pages.ts). Decode it back to the `unknown[][]` buckets the ordinal
+// replay reads. A malformed/absent payload degrades to no seed (every cell falls back to its literal
+// initial) rather than failing the mount.
+function decodeStates(encoded: HydrationSeed['states']): unknown[][] | undefined {
+    if (typeof encoded !== 'string') return undefined
+    try {
+        const decoded = decode(encoded)
+        return Array.isArray(decoded) ? (decoded as unknown[][]) : undefined
+    } catch {
+        return undefined
+    }
+}
 
 // `isHydrating` reports whether the mount cursor is CLAIMING server nodes right now. `bootstrapPage`
 // passes the live runtime flag; it defaults to always-true for direct callers/tests that replay outside
@@ -26,7 +41,7 @@ export function makeSeededState(
     seed: HydrationSeed,
     isHydrating: () => boolean = () => true,
 ): State {
-    const buckets = Array.isArray(seed.states) ? (seed.states as unknown[][]) : undefined
+    const buckets = decodeStates(seed.states)
     // The shared mount-order component counter — bumped once per component instance (page = 0). Shared by
     // the root and every `.forComponent()` descendant so ids line up with the server's record order.
     let nextComponentId = -1

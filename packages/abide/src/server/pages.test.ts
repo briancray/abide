@@ -3,6 +3,7 @@
 // through the middleware onion like any request.
 
 import { expect, test } from 'bun:test'
+import { encode } from '../shared/internal/codec.ts'
 import { error } from '../server/error.ts'
 import { GET } from '../server/GET.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
@@ -15,7 +16,7 @@ import { loadEmittedServer } from '../ui/internal/emit.ts'
 test('documentHead + inner + documentTail is byte-identical to renderDocument across opts', () => {
     const seed: HydrationSeed = {
         reads: [{ name: 'greet', args: { name: 'a' }, value: 'hi a' }],
-        states: [1],
+        states: encode([[1]]),
     }
     const cases: Array<{ inner: string; opts?: RenderDocumentOptions }> = [
         { inner: '<h1>plain</h1>' },

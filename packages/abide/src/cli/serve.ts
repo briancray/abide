@@ -31,6 +31,14 @@ const DEV_RELOAD_CHANNEL = '__abide_dev_reload'
 // Coalesce a burst of filesystem events into one rebuild.
 const WATCH_DEBOUNCE_MS = 60
 
+// Default listen port when none is given (via `--port` or `PORT`). `abide dev` hops upward from here to
+// the next free port so parallel dev servers coexist; `abide start` binds it directly.
+const DEFAULT_PORT = 3000
+
+// How many ports to probe upward from the requested one (dev only) before giving up and letting the OS
+// pick an ephemeral port.
+const PORT_SCAN_LIMIT = 100
+
 // The browser-side live-reload client (BP2.3). Connects to the mux, subscribes to the dev-reload
 // channel, and reloads on any message. Kept dependency-free and defensive so a transport hiccup
 // never breaks the page.
@@ -55,9 +63,52 @@ export interface ServeResult {
     stop(): Promise<void>
 }
 
+// Resolve the listen port from (in order) an explicit `--port`, the `PORT` env var, then DEFAULT_PORT.
+// In dev the requested port is only a starting point — if it's taken, hop to the next open one so
+// several dev servers can run side by side. Production (`abide start`) binds the requested port as-is,
+// so a clash surfaces as a hard EADDRINUSE rather than silently moving.
+async function resolvePort(opts: ServeOptions): Promise<number> {
+    const requested = opts.port ?? readEnvPort() ?? DEFAULT_PORT
+    if (opts.dev === true) return await findOpenPort(requested)
+    return requested
+}
+
+// Read `PORT` from the environment, ignoring an unset/blank/out-of-range value.
+function readEnvPort(): number | undefined {
+    const raw = Bun.env.PORT
+    if (raw === undefined || raw === '') return undefined
+    const port = Number(raw)
+    return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : undefined
+}
+
+// Probe upward from `start` for a port nothing else is bound to, using a throwaway `Bun.serve` bind as
+// the availability test. Falls back to the starting port after PORT_SCAN_LIMIT tries (the real bind
+// then reports the clash). There's an inherent race between the probe and the real bind, but that's
+// acceptable for the dev-only convenience this powers.
+async function findOpenPort(start: number): Promise<number> {
+    for (let port = start; port < start + PORT_SCAN_LIMIT; port++) {
+        try {
+            const probe = Bun.serve({ port, fetch: () => new Response() })
+            probe.stop(true)
+            return port
+        } catch (caught) {
+            if (isAddressInUse(caught)) continue
+            throw caught
+        }
+    }
+    return start
+}
+
+// Whether a thrown bind error is "address already in use" (the signal to try the next port).
+function isAddressInUse(caught: unknown): boolean {
+    if (!(caught instanceof Error)) return false
+    const code = (caught as { code?: unknown }).code
+    return code === 'EADDRINUSE' || /EADDRINUSE|address already in use/i.test(caught.message)
+}
+
 export async function serve(dir: string, opts: ServeOptions = {}): Promise<ServeResult> {
     const config: LoadedApp = await loadApp(dir)
-    if (opts.port !== undefined) config.port = opts.port
+    config.port = await resolvePort(opts)
     // Production (`abide start`) minifies the client bundle; `abide dev` does not (TODO #6).
     config.dev = opts.dev === true
     // Production `abide start` passes the pre-built client loaded from `dist` — the router serves it
@@ -101,8 +152,9 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
         async stop(): Promise<void> {
             watcher?.close()
             // onStop mirrors onStart: a `stop()` thunk it may wrap (e.g. drain in-flight work first).
-            // Unlike boot, teardown MUST complete — if the hook returns without calling stop(), serve()
-            // calls it as a backstop so the server never strands as a zombie.
+            // Unlike boot, teardown MUST complete — if the hook returns (or throws) without calling
+            // stop(), serve() calls it as a backstop so the server never strands as a zombie. A hook
+            // that throws still gets the backstop, then the original error is re-thrown for the caller.
             let stopped = false
             const stop = async (): Promise<void> => {
                 if (stopped) return
@@ -110,8 +162,11 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
                 await booted.stop()
             }
             if (config.onStop !== undefined) {
-                await config.onStop(stop)
-                if (!stopped) await stop()
+                try {
+                    await config.onStop(stop)
+                } finally {
+                    if (!stopped) await stop()
+                }
             } else {
                 await stop()
             }

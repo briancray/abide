@@ -56,7 +56,7 @@ export async function onStop(stop) {
 
 describe('serve — onStart/onStop wrappers', () => {
     test('setup wraps the boot and teardown wraps the stop, in order', async () => {
-        const app = await serve(await project(WRAP_APP), {})
+        const app = await serve(await project(WRAP_APP), { port: 0 })
         // By the time serve() resolves, onStart has wrapped a completed boot.
         expect(events()).toEqual(['start:before', 'start:after'])
         expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
@@ -75,11 +75,23 @@ describe('serve — onStart/onStop wrappers', () => {
     test('onStop that forgets stop() is backstopped — the server is still torn down', async () => {
         const app = await serve(
             await project(`export function onStop() { /* forgets stop() */ }`),
-            {},
+            { port: 0 },
         )
         running.push(app)
         expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
         await app.stop()
+        await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
+    })
+
+    test('onStop that throws before stop() is still backstopped — teardown completes, error re-thrown', async () => {
+        const app = await serve(
+            await project(`export function onStop() { throw new Error('teardown boom') }`),
+            { port: 0 },
+        )
+        expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
+        // The hook's throw surfaces to the caller...
+        await expect(app.stop()).rejects.toThrow(/teardown boom/)
+        // ...but the backstop still tore the server down.
         await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
     })
 })
@@ -95,7 +107,7 @@ describe('serve — onHealth/onError are loaded from src/app.ts', () => {
             await project(`
                 export function onHealth() { return { app: 'demo', reachable: false } }
             `),
-            {},
+            { port: 0 },
         )
         running.push(app)
         const response = await fetch(`${app.url}/__abide/health`)

@@ -3,6 +3,7 @@ node_modules/
 
 # builds / generated
 dist/
+.abide/
 packages/docs/src/.abide/
 packages/starter/src/.abide/
 

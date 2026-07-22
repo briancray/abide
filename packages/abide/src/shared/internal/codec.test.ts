@@ -328,3 +328,33 @@ describe('encode rejects unsupported values', () => {
         expect(() => encode({ s: Symbol.iterator })).toThrow()
     })
 })
+
+describe('encode lossy mode (hydration seed)', () => {
+    class Point {
+        constructor(
+            public x: number,
+            public y: number,
+        ) {}
+    }
+
+    // Encode with lossy=true, decode, return the decoded value — the seed round-trip.
+    function lossyRoundtrip(value: unknown): unknown {
+        return decode(encode(value, true))
+    }
+
+    test('encodes an unsupported value as null instead of throwing', () => {
+        expect(lossyRoundtrip(new Point(1, 2))).toBeNull()
+        expect(lossyRoundtrip(() => {})).toBeNull()
+        expect(lossyRoundtrip(Symbol('x'))).toBeNull()
+    })
+
+    test('drops only the unsupported leaf, preserving surrounding structure and ordinals', () => {
+        expect(lossyRoundtrip([new Point(1, 2), 7, 'ok'])).toEqual([null, 7, 'ok'])
+        expect(lossyRoundtrip({ bad: () => {}, good: 42 })).toEqual({ bad: null, good: 42 })
+    })
+
+    test('still round-trips rich supported values under lossy', () => {
+        const value = { at: new Date(0), tags: new Set([1, 2]), big: 9n }
+        expect(lossyRoundtrip(value)).toEqual(value)
+    })
+})

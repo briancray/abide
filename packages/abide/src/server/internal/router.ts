@@ -57,7 +57,14 @@ import { buildOpenApi } from './openapi.ts'
 import { renderPage, streamPageDocument, streamSoftNav } from './pages.ts'
 import { projectFormText } from './projectFormText.ts'
 import { buildRegistry } from './registry.ts'
-import { type RequestScope, type RouteInfo, type RouteKind, runInScope } from './scope.ts'
+import {
+    anonymousPrincipal,
+    type Principal,
+    type RequestScope,
+    type RouteInfo,
+    type RouteKind,
+    runInScope,
+} from './scope.ts'
 import { validateFiles } from './validateFiles.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -184,7 +191,8 @@ export interface AppConfig {
     // from a tmpdir entry) can find them. Absent for hand-built configs (no relative CSS to resolve).
     pageDirs?: Record<string, string>
     layoutDirs?: Record<string, string>
-    // BP3: listen port for `Bun.serve`. Absent → 0 (ephemeral). The CLI's `serve` passes `--port`.
+    // BP3: listen port for `Bun.serve`. Absent → 0 (ephemeral, e.g. createTestApp / hand-built configs).
+    // The CLI's `serve` always resolves a concrete port (`--port` / `PORT` / 3000, dev hops to the next open one).
     port?: number
     // BP2.3: dev-only JS injected as an inline `<script>` into every SSR'd page document — the
     // live-reload client that subscribes to the reserved dev-reload channel on the socket mux and
@@ -799,10 +807,21 @@ export function createApp(config: AppConfig = {}): App {
                 incomingTrace !== null && TRACEPARENT_PATTERN.test(incomingTrace)
                     ? incomingTrace
                     : undefined
+            // Identity resolution can throw (a malformed/tampered token that fails to unseal). Degrade
+            // to an anonymous principal so the request still gets a scope, and defer the error into the
+            // in-scope try below so onError sees it (rather than escaping as a bare 500 before scope).
+            let identity: Principal
+            let scopeError: unknown
+            try {
+                identity = await resolveIdentity(request)
+            } catch (caught) {
+                identity = anonymousPrincipal()
+                scopeError = caught
+            }
             const scope: RequestScope = {
                 request,
                 cookies: new Bun.CookieMap(request.headers.get('cookie') ?? ''),
-                identity: await resolveIdentity(request),
+                identity,
                 identityStateless: isMachineBearer(request),
                 bag: {},
                 route,
@@ -834,19 +853,11 @@ export function createApp(config: AppConfig = {}): App {
                 dispatch(scope, config, startedAt),
             )
 
-            return runInScope(scope, async () => {
-                // AU8 CSRF gate runs before the middleware onion — a rejected mutation never dispatches
-                // and gets no identity cookie. A crossOrigin-allowed origin is exempt from the gate.
-                const rejected = csrfReject(request, cors)
-                if (rejected !== undefined) return applyResponseHeaders(rejected)
-                let response: Response
-                try {
-                    response = await chain()
-                } catch (caught) {
-                    response = await handleUncaught(caught, config)
-                }
-                // C6-nav: translate a middleware short-circuit redirect into a soft-nav `{ redirect }`
-                // envelope so the client can follow it (the raw 3xx would be opaque to a fetch soft-nav).
+            // Translate a middleware short-circuit redirect into a soft-nav `{ redirect }` envelope (the
+            // raw 3xx would be opaque to a fetch soft-nav), then stamp the identity cookie, CORS, and
+            // trace headers. Runs for BOTH the normal response and an onError response — a throw here
+            // (gap: post-dispatch stamping) routes to onError via the outer catch.
+            const finalize = async (response: Response): Promise<Response> => {
                 if (info.kind === 'nav' && isSoftNav(request) && isRedirectResponse(response)) {
                     response = json(
                         { redirect: response.headers.get('location') ?? '', seed: {} },
@@ -854,13 +865,38 @@ export function createApp(config: AppConfig = {}): App {
                     )
                 }
                 await applyIdentityCookie(scope, response)
-                // Stamp CORS Allow-* headers for a crossOrigin RPC serving an allowed origin.
                 if (cors !== undefined) applyCors(cors, request, response)
-                // Correlate the response with the trace: `traceresponse` (W3C Trace Context Level 2) is
-                // the response-side header; keep echoing `traceparent` for callers that read it.
                 if (scope.traceparent !== undefined) {
                     response.headers.set('traceparent', scope.traceparent)
                     response.headers.set('traceresponse', scope.traceparent)
+                }
+                return response
+            }
+
+            return runInScope(scope, async () => {
+                // The whole request lifecycle — CSRF gate, dispatch, and post-dispatch stamping — runs
+                // inside one try so ANY throw is routed to onError in request scope (not just a throw
+                // from the middleware/dispatch chain). A deferred identity-resolution failure surfaces
+                // here too. The onError response is itself finalized (stamped); if THAT stamping throws,
+                // the response is returned bare rather than recursing.
+                let response: Response
+                try {
+                    if (scopeError !== undefined) throw scopeError
+                    // AU8 CSRF gate runs before the middleware onion — a rejected mutation never
+                    // dispatches and gets no identity cookie. A crossOrigin-allowed origin is exempt.
+                    const rejected = csrfReject(request, cors)
+                    if (rejected !== undefined) return applyResponseHeaders(rejected)
+                    response = await finalize(await chain())
+                } catch (caught) {
+                    response = await handleUncaught(caught, config)
+                    try {
+                        response = await finalize(response)
+                    } catch (finalizeError) {
+                        log.channel('abide:router').error(
+                            'failed to finalize error response:',
+                            finalizeError,
+                        )
+                    }
                 }
                 return applyResponseHeaders(response)
             }) as Promise<Response>

@@ -30,7 +30,7 @@ afterAll(async () => {
 
 describe('serve — boots a file-based project on a real port', () => {
     test('SSR page and RPC respond over real HTTP', async () => {
-        const app = await serve(FIXTURE_DIR, {})
+        const app = await serve(FIXTURE_DIR, { port: 0 })
         running.push(app)
 
         expect(app.url).toMatch(/^http:\/\/localhost:\d+$/)
@@ -47,16 +47,32 @@ describe('serve — boots a file-based project on a real port', () => {
     })
 
     test('non-dev mode does not inject the live-reload snippet', async () => {
-        const app = await serve(FIXTURE_DIR, {})
+        const app = await serve(FIXTURE_DIR, { port: 0 })
         running.push(app)
         const html = await (await fetch(`${app.url}/`)).text()
         expect(html).not.toContain('__abide_dev_reload')
+    })
+
+    test('dev hops to the next open port when the requested one is taken', async () => {
+        // Hold a fixed port with a throwaway server, then ask dev for that same port.
+        const held = 34567
+        const blocker = Bun.serve({ port: held, fetch: () => new Response('busy') })
+        try {
+            const app = await serve(FIXTURE_DIR, { dev: true, port: held })
+            running.push(app)
+            const boundPort = Number(new URL(app.url).port)
+            // dev must have moved past the busy port, landing on a higher, free one.
+            expect(boundPort).toBeGreaterThan(held)
+            expect((await fetch(`${app.url}/`)).status).toBe(200)
+        } finally {
+            blocker.stop(true)
+        }
     })
 })
 
 describe('serve dev — live-reload wiring', () => {
     test('dev mode injects the live-reload snippet into served HTML', async () => {
-        const app = await serve(FIXTURE_DIR, { dev: true })
+        const app = await serve(FIXTURE_DIR, { dev: true, port: 0 })
         running.push(app)
         const html = await (await fetch(`${app.url}/`)).text()
         expect(html).toContain('id="__abide-dev-reload"')

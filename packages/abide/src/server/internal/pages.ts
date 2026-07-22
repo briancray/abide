@@ -13,6 +13,7 @@
 // — as `{ reads: [{ name, args, value }] }`, each value trimmed to its output schema — so the client
 // replays them from cache instead of re-fetching on hydration. An empty seed serialises to `{}`.
 
+import { encode } from '../../shared/internal/codec.ts'
 import type { CacheContext } from '../../shared/internal/context.ts'
 import { getContext, runInContext } from '../../shared/internal/context.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
@@ -262,11 +263,14 @@ export interface StreamHandle {
 // The hydration seed payload. Empty (`{}`) when the page resolved no reads and declared no state.
 export interface HydrationSeed {
     reads?: SeedRead[]
-    // Recorded `state(initial)` initials, in call order, so the client seeds each cell with the same
-    // value the server rendered (decision 10). Present only when the page declared state. Values must be
-    // JSON-serializable (the seed contract); a non-serializable initial is recorded as `null` rather
-    // than crashing the render.
-    states?: unknown[][]
+    // Recorded `state(initial)` initials, grouped per component in call order, so the client seeds each
+    // cell with the same value the server rendered (decision 10). Present only when the page declared
+    // state. These are hydrated NON-RPC values, so — unlike the JSON-only RPC `reads`/`streams` — the
+    // whole `unknown[][]` bucket structure is serialized with the rich value codec (`encode`), preserving
+    // Date/Map/Set/BigInt/TypedArray and shared/circular references across the record. The field holds
+    // that one `encode(...)` string; the client `decode`s it. A codec-unsupported initial (function/
+    // symbol/class instance) is encoded as `null` rather than crashing the render (lossy mode).
+    states?: string
     // Attachable `{#for await}` handoff records (§5). Present only when the page streamed a known-RPC
     // source; the client adopts/resumes each instead of re-invoking the source on hydrate.
     streams?: StreamHandle[]
@@ -310,8 +314,9 @@ export function collectSeed(config: AppConfig): HydrationSeed {
     const recorded = getContext().states as unknown as unknown[][]
     const seed: HydrationSeed = {}
     if (reads.length > 0) seed.reads = reads
-    if (recorded.some((bucket) => bucket.length > 0))
-        seed.states = recorded.map((bucket) => bucket.map(jsonSafeState))
+    // Encode the whole bucket structure once (lossy: an unsupported initial → `null` node, never a throw)
+    // so the rich codec carries non-RPC state initials the JSON seed used to flatten to `null`.
+    if (recorded.some((bucket) => bucket.length > 0)) seed.states = encode(recorded, true)
     // Attachable `{#for await}` handoffs recorded during this render (§5). Values/args are JSON-safed
     // like state initials — a non-serializable entry drops to `null` rather than crashing the seed. The
     // decoded values leak nothing the SSR HTML did not already paint.

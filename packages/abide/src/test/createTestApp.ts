@@ -297,8 +297,13 @@ export async function createTestApp(config: TestAppConfig = {}): Promise<TestApp
     const stop =
         runLifecycle && loaded.onStop !== undefined
             ? async (): Promise<void> => {
-                  await loaded.onStop?.(rawStop)
-                  if (!stopped) await rawStop()
+                  // A hook that throws (or returns without calling stop()) still gets the backstop,
+                  // so teardown always completes; the original error is re-thrown for the caller.
+                  try {
+                      await loaded.onStop?.(rawStop)
+                  } finally {
+                      if (!stopped) await rawStop()
+                  }
               }
             : rawStop
 

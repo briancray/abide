@@ -7,15 +7,23 @@
 // unchanged by this PR; only recording is added.
 
 import { expect, test } from 'bun:test'
+import { decode } from '../shared/internal/codec.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { parseSoftNav } from '../test/parseSoftNav.ts'
 
-function readSeedFromDocument(html: string): { reads?: unknown[]; states?: unknown[] } {
+function readSeedFromDocument(html: string): { reads?: unknown[]; states?: string } {
     const match = html.match(/<script type="application\/json" id="__abide-seed">(.*?)<\/script>/s)
     expect(match).not.toBeNull()
     const json = match?.[1]
     if (json === undefined) throw new Error('missing __abide-seed script in document HTML')
     return JSON.parse(json)
+}
+
+// `seed.states` rides the wire as the rich-codec encoding of the per-component buckets — decode it back
+// to the `unknown[][]` the assertions read (pages.ts / seededState.ts).
+function decodeStates(states: string | undefined): unknown[][] {
+    if (states === undefined) throw new Error('seed.states missing')
+    return decode(states) as unknown[][]
 }
 
 // The reactive text leaf renders as `<p>VALUE<!----></p>` (the `<!---->` is the client-skeleton anchor).
@@ -38,15 +46,15 @@ test('SSR records a non-deterministic state initial into #__abide-seed, matching
     const seed = readSeedFromDocument(html)
 
     // Exactly one state → one recorded initial.
-    expect(Array.isArray(seed.states)).toBe(true)
-    const states = seed.states
-    if (states === undefined) throw new Error('seed.states missing')
+    expect(typeof seed.states).toBe('string')
+    const states = decodeStates(seed.states)
     // Per-component buckets: one page bucket (0) holding the one recorded initial.
     expect(states.length).toBe(1)
-    expect(typeof states[0][0]).toBe('number')
+    const bucket = states[0]
+    expect(typeof bucket?.[0]).toBe('number')
     // The recorded value is EXACTLY what the server rendered with (no desync): the seed value equals the
     // value the `{t}` leaf produced in the HTML.
-    expect(String(states[0][0])).toBe(readRenderedValue(html))
+    expect(String(bucket?.[0])).toBe(readRenderedValue(html))
 
     await app.stop()
 })
@@ -59,8 +67,8 @@ test('the soft-nav envelope carries the recorded state initials', async () => {
     })
 
     const response = await app.fetch('/', { headers: { 'Abide-Nav': '/other' } })
-    const envelope = (await parseSoftNav(response)) as { seed: { states?: unknown[] } }
-    expect(envelope.seed.states).toEqual([[1, 'two']])
+    const envelope = (await parseSoftNav(response)) as { seed: { states?: string } }
+    expect(decodeStates(envelope.seed.states)).toEqual([[1, 'two']])
 
     await app.stop()
 })
@@ -85,16 +93,17 @@ test('state initials are recorded RAW (pre-transform) so the client re-applies t
     const seed = readSeedFromDocument(html)
     // Raw initial (5) is recorded, NOT the post-transform cell value (6) the server rendered — the client
     // calls `state(5, transform)` and re-applies the transform to reach 6.
-    expect(seed.states).toEqual([[5]])
+    expect(decodeStates(seed.states)).toEqual([[5]])
     expect(readRenderedValue(html)).toBe('6')
 
     await app.stop()
 })
 
-test('a non-JSON-serializable state initial is recorded as null rather than crashing the render', async () => {
+test('a rich (non-JSON) state initial round-trips through the value codec', async () => {
     const app = await createTestApp({
         pages: {
-            // BigInt is not JSON-serializable; recording it must not throw during seed serialisation.
+            // BigInt is not JSON-serializable, but the rich value codec carries it — the seed preserves it
+            // instead of flattening to null (the JSON-only seed's old behaviour).
             '/': "<script>import { state } from 'abide/shared/state'; let big = state(1n); let ok = state(7)</script><p>{ok}</p>",
         },
     })
@@ -102,8 +111,24 @@ test('a non-JSON-serializable state initial is recorded as null rather than cras
     const response = await app.fetch('/')
     expect(response.status).toBe(200)
     const seed = readSeedFromDocument(await response.text())
-    // Ordinal preserved: the non-serializable slot becomes null, the following slot keeps its value.
-    expect(seed.states).toEqual([[null, 7]])
+    expect(decodeStates(seed.states)).toEqual([[1n, 7]])
+
+    await app.stop()
+})
+
+test('a codec-unsupported state initial (class instance) drops to null rather than crashing', async () => {
+    const app = await createTestApp({
+        pages: {
+            // A class instance has no revival path; lossy encoding records it as null so the render never
+            // crashes, and the following slot keeps its value (ordinal preserved).
+            '/': "<script>import { state } from 'abide/shared/state'; let bad = state(new (class {})()); let ok = state(7)</script><p>{ok}</p>",
+        },
+    })
+
+    const response = await app.fetch('/')
+    expect(response.status).toBe(200)
+    const seed = readSeedFromDocument(await response.text())
+    expect(decodeStates(seed.states)).toEqual([[null, 7]])
 
     await app.stop()
 })

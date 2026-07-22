@@ -13,12 +13,12 @@ const boom = GET(() => {
     throw new Error('boom secret detail')
 })
 
-async function fetchBoom(onError?: AppConfig['onError']): Promise<Response> {
+async function fetchBoom(onError?: AppConfig['onError'], init?: RequestInit): Promise<Response> {
     const app = createApp(
         onError !== undefined ? { routes: { boom }, onError } : { routes: { boom } },
     )
     try {
-        return await fetch(`${app.origin}/__abide/rpc/boom`)
+        return await fetch(`${app.origin}/__abide/rpc/boom`, init)
     } finally {
         await app.stop()
     }
@@ -58,5 +58,17 @@ describe('onError', () => {
         expect(response.status).toBe(500)
         const body = (await response.json()) as Record<string, unknown>
         expect(body.message).toBe('failed GET authed=false')
+    })
+
+    // Regression: the onError response is finalized like a normal one — a throw during the request
+    // must not skip the post-dispatch header stamping (identity cookie / CORS / trace). Prove it with
+    // trace: an incoming traceparent should be echoed back on the error response too.
+    test('the onError response is still stamped with the post-dispatch trace headers', async () => {
+        const traceparent = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'
+        const response = await fetchBoom(() => error(503, 'down'), {
+            headers: { traceparent },
+        })
+        expect(response.status).toBe(503)
+        expect(response.headers.get('traceresponse')).toBe(traceparent)
     })
 })

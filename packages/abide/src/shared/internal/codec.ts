@@ -124,14 +124,18 @@ function numberToToken(value: number): string {
 
 type Node = unknown[]
 
-export function encode(value: unknown): string {
+// `lossy` (used by the hydration-seed path) makes an encode-unsupported value — a symbol, function, or
+// class instance — encode as a `null` node instead of throwing, so recording a page's state initials can
+// never crash the render (the seed-contract "drop to null" guarantee). The strict default (throw) still
+// guards any caller that must reject unrepresentable values.
+export function encode(value: unknown, lossy = false): string {
     const heap: Node[] = []
     const seen = new Map<object, number>()
-    const root = encodeNode(value, heap, seen)
+    const root = encodeNode(value, heap, seen, lossy)
     return JSON.stringify({ root, heap })
 }
 
-function encodeNode(value: unknown, heap: Node[], seen: Map<object, number>): Node {
+function encodeNode(value: unknown, heap: Node[], seen: Map<object, number>, lossy: boolean): Node {
     if (value === null) return ['null']
     const kind = typeof value
     if (kind === 'undefined') return ['u']
@@ -139,8 +143,14 @@ function encodeNode(value: unknown, heap: Node[], seen: Map<object, number>): No
     if (kind === 'number') return encodeNumber(value as number)
     if (kind === 'boolean') return ['b', value]
     if (kind === 'bigint') return ['big', (value as bigint).toString()]
-    if (kind === 'symbol') throw new TypeError('encode: symbols are not supported')
-    if (kind === 'function') throw new TypeError('encode: functions are not supported')
+    if (kind === 'symbol') {
+        if (lossy) return ['null']
+        throw new TypeError('encode: symbols are not supported')
+    }
+    if (kind === 'function') {
+        if (lossy) return ['null']
+        throw new TypeError('encode: functions are not supported')
+    }
 
     const object = value as object
     const existing = seen.get(object)
@@ -149,11 +159,16 @@ function encodeNode(value: unknown, heap: Node[], seen: Map<object, number>): No
     const index = heap.length
     seen.set(object, index)
     heap.push([]) // reserve slot before recursing so cycles resolve to this index
-    heap[index] = encodeObjectLike(object, heap, seen)
+    heap[index] = encodeObjectLike(object, heap, seen, lossy)
     return ['ref', index]
 }
 
-function encodeObjectLike(object: object, heap: Node[], seen: Map<object, number>): Node {
+function encodeObjectLike(
+    object: object,
+    heap: Node[],
+    seen: Map<object, number>,
+    lossy: boolean,
+): Node {
     if (object instanceof Date) {
         const time = object.getTime()
         return ['date', Number.isNaN(time) ? 'NaN' : time]
@@ -171,7 +186,7 @@ function encodeObjectLike(object: object, heap: Node[], seen: Map<object, number
     if (Array.isArray(object)) {
         const elements: Node[] = []
         for (let i = 0; i < object.length; i++) {
-            elements.push(encodeNode(object[i], heap, seen))
+            elements.push(encodeNode(object[i], heap, seen, lossy))
         }
         return ['arr', elements]
     }
@@ -179,19 +194,23 @@ function encodeObjectLike(object: object, heap: Node[], seen: Map<object, number
     if (object instanceof Map) {
         const entries: [Node, Node][] = []
         for (const [entryKey, entryValue] of object) {
-            entries.push([encodeNode(entryKey, heap, seen), encodeNode(entryValue, heap, seen)])
+            entries.push([
+                encodeNode(entryKey, heap, seen, lossy),
+                encodeNode(entryValue, heap, seen, lossy),
+            ])
         }
         return ['map', entries]
     }
 
     if (object instanceof Set) {
         const elements: Node[] = []
-        for (const element of object) elements.push(encodeNode(element, heap, seen))
+        for (const element of object) elements.push(encodeNode(element, heap, seen, lossy))
         return ['set', elements]
     }
 
     const prototype = Object.getPrototypeOf(object)
     if (prototype !== Object.prototype && prototype !== null) {
+        if (lossy) return ['null']
         throw new TypeError(
             `encode: unsupported value of type ${object.constructor?.name ?? 'unknown'} (class instances have no revival path)`,
         )
@@ -200,7 +219,7 @@ function encodeObjectLike(object: object, heap: Node[], seen: Map<object, number
     const entries: [string, Node][] = []
     const record = object as Record<string, unknown>
     for (const objectKey of Object.keys(record)) {
-        entries.push([objectKey, encodeNode(record[objectKey], heap, seen)])
+        entries.push([objectKey, encodeNode(record[objectKey], heap, seen, lossy)])
     }
     return ['obj', entries]
 }
@@ -261,6 +280,11 @@ function buildShell(node: Node): unknown {
             const buffer = base64ToArrayBuffer(node[2] as string)
             return new Constructor(buffer as ArrayBuffer)
         }
+        // A reference-typed value dropped by lossy encoding (an unsupported class instance) was interned
+        // before its prototype was known, so its reserved heap slot holds a `null` node. Resolve it to
+        // null; `fillShell` leaves it untouched.
+        case 'null':
+            return null
         default:
             throw new TypeError(`decode: unexpected heap node tag ${tag}`)
     }
@@ -331,16 +355,20 @@ function decodeNumber(payload: unknown): number {
 }
 
 // ---------------------------------------------------------------------------
-// base64 helpers (Bun's global Buffer)
+// base64 helpers (isomorphic: `atob`/`btoa` are web-standard globals present in Bun AND the browser —
+// `decode` now runs client-side during hydration, where Bun's `Buffer` does not exist)
 // ---------------------------------------------------------------------------
 
 function bytesToBase64(bytes: Uint8Array): string {
-    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64')
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i] as number)
+    return btoa(binary)
 }
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const source = Buffer.from(base64, 'base64')
-    const buffer = new ArrayBuffer(source.byteLength)
-    new Uint8Array(buffer).set(source)
+    const binary = atob(base64)
+    const buffer = new ArrayBuffer(binary.length)
+    const view = new Uint8Array(buffer)
+    for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i)
     return buffer
 }
