@@ -116,8 +116,9 @@ navigation**.
 3. **`route()` is the single isomorphic reactive accessor** (FD2; `page` is retired) —
    `route()` → `{ kind, name, params, url, navigating }`, derived from the request and usable
    in both middleware (all kinds) and templates. Reading `route().params.id` subscribes;
-   same-route param change re-renders dependents without full remount (the seeds-only mode,
-   C6-nav). `navigating` is inert server-side; for `rpc` kind, `params` is the args object.
+   same-route param change re-renders dependents without full remount (the whole nav chain is
+   kept alive — C6.3, C6-nav). `navigating` is inert server-side; for `rpc` kind, `params` is
+   the args object.
 4. **First load = full SSR (§5/§6) + hydrate (C2). Subsequent same-origin nav = client-side
    (History API), but every nav round-trips the server (C6-nav).**
 5. **No separate loader convention.** Page data = in-template RPC reads (C3), which SSR-
@@ -127,20 +128,26 @@ navigation**.
 ### C6-nav. Per-navigation server round-trip
 
 **Every nav hits the server so the app middleware chain runs (auth/log/redirect).** One
-server render/read path serves **three emission modes**, reconciling remount vs
-state-preserved:
+server render/read path serves **three nav shapes**, each keeping as much of the live chain
+alive as it soundly can (remount only the part that actually diverges):
 
 - **First load** (no `Abide-Nav` header — hard load / refresh / crawler / pasted link) →
   full SSR **HTML + §5 seeds**, then hydrate (C2).
-- **Cross-route nav** (destination is a different page/layout) → server-driven **HTML** for
-  the diverging outlet down; the client swaps that outlet DOM and runs the C2 attach pass.
-  State below the divergence is naturally new — this is the **remount** case.
-- **Same-route param nav** (`/users/1` → `/users/2`, same page, different `[id]`) →
-  **seeds-only mode**: the server round-trip runs the middleware chain and re-executes **only
-  the param-dependent reads**, streaming **§5 cache seeds and NO outlet HTML**. The client
-  **keeps the component instance**; `route().params` (a signal) updates; param-keyed reads
-  update **fine-grained** (surgical DOM patch — no swap, no re-hydration, local `state`
-  preserved). This is the **state-preserved** case (C6.3).
+- **Same-route param/query nav** (`/users/1` → `/users/2`, same page pattern, different
+  `[id]`/query) → **whole chain kept alive (C6.3).** The client republishes `route()`
+  optimistically and lets `route()`-driven bindings and param-keyed reads **re-fire reactively
+  in place** — no dispose, no DOM swap, no re-hydration, so local `state`, scroll, focus, and
+  element state are all preserved. The server round-trip still happens (the `Abide-Nav` fetch)
+  but serves only as a **background middleware/redirect confirm**: if middleware short-circuits
+  the client follows the `{redirect}`; otherwise the streamed body is discarded (the kept
+  page's reads have already re-fetched reactively). Reads-only seed replay to fold that
+  re-fetch back onto the one round-trip is a possible future optimization, not shipped.
+- **Cross-route nav** (destination is a different page pattern) → the client keeps every
+  **outer layout it SHARES with the destination alive** (the longest common layout prefix —
+  `sharedLayoutDepth`, the client mirrors it) and **grafts + claims only the diverging suffix**
+  into the innermost kept layout's outlet. A fully-disjoint route (no shared layout) swaps the
+  whole outlet. State in the kept prefix is preserved; the diverging suffix is naturally new —
+  this is the scoped **remount** case (C6.2).
 
 Mechanism:
 
@@ -148,31 +155,31 @@ Mechanism:
   and single client attach path (hydrate). Rejected alternative (B: hook-only + client
   render) would create a second, client render path — against dev/build consistency.
 - **Request:** the nav requests the **destination URL** (`GET /users/2`) with a header
-  `Abide-Nav: <current-route>`. The header (a) marks it a soft-nav → return fragment, not
-  full document; (b) carries the current route → server renders only from the **first
-  diverging layout/outlet down** (persisted layouts not re-rendered). No header (first
-  load / hard refresh / crawler / pasted link) → full document. Server sends
-  **`Vary: Abide-Nav`** so caches/CDN key the two response shapes separately.
-- **Response (streamed, interleaved):** (1) nav-control metadata — a **structured redirect
-  instruction** (client updates `route()` + re-navigates, not a blind 302) or the resolved
-  new `route()`; (2) for first-load/cross-route, the changed outlet subtree as **HTML**
-  (out-of-order, §6) — same format as first load, minus the persisted shell, and **omitted in
-  seeds-only param nav**; (3) the §5 `<script type="application/json">` cache seeds so new
-  reads don't refetch.
-- **Client:** apply nav-control → (cross-route) swap outlet DOM with streamed HTML and run the
-  **same C2 attach/hydrate pass** over the new subtree, or (same-route param) keep the instance
-  and let the seeded param-keyed reads patch fine-grained → seed cache either way. A nav to a
-  not-yet-loaded route fetches its code-split **client chunk in parallel** with the HTML/seeds
-  (HTML is inert until the chunk attaches). Accepted cost: each nav ships the server response +
-  (if new) the route chunk — more bytes/CPU than data-only SPA nav, the price of the
+  `Abide-Nav: <current-route path>`. The header (a) marks it a soft-nav → return a JSONL frame
+  stream, not a full document; (b) carries the current route → the server computes
+  `sharedLayoutDepth(from, to)` (the longest common layout prefix) and renders **only the
+  diverging suffix** `levels.slice(sharedLevels)` (the shared outer layouts are not
+  re-rendered). No header (first load / hard refresh / crawler / pasted link) → full document.
+  Server sends **`Vary: Abide-Nav`** so caches/CDN key the two response shapes separately.
+- **Response (a streamed JSONL frame stream, §PR4):** `{kind:"shell", html, url, sharedLevels}`
+  first — the diverging-suffix HTML plus how many outer layouts the client is keeping; then a
+  patch frame per streamed subtree as it resolves (`fill`/`append`/`complete`, keyed by slot
+  `id`, §6 out-of-order); then `{kind:"seed", seed}` last (§5 cache seeds so the suffix's reads
+  don't re-fetch). A middleware short-circuit instead arrives as a JSON `{redirect}` envelope
+  (checked before the stream) — a structured redirect the client re-navigates, not a blind 302.
+- **Client:** a **monotonic newest-wins nav token** stamps each nav; a superseded response
+  (a redirect or graft from an older nav) is dropped before it can touch the DOM. Then, by
+  shape: **same-route param/query** → republish `route()` and let reactive reads re-fire in
+  place (the fetch is only the background middleware/redirect confirm above); **cross-route** →
+  read the frame stream, verify the shell's `sharedLevels` matches the depth the client is
+  keeping, **graft** the suffix HTML into the innermost kept layout's outlet, fill each patch,
+  then **claim** (the same C2 attach/hydrate pass, scoped to the suffix). A nav to a
+  not-yet-loaded route fetches its code-split **client chunk in parallel** with the frame stream
+  (its `levels`/`prefixes` drive the shared-depth math). Nav **never dead-ends**: a shell/depth
+  disagreement or a claim mismatch degrades to a scoped fresh-mount of the suffix, and a
+  network/parse failure to a hard `location.href` load. Accepted cost: each nav ships the server
+  response + (if new) the route chunk — more bytes/CPU than data-only SPA nav, the price of the
   server-middleware guarantee.
-- **Seeds-only mechanism = server-produces-seeds.** For param nav the server runs the
-  component's read graph and **discards the HTML** (SSR-minus-emission), streaming just the
-  seeds. Chosen over client-drives-reads because a middleware round-trip is mandatory every nav
-  anyway (C6.4): server-produces-seeds folds the data onto that one request (1 round-trip,
-  reads next to the DB) vs client-drives (1 middleware request + N read fetches). **DOM cost is
-  identical either way** (fine-grained patch of only param-dependent bindings); the win is fewer
-  requests and reads co-located with data.
 - **The middleware chain = `src/app.ts` `export const middleware = [...]`** (FD1), running on
   **every server-touching request except static assets** (RPC and nav alike, §13.4 uniform
   auth). Each entry is onion middleware `(next) => Response` (`async (next) => { … return await

@@ -117,11 +117,17 @@ still hydrates). Refs: `ui/internal/runtime.ts` (`unwrapStreamSlot`), `ui/intern
 
 ### PR4 — Streaming soft-nav (true incremental) ✅ LANDED
 Decision (2) TRUE INCREMENTAL. Soft-nav's response is now a **JSONL frame stream** (not the buffered
-JSON `{html, seed}` envelope): `{kind:"shell", html, url}` first, then `{kind:"patch", id, html}` per
-streamed subtree as it resolves, then `{kind:"seed", seed}` last (`server/internal/pages.ts
-streamSoftNav`, `content-type: application/jsonl`). `navigate.ts softLoad` reads the frames
+JSON `{html, seed}` envelope): `{kind:"shell", html, url, sharedLevels}` first, then a patch frame per
+streamed subtree as it resolves (`{kind:"fill"|"append", id, html}` / `{kind:"complete", id}`, keyed by
+slot `id`), then `{kind:"seed", seed}` last (`server/internal/pages.ts streamSoftNav`, `content-type:
+application/jsonl`). **`sharedLevels`** (C6.2, added with the layout keep-alive work) = how many outer
+layouts the client is keeping alive: the `shell` `html` is then only the diverging suffix, and the
+client grafts it into the innermost kept layout's outlet (not `#__abide-app`) rather than swapping the
+whole app root. `sharedLevels: 0` (no shared layout / first-diverging is the root) grafts the full shell
+into `#__abide-app` as before. `navigate.ts softLoad` reads the frames
 PROGRESSIVELY (`readFrames` — decode + split on `\n`, parse each line as it completes): swaps the shell
-into `#__abide-app` immediately (a slow read shows its `<abide-slot>` fallback), fills each placeholder
+into the kept outlet (or `#__abide-app` when `sharedLevels: 0`) immediately (a slow read shows its
+`<abide-slot>` fallback), fills each placeholder
 as its patch frame arrives (`fillSlot` — a `<template>`.innerHTML parse + `replaceChildren`, i.e. the
 same DOM op the first-load move-script does but in JS, since a `fetch`ed body's inline scripts don't
 auto-run), then once the stream ends hydrates the assembled DOM (the SAME `mountPathname` path — PR3
