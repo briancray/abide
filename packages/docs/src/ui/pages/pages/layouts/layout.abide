@@ -6,6 +6,13 @@
   // child) — the framework grafts only the diverging page into the <slot/> below, never rebuilding this
   // layout. Increment it, navigate around this section, and watch it hold.
   let count = state(0)
+
+  // Proof this layout was SERVER-rendered and hydration CLAIMED it (rather than re-rendering it on the
+  // client): the initializer runs where there's no `document` — the SERVER — so it captures "server",
+  // that value is SEEDED into the SSR HTML, and on hydrate the seeded value is REPLAYED (the initializer
+  // is NOT re-run). So the client shows the server's verdict. A failed claim (create-fallback) would
+  // re-run the initializer in the browser and read "client" — so "server" here means SSR + a clean claim.
+  let renderedOn = state(typeof document === "undefined" ? "server" : "client")
 </script>
 
 <section class="rounded border border-indigo-300 bg-indigo-50 p-4" data-testid="section-layout">
@@ -13,6 +20,7 @@
     <strong>section layout</strong>
     <span>persistent count: <b data-testid="layout-count">{count}</b></span>
     <button data-testid="layout-inc" onclick={() => count++}>+1</button>
+    <span class="ml-auto rounded bg-white px-2 py-0.5 text-xs" data-testid="ssr-proof">rendered on: <b data-testid="ssr-origin">{renderedOn}</b></span>
   </div>
   <div class="mt-3 rounded border border-slate-200 bg-white p-3">
     <slot/>

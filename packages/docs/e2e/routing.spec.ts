@@ -209,6 +209,23 @@ test('a section layout wraps every page in its folder, over a soft nav', async (
     await expect(page.getByTestId('section-layout')).toBeVisible()
 })
 
+test('the section layout proves it was server-rendered AND cleanly hydrated (not re-rendered)', async ({
+    page,
+}) => {
+    // The badge value is a SEEDED `state(typeof document === 'undefined' ? 'server' : 'client')`: the
+    // initializer reads "server" only where there's no `document` — i.e. during SSR — and that value is
+    // seeded into the HTML, then REPLAYED (not re-run) on hydrate. So:
+    // 1) It must be present as "server" in the RAW SSR bytes — the server rendered it.
+    const raw = await (await page.request.get('/pages/layouts')).text()
+    expect(raw).toContain('data-testid="ssr-origin">server')
+
+    // 2) After hydration it must STILL read "server". Hydration CLAIMED the server node and replayed the
+    // seed; a failed claim (create-fallback) would re-run the initializer in the browser and flip it to
+    // "client". So a stable "server" is a live proof of SSR + a clean claim — not seed-masked.
+    await page.goto('/pages/layouts')
+    await expect(page.getByTestId('ssr-origin')).toHaveText('server')
+})
+
 // C6.2 layout PERSISTENCE: a cross-route soft-nav between two pages sharing a layout keeps the shared
 // layout instances ALIVE (only the diverging page suffix is grafted + claimed). Proven by pinning a
 // DOM attribute on the kept layout node — a full rebuild would drop it.

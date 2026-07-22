@@ -16,11 +16,11 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 ## Coverage summary (verify phase)
 
 - **Total capabilities in this manifest: 135** (~91 browser-facing PW/PW+RT, ~44 runtime-only RT).
-- **Playwright suite: 20 spec files, 134 tests — ALL PASSING (serial).** They drive the real docs app
+- **Playwright suite: 20 spec files, 135 tests — ALL PASSING (serial).** They drive the real docs app
   (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
   binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, and machine surfaces
   fetched from the browser.
-  - `rpc` (20), `bindings` (15), `routing` (14), `platform` (14), `control` (9), `sockets` (8),
+  - `rpc` (20), `bindings` (15), `routing` (15), `platform` (14), `control` (9), `sockets` (8),
     `reactivity` (8), `caching-cells` (7), `cache` (6), `caching-global` (5), `build-deploy` (5),
     `smoke` (4), `rpc-probes` (4), `bench` (4), `streaming` (3), `bench-client` (3), `uploads` (2),
     `styling` (1), `nav-perf` (1), `hydration` (1).
@@ -32,7 +32,7 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
   single read/mutation) gets a "Run again" button (`replayable`). Coupled capabilities that share one
   reactive signal (e.g. the reactivity chain, the verb mutations, the socket) live in one cohesive
   component so the shared behaviour — which the e2e asserts — is preserved.
-- **Runtime (`bun test`) suite in `packages/abide`: 1033 tests — ALL PASSING.** Covers the RT-only
+- **Runtime (`bun test`) suite in `packages/abide`: 1072 tests — ALL PASSING.** Covers the RT-only
   capabilities (agent, CLI/build, `createTestApp`, RPC `opts` internals, template compiler units) and
   the browser-facing runtime primitives at the unit level.
 - Every capability marked `[x]` below with a Playwright note has a browser test; RT-only items are
