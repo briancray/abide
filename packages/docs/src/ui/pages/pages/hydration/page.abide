@@ -1,0 +1,70 @@
+<script module>
+  import HydrationProbe from "$ui/components/HydrationProbe.abide"
+  import streamSlow from "$server/rpc/streamSlow"
+  import rpcStreamJob from "$server/rpc/rpcStreamJob"
+
+  // Each scenario embeds a <HydrationProbe/> in a DIFFERENT block so you can eyeball, at a glance,
+  // whether every hydration path claimed the server DOM (GREEN "server") or re-rendered on the client
+  // (RED "client"). All green = the page SSR'd and hydrated correctly across every scenario.
+  const items = ["a", "b", "c"]
+</script>
+
+<main class="page">
+  <h1>Hydration health</h1>
+  <p class="lead">Every chip below is a <code>HydrationProbe</code> — a seeded <code>state</code> that reads <b>server</b> when its block was server-rendered and cleanly <em>claimed</em>, or <b>client</b> if that block re-rendered in the browser. A chip is <b class="text-green-700">green</b> when it matches what the block SHOULD do and <b class="text-red-700">red</b> when it doesn't. <strong>All green = correct hydration across every scenario.</strong> Reach this page by a hard load AND by clicking it in the sidebar (a soft-nav) — both must stay green. Note the last row: a <code>&#123;#for await&#125;</code> list re-renders on the client <em>by design</em> (its server paint is a discarded placeholder), so its chips correctly expect <b>client</b>.</p>
+
+  <section class="sample" id="scenarios">
+    <h2>One probe per hydration scenario</h2>
+    <div class="grid gap-3">
+      <div class="row" data-testid="scenario-static">
+        <span>Static element</span>
+        <HydrationProbe label="static"/>
+      </div>
+
+      <div class="row" data-testid="scenario-if">
+        <span><code>&#123;#if&#125;</code> branch</span>
+        {#if items.length > 0}
+          <HydrationProbe label="if-true"/>
+        {:else}
+          <HydrationProbe label="if-else"/>
+        {/if}
+      </div>
+
+      <div class="row" data-testid="scenario-for">
+        <span><code>&#123;#for&#125;</code> keyed list</span>
+        {#for item of items by item}
+          <HydrationProbe label={"for-" + item}/>
+        {/for}
+      </div>
+
+      <div class="row" data-testid="scenario-component">
+        <span>Nested component</span>
+        {#component Wrap(props)}
+          <span class="rounded border border-slate-200 px-2 py-1">{children()}</span>
+        {/component}
+        <Wrap>
+          <HydrationProbe label="in-component"/>
+        </Wrap>
+      </div>
+
+      <div class="row" data-testid="scenario-await">
+        <span><code>&#123;#await&#125;</code> streamed then-branch</span>
+        {#await streamSlow()}
+          <span data-testid="await-pending">streaming…</span>
+        {:then result}
+          <HydrationProbe label="await-then"/>
+          <small>runs: {result.runs}</small>
+        {/await}
+      </div>
+
+      <div class="row" data-testid="scenario-for-await">
+        <span><code>&#123;#for await&#125;</code> streamed list item</span>
+        <span class="feed">
+          {#for await step of rpcStreamJob({ steps: 3 })}
+            <HydrationProbe label={"chunk-" + step.step} expect="client"/>
+          {/for}
+        </span>
+      </div>
+    </div>
+  </section>
+</main>

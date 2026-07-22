@@ -1,0 +1,35 @@
+<script>
+  import { props } from "abide/ui/props"
+  import { state } from "abide/shared/state"
+
+  // A HYDRATION-CORRECTNESS probe. `origin` is a SEEDED state whose initializer reads "server" only
+  // where there is no `document` — i.e. during SSR. That value is seeded into the HTML and REPLAYED
+  // (never re-run) on hydrate, so a cleanly-CLAIMED block shows the server's verdict: "server". If the
+  // block this probe sits in create-fell-back (a hydration mismatch, or a streamed branch the client
+  // couldn't claim), the runtime re-runs this initializer in the browser and it reads "client".
+  //
+  // `expect` is what this block SHOULD read: "server" for a claiming block (the default), or "client"
+  // for a block that re-renders on the client BY DESIGN — a `{#for await}` list, whose server paint is
+  // a discarded placeholder (the client redraws it from the warmed cell). The chip is GREEN when origin
+  // matches `expect`, RED when it doesn't. So "all green" = every block hydrated the way it should; a
+  // RED chip = a block that claimed/re-rendered against its contract — a real regression to eyeball.
+  const { label = "", expect = "server" } = props()
+  let origin = state(typeof document === "undefined" ? "server" : "client")
+</script>
+
+<style>
+  .probe { display: inline-flex; gap: 0.35rem; align-items: baseline; border-radius: 0.25rem; padding: 0.1rem 0.45rem; font-size: 0.72rem; font-weight: 600; }
+  .probe-ok { background: #dcfce7; color: #166534; }
+  .probe-bad { background: #fee2e2; color: #991b1b; }
+  .probe small { font-weight: 500; opacity: 0.75; }
+</style>
+
+<span
+  class="probe"
+  class:probe-ok={origin === expect}
+  class:probe-bad={origin !== expect}
+  data-testid="probe"
+  data-origin={origin}
+  data-label={label}
+  data-ok={origin === expect ? "true" : "false"}
+><small>{label}</small> {origin === expect ? "✓" : "✗"} {origin}</span>
