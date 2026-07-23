@@ -705,6 +705,37 @@ function isShadowed(shadows: ShadowScope[], name: string, idx: number): boolean 
 // rewriteCellRefs — the crux
 // ---------------------------------------------------------------------------
 
+// Operators that cannot END (or, when leading a line, cannot START a fresh statement after) an
+// expression: a line break adjacent to one is a CONTINUATION, so JS ASI inserts no semicolon and the
+// RHS keeps going on the next line. Used to keep `rhsExtent` from truncating a multi-line RHS such as
+// `count = a +` ⏎ `  b` mid-expression (which emitted `count.write(a +)` with an orphaned `b`).
+const CONTINUATION_OPERATORS: Set<SyntaxKind> = new Set([
+    K.PlusToken,
+    K.MinusToken,
+    K.AsteriskToken,
+    K.SlashToken,
+    K.PercentToken,
+    K.AsteriskAsteriskToken,
+    K.AmpersandAmpersandToken,
+    K.BarBarToken,
+    K.QuestionQuestionToken,
+    K.AmpersandToken,
+    K.BarToken,
+    K.CaretToken,
+    K.LessThanToken,
+    K.GreaterThanToken,
+    K.LessThanEqualsToken,
+    K.GreaterThanEqualsToken,
+    K.EqualsEqualsToken,
+    K.ExclamationEqualsToken,
+    K.EqualsEqualsEqualsToken,
+    K.ExclamationEqualsEqualsToken,
+    K.DotToken,
+    K.QuestionDotToken,
+    K.EqualsToken,
+    K.EqualsGreaterThanToken,
+])
+
 // Extent of an assignment/compound RHS starting at token `start`; returns the last RHS token index.
 // Stops at a depth-0 comma/semicolon, an enclosing bracket close, or a statement-boundary line break.
 function rhsExtent(tokens: Tok[], start: number): number {
@@ -715,7 +746,15 @@ function rhsExtent(tokens: Tok[], start: number): number {
         const kind = t.kind
         if (depth === 0) {
             if (kind === K.CommaToken || kind === K.SemicolonToken) return j > start ? j - 1 : start
-            if (t.nl && j > start) return j - 1
+            // A line break is a statement boundary ONLY when neither side is a continuation operator —
+            // otherwise the expression continues onto the next line (JS ASI), so keep scanning.
+            if (
+                t.nl &&
+                j > start &&
+                !CONTINUATION_OPERATORS.has(tokenAt(tokens, j - 1).kind) &&
+                !CONTINUATION_OPERATORS.has(kind)
+            )
+                return j - 1
         }
         if (isOpen(kind)) depth++
         else if (isClose(kind)) {
@@ -818,7 +857,7 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
             if (
                 isPrefix &&
                 next &&
-                next.kind === K.Identifier &&
+                isIdentifierLike(next.kind) &&
                 cellNames.has(next.text) &&
                 isCellRef(i + 1)
             ) {
@@ -834,7 +873,7 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
             continue
         }
 
-        if (kind === K.Identifier && cellNames.has(t.text) && isCellRef(i)) {
+        if (isIdentifierLike(kind) && cellNames.has(t.text) && isCellRef(i)) {
             const name = t.text
             const next = tokens[i + 1]
             const nextKind = next?.kind

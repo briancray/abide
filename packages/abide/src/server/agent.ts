@@ -206,7 +206,13 @@ function awaitDecision(
 ): Promise<ApprovalDecision | typeof ABORTED> {
     const decision = policy.decide(request)
     if (signal === undefined) return decision
-    if (signal.aborted) return Promise.resolve(ABORTED)
+    if (signal.aborted) {
+        // Already aborted: we return ABORTED without awaiting `decision`, so attach a swallow handler —
+        // an approval transport that later rejects would otherwise be an unhandled rejection (process
+        // crash under strict unhandled-rejection modes).
+        void decision.catch(() => {})
+        return Promise.resolve(ABORTED)
+    }
     return new Promise<ApprovalDecision | typeof ABORTED>((resolve, reject) => {
         const onAbort = (): void => resolve(ABORTED)
         signal.addEventListener('abort', onAbort, { once: true })

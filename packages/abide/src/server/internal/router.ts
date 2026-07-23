@@ -97,10 +97,14 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
 
     const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
     const hasAbideHeader = request.headers.get('x-abide') !== null
+    // Compare the BASE media type (before any `;` parameters), never a substring: a cross-site simple
+    // request can smuggle `application/json` inside a spoofable parameter (e.g.
+    // `multipart/form-data; boundary=application/json`) and `.includes` would wrongly clear the gate.
     // NB (TODO #8): `multipart/form-data` is a CORS "simple" content type a cross-site <form> CAN
     // send, so it does NOT count as a non-simple shape here — a multipart mutation is admitted ONLY
     // via the `x-abide` header (which a cross-site form cannot set). CSRF is not weakened for uploads.
-    const hasNonSimpleShape = contentType.includes('application/json') || hasAbideHeader
+    const mediaType = contentType.split(';', 1)[0]?.trim() ?? ''
+    const hasNonSimpleShape = mediaType === 'application/json' || hasAbideHeader
     if (!hasNonSimpleShape) {
         return error(
             403,
@@ -621,7 +625,10 @@ async function dispatch(
         const maxBodySize = meta.options.maxBodySize
         if (maxBodySize !== undefined) {
             const contentLength = scope.request.headers.get('content-length')
-            if (contentLength !== null && Number(contentLength) > maxBodySize) {
+            // A finite, oversized declared length is rejected before buffering. A non-numeric or absent
+            // length (chunked bodies) can't be trusted, so the real guard is the post-buffer check below.
+            const declared = contentLength !== null ? Number(contentLength) : Number.NaN
+            if (Number.isFinite(declared) && declared > maxBodySize) {
                 return error(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
             }
         }
@@ -631,6 +638,11 @@ async function dispatch(
             args = await scope.request.formData()
         } else {
             const body = await scope.request.text()
+            // Enforce maxBodySize against the ACTUAL byte count too — a chunked or length-spoofed body
+            // slips past the Content-Length check above, so measure what we actually buffered.
+            if (maxBodySize !== undefined && Buffer.byteLength(body) > maxBodySize) {
+                return error(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
+            }
             args = body.length > 0 ? JSON.parse(body) : {}
         }
     }

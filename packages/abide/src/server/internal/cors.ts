@@ -86,8 +86,10 @@ export function preflightResponse(cors: NormalizedCors, request: Request): Respo
     const headers = new Headers({
         'access-control-allow-origin': allowOrigin,
         'access-control-allow-methods': cors.methods,
-        'access-control-allow-headers':
-            request.headers.get('access-control-request-headers') ?? cors.headers,
+        // Advertise the CONFIGURED allowlist, not a verbatim echo of the request's
+        // `Access-Control-Request-Headers` — echoing would grant whatever the caller asked for and
+        // make the `headers` option decorative. `cors.headers` is always set (explicit list or default).
+        'access-control-allow-headers': cors.headers,
         'access-control-max-age': String(cors.maxAge),
     })
     if (cors.credentials) headers.set('access-control-allow-credentials', 'true')

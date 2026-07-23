@@ -466,7 +466,10 @@ export function interpolate(
         anchor = close ?? end
         const saved = hydrateNode()
         hydrateSeek(nextSibling(end))
-        const disposer = value.mount(parent, close)
+        // Mount against `anchor` (= close ?? end), not raw `close`: a malformed/foreign-mutated DOM can
+        // leave `close` null, and most Mountables treat a null anchor as "append to end of parent",
+        // which would place the adopted subtree after later siblings. `anchor` keeps the fallback intact.
+        const disposer = value.mount(parent, anchor)
         hydrateSeek(saved)
         return disposer
     }
@@ -670,15 +673,18 @@ export function listen(element: Element, eventName: string, read: () => unknown)
 
 export function spread(element: Element, read: () => unknown): Disposer {
     let previousKeys: string[] = []
+    let previousHandlerKeys: string[] = []
     let primed = hydrating
     return effect(() => {
         const value = read()
         const nextKeys: string[] = []
+        const nextHandlerKeys: string[] = []
         if (value !== null && typeof value === 'object') {
             for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
                 if (typeof entry === 'function' && /^on[a-z]/.test(key)) {
                     // Event props attach unconditionally — free during the walk (decision 7).
                     ;(element as unknown as Record<string, unknown>)[key] = entry
+                    nextHandlerKeys.push(key)
                     continue
                 }
                 // Under hydration, skip re-applying attributes on the first pass (decision 9) but still
@@ -692,7 +698,14 @@ export function spread(element: Element, read: () => unknown): Disposer {
                 if (!nextKeys.includes(key)) element.removeAttribute(key)
             }
         }
+        // Event handlers are set as properties (not attributes), so a dropped one must be nulled out
+        // explicitly — removeAttribute won't clear it. Runs every pass (handlers attach every pass).
+        for (const key of previousHandlerKeys) {
+            if (!nextHandlerKeys.includes(key))
+                (element as unknown as Record<string, unknown>)[key] = null
+        }
         previousKeys = nextKeys
+        previousHandlerKeys = nextHandlerKeys
         primed = false
     })
 }
@@ -1467,8 +1480,12 @@ export function forBlock(
             }
         }
 
+        // Remove by ITEM IDENTITY, not by key: with a non-unique `by` key, two old items can share a
+        // key while only one was reused into `nextItems`. A key-based check (`!used.has(item.key)`)
+        // would spare BOTH, stranding the un-reused duplicate in the DOM (never updated, never disposed).
+        const kept = new Set(nextItems)
         for (const item of items) {
-            if (!used.has(item.key)) removeListItem(item)
+            if (!kept.has(item)) removeListItem(item)
         }
 
         // Reorder DOM to match nextItems (walk back-to-front, moving out-of-place ranges).

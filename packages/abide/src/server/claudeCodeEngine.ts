@@ -127,6 +127,11 @@ async function* streamTurn(
         else signal.addEventListener('abort', onAbort, { once: true })
     }
 
+    // Drain stderr concurrently and discard it. Nothing else reads it, so a chatty CLI (verbose
+    // warnings, a crash trace) would otherwise fill the OS pipe buffer, block the child's write, and
+    // hang the whole turn — the child depends on continuing to run for stdout to progress.
+    void drainToVoid(child.stderr)
+
     try {
         child.stdin?.write(prompt)
         child.stdin?.end()
@@ -297,6 +302,21 @@ function renderPrompt(
 
 function errorText(caught: unknown): string {
     return caught instanceof Error ? caught.message : String(caught)
+}
+
+// Read a stream to completion and discard it, so an unread pipe can never deadlock the child. Tolerant
+// of a null stream (a fake child in tests) and of the stream closing under us (child killed on abort).
+async function drainToVoid(stream: ReadableStream<Uint8Array> | null): Promise<void> {
+    if (stream === null) return
+    try {
+        const reader = stream.getReader()
+        for (;;) {
+            const { done } = await reader.read()
+            if (done) return
+        }
+    } catch {
+        // Stream errored/closed (e.g. the child was killed) — nothing left to drain.
+    }
 }
 
 // One decoded stream-json line. Only the fields this engine reads are typed; the CLI emits more.

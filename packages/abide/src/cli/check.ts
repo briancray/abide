@@ -21,7 +21,7 @@
 //   props are typed via each `.abide`'s `.d.ts` companion. NOT checked: quoted-attribute interpolation
 //   (`title="x {n}"`) and nested branch-local `<script>`s — only the top-level module + instance scripts.
 
-import { type Dirent, readdirSync, readFileSync } from 'node:fs'
+import { type Dirent, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FileSystem } from 'typescript/unstable/fs'
@@ -157,7 +157,17 @@ export async function check(dir: string): Promise<CheckResult> {
 
 export function findAbideFiles(dir: string): string[] {
     const found: string[] = []
+    // Guard against symlink cycles by tracking canonical (realpath) directories already walked.
+    const seenDirs = new Set<string>()
     const walk = (current: string): void => {
+        let real: string
+        try {
+            real = realpathSync(current)
+        } catch {
+            return
+        }
+        if (seenDirs.has(real)) return
+        seenDirs.add(real)
         let entries: Dirent[]
         try {
             entries = readdirSync(current, { withFileTypes: true })
@@ -166,7 +176,20 @@ export function findAbideFiles(dir: string): string[] {
         }
         for (const dirent of entries) {
             const full = join(current, dirent.name)
-            if (dirent.isDirectory()) {
+            // A symlink Dirent reports neither isDirectory() nor isFile() — stat the target so
+            // symlinked `.abide` files/dirs (common in monorepos) aren't silently skipped.
+            let isDir = dirent.isDirectory()
+            let isFile = dirent.isFile()
+            if (dirent.isSymbolicLink()) {
+                try {
+                    const target = statSync(full)
+                    isDir = target.isDirectory()
+                    isFile = target.isFile()
+                } catch {
+                    continue // broken symlink
+                }
+            }
+            if (isDir) {
                 if (
                     dirent.name === 'node_modules' ||
                     dirent.name === 'dist' ||
@@ -174,7 +197,7 @@ export function findAbideFiles(dir: string): string[] {
                 )
                     continue
                 walk(full)
-            } else if (dirent.isFile() && dirent.name.endsWith('.abide')) {
+            } else if (isFile && dirent.name.endsWith('.abide')) {
                 found.push(full)
             }
         }

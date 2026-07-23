@@ -37,14 +37,31 @@ Options:
   --no-dev                    scaffold: skip starting the dev server
   -h, --help                  show this help`
 
-// Pull `--port <n>` out of an argv tail; returns the parsed port or undefined.
+// Pull `--port <n>` out of an argv tail; returns the parsed port or undefined. Validates the same
+// range as the env-var path (integer, 0..65535) so an invalid `--port` fails cleanly instead of
+// flowing a garbage value into Bun.serve/findOpenPort.
 function parsePort(argv: string[]): number | undefined {
     const index = argv.indexOf('--port')
     if (index === -1) return undefined
     const raw = argv[index + 1]
     if (raw === undefined) return undefined
     const port = Number(raw)
-    return Number.isFinite(port) ? port : undefined
+    return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : undefined
+}
+
+// The first positional (non-flag) argument, skipping the value consumed by `--port`. Used by
+// `scaffold` to read the project <name> even when it follows `--port <n>`.
+function firstPositional(argv: string[]): string | undefined {
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i]
+        if (arg === undefined) continue
+        if (arg === '--port') {
+            i++ // skip the port value
+            continue
+        }
+        if (!arg.startsWith('-')) return arg
+    }
+    return undefined
 }
 
 // True unless the given boolean flag is present in argv (e.g. `--no-install`).
@@ -321,7 +338,7 @@ export async function main(argv: string[]): Promise<ServeResult | undefined> {
     }
 
     if (command === 'scaffold') {
-        const name = rest.find((arg) => !arg.startsWith('-'))
+        const name = firstPositional(rest)
         if (name === undefined || name.length === 0) {
             console.error('abide scaffold: missing project <name>.\n')
             console.info(USAGE)
@@ -331,7 +348,19 @@ export async function main(argv: string[]): Promise<ServeResult | undefined> {
         console.info(`abide scaffold — created ${root}`)
 
         if (flagAbsent(rest, '--no-git')) await runStep(['git', 'init'], root)
-        if (flagAbsent(rest, '--no-install')) await runStep(['bun', 'install'], root)
+        if (flagAbsent(rest, '--no-install')) {
+            const installed = await runStep(['bun', 'install'], root)
+            if (!installed) {
+                // Booting the dev server against an app whose deps (including abide) never installed
+                // fails deep in module resolution with a confusing stack — stop cleanly and signal failure.
+                console.error(
+                    'abide scaffold: `bun install` failed — skipping the dev server. Fix the install, then run `bun run dev`.',
+                )
+                process.exitCode = 1
+                console.info(`  cd ${name} && bun install && bun run dev`)
+                return undefined
+            }
+        }
 
         if (flagAbsent(rest, '--no-dev')) {
             const running = await serve(root, { dev: true, port: parsePort(rest) })

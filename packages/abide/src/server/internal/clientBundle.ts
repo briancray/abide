@@ -209,7 +209,12 @@ async function emitOne(
     modules: EmittedModule[],
     absolutePath?: string,
 ): Promise<number> {
-    const key = absolutePath !== undefined ? `path:${absolutePath}` : `src:${source}`
+    // Dedup key must include `sourceDir`: two byte-identical page/layout sources in DIFFERENT dirs
+    // resolve their relative CSS/component imports against different dirs, so keying on source text
+    // alone would make the second reuse the first's compiled module (wrong client bundle / hydration
+    // mismatch). A component keys by its absolute path (already dir-unique).
+    const key =
+        absolutePath !== undefined ? `path:${absolutePath}` : `src:${sourceDir ?? ''} ${source}`
     const existing = visited.get(key)
     if (existing !== undefined) return existing
 

@@ -148,7 +148,10 @@ export function buildPageScope(
     }
     replayReads(seed, imports)
     replayStreams(seed, imports, base ?? '')
-    const { reads: _reads, ...props } = seed
+    // Strip ALL internal seed sections — `reads`, `states`, and `streams` are hydration plumbing, not
+    // page props. Leaving `states`/`streams` in would make client `props()` return an encoded blob /
+    // handoff records while the server's `props()` returns `{}` — an isomorphism break + internal leak.
+    const { reads: _reads, states: _states, streams: _streams, ...props } = seed
     imports.route = route
     imports.url = url
     imports.navigate = navigate

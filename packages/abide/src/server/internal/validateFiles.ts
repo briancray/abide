@@ -21,32 +21,35 @@ export function validateFiles(formData: FormData, schema: FilesSchema): Standard
 
     const required = schema.required ?? []
     for (const name of required) {
-        const entry = formData.get(name)
-        if (!(entry instanceof File)) {
+        // A field can carry multiple files under one name (`<input multiple>`); require at least one.
+        if (!formData.getAll(name).some((entry) => entry instanceof File)) {
             issues.push({ message: `Missing required file: ${name}`, path: [name] })
         }
     }
 
     const properties = schema.properties ?? {}
     for (const [name, constraint] of Object.entries(properties)) {
-        const entry = formData.get(name)
-        // Presence is the `required` list's job; an absent optional field is fine.
-        if (!(entry instanceof File)) continue
-        if (constraint.maxSize !== undefined && entry.size > constraint.maxSize) {
-            issues.push({
-                message: `File "${name}" is ${entry.size} bytes, exceeds max ${constraint.maxSize}`,
-                path: [name],
-            })
-        }
-        if (constraint.accept !== undefined) {
-            const accepts = Array.isArray(constraint.accept)
-                ? constraint.accept
-                : [constraint.accept]
-            if (!accepts.some((accept) => mimeMatches(entry.type, accept))) {
+        // Validate EVERY file under this name, not just the first — `formData.get` returns only the
+        // first entry, so a multi-file field could smuggle an oversized/wrong-MIME file past the gate.
+        for (const entry of formData.getAll(name)) {
+            // Presence is the `required` list's job; an absent optional field is fine.
+            if (!(entry instanceof File)) continue
+            if (constraint.maxSize !== undefined && entry.size > constraint.maxSize) {
                 issues.push({
-                    message: `File "${name}" type "${entry.type}" is not accepted`,
+                    message: `File "${name}" is ${entry.size} bytes, exceeds max ${constraint.maxSize}`,
                     path: [name],
                 })
+            }
+            if (constraint.accept !== undefined) {
+                const accepts = Array.isArray(constraint.accept)
+                    ? constraint.accept
+                    : [constraint.accept]
+                if (!accepts.some((accept) => mimeMatches(entry.type, accept))) {
+                    issues.push({
+                        message: `File "${name}" type "${entry.type}" is not accepted`,
+                        path: [name],
+                    })
+                }
             }
         }
     }
