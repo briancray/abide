@@ -3,6 +3,7 @@
   import RouteReadoutDemo from "$ui/demos/pages/routing/RouteReadoutDemo.abide"
   import SlugLinksDemo from "$ui/demos/pages/routing/SlugLinksDemo.abide"
   import QueryLinksDemo from "$ui/demos/pages/routing/QueryLinksDemo.abide"
+  import OptionalRestLinksDemo from "$ui/demos/pages/routing/OptionalRestLinksDemo.abide"
   import NavigateDemo from "$ui/demos/pages/routing/NavigateDemo.abide"
 </script>
 
@@ -23,6 +24,11 @@
   <p><code>url("/pages/routing/[slug]", &#123; slug &#125;, &#123; ref, page &#125;)</code> also appends a query string; with no <code>[name]</code> segments it collapses to <code>url(path, query)</code>. The built href flows straight into an <code>&lt;a href&gt;</code>.</p>
   <Demo id="query-links" title="<code>url(…)</code> — params &amp; query" client="src/ui/demos/pages/routing/QueryLinksDemo.abide" tab="client">
     <QueryLinksDemo />
+  </Demo>
+
+  <p>Beyond a required <code>[name]</code>, a segment can be <strong>optional</strong> — <code>[[page]]</code> matches zero or one segment (absent → the param is omitted) — or a <strong>rest</strong> catch-all — <code>[...path]</code> captures the remaining segments as a <code>/</code>-joined string. Match precedence is most-specific-wins: <code>literal &gt; required &gt; optional &gt; rest</code>. <code>url()</code> mirrors this — it drops an absent optional segment and expands a rest param.</p>
+  <Demo id="optional-rest-links" title="Optional &amp; rest segments — <code>[[page]]</code> / <code>[...path]</code>" client="src/ui/demos/pages/routing/OptionalRestLinksDemo.abide" tab="client">
+    <OptionalRestLinksDemo />
   </Demo>
 
   <p>A sibling static route. Exact routes win over the <code>[slug]</code> param route, so this resolves to the dedicated page. <code>navigate</code> takes an already-resolved href, so compose it with <code>url()</code> — <code>navigate(url(&hellip;))</code> — for a params + query target. <code>navigate(target, options?)</code> also takes an optional second argument: <code>&#123; replace &#125;</code> swaps the current history entry instead of pushing a new one (so Back skips it), and <code>&#123; keepScroll &#125;</code> holds the scroll position instead of jumping to the top.</p>

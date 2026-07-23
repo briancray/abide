@@ -372,7 +372,11 @@ function emitFor(node: Extract<TemplateNode, { type: 'ForBlock' }>, e: WalkEmit)
         walk(node.children, e)
         e.emitSynthetic('}\n')
         if (node.catch !== null) {
-            e.emitSynthetic(`} catch (${node.catch.param ?? '__e'}) {\n`)
+            e.emitSynthetic('} catch (')
+            if (node.catch.param !== null)
+                emitClauseBinding(e, node.catch, 'catch', node.catch.param)
+            else e.emitSynthetic('__e')
+            e.emitSynthetic(') {\n')
             walk(node.catch.children, e)
             e.emitSynthetic('}\n')
         }
@@ -403,13 +407,30 @@ function emitFor(node: Extract<TemplateNode, { type: 'ForBlock' }>, e: WalkEmit)
     e.emitSynthetic('}\n')
 }
 
+// Emit a clause binding identifier — `{:then x}` / `{:catch e}`, or the inline `then x` / `catch e`
+// openers — source-mapped, so hover and go-to-definition resolve on it. An unmapped synthetic binding
+// (what these used to be) has no `.abide` span, so the editor shows nothing when you hover it. The
+// search is scoped to after the clause keyword and before the clause body, so a short binding name
+// can't collide with the keyword itself or the awaited expression.
+function emitClauseBinding(
+    e: WalkEmit,
+    clause: { start: number; end: number; children: TemplateNode[] },
+    keyword: string,
+    param: string,
+): void {
+    const bodyStart = clause.children[0]?.start ?? clause.end
+    const keywordAt = e.locate(clause.start, bodyStart, keyword)
+    const from = keywordAt === -1 ? clause.start : keywordAt + keyword.length
+    e.emitExpr(from, bodyStart, param)
+}
+
 function emitAwait(node: Extract<TemplateNode, { type: 'AwaitBlock' }>, e: WalkEmit): void {
     e.emitSynthetic('{\n')
     walk(node.pending, e)
     e.emitSynthetic('try {\n')
     if (node.then !== null && node.then.param !== null) {
         e.emitSynthetic('const ')
-        e.emitSynthetic(node.then.param)
+        emitClauseBinding(e, node.then, 'then', node.then.param)
         e.emitSynthetic(' = await (')
         e.emitExpr(node.start, node.end, node.expression)
         e.emitSynthetic(');\n')
@@ -419,7 +440,11 @@ function emitAwait(node: Extract<TemplateNode, { type: 'AwaitBlock' }>, e: WalkE
         e.emitSynthetic(');\n')
     }
     if (node.then !== null) walk(node.then.children, e)
-    e.emitSynthetic(`} catch (${node.catch?.param ?? '__e'}) {\n`)
+    e.emitSynthetic('} catch (')
+    if (node.catch !== null && node.catch.param !== null)
+        emitClauseBinding(e, node.catch, 'catch', node.catch.param)
+    else e.emitSynthetic('__e')
+    e.emitSynthetic(') {\n')
     if (node.catch !== null) walk(node.catch.children, e)
     e.emitSynthetic('}\n')
     if (node.finally !== null) {
@@ -452,7 +477,11 @@ function emitSwitch(node: Extract<TemplateNode, { type: 'SwitchBlock' }>, e: Wal
 function emitTry(node: Extract<TemplateNode, { type: 'TryBlock' }>, e: WalkEmit): void {
     e.emitSynthetic('try {\n')
     walk(node.children, e)
-    e.emitSynthetic(`} catch (${node.catch?.param ?? '__e'}) {\n`)
+    e.emitSynthetic('} catch (')
+    if (node.catch !== null && node.catch.param !== null)
+        emitClauseBinding(e, node.catch, 'catch', node.catch.param)
+    else e.emitSynthetic('__e')
+    e.emitSynthetic(') {\n')
     if (node.catch !== null) walk(node.catch.children, e)
     e.emitSynthetic('}\n')
     if (node.finally !== null) {

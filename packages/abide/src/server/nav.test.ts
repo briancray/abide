@@ -116,3 +116,52 @@ test('url() appends a query string — (path, params, query) and (path, query)',
     expect(url('/plain')).toBe('/plain')
     expect(url('/plain', {})).toBe('/plain')
 })
+
+test('SSRs an optional [[name]] route both with and without the segment', async () => {
+    const app = await createTestApp({
+        pages: {
+            '/blog/[[page]]':
+                "<script>import { route } from 'abide/shared/route'</script><span>page:{route().params.page}</span>",
+        },
+    })
+
+    const withSegment = stripAnchors(await (await app.fetch('/blog/2')).text())
+    expect(withSegment).toContain('<span>page:2</span>')
+
+    const bare = stripAnchors(await (await app.fetch('/blog')).text())
+    expect(bare).toContain('<span>page:</span>')
+
+    await app.stop()
+})
+
+test('SSRs a rest [...name] route, exposing the captured segments', async () => {
+    const app = await createTestApp({
+        pages: {
+            '/docs/[...path]':
+                "<script>import { route } from 'abide/shared/route'</script><span>{route().params.path}</span>",
+        },
+    })
+
+    const deep = stripAnchors(await (await app.fetch('/docs/a/b/c')).text())
+    expect(deep).toContain('<span>a/b/c</span>')
+
+    const single = stripAnchors(await (await app.fetch('/docs/intro')).text())
+    expect(single).toContain('<span>intro</span>')
+
+    await app.stop()
+})
+
+test('an exact page beats an optional/rest catch-all at the same prefix', async () => {
+    const app = await createTestApp({
+        pages: {
+            '/docs/[...path]':
+                "<script>import { route } from 'abide/shared/route'</script><span>rest:{route().params.path}</span>",
+            '/docs/api': '<span>exact-api</span>',
+        },
+    })
+
+    expect(stripAnchors(await (await app.fetch('/docs/api')).text())).toContain('exact-api')
+    expect(stripAnchors(await (await app.fetch('/docs/x/y')).text())).toContain('rest:x/y')
+
+    await app.stop()
+})

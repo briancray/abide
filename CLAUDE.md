@@ -193,7 +193,7 @@ Partial args match every superset slot.
 | `abide/shared/HttpError` | type: `status`, `statusText`, `kind?`, `data?` |
 | `abide/shared/ValidationErrorData` | `{ issues, fields }` |
 | `abide/shared/route` | `route()` (see above) |
-| `abide/shared/url` | `url(path \| URL, params?, query?)` — in-app href resolver; `params` fill `[name]` segments (typed from the path literal), `query` appends a query string. No-`[name]` path (or a `URL`) collapses to `url(target, query?)` |
+| `abide/shared/url` | `url(path \| URL, params?, query?)` — in-app href resolver; `params` fill dynamic segments (`[name]` required, `[[name]]` optional, `[...name]` rest — a `/`-joined string; typed from the path literal), `query` appends a query string. No-dynamic-segment path (or a `URL`) collapses to `url(target, query?)` |
 | `abide/shared/health` | `health()` → `Promise<{ reachable, version, ... }>` — isomorphic: server returns the baseline in-proc, client `await`s a fetch of `/__abide/health` (full merged doc) |
 | `abide/shared/log` | `log(...)`, `.info/.warn/.error/.trace`, `.channel(name)`. Every line carries a channel label — the un-channeled `log(...)` uses the **app name** (`ABIDE_APP_NAME`/package.json/`"abide"`, always on); `.channel('abide:…')` names a framework channel gated by `DEBUG` (server) / `localStorage.debug` (browser). `error` always emits; `warn/info/trace` gated. Channels: `abide:{rpc,cache,router,ssr,socket,identity,agent,mcp,hydrate,stream,bundle,cli}` |
 | `abide/shared/trace` | `trace()` → W3C traceparent \| undefined |
@@ -282,7 +282,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | Capitalised tags | component invocation (`<Name/>`) · `<slot/>` renders default children (`{children()}` is the equivalent interpolation form) · nested inline-component defs = named component props (render-prop) · a cell-named tag (`const C = state.computed(…)`; `<C/>`) is a **reactive** component (re-mounts on change) · a component-valued prop types as `Component<Props>` |
 | `<script>` per-instance · `<script module>` once-per-module · nested `<script>` branch-local |
 | `<style>` component-scoped · nested `<style>` subtree-scoped · tailwind optional |
-| `src/ui/pages/**/page.abide` / `layout.abide` | routes; `[name]` → `route().params.name` |
+| `src/ui/pages/**/page.abide` / `layout.abide` | routes; `[name]` → `route().params.name` (required); `[[name]]` optional segment (absent → param omitted); `[...name]` rest/catch-all (terminal) → `route().params.name` is the `/`-joined remaining segments. Precedence: literal > required > optional > rest |
 | `route()` | `route().url`, `.params`, `.name`, `.kind`, `.navigating` |
 | `navigate` / `url` | `url(path, params?, query?)` builds an href; `navigate(target, options?)` moves to one — compose as `navigate(url(...), options)`. Nav always hits the server (middleware); same-route param/query nav = a pure `route()` republish (reads re-fire reactively in place — no DOM swap, no re-hydrate; scroll/focus preserved; the server round-trip is a background middleware/redirect confirm), a cross-route nav sharing a layout prefix keeps the shared outer layouts alive and grafts/claims only the diverging suffix (fully-disjoint route = whole-outlet swap) |
 
@@ -311,7 +311,7 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 | `abide cli [--target] [--out] [--platforms]` | dual-mode binary: embeds app, self-hosts or targets `ABIDE_APP_URL`; interactive with no subcommand |
 | `abide bundle` | desktop app (host platform; embeds assets; first-run setup screen) |
 | `abide check` | type-check `.abide` (generate-TS → TS7 → map back); template + cross-file component-prop type-flow |
-| `abide lsp` | `.abide` language server over stdio: diagnostics · hover · go-to-definition · completion · signature-help · find-references (runs under node; `abide lsp` forwards from Bun) |
+| `abide lsp` | `.abide` language server over stdio: diagnostics · hover · go-to-definition · completion · signature-help · find-references · semantic-tokens/highlighting (markup + inline script/style; the Zed extension in `packages/zed-abide` consumes it) (runs under node; `abide lsp` forwards from Bun) |
 | `abide init-agent` | write/refresh this `CLAUDE.md` pointer |
 
 ## File-based conventions

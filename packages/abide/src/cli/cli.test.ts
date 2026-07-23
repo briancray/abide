@@ -78,6 +78,16 @@ describe('serve dev — live-reload wiring', () => {
         expect(html).toContain('id="__abide-dev-reload"')
         expect(html).toContain('__abide_dev_reload')
         expect(html).toContain('/__abide/sockets')
+
+        // The injected snippet is an inline JS string — a syntax slip would ship silently (the HTML tests
+        // above only match substrings). Extract it and assert it actually PARSES, and that it wires the
+        // scroll capture/restore that keeps position across a dev reload.
+        const match = html.match(/<script id="__abide-dev-reload"[^>]*>([\s\S]*?)<\/script>/)
+        expect(match).not.toBeNull()
+        const snippet = match?.[1] ?? ''
+        expect(() => new Function(snippet)).not.toThrow()
+        expect(snippet).toContain('sessionStorage')
+        expect(snippet).toContain('scrollX')
     })
 })
 

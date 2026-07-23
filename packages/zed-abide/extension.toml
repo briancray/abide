@@ -1,0 +1,19 @@
+id = "abide"
+name = "Abide"
+version = "0.0.1"
+schema_version = 1
+authors = ["Brian Cray <bcrayzie@icloud.com>"]
+description = "Language support for .abide templates — runs the `abide lsp` language server and highlights markup, inline <script> (TS) and <style> (CSS)."
+
+# The `.abide` language server: Zed spawns `abide lsp` and speaks LSP over stdio.
+[language_servers.abide]
+name = "Abide LSP"
+languages = ["Abide"]
+
+# Baseline syntax highlighting is borrowed from tree-sitter-html (pinned to the same
+# commit Zed's built-in HTML extension uses). `.abide` markup, tags, attributes, and
+# inline <script>/<style> get colored; template `{expr}` interpolations render as text
+# (a full-fidelity grammar would need a dedicated tree-sitter-abide).
+[grammars.html]
+repository = "https://github.com/tree-sitter/tree-sitter-html"
+commit = "bfa075d83c6b97cd48440b3829ab8d24a2319809"

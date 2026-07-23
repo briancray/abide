@@ -1,15 +1,36 @@
 // ROUTE PARAM MATCHING (M5b / abide-compiler C6) — match a request pathname against the set of
-// page path patterns discovered by loadApp. A pattern is a page route path whose segments may be
-// literal (`users`) or a `[name]` param placeholder (`/users/[id]`). matchRoute returns the winning
-// pattern plus the extracted params, or null when nothing matches.
+// page path patterns discovered by loadApp. A pattern is a page route path whose segments may be:
+//   - literal      (`users`)          → must match exactly
+//   - `[name]`     (`/users/[id]`)    → required dynamic segment, captured as a string
+//   - `[[name]]`   (`/blog/[[page]]`) → optional dynamic segment, matches zero or one segment here
+//   - `[...name]`  (`/docs/[...path]`)→ rest / catch-all, captures the remaining segments as a `/`-joined string
+// matchRoute returns the winning pattern plus the extracted params, or null when nothing matches.
 //
-// Precedence: an exact (all-literal) match always beats a param match, so `/users/new` prefers a
-// `/users/new` pattern over `/users/[id]`. Among param patterns, the first in sorted order wins —
-// callers pass patterns already sorted (loadApp sorts its page keys), keeping this deterministic.
+// Optional (`[[name]]`) and rest (`[...name]`) make a pattern match paths of varying length, so a
+// single pathname can match several patterns. Precedence picks the MOST SPECIFIC: an exact (all-
+// literal) match always wins outright; otherwise patterns are ranked segment-by-segment where a more
+// literal / required-earlier shape beats a catch-all (literal < required < optional < rest), with a
+// longer pattern breaking a tie. Among equally-specific matches the earliest pattern (by iteration
+// order — callers pass patterns already sorted) wins, keeping this deterministic.
+//
+// A rest segment is terminal (it consumes every remaining path segment); a rest that is not the last
+// pattern segment simply won't match paths that have segments after it.
 
 export interface RouteMatch {
     pattern: string
     params: Record<string, string>
+}
+
+// Segment kind ranks — also the specificity order (lower = more specific).
+const LITERAL = 0
+const REQUIRED = 1
+const OPTIONAL = 2
+const REST = 3
+
+interface Segment {
+    kind: number
+    name: string
+    literal: string
 }
 
 // Split a path into non-empty segments. "/" → [], "/users/42" → ["users", "42"].
@@ -18,49 +39,112 @@ function segments(path: string): string[] {
     return trimmed.length === 0 ? [] : trimmed.split('/')
 }
 
-// A `[name]` segment captures into params[name]; a literal segment must match exactly. Returns the
-// captured params on a full match, or null when the pattern does not fit this pathname.
-function matchPattern(
-    patternSegments: string[],
-    pathSegments: string[],
-): Record<string, string> | null {
-    if (patternSegments.length !== pathSegments.length) return null
-    const params: Record<string, string> = {}
-    for (const [i, patternSegment] of patternSegments.entries()) {
-        const pathSegment = pathSegments[i]
-        if (pathSegment === undefined) return null
-        if (
-            patternSegment.length > 2 &&
-            patternSegment.startsWith('[') &&
-            patternSegment.endsWith(']')
-        ) {
-            params[patternSegment.slice(1, -1)] = decodeURIComponent(pathSegment)
-        } else if (patternSegment !== pathSegment) {
-            return null
-        }
+// Classify one pattern segment. Order matters — `[[name]]` and `[...name]` must be recognised before
+// the plain `[name]` form. Anything not matching a bracket form is a literal.
+function classify(segment: string): Segment {
+    if (segment.length > 4 && segment.startsWith('[[') && segment.endsWith(']]')) {
+        return { kind: OPTIONAL, name: segment.slice(2, -2), literal: segment }
     }
-    return params
+    if (segment.length > 5 && segment.startsWith('[...') && segment.endsWith(']')) {
+        return { kind: REST, name: segment.slice(4, -1), literal: segment }
+    }
+    if (segment.length > 2 && segment.startsWith('[') && segment.endsWith(']')) {
+        return { kind: REQUIRED, name: segment.slice(1, -1), literal: segment }
+    }
+    return { kind: LITERAL, name: '', literal: segment }
 }
 
-// A pattern is exact when none of its segments are `[name]` placeholders.
-function isExactPattern(patternSegments: string[]): boolean {
-    for (const segment of patternSegments) {
-        if (segment.startsWith('[') && segment.endsWith(']')) return false
+// Recursive backtracking match of `pattern[patternIndex..]` against `path[pathIndex..]`, filling
+// `params` as it goes. Optional segments try consuming one path segment, then zero; a rest segment
+// greedily consumes every remaining segment (so it only matches as the terminal pattern segment).
+function fill(
+    pattern: Segment[],
+    patternIndex: number,
+    path: string[],
+    pathIndex: number,
+    params: Record<string, string>,
+): boolean {
+    if (patternIndex === pattern.length) return pathIndex === path.length
+    const segment = pattern[patternIndex]
+    if (segment === undefined) return false
+    if (segment.kind === LITERAL) {
+        if (pathIndex < path.length && path[pathIndex] === segment.literal) {
+            return fill(pattern, patternIndex + 1, path, pathIndex + 1, params)
+        }
+        return false
+    }
+    if (segment.kind === REQUIRED) {
+        const value = path[pathIndex]
+        if (value === undefined) return false
+        params[segment.name] = decodeURIComponent(value)
+        if (fill(pattern, patternIndex + 1, path, pathIndex + 1, params)) return true
+        delete params[segment.name]
+        return false
+    }
+    if (segment.kind === OPTIONAL) {
+        const value = path[pathIndex]
+        if (value !== undefined) {
+            params[segment.name] = decodeURIComponent(value)
+            if (fill(pattern, patternIndex + 1, path, pathIndex + 1, params)) return true
+            delete params[segment.name]
+        }
+        // Zero: skip this segment (param left absent) and match the rest of the pattern in place.
+        return fill(pattern, patternIndex + 1, path, pathIndex, params)
+    }
+    // REST — consume every remaining path segment (possibly none) as a `/`-joined string, terminal.
+    const rest: string[] = []
+    for (let index = pathIndex; index < path.length; index++) {
+        const value = path[index]
+        if (value === undefined) return false
+        rest.push(decodeURIComponent(value))
+    }
+    params[segment.name] = rest.join('/')
+    return fill(pattern, patternIndex + 1, path, path.length, params)
+}
+
+// Match a classified pattern against a pathname's segments. Returns the captured params on a full
+// match, or null when the pattern does not fit this pathname.
+function matchPattern(pattern: Segment[], path: string[]): Record<string, string> | null {
+    const params: Record<string, string> = {}
+    return fill(pattern, 0, path, 0, params) ? params : null
+}
+
+// Whether every segment is literal — an exact route with no dynamic capture.
+function isExact(pattern: Segment[]): boolean {
+    for (const segment of pattern) {
+        if (segment.kind !== LITERAL) return false
     }
     return true
 }
 
-// Match `pathname` against `patterns` (page path keys). Exact routes win over param routes; among
-// same-precedence matches the earliest pattern (by iteration order) wins.
+// Compare two patterns' specificity. Negative → `a` is more specific (wins). Segment-by-segment, a
+// lower kind (more literal) wins at the first difference; if one pattern is a prefix of the other, the
+// longer (more constrained) pattern wins.
+function moreSpecific(a: Segment[], b: Segment[]): number {
+    const shared = Math.min(a.length, b.length)
+    for (let index = 0; index < shared; index++) {
+        const kindA = a[index]?.kind ?? LITERAL
+        const kindB = b[index]?.kind ?? LITERAL
+        if (kindA !== kindB) return kindA - kindB
+    }
+    return b.length - a.length
+}
+
+// Match `pathname` against `patterns` (page path keys). Exact routes win outright; otherwise the most
+// specific dynamic pattern wins, ties broken by the earliest pattern in iteration order.
 export function matchRoute(patterns: string[], pathname: string): RouteMatch | null {
     const pathSegments = segments(pathname)
-    let paramMatch: RouteMatch | null = null
+    let best: RouteMatch | null = null
+    let bestPattern: Segment[] | null = null
     for (const pattern of patterns) {
-        const patternSegments = segments(pattern)
+        const patternSegments = segments(pattern).map(classify)
         const params = matchPattern(patternSegments, pathSegments)
         if (params === null) continue
-        if (isExactPattern(patternSegments)) return { pattern, params }
-        if (paramMatch === null) paramMatch = { pattern, params }
+        if (isExact(patternSegments)) return { pattern, params }
+        if (bestPattern === null || moreSpecific(patternSegments, bestPattern) < 0) {
+            best = { pattern, params }
+            bestPattern = patternSegments
+        }
     }
-    return paramMatch
+    return best
 }

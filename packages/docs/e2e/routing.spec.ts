@@ -37,6 +37,65 @@ test('url() builds hrefs with a query string — (path, params, query) and (path
     )
 })
 
+test('url() builds optional and rest hrefs — absent optional dropped, rest `/`-joined', async ({
+    page,
+}) => {
+    await page.goto('/pages/routing')
+
+    // An absent optional [[page]] param drops the whole segment; url("…/blog/[[page]]", {}) → /blog.
+    await expect(page.getByTestId('url-optional-absent')).toHaveText('/pages/routing/blog')
+    // A present optional param fills it.
+    await expect(page.getByTestId('url-optional-present')).toHaveText('/pages/routing/blog/2')
+    // A rest [...path] param expands the `/`-joined string into path segments.
+    await expect(page.getByTestId('url-rest')).toHaveText('/pages/routing/files/guide/intro')
+
+    // The built hrefs flow straight into <a href>.
+    await expect(page.getByTestId('optional-link-bare')).toHaveAttribute(
+        'href',
+        '/pages/routing/blog',
+    )
+    await expect(page.getByTestId('optional-link-paged')).toHaveAttribute(
+        'href',
+        '/pages/routing/blog/2',
+    )
+    await expect(page.getByTestId('rest-link')).toHaveAttribute(
+        'href',
+        '/pages/routing/files/guide/intro',
+    )
+})
+
+test('an optional [[page]] route SSRs both with and without the segment', async ({ page }) => {
+    // Absent: /pages/routing/blog matches blog/[[page]]/page.abide with the param omitted.
+    await page.goto('/pages/routing/blog')
+    await expect(page.getByTestId('blog-heading')).toHaveText('Blog')
+    await expect(page.getByTestId('blog-has-page')).toHaveText('absent')
+    await expect(page.getByTestId('blog-page')).toHaveText('')
+
+    // Present: /pages/routing/blog/2 captures page=2 into route().params.
+    await page.goto('/pages/routing/blog/2')
+    await expect(page.getByTestId('blog-has-page')).toHaveText('present')
+    await expect(page.getByTestId('blog-page')).toHaveText('2')
+})
+
+test('a rest [...path] route captures the remaining segments as a `/`-joined string', async ({
+    page,
+}) => {
+    await page.goto('/pages/routing/files/guide/intro')
+    await expect(page.getByTestId('files-heading')).toHaveText('Files')
+    await expect(page.getByTestId('files-path')).toHaveText('guide/intro')
+
+    // A single trailing segment still resolves to the same catch-all page.
+    await page.goto('/pages/routing/files/readme')
+    await expect(page.getByTestId('files-path')).toHaveText('readme')
+})
+
+test('an exact route beats the rest catch-all sharing its prefix', async ({ page }) => {
+    // /pages/routing/files/latest matches BOTH files/latest (exact) and files/[...path] (rest).
+    // Precedence literal > rest → the exact page wins.
+    await page.goto('/pages/routing/files/latest')
+    await expect(page.getByTestId('files-latest-heading')).toHaveText('Latest file')
+})
+
 test('navigate(url(...)) soft-navigates to a params + query href, and route() sees the query', async ({
     page,
 }) => {

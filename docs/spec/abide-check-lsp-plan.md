@@ -5,14 +5,20 @@ Concrete plan to complete TODO #11: full template-expression type-flow (C10.2–
 `file:line` is an anchor in the current code. This doc is the decision record from the design grill —
 the resolved fork at each branch is stated with its rationale.
 
-> **STATUS: IMPLEMENTED as PR1–6.** `abide check` does full template + cross-file type-flow; `abide lsp`
-> is a full language server (diagnostics · hover · definition · completion · signature-help · references).
+> **STATUS: IMPLEMENTED as PR1–7.** `abide check` does full template + cross-file type-flow; `abide lsp`
+> is a full language server (diagnostics · hover · definition · completion · signature-help · references ·
+> **semantic-tokens**). Semantic tokens (PR7) shipped out of the original v2 bucket: a markup-only
+> highlight pass driven from the one parse walk (`onToken`/`onExpression`), consumed by the Zed extension
+> in `packages/zed-abide`.
 > The authoritative AS-BUILT record — including the six bugs end-to-end testing caught and the exact
 > `file:line` refs — lives in **`docs/TODO.md` #11**. Where the build deviated from this plan: **§1.5**
 > bare-`props()` shipped as a fully-OPEN `Record<string, unknown>` (the widened-default *synthesis* is
 > deferred — TODO #11 "bare-props destructuring-synthesis"); the LSP runs `node lsp.ts` behind a Bun
-> byte-pump forwarder (`bunCanHostTsgo()` gate); virtual paths are per-lowering *fresh revisions*
-> (reused paths stay cached) with `closeFiles` for the prior one. The docs-clean gate also surfaced the
+> byte-pump forwarder (`bunCanHostTsgo()` gate); virtual paths are now **stable** (one per `.abide`, no
+> revision) and freshness comes from the engine rebuilding a fresh tsgo `API` whenever the overlay+open
+> signature changes — reused across unchanged buffers, rebuilt on an actual edit (this replaced the
+> earlier fresh-revision + `closeFiles` scheme, which left a warm API collapsing cross-file import
+> resolution to `any` after its first snapshot). The docs-clean gate also surfaced the
 > RPC read-surface typing question → its own decision record in **`docs/spec/promise-read-model.md`**
 > (`rpc(): Promise<T>` + drop `.load()`; spec'd, own PR series, not yet built).
 
@@ -81,8 +87,10 @@ the resolved fork at each branch is stated with its rationale.
 8. **Scope/route** — resolved by verbatim imports; `route().params` stays `Record<string,unknown>`.
    Per-route `[name]` `Params` synthesis is deferred (low value, params are strings).
 9. **LSP feature set v1** = {diagnostics, hover, completion, go-to-definition, find-references,
-   signature-help}. v2 = {rename, semantic tokens}. Rename is deferred because it is the only *write*
-   feature — a mis-mapped edit corrupts source — so it needs the round-trip map proven first.
+   signature-help}. Semantic tokens (originally parked for v2) also shipped — a markup-only highlight
+   pass, read-only like the rest, so it carried no write-risk. **v2 = {rename}.** Rename is deferred
+   because it is the only *write* feature — a mis-mapped edit corrupts source — so it needs the
+   round-trip map proven first.
 10. **Incremental** — on open/change/save re-lower ONLY the changed doc, update the in-memory virtual
     map, one `updateSnapshot({fileChanges})`, publish diagnostics for OPEN docs (tsgo re-checks
     dependents). Debounce `didChange` (~250–300 ms); `didSave` flushes. No temp-file churn.
@@ -132,9 +140,12 @@ type-position operands. Tracked in TODO.md.
 - **PR4** — hover + go-to-definition (read-only, cross-file result mapping).
 - **PR5** — completion + signature-help.
 - **PR6** — find-references.
+- **PR7** — semantic tokens: a markup-only highlight pass (`textDocument/semanticTokens/full` +
+  `ABIDE_SEMANTIC_TOKENS_LEGEND`), colored from the one parse walk (`onToken`/`onExpression`), plus the
+  Zed extension (`packages/zed-abide`) that consumes it. Read-only, so no write-risk gate.
 
 ## 5. Deferred / parked
 
-rename, semantic tokens, formatting (§2), per-route `[name]` param typing, bidirectional inline-component-param
+rename, formatting (§2), per-route `[name]` param typing, bidirectional inline-component-param
 inference, the runtime type-position cleanup (§3). Each has a recorded rationale (write-risk / poor
 cost-value / needs separate machinery).

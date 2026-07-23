@@ -24,6 +24,8 @@ import type {
     SwitchBlock,
     SwitchCase,
     TemplateNode,
+    TemplateToken,
+    TemplateTokenType,
     Text,
     TryBlock,
 } from './ast.ts'
@@ -72,10 +74,32 @@ export class ParseError extends Error {
 
 const IDENT_CHAR = /[A-Za-z0-9_$]/
 
-export function parse(source: string, opts?: { filename?: string }): Root {
+export function parse(
+    source: string,
+    opts?: {
+        filename?: string
+        onToken?: (token: TemplateToken) => void
+        onExpression?: (start: number, end: number) => void
+    },
+): Root {
     const length = source.length
     const filename = opts?.filename
+    const onToken = opts?.onToken
+    const onExpression = opts?.onExpression
     let pos = 0
+
+    // Emit a highlight token for [start, end). A no-op unless the caller passed `onToken`, so a plain
+    // `parse` (the compile/check path) pays nothing and behaves identically.
+    function emit(start: number, end: number, type: TemplateTokenType): void {
+        if (onToken !== undefined && end > start) onToken({ start, length: end - start, type })
+    }
+
+    // Report a raw expression interior [start, end) — the text inside a `{ … }`: an interpolation,
+    // an attribute value, a spread, or a block header (`{#if COND}`, `{#for HEADER}`, …). The LSP
+    // tokenizes these for syntactic highlighting; a plain `parse` passes no callback and pays nothing.
+    function reportExpression(start: number, end: number): void {
+        if (onExpression !== undefined && end > start) onExpression(start, end)
+    }
 
     // --- diagnostics -------------------------------------------------------
 
@@ -191,6 +215,8 @@ export function parse(source: string, opts?: { filename?: string }): Root {
         scanBalancedUntilBrace()
         if (pos >= length) fail('unclosed `{`', start - 1)
         const raw = source.slice(start, pos)
+        reportExpression(start, pos) // the interior [start, pos) — every brace-delimited expression
+        emit(pos, pos + 1, 'operator') // closing `}` (openers are emitted by each caller)
         pos++ // closing brace
         return raw
     }
@@ -229,21 +255,28 @@ export function parse(source: string, opts?: { filename?: string }): Root {
     // Consume `{:`, read and return the clause keyword (e.g. "else", "then", "catch"). `pos` is left
     // just after the keyword.
     function consumeClauseKeyword(): string {
+        emit(pos, pos + 2, 'operator') // `{:`
         pos += 2 // `{:`
+        const keywordStart = pos
         const keyword = readIdentifier()
         if (keyword === '') fail('expected a clause keyword after `{:`')
+        emit(keywordStart, pos, 'keyword') // `else` / `then` / `catch` / …
         return keyword
     }
 
     // Consume `{/name}`; errors on a name mismatch or missing `}`.
     function consumeBlockClose(name: string): void {
         if (!atBlockClose()) fail(`expected \`{/${name}}\``)
+        emit(pos, pos + 2, 'operator') // `{/`
         pos += 2 // `{/`
+        const actualStart = pos
         const actual = readIdentifier()
         if (actual !== name)
             fail(`expected \`{/${name}}\` but found \`{/${actual}}\``, pos - actual.length - 2)
+        emit(actualStart, pos, 'keyword')
         skipWhitespace()
         if (source[pos] !== '}') fail(`expected \`}\` to close \`{/${name}}\``)
+        emit(pos, pos + 1, 'operator') // `}`
         pos++
     }
 
@@ -309,6 +342,7 @@ export function parse(source: string, opts?: { filename?: string }): Root {
         if (end === -1) fail('unclosed comment `<!--`', start)
         const value = source.slice(pos, end)
         pos = end + 3
+        emit(start, pos, 'comment')
         return { type: 'Comment', value, start, end: pos }
     }
 
@@ -316,6 +350,7 @@ export function parse(source: string, opts?: { filename?: string }): Root {
 
     function parseInterpolation(): TemplateNode {
         const start = pos
+        emit(start, start + 1, 'operator') // opening `{`
         pos++ // `{`
         const raw = readBraceContents()
         const end = pos
@@ -374,8 +409,13 @@ export function parse(source: string, opts?: { filename?: string }): Root {
 
     function parseElement(): TemplateNode {
         const start = pos
+        emit(start, start + 1, 'operator') // `<`
         pos++ // `<`
+        const nameStart = pos
         const name = readTagName()
+        const firstChar = name[0]
+        const isComponent = firstChar !== undefined && /[A-Z]/.test(firstChar)
+        emit(nameStart, pos, isComponent ? 'type' : 'tag')
         const lower = name.toLowerCase()
         if (lower === 'script') return parseRawText(start, name, true) as Script
         if (lower === 'style') return parseRawText(start, name, false) as Style
@@ -386,13 +426,12 @@ export function parse(source: string, opts?: { filename?: string }): Root {
         let selfClosing = false
         if (source[pos] === '/') {
             selfClosing = true
+            emit(pos, pos + 1, 'operator') // `/` of a self-closing tag
             pos++
         }
         if (source[pos] !== '>') fail(`expected \`>\` to close <${name}>`, start)
+        emit(pos, pos + 1, 'operator') // `>`
         pos++ // `>`
-
-        const firstChar = name[0]
-        const isComponent = firstChar !== undefined && /[A-Z]/.test(firstChar)
         const isVoid = !isComponent && VOID_ELEMENTS.has(lower)
 
         let children: TemplateNode[] = []
@@ -428,12 +467,16 @@ export function parse(source: string, opts?: { filename?: string }): Root {
     }
 
     function consumeClosingTag(name: string, openStart: number): void {
+        emit(pos, pos + 2, 'operator') // `</`
         pos += 2 // `</`
+        const nameStart = pos
         const closeName = readTagName()
         if (closeName !== name)
             fail(`mismatched closing tag: expected </${name}> but found </${closeName}>`, openStart)
+        emit(nameStart, pos, /[A-Z]/.test(name[0] ?? '') ? 'type' : 'tag')
         skipWhitespace()
         if (source[pos] !== '>') fail(`expected \`>\` to close </${name}>`)
+        emit(pos, pos + 1, 'operator') // `>`
         pos++
     }
 
@@ -445,9 +488,11 @@ export function parse(source: string, opts?: { filename?: string }): Root {
         let selfClosing = false
         if (source[pos] === '/') {
             selfClosing = true
+            emit(pos, pos + 1, 'operator') // `/` of a self-closing tag
             pos++
         }
         if (source[pos] !== '>') fail(`expected \`>\` to close <${name}>`, start)
+        emit(pos, pos + 1, 'operator') // `>`
         pos++ // `>`
 
         const contentStart = pos
@@ -460,6 +505,10 @@ export function parse(source: string, opts?: { filename?: string }): Root {
             const match = closeRe.exec(source)
             if (match === null) fail(`unclosed <${name}>`, start)
             contentEnd = match.index
+            // Color the closing `</script>`/`</style>`: `</` operator + tag name + `>` operator.
+            emit(match.index, match.index + 2, 'operator')
+            emit(match.index + 2, match.index + 2 + name.length, 'tag')
+            emit(match.index + match[0].length - 1, match.index + match[0].length, 'operator')
             pos = match.index + match[0].length
         }
         const content = source.slice(contentStart, contentEnd)
@@ -511,6 +560,7 @@ export function parse(source: string, opts?: { filename?: string }): Root {
 
     function parseSpreadAttribute(): AttributeNode {
         const start = pos
+        emit(start, start + 1, 'operator') // opening `{`
         pos++ // `{`
         if (source.startsWith('...', pos)) {
             pos += 3
@@ -526,6 +576,7 @@ export function parse(source: string, opts?: { filename?: string }): Root {
         const start = pos
         const name = readAttributeName()
         if (name === '') fail('expected an attribute name')
+        emit(start, pos, 'attribute') // whole name, `bind:`/`class:`/`style:`/`on…` included
 
         let valueKind: 'none' | 'expr' | 'static' = 'none'
         let expression = ''
@@ -533,18 +584,24 @@ export function parse(source: string, opts?: { filename?: string }): Root {
 
         skipWhitespace()
         if (source[pos] === '=') {
+            emit(pos, pos + 1, 'operator') // `=`
             pos++
             skipWhitespace()
             const valueChar = source[pos]
             if (valueChar === '{') {
+                emit(pos, pos + 1, 'operator') // opening `{` (closing emitted by readBraceContents)
                 pos++
                 expression = readBraceContents().trim()
                 valueKind = 'expr'
             } else if (valueChar === '"' || valueChar === "'") {
+                const valueStart = pos
                 staticValue = readQuotedValue(valueChar)
+                emit(valueStart, pos, 'string')
                 valueKind = 'static'
             } else {
+                const valueStart = pos
                 staticValue = readUnquotedValue()
+                emit(valueStart, pos, 'string')
                 valueKind = 'static'
             }
         }
@@ -655,8 +712,11 @@ export function parse(source: string, opts?: { filename?: string }): Root {
 
     function parseBlock(): TemplateNode {
         const start = pos
+        emit(start, start + 2, 'operator') // `{#`
         pos += 2 // `{#`
+        const keywordStart = pos
         const keyword = readIdentifier()
+        emit(keywordStart, pos, 'keyword') // `if` / `for` / `await` / …
         switch (keyword) {
             case 'if':
                 return parseIfBlock(start)
@@ -687,7 +747,9 @@ export function parse(source: string, opts?: { filename?: string }): Root {
             const keyword = consumeClauseKeyword()
             if (keyword !== 'else') fail(`unexpected \`{:${keyword}}\` in \`{#if}\``, branchStart)
             skipWhitespace()
+            const ifStart = pos
             if (matchWord('if')) {
+                emit(ifStart, pos, 'keyword') // the `if` of `{:else if}`
                 const elseCondition = readBraceContents().trim()
                 children = parseChildren()
                 branches.push({ condition: elseCondition, children, start: branchStart, end: pos })

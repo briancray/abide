@@ -1,36 +1,93 @@
-// Shared URL resolution for `url()` and `navigate()`: fill a page path's dynamic segments (`[name]`
-// or `/:name`) from `params`, then append `query` as a query string. Isomorphic — no DOM. Throws on a
-// missing required param so a broken link fails loudly at call time rather than emitting a malformed
-// URL. The type helpers derive a path literal's `[name]` params so callers pass a correctly-shaped
-// params object (and only when the path declares one).
+// Shared URL resolution for `url()` and `navigate()`: fill a page path's dynamic segments from
+// `params`, then append `query` as a query string. Isomorphic — no DOM. Segment forms mirror the
+// file-based router (matchRoute.ts):
+//   - `[name]`    required — filled from `params[name]` (a missing param throws so a broken link fails
+//                            loudly at call time rather than emitting a malformed URL)
+//   - `[[name]]`  optional — filled when `params[name]` is present, otherwise the segment is DROPPED
+//   - `[...name]` rest     — filled from a `/`-joined string (each part encoded); an empty string drops it
+//   - `/:name`   legacy colon form — treated as a required segment
+// The type helpers derive a path literal's params so callers pass a correctly-shaped params object
+// (and only when the path declares one).
 
 export type UrlQueryValue = string | number | boolean | null | undefined
 export type UrlQuery = Record<string, UrlQueryValue | UrlQueryValue[]>
 
-// The `[name]` params a path literal declares (e.g. `PathParams<'/u/[id]/p/[n]'>` = `'id' | 'n'`).
-// A non-literal `string` path yields `never`, so such callers pass no params object.
-export type PathParams<P extends string> = P extends `${string}[${infer Name}]${infer Rest}`
-    ? Name | PathParams<Rest>
-    : never
+// The params object a path literal requires, derived by peeling its bracket segments left to right.
+// Each `[name]` and `[...name]` → a required `string | number` key; each `[[name]]` → an optional key.
+// A path with no bracket segments yields `{}`.
+export type PathParamsArg<P extends string> = P extends `${string}[${infer After}`
+    ? After extends `[${infer Name}]]${infer Rest}`
+        ? { [K in Name]?: string | number } & PathParamsArg<Rest>
+        : After extends `...${infer Name}]${infer Rest}`
+          ? { [K in Name]: string | number } & PathParamsArg<Rest>
+          : After extends `${infer Name}]${infer Rest}`
+            ? { [K in Name]: string | number } & PathParamsArg<Rest>
+            : // biome-ignore lint/complexity/noBannedTypes: the empty-object tail of the param intersection
+              {}
+    : // biome-ignore lint/complexity/noBannedTypes: a path with no bracket segments declares no params
+      {}
 
-// The params object a path requires — one `string | number` per declared `[name]`.
-export type PathParamsArg<P extends string> = { [K in PathParams<P>]: string | number }
+// Whether a path declares any bracket segment — the split between the (path, params, query) and
+// (path, query) call shapes. Matches `[name]`, `[[name]]` and `[...name]`.
+type HasParams<P extends string> = P extends `${string}[${string}]${string}` ? true : false
 
-// Trailing args for `url(path, …)`: a params object only when the path declares `[name]` segments,
-// followed by an optional query. Wrapping in a tuple (`[PathParams<P>] extends [never]`) blocks the
-// distributive edge case when the union is `never`.
-export type UrlArgs<P extends string> = [PathParams<P>] extends [never]
-    ? [query?: UrlQuery]
-    : [params: PathParamsArg<P>, query?: UrlQuery]
-
-const DYNAMIC_SEGMENT = /\[([^\]]+)\]|(?<=\/):([A-Za-z0-9_]+)/g
+// Trailing args for `url(path, …)`: a params object when the path declares bracket segments, else just
+// an optional query. When every declared param is optional (`{} extends PathParamsArg<P>`) the params
+// object itself becomes optional so an all-optional path needs no params argument.
+export type UrlArgs<P extends string> =
+    HasParams<P> extends true
+        ? // biome-ignore lint/complexity/noBannedTypes: `{} extends` tests whether every param key is optional
+          {} extends PathParamsArg<P>
+            ? [params?: PathParamsArg<P>, query?: UrlQuery]
+            : [params: PathParamsArg<P>, query?: UrlQuery]
+        : [query?: UrlQuery]
 
 // Whether a path declares any dynamic segment — the runtime split between the (path, params, query)
 // and (path, query) call shapes. The `(?<=\/)` lookbehind keeps a colon-port (`host:8080`) or a URL
-// scheme (`https:`) from reading as a `:name` param. A fresh non-global regex avoids the `lastIndex`
-// state carried by the global `DYNAMIC_SEGMENT`.
+// scheme (`https:`) from reading as a `:name` param.
 export function hasDynamicSegments(path: string): boolean {
-    return /\[[^\]]+\]|(?<=\/):[A-Za-z0-9_]+/.test(path)
+    return /\[[^\]]*\]|(?<=\/):[A-Za-z0-9_]+/.test(path)
+}
+
+// Fill one path segment from params. Returns the resolved text, an array of resolved segments (a rest
+// expansion), or undefined when the segment is dropped (an absent optional / empty rest).
+function fillSegment(
+    segment: string,
+    params: Record<string, string | number> | undefined,
+    path: string,
+): string | string[] | undefined {
+    let name: string | undefined
+    let optional = false
+    let rest = false
+    if (segment.length > 4 && segment.startsWith('[[') && segment.endsWith(']]')) {
+        name = segment.slice(2, -2)
+        optional = true
+    } else if (segment.length > 5 && segment.startsWith('[...') && segment.endsWith(']')) {
+        name = segment.slice(4, -1)
+        rest = true
+    } else if (segment.length > 2 && segment.startsWith('[') && segment.endsWith(']')) {
+        name = segment.slice(1, -1)
+    } else if (segment.length > 1 && segment.startsWith(':')) {
+        name = segment.slice(1)
+    } else {
+        return segment // literal
+    }
+    const value = params?.[name]
+    if (rest) {
+        if (value === undefined) {
+            throw new Error(`url(): missing param "${name}" for path "${path}".`)
+        }
+        // A `/`-joined string expands into one encoded segment per part; an empty string drops it.
+        return String(value)
+            .split('/')
+            .filter((part) => part.length > 0)
+            .map((part) => encodeURIComponent(part))
+    }
+    if (value === undefined) {
+        if (optional) return undefined
+        throw new Error(`url(): missing param "${name}" for path "${path}".`)
+    }
+    return encodeURIComponent(String(value))
 }
 
 export function resolveUrl(
@@ -38,21 +95,23 @@ export function resolveUrl(
     params: Record<string, string | number> | undefined,
     query: UrlQuery | undefined,
 ): string {
-    const resolved = path.replace(
-        DYNAMIC_SEGMENT,
-        (_match, bracketName?: string, colonName?: string) => {
-            const name = bracketName ?? colonName
-            if (name === undefined) {
-                throw new Error(`url(): malformed segment in path "${path}".`)
-            }
-            const value = params?.[name]
-            if (value === undefined) {
-                throw new Error(`url(): missing param "${name}" for path "${path}".`)
-            }
-            return encodeURIComponent(String(value))
-        },
-    )
-    return appendQuery(resolved, query)
+    const parts: string[] = []
+    for (const segment of path.split('/')) {
+        if (segment === '') {
+            parts.push(segment) // preserve a leading/trailing slash boundary
+            continue
+        }
+        const filled = fillSegment(segment, params, path)
+        if (filled === undefined) continue
+        if (Array.isArray(filled)) {
+            for (const item of filled) parts.push(item)
+            continue
+        }
+        parts.push(filled)
+    }
+    // All segments dropped (an all-optional path with no params) collapses to the root.
+    const resolved = parts.length === 0 ? '/' : parts.join('/')
+    return appendQuery(resolved === '' ? '/' : resolved, query)
 }
 
 // Append query values, preserving any existing `?…` and keeping a trailing `#hash` last.

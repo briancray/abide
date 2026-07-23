@@ -12,7 +12,7 @@
 // Diagnostics for OPEN documents (their errors, or empty to clear). The transport is injected
 // (`read`/`write`) so the loop is drivable; the node entry at the bottom wires real stdio.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -22,7 +22,8 @@ import {
     type Node,
     SyntaxKind,
 } from 'typescript/unstable/ast'
-import { API, DiagnosticCategory } from 'typescript/unstable/sync'
+import { API, DiagnosticCategory, SymbolFlags } from 'typescript/unstable/sync'
+import { ABIDE_SEMANTIC_TOKENS_LEGEND } from '../ui/internal/ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import type { Root } from '../ui/internal/ast.ts'
 import {
     CHECK_HEADER_LENGTH,
@@ -32,7 +33,9 @@ import {
     mapOrigToGen,
     type Segment,
 } from '../ui/internal/emitCheck.ts'
+import { encodeSemanticTokens } from '../ui/internal/encodeSemanticTokens.ts'
 import { parse } from '../ui/internal/parse.ts'
+import { templateSemanticTokens } from '../ui/internal/templateSemanticTokens.ts'
 import { CHECK_SUPPRESSED_CODES, findAbideFiles, offsetToLineColumn, overlayFs } from './check.ts'
 
 export interface LspServerOptions {
@@ -40,6 +43,12 @@ export interface LspServerOptions {
     read: ReadableStream<Uint8Array>
     write: (bytes: Uint8Array) => void
 }
+
+// Debounce window for recomputing diagnostics after an edit. Diagnostics lower the whole project + build
+// a fresh tsgo program (~100s of ms), so running them inline on every keystroke saturates the single-
+// threaded server loop and makes interactive requests (semanticTokens, hover) time out. Coalescing to
+// one run after typing settles keeps the loop responsive.
+const REFRESH_DEBOUNCE_MS = 250
 
 interface JsonRpcMessage {
     id?: number | string
@@ -99,16 +108,14 @@ function lineColumnToOffset(source: string, line: number, character: number): nu
 
 // Lower every `.abide` under `dir` into virtual files (generated modules + `.d.ts` companions) served
 // through the overlay. `overrides` supplies unsaved buffer content (keyed by absolute path) in place of
-// the disk file — the source of LIVE diagnostics. Each lowering mints FRESH virtual paths (a monotonic
-// `revision`) so tsgo re-reads the current content — reusing a path leaves its SourceFile cached even
-// under `invalidateAll`/`clearSourceFileCache`. The engine `closeFiles` the prior revision so opens
-// don't accumulate.
-let revision = 0
+// the disk file — the source of LIVE diagnostics. Virtual paths are STABLE (one per `.abide`, no
+// revision) so an unchanged buffer lowers to a byte-identical overlay — the engine keys its warm-API
+// reuse on that. Freshness comes from the engine recreating the API when the overlay changes, NOT from
+// churning paths (see `LspEngine.snapshot`).
 function lowerProject(dir: string, overrides: Record<string, string>): LoweredProject {
     const files: Record<string, string> = {}
     const modules: CheckModule[] = []
     const parseErrors = new Map<string, ParseError>()
-    const rev = ++revision // one fresh revision per lowering, shared by all its modules
     for (const abidePath of findAbideFiles(dir)) {
         let source: string
         try {
@@ -134,7 +141,7 @@ function lowerProject(dir: string, overrides: Record<string, string>): LoweredPr
         const { code, segments } = emitCheck(source, root)
         const tsPath = join(
             dirname(abidePath),
-            `__abide_lsp_${basename(abidePath).replace(/[^\w]/g, '_')}_${rev}.ts`,
+            `__abide_lsp_${basename(abidePath).replace(/[^\w]/g, '_')}.ts`,
         )
         files[tsPath] = code
         modules.push({ abidePath, tsPath, source, segments })
@@ -147,23 +154,33 @@ function lowerProject(dir: string, overrides: Record<string, string>): LoweredPr
 // ---------------------------------------------------------------------------
 
 class LspEngine {
-    private readonly api: API
+    private readonly cwd: string
+    private api: API | null = null
     private files: Record<string, string> = {}
-    private opened: string[] = [] // the prior lowering's open modules, to release
+    private signature = '' // content-hash of the last overlay + open set the current API was built on
+    private lastSnapshot: ReturnType<API['updateSnapshot']> | null = null
 
     constructor(cwd: string) {
-        this.api = new API({ cwd, fs: overlayFs(() => this.files) })
+        this.cwd = cwd
     }
 
-    // Point the overlay at the current (freshly-revisioned) virtual files, RELEASE the prior revision's
-    // opens (so they don't accumulate as dangling paths), and open the new ones. Fresh paths = fresh reads
-    // (a reused path stays cached even under `invalidateAll`/`clearSourceFileCache`); tsgo stays warm.
+    // Return a snapshot for `files`/`open`, building a FRESH tsgo `API` whenever the overlay or open set
+    // changed since the last call, and reusing the warm one when nothing changed. This is deliberate: a
+    // warm API's incremental `updateSnapshot` collapses CROSS-FILE import resolution to `any` after its
+    // first snapshot (a tsgo incremental-resolution defect — a file's own checks stay correct across
+    // snapshots, which is why plain diagnostics looked fine but every `$server/rpc/*` hover was `any`);
+    // a first snapshot on a fresh API always resolves. Reuse keeps hover/completion bursts on an
+    // unchanged buffer warm (the common case); only an actual edit pays the rebuild.
     private snapshot(files: Record<string, string>, open: string[]) {
+        const signature = overlaySignature(files, open)
+        if (this.api !== null && this.lastSnapshot !== null && signature === this.signature)
+            return this.lastSnapshot
+        this.api?.close()
         this.files = files
-        const closeFiles = this.opened.filter((path) => !open.includes(path))
-        const snapshot = this.api.updateSnapshot({ openFiles: open, closeFiles })
-        this.opened = open
-        return snapshot
+        this.api = new API({ cwd: this.cwd, fs: overlayFs(() => this.files) })
+        this.signature = signature
+        this.lastSnapshot = this.api.updateSnapshot({ openFiles: open, closeFiles: [] })
+        return this.lastSnapshot
     }
 
     // Diagnostics for the `open` generated modules.
@@ -191,24 +208,31 @@ class LspEngine {
         return diagnostics
     }
 
-    // Hover: the type string (+ any doc comment) at a generated-module position. Null when the position
-    // resolves to nothing (e.g. inside synthetic scaffolding).
+    // Hover: the type string (+ any doc comment) at a generated-module position, plus the hovered
+    // token's generated span (`start`/`end`) so the caller can report a precise hover `range` — without
+    // it the editor highlights the whole enclosing text node (the entire `{…}` interpolation). Null when
+    // the position resolves to nothing (e.g. inside synthetic scaffolding).
     typeAt(
         files: Record<string, string>,
         open: string[],
         file: string,
         position: number,
-    ): { type: string; documentation: string } | null {
+    ): { type: string; documentation: string; start: number; end: number } | null {
         const snapshot = this.snapshot(files, open)
         const project = snapshot.getDefaultProjectForFile(file)
         if (project === undefined) return null
         const type = project.checker.getTypeAtPosition(file, position)
         if (type === undefined) return null
         const symbol = project.checker.getSymbolAtPosition(file, position)
+        const sourceFile = project.program.getSourceFile(file)
+        const token =
+            sourceFile !== undefined ? getTokenAtPosition(sourceFile, position) : undefined
         return {
             type: project.checker.typeToString(type),
             documentation:
                 symbol !== undefined ? symbol.getDocumentationComment(project.checker) : '',
+            start: token !== undefined ? token.getStart() : position,
+            end: token !== undefined ? token.getEnd() : position,
         }
     }
 
@@ -226,8 +250,17 @@ class LspEngine {
         if (project === undefined) return []
         const symbol = project.checker.getSymbolAtPosition(file, position)
         if (symbol === undefined) return []
+        // Follow an import alias through to the real symbol, so go-to-definition jumps to the SOURCE
+        // (e.g. `$server/rpc/capabilities.ts`) instead of landing on the local `import …` line in the
+        // `.abide`. Non-alias symbols (locals) are used as-is.
+        let target = symbol
+        if ((symbol.flags & SymbolFlags.Alias) !== 0) {
+            const aliased = project.checker.getAliasedSymbol(symbol)
+            if (!project.checker.isUnknownSymbol(aliased) && aliased.declarations.length > 0)
+                target = aliased
+        }
         const locations: Array<{ file: string; pos: number; end: number }> = []
-        for (const handle of symbol.declarations) {
+        for (const handle of target.declarations) {
             const node = handle.resolve(project)
             if (node === undefined) continue
             locations.push({ file: String(handle.path), pos: node.getStart(), end: node.getEnd() })
@@ -333,8 +366,30 @@ class LspEngine {
     }
 
     close(): void {
-        this.api.close()
+        this.api?.close()
     }
+}
+
+// A cheap deterministic signature of the overlay + open set — the engine reuses its warm API only while
+// this is unchanged. FNV-1a over each `path\0content` and the open list catches any content or file-set
+// change (edits, added/removed `.abide`, a different open doc); an unchanged buffer hashes identically.
+function overlaySignature(files: Record<string, string>, open: string[]): string {
+    let hash = 0x811c9dc5
+    const mix = (text: string): void => {
+        for (let index = 0; index < text.length; index++) {
+            hash ^= text.charCodeAt(index)
+            hash = Math.imul(hash, 0x01000193)
+        }
+        hash ^= 0
+        hash = Math.imul(hash, 0x01000193)
+    }
+    for (const path of Object.keys(files).sort()) {
+        mix(path)
+        mix(files[path] ?? '')
+    }
+    mix('')
+    for (const path of open) mix(path)
+    return (hash >>> 0).toString(16)
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +487,17 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
         }
     }
 
+    // Coalesce diagnostics: each edit re-arms the timer, so `refresh` runs once after typing settles
+    // instead of blocking the loop on every keystroke. The timer fires while the loop awaits input.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = (): void => {
+        if (refreshTimer !== null) clearTimeout(refreshTimer)
+        refreshTimer = setTimeout(() => {
+            refreshTimer = null
+            refresh()
+        }, REFRESH_DEBOUNCE_MS)
+    }
+
     const documentPath = (params: unknown): string | undefined => {
         const uri = (params as { textDocument?: { uri?: string } } | undefined)?.textDocument?.uri
         return uri === undefined ? undefined : fileURLToPath(uri)
@@ -492,6 +558,21 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
         }
     }
 
+    // Recover a path's real on-disk case. tsgo canonicalizes `handle.path` to lowercase on a
+    // case-insensitive filesystem, so a location built from it (`…/demo.abide`) opens a phantom
+    // lowercased buffer in the editor that the language server never attaches to. `realpathSync.native`
+    // returns the actual stored casing (`…/Demo.abide`); falls back to the input if the file is absent.
+    const realCasePath = (path: string): string => {
+        try {
+            const real = realpathSync.native(path)
+            // Only accept a pure CASE correction — `realpathSync` also resolves symlinks (e.g. macOS
+            // `/var` → `/private/var`), which would rewrite an otherwise-correct path.
+            return real.toLowerCase() === path.toLowerCase() ? real : path
+        } catch {
+            return path
+        }
+    }
+
     // Map a declaration site to an LSP Location: a virtual generated module → back to its `.abide` (via
     // segments); a `.abide.d.ts` companion (synthetic) → the top of the `.abide`; a real `.ts` → as-is.
     // `byTs` is keyed lowercase — tsgo canonicalizes `handle.path` on a case-insensitive filesystem.
@@ -511,17 +592,18 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
         }
         if (decl.file.endsWith('.abide.d.ts')) {
             return {
-                uri: pathToFileURL(decl.file.slice(0, -'.d.ts'.length)).href,
+                uri: pathToFileURL(realCasePath(decl.file.slice(0, -'.d.ts'.length))).href,
                 range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
             }
         }
+        const file = realCasePath(decl.file)
         let source: string
         try {
-            source = readFileSync(decl.file, 'utf8')
+            source = readFileSync(file, 'utf8')
         } catch {
             return null
         }
-        return makeLocation(decl.file, source, decl.pos, decl.end)
+        return makeLocation(file, source, decl.pos, decl.end)
     }
 
     const handle = (message: JsonRpcMessage): boolean => {
@@ -544,6 +626,10 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                             completionProvider: { triggerCharacters: ['.'] },
                             signatureHelpProvider: { triggerCharacters: ['(', ','] },
                             referencesProvider: true,
+                            semanticTokensProvider: {
+                                legend: ABIDE_SEMANTIC_TOKENS_LEGEND,
+                                full: true,
+                            },
                         },
                     },
                 })
@@ -558,7 +644,7 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                 if (path !== undefined && text !== undefined) {
                     buffers.set(path, text)
                     openDocs.add(path)
-                    refresh()
+                    scheduleRefresh()
                 }
                 return false
             }
@@ -571,13 +657,13 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                 const text = lastChange !== undefined ? lastChange.text : undefined
                 if (path !== undefined && text !== undefined) {
                     buffers.set(path, text)
-                    refresh()
+                    scheduleRefresh()
                 }
                 return false
             }
             case 'textDocument/didSave': {
                 const path = documentPath(message.params)
-                if (path !== undefined) refresh()
+                if (path !== undefined) scheduleRefresh()
                 return false
             }
             case 'textDocument/didClose': {
@@ -601,7 +687,28 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                     )
                     if (info !== null) {
                         const value = `\`\`\`typescript\n${info.type}\n\`\`\`${info.documentation ? `\n\n${info.documentation}` : ''}`
-                        result = { contents: { kind: 'markdown', value } }
+                        // Map the hovered token's generated span back to the `.abide` so the editor
+                        // highlights just that token (e.g. `blurb` in `{cap.blurb}`), not the whole
+                        // interpolation. Omit the range on a synthetic/unmapped token.
+                        let range: object | undefined
+                        if (info.start >= CHECK_HEADER_LENGTH && info.end > info.start) {
+                            const originStart = mapGenToOrig(target.module.segments, info.start)
+                            // Map the last char (inclusive), then + 1 — the generated end offset lands on
+                            // a segment boundary (`mapGenToOrig`'s end is exclusive) and would mis-map.
+                            const originEnd = mapGenToOrig(target.module.segments, info.end - 1) + 1
+                            if (originStart >= 0 && originEnd > originStart) {
+                                const start = offsetToLineColumn(target.module.source, originStart)
+                                const end = offsetToLineColumn(target.module.source, originEnd)
+                                range = {
+                                    start: { line: start.line - 1, character: start.column - 1 },
+                                    end: { line: end.line - 1, character: end.column - 1 },
+                                }
+                            }
+                        }
+                        result = {
+                            contents: { kind: 'markdown', value },
+                            ...(range ? { range } : {}),
+                        }
                     }
                 }
                 send({ jsonrpc: '2.0', id: message.id, result })
@@ -686,10 +793,32 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                 send({ jsonrpc: '2.0', id: message.id, result })
                 return false
             }
+            case 'textDocument/semanticTokens/full': {
+                // Markup + block-framing tokens from the raw `.abide` (the ONE parse walk), NOT the
+                // lowered TS shadow — expression interiors and script/style bodies are left to the
+                // grammar/injection layer. Prefer the unsaved buffer; fall back to disk.
+                const path = documentPath(message.params)
+                let data: number[] = []
+                if (path !== undefined) {
+                    let source = buffers.get(path)
+                    if (source === undefined) {
+                        try {
+                            source = readFileSync(path, 'utf8')
+                        } catch {
+                            source = undefined
+                        }
+                    }
+                    if (source !== undefined)
+                        data = encodeSemanticTokens(source, templateSemanticTokens(source))
+                }
+                send({ jsonrpc: '2.0', id: message.id, result: { data } })
+                return false
+            }
             case 'shutdown':
                 send({ jsonrpc: '2.0', id: message.id, result: null })
                 return false
             case 'exit':
+                if (refreshTimer !== null) clearTimeout(refreshTimer)
                 engine?.close()
                 return true
             default:

@@ -232,9 +232,10 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | Hydration correctness across scenarios (claim vs create-fallback; `{#for await}` re-renders by design) | PW | [x] (/pages/hydration — a seeded-state HydrationProbe per scenario; e2e/hydration.spec asserts zero mismatches on hard load + soft-nav) |
 | Rich-typed `state()` seed initials (`Date`/`BigInt`/`Map`/`Set`/`TypedArray`/refs) round-trip through the hydration value codec — preserved with their type, not JSON-flattened to `null`; a codec-unsupported initial (class instance/fn/symbol) → `null` (lossy) rather than crashing | PW+RT | [x] (/pages/hydration RichSeedProbe row + e2e/hydration.spec `data-{date,big,map}-ok` on hard load + soft-nav; RT: abide stateSeed.test + codec.test lossy-mode) |
 | `[name]` dynamic param routes → `route().params.name` | PW | [x] (/pages/routing/[slug] + e2e/routing.spec) |
+| Optional `[[name]]` (absent → param omitted) + rest `[...name]` (`/`-joined) segments; precedence literal > required > optional > rest | PW | [x] (/pages/routing/blog/[[page]] bare+paged, /pages/routing/files/[...path], /pages/routing/files/latest exact-over-catch-all + e2e/routing.spec) |
 | `route()` → `{ kind, name, params, url, navigating }` (isomorphic) | PW+RT | [x] (/pages/routing pages assert kind/name/params/url) |
 | `navigate(target, opts)` — soft nav (same-route param/query = whole chain kept alive, no re-hydrate; cross-route sharing a layout prefix keeps shared layouts + grafts only the diverging suffix; disjoint = outlet swap) | PW | [x] (/pages/routing navigate() + soft-nav/back-forward e2e; /pages/layouts keep-alive + e2e/routing.spec persistence asserts) |
-| `url(path, params?, query?)` — in-app href resolver (typed params + query string) | PW+RT | [x] (/pages/routing hub builds [slug] hrefs + query strings; e2e asserts href + query round-trip via route().url) |
+| `url(path, params?, query?)` — in-app href resolver (typed params + query string; drops absent optional `[[name]]`, expands rest `[...name]`, all-optional path → optional params arg) | PW+RT | [x] (/pages/routing hub builds [slug] hrefs + query strings + optional/rest hrefs; e2e asserts href + query round-trip via route().url) |
 | Static assets `src/ui/public/` | PW | [ ] |
 
 ## 10. Sockets

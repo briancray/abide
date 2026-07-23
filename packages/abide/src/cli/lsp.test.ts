@@ -72,6 +72,8 @@ test('persistent lsp: live template diagnostics on didOpen, cleared on didChange
         stdout: 'pipe',
         stderr: 'pipe',
     })
+    // Diagnostics are debounced (coalesced per edit), so pause past the window after each edit to let its
+    // publish land: didOpen(bad) → error publish, then didChange(fixed) → cleared publish.
     proc.stdin.write(
         frame({
             jsonrpc: '2.0',
@@ -83,14 +85,18 @@ test('persistent lsp: live template diagnostics on didOpen, cleared on didChange
                 jsonrpc: '2.0',
                 method: 'textDocument/didOpen',
                 params: { textDocument: { uri, languageId: 'abide', version: 1, text: bad } },
-            }) +
-            frame({
-                jsonrpc: '2.0',
-                method: 'textDocument/didChange',
-                params: { textDocument: { uri, version: 2 }, contentChanges: [{ text: fixed }] },
-            }) +
-            frame({ jsonrpc: '2.0', method: 'exit' }),
+            }),
     )
+    await Bun.sleep(600)
+    proc.stdin.write(
+        frame({
+            jsonrpc: '2.0',
+            method: 'textDocument/didChange',
+            params: { textDocument: { uri, version: 2 }, contentChanges: [{ text: fixed }] },
+        }),
+    )
+    await Bun.sleep(600)
+    proc.stdin.write(frame({ jsonrpc: '2.0', method: 'exit' }))
     proc.stdin.end()
     const out = await new Response(proc.stdout).text()
     await proc.exited
@@ -162,8 +168,16 @@ test('hover returns the TS type at a template position; definition jumps templat
     // Hover: the type of `count` (a template reference) is `number`.
     const hover = messages.find((m) => m.id === 2)
     if (hover === undefined) throw new Error('expected a hover response')
-    const value = (hover.result as { contents?: { value?: string } } | null)?.contents?.value ?? ''
-    expect(value).toContain('number')
+    const hoverResult = hover.result as {
+        contents?: { value?: string }
+        range?: { start: { line: number; character: number }; end: { character: number } }
+    } | null
+    expect(hoverResult?.contents?.value ?? '').toContain('number')
+    // A precise range covering just `count` (not the whole `{count.toFixed(2)}`) so the editor
+    // highlights the hovered token — line 3, `{count...}` → `count` spans characters 4..9.
+    expect(hoverResult?.range).toBeDefined()
+    expect(hoverResult?.range?.start).toEqual({ line: 3, character: 4 })
+    expect(hoverResult?.range?.end.character).toBe(9)
 
     // Definition: the template `count` resolves to its script declaration (line 1, mapped back to .abide).
     const definition = messages.find((m) => m.id === 3)
@@ -313,6 +327,7 @@ test('persistent lsp: answers initialize with full-change sync + publishes clean
         stdout: 'pipe',
         stderr: 'pipe',
     })
+    // Diagnostics are debounced, so wait past the window before exiting to let the clean publish land.
     proc.stdin.write(
         frame({
             jsonrpc: '2.0',
@@ -324,9 +339,10 @@ test('persistent lsp: answers initialize with full-change sync + publishes clean
                 jsonrpc: '2.0',
                 method: 'textDocument/didOpen',
                 params: { textDocument: { uri, languageId: 'abide', version: 1, text: clean } },
-            }) +
-            frame({ jsonrpc: '2.0', method: 'exit' }),
+            }),
     )
+    await Bun.sleep(600)
+    proc.stdin.write(frame({ jsonrpc: '2.0', method: 'exit' }))
     proc.stdin.end()
     const out = await new Response(proc.stdout).text()
     await proc.exited
@@ -341,4 +357,118 @@ test('persistent lsp: answers initialize with full-change sync + publishes clean
     const publish = messages.find((m) => m.method === 'textDocument/publishDiagnostics')
     if (publish === undefined) throw new Error('expected a publishDiagnostics message')
     expect((publish.params as { diagnostics: unknown[] }).diagnostics).toEqual([])
+}, 30_000)
+
+// Regression: a symbol imported from ANOTHER file (a `$server/rpc/*`-style module) must hover to its
+// real type, and must STAY resolved after a `didChange`. The warm tsgo API's incremental snapshot used
+// to collapse cross-file import resolution to `any` on every snapshot after the first — so the very
+// first hover looked fine but every hover after an edit went `any`. The engine now rebuilds the API when
+// the overlay changes; this asserts the type survives the edit.
+test('cross-file import hovers to its real type and stays resolved after didChange', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'abide-lsp-'))
+    cleanupDirs.push(root)
+    writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify({
+            compilerOptions: {
+                lib: ['ESNext', 'DOM'],
+                target: 'ESNext',
+                module: 'Preserve',
+                moduleResolution: 'bundler',
+                moduleDetection: 'force',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                strict: true,
+                skipLibCheck: true,
+                types: [],
+                paths: { '$server/*': ['./src/server/*'] },
+            },
+            include: ['src/**/*.ts'],
+        }),
+    )
+    // A cross-file module the page imports (stands in for a `$server/rpc/*` RPC — a plain typed export,
+    // so the test stays hermetic without the real `abide` runtime).
+    const widgetPath = join(root, 'src/server/rpc/widget.ts')
+    mkdirSync(dirname(widgetPath), { recursive: true })
+    writeFileSync(
+        widgetPath,
+        'export interface Widget {\n  label: string\n  count: number\n}\nexport default function widget(): Widget {\n  return { label: "x", count: 1 }\n}\n',
+    )
+    const pagePath = join(root, 'src/ui/pages/p/page.abide')
+    mkdirSync(dirname(pagePath), { recursive: true })
+    const page =
+        '<script module>\nimport widget from "$server/rpc/widget"\nconst w = widget()\n</script>\n<p>{w.label}</p>\n'
+    const edited = page.replace('<p>{w.label}</p>', '<p>{w.label}!</p>') // a trivial template edit → didChange
+    const uri = pathToFileURL(pagePath).href
+    writeFileSync(pagePath, page)
+    const at = { line: 4, character: 4 } // the `w` inside `{w.label}` — its type flows from widget.ts
+
+    const proc = Bun.spawn(['node', LSP], {
+        cwd: root,
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    proc.stdin.write(
+        frame({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { rootUri: pathToFileURL(root).href },
+        }) +
+            frame({
+                jsonrpc: '2.0',
+                method: 'textDocument/didOpen',
+                params: { textDocument: { uri, languageId: 'abide', version: 1, text: page } },
+            }) +
+            frame({
+                jsonrpc: '2.0',
+                id: 2,
+                method: 'textDocument/hover',
+                params: { textDocument: { uri }, position: at },
+            }) +
+            // an edit, then hover again — the path that used to regress to `any`
+            frame({
+                jsonrpc: '2.0',
+                method: 'textDocument/didChange',
+                params: { textDocument: { uri, version: 2 }, contentChanges: [{ text: edited }] },
+            }) +
+            frame({
+                jsonrpc: '2.0',
+                id: 3,
+                method: 'textDocument/hover',
+                params: { textDocument: { uri }, position: at },
+            }) +
+            // Go-to-definition on the imported `widget` (line 2 `const w = widget()`) must jump THROUGH
+            // the import to the source file, not land on the local `import …` line.
+            frame({
+                jsonrpc: '2.0',
+                id: 4,
+                method: 'textDocument/definition',
+                params: { textDocument: { uri }, position: { line: 2, character: 12 } },
+            }) +
+            frame({ jsonrpc: '2.0', method: 'exit' }),
+    )
+    proc.stdin.end()
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    const messages = parseFrames(out)
+    const hoverValue = (id: number): string =>
+        (messages.find((m) => m.id === id)?.result as { contents?: { value?: string } } | null)
+            ?.contents?.value ?? ''
+
+    // Both hovers resolve `w` to the imported `Widget` — never `any`.
+    expect(hoverValue(2)).toContain('Widget')
+    expect(hoverValue(3)).toContain('Widget') // the post-didChange hover — the regression guard
+    expect(hoverValue(3)).not.toContain('any')
+
+    // Definition follows the import alias into `widget.ts` (the `export default function widget`), not
+    // the `.abide` import line.
+    const definition = messages.find((m) => m.id === 4)
+    const target = (
+        definition?.result as Array<{ uri: string; range: { start: { line: number } } }>
+    )?.[0]
+    // Case-insensitive compare: tsgo canonicalizes the path to lowercase on a case-insensitive FS.
+    expect(target?.uri.toLowerCase()).toBe(pathToFileURL(widgetPath).href.toLowerCase())
+    expect(target?.range.start.line).toBe(4) // `export default function widget(): Widget {`
 }, 30_000)

@@ -13,6 +13,28 @@ export interface Span {
     end: number
 }
 
+// A syntax-highlight token emitted by the parser while it builds the tree (opt-in via
+// `parse(source, { onToken })`). These color the MARKUP + block framing only — tag/component
+// names, attribute names, quoted values, comments, the `< > = /` punctuation, and the
+// `{#…}`/`{:…}`/`{/…}` block framing. Expression interiors and raw script/style bodies are left
+// untouched (those are the type-checking shadow's job). Reusing the one parse walk means the same
+// grammar that accepts the source colors it — no second lexer to drift.
+export type TemplateTokenType =
+    | 'tag'
+    | 'type' // component tag name (TitleCase)
+    | 'attribute'
+    | 'string'
+    | 'comment'
+    | 'keyword'
+    | 'operator'
+    | 'number'
+
+export interface TemplateToken {
+    start: number
+    length: number
+    type: TemplateTokenType
+}
+
 // ---------------------------------------------------------------------------
 // Attributes / directives (on elements and components)
 // ---------------------------------------------------------------------------

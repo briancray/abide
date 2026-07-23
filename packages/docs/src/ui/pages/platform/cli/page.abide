@@ -14,7 +14,7 @@
 abide dev --port 4321</code></pre>
 
   <h2 id="check">Type-check</h2>
-  <p><code>check</code> type-checks <code>.abide</code> files — script bodies, template expressions, and cross-file component props — by lowering to TypeScript and mapping diagnostics back. <code>lsp</code> exposes the same engine to editors (diagnostics, hover, go-to-definition, completion, signature help, references).</p>
+  <p><code>check</code> type-checks <code>.abide</code> files — script bodies, template expressions, and cross-file component props — by lowering to TypeScript and mapping diagnostics back. <code>lsp</code> exposes the same engine to editors (diagnostics, hover, go-to-definition, completion, signature help, references, and semantic-token highlighting) — the <code>packages/zed-abide</code> extension runs it in Zed.</p>
   <pre class="code" data-lang="bash"><code>abide check           # type-check .abide (template + cross-file component props)
 abide lsp             # .abide language server over stdio (editors)</code></pre>
 

@@ -1,0 +1,22 @@
+<script>
+  import { url } from "abide/shared/url"
+
+  // Optional `[[name]]` and rest `[...name]` segments. url() DROPS an absent optional segment and
+  // EXPANDS a rest param into a `/`-joined path (each part encoded). When every declared segment is
+  // optional the params argument itself is optional — so both call shapes below type-check.
+</script>
+
+<dl class="route">
+  <dt>url("/pages/routing/blog/[[page]]", &#123;&#125;)</dt>
+  <dd data-testid="url-optional-absent">{url("/pages/routing/blog/[[page]]", {})}</dd>
+  <dt>url("/pages/routing/blog/[[page]]", &#123; page: 2 &#125;)</dt>
+  <dd data-testid="url-optional-present">{url("/pages/routing/blog/[[page]]", { page: 2 })}</dd>
+  <dt>url("/pages/routing/files/[...path]", &#123; path: "guide/intro" &#125;)</dt>
+  <dd data-testid="url-rest">{url("/pages/routing/files/[...path]", { path: "guide/intro" })}</dd>
+</dl>
+
+<div class="row">
+  <a data-testid="optional-link-bare" href={url("/pages/routing/blog/[[page]]", {})}>open /blog</a>
+  <a data-testid="optional-link-paged" href={url("/pages/routing/blog/[[page]]", { page: 2 })}>open /blog/2</a>
+  <a data-testid="rest-link" href={url("/pages/routing/files/[...path]", { path: "guide/intro" })}>open /files/guide/intro</a>
+</div>

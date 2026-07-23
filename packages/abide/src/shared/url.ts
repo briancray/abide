@@ -1,6 +1,10 @@
-// url() — isomorphic in-app href builder. Fills a page path's dynamic segments (`[name]` or `/:name`)
-// from `params` and appends `query` as a query string, returning the resolved href. Call shapes:
-//   url('/users/[id]', { id }, { tab: 'posts' })   // (path, params, query?)
+// url() — isomorphic in-app href builder. Fills a page path's dynamic segments from `params` and
+// appends `query` as a query string, returning the resolved href. Segment forms mirror the router:
+// `[name]` required, `[[name]]` optional (omit the param to drop it), `[...name]` rest (a `/`-joined
+// string), plus the legacy `/:name`. Call shapes:
+//   url('/users/[id]', { id }, { tab: 'posts' })    // (path, params, query?)
+//   url('/blog/[[page]]', { page: 2 })              // (path, params?) — optional segment
+//   url('/docs/[...path]', { path: 'a/b' })         // (path, params) — rest → /docs/a/b
 //   url('/search', { q: 'abide' })                  // (path, query?) — no dynamic segments
 //   url(new URL(href), { page: 2 })                 // (url, query?) — already-resolved URL
 // `params` is typed from the path literal, so a missing/misnamed segment is a compile error; a missing

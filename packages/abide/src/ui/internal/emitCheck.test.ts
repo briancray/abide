@@ -67,6 +67,42 @@ describe('bidirectional round-trip', () => {
             }
         }
     })
+
+    // Clause bindings (`{:then x}` / `{:catch e}`, and the inline `{#await p then x}`) are source-mapped
+    // like `{#for}` bindings, so hover / go-to-definition resolve on them. They used to be emitted as
+    // un-mapped synthetic text — the binding had no `.abide` span, so the editor showed nothing on it.
+    test('then/catch clause bindings map to the .abide (hover works on them)', () => {
+        // The FIRST occurrence of each name in these sources is the binding site (before any use).
+        const cases: Array<{ source: string; name: string }> = [
+            {
+                source: '<div>{#await load()}p{:then value}<b>{value.title}</b>{/await}</div>',
+                name: 'value',
+            },
+            {
+                source: '<div>{#await load()}p{:catch oops}{oops.message}{/await}</div>',
+                name: 'oops',
+            },
+            {
+                source: '<div>{#await load() then ready}<b>{ready.title}</b>{/await}</div>',
+                name: 'ready',
+            },
+            {
+                source: '<div>{#try}<b>{risky()}</b>{:catch problem}{problem.message}{/try}</div>',
+                name: 'problem',
+            },
+            {
+                source: '<ul>{#for await chunk of stream()}<li>{chunk}</li>{:catch fail}{fail.message}{/for}</ul>',
+                name: 'fail',
+            },
+        ]
+        for (const { source, name } of cases) {
+            const { segments } = emitCheck(source, parse(source))
+            const bindingOffset = source.indexOf(name) // first occurrence = the binding
+            const gen = mapOrigToGen(segments, bindingOffset)
+            expect(gen).toBeGreaterThanOrEqual(0) // the binding is mapped, not synthetic
+            expect(mapGenToOrig(segments, gen)).toBe(bindingOffset) // and round-trips exactly
+        }
+    })
 })
 
 describe('lowering shape', () => {

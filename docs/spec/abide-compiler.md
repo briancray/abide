@@ -108,9 +108,14 @@ navigation**.
 
 ## C6. Pages, layouts, routing, navigation
 
-1. **File-based routing = filesystem route tree.** `pages/foo/page.abide` → `/foo`;
-   `[name]` → `route().params.name`; nested dirs nest routes. `layout.abide` wraps nested
-   routes; **the layout's outlet is `<slot/>`** (C4.2).
+1. **File-based routing = filesystem route tree.** `pages/foo/page.abide` → `/foo`; nested
+   dirs nest routes. `layout.abide` wraps nested routes; **the layout's outlet is `<slot/>`**
+   (C4.2). Dynamic segments: `[name]` **required** (captured into `route().params.name`);
+   `[[name]]` **optional** (matches zero or one segment — absent → the param is omitted);
+   `[...name]` **rest/catch-all** (terminal — captures the remaining segments as a `/`-joined
+   string). **Match precedence** picks the most specific: an all-literal (exact) route wins
+   outright; otherwise patterns rank segment-by-segment `literal > required > optional > rest`,
+   a longer pattern breaks a tie, and iteration order (loadApp-sorted) is the final tiebreak.
 2. **Layouts persist across same-chain nav** — the layout's effect scope survives; only the
    child outlet subtree remounts. State preserved.
 3. **`route()` is the single isomorphic reactive accessor** (FD2; `page` is retired) —
@@ -294,12 +299,18 @@ bespoke checker.
 5. **Control-flow blocks preserve TS narrowing** — `{#if x}` narrows in-branch, `{#await}{:then
    v}` types `v`, `{#for item of list}` types `item`, `{:catch e}` types `e`, `{#switch}{:case}`
    narrows. The generated TS preserves flow narrowing.
-6. **Generated `src/.abide/*.d.ts` drive typed routing** — route params (`[name]` →
-   `route().params.name`), `url(path, args)` type-safe against the route tree, typed `navigate`
-   targets — all from generated types keyed to the filesystem routes.
-7. **`abide check` (batch/CI) and `abide lsp` (editor: diagnostics/completion/hover/go-to-def
-   over stdio) share one core** — the `.abide`→TS transform + a TS language service. `check` is a
-   one-shot run of what `lsp` does live.
+6. **Generated `src/.abide/*.d.ts` drive typed routing** — route params (`[name]`/`[...name]`
+   required, `[[name]]` optional → `route().params.name`), `url(path, args)` type-safe against
+   the route tree, typed `navigate` targets — all from generated types keyed to the filesystem
+   routes. `url(path, params?, query?)` fills `[name]` (required), `[[name]]` (optional — an
+   absent param drops the segment), and `[...name]` (rest — a `/`-joined string, each part
+   encoded); an all-optional path makes the params argument itself optional. The legacy `/:name`
+   colon form is still accepted as a required segment.
+7. **`abide check` (batch/CI) and `abide lsp` (editor: diagnostics/completion/hover/go-to-def/
+   signature-help/find-references/**semantic-tokens** over stdio) share one core** — the
+   `.abide`→TS transform + a TS language service. `check` is a one-shot run of what `lsp` does
+   live. The semantic-tokens pass is markup-only (colored from the one parse walk, not the TS
+   shadow); the Zed extension (`packages/zed-abide`) consumes it.
 
 ---
 

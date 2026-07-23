@@ -50,7 +50,10 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
 2. **Reload strategy: fast full page reload, not stateful HMR.** On change, rebuild (Bun is fast)
    and reload the page. State-preserving HMR is a *divergent* runtime (state survives edits in
    ways prod never does), against the consistency goal. **HMR is opportunistic/parked** — adopted
-   only if it proves genuinely low-effort; otherwise full-reload stands.
+   only if it proves genuinely low-effort; otherwise full-reload stands. The one concession to the
+   full reload wiping UI position: the client snapshots window + identified-element scroll into
+   `sessionStorage` just before reloading and restores it on the next load (position only — not
+   component state, so no runtime divergence).
 3. **Reload transport = the socket mux** — a **reserved dev-reload channel** on `/__abide/sockets`
    (parallel to the §8 invalidation channel), reusing the WebSocket infrastructure rather than a
    bespoke dev server. The dev-reload and invalidation channels are **reserved internal channels**,

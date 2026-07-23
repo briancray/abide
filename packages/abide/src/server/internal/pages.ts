@@ -475,8 +475,22 @@ export function streamSoftNav(
     const encoder = new TextEncoder()
     return new ReadableStream<Uint8Array>({
         async start(controller) {
-            const frame = (obj: unknown): void =>
-                controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
+            // The client can navigate away / abort mid-stream (e.g. a soft-nav's background middleware
+            // confirm never reads the body — it only wants the redirect envelope). That's EXPECTED, not a
+            // server fault: a cancelled controller reports `desiredSize === null`, so stop writing rather
+            // than throwing/logging. Only a genuine render error surfaces below.
+            let disconnected = false
+            const frame = (obj: unknown): void => {
+                if (disconnected || controller.desiredSize === null) {
+                    disconnected = true
+                    return
+                }
+                try {
+                    controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
+                } catch {
+                    disconnected = true
+                }
+            }
             // `sharedLevels` > 0: the shell is only the diverging suffix; the client keeps that many outer
             // layout instances alive and grafts this into the innermost kept layout's outlet (C6.2).
             frame({ kind: 'shell', html: shell, url: urlPath, sharedLevels })
@@ -487,17 +501,25 @@ export function streamSoftNav(
                 ) {
                     await runInContext(ctx, async () => {
                         for await (const patch of drainPatches(stream)) {
+                            if (disconnected) break // client gone — stop draining
                             if (patch.op === 'complete') frame({ kind: 'complete', id: patch.id })
                             else frame({ kind: patch.op, id: patch.id, html: patch.html }) // "fill" | "append"
                         }
                     })
                 }
             } catch (caught) {
+                // A genuine render/drain error — a client disconnect is already absorbed by `frame`.
                 log.channel('abide:stream').error('streaming soft-nav drain failed:', caught)
             }
-            const seed = runInContext(ctx, () => collectSeed(config))
-            frame({ kind: 'seed', seed })
-            controller.close()
+            if (!disconnected) {
+                const seed = runInContext(ctx, () => collectSeed(config))
+                frame({ kind: 'seed', seed })
+                try {
+                    controller.close()
+                } catch {
+                    // Raced with a client disconnect between the guard and here — nothing to do.
+                }
+            }
             ctx.stream = undefined
         },
     })

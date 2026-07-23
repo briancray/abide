@@ -40,14 +40,30 @@ const DEFAULT_PORT = 3000
 const PORT_SCAN_LIMIT = 100
 
 // The browser-side live-reload client (BP2.3). Connects to the mux, subscribes to the dev-reload
-// channel, and reloads on any message. Kept dependency-free and defensive so a transport hiccup
-// never breaks the page.
+// channel, and reloads on any message. A dev reload is a FULL `location.reload()` (it always reflects
+// the edit), but that wipes scroll — so before reloading we snapshot the window scroll plus every
+// identified scrolled element (`[data-testid]`/`[id]`, e.g. an `overflow` strip) into sessionStorage,
+// and restore it on the next load. Kept dependency-free and defensive so a transport hiccup / a private-
+// mode sessionStorage throw never breaks the page.
 const DEV_RELOAD_SNIPPET =
     `(function(){try{` +
+    `var K="__abide_dev_scroll";` +
+    // Restore scroll captured just before the previous dev reload, then clear it (two frames so the
+    // SSR'd layout has settled).
+    `try{var s=sessionStorage.getItem(K);if(s){sessionStorage.removeItem(K);var st=JSON.parse(s);` +
+    `requestAnimationFrame(function(){requestAnimationFrame(function(){` +
+    `scrollTo(st.x||0,st.y||0);var es=st.els||[];` +
+    `for(var i=0;i<es.length;i++){var n=document.querySelector(es[i].sel);if(n){n.scrollLeft=es[i].l;n.scrollTop=es[i].t;}}` +
+    `});});}}catch(_){}` +
+    // Snapshot window + every identified scrolled element so the reload can restore position.
+    `function cap(){try{var es=[];var ns=document.querySelectorAll("[data-testid],[id]");` +
+    `for(var i=0;i<ns.length;i++){var n=ns[i];if(n.scrollLeft||n.scrollTop){var d=n.getAttribute("data-testid");` +
+    `var sel=d?'[data-testid="'+d+'"]':'#'+CSS.escape(n.id);es.push({sel:sel,l:n.scrollLeft,t:n.scrollTop});}}` +
+    `sessionStorage.setItem(K,JSON.stringify({x:scrollX,y:scrollY,els:es}));}catch(_){}}` +
     `var proto=location.protocol==="https:"?"wss://":"ws://";` +
     `var ws=new WebSocket(proto+location.host+"/__abide/sockets");` +
     `ws.addEventListener("open",function(){ws.send(JSON.stringify({t:"sub",name:${JSON.stringify(DEV_RELOAD_CHANNEL)}}));});` +
-    `ws.addEventListener("message",function(e){try{var f=JSON.parse(e.data);if(f&&f.name===${JSON.stringify(DEV_RELOAD_CHANNEL)}&&f.msg!==undefined)location.reload();}catch(_){}});` +
+    `ws.addEventListener("message",function(e){try{var f=JSON.parse(e.data);if(f&&f.name===${JSON.stringify(DEV_RELOAD_CHANNEL)}&&f.msg!==undefined){cap();location.reload();}}catch(_){}});` +
     `}catch(_){}})();`
 
 export interface ServeOptions {
