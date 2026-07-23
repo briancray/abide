@@ -10,6 +10,7 @@
 // internal request back through the app's full middleware/auth chain, so whatever the app's
 // middleware enforces applies here uniformly with the browser and CLI surfaces.
 
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
 import type { Socket } from '../socket.ts'
@@ -109,7 +110,7 @@ function listTools(config: AppConfig): McpTool[] {
 
 // Dispatch an RPC tool by routing an internal request to `/rpc/<name>` on this same server, so it
 // runs the identical middleware/auth chain as any browser or CLI call (MS2.5). Reads carry the
-// args object in `?args=`; mutations send it as a JSON body. Auth headers ride along.
+// args object in `?__abide_args=`; mutations send it as a JSON body. Auth headers ride along.
 async function callRpc(rpc: RpcEntry, args: unknown, request: Request): Promise<McpToolResult> {
     const headers = new Headers()
     const authorization = request.headers.get('authorization')
@@ -121,7 +122,7 @@ async function callRpc(rpc: RpcEntry, args: unknown, request: Request): Promise<
     let response: Response
     if (rpc.read) {
         const target = new URL(`/__abide/rpc/${rpc.name}`, request.url)
-        target.searchParams.set('args', encoded)
+        target.searchParams.set(RPC_QUERY_PARAMS.args, encoded)
         response = await fetch(target, { method: rpc.method, headers })
     } else {
         const target = new URL(`/__abide/rpc/${rpc.name}`, request.url)

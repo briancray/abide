@@ -4,7 +4,7 @@
 // LAZY (pull-based, HWM 0), exactly like `jsonl.ts`: the source is consumed only as the body is READ,
 // and it is tagged see-through with the pre-encoding source. So `GET(() => sse(gen()))` is replayable —
 // a cell-backed read taps the raw source to build a ReplayableStream and the discarded, unread Response
-// body never drains it (no double-consumption). The `?from=` resume re-encodes as sse (its tagged
+// body never drains it (no double-consumption). The `?__abide_from=` resume re-encodes as sse (its tagged
 // encoding). This makes sse fully isomorphic (SSR-block/seed/resume), on par with jsonl.
 //
 // The prelude + heartbeat are deferred to the FIRST real read (a discarded body never opens):
@@ -88,7 +88,7 @@ export function sse<C>(
     if (!headers.has('cache-control')) headers.set('cache-control', 'no-cache')
     if (!headers.has('x-accel-buffering')) headers.set('x-accel-buffering', 'no')
     // Tag with the pre-encoding source so a cell-backed read is REPLAYABLE (replayable-streams.md §4);
-    // the router re-encodes the replayed transcript as sse (its tagged encoding) on `?from=` resume.
+    // the router re-encodes the replayed transcript as sse (its tagged encoding) on `?__abide_from=` resume.
     return tagResponseSource(new Response(stream, { ...init, headers }), {
         kind: 'stream',
         source: iterable,

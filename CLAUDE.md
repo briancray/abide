@@ -49,7 +49,12 @@
 
 Handler takes **one positional argument** — a single object `{...}` (or absent for zero-arg). Its
 properties are the input schema / MCP tool props / CLI flags / cache-key args. Any handler may
-return a stream (`jsonl`/`sse`). Reads put args in the URL, mutations in the body.
+return a stream (`jsonl`/`sse`). Reads put args in the URL, mutations in the body. A read's URL args
+take **two forms**: the canonical `?__abide_args=<json>` blob machine callers emit (browser proxy,
+test app, MCP), or **flat per-field query params** (`?key=beta&n=5`) for hand-testing/curl — each
+coerced to its `input`-schema field type (no runtime schema → the raw string passes through). The
+reserved transport params are namespaced (`__abide_args`, `__abide_from`) so they never collide with a
+handler's own arg fields; the JSON blob wins when both are present.
 
 **RPC `opts`**: `{ schemas?: { input?, output?, files? }, clients?: { browser?, mcp?, cli? },
 middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, shared?, tags? } }`.
@@ -76,12 +81,12 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
   `AsyncIterable` (or `jsonl(gen())`, which sees through to it) is stored as a **ReplayableStream**
   (replay-then-live; ttl clock from stream CLOSE; open streams pinned; per-stream cap
   `ABIDE_MAX_STREAM_BUFFER_SIZE`, default unbounded) so concurrent/late viewers share one run. Resume a
-  retained transcript over `GET /__abide/rpc/<name>?args=…&from=<count>` (re-encoded in the handler's ORIGINAL
+  retained transcript over `GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>` (re-encoded in the handler's ORIGINAL
   encoding — jsonl resumes as jsonl, sse as sse). **Built:** primitive + cell + verb routing + shared
   streaming + json/jsonl/**sse** see-through (all lazy) + resumable endpoint + the **SSR→client hydration
   handoff** — a `{#for await}` over a known-RPC source seeds its decoded transcript so hydrate re-reads the
   source with NO client re-invoke: on hydrate `replayStreams` warms the RPC cell via `cell.seedStream` — a
-  completed (mode-A) inline transcript, or an open (mode-B) **prefix + `?from=<count>` resume source** — and
+  completed (mode-A) inline transcript, or an open (mode-B) **prefix + `?__abide_from=<count>` resume source** — and
   the block drains that warm cell (a non-RPC source still re-iterates). There is no separate DOM handoff; the
   server paint is a discarded placeholder. **`{#for await}` is REACTIVE (not one-shot):** its client mount
   wraps the drain in an effect subscribed to the cell's state signal (not per-chunk), so a
@@ -231,7 +236,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `fn.peek` / `fn.pending` / `fn.refreshing` / `fn.error` / `fn.watch` | reactive probes |
 | `fn.isError(e, name)` | narrow a typed error |
 | bare call on a streaming handler | resolves to a fresh replay-then-live `AsyncIterable<C>` cursor (per caller, over one shared run) |
-| **streaming read/mutation** `StreamRead<Args, C>` / `StreamMutation<Args, C>` | any handler (read OR mutation) that yields an `AsyncIterable<C>`; replaces the value verbs with reactive chunk probes: `fn.peek(args): C\|undefined` (the **latest chunk** — the "current value"), `fn.chunks(args): C[]\|undefined` (transcript snapshot), `fn.done(args)`, `fn.error(args)`. A streaming mutation is consumed client-side via `{#for await x of fn()}` identically; only the `?from=` HTTP RESUME endpoint stays read-only |
+| **streaming read/mutation** `StreamRead<Args, C>` / `StreamMutation<Args, C>` | any handler (read OR mutation) that yields an `AsyncIterable<C>`; replaces the value verbs with reactive chunk probes: `fn.peek(args): C\|undefined` (the **latest chunk** — the "current value"), `fn.chunks(args): C[]\|undefined` (transcript snapshot), `fn.done(args)`, `fn.error(args)`. A streaming mutation is consumed client-side via `{#for await x of fn()}` identically; only the `?__abide_from=` HTTP RESUME endpoint stays read-only |
 
 ## `.abide` template grammar
 
@@ -304,8 +309,8 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 | --- | --- |
 | `abide scaffold <name>` | scaffold + install + dev (`--no-install`/`--no-dev`/`--no-git`) |
 | `abide dev` | same pipeline as build + watch + full live-reload (over the socket mux); `--port` (default `3000`) hops to the next open port if taken; graceful `onStop` teardown on SIGINT/SIGTERM/crash |
-| `abide build` | code-split client → content-hashed chunks + `manifest.json` into `dist/_app/<hash>/` |
-| `abide start` | serve the app against the built `dist/` client assets (no bundler at boot; builds first if absent); `--port` (default `3000`) binds directly (hard `EADDRINUSE` on clash); graceful `onStop` teardown on SIGINT/SIGTERM/crash |
+| `abide build` | code-split client → content-hashed chunks + `manifest.json` into `dist/_app/<hash>/`; also bakes the type-derived schema map to `dist/schemas.json` (clearing any stale one first) |
+| `abide start` | serve the app against the built `dist/` client assets (no bundler at boot; builds first if absent); prefers the baked `dist/schemas.json` over a live `node`/tsgo derivation pass; `--port` (default `3000`) binds directly (hard `EADDRINUSE` on clash); graceful `onStop` teardown on SIGINT/SIGTERM/crash |
 | `abide run <file> [args...]` | run script under the abide runtime (no HTTP; `onStart`/`onStop` run) |
 | `abide compile [--target] [--out]` | standalone server executable (embeds assets) |
 | `abide cli [--target] [--out] [--platforms]` | dual-mode binary: embeds app, self-hosts or targets `ABIDE_APP_URL`; interactive with no subcommand |
@@ -324,12 +329,13 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 | `src/app.ts` | `middleware` + lifecycle hooks |
 | `src/ui/pages/**/page.abide` · `layout.abide` · `src/ui/public/` | routes / layouts / static |
 | `src/bundle/window.ts` | `BundleWindow` config |
-| `src/.abide/*` | generated types + JSON Schema (+ `--dump` proxies) |
+| `src/.abide/*` | reserved generated-types namespace; `abide check`/`lsp` synthesize the typed `<file>.abide.d.ts` companions **virtually** (in-memory), not on disk |
 | `dist/_app/<hash>/` | content-addressed code-split client build (hashed chunks + `index.json`; a stable `dist/manifest.json` points `abide start` at it) |
+| `dist/schemas.json` | baked type-derived input/output JSON Schema map (`abide build`); `abide start` merges it at boot so prod carries no `node`/tsgo dependency |
 | `$server/*` · `$ui/*` · `$shared/*` | tsconfig-path import aliases for `src/server/*` · `src/ui/*` · `src/shared/*` (scaffolded into the app `tsconfig.json`; resolved by the Bun runtime and `abide check`). A local `.ts` imported into an `.abide` client script stays unsupported client-side (aliased or relative) — share client state via `state.shared(key)`. |
 
 ## Generated routes
-`/__abide/rpc/<name>` (per-RPC transport; `+ ?from=<count>` stream resume) · `/openapi.json` (OpenAPI
+`/__abide/rpc/<name>` (per-RPC transport; `+ ?__abide_from=<count>` stream resume) · `/openapi.json` (OpenAPI
 3.1) · `/__abide/mcp` (MCP; socket → tail/publish tools) · `/__abide/sockets`
 (multiplexed WS + per-socket HTTP face) · `/__abide/health` · `/__abide/cli` (per-user install) ·
 `/__abide/inspector` (gated) · `/__abide/chunk/<name>-<hash>.(js|css)` (content-hashed, code-split client
@@ -349,5 +355,6 @@ assets — the loader entry + per-route chunks + shared chunks + CSS; served imm
 | `ABIDE_RPC_TIMEOUT` | default for the RPC `timeout` prop (bilateral); per-RPC `timeout` overrides |
 | `ABIDE_SOCKET_TIMEOUT` | socket idle/connection timeout (WS) |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | default max request body |
+| `ABIDE_DERIVE_SCHEMAS` (`0`) | disable load-time type-derived schema inference at boot (default on; `abide dev`/`run`/test app derive live via a `node`/tsgo pass, `abide build` bakes to `dist/schemas.json`) |
 | `ABIDE_LOG_FORMAT` (`json`) / `DEBUG` / `ABIDE_DEV_SURFACE` | log format / channel gating / dev request log |
 | `ABIDE_ENABLE_INSPECTOR` / `ABIDE_INSPECT` | inspector route (off by default) / debug instrumentation |

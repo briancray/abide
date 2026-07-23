@@ -19,9 +19,7 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "abide-check": "bun src/cli/bin.ts check src/server/__fixtures__/app",
-    "bench": "bun run bench/run.ts",
-    "bench:delta": "bun run bench/delta.ts"
+    "abide-check": "bun src/cli/bin.ts check src/server/__fixtures__/app"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.10.6",

@@ -314,8 +314,23 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
 4. **Output derivation unwraps the response wrapper:** `TypedResponse<T>`/`json(T)` → `T`;
    `jsonl`/`sse` → element type; `redirect`/`error` union members excluded from success
    schema.
-5. **Build-time extraction**, emitted to `src/.abide/` as inspectable JSON Schema. Not
-   computed at request time.
+5. **Derived at load, not per request.** `loadApp` runs ONE batched tsgo session over every
+   RPC missing a hand-written schema at boot (sub-second for a whole app — grouped by tsconfig
+   project, one Node/tsgo bridge) and merges the derived **input** AND **output** schemas into
+   `options.schemas` (per slot — a hand-written `input`/`output` schema wins for that slot, suppressing
+   the derived one wholesale; there is no per-arg-field merge), so the registry (OpenAPI/MCP),
+   the router's input validation, and its output drift-check + shaping (§5.2) all consume them
+   with no extra wiring. An unrepresentable position (§11.3) derives nothing and stays as-is.
+   Output derivation unwraps the response wrapper (§11.4). One type-level limitation: a
+   `json(T) | error()` union collapses to `Response` (a `TypedResponse<T>` is a subtype of
+   `Response`), erasing `T` — return the bare value in the success branch for a typed
+   success+error union. Opt out with `ABIDE_DERIVE_SCHEMAS=0`. Live derivation needs `node` on
+   PATH (the tsgo bridge can't run under Bun); `abide dev`/`run` and the test app derive live.
+   **Baked (§11.5):** `abide build` writes the derived schema map to `dist/schemas.json`, and
+   `loadApp` prefers it over a live tsgo pass when present — so `abide start` (and a future
+   source-less `compile`/`cli`) merges schemas at boot with no derivation, and prod carries no
+   tsgo/node dependency. `abide build` first clears any stale `dist/schemas.json` so it always
+   re-derives from current source.
 
 ## 12. Streaming reads/writes
 
@@ -368,8 +383,17 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
 other path is an app page route. So `/rpc/*` (and any non-`/__abide/*` path) is free for application
 pages — nothing is reserved outside `/__abide/*`.
 
-1. **Reads (`GET`/`HEAD`): args object in the URL** (canonical-keyer → compact query
-   param; GET has no body). Safe/idempotent, cacheable, coalesced. **Mutations
+1. **Reads (`GET`/`HEAD`): args object in the URL** (GET has no body). Two accepted forms:
+   the canonical **`?__abide_args=<json>`** blob machine callers emit (browser proxy, test app,
+   MCP, channel-auth — canonical-keyer → one compact param), or **flat per-field query params**
+   (`?key=beta&n=5`) — the hand-testable/curl form — each string coerced to its `input`-schema
+   field type via the shared `coerceStringToType` (`decodeQueryArgs.ts`; same string→typed rule as
+   multipart form-text and `env`). When no runtime schema is available (a type-derived RPC carries
+   none at request time) or a field's type is undeclared, the raw string passes through and any
+   downstream validation — not the decoder — emits the 422. The blob wins when both are present.
+   The reserved transport params are **namespaced** (`__abide_args`, `__abide_from`) precisely so
+   they can never collide with a handler's own arg field named `args`/`from`. Safe/idempotent,
+   cacheable, coalesced. **Mutations
    (`POST`/`PUT`/`PATCH`/`DELETE`): args in the body** (value codec), may
    `invalidate`/`amend`/`refresh`; **not read-cached, not coalesced (today).** **SUPERSEDED
    (designed, not yet built — `replayable-streams.md`):** mutations would route through the

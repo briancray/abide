@@ -14,13 +14,15 @@
 //
 // Routing is intentionally thin: `/rpc/<name>` dispatches to a registered Rpc/Mutation,
 // `/__abide/health` reports reachability, everything else 404s. Read rpcs (GET/HEAD) take
-// their args from the `?args=` query param and go through the cache-backed `load`; mutations
-// take args from the JSON body and call the handler directly. A handler that already returned
+// their args from the `__abide_args` query blob (or flat query params) and go through the
+// cache-backed `load`; mutations take args from the JSON body and call the handler directly. A
+// handler that already returned
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
 import { health } from '../../shared/health.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
@@ -48,6 +50,7 @@ import {
     normalizeCrossOrigin,
     preflightResponse,
 } from './cors.ts'
+import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { sharedLayoutDepth } from './layouts.ts'
 import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
 import { matchRoute } from './matchRoute.ts'
@@ -617,8 +620,14 @@ async function dispatch(
     // `FormData` (a `File` rides in it, never in a JSON args object), passed straight to the handler.
     let isMultipart = false
     if (meta.read) {
-        const raw = url.searchParams.get('args')
-        args = raw !== null ? JSON.parse(raw) : {}
+        // Reads carry args in the URL two ways: the canonical `__abide_args` JSON blob (what the
+        // browser proxy / test app / MCP / channel-auth emit), or FLAT query params (`?key=beta`, the
+        // hand-testable form) decoded + schema-coerced when the blob is absent.
+        const raw = url.searchParams.get(RPC_QUERY_PARAMS.args)
+        args =
+            raw !== null
+                ? JSON.parse(raw)
+                : decodeQueryArgs(url.searchParams, meta.options.schemas?.input)
     } else {
         // maxBodySize is enforced on the mutation body up front via Content-Length (multipart streams
         // can lie about length, but a declared oversize is rejected before we buffer it).
@@ -675,11 +684,11 @@ async function dispatch(
         }
     }
 
-    // Resumable stream replay (replayable-streams.md §5): `?from=<count>` asks to resume a RETAINED stream
+    // Resumable stream replay (replayable-streams.md §5): `?__abide_from=<count>` asks to resume a RETAINED stream
     // transcript from chunk `count` (replay `chunks[count..]` then live). If the transcript is gone, we fall
     // through to a fresh run and flag it so the client REPLACES its painted prefix instead of appending.
     let resumeFresh = false
-    const fromRaw = meta.read ? url.searchParams.get('from') : null
+    const fromRaw = meta.read ? url.searchParams.get(RPC_QUERY_PARAMS.from) : null
     if (fromRaw !== null && /^\d+$/.test(fromRaw)) {
         // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased at this dispatch boundary; `unknown` breaks assignability through RpcMeta's invariant Args.
         const resumable = route as Rpc<any, any> & {
@@ -721,7 +730,7 @@ async function dispatch(
         const useSse =
             encoding === 'sse' || (encoding === undefined && accept.includes('text/event-stream'))
         const response = useSse ? sse(result) : jsonl(result)
-        // A `?from=` resume whose transcript was gone → a fresh run from 0; the client must REPLACE.
+        // A `?__abide_from=` resume whose transcript was gone → a fresh run from 0; the client must REPLACE.
         if (resumeFresh) response.headers.set('x-abide-stream-resume', 'fresh')
         return response
     }

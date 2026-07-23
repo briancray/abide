@@ -159,7 +159,7 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
     })
 })
 
-describe('mode B — an OPEN RPC {#for await} resumes over ?from=<count> (no client re-run)', () => {
+describe('mode B — an OPEN RPC {#for await} resumes over ?__abide_from=<count> (no client re-run)', () => {
     const SRC =
         `<script>import complete from '../../server/rpc/complete'</script>` +
         `<ul>{#for await tok of complete({ n: 5 })}<li>{tok}</li>{/for}</ul>`
@@ -178,7 +178,7 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?from=<count> (no cli
         handle.values = ['t0', 't1']
 
         // The source is modeled as a seeded cell — `replayStreams` warms an OPEN handle with
-        // `resumeStreamSource` (prefix + `?from=` resume). The spy counts NETWORK re-invokes (must stay 0).
+        // `resumeStreamSource` (prefix + `?__abide_from=` resume). The spy counts NETWORK re-invokes (must stay 0).
         let clientCalls = 0
         const complete = cell((_args: { n: number }): AsyncIterable<string> => {
             clientCalls++
@@ -220,7 +220,7 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?from=<count> (no cli
 
             expect(clientCalls).toBe(0) // the RPC source was NEVER re-invoked
             expect(fetchUrls.length).toBe(1)
-            expect(fetchUrls[0]).toContain('/__abide/rpc/complete?from=2')
+            expect(fetchUrls[0]).toContain('/__abide/rpc/complete?__abide_from=2')
             expect(fetchUrls[0]).toContain('args=')
             const lis = host.querySelectorAll('li')
             expect(Array.from(lis).map((li) => li.textContent)).toEqual([

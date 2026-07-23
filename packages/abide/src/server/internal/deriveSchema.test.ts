@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { fileURLToPath } from 'node:url'
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
-import { deriveSchema } from './deriveSchema.ts'
+import { deriveSchema, deriveSchemas } from './deriveSchema.ts'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/handlers.ts', import.meta.url))
+const DEFAULT_FIXTURE = fileURLToPath(new URL('./__fixtures__/defaultRpc.ts', import.meta.url))
+const OUTPUTS_FIXTURE = fileURLToPath(new URL('./__fixtures__/outputs.ts', import.meta.url))
 
 describe('deriveSchema', () => {
     test('derives input/output for a wrapped async handler with mixed field shapes', () => {
@@ -148,5 +150,79 @@ describe('deriveSchema', () => {
         const { input, warnings } = deriveSchema(FIXTURE, 'zeroArg')
         expect(input).toBeUndefined()
         expect(warnings).toEqual([])
+    })
+
+    test('unwraps `export default GET(...)` to the handler arg (not the Rpc parameter tuple)', () => {
+        const { input, output, warnings } = deriveSchema(DEFAULT_FIXTURE, 'default')
+        // The single arg object — NOT an array/tuple (the pre-fix bug read the Rpc callable's params).
+        expect(input).toEqual({ type: 'object', properties: { key: { type: 'string' } } })
+        expect(output).toEqual({
+            type: 'object',
+            properties: { key: { type: 'string' }, runs: { type: 'number' } },
+            required: ['key', 'runs'],
+        })
+        expect(warnings).toEqual([])
+    })
+})
+
+describe('deriveSchema — §11.4 output-wrapper unwrapping', () => {
+    test('json(T) output sees through to T', () => {
+        const { output, warnings } = deriveSchema(OUTPUTS_FIXTURE, 'jsonReturn')
+        expect(output).toEqual({
+            type: 'object',
+            properties: { id: { type: 'number' }, name: { type: 'string' } },
+            required: ['id', 'name'],
+        })
+        expect(warnings).toEqual([]) // no Response-shape leakage, no brand-property warnings
+    })
+
+    test('jsonl(C) output is the element/chunk schema', () => {
+        const { output, warnings } = deriveSchema(OUTPUTS_FIXTURE, 'streamReturn')
+        expect(output).toEqual({
+            type: 'object',
+            properties: { seq: { type: 'number' }, kind: { type: 'string' } },
+            required: ['seq', 'kind'],
+        })
+        expect(warnings).toEqual([])
+    })
+
+    test('a value|error union drops the error member and keeps the payload', () => {
+        const { output } = deriveSchema(OUTPUTS_FIXTURE, 'valueOrError')
+        expect(output).toEqual({
+            type: 'object',
+            properties: { value: { type: 'number' } },
+            required: ['value'],
+        })
+    })
+
+    test('a redirect-only handler contributes no output schema', () => {
+        const { output, warnings } = deriveSchema(OUTPUTS_FIXTURE, 'redirectOnly')
+        expect(output).toBeUndefined()
+        expect(warnings).toEqual([])
+    })
+})
+
+describe('deriveSchemas (batch)', () => {
+    test('derives many exports in one session, keyed by the caller key', () => {
+        const map = deriveSchemas([
+            { key: 'echo', filePath: FIXTURE, exportName: 'echo' },
+            { key: 'counter', filePath: DEFAULT_FIXTURE, exportName: 'default' },
+            { key: 'zero', filePath: FIXTURE, exportName: 'zeroArg' },
+        ])
+        expect(map.echo?.input).toEqual({
+            type: 'object',
+            properties: { text: { type: 'string' } },
+            required: ['text'],
+        })
+        expect(map.counter?.input).toEqual({
+            type: 'object',
+            properties: { key: { type: 'string' } },
+        })
+        // A zero-arg handler contributes an entry with no input schema (not an error).
+        expect(map.zero?.input).toBeUndefined()
+    })
+
+    test('an empty entry list derives nothing without spawning a session', () => {
+        expect(deriveSchemas([])).toEqual({})
     })
 })

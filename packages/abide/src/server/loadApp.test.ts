@@ -77,4 +77,40 @@ describe('loadApp — file-based app loader', () => {
         expect(about.status).toBe(200)
         expect(await about.text()).toContain('about')
     })
+
+    test('§11: a schemaless RPC gets its input schema derived from types at load', async () => {
+        // `greet` is `export default GET(({ name }: { name: string }) => …)` — no hand-written schema.
+        const loaded = await loadApp(FIXTURE_DIR)
+        const greet = loaded.routes?.greet
+        if (greet === undefined) throw new Error('expected greet route')
+        // The derived input schema is merged onto the route's options (drives validation + OpenAPI).
+        expect(greet.__rpc.options.schemas?.input).toEqual({
+            type: 'object',
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+        })
+        // …and the output schema too — `greet` returns `hi ${name}`, a string (§11.4).
+        expect(greet.__rpc.options.schemas?.output).toEqual({ type: 'string' })
+
+        const app = await createTestApp(loaded)
+        running = app
+
+        // OpenAPI advertises `name` as a flat, typed query param (the public affordance).
+        const doc = (await (await app.fetch('/openapi.json')).json()) as {
+            paths: Record<string, { get?: { parameters?: Array<{ name: string }> } }>
+        }
+        const params = doc.paths['/__abide/rpc/greet']?.get?.parameters ?? []
+        expect(params.some((parameter) => parameter.name === 'name')).toBe(true)
+
+        // The derived schema is runtime-enforced (§11.2): a bad-typed `name` → 422, handler never runs.
+        const bad = await app.fetch(
+            `/__abide/rpc/greet?__abide_args=${encodeURIComponent(JSON.stringify({ name: 123 }))}`,
+        )
+        expect(bad.status).toBe(422)
+
+        // A flat query param still resolves and coerces through the same derived schema.
+        const ok = await app.fetch('/__abide/rpc/greet?name=world')
+        expect(ok.status).toBe(200)
+        expect(await ok.json()).toBe('hi world')
+    })
 })

@@ -8,12 +8,12 @@
 // `dev`/`start` return the running `ServeResult` (the process stays alive on Bun.serve's handles);
 // `build`/`scaffold` return undefined after their one-shot work.
 
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { BundleWindow } from '../bundle/BundleWindow.ts'
 import { buildClient, type ClientBuild, loadClientBuild } from '../server/internal/clientBundle.ts'
-import { loadApp } from '../server/internal/loadApp.ts'
+import { loadApp, writeBakedSchemas } from '../server/internal/loadApp.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { check } from './check.ts'
 import { lspServer } from './lsp.ts'
@@ -91,6 +91,9 @@ async function runStep(command: string[], cwd: string): Promise<boolean> {
 // output dir. The outer hash is a deterministic digest of the manifest (entry + sorted filenames), so
 // the same source yields the same dir (immutable long-cache, reproducible builds).
 export async function build(dir: string): Promise<string> {
+    // Drop any prior baked schema map so this build derives FRESH from the current source (§11.5),
+    // rather than loadApp reusing a stale `dist/schemas.json`.
+    await rm(join(dir, 'dist', 'schemas.json'), { force: true })
     const config = await loadApp(dir)
     config.dev = false // production build → minify the client bundle (TODO #6).
     const built = await buildClient(config)
@@ -115,6 +118,10 @@ export async function build(dir: string): Promise<string> {
     await Bun.write(join(outDir, 'index.json'), record)
     // Stable top-level pointer so `abide start` finds the current build without scanning hash dirs.
     await Bun.write(join(dir, 'dist', 'manifest.json'), record)
+    // Bake the type-derived schemas (§11.5) alongside the manifest, so `abide start` (and a future
+    // source-less `compile`/`cli`) merges them at boot without a tsgo pass. `config.routes` already
+    // carry the freshly-derived schemas from the `loadApp` above.
+    if (config.routes !== undefined) await writeBakedSchemas(dir, config.routes)
     return outDir
 }
 

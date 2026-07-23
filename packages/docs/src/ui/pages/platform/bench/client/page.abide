@@ -31,6 +31,8 @@
       { name: "for-list-100", scope: () => ({ items: range(100) }) },
       { name: "for-list-1000", scope: () => ({ items: range(1000) }) },
       { name: "for-list-10000", scope: () => ({ items: range(10000) }) },
+      { name: "nested-for-if-50", scope: () => ({ rows: range(50).map((i) => ({ id: i, on: i % 2 === 0 })) }) },
+      { name: "class-style-directives", scope: () => ({ active: true, big: false, hue: "red", width: "40px" }) },
       { name: "state-update", scope: () => ({ state: mod.state, watch: mod.watch }) },
       { name: "list-append-update", scope: () => ({ state: mod.state, watch: mod.watch }) },
       { name: "list-reverse-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },

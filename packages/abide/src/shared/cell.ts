@@ -202,17 +202,37 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     return prototype === Object.prototype || prototype === null
 }
 
+// A selector's canonical keys, computed ONCE per verb call. `selectSlots` scans every slot of the cell,
+// so deriving the selector side inside the per-slot match recomputed identical `canonicalKey(selector…)`
+// values (each with its own alloc) for every slot — O(slots × selectorKeys) → O(slots + selectorKeys).
+type CompiledSelector =
+    | { kind: 'object'; keys: string[]; values: string[] }
+    | { kind: 'exact'; canonical: string }
+
+function compileSelector(selector: unknown): CompiledSelector {
+    if (isPlainObject(selector)) {
+        const keys = Object.keys(selector)
+        const values: string[] = []
+        for (let i = 0; i < keys.length; i++) values.push(canonicalKey(selector[keys[i] as string]))
+        return { kind: 'object', keys, values }
+    }
+    return { kind: 'exact', canonical: canonicalKey(selector) }
+}
+
 // Superset match (§8.2): a selector object matches a slot whose args include every selector
 // key with a canonically-equal value. Non-object selectors fall back to exact key equality.
-function matchesSelector(slotArgs: unknown, selector: unknown): boolean {
-    if (isPlainObject(selector) && isPlainObject(slotArgs)) {
-        for (const key of Object.keys(selector)) {
+function matchesSelector(slotArgs: unknown, compiled: CompiledSelector): boolean {
+    if (compiled.kind === 'object') {
+        if (!isPlainObject(slotArgs)) return false
+        const keys = compiled.keys
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i] as string
             if (!(key in slotArgs)) return false
-            if (canonicalKey(slotArgs[key]) !== canonicalKey(selector[key])) return false
+            if (canonicalKey(slotArgs[key]) !== compiled.values[i]) return false
         }
         return true
     }
-    return canonicalKey(slotArgs) === canonicalKey(selector)
+    return canonicalKey(slotArgs) === compiled.canonical
 }
 
 export function cell<Args, T>(
@@ -293,10 +313,12 @@ export function cell<Args, T>(
     function selectSlots(selector: Partial<Args> | Args | undefined): Slot<Args, T>[] {
         const cache = slotCache()
         const result: Slot<Args, T>[] = []
+        // Compile the selector's canonical keys once, not per slot scanned.
+        const compiled = selector === undefined ? undefined : compileSelector(selector)
         for (const [cacheKey, entry] of cache) {
             if (typeof cacheKey !== 'string' || !cacheKey.startsWith(prefix)) continue
             const slot = entry as Slot<Args, T>
-            if (selector === undefined || matchesSelector(slot.args, selector)) result.push(slot)
+            if (compiled === undefined || matchesSelector(slot.args, compiled)) result.push(slot)
         }
         return result
     }
@@ -652,7 +674,7 @@ export function cell<Args, T>(
         ) {
             touchOnRead(slot)
             const cursor = state.stream.consume(from)
-            // Stamp the wire encoding (as a fresh consume does) so the router re-serves a `?from=` resume
+            // Stamp the wire encoding (as a fresh consume does) so the router re-serves a `?__abide_from=` resume
             // in the handler's ORIGINAL encoding (sse resumes as sse, jsonl as jsonl).
             if (state.stream.encoding !== undefined)
                 tagStreamEncoding(cursor, state.stream.encoding)

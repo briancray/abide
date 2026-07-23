@@ -100,7 +100,9 @@ test('output-shaping drops undeclared fields on the RPC wire', async () => {
         },
     })
 
-    const body = await (await app.fetch(`/__abide/rpc/me?args=${encodeURIComponent('{}')}`)).json()
+    const body = await (
+        await app.fetch(`/__abide/rpc/me?__abide_args=${encodeURIComponent('{}')}`)
+    ).json()
     expect(body).toEqual({ id: 1, name: 'ada' })
 
     await app.stop()
@@ -111,7 +113,9 @@ test('with no output schema the RPC wire value is unshaped', async () => {
         routes: { me: GET(() => ({ id: 1, name: 'ada', extra: 'kept' })) },
     })
 
-    const body = await (await app.fetch(`/__abide/rpc/me?args=${encodeURIComponent('{}')}`)).json()
+    const body = await (
+        await app.fetch(`/__abide/rpc/me?__abide_args=${encodeURIComponent('{}')}`)
+    ).json()
     expect(body).toEqual({ id: 1, name: 'ada', extra: 'kept' })
 
     await app.stop()

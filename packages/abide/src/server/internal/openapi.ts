@@ -1,8 +1,9 @@
 // OpenAPI 3.1 projection of the registry (machine-surfaces.md MS4). Every RPC whose
 // `clients.browser` is not explicitly false becomes a path `/rpc/<name>` with the operation for
 // its HTTP verb:
-//   - GET/HEAD (reads): a single `args` query parameter carrying the encoded args object (§14.1),
-//     typed by the input schema.
+//   - GET/HEAD (reads): one query parameter PER input field when the schema is field-enumerable
+//     (the flat-param form — `?field=value`, coerced by the router to each field's type), else the
+//     canonical `__abide_args` JSON-blob parameter carrying the whole encoded args object (§14.1).
 //   - POST/PUT/PATCH/DELETE (mutations): a JSON request body typed by the input schema.
 // Every operation declares a 200 application/json response (output schema when known) and a 422
 // ValidationError response (the shape the router returns on input-validation failure). Both
@@ -10,6 +11,8 @@
 // schemes (MS4.2). Missing schemas project as a permissive `{}` (anything).
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
+import { singleType } from '../../shared/internal/jsonSchema.ts'
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import type { Registry, RpcEntry } from './registry.ts'
 
 export interface OpenApiOptions {
@@ -47,6 +50,33 @@ function validationErrorSchema(): Record<string, unknown> {
     }
 }
 
+// Query parameters for a read (§14.1). When the input schema enumerates its fields, project ONE
+// query parameter per field (typed, required-flagged) so the flat-param form (`?field=value`) is
+// publicly visible in the spec / Swagger UI — the router coerces each to its declared type. When the
+// schema is opaque (a native Standard Schema with no JSON projection) or absent, fall back to the
+// canonical `__abide_args` JSON-blob parameter that machine callers encode the whole args object into.
+function readParameters(entry: RpcEntry): Array<Record<string, unknown>> {
+    const schema = entry.inputSchema
+    const properties = schema?.properties
+    if (schema !== undefined && singleType(schema.type) === 'object' && properties !== undefined) {
+        const required = Array.isArray(schema.required) ? schema.required : []
+        return Object.entries(properties).map(([name, propSchema]) => ({
+            name,
+            in: 'query',
+            required: required.includes(name),
+            schema: propSchema as Record<string, unknown>,
+        }))
+    }
+    return [
+        {
+            name: RPC_QUERY_PARAMS.args,
+            in: 'query',
+            required: schema !== undefined,
+            schema: schemaOrAny(schema),
+        },
+    ]
+}
+
 function operationForRpc(entry: RpcEntry): Record<string, unknown> {
     const responses: Record<string, unknown> = {
         '200': {
@@ -68,15 +98,9 @@ function operationForRpc(entry: RpcEntry): Record<string, unknown> {
     if (entry.doc !== undefined) operation.summary = entry.doc
 
     if (entry.read) {
-        // §14.1: reads carry the args object encoded in a single `args` query parameter.
-        operation.parameters = [
-            {
-                name: 'args',
-                in: 'query',
-                required: entry.inputSchema !== undefined,
-                schema: schemaOrAny(entry.inputSchema),
-            },
-        ]
+        // §14.1: reads carry args in the URL — one query param per field when the shape is known
+        // (the flat-param form), else the `__abide_args` JSON blob.
+        operation.parameters = readParameters(entry)
     } else {
         operation.requestBody = {
             required: true,

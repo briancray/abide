@@ -3,12 +3,12 @@
 // through the middleware onion like any request.
 
 import { expect, test } from 'bun:test'
-import { encode } from '../shared/internal/codec.ts'
 import { error } from '../server/error.ts'
 import { GET } from '../server/GET.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
 import type { HydrationSeed, RenderDocumentOptions } from '../server/internal/pages.ts'
 import { documentHead, documentTail, renderDocument, warmPages } from '../server/internal/pages.ts'
+import { encode } from '../shared/internal/codec.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { loadEmittedServer } from '../ui/internal/emit.ts'
 
@@ -236,7 +236,7 @@ test('an unknown path still 404s; RPC + openapi unaffected', async () => {
     expect(notFound.status).toBe(404)
 
     const rpcResponse = await app.fetch(
-        `/__abide/rpc/greet?args=${encodeURIComponent(JSON.stringify({ name: 'z' }))}`,
+        `/__abide/rpc/greet?__abide_args=${encodeURIComponent(JSON.stringify({ name: 'z' }))}`,
     )
     expect(rpcResponse.status).toBe(200)
     expect(await rpcResponse.json()).toBe('hi z')

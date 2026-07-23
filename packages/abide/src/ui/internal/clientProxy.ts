@@ -7,7 +7,7 @@
 //
 // READS (GET/HEAD) get wrapped in a `cell`, so the browser proxy caches, coalesces, and is
 // reactive exactly like the server Rpc: `(args)` reactive peek, `.load`, `.peek`, `.pending`,
-// `.error`, `.refresh`, `.invalidate`. The cell's inner fn fetches `/rpc/<name>?args=…` and
+// `.error`, `.refresh`, `.invalidate`. The cell's inner fn fetches `/rpc/<name>?__abide_args=…` and
 // parses JSON. MUTATIONS (POST/PUT/PATCH/DELETE) are a plain async callable — a JSON-body POST
 // with `Content-Type: application/json` (satisfies the CSRF gate), never cached.
 
@@ -19,6 +19,7 @@ import {
     decodeStreamResponse,
     isStreamContentType,
 } from '../../shared/internal/decodeStreamResponse.ts'
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { applyCacheFrame } from './applyCacheFrame.ts'
 import { subscribeCacheChannel } from './cacheMux.ts'
 
@@ -48,7 +49,10 @@ class HttpErrorLike extends Error {
 }
 
 function readUrl(base: string, name: string, args: unknown): string {
-    const query = args !== undefined ? `?args=${encodeURIComponent(JSON.stringify(args))}` : ''
+    const query =
+        args !== undefined
+            ? `?${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
+            : ''
     return `${base}/__abide/rpc/${name}${query}`
 }
 
@@ -90,7 +94,7 @@ function mutationInit(method: string, args: unknown): RequestInit {
 }
 
 // A single client proxy for BOTH reads and mutations — full symmetry with the server. The only
-// differences are transport (a read GETs with `?args=`; a mutation POSTs the body + CSRF header) and
+// differences are transport (a read GETs with `?__abide_args=`; a mutation POSTs the body + CSRF header) and
 // the default cache policy (carried by the spec's `ttl`: reads retain, mutations coalesce-only). Every
 // probe/verb (peek/pending/refreshing/refresh/invalidate/amend/watch/chunks/done/raw) is attached for
 // both, so an author who caches a mutation (`cache: { ttl }`) gets the identical reactive surface.
@@ -182,7 +186,7 @@ export function clientProxy<Args = unknown, T = unknown>(
     rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
         backing.watch(args, handler)
     // Raw fetch, full bypass of the cell — the untouched `Response` (no parse, no `!ok` throw). A read
-    // GETs `?args=`; a mutation POSTs the body + CSRF header. `init` overrides wholesale.
+    // GETs `?__abide_args=`; a mutation POSTs the body + CSRF header. `init` overrides wholesale.
     rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> =>
         read
             ? fetch(readUrl(base, name, args), { method, ...(init ?? {}) })

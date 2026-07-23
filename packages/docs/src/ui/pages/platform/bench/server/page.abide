@@ -1,0 +1,60 @@
+<script module>
+  import benchServer from "$server/rpc/benchServer"
+
+  // Format a nanosecond mean into the tightest readable unit — mirrors the CLI bench's `fmtNs`.
+  function fmtNs(ns) {
+    if (ns >= 1e6) return (ns / 1e6).toFixed(2) + " ms"
+    if (ns >= 1e3) return (ns / 1e3).toFixed(2) + " µs"
+    return ns.toFixed(0) + " ns"
+  }
+</script>
+
+<main class="page">
+  <h1>Server dispatch bench (live)</h1>
+  <p class="lead">
+    The other half of every request the <a href="/platform/bench">frontend bench</a> doesn't touch: the
+    in-process per-request / per-read primitives on abide's hot path — route classification
+    (<code>matchRoute</code>), cache-key building (<code>canonicalKey</code>), and the <code>cell</code>
+    read + cache-verb surface. This runs the same <code>@abide/bench/serverBenches</code> recipes the CLI
+    <code>bun run bench:server</code> measures, timed with the same loop, streamed one row per bench via
+    <code>jsonl</code> so the table fills live via <code>&#123;#for await&#125;</code>. Refresh to re-run.
+  </p>
+
+  <p class="lead">
+    These are the tight, isolated numbers the framework's request path is made of — no loopback socket in
+    the mix. The end-to-end <code>createTestApp</code> dispatch numbers live in the CLI runner only
+    (<code>bun run bench:server</code>): booting a real server per page-load is the wrong shape for a live
+    page.
+  </p>
+
+  <button
+    data-testid="rerun"
+    class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white"
+    onclick={() => benchServer.refresh()}
+  >
+    Re-run bench
+  </button>
+
+  <table class="w-full border-collapse text-sm" data-testid="bench-table">
+    <thead>
+      <tr class="border-b border-slate-300 text-left">
+        <th class="py-1.5 pr-4">bench</th>
+        <th class="py-1.5 pr-4 text-right">ns/op</th>
+        <th class="py-1.5 pr-4 text-right">iters</th>
+        <th class="py-1.5">note</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#for await row of benchServer()}
+        <tr class="border-b border-slate-100" data-testid="bench-row">
+          <td class="py-1.5 pr-4 font-mono">{row.group}/{row.name}</td>
+          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+          <td class="py-1.5 font-mono text-slate-500">{row.note}</td>
+        </tr>
+      {:catch}
+        <tr><td colspan="4" class="py-2 text-red-600">bench failed</td></tr>
+      {/for}
+    </tbody>
+  </table>
+</main>

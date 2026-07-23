@@ -1,0 +1,25 @@
+{
+  "name": "@abide/bench",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./scenarios": "./src/scenarios.ts",
+    "./serverBenches": "./src/serverBenches.ts",
+    "./measure": "./src/measure.ts"
+  },
+  "scripts": {
+    "bench": "bun run run.ts",
+    "bench:server": "bun run server.ts",
+    "bench:delta": "bun run delta.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "abide": "workspace:*"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^20.10.6",
+    "@types/bun": "latest",
+    "happy-dom": "^20.10.6",
+    "typescript": "^7.0.0"
+  }
+}

@@ -29,8 +29,19 @@ type TypedArrayName = keyof typeof TYPED_ARRAY_CONSTRUCTORS
 // ---------------------------------------------------------------------------
 
 export function canonicalKey(value: unknown): string {
-    const seen = new Map<object, number>()
-    return writeKey(value, seen)
+    // Scalar fast path — the overwhelmingly common cell-read arg. Returns without the cycle-guard Map:
+    // a scalar can never form a cycle, so allocating one per read was dead work on the hottest path.
+    if (value === null) return 'N'
+    const kind = typeof value
+    if (kind === 'string') return `s${JSON.stringify(value)}`
+    if (kind === 'number') return `n${numberToToken(value as number)}`
+    if (kind === 'boolean') return value ? 'b1' : 'b0'
+    if (kind === 'undefined') return 'U'
+    if (kind === 'bigint') return `g${(value as bigint).toString()}`
+    if (kind === 'symbol') throw new TypeError('canonicalKey: symbols are not supported')
+    if (kind === 'function') throw new TypeError('canonicalKey: functions are not supported')
+    // Reference type — allocate the cycle guard only now, then walk the structure.
+    return writeKey(value, new Map<object, number>())
 }
 
 function writeKey(value: unknown, seen: Map<object, number>): string {
@@ -93,14 +104,13 @@ function writeKey(value: unknown, seen: Map<object, number>): string {
         )
     }
 
-    const keys = Object.keys(object as Record<string, unknown>).sort()
+    const record = object as Record<string, unknown>
+    const keys = Object.keys(record).sort()
     let out = 'O{'
-    for (const [i, objectKey] of keys.entries()) {
+    for (let i = 0; i < keys.length; i++) {
         if (i > 0) out += ','
-        out +=
-            JSON.stringify(objectKey) +
-            ':' +
-            writeKey((object as Record<string, unknown>)[objectKey], seen)
+        const objectKey = keys[i] as string
+        out += `${JSON.stringify(objectKey)}:${writeKey(record[objectKey], seen)}`
     }
     return `${out}}`
 }

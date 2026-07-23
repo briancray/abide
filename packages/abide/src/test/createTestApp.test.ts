@@ -40,7 +40,7 @@ describe('createTestApp routing', () => {
     test('GET rpc via raw fetch returns 200 + json', async () => {
         const app = await start({ routes: { greet } })
         const response = await app.fetch(
-            `/__abide/rpc/greet?args=${encodeURIComponent(JSON.stringify({ name: 'x' }))}`,
+            `/__abide/rpc/greet?__abide_args=${encodeURIComponent(JSON.stringify({ name: 'x' }))}`,
         )
         expect(response.status).toBe(200)
         expect(response.headers.get('content-type')).toContain('application/json')
@@ -77,7 +77,7 @@ describe('createTestApp routing', () => {
 
     test('unknown rpc 404s', async () => {
         const app = await start({ routes: { greet } })
-        const response = await app.fetch('/__abide/rpc/nope?args=%7B%7D')
+        const response = await app.fetch('/__abide/rpc/nope?__abide_args=%7B%7D')
         expect(response.status).toBe(404)
     })
 
@@ -97,7 +97,7 @@ describe('middleware', () => {
             return { ok: true }
         })
         const app = await start({ routes: { guarded }, middleware: [guard] })
-        const response = await app.fetch('/__abide/rpc/guarded?args=%7B%7D')
+        const response = await app.fetch('/__abide/rpc/guarded?__abide_args=%7B%7D')
         expect(response.status).toBe(403)
         expect(handlerRan).toBe(false)
     })
@@ -124,7 +124,7 @@ describe('middleware', () => {
             { middleware: [localMw] },
         )
         const app = await start({ routes: { handler }, middleware: [globalMw] })
-        await app.fetch('/__abide/rpc/handler?args=%7B%7D')
+        await app.fetch('/__abide/rpc/handler?__abide_args=%7B%7D')
         expect(order).toEqual(['global-in', 'local-in', 'handler', 'local-out', 'global-out'])
     })
 })
@@ -178,7 +178,9 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
         expect(cookie).toStartWith('abide-identity=')
         if (cookie === undefined) throw new Error('expected an identity cookie')
 
-        const follow = await app.fetch(`/__abide/rpc/whoami?args=%7B%7D`, { headers: { cookie } })
+        const follow = await app.fetch(`/__abide/rpc/whoami?__abide_args=%7B%7D`, {
+            headers: { cookie },
+        })
         const seen = (await follow.json()) as { id: string; authenticated: boolean }
         expect(seen.authenticated).toBe(true)
         expect(seen.id).toBe('u1')
@@ -199,14 +201,16 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
     test('(c) an anonymous request is authenticated:false with a stable-per-cookie id', async () => {
         const app = await start({ routes: { whoami } })
 
-        const first = await app.fetch('/__abide/rpc/whoami?args=%7B%7D')
+        const first = await app.fetch('/__abide/rpc/whoami?__abide_args=%7B%7D')
         const firstBody = (await first.json()) as { id: string; authenticated: boolean }
         expect(firstBody.authenticated).toBe(false)
         const cookie = identityCookie(first)
         expect(cookie).toBeDefined()
         if (cookie === undefined) throw new Error('expected an identity cookie')
 
-        const second = await app.fetch('/__abide/rpc/whoami?args=%7B%7D', { headers: { cookie } })
+        const second = await app.fetch('/__abide/rpc/whoami?__abide_args=%7B%7D', {
+            headers: { cookie },
+        })
         const secondBody = (await second.json()) as { id: string }
         expect(secondBody.id).toBe(firstBody.id) // stable across requests carrying the cookie
     })
@@ -233,7 +237,7 @@ describe('auth (M7) — cookie login, bearer, anonymous tracking, CSRF', () => {
         Bun.env.ABIDE_APP_TOKEN = 'test-app-token-value'
         const owner = GET(async () => ({ ...identity() }))
         const app = await start({ routes: { owner } })
-        const response = await app.fetch('/__abide/rpc/owner?args=%7B%7D', {
+        const response = await app.fetch('/__abide/rpc/owner?__abide_args=%7B%7D', {
             headers: { authorization: 'Bearer test-app-token-value' },
         })
         const principal = (await response.json()) as {
@@ -287,7 +291,7 @@ describe('discovery mode', () => {
     test('an explicit surface stays hermetic — no discovery', async () => {
         // `{ routes: {} }` NAMES the routes surface (empty), so the fixture's greet is NOT loaded.
         const app = await start({ routes: {} })
-        const response = await app.fetch('/__abide/rpc/greet?args=%7B%7D')
+        const response = await app.fetch('/__abide/rpc/greet?__abide_args=%7B%7D')
         expect(response.status).toBe(404)
     })
 

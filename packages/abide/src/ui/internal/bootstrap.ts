@@ -24,6 +24,7 @@
 
 import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
@@ -76,7 +77,7 @@ function replayReads(seed: HydrationSeed, imports: Record<string, unknown>): voi
 }
 
 // Build the mode-B (OPEN handoff) source for `seedStream`: replay the flushed prefix, then RESUME the tail
-// over `GET …?from=<count>` (re-encoded in the handler's original encoding, decoded by content-type). If
+// over `GET …?__abide_from=<count>` (re-encoded in the handler's original encoding, decoded by content-type). If
 // the server transcript was evicted the endpoint answers `x-abide-stream-resume: fresh` — a full run from 0
 // that REPLACES the prefix. A failed/absent resume (offline, 4xx, no body) leaves the prefix standing and
 // the slot closes; a later `refresh()` (now reactive) re-runs from scratch.
@@ -87,10 +88,15 @@ export async function* resumeStreamSource(
     count: number,
     prefix: readonly unknown[],
 ): AsyncGenerator<unknown> {
-    const argsQuery = args !== undefined ? `&args=${encodeURIComponent(JSON.stringify(args))}` : ''
+    const argsQuery =
+        args !== undefined
+            ? `&${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
+            : ''
     let response: Response
     try {
-        response = await fetch(`${base}/__abide/rpc/${name}?from=${count}${argsQuery}`)
+        response = await fetch(
+            `${base}/__abide/rpc/${name}?${RPC_QUERY_PARAMS.from}=${count}${argsQuery}`,
+        )
     } catch {
         yield* prefix
         return
@@ -107,7 +113,7 @@ export async function* resumeStreamSource(
 // Replay the seed's stream handoffs into the client RPC cells so an SSR-adopted `{#for await}` warms its
 // cell without re-invoking the source, and `peek`/`chunks`/`done`/`refresh` all work on the adopted stream
 // (§5). A COMPLETED (mode-A) handle seeds its inline transcript; an OPEN (mode-B) handle seeds a source
-// that replays the flushed prefix then resumes the tail over `?from=<count>`. Unknown names / malformed
+// that replays the flushed prefix then resumes the tail over `?__abide_from=<count>`. Unknown names / malformed
 // records are skipped.
 function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, base: string): void {
     const streams = seed.streams

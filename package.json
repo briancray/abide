@@ -8,8 +8,9 @@
     "typecheck": "bun run --filter '*' typecheck",
     "check": "biome check && bun run --filter '*' typecheck && bun run --filter abide abide-check && bun run --filter docs abide-check && bun run --filter docs abide-lsp && bun run --filter starter abide-check",
     "test": "bun run --filter abide test",
-    "bench": "bun run --filter abide bench",
-    "bench:delta": "bun run --filter abide bench:delta",
+    "bench": "bun run --filter @abide/bench bench",
+    "bench:server": "bun run --filter @abide/bench bench:server",
+    "bench:delta": "bun run --filter @abide/bench bench:delta",
     "e2e": "bun run --filter docs e2e:ci && bun run --filter starter e2e:ci",
     "verify": "bun run scripts/verify.ts",
     "verify:fix": "bun run scripts/verify.ts --fix-only"

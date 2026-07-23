@@ -92,8 +92,11 @@ manifests; every surface derives from the same RPC + socket metadata.
 ## MS4. OpenAPI projection (`/openapi.json`)
 
 1. **OpenAPI 3.1 from the registry.** Each `clients.browser` RPC (MS1.4) → path + operation:
-   GET → query params (encoded args object, §14.1); POST/etc → `requestBody`; output schema →
-   `responses`; typed errors (§9) → declared error responses; `ValidationErrorData` → 422.
+   GET → **one query param per input field** when the schema is field-enumerable (the flat-param
+   form, §14.1), else the `__abide_args` JSON-blob param (a type-derived read carries no runtime
+   schema, so its fields are unknown to the projection and it falls back to the blob); POST/etc →
+   `requestBody`; output schema → `responses`; typed errors (§9) → declared error responses;
+   `ValidationErrorData` → 422.
 2. **Security schemes documented:** both **bearer** (token) and **cookie** (`abide-identity`)
    auth appear as OpenAPI security schemes.
 3. **Gating:** `/openapi.json` is **served by default** and runs through the **middleware

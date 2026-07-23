@@ -11,19 +11,19 @@
 // ABIDE_BENCH_TIME ms and completed ABIDE_BENCH_MIN_ITERS iterations. mount/update rebuild a fresh
 // host (and, for update, a fresh reactive tree) each round so state does not accumulate across ops.
 
-import '../src/test/happydom.ts'
-import { type EmittedModule, loadEmitted } from '../src/ui/internal/emit.ts'
-import { SCENARIOS, type Scenario } from './SCENARIOS.ts'
+import 'abide/test/happydom'
+import { type EmittedModule, loadEmitted } from 'abide/ui/internal/emit'
+import {
+    DEFAULT_MIN_ITERS,
+    DEFAULT_MIN_TIME_MS,
+    DEFAULT_WARMUP_ITERS,
+    fmtNs,
+    type MetricResult,
+    measure,
+} from './src/measure.ts'
+import { SCENARIOS, type Scenario } from './src/scenarios.ts'
 
-const MIN_TIME_MS = Number(process.env.ABIDE_BENCH_TIME ?? 400)
-const MIN_ITERS = Number(process.env.ABIDE_BENCH_MIN_ITERS ?? 25)
-const WARMUP_ITERS = 5
 const UPDATES_PER_ROUND = 20
-
-export interface MetricResult {
-    nsPerOp: number
-    iters: number
-}
 
 export interface ScenarioResult {
     name: string
@@ -37,21 +37,6 @@ export interface BenchReport {
     minTimeMs: number
     minIters: number
     scenarios: ScenarioResult[]
-}
-
-// Repeatedly invoke `op` until the time and iteration floors are both met; return mean ns/op.
-async function measure(op: () => Promise<void> | void): Promise<MetricResult> {
-    for (let i = 0; i < WARMUP_ITERS; i++) await op()
-    let iters = 0
-    const start = Bun.nanoseconds()
-    let elapsed = 0
-    const budgetNs = MIN_TIME_MS * 1e6
-    do {
-        await op()
-        iters++
-        elapsed = Bun.nanoseconds() - start
-    } while (elapsed < budgetNs || iters < MIN_ITERS)
-    return { nsPerOp: elapsed / iters, iters }
 }
 
 async function benchRender(mod: EmittedModule, scenario: Scenario): Promise<MetricResult | null> {
@@ -77,13 +62,13 @@ async function benchUpdate(mod: EmittedModule, scenario: Scenario): Promise<Metr
         throw new Error(`benchUpdate called for scenario without an update fn: ${scenario.name}`)
     let iters = 0
     let totalNs = 0
-    const budgetNs = MIN_TIME_MS * 1e6
+    const budgetNs = DEFAULT_MIN_TIME_MS * 1e6
     // Warmup round.
     {
         const host = document.createElement('div')
         const cleanup = mod.mount(host, scenario.scope())
         await Promise.resolve()
-        for (let i = 0; i < WARMUP_ITERS; i++) await update(host)
+        for (let i = 0; i < DEFAULT_WARMUP_ITERS; i++) await update(host)
         cleanup()
     }
     do {
@@ -97,7 +82,7 @@ async function benchUpdate(mod: EmittedModule, scenario: Scenario): Promise<Metr
             iters++
         }
         cleanup()
-    } while (totalNs < budgetNs || iters < MIN_ITERS)
+    } while (totalNs < budgetNs || iters < DEFAULT_MIN_ITERS)
     return { nsPerOp: totalNs / iters, iters }
 }
 
@@ -110,15 +95,12 @@ export async function runBench(): Promise<BenchReport> {
         const update = scenario.update ? await benchUpdate(mod, scenario) : null
         scenarios.push({ name: scenario.name, render, mount, update })
     }
-    return { time: Date.now(), minTimeMs: MIN_TIME_MS, minIters: MIN_ITERS, scenarios }
-}
-
-function fmtNs(metric: MetricResult | null): string {
-    if (metric === null) return '        —'
-    const ns = metric.nsPerOp
-    if (ns >= 1e6) return `${(ns / 1e6).toFixed(2)} ms`.padStart(9)
-    if (ns >= 1e3) return `${(ns / 1e3).toFixed(2)} µs`.padStart(9)
-    return `${ns.toFixed(0)} ns`.padStart(9)
+    return {
+        time: Date.now(),
+        minTimeMs: DEFAULT_MIN_TIME_MS,
+        minIters: DEFAULT_MIN_ITERS,
+        scenarios,
+    }
 }
 
 function printTable(report: BenchReport): void {
@@ -132,7 +114,7 @@ function printTable(report: BenchReport): void {
         )
     }
     console.log(
-        `\nmean ns/op · warmup ${WARMUP_ITERS} · ≥${report.minTimeMs}ms/≥${report.minIters} iters per metric`,
+        `\nmean ns/op · warmup ${DEFAULT_WARMUP_ITERS} · ≥${report.minTimeMs}ms/≥${report.minIters} iters per metric`,
     )
 }
 

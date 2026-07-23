@@ -14,11 +14,24 @@
 
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
+import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
+import { log } from '../../shared/log.ts'
 import type { Socket } from '../socket.ts'
+import { type DeriveEntry, deriveSchemas } from './deriveSchema.ts'
 import { layoutRoutePrefix } from './layouts.ts'
 import type { Middleware } from './middleware.ts'
 import { routePrefixFromRelative } from './routePrefixFromRelative.ts'
 import type { AppConfig, Route } from './router.ts'
+
+// The baked type-derived schema map (§11.5): `abide build` writes it to `dist/schemas.json` so a
+// source-less/tsgo-less runtime (`abide start`, a future `compile`/`cli` standalone) merges schemas
+// with NO derivation at boot. Route name → its derived input/output JSON Schema.
+export interface BakedSchemas {
+    [routeName: string]: { input?: JSONSchema; output?: JSONSchema }
+}
+
+const BAKED_SCHEMAS_FILE = 'dist/schemas.json'
 
 // The process-lifecycle hooks a project's `src/app.ts` may export alongside `middleware` (CL3).
 // `onHealth` is NOT here — it is consumed by the router per request, so it rides on `AppConfig`.
@@ -37,13 +50,16 @@ export interface AppLifecycle {
 // onStart/onStop itself (CL2/CO2.4); the router drives `onHealth`.
 export interface LoadedApp extends AppConfig, AppLifecycle {}
 
-// Pull the single meaningful export from an imported module: prefer `default`, else the sole named
-// export. Returns undefined when the module has no usable export (the caller decides to skip it).
-function singleExport(module: Record<string, unknown>): unknown {
-    if (module.default !== undefined) return module.default
+// Pull the single meaningful export from an imported module, WITH the name it was found under (needed
+// to derive its schema from source). Prefer `default`, else the sole named export. Returns undefined
+// when the module has no usable export (the caller decides to skip it).
+function singleExport(
+    module: Record<string, unknown>,
+): { value: unknown; exportName: string } | undefined {
+    if (module.default !== undefined) return { value: module.default, exportName: 'default' }
     const names = Object.keys(module).filter((name) => name !== 'default')
     const only = names[0]
-    if (names.length === 1 && only !== undefined) return module[only]
+    if (names.length === 1 && only !== undefined) return { value: module[only], exportName: only }
     return undefined
 }
 
@@ -85,17 +101,101 @@ async function scanFiles(baseDir: string, pattern: string): Promise<string[]> {
     return found
 }
 
-async function loadRoutes(dir: string): Promise<Record<string, Route>> {
+async function loadRoutes(
+    dir: string,
+): Promise<{ routes: Record<string, Route>; derivationTargets: DeriveEntry[] }> {
     const rpcDir = join(dir, 'src/server/rpc')
     const routes: Record<string, Route> = {}
+    const derivationTargets: DeriveEntry[] = []
     const files = await scanFiles(rpcDir, '**/*.ts')
     for (const relative of files) {
-        const module = (await import(join(rpcDir, relative))) as Record<string, unknown>
+        const absolute = join(rpcDir, relative)
+        const module = (await import(absolute)) as Record<string, unknown>
         const exported = singleExport(module)
-        if (!isRoute(exported)) continue
-        routes[rpcRouteName(relative)] = exported
+        if (exported === undefined || !isRoute(exported.value)) continue
+        const name = rpcRouteName(relative)
+        routes[name] = exported.value
+        // An RPC missing EITHER a hand-written input or output schema is a candidate for type
+        // derivation (§11): the handler's arg type → input schema, its return payload → output schema.
+        // An explicit schema always wins per field.
+        const schemas = exported.value.__rpc.options.schemas
+        if (schemas?.input === undefined || schemas?.output === undefined) {
+            derivationTargets.push({
+                key: name,
+                filePath: absolute,
+                exportName: exported.exportName,
+            })
+        }
     }
-    return routes
+    return { routes, derivationTargets }
+}
+
+// §11 type-derived schemas: fill each RPC's missing `input`/`output` from its handler's TS types.
+// Merged into `options.schemas` so the registry (OpenAPI/MCP), the router's input validation, and its
+// output drift-check + shaping (§5.2) all pick it up with no further wiring — an explicit schema is
+// never overwritten (per field). The schemas come from either a **baked** `dist/schemas.json` (§11.5,
+// written by `abide build` — used verbatim, no tsgo at boot) or, when absent, ONE batched live tsgo
+// session (~sub-second for a whole app). tsgo-unrepresentable positions (§11.3) derive nothing (a
+// logged warning) and stay as-is; output unwraps the response wrapper (§11.4). Opt out with
+// `ABIDE_DERIVE_SCHEMAS=0`.
+async function applyDerivedSchemas(
+    dir: string,
+    routes: Record<string, Route>,
+    targets: DeriveEntry[],
+): Promise<void> {
+    if (targets.length === 0) return
+    if (Bun.env.ABIDE_DERIVE_SCHEMAS === '0') return
+    const baked = await readBakedSchemas(dir)
+    // Baked path: no tsgo, no warnings (they were emitted at build). Live path: derive + log warnings.
+    const derived = baked ?? deriveSchemas(targets)
+    for (const target of targets) {
+        const result = derived[target.key]
+        if (result === undefined) continue
+        if (baked === undefined && 'warnings' in result) {
+            for (const warning of (result as { warnings: string[] }).warnings) {
+                log.channel('abide:rpc').warn(warning)
+            }
+        }
+        const route = routes[target.key]
+        if (route === undefined) continue
+        const options = route.__rpc.options
+        const schemas = { ...options.schemas }
+        if (schemas.input === undefined && result.input !== undefined) schemas.input = result.input
+        if (schemas.output === undefined && result.output !== undefined) {
+            schemas.output = result.output
+        }
+        options.schemas = schemas
+    }
+}
+
+// Read the baked schema map if `abide build` wrote one. A missing/corrupt file → live derivation.
+async function readBakedSchemas(dir: string): Promise<BakedSchemas | undefined> {
+    const path = join(dir, BAKED_SCHEMAS_FILE)
+    if (!existsSync(path)) return undefined
+    try {
+        return (await Bun.file(path).json()) as BakedSchemas
+    } catch {
+        return undefined
+    }
+}
+
+// §11.5 build-time bake: project every route's EFFECTIVE input/output schema (derived or explicit, as
+// long as it's JSON-Schema-representable — a native Standard Schema like Zod stays in the module and
+// needs no baking) into `dist/schemas.json`, so a tsgo-less runtime merges it at boot. Called by
+// `abide build` AFTER a live `loadApp` has merged the derived schemas onto the routes.
+export async function writeBakedSchemas(dir: string, routes: Record<string, Route>): Promise<void> {
+    const baked: BakedSchemas = {}
+    for (const [name, route] of Object.entries(routes)) {
+        const schemas = route.__rpc.options.schemas
+        const input = jsonSchemaOf(schemas?.input)
+        const output = jsonSchemaOf(schemas?.output)
+        if (input === undefined && output === undefined) continue
+        const entry: { input?: JSONSchema; output?: JSONSchema } = {}
+        if (input !== undefined) entry.input = input
+        if (output !== undefined) entry.output = output
+        baked[name] = entry
+    }
+    await Bun.write(join(dir, BAKED_SCHEMAS_FILE), JSON.stringify(baked, null, 2))
 }
 
 async function loadSockets(dir: string): Promise<Record<string, Socket<unknown>>> {
@@ -105,8 +205,8 @@ async function loadSockets(dir: string): Promise<Record<string, Socket<unknown>>
     for (const relative of files) {
         const module = (await import(join(socketsDir, relative))) as Record<string, unknown>
         const exported = singleExport(module)
-        if (!isSocket(exported)) continue
-        sockets[socketName(relative)] = exported
+        if (exported === undefined || !isSocket(exported.value)) continue
+        sockets[socketName(relative)] = exported.value
     }
     return sockets
 }
@@ -211,7 +311,8 @@ export async function loadApp(dir: string): Promise<LoadedApp> {
     await seedAppName(dir)
     await loadConfig(dir)
 
-    const routes = await loadRoutes(dir)
+    const { routes, derivationTargets } = await loadRoutes(dir)
+    await applyDerivedSchemas(dir, routes, derivationTargets)
     const sockets = await loadSockets(dir)
     const pages = await loadPages(dir)
     const layouts = await loadLayouts(dir)

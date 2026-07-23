@@ -180,7 +180,7 @@ export interface ForAwaitStreamConfig {
     // Attach-handoff tag (replayable-streams.md §5), emitted by `emitServer` only when the source head
     // resolves to a known RPC import. `attachable` gates the whole handoff; `rpcName` is the RPC route
     // name (= the source's wire name); `args` re-evaluates the call's argument expression so the handle
-    // can be resumed over `?from=<count>` WITHOUT re-invoking the source on the client. A non-RPC source
+    // can be resumed over `?__abide_from=<count>` WITHOUT re-invoking the source on the client. A non-RPC source
     // (bare async generator / `fetch().body`) leaves these unset → today's behavior (client re-iterates).
     attachable?: boolean
     rpcName?: string
@@ -188,7 +188,7 @@ export interface ForAwaitStreamConfig {
 }
 
 // Evaluate an attachable source's argument expression once so the handoff record can be resumed over
-// `?from=<count>` on the client WITHOUT re-invoking the source (§5). Pure by contract; a throw
+// `?__abide_from=<count>` on the client WITHOUT re-invoking the source (§5). Pure by contract; a throw
 // degrades to `undefined` (the record stays inline-adopt-only rather than crashing the render).
 async function resolveArgs(config: ForAwaitStreamConfig): Promise<unknown> {
     if (config.args === undefined) return undefined

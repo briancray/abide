@@ -1,6 +1,7 @@
 import { mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { SCENARIOS as CORPUS } from '@abide/bench/scenarios'
 import { GET } from 'abide/server/GET'
 import { analyzeScope } from 'abide/ui/internal/analyzeScope'
 import { emitModuleSource, loadEmittedServer } from 'abide/ui/internal/emit'
@@ -30,83 +31,19 @@ interface Scenario {
     serverScope?: () => Record<string, unknown>
 }
 
-function range(n: number): number[] {
-    const out: number[] = []
-    for (let i = 0; i < n; i++) out.push(i)
-    return out
-}
-
-// The corpus. The first block mirrors `benchFrontend` (template-only, kept in lockstep by name so the
-// bench pages line up row-for-row) and carries a `serverScope` for the hydrate pass. The `update` block
-// adds interactive scenarios that own state behind a `<button>` — mounted once, then driven by clicking
-// and flushing the DOM patch. Client scopes live on the page (they must be built in the browser).
-const SCENARIOS: Scenario[] = [
-    { name: 'static-text', src: '<p>hello world</p>', serverScope: () => ({}) },
-    {
-        name: 'interpolation',
-        src: '<p>Hi {name}, you have {count} messages</p>',
-        serverScope: () => ({ name: 'Bob', count: 7 }),
-    },
-    {
-        name: 'attributes',
-        src: '<a id={id} href={href} title={title} class={cls}>link</a>',
-        serverScope: () => ({ id: 'n1', href: '/x', title: 'go', cls: 'btn primary' }),
-    },
-    {
-        name: 'if-else',
-        src: '{#if show}<p>{msg}</p>{:else}<p>hidden</p>{/if}',
-        serverScope: () => ({ show: true, msg: 'visible' }),
-    },
-    {
-        name: 'switch',
-        src: '{#switch color}{:case "red"}<p>red</p>{:case "blue"}<p>blue</p>{:default}<p>other</p>{/switch}',
-        serverScope: () => ({ color: 'blue' }),
-    },
-    {
-        name: 'await-block',
-        src: '{#await p}<em>…</em>{:then v}<p>{v}</p>{/await}',
-        serverScope: () => ({ p: Promise.resolve('ready') }),
-    },
-    {
-        name: 'for-list-100',
-        src: '<ul>{#for n of items by n}<li>row {n}</li>{/for}</ul>',
-        rows: 100,
-        serverScope: () => ({ items: range(100) }),
-    },
-    {
-        name: 'for-list-1000',
-        src: '<ul>{#for n of items by n}<li>row {n}</li>{/for}</ul>',
-        rows: 1000,
-        serverScope: () => ({ items: range(1000) }),
-    },
-    {
-        name: 'for-list-10000',
-        src: '<ul>{#for n of items by n}<li>row {n}</li>{/for}</ul>',
-        rows: 10000,
-        serverScope: () => ({ items: range(10000) }),
-    },
-    {
-        name: 'state-update',
-        src: "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>",
-        update: true,
-    },
-    {
-        name: 'list-append-update',
-        src: "<script>import { state } from 'abide/shared/state'; let items = state([0])</script><button onclick={() => (items = [...items, items.length])}>add</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
-        update: true,
-    },
-    {
-        name: 'list-reverse-1000',
-        src: "<script>import { state } from 'abide/shared/state'; let items = state(Array.from({ length: 1000 }, (_, i) => i))</script><button onclick={() => (items = [...items].reverse())}>rev</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
-        rows: 1000,
-        update: true,
-    },
-    {
-        name: 'if-toggle',
-        src: "<script>import { state } from 'abide/shared/state'; let on = state(true)</script><button onclick={() => (on = !on)}>t</button>{#if on}<p>A</p>{:else}<p>B</p>{/if}",
-        update: true,
-    },
-]
+// Derived from the shared `@abide/bench/scenarios` corpus (kept in lockstep with `benchFrontend` and the
+// CLI runner, row-for-row, by construction). A render-able scenario (`server !== false`) carries its
+// `scope` as the hydrate `serverScope`; an interactive scenario (has an `update` fn) is marked
+// `update: true` and is driven by a real click in the browser (its reactive instances live on the page,
+// so it needs no server scope). The corpus's update CLOSURES are for the CLI's happy-dom path and are not
+// serializable to the browser — only the `update` marker crosses.
+const SCENARIOS: Scenario[] = CORPUS.map((scenario) => ({
+    name: scenario.name,
+    src: scenario.src,
+    ...(scenario.rows !== undefined ? { rows: scenario.rows } : {}),
+    ...(scenario.update !== undefined ? { update: true } : {}),
+    ...(scenario.server !== false ? { serverScope: scenario.scope } : {}),
+}))
 
 // Emitted client modules import the runtime as a bare specifier; rewrite it to an absolute path so
 // Bun.build — running from a tmpdir entry outside the package — resolves it (same trick as

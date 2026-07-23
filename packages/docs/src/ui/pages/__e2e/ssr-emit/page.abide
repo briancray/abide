@@ -1,0 +1,32 @@
+<script>
+  import { state } from "abide/shared/state"
+  // Test-only fixture route (not linked in the sidebar) that concentrates the element + attribute
+  // constructs the SSR emitter serializes, so `e2e/ssr-emit.spec.ts` can assert the RAW server bytes
+  // (pre-hydration) — the layer the rest of the suite only checks after hydration heals it.
+  const dyn = "DYN"
+  const id = "42"
+  const spread = { title: "spr", role: "r", id: "spread-id" }
+  const risky = `a & "b" 'c' <d>`
+  let flag = state(true)
+</script>
+
+<main data-testid="ssr-emit">
+  <a data-testid="static" id="lnk" href="/x" data-role="link" class="btn primary">go</a>
+
+  <div data-testid="cls-on" class="base" class:active={true}>on</div>
+  <div data-testid="cls-off" class="base" class:active={false}>off</div>
+
+  <div data-testid="sty" style="color:red" style:font-weight={700}>styled</div>
+
+  <a data-testid="qi" class="a {dyn}" href="/x/{id}">qi</a>
+
+  <div data-testid="spread" id="static-id" {...spread}>spread</div>
+
+  <div data-testid="esc" title={risky}>esc</div>
+
+  <input data-testid="falsy" value={null} required>
+
+  <section data-testid="nest"><header><h2>T</h2></header><p>B</p></section>
+
+  <ul data-testid="blk">{#if flag}<li>yes</li>{:else}<li>no</li>{/if}</ul>
+</main>

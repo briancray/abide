@@ -22,6 +22,7 @@ import type { Node } from 'typescript/unstable/ast'
 import {
     isArrowFunction,
     isCallExpression,
+    isExportAssignment,
     isFunctionDeclaration,
     isFunctionExpression,
     isVariableDeclaration,
@@ -87,68 +88,218 @@ function deriveViaNodeSubprocess(filePath: string, exportName: string): DeriveSc
 }
 
 function deriveInProcess(filePath: string, exportName: string): DeriveSchemaResult {
-    const warnings: string[] = []
-    const result: DeriveSchemaResult = { warnings }
     const api = new API({ cwd: findProjectRoot(filePath) })
     try {
-        const snapshot = api.updateSnapshot({ openFiles: [filePath] })
-        const project = snapshot.getDefaultProjectForFile(filePath)
+        const project = api
+            .updateSnapshot({ openFiles: [filePath] })
+            .getDefaultProjectForFile(filePath)
         if (project === undefined) {
-            warnings.push(`deriveSchema: no TypeScript project found for ${filePath}`)
-            return result
+            return { warnings: [`deriveSchema: no TypeScript project found for ${filePath}`] }
         }
-        const checker = project.checker
-        const sourceFile = project.program.getSourceFile(filePath)
-        if (sourceFile === undefined) {
-            warnings.push(`deriveSchema: source file ${filePath} is not part of the project`)
-            return result
-        }
-        const moduleSymbol = checker.getSymbolAtLocation(sourceFile)
-        if (moduleSymbol === undefined) {
-            warnings.push(`deriveSchema: ${filePath} is not a module (no exports)`)
-            return result
-        }
-        const exported = checker
-            .getExportsOfModule(moduleSymbol)
-            .find((symbol) => symbol.name === exportName)
-        if (exported === undefined) {
-            warnings.push(`deriveSchema: export "${exportName}" not found in ${filePath}`)
-            return result
-        }
-        const signature = findHandlerSignature(exported, checker, project)
-        if (signature === undefined) {
-            warnings.push(
-                `deriveSchema: export "${exportName}" is not callable — cannot derive a schema`,
-            )
-            return result
-        }
-
-        const parameters = signature.getParameters()
-        const firstParameter = parameters[0]
-        if (firstParameter !== undefined) {
-            const inputType = checker.getTypeOfSymbol(firstParameter)
-            if (inputType !== undefined) {
-                result.input = typeToSchema(inputType, checker, warnings, new Set<number>(), 0, '')
-            }
-        }
-
-        const returnType = checker.getReturnTypeOfSignature(signature)
-        if (returnType !== undefined) {
-            const resolved = unwrapPromise(returnType, checker)
-            // void / undefined returns carry no output payload.
-            if ((resolved.flags & (TypeFlags.Void | TypeFlags.Undefined)) === 0) {
-                result.output = typeToSchema(resolved, checker, warnings, new Set<number>(), 0, '')
-            }
-        }
-        return result
+        return deriveExportFromProject(project, filePath, exportName)
     } finally {
         api.close()
     }
 }
 
+// One export-name in an already-open project → its {input, output} JSON Schema. Shared by the single
+// (`deriveInProcess`) and batch (`deriveBatchInProcess`) paths so the derivation rules stay identical.
+function deriveExportFromProject(
+    project: Project,
+    filePath: string,
+    exportName: string,
+): DeriveSchemaResult {
+    const warnings: string[] = []
+    const result: DeriveSchemaResult = { warnings }
+    const checker = project.checker
+    const sourceFile = project.program.getSourceFile(filePath)
+    if (sourceFile === undefined) {
+        warnings.push(`deriveSchema: source file ${filePath} is not part of the project`)
+        return result
+    }
+    const moduleSymbol = checker.getSymbolAtLocation(sourceFile)
+    if (moduleSymbol === undefined) {
+        warnings.push(`deriveSchema: ${filePath} is not a module (no exports)`)
+        return result
+    }
+    const exported = checker
+        .getExportsOfModule(moduleSymbol)
+        .find((symbol) => symbol.name === exportName)
+    if (exported === undefined) {
+        warnings.push(`deriveSchema: export "${exportName}" not found in ${filePath}`)
+        return result
+    }
+    const signature = findHandlerSignature(exported, checker, project)
+    if (signature === undefined) {
+        warnings.push(
+            `deriveSchema: export "${exportName}" is not callable — cannot derive a schema`,
+        )
+        return result
+    }
+
+    const parameters = signature.getParameters()
+    const firstParameter = parameters[0]
+    if (firstParameter !== undefined) {
+        const inputType = checker.getTypeOfSymbol(firstParameter)
+        if (inputType !== undefined) {
+            result.input = typeToSchema(inputType, checker, warnings, new Set<number>(), 0, '')
+        }
+    }
+
+    const returnType = checker.getReturnTypeOfSignature(signature)
+    if (returnType !== undefined) {
+        const outputSchema = deriveOutputSchema(returnType, checker, warnings)
+        if (outputSchema !== undefined) result.output = outputSchema
+    }
+    return result
+}
+
+// §11.4 output derivation: reduce a handler's return type to the schema of its SUCCESS PAYLOAD.
+// `json(T)`/`TypedResponse<T>` → `T`; `jsonl(C)`/`sse(C)`/`StreamResponse<C>` → element `C`; a bare
+// `Response` (what `redirect()`/`error()`/`error.typed()` return) carries no success payload and is
+// dropped; `void`/`undefined` likewise. A union maps member-by-member with the same rules, so a
+// `TypedResponse<T> | Response` (value-or-typed-error) collapses to `T`. Returns undefined when nothing
+// remains (e.g. a redirect-only handler) — then no output schema is merged and no shaping happens.
+function deriveOutputSchema(
+    returnType: Type,
+    checker: Checker,
+    warnings: string[],
+): JSONSchema | undefined {
+    const settled = unwrapPromise(returnType, checker)
+    const members = settled.isUnionType() ? settled.getTypes() : [settled]
+    const schemas: JSONSchema[] = []
+    for (const member of members) {
+        if ((member.flags & (TypeFlags.Void | TypeFlags.Undefined)) !== 0) continue
+        const payload = unwrapResponseWrapper(member, checker)
+        if (payload === undefined) continue // a bare Response member (redirect/error) — no payload
+        if ((payload.flags & (TypeFlags.Void | TypeFlags.Undefined)) !== 0) continue
+        schemas.push(typeToSchema(payload, checker, warnings, new Set<number>(), 0, ''))
+    }
+    if (schemas.length === 0) return undefined
+    if (schemas.length === 1) return schemas[0]
+    return { anyOf: schemas }
+}
+
+// One return-type member → its payload Type, or undefined when it is a non-payload Response.
+// `TypedResponse<T>`/`StreamResponse<C>` are detected by their brand property (a unique-symbol member
+// whose name carries `VALUE_BRAND`/`CHUNK_BRAND`); a plain data type passes through unchanged.
+function unwrapResponseWrapper(type: Type, checker: Checker): Type | undefined {
+    const valueBrand = brandPropertyType(type, 'VALUE_BRAND', checker)
+    if (valueBrand !== undefined) return valueBrand
+    const chunkBrand = brandPropertyType(type, 'CHUNK_BRAND', checker)
+    if (chunkBrand !== undefined) return chunkBrand
+    if (isResponseLike(type, checker)) return undefined
+    return type
+}
+
+// The type argument carried by a TypedResponse/StreamResponse brand property, if present.
+function brandPropertyType(type: Type, brand: string, checker: Checker): Type | undefined {
+    for (const property of checker.getPropertiesOfType(type)) {
+        if (property.name.includes(brand)) return checker.getTypeOfSymbol(property)
+    }
+    return undefined
+}
+
+// A bare `Response` (or a typed-error `Response & { __typedErrorName }`) — structurally, the fetch
+// `Response` shape. Checked AFTER the brand probes, so a TypedResponse/StreamResponse (which also
+// extends Response) has already been unwrapped and never reaches here.
+function isResponseLike(type: Type, checker: Checker): boolean {
+    if (type.getSymbol()?.name === 'Response') return true
+    const names = new Set(checker.getPropertiesOfType(type).map((property) => property.name))
+    return (
+        names.has('status') &&
+        names.has('ok') &&
+        names.has('headers') &&
+        names.has('body') &&
+        names.has('arrayBuffer')
+    )
+}
+
+// A batch derivation entry: a stable `key` (the caller's RPC route name) plus the file + export to
+// derive. `deriveSchemas` returns a `key → result` map.
+export type DeriveEntry = { key: string; filePath: string; exportName: string }
+
+// Batch-derive many exports in ONE type-engine session (grouped by tsconfig project root), so a whole
+// app's RPCs cost a single tsgo project load instead of N subprocess spawns. Same Bun→Node bridge as
+// the single path.
+export function deriveSchemas(entries: DeriveEntry[]): Record<string, DeriveSchemaResult> {
+    if (entries.length === 0) return {}
+    const bun = (globalThis as { Bun?: unknown }).Bun
+    return bun !== undefined ? deriveBatchViaNodeSubprocess(entries) : deriveBatchInProcess(entries)
+}
+
+function deriveBatchInProcess(entries: DeriveEntry[]): Record<string, DeriveSchemaResult> {
+    const out: Record<string, DeriveSchemaResult> = {}
+    // Group by project root so each tsconfig project is loaded once and reused across its RPCs.
+    const byRoot = new Map<string, DeriveEntry[]>()
+    for (const entry of entries) {
+        const root = findProjectRoot(entry.filePath)
+        const group = byRoot.get(root)
+        if (group === undefined) byRoot.set(root, [entry])
+        else group.push(entry)
+    }
+    for (const [root, group] of byRoot) {
+        const api = new API({ cwd: root })
+        try {
+            const snapshot = api.updateSnapshot({ openFiles: group.map((entry) => entry.filePath) })
+            for (const entry of group) {
+                const project = snapshot.getDefaultProjectForFile(entry.filePath)
+                out[entry.key] =
+                    project === undefined
+                        ? {
+                              warnings: [
+                                  `deriveSchema: no TypeScript project found for ${entry.filePath}`,
+                              ],
+                          }
+                        : deriveExportFromProject(project, entry.filePath, entry.exportName)
+            }
+        } finally {
+            api.close()
+        }
+    }
+    return out
+}
+
+function deriveBatchViaNodeSubprocess(entries: DeriveEntry[]): Record<string, DeriveSchemaResult> {
+    const self = fileURLToPath(import.meta.url)
+    const spawnSync = (
+        globalThis as {
+            Bun: {
+                spawnSync: (
+                    cmd: string[],
+                    opts?: unknown,
+                ) => {
+                    stdout: { toString(): string }
+                    stderr: { toString(): string }
+                    success: boolean
+                }
+            }
+        }
+    ).Bun.spawnSync
+    const proc = spawnSync(['node', self, '--batch'], {
+        stdin: Buffer.from(JSON.stringify(entries)),
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    const stdout = proc.stdout.toString()
+    const markerAt = stdout.lastIndexOf(RESULT_MARKER)
+    if (markerAt === -1) {
+        const stderr = proc.stderr.toString().trim()
+        const warning = `deriveSchema: batch Node subprocess produced no result${stderr ? ` (stderr: ${stderr})` : ''}`
+        const out: Record<string, DeriveSchemaResult> = {}
+        for (const entry of entries) out[entry.key] = { warnings: [warning] }
+        return out
+    }
+    const jsonStart = markerAt + RESULT_MARKER.length
+    const jsonEnd = stdout.indexOf('\n', jsonStart)
+    const json = stdout.slice(jsonStart, jsonEnd === -1 ? undefined : jsonEnd)
+    return JSON.parse(json) as Record<string, DeriveSchemaResult>
+}
+
 // The exported binding may be the function itself (`export const fn = (a) => ...`), a wrapped handler
-// (`export const fn = GET((a) => ...)`), or a function declaration. Walk the value declaration to the
-// innermost function-like node and take ITS call signature, so wrappers don't hide the real shape.
+// (`export const fn = GET((a) => ...)`, incl. `export default GET(...)`), or a function declaration.
+// Walk the value declaration to the innermost function-like node and take ITS call signature, so
+// wrappers don't hide the real shape.
 function findHandlerSignature(
     symbol: TSSymbol,
     checker: Checker,
@@ -178,6 +329,11 @@ function findFunctionNode(node: Node): Node | undefined {
         return node
     if (isVariableDeclaration(node)) {
         return node.initializer === undefined ? undefined : findFunctionNode(node.initializer)
+    }
+    // `export default GET(...)` — the value declaration is the ExportAssignment; unwrap to its
+    // expression so a default-exported wrapped handler resolves like a named one.
+    if (isExportAssignment(node)) {
+        return findFunctionNode(node.expression)
     }
     if (isCallExpression(node)) {
         for (const argument of node.arguments) {
@@ -428,13 +584,23 @@ function findProjectRoot(filePath: string): string {
 }
 
 // When executed directly by Node (the Bun-side bridge above), read args and print the JSON result.
+// `--batch` reads a JSON `DeriveEntry[]` from stdin and prints a `key → result` map; otherwise the
+// two positional args are a single `<filePath> <exportName>`.
 if (import.meta.main) {
-    const filePath = process.argv[2]
-    const exportName = process.argv[3]
-    if (filePath === undefined || exportName === undefined) {
-        process.stderr.write('usage: node deriveSchema.ts <filePath> <exportName>\n')
-        process.exit(2)
+    if (process.argv[2] === '--batch') {
+        const chunks: Buffer[] = []
+        for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
+        const entries = JSON.parse(Buffer.concat(chunks).toString('utf8')) as DeriveEntry[]
+        const derived = deriveBatchInProcess(entries)
+        process.stdout.write(`${RESULT_MARKER}${JSON.stringify(derived)}\n`)
+    } else {
+        const filePath = process.argv[2]
+        const exportName = process.argv[3]
+        if (filePath === undefined || exportName === undefined) {
+            process.stderr.write('usage: node deriveSchema.ts <filePath> <exportName>\n')
+            process.exit(2)
+        }
+        const derived = deriveInProcess(filePath, exportName)
+        process.stdout.write(`${RESULT_MARKER}${JSON.stringify(derived)}\n`)
     }
-    const derived = deriveInProcess(filePath, exportName)
-    process.stdout.write(`${RESULT_MARKER}${JSON.stringify(derived)}\n`)
 }

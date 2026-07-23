@@ -34,7 +34,7 @@ export interface StreamScope {
     // Handoff records for attachable `{#for await}` sources (replayable-streams.md §5). One per
     // ATTACHABLE (known-RPC) streamed list, keyed by `listId` (its `<abide-list>` id). `collectSeed`
     // drains these into the seed's `streams` section so the client ADOPTS the decoded transcript (mode
-    // A, `done`) or RESUMES over `?from=<count>` (mode B, open) instead of re-invoking the source. A
+    // A, `done`) or RESUMES over `?__abide_from=<count>` (mode B, open) instead of re-invoking the source. A
     // streamer mutates its own record's `count`/`values`/`done` as it flushes; the record is final by
     // the time `collectSeed` runs (after the drain). Non-attachable sources register nothing.
     streamHandles: StreamHandleRecord[]

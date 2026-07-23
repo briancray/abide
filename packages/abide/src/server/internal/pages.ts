@@ -248,7 +248,7 @@ export interface SeedRead {
 
 // One attachable `{#for await}` stream handed off to the client (replayable-streams.md §5). `listId`
 // matches the `<abide-list id>` the SSR painted; `name`/`args` identify the source RPC for a mode-B
-// resume (`GET /__abide/rpc/<name>?args=…&from=<count>`); `done` picks the mode (true → adopt `values`, false
+// resume (`GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>`); `done` picks the mode (true → adopt `values`, false
 // → resume); `count` is the flushed item count (= `values.length`); `values` is the decoded transcript
 // so mode A re-mounts with zero network. `values` is absent only if it wasn't JSON-serializable.
 export interface StreamHandle {

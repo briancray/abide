@@ -477,7 +477,9 @@ describe('attribute-value interpolation', () => {
             specifier === './Badge.abide' ? child : undefined
         const emitted = await loadEmitted(parent, resolve)
         const host = document.createElement('div')
-        const dispose = emitted.mount(host, { state: (await import('../../shared/state.ts')).state })
+        const dispose = emitted.mount(host, {
+            state: (await import('../../shared/state.ts')).state,
+        })
         const span = host.querySelector('span[data-label]') as HTMLElement
         expect(span.getAttribute('data-label')).toBe('n is 2')
         dispose()

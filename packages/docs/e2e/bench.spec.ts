@@ -7,16 +7,20 @@ import { expect, test } from '@playwright/test'
 // a regression there floods the page with stray patches and pegs the render. This drives the real
 // browser to prove the table fills, streams as an `<abide-list>`, hydrates, and re-runs on demand.
 
+// The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus, in corpus order (the
+// four `server: false` interaction-only scenarios are not render-benched). Kept in sync with that corpus.
 const SCENARIOS = [
     'static-text',
     'interpolation',
     'attributes',
     'if-else',
-    'switch',
-    'await-block',
     'for-list-100',
     'for-list-1000',
     'for-list-10000',
+    'nested-for-if-50',
+    'switch',
+    'class-style-directives',
+    'await-block',
 ]
 
 test('bench table fills live from the streamed corpus and stays bounded', async ({ page }) => {

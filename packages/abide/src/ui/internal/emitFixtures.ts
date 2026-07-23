@@ -213,6 +213,47 @@ export const FIXTURES: Fixture[] = [
         client: false,
     },
 
+    // --- static-attribute serialization (emitter fast-path guards) --------------
+    // These lock the server attribute-string output byte-for-byte for the all-static element case (the
+    // compile-time serialization fast path) and the mixed static/dynamic case (the runtime builder path).
+    {
+        name: 'static-only multiple attrs',
+        src: '<a id="n1" href="/x" data-role="link">go</a>',
+        kind: 'template',
+        scope: () => ({}),
+    },
+    {
+        name: 'static attrs with event (server literal)',
+        src: '<button type="button" class="btn" onclick={fn}>x</button>',
+        kind: 'template',
+        scope: () => ({ fn: () => {} }),
+        client: false,
+    },
+    {
+        name: 'static class trimmed and merged',
+        src: '<div class="  a b  ">x</div>',
+        kind: 'template',
+        scope: () => ({}),
+    },
+    {
+        name: 'static attr single quote escaped',
+        src: `<a title="it's a test">x</a>`,
+        kind: 'template',
+        scope: () => ({}),
+    },
+    {
+        name: 'static style + style directive merge',
+        src: '<div style="color:red" style:margin={m}>x</div>',
+        kind: 'template',
+        scope: () => ({ m: '0' }),
+    },
+    {
+        name: 'mixed static and dynamic attr order',
+        src: '<a id="a" href={h} title="t">x</a>',
+        kind: 'template',
+        scope: () => ({ h: '/x' }),
+    },
+
     // --- void / nesting --------------------------------------------------------
     { name: 'void element', src: '<br>', kind: 'template', scope: () => ({}) },
     {
@@ -227,6 +268,14 @@ export const FIXTURES: Fixture[] = [
         src: '<div><span>{x}</span></div>',
         kind: 'template',
         scope: () => ({ x: 'hi' }),
+    },
+    {
+        // A fully-static nested tree (no interpolation) — the pure-sync element path exercised by the
+        // child-inlining change; locks multi-child static nesting byte-for-byte.
+        name: 'static nested tree',
+        src: '<section><h1>Title</h1><p>Body</p></section>',
+        kind: 'template',
+        scope: () => ({}),
     },
 
     // --- if --------------------------------------------------------------------

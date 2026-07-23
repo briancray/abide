@@ -15,6 +15,7 @@
 // before trusting them. Without this a client could name channel-for-A (whose data it wants) while
 // presenting args-for-B (which its identity is allowed to read) and slip past the gate.
 
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { cacheChannelName } from './cacheChannels.ts'
 import { compose } from './middleware.ts'
 import type { AppConfig } from './router.ts'
@@ -77,9 +78,9 @@ export async function authorizeChannelJoin(
 
     // Reconstruct the scope the HTTP GET read of `(rpcName, presentedArgs)` would have run in:
     // identity resolved at upgrade (same cookie/bearer ladder), args reachable both on the request
-    // URL query (`?args=` — where a read handler's middleware reads them) AND in route().params.
+    // URL query (`?__abide_args=` — where a read handler's middleware reads them) AND in route().params.
     const rpcUrl = new URL(`/__abide/rpc/${rpcName}`, new URL(connData.request.url).origin)
-    rpcUrl.searchParams.set('args', JSON.stringify(presentedArgs))
+    rpcUrl.searchParams.set(RPC_QUERY_PARAMS.args, JSON.stringify(presentedArgs))
     const syntheticRequest = new Request(rpcUrl, {
         method: 'GET',
         headers: connData.request.headers,

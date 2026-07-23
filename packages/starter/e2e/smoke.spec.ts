@@ -37,7 +37,7 @@ test('the client bundle hydrates with no console errors', async ({ page }) => {
 
 test('the greet RPC responds over HTTP', async ({ request }) => {
     const res = await request.get('/__abide/rpc/greet', {
-        params: { args: JSON.stringify({ name: 'abide' }) },
+        params: { name: 'abide' },
     })
     expect(res.ok()).toBe(true)
     expect(await res.json()).toBe('Hello, abide!')

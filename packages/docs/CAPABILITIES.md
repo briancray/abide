@@ -16,14 +16,14 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 ## Coverage summary (verify phase)
 
 - **Total capabilities in this manifest: 135** (~91 browser-facing PW/PW+RT, ~44 runtime-only RT).
-- **Playwright suite: 20 spec files, 137 tests — ALL PASSING (serial).** They drive the real docs app
+- **Playwright suite: 22 spec files, 153 tests — ALL PASSING (serial).** They drive the real docs app
   (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
-  binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, and machine surfaces
-  fetched from the browser.
-  - `rpc` (20), `bindings` (15), `routing` (15), `platform` (14), `control` (9), `sockets` (8),
-    `reactivity` (8), `caching-cells` (7), `cache` (6), `caching-global` (5), `build-deploy` (5),
-    `smoke` (4), `rpc-probes` (4), `bench` (4), `streaming` (3), `bench-client` (3), `uploads` (2),
-    `styling` (1), `nav-perf` (1), `hydration` (3).
+  binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, raw SSR-emitter bytes,
+  and machine surfaces fetched from the browser.
+  - `rpc` (20), `routing` (19), `bindings` (15), `platform` (14), `ssr-emit` (10), `control` (9),
+    `sockets` (8), `reactivity` (8), `caching-cells` (7), `cache` (6), `caching-global` (5),
+    `build-deploy` (5), `smoke` (4), `rpc-probes` (4), `bench` (4), `streaming` (3), `bench-client` (3),
+    `hydration` (3), `uploads` (2), `bench-server` (2), `styling` (1), `nav-perf` (1).
   - Note: `hydration.spec.ts` "soft-nav … keeps every demo tab correctly seeded" was flaky under CPU
     contention — diagnosed as a TEST race (it counted `.sample` after `toHaveURL`, which resolves on the
     history push BEFORE the soft-nav content swap, so it read the outgoing page's samples). Framework
@@ -146,6 +146,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `fn.raw(args, init?)` — raw `Response`, full bypass (reads AND mutations) | PW+RT | [x] (/rpc/reads `rpcGreet.raw`; platform/lifecycle `lifecycleThrow.raw({})` on a POST) |
 | bare call on a streaming handler → replay-then-live `AsyncIterable<C>` (client proxy decodes jsonl/sse by content-type → same cell → stream slot) | PW+RT | [x] (/rpc/streaming; browser `{#for await x of rpc()}` for jsonl + sse, verified streaming + re-run) |
 | `fn.peek` — reactive probe | PW | [x] (/rpc/reads) |
+| Read URL args — two forms: canonical `?__abide_args=<json>` blob (browser proxy / test app / MCP) OR flat per-field query params (`?key=beta&n=5`, curl-friendly; coerced to each input-schema field type, raw passthrough when undeclared) | RT | [ ] (abide `decodeQueryArgs`/router unit tests; no docs-app demo) |
 
 ## 4. Cache verbs + probes (isomorphic — `abide/shared/*`)
 | Capability | Kind | Status |
@@ -285,7 +286,7 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 ## 13. Machine surfaces (generated routes)
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `/openapi.json` — OpenAPI 3.1 document | PW+RT | [x] (platform/machines fetches + renders paths in-browser; e2e asserts) |
+| `/openapi.json` — OpenAPI 3.1 document (reads project one query param per input field when field-enumerable, else the `__abide_args` blob) | PW+RT | [x] (platform/machines fetches + renders paths in-browser; e2e asserts) |
 | `/__abide/mcp` — MCP endpoint (tools/list, tools/call) | RT | [x] (platform/machines POSTs tools/list from browser; e2e asserts tool list) |
 | MCP prompts (`src/mcp/prompts/<name>.md`) / resources | RT | [ ] |
 | Socket → MCP tail/publish tools | RT | [ ] |
@@ -308,7 +309,10 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | --- | --- | --- |
 | `abide scaffold <name>` | RT | [ ] |
 | `abide dev` (watch + live-reload over mux) | RT | [ ] |
-| `abide build` (content-addressed client bundle) | PW+RT | [~] (/platform/deploy page + e2e/build-deploy.spec; also /platform/cli, /platform/bench pages) |
+| `abide build` (content-addressed client bundle + baked `dist/schemas.json` type-derived schema map) | PW+RT | [~] (/platform/deploy page + e2e/build-deploy.spec; also /platform/cli, /platform/bench, /platform/bench/server pages) |
+| Boot-time type-derived schemas (batched `node`/tsgo pass; `ABIDE_DERIVE_SCHEMAS=0` opts out; `abide build` bakes, `abide start` prefers the bake) | RT | [ ] (abide `bakeSchemas.test.ts` / `deriveSchema.test.ts`) |
+| Server-dispatch microbench (`route`/`cache-key`/`cell` hot paths) | PW+RT | [x] (/platform/bench/server + e2e/bench-server.spec) |
+| Raw SSR-emitter byte fixture (static attrs, class/style merge, spread override, escaping, null-attr omission, block anchors) | PW | [x] (/__e2e/ssr-emit + e2e/ssr-emit.spec) |
 | `abide start` | RT | [ ] |
 | `abide run <file>` | RT | [ ] |
 | `abide compile` / `abide cli` / `abide bundle` | RT | [ ] |

@@ -10,6 +10,7 @@ import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
+import { applyStatic, attrBuilder } from './serverRuntime.ts'
 import { splitParams } from './splitParams.ts'
 import type { AttrPlan, ServerChunk, TemplatePlan } from './templatePlan.ts'
 
@@ -95,6 +96,28 @@ function bodyExpr(analysis: ScopeAnalysis, chunks: ServerChunk[]): string {
     return `(async ($scope) => {\n  let $out = "";\n${genChunks(analysis, chunks)}  return $out;\n})`
 }
 
+// An element whose every attribute is a compile-time constant (or a client-only `event`, which emits
+// nothing server-side) needs no runtime `AttributeBuilder` — its open tag is a constant string.
+function isStaticOnly(attrs: AttrPlan[]): boolean {
+    for (const attr of attrs) {
+        if (attr.kind !== 'static' && attr.kind !== 'event') return false
+    }
+    return true
+}
+
+// The open-tag attribute string for an all-static element, computed at emit time by running the SAME
+// `AttributeBuilder` the runtime would — so the baked literal is byte-identical to the builder path
+// (class/style trim + merge, boolean/bare attrs, escaping, and the trailing scope attribute all match).
+function staticAttrLiteral(attrs: AttrPlan[], scopeAttr: string | null): string {
+    const builder = attrBuilder()
+    for (const attr of attrs) {
+        if (attr.kind === 'static') applyStatic(builder, attr.name, attr.value)
+        // `event` contributes no server attribute (mirrors the builder path's `case 'event': break`).
+    }
+    if (scopeAttr !== null) applyStatic(builder, scopeAttr, null)
+    return builder.serialize()
+}
+
 function genElement(
     analysis: ScopeAnalysis,
     name: string,
@@ -103,40 +126,49 @@ function genElement(
     children: ServerChunk[],
     scopeAttr: string | null,
 ): string {
-    let out = '  {\n    const $a = $rt.attrBuilder();\n'
-    for (const attr of attrs) {
-        switch (attr.kind) {
-            case 'static':
-                out += `    $rt.applyStatic($a, ${JSON.stringify(attr.name)}, ${JSON.stringify(attr.value)});\n`
-                break
-            case 'expr':
-                out += `    $rt.applyExpr($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
-                break
-            case 'event':
-                break // omitted server-side
-            case 'class':
-                out += `    $rt.applyClassDir($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
-                break
-            case 'style':
-                out += `    $rt.applyStyleDir($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
-                break
-            case 'bind':
-                out += `    $rt.applyBind($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
-                break
-            case 'spread':
-                out += `    $rt.applySpread($a, await (${attr.expr}));\n`
-                break
+    let out = ''
+    if (isStaticOnly(attrs)) {
+        // Fast path: no `attrBuilder()` allocation — the whole open tag is a compile-time constant.
+        out += `  $out += ${JSON.stringify(`<${name}${staticAttrLiteral(attrs, scopeAttr)}>`)};\n`
+    } else {
+        out += '  {\n    const $a = $rt.attrBuilder();\n'
+        for (const attr of attrs) {
+            switch (attr.kind) {
+                case 'static':
+                    out += `    $rt.applyStatic($a, ${JSON.stringify(attr.name)}, ${JSON.stringify(attr.value)});\n`
+                    break
+                case 'expr':
+                    out += `    $rt.applyExpr($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    break
+                case 'event':
+                    break
+                case 'class':
+                    out += `    $rt.applyClassDir($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    break
+                case 'style':
+                    out += `    $rt.applyStyleDir($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    break
+                case 'bind':
+                    out += `    $rt.applyBind($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    break
+                case 'spread':
+                    out += `    $rt.applySpread($a, await (${attr.expr}));\n`
+                    break
+            }
         }
+        if (scopeAttr !== null)
+            out += `    $rt.applyStatic($a, ${JSON.stringify(scopeAttr)}, null);\n`
+        out += `    $out += "<${name}" + $a.serialize() + ">";\n`
+        out += '  }\n'
     }
-    // #20: stamp the #13 scope attribute LAST (after the element's own attrs), matching the client
-    // skeleton's trailing bare ` data-ab-<hash>`; a null value serializes as a bare attribute.
-    if (scopeAttr !== null) out += `    $rt.applyStatic($a, ${JSON.stringify(scopeAttr)}, null);\n`
-    out += `    $out += "<${name}" + $a.serialize() + ">";\n`
     if (!isVoid) {
-        out += `    $out += await ${bodyExpr(analysis, children)}($scope);\n`
-        out += `    $out += ${JSON.stringify(`</${name}>`)};\n`
+        // Children keep their own awaited `bodyExpr` IIFE. (Inlining sync children into the parent
+        // accumulator was tried and reverted: it silently broke streaming SSR — a later `{#for await}`
+        // stopped seeing the per-render stream scope (`getContext().stream`) and fell back to a fully
+        // buffered drain. The unit oracle can't catch that, docs e2e `bench.spec` does.)
+        out += `  $out += await ${bodyExpr(analysis, children)}($scope);\n`
+        out += `  $out += ${JSON.stringify(`</${name}>`)};\n`
     }
-    out += '  }\n'
     return out
 }
 

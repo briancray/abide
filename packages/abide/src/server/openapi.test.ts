@@ -105,11 +105,14 @@ test('buildOpenApi emits a 3.1 document with GET query param and POST requestBod
     const searchGet = searchPath.get
     if (!searchGet) throw new Error('expected a GET on /rpc/search')
     const parameters = searchGet.parameters as Array<Record<string, unknown>>
-    const firstParameter = parameters[0]
-    if (!firstParameter) throw new Error('expected a query parameter on /rpc/search')
-    expect(firstParameter.name).toBe('args')
-    expect(firstParameter.in).toBe('query')
-    expect(firstParameter.required).toBe(true)
+    // The input schema enumerates its fields → one flat query param PER field (the public affordance).
+    const qParameter = parameters.find((parameter) => parameter.name === 'q')
+    if (!qParameter) throw new Error('expected a `q` query parameter on /rpc/search')
+    expect(qParameter.in).toBe('query')
+    expect(qParameter.required).toBe(true)
+    expect((qParameter.schema as Record<string, unknown>).type).toBe('string')
+    // No opaque `__abide_args` blob param when the fields are known.
+    expect(parameters.some((parameter) => parameter.name === '__abide_args')).toBe(false)
     expect((searchGet.responses as Record<string, unknown>)['422']).toBeDefined()
     expect(searchGet.summary).toBe('Search the index')
 
@@ -132,6 +135,25 @@ test('buildOpenApi emits a 3.1 document with GET query param and POST requestBod
     expect(securitySchemes.bearerAuth).toBeDefined()
 })
 
+test('a read whose schema is not field-enumerable falls back to the __abide_args blob param', () => {
+    // No schema (a bare zero/loose-arg read) → the fields are unknown, so the spec advertises the
+    // canonical JSON-blob parameter instead of per-field flat params.
+    const doc = buildOpenApi(
+        buildRegistry({
+            routes: {
+                loose: GET(async (args: { anything?: unknown }) => ({ echoed: args.anything })),
+            },
+        }),
+    )
+    const paths = doc.paths as Record<string, Record<string, Record<string, unknown>>>
+    const looseGet = paths['/__abide/rpc/loose']?.get
+    if (!looseGet) throw new Error('expected a GET on /rpc/loose')
+    const parameters = looseGet.parameters as Array<Record<string, unknown>>
+    expect(parameters).toHaveLength(1)
+    expect(parameters[0]?.name).toBe('__abide_args')
+    expect(parameters[0]?.in).toBe('query')
+})
+
 test('GET /openapi.json serves the generated document', async () => {
     const app = await createTestApp(fixtureConfig())
     try {
@@ -143,9 +165,12 @@ test('GET /openapi.json serves the generated document', async () => {
         expect(doc.openapi).toBe('3.1.0')
         const searchGet = doc.paths['/__abide/rpc/search'].get
         expect(searchGet).toBeDefined()
-        // The args object is carried in a single `args` query param whose schema types the q field.
-        expect(searchGet.parameters[0].name).toBe('args')
-        expect(searchGet.parameters[0].schema.properties.q).toBeDefined()
+        // Reads advertise one flat query param per input field — here the typed `q` field.
+        const qParam = searchGet.parameters.find(
+            (parameter: { name: string }) => parameter.name === 'q',
+        )
+        expect(qParam).toBeDefined()
+        expect(qParam.schema.type).toBe('string')
         expect(doc.paths['/__abide/rpc/create'].post.requestBody).toBeDefined()
         expect(doc.paths['/__abide/rpc/create'].post.responses['422']).toBeDefined()
         expect(doc.paths['/__abide/rpc/secret']).toBeUndefined()

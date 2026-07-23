@@ -43,12 +43,45 @@ export type JSONSchemaType =
     | 'null'
 
 // The non-null member of a `type` union (e.g. `["string","null"]` → "string"); a scalar type passes
-// through. Used by the string→typed coercers (env config, multipart form-text projection).
+// through. Used by the string→typed coercers (env config, multipart form-text projection, query args).
 export function singleType(
     type: JSONSchemaType | JSONSchemaType[] | undefined,
 ): JSONSchemaType | undefined {
     if (Array.isArray(type)) return type.find((candidate) => candidate !== 'null')
     return type
+}
+
+// Coerce one raw string to its declared JSON-Schema scalar type — the shared string→typed step behind
+// the flat query-arg decoder and multipart form-text projection (both feed string wire values into a
+// JSON-shaped args object). Best-effort: an uncoercible value is left as the raw string so the schema
+// validation — not this coercer — produces the loud 422. A `string`/undeclared type passes through.
+export function coerceStringToType(raw: string, type: JSONSchemaType | undefined): unknown {
+    switch (type) {
+        case 'number':
+        case 'integer': {
+            const parsed = Number(raw)
+            if (raw.trim() === '' || !Number.isFinite(parsed)) return raw
+            if (type === 'integer' && !Number.isInteger(parsed)) return raw
+            return parsed
+        }
+        case 'boolean': {
+            const lowered = raw.trim().toLowerCase()
+            if (lowered === 'true') return true
+            if (lowered === 'false') return false
+            return raw
+        }
+        case 'object':
+        case 'array':
+        case 'null': {
+            try {
+                return JSON.parse(raw)
+            } catch {
+                return raw
+            }
+        }
+        default:
+            return raw // string or undeclared — leave as-is.
+    }
 }
 
 type Issue = { message: string; path: Array<string | number> }

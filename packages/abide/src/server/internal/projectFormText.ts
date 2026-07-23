@@ -11,41 +11,10 @@
 // 422 issue. When the schema is opaque (a native Standard Schema, no field types available) or a
 // field's type is undeclared, the raw string passes through unchanged.
 
-import type { JSONSchema, JSONSchemaType } from '../../shared/internal/jsonSchema.ts'
-import { singleType } from '../../shared/internal/jsonSchema.ts'
+import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
+import { coerceStringToType, singleType } from '../../shared/internal/jsonSchema.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
 import type { StandardSchemaV1 } from '../../shared/StandardSchema.ts'
-
-// Coerce one raw string to its declared JSON-Schema type. Leaves the raw string when the value can't
-// be coerced (validation reports the mismatch) or the type is string/untyped.
-function coerceString(raw: string, type: JSONSchemaType | undefined): unknown {
-    switch (type) {
-        case 'number':
-        case 'integer': {
-            const parsed = Number(raw)
-            if (raw.trim() === '' || !Number.isFinite(parsed)) return raw
-            if (type === 'integer' && !Number.isInteger(parsed)) return raw
-            return parsed
-        }
-        case 'boolean': {
-            const lowered = raw.trim().toLowerCase()
-            if (lowered === 'true') return true
-            if (lowered === 'false') return false
-            return raw
-        }
-        case 'object':
-        case 'array':
-        case 'null': {
-            try {
-                return JSON.parse(raw)
-            } catch {
-                return raw
-            }
-        }
-        default:
-            return raw // string or untyped — leave as-is.
-    }
-}
 
 export function projectFormText(
     formData: FormData,
@@ -61,7 +30,7 @@ export function projectFormText(
         const coerced: unknown[] = []
         for (const value of formData.getAll(name)) {
             if (value instanceof File) continue // a File never rides in the JSON args object
-            coerced.push(coerceString(value, type))
+            coerced.push(coerceStringToType(value, type))
         }
         // A field that was purely File(s) contributes nothing here — the `files` schema governs it.
         if (coerced.length === 0) continue

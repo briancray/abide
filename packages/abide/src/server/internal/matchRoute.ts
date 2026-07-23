@@ -54,6 +54,23 @@ function classify(segment: string): Segment {
     return { kind: LITERAL, name: '', literal: segment }
 }
 
+// Per-pattern classification cache. Route patterns come from the static page-route table (a small,
+// stable set), so classifying `segments(pattern).map(classify)` on every request was pure recompute —
+// the same regex-split + object allocations rebuilt per nav (and twice per soft-nav). The classified
+// `Segment[]` is immutable (matching only reads it and mutates its own `params`), so it is safe to share
+// across every request. Keyed by the pattern string, not the caller's array, so a fresh `Object.keys()`
+// per request still hits.
+const CLASSIFIED_PATTERNS = new Map<string, Segment[]>()
+
+function classifyPattern(pattern: string): Segment[] {
+    let classified = CLASSIFIED_PATTERNS.get(pattern)
+    if (classified === undefined) {
+        classified = segments(pattern).map(classify)
+        CLASSIFIED_PATTERNS.set(pattern, classified)
+    }
+    return classified
+}
+
 // Recursive backtracking match of `pattern[patternIndex..]` against `path[pathIndex..]`, filling
 // `params` as it goes. Optional segments try consuming one path segment, then zero; a rest segment
 // greedily consumes every remaining segment (so it only matches as the terminal pattern segment).
@@ -137,7 +154,7 @@ export function matchRoute(patterns: string[], pathname: string): RouteMatch | n
     let best: RouteMatch | null = null
     let bestPattern: Segment[] | null = null
     for (const pattern of patterns) {
-        const patternSegments = segments(pattern).map(classify)
+        const patternSegments = classifyPattern(pattern)
         const params = matchPattern(patternSegments, pathSegments)
         if (params === null) continue
         if (isExact(patternSegments)) return { pattern, params }

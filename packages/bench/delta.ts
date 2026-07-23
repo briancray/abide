@@ -1,25 +1,27 @@
 // FRONTEND BENCH DELTA.
 //
 // Runs the standard bench corpus against the WORKING TREE and against a base git ref (default HEAD),
-// then reports the per-metric change. The point is to answer "did my uncommitted frontend changes
-// speed up or slow down render/mount/update vs what's committed?".
+// then reports the per-metric change. The point is to answer "did my uncommitted abide changes speed up
+// or slow down render/mount/update vs what's committed?".
 //
 //   bun run bench:delta            # working tree vs HEAD
 //   bun run bench:delta -- <ref>   # working tree vs <ref> (branch, tag, or SHA)
 //
-// The base is checked out into a throwaway git worktree; the CURRENT bench harness (bench/) is copied
-// in and run there, so both sides execute identical measurement code against different library source.
-// node_modules is symlinked from this checkout (deps are assumed unchanged across the compared refs).
-// A metric is flagged when it moves more than ABIDE_BENCH_THRESHOLD percent (default 5).
+// The base ref is checked out into a throwaway git worktree. Bench now imports `abide` by package name
+// (not relative `../src`), so to bench the BASE library we run the CURRENT harness with its `abide`
+// resolution repointed at the worktree's base source via a local `node_modules/abide` symlink; every
+// other dependency resolves up to this checkout's `node_modules` (symlinked in). Both sides therefore
+// execute identical measurement code against different abide source. A metric is flagged when it moves
+// more than ABIDE_BENCH_THRESHOLD percent (default 5).
 
-import { cp, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { BenchReport, MetricResult, ScenarioResult } from './run.ts'
+import type { BenchReport, ScenarioResult } from './run.ts'
+import type { MetricResult } from './src/measure.ts'
 
-const BENCH_DIR = import.meta.dir
-const PACKAGE_DIR = join(BENCH_DIR, '..')
-const REPO_ROOT = join(PACKAGE_DIR, '..', '..')
+const BENCH_PKG_DIR = import.meta.dir
+const REPO_ROOT = join(BENCH_PKG_DIR, '..', '..')
 const THRESHOLD = Number(process.env.ABIDE_BENCH_THRESHOLD ?? 5)
 
 const baseRef = process.argv.slice(2).find((a) => !a.startsWith('-')) ?? 'HEAD'
@@ -37,7 +39,7 @@ async function git(args: string[], cwd: string): Promise<string> {
 
 // Run the bench harness at `cwd` and parse its JSON report (last JSON line of stdout).
 async function runBenchAt(cwd: string): Promise<BenchReport> {
-    const proc = Bun.spawn(['bun', 'run', 'bench/run.ts', '--json'], {
+    const proc = Bun.spawn(['bun', 'run', 'run.ts', '--json'], {
         cwd,
         stdout: 'pipe',
         stderr: 'inherit',
@@ -56,20 +58,26 @@ async function runBenchAt(cwd: string): Promise<BenchReport> {
 
 async function benchBaseRef(): Promise<BenchReport> {
     const worktree = await mkdtemp(join(tmpdir(), 'abide-bench-'))
-    const worktreePackage = join(worktree, 'packages', 'abide')
+    const worktreeBench = join(worktree, 'packages', 'bench')
     try {
         await git(['worktree', 'add', '--detach', worktree, baseRef], REPO_ROOT)
-        // node_modules is gitignored (absent in the fresh worktree); reuse this checkout's install.
+        // node_modules is gitignored (absent in the fresh worktree); reuse this checkout's install for
+        // every dependency EXCEPT abide, which the local symlink below pins to the worktree's base source.
         await symlink(join(REPO_ROOT, 'node_modules'), join(worktree, 'node_modules'), 'dir')
+        // Run the CURRENT harness (overlay it over the base bench package) so measurement code is fixed.
+        await rm(worktreeBench, { recursive: true, force: true })
+        await cp(BENCH_PKG_DIR, worktreeBench, {
+            recursive: true,
+            filter: (src) => !src.includes('node_modules'),
+        })
+        // Repoint `abide` to the worktree's BASE source: bench resolves it from its own node_modules first.
+        await mkdir(join(worktreeBench, 'node_modules'), { recursive: true })
         await symlink(
-            join(PACKAGE_DIR, 'node_modules'),
-            join(worktreePackage, 'node_modules'),
+            join(worktree, 'packages', 'abide'),
+            join(worktreeBench, 'node_modules', 'abide'),
             'dir',
         )
-        // Run the CURRENT harness against the base library source.
-        await rm(join(worktreePackage, 'bench'), { recursive: true, force: true })
-        await cp(BENCH_DIR, join(worktreePackage, 'bench'), { recursive: true })
-        return await runBenchAt(worktreePackage)
+        return await runBenchAt(worktreeBench)
     } finally {
         await git(['worktree', 'remove', '--force', worktree], REPO_ROOT).catch(() => {})
         await rm(worktree, { recursive: true, force: true }).catch(() => {})
@@ -140,5 +148,5 @@ function printDelta(rows: Row[]): void {
 console.log(`benchmarking base ref: ${baseRef} …`)
 const base = await benchBaseRef()
 console.log('benchmarking working tree …')
-const current = await runBenchAt(PACKAGE_DIR)
+const current = await runBenchAt(BENCH_PKG_DIR)
 printDelta(collect(base, current))

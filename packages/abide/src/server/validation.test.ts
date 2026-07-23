@@ -115,7 +115,7 @@ describe('RPC input validation (integration)', () => {
         })
         try {
             const response = await app.fetch(
-                `/__abide/rpc/read?args=${encodeURIComponent(JSON.stringify({ id: 5 }))}`,
+                `/__abide/rpc/read?__abide_args=${encodeURIComponent(JSON.stringify({ id: 5 }))}`,
             )
             expect(response.status).toBe(200)
             expect(await response.json()).toEqual({ doubled: 10 })
@@ -140,7 +140,7 @@ describe('RPC input validation (integration)', () => {
         })
         try {
             const response = await app.fetch(
-                `/__abide/rpc/read?args=${encodeURIComponent(JSON.stringify({ id: 'bad' }))}`,
+                `/__abide/rpc/read?__abide_args=${encodeURIComponent(JSON.stringify({ id: 'bad' }))}`,
             )
             expect(response.status).toBe(422)
             const body = (await response.json()) as {
@@ -227,7 +227,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
         try {
             // Valid args → handler runs → 200.
             const ok = await app.fetch(
-                `/__abide/rpc/echo?args=${encodeURIComponent(JSON.stringify({ text: 'hi' }))}`,
+                `/__abide/rpc/echo?__abide_args=${encodeURIComponent(JSON.stringify({ text: 'hi' }))}`,
             )
             expect(ok.status).toBe(200)
             expect(await ok.json()).toEqual({ echoed: 'hi' })
@@ -235,7 +235,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
 
             // Wrong type for `text` → 422 ValidationError, handler never runs.
             const badType = await app.fetch(
-                `/__abide/rpc/echo?args=${encodeURIComponent(JSON.stringify({ text: 123 }))}`,
+                `/__abide/rpc/echo?__abide_args=${encodeURIComponent(JSON.stringify({ text: 123 }))}`,
             )
             expect(badType.status).toBe(422)
             const typeBody = (await badType.json()) as {
@@ -248,7 +248,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
 
             // Missing required `text` → 422 ValidationError, handler never runs.
             const missing = await app.fetch(
-                `/__abide/rpc/echo?args=${encodeURIComponent(JSON.stringify({}))}`,
+                `/__abide/rpc/echo?__abide_args=${encodeURIComponent(JSON.stringify({}))}`,
             )
             expect(missing.status).toBe(422)
             const missingBody = (await missing.json()) as {
@@ -297,6 +297,91 @@ describe('RPC output validation (dev-only)', () => {
             else Bun.env.DEBUG = previousDebug
             if (previousEnv === undefined) delete Bun.env.NODE_ENV
             else Bun.env.NODE_ENV = previousEnv
+            await app.stop()
+        }
+    })
+})
+
+describe('flat query-param reads (the hand-testable form)', () => {
+    test('a read with NO runtime schema decodes flat params as strings (?key=beta → beta)', async () => {
+        const app = await createTestApp({
+            routes: {
+                counter: GET(({ key = 'alpha' }: { key?: string }) => ({ key })),
+            },
+        })
+        try {
+            const beta = await app.fetch('/__abide/rpc/counter?key=beta')
+            expect(beta.status).toBe(200)
+            expect(await beta.json()).toEqual({ key: 'beta' })
+            // An absent param falls through to the handler's destructuring default.
+            const fallback = await app.fetch('/__abide/rpc/counter')
+            expect(await fallback.json()).toEqual({ key: 'alpha' })
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('flat params are COERCED to the input schema field types', async () => {
+        let seen: unknown
+        const app = await createTestApp({
+            routes: {
+                dbl: GET(
+                    (args: { n: number }) => {
+                        seen = args.n
+                        return { doubled: args.n * 2 }
+                    },
+                    {
+                        schemas: {
+                            input: {
+                                type: 'object',
+                                properties: { n: { type: 'number' } },
+                                required: ['n'],
+                            },
+                        },
+                    },
+                ),
+            },
+        })
+        try {
+            const ok = await app.fetch('/__abide/rpc/dbl?n=5')
+            expect(ok.status).toBe(200)
+            expect(seen).toBe(5) // coerced to a number, not the raw string "5"
+            expect(await ok.json()).toEqual({ doubled: 10 })
+
+            // An uncoercible value stays a string → schema validation, not the decoder, emits the 422.
+            const bad = await app.fetch('/__abide/rpc/dbl?n=nope')
+            expect(bad.status).toBe(422)
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('the canonical __abide_args blob wins over flat params when both are present', async () => {
+        const app = await createTestApp({
+            routes: {
+                counter: GET(({ key = 'alpha' }: { key?: string }) => ({ key })),
+            },
+        })
+        try {
+            const res = await app.fetch(
+                `/__abide/rpc/counter?key=beta&__abide_args=${encodeURIComponent(JSON.stringify({ key: 'gamma' }))}`,
+            )
+            expect(await res.json()).toEqual({ key: 'gamma' })
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('the reserved __abide_from param is never treated as an arg field', async () => {
+        const app = await createTestApp({
+            routes: {
+                echoKeys: GET((args: Record<string, unknown>) => ({ keys: Object.keys(args) })),
+            },
+        })
+        try {
+            const res = await app.fetch('/__abide/rpc/echoKeys?key=beta&__abide_from=3')
+            expect(await res.json()).toEqual({ keys: ['key'] })
+        } finally {
             await app.stop()
         }
     })

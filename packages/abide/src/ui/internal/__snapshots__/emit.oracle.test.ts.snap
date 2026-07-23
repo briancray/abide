@@ -56,6 +56,18 @@ exports[`emit regression — server output bind:value server 1`] = `"<input valu
 
 exports[`emit regression — server output bind:checked server 1`] = `"<input checked>"`;
 
+exports[`emit regression — server output static-only multiple attrs 1`] = `"<a id="n1" href="/x" data-role="link">go</a>"`;
+
+exports[`emit regression — server output static attrs with event (server literal) 1`] = `"<button type="button" class="btn">x</button>"`;
+
+exports[`emit regression — server output static class trimmed and merged 1`] = `"<div class="a b">x</div>"`;
+
+exports[`emit regression — server output static attr single quote escaped 1`] = `"<a title="it&#39;s a test">x</a>"`;
+
+exports[`emit regression — server output static style + style directive merge 1`] = `"<div style="color:red; margin: 0">x</div>"`;
+
+exports[`emit regression — server output mixed static and dynamic attr order 1`] = `"<a id="a" href="/x" title="t">x</a>"`;
+
 exports[`emit regression — server output void element 1`] = `"<br>"`;
 
 exports[`emit regression — server output void with attr 1`] = `"<img src="/a.png">"`;
@@ -63,6 +75,8 @@ exports[`emit regression — server output void with attr 1`] = `"<img src="/a.p
 exports[`emit regression — server output self-closing void 1`] = `"<hr>"`;
 
 exports[`emit regression — server output nested elements 1`] = `"<div><span>hi<!----></span></div>"`;
+
+exports[`emit regression — server output static nested tree 1`] = `"<section><h1>Title</h1><p>Body</p></section>"`;
 
 exports[`emit regression — server output if truthy 1`] = `"<!--[-->yes<!--]-->"`;
 
@@ -194,6 +208,16 @@ exports[`emit regression — client DOM multiple style directives 1`] = `"<div s
 
 exports[`emit regression — client DOM spread attributes 1`] = `"<div id="x" class="c" hidden="">y</div>"`;
 
+exports[`emit regression — client DOM static-only multiple attrs 1`] = `"<a id="n1" href="/x" data-role="link">go</a>"`;
+
+exports[`emit regression — client DOM static class trimmed and merged 1`] = `"<div class="  a b  ">x</div>"`;
+
+exports[`emit regression — client DOM static attr single quote escaped 1`] = `"<a title="it's a test">x</a>"`;
+
+exports[`emit regression — client DOM static style + style directive merge 1`] = `"<div style="color: red; margin: 0px;">x</div>"`;
+
+exports[`emit regression — client DOM mixed static and dynamic attr order 1`] = `"<a id="a" title="t" href="/x">x</a>"`;
+
 exports[`emit regression — client DOM void element 1`] = `"<br>"`;
 
 exports[`emit regression — client DOM void with attr 1`] = `"<img src="/a.png">"`;
@@ -201,6 +225,8 @@ exports[`emit regression — client DOM void with attr 1`] = `"<img src="/a.png"
 exports[`emit regression — client DOM self-closing void 1`] = `"<hr>"`;
 
 exports[`emit regression — client DOM nested elements 1`] = `"<div><span>hi<!----></span></div>"`;
+
+exports[`emit regression — client DOM static nested tree 1`] = `"<section><h1>Title</h1><p>Body</p></section>"`;
 
 exports[`emit regression — client DOM if truthy 1`] = `"<!--[-->yes<!--if--><!--]-->"`;
 

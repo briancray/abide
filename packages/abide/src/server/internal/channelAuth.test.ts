@@ -6,6 +6,7 @@
 // live WS mux with the extended `socketClient` (which sends `args` and a sealed Bearer identity).
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { createTestApp, type SocketClient, type TestApp } from '../../test/createTestApp.ts'
 import { error } from '../error.ts'
 import { identity } from '../identity.ts'
@@ -57,11 +58,11 @@ async function nextOrTimeout<T>(
 }
 
 // Read the args a read handler's middleware would see on the HTTP GET path: from the request URL
-// `?args=` query. Identical on both the real HTTP read AND the synthetic channel-join scope (which
-// reconstructs the same `/__abide/rpc/<name>?args=` request), so ONE middleware gates both paths.
+// `?__abide_args=` query. Identical on both the real HTTP read AND the synthetic channel-join scope (which
+// reconstructs the same `/__abide/rpc/<name>?__abide_args=` request), so ONE middleware gates both paths.
 function readArgs(): { id?: string } {
     const url = new URL(request().url)
-    const raw = url.searchParams.get('args')
+    const raw = url.searchParams.get(RPC_QUERY_PARAMS.args)
     return raw !== null ? (JSON.parse(raw) as { id?: string }) : {}
 }
 

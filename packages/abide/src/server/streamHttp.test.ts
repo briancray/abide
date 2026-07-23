@@ -11,7 +11,7 @@ import { json } from './json.ts'
 import { jsonl } from './jsonl.ts'
 import { sse } from './sse.ts'
 
-const argsQuery = (value: unknown) => `?args=${encodeURIComponent(JSON.stringify(value))}`
+const argsQuery = (value: unknown) => `?__abide_args=${encodeURIComponent(JSON.stringify(value))}`
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 describe('streaming read HTTP transport', () => {
@@ -80,8 +80,8 @@ describe('streaming read HTTP transport', () => {
     })
 })
 
-describe('resumable stream replay (?from=count)', () => {
-    test('?from=N resumes a RETAINED transcript from chunk N (replay then end)', async () => {
+describe('resumable stream replay (?__abide_from=count)', () => {
+    test('?__abide_from=N resumes a RETAINED transcript from chunk N (replay then end)', async () => {
         const app = await createTestApp({
             routes: {
                 gen: GET(
@@ -96,13 +96,13 @@ describe('resumable stream replay (?from=count)', () => {
         const first = await app.fetch(`/__abide/rpc/gen${argsQuery({})}`)
         expect((await first.text()).trim().split('\n')).toEqual(['0', '1', '2', '3', '4'])
 
-        const resume = await app.fetch(`/__abide/rpc/gen${argsQuery({})}&from=2`)
+        const resume = await app.fetch(`/__abide/rpc/gen${argsQuery({})}&__abide_from=2`)
         expect(resume.headers.get('x-abide-stream-resume')).toBe('live')
         expect((await resume.text()).trim().split('\n')).toEqual(['2', '3', '4'])
         await app.stop()
     })
 
-    test("?from=N with no retained transcript runs fresh from 0 and flags 'fresh' (client replaces)", async () => {
+    test("?__abide_from=N with no retained transcript runs fresh from 0 and flags 'fresh' (client replaces)", async () => {
         let runs = 0
         const app = await createTestApp({
             routes: {
@@ -118,7 +118,7 @@ describe('resumable stream replay (?from=count)', () => {
         })
 
         // Cold slot: resuming from 5 has nothing to replay → a fresh run from 0.
-        const res = await app.fetch(`/__abide/rpc/g2${argsQuery({})}&from=5`)
+        const res = await app.fetch(`/__abide/rpc/g2${argsQuery({})}&__abide_from=5`)
         expect(res.headers.get('x-abide-stream-resume')).toBe('fresh')
         expect((await res.text()).trim().split('\n')).toEqual(['1', '2'])
         expect(runs).toBe(1)

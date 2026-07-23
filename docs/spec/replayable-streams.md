@@ -229,7 +229,7 @@ see-through too (built).** The lazy `sse` tags its source like `jsonl` and **def
 idle heartbeat to the FIRST real read**, so a discarded see-through body never opens (no timer leak) while
 the long-lived socket HTTP faces — `router.ts` `sse(sock)`, consumed WS-less by CLI/MCP — keep their
 live-tail behaviour (onopen on connect, idle keep-alive). This makes `sse` fully isomorphic
-(SSR-block/seed/`?from=` resume), on par with `jsonl`. The `sse` response also carries
+(SSR-block/seed/`?__abide_from=` resume), on par with `jsonl`. The `sse` response also carries
 `Cache-Control: no-cache` + `X-Accel-Buffering: no` (set unless overridden) so an intermediary
 proxy/browser can't buffer or cache a live event stream.
 
@@ -309,14 +309,14 @@ return, with reactive `peek`/`chunks`/`done`), and 3 (shared streaming + increme
 open-stream pinning + per-stream cap/overflow) are **built and tested** (`replayableStream.ts`,
 `cell.ts`, `makeRpc.ts`, `GET.ts`/`HEAD.ts`, `sharedCache.ts` + their `*.test.ts`; verified against the
 docs app). The transport half of step **4** is built — the router transport-encodes streaming reads
-(jsonl/sse) with HTTP-level fan-out AND serves the resumable `?from=<count>` replay endpoint (`router.ts`,
+(jsonl/sse) with HTTP-level fan-out AND serves the resumable `?__abide_from=<count>` replay endpoint (`router.ts`,
 `cell.resumeStream`, `ReplayableStream.consume(from)`, `responseSource.ts` see-through helpers +
 `streamHttp.test.ts`). The **client half of 4b is now built** — the `StreamHandle` seed section
 (`pages.ts`, inline `values` + `data-ab-count`), the value capture + handoff records (`streamScope.ts`,
 `context.ts`), the emit-time source tag (`emitServer.ts`, `{ attachable, rpcName?, args }` for a
 known-RPC head under `src/server/rpc/`), and the `forBlock` reactive drain (`runtime.ts`) fed by a
 warm-seeded cell: `bootstrap.replayStreams` warms the cell via `cell.seedStream` — a completed
-(mode-A) `values` transcript, or an open (mode-B) `resumeStreamSource` (prefix + `?from=<count>` resume,
+(mode-A) `values` transcript, or an open (mode-B) `resumeStreamSource` (prefix + `?__abide_from=<count>` resume,
 `fresh`-replace on attach-miss, prefix-stands on offline/failure). There is NO separate DOM handoff any
 more — the block just re-reads the warm cell (`emitStreamAttach.test.ts` proves the invariant: an RPC
 `{#for await}` source is never re-invoked on the client; a non-RPC source still re-iterates; the
@@ -407,7 +407,7 @@ Two handoff modes, keyed on stream state at flush:
 - **(B) Open-at-flush** (SSR flushed a partial or was cut off by the budget): the seed carries a **slot
   handle** `(name, args, count, done: false)`. `replayStreams` seeds the cell (`cell.seedStream`) with a
   `resumeStreamSource` (`bootstrap.ts`) — an async source that yields the flushed prefix, then **resumes
-  over a resumable HTTP replay**: `GET /__abide/rpc/<name>?from=<count>&args=<json>` returns a stream
+  over a resumable HTTP replay**: `GET /__abide/rpc/<name>?__abide_from=<count>&__abide_args=<json>` returns a stream
   **re-encoded in the handler's original encoding** (`jsonl` resumes as `jsonl`, `sse` as `sse` — the
   retained cursor carries its `tagStreamEncoding`, and the router mirrors the fresh-run encode) that
   synchronously replays `chunks[count..]` then continues live until close (one deterministic stream, no
@@ -445,7 +445,7 @@ StreamHandle = { listId: string; name: string; args: unknown; done: boolean; cou
 The streamer registration (`streamScope`) records `listId`, the flushed item `count`, `done`, and the
 source's `(name, args)` at drain time, and emits `data-ab-count="<count>"` on `<abide-list>` alongside
 `data-ab-done`. On hydrate the client iterates `streams`, finds `document.getElementById(listId)`, and
-chooses adopt-from-`values` (mode A) vs resume-replay-`from=count` (mode B). The client keys the replay
+chooses adopt-from-`values` (mode A) vs resume-replay-`?__abide_from=<count>` (mode B). The client keys the replay
 request off the recorded `(name, args)` — **never** by re-evaluating the source expression (which may
 reference server-only bindings).
 
@@ -465,7 +465,7 @@ timeout?: number }` (it already knows whether the head resolves to an RPC import
   and the client drops the painted items and re-renders from the fresh values — the defined degraded
   path (double-bill only on this edge).
 - **Offline at hydrate** (`online() === false`): a completed transcript still warm-seeds from `values`
-  with no network. An open stream's `resumeStreamSource` attempts the `?from=count` resume; if the fetch
+  with no network. An open stream's `resumeStreamSource` attempts the `?__abide_from=count` resume; if the fetch
   fails (offline, `4xx`, no body) the flushed **prefix stands** and the seeded slot closes — no
   `online()`-flip auto-retry. A later (now reactive) `fn.refresh()` re-runs the source from scratch.
 - **No hydrate reorder.** There is no `<abide-list>` interception. `bootstrap.replayStreams` warm-seeds
@@ -494,7 +494,7 @@ and dropped until then.
 | Frame kind | Shape | Channel / transport | Carries |
 | --- | --- | --- | --- |
 | Cache verb | `CacheFrame { verb, value? }` (`cacheChannels.ts:23`) | `@rpc:<name>:<key>` mux | invalidate/refresh/amend — **verbs only, never chunks** |
-| Stream replay | `jsonl`/`sse` body | `GET /__abide/rpc/<name>?args=…&from=<count>` | replay `chunks[from..]` then live — **read-only**: a streaming mutation is consumable client-side via `{#for await}`, but the `?from=` RESUME endpoint stays `GET`-only (`router.ts` gates it on `__rpc.read`), since replaying a POST/PUT/… over a GET would re-trigger the effect. This is the one deliberate read/mutation asymmetry. |
+| Stream replay | `jsonl`/`sse` body | `GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>` | replay `chunks[from..]` then live — **read-only**: a streaming mutation is consumable client-side via `{#for await}`, but the `?__abide_from=` RESUME endpoint stays `GET`-only (`router.ts` gates it on `__rpc.read`), since replaying a POST/PUT/… over a GET would re-trigger the effect. This is the one deliberate read/mutation asymmetry. |
 | Seed (value) | `SeedRead { name, args, value }` (`pages.ts:170`) | hydration payload | a resolved value |
 | Seed (stream) | `StreamHandle { listId, name, args, done, count, values? }` | hydration payload | inline transcript (A) or slot handle (B) |
 
@@ -608,7 +608,7 @@ against LRU eviction; per-stream cap `ABIDE_MAX_STREAM_BUFFER_SIZE` (default unb
 the ROUTER transport-encodes a streaming read whose slot resolves to an AsyncIterable as
 `application/jsonl` (or SSE on `Accept: text/event-stream`), once per HTTP consumer, so a
 bare-async-generator read is HTTP-serviceable and concurrent HTTP consumers fan out over ONE
-ReplayableStream run; and **`?from=<count>` resumes a RETAINED transcript** (replay `chunks[from..]` then
+ReplayableStream run; and **`?__abide_from=<count>` resumes a RETAINED transcript** (replay `chunks[from..]` then
 live via `ReplayableStream.consume(from)` + `cell.resumeStream`), or, when the transcript is gone, runs
 fresh from 0 and sets `x-abide-stream-resume: fresh` so the client REPLACES its painted prefix
 (`streamHttp.test.ts`). **Client half (4b)**: the SSR→client handoff — an attachable `{#for await}`
@@ -620,7 +620,7 @@ cell via `cell.seedStream` — the `values` transcript (A) or a `resumeStreamSou
 the warm cell with no re-invoke (no separate DOM handoff). Tests (`emitStreamAttach.test.ts`):
 - completed SSR stream → client renders identical items, **RPC source spy shows zero client-side
   calls**, an `onclick` inside an item fires (reactive mount proven). ✅
-- cut-off SSR stream → client adopts partial + receives remaining chunks live via `?from=count`, source
+- cut-off SSR stream → client adopts partial + receives remaining chunks live via `?__abide_from=count`, source
   spy shows zero client calls. ✅
 - non-RPC source → client re-runs (current behavior preserved). ✅
 - attach-miss (slot evicted) on an incomplete stream → endpoint signals fresh-from-0, client replaces.

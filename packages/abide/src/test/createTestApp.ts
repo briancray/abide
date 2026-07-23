@@ -24,6 +24,7 @@ import { type App, createApp, type Route } from '../server/internal/router.ts'
 import type { Principal } from '../server/internal/scope.ts'
 import { seal } from '../server/internal/seal.ts'
 import type { Socket } from '../server/socket.ts'
+import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
 
 // A thin test client over the multiplexed socket WS (`/__abide/sockets`). `subscribe(name)`
 // yields the framed messages for that socket; `publish(name, msg)` sends a client publish. Close
@@ -228,7 +229,7 @@ function bind(
                 if (read) {
                     const query =
                         args !== undefined
-                            ? `?args=${encodeURIComponent(JSON.stringify(args))}`
+                            ? `?${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
                             : ''
                     response = await doFetch(`/__abide/rpc/${property}${query}`, { method: 'GET' })
                 } else if (args instanceof FormData) {

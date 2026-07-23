@@ -9,16 +9,20 @@ import { expect, test } from '@playwright/test'
 // critically — that the reactive update scenarios actually PATCH the DOM (the bundle's own `state`
 // instance shares its runtime scheduler; the page's separate copy would silently fail to propagate).
 
+// The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus (mount + hydrate passes),
+// then the interactive ones (update pass). Kept in sync with that corpus.
 const RENDER_SCENARIOS = [
     'static-text',
     'interpolation',
     'attributes',
     'if-else',
-    'switch',
-    'await-block',
     'for-list-100',
     'for-list-1000',
     'for-list-10000',
+    'nested-for-if-50',
+    'switch',
+    'class-style-directives',
+    'await-block',
 ]
 const UPDATE_SCENARIOS = ['state-update', 'list-append-update', 'list-reverse-1000', 'if-toggle']
 

@@ -1,29 +1,32 @@
-// The standard frontend bench corpus.
+// THE STANDARD FRONTEND BENCH CORPUS — the single source of truth for both the CLI runner (`run.ts`,
+// which drives render/mount/update through happy-dom) and the docs-app live render bench
+// (`packages/docs/src/server/rpc/benchFrontend.ts`, which streams the SSR `render` numbers to
+// `/platform/bench`). Kept in one place so the two never drift.
 //
-// A fixed, representative set of `.abide` frontend workloads exercised by `bench/run.ts`. Each entry
-// is compiled once (via `loadEmitted`) and then driven repeatedly across the three hot paths every
-// frontend build shares: `render` (SSR string), `mount` (client DOM construction), and `update` (a
-// reactive state change + microtask-flushed DOM patch).
-//
-// This corpus is deliberately INLINE and STABLE — kept separate from the test fixture corpus so bench
-// numbers stay comparable release-over-release even as tests churn. Changing a scenario's `src` or
-// `scope` breaks historical comparability; add a new scenario instead.
+// A fixed, representative set of `.abide` workloads exercising the three hot paths every frontend build
+// shares: `render` (SSR string), `mount` (client DOM construction), and `update` (a reactive state
+// change + microtask-flushed DOM patch). Deliberately INLINE and STABLE so bench numbers stay comparable
+// release-over-release — changing a scenario's `src`/`scope` breaks historical comparability; add a new
+// scenario instead.
 //
 // A `<script>`'s imports are resolved by the page builder into `$scope`, not by the emitted module, so
-// scenarios that use `state`/`watch` must inject them (mirrors the oracle's `scriptScope`).
+// scenarios that use `state`/`watch` must inject them (mirrors the page-scope the oracle builds).
 
-import { state } from '../src/shared/state.ts'
-import { watch } from '../src/shared/watch.ts'
+import { state } from 'abide/shared/state'
+import { watch } from 'abide/shared/watch'
 
 export interface Scenario {
     name: string
     src: string
     // Fresh render/mount scope per invocation (promises, arrays, etc. must not be shared across ops).
     scope: () => Record<string, unknown>
-    // Skip the SSR `render` pass (e.g. interaction-only workloads where server HTML is uninteresting).
+    // Skip the SSR `render` pass (interaction-only / script-bearing workloads). The docs render bench
+    // also uses this to filter to server-renderable scenarios.
     server?: boolean
+    // Element count for list scenarios — lets a render bench report ns/row and demonstrate O(n) scaling.
+    rows?: number
     // One reactive-update unit of work over a mounted host: mutate, then await the DOM patch. Present
-    // only on scenarios that own reactive state; drives the `update` metric.
+    // only on scenarios that own reactive state; drives the CLI runner's `update` metric.
     update?: (host: HTMLElement) => Promise<void>
 }
 
@@ -64,21 +67,25 @@ export const SCENARIOS: Scenario[] = [
         name: 'for-list-100',
         src: '<ul>{#for n of items by n}<li>row {n}</li>{/for}</ul>',
         scope: () => ({ items: range(100) }),
+        rows: 100,
     },
     {
         name: 'for-list-1000',
         src: '<ul>{#for n of items by n}<li>row {n}</li>{/for}</ul>',
         scope: () => ({ items: range(1000) }),
+        rows: 1000,
     },
     {
         name: 'for-list-10000',
         src: '<ul>{#for n of items by n}<li>row {n}</li>{/for}</ul>',
         scope: () => ({ items: range(10000) }),
+        rows: 10000,
     },
     {
         name: 'nested-for-if-50',
         src: '{#for row of rows by row.id}<section>{#if row.on}<b>{row.id}</b>{:else}<i>{row.id}</i>{/if}</section>{/for}',
         scope: () => ({ rows: range(50).map((i) => ({ id: i, on: i % 2 === 0 })) }),
+        rows: 50,
     },
     {
         name: 'switch',
@@ -115,6 +122,31 @@ export const SCENARIOS: Scenario[] = [
         update: async (host) => {
             const button = host.querySelector('button')
             if (!button) throw new Error('list-append-update scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        name: 'list-reverse-1000',
+        src: "<script>import { state } from 'abide/shared/state'; let items = state(Array.from({ length: 1000 }, (_, i) => i))</script><button onclick={() => (items = [...items].reverse())}>rev</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('list-reverse-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        name: 'if-toggle',
+        src: "<script>import { state } from 'abide/shared/state'; let on = state(true)</script><button onclick={() => (on = !on)}>t</button>{#if on}<p>A</p>{:else}<p>B</p>{/if}",
+        scope: () => ({ state, watch }),
+        server: false,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('if-toggle scenario is missing its button')
             button.click()
             await flush()
         },

@@ -12,7 +12,7 @@
             "packages/docs/scripts/**/*.ts",
             "packages/docs/*.ts",
             "packages/abide/src/**/*.ts",
-            "packages/abide/bench/**/*.ts",
+            "packages/bench/**/*.ts",
             "packages/starter/src/**/*.ts",
             "packages/starter/e2e/**/*.ts",
             "packages/starter/scripts/**/*.ts",

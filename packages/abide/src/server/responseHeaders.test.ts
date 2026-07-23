@@ -7,7 +7,7 @@ import { GET } from './GET.ts'
 import { POST } from './POST.ts'
 import { sse } from './sse.ts'
 
-const argsQuery = (value: unknown) => `?args=${encodeURIComponent(JSON.stringify(value))}`
+const argsQuery = (value: unknown) => `?__abide_args=${encodeURIComponent(JSON.stringify(value))}`
 
 describe('baseline hardening', () => {
     test('an RPC read carries nosniff + the private/no-cache default + Vary: Cookie', async () => {
