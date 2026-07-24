@@ -1,7 +1,9 @@
-// socket(...) — the named, typed, isomorphic pub/sub topic primitive (sockets.md S1-S2). A socket is
-// an `AsyncIterable<T>`: subscribe by iterating (`for await (const m of sock)`), unsubscribe by
+// socket(...) — the named, typed, isomorphic pub/sub topic primitive (sockets.md S1-S2). A socket IS a
+// `channel` + transport (ADR 0023): it builds on a single-topic `channel()` for the pub/sub core and
+// adds the transport internals. Subscribe by iterating (`for await (const m of sock)`), unsubscribe by
 // breaking. `publish(msg)` is the server broadcast path. Client-mediated publishes go through the
-// hub's `ingressPublish` (surfaced on `__socket` for the transport to call).
+// socket-layer `ingressPublish` (runs the `handler`, then server-publishes — surfaced on `__socket` for
+// the transport to call; the channel itself is pure pub/sub).
 //
 // The reactive PROBE surface (client-sockets.md CS1/CS4) — `peek`/`chunks`/`pending`/`refreshing`/
 // `done`/`error` — is identical on both sides so the browser proxy (`ui/internal/socketProxy`) is the
@@ -11,8 +13,8 @@
 // One socket per file in `src/server/sockets/<name>.ts`; the name comes from the filename. This core
 // is single-process (S3.3) — tail buffer + fanout live in one server process.
 
-import { getContext } from '../shared/internal/context.ts'
-import { type DROP, SocketHub } from './internal/socketHub.ts'
+import { type ChannelOptions, channel } from './channel.ts'
+import { DROP } from './internal/socketHub.ts'
 
 // A mediating handler may return the transformed value to publish, or `void`/`DROP` to suppress the
 // client publish. `DROP` is the explicit drop signal; a bare `void`/`undefined` return drops too.
@@ -48,16 +50,15 @@ export interface Socket<T> extends AsyncIterable<T> {
     readonly __socket: SocketInternals<T>
 }
 
-// True while the current request is an SSR page render (set by `renderPage`). A socket iterated in a
-// render must not open a live subscription — it would never close and would hang the flush; instead it
-// yields the tail snapshot and completes (CS5). Outside a render (RPC handler, socket transport,
-// background task) the iterator is the real live subscription.
-function inRender(): boolean {
-    return getContext().rendering === true
-}
-
-export function socket<T>(options?: SocketOptions<T>): Socket<T> {
-    const hub = new SocketHub<T>(options ?? {})
+export function socket<T>(options: SocketOptions<T> = {}): Socket<T> {
+    // A socket IS a channel + transport (ADR 0023). Build on a single-topic (void) channel for the
+    // pub/sub core; the socket layer adds the transport internals + client-publish mediation. `ttl` is
+    // the socket's name for the channel's per-message `maxAge`.
+    const channelOptions: ChannelOptions = {}
+    if (options.tail !== undefined) channelOptions.tail = options.tail
+    if (options.ttl !== undefined) channelOptions.maxAge = options.ttl
+    const ch = channel<T, void>(channelOptions)
+    const hub = ch.__hub(undefined)
     return {
         publish(message: T): void {
             hub.publish(message)
@@ -71,12 +72,25 @@ export function socket<T>(options?: SocketOptions<T>): Socket<T> {
         refreshing: (): boolean => false,
         done: (): boolean => false,
         error: (): unknown | undefined => undefined,
+        // Delegate to the channel, which yields the tail snapshot inside an SSR render (never hangs) and a
+        // live subscription otherwise (CS5).
         [Symbol.asyncIterator](): AsyncIterator<T> {
-            return inRender() ? hub.snapshotIterator() : hub.subscribe()
+            return ch[Symbol.asyncIterator]()
         },
         __socket: {
-            options: hub.options,
-            ingressPublish: (message: T): Promise<void> => hub.ingressPublish(message),
+            options,
+            // Client-publish mediation lives HERE now (the channel is pure pub/sub): run the handler,
+            // then server-publish the transformed value. A `void`/`DROP` return suppresses.
+            ingressPublish: async (message: T): Promise<void> => {
+                const handler = options.handler
+                if (handler === undefined) {
+                    hub.publish(message)
+                    return
+                }
+                const result = await handler(message)
+                if (result === undefined || (result as unknown) === DROP) return
+                hub.publish(result as T)
+            },
             tailSnapshot: (): T[] => hub.tailSnapshot(),
             subscribe: (replay?: boolean): AsyncIterator<T> => hub.subscribe(replay),
         },

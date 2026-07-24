@@ -29,6 +29,9 @@ export interface ChannelOptions {
 export interface Channel<T, Args = void> extends ReactiveReadSurface<Args, T>, AsyncIterable<T> {
     // Subscribe to the room `args` — a fresh replay-then-live cursor. `for await (const m of channel(args))`.
     (args: Args): AsyncIterable<T>
+    // TRANSPORT hook (internal): the room's hub, for the server-form (`socket`) to wire replay-controlled
+    // subscribe / tail snapshot / server publish onto the mux. Not part of the public pub/sub surface.
+    __hub(args: Args): SocketHub<T>
 }
 
 // True while an SSR page render is in flight — a live subscription would never close and would hang the
@@ -64,6 +67,7 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
 
     // Direct iteration (`for await m of channel`) subscribes the DEFAULT (void) room.
     ch[Symbol.asyncIterator] = (): AsyncIterator<T> => cursor(undefined as Args)
+    ch.__hub = (args: Args): SocketHub<T> => hubFor(args)
     ch.publish = (args: Args, message: T): void => {
         hubFor(args).publish(message)
     }

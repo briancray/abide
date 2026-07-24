@@ -63,19 +63,6 @@ export class SocketHub<T> {
         return last.message
     }
 
-    // Transport path for CLIENT publishes (S1.3-B). Runs the mediating handler; a returned value
-    // is published (transform), DROP/undefined suppresses, a throw rejects to the publisher.
-    async ingressPublish(message: T): Promise<void> {
-        const handler = this.options.handler
-        if (handler === undefined) {
-            this.publish(message)
-            return
-        }
-        const result = await handler(message)
-        if (result === undefined || (result as unknown) === DROP) return
-        this.publish(result as T)
-    }
-
     // A one-shot snapshot of the in-window tail (last-N within ttl, S2) — the MCP tail tool's
     // request/response view (MS2.2). Ordered oldest→newest, same window a fresh subscriber replays.
     tailSnapshot(): T[] {
