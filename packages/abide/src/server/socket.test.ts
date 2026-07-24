@@ -74,6 +74,36 @@ describe('socket — fanout & ordering', () => {
 
         expect(await got).toEqual([10, 20, 30, 40])
     })
+
+    // BURST — the gap ADR 0023's storage stress-test exposed, and the case that killed the proposed
+    // `signal<ring>` channel buffer. A SYNCHRONOUS burst of N publishes with N >> `tail`, against a
+    // consumer that is parked and keeping up, must deliver ALL N in order.
+    //
+    // It works today because delivery capacity and replay depth are INDEPENDENT: a subscriber's FIFO
+    // holds 1024 regardless of `tail` (subscriber.ts), so `tail` bounds only what a LATE joiner replays.
+    // Any future change that fuses the two — sizing live delivery to `tail` — drops messages for an
+    // on-time consumer and fails right here, which is exactly what this test exists to catch.
+    test('a synchronous burst larger than tail still reaches a live subscriber intact', async () => {
+        const BURST = 200
+        const sock = socket<number>({ tail: 4 }) // tail deliberately far smaller than the burst
+        const got = collect(sock, BURST)
+        await delay(5) // let the subscriber attach and park
+
+        for (let i = 0; i < BURST; i++) sock.publish(i)
+
+        expect(await got).toEqual(Array.from({ length: BURST }, (_unused, i) => i))
+    })
+
+    test('tail:0 delivers a live burst too — replay depth is not delivery capacity', async () => {
+        const BURST = 50
+        const sock = socket<number>() // tail defaults to 0: no replay at all
+        const got = collect(sock, BURST)
+        await delay(5)
+
+        for (let i = 0; i < BURST; i++) sock.publish(i)
+
+        expect(await got).toEqual(Array.from({ length: BURST }, (_unused, i) => i))
+    })
 })
 
 describe('socket — unsubscribe lifecycle', () => {
