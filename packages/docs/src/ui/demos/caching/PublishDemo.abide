@@ -1,0 +1,24 @@
+<script>
+  import { state } from "abide/shared/state"
+  import cacheCounter from "$server/rpc/cacheCounter"
+
+  // publish(args, value | updater) mutates the retained slot value in place — the handler never re-runs.
+  let publishStarted = state(false)
+  const publishValue = state.computed(() => (publishStarted ? String(cacheCounter.peek({ key: "publish-demo" })?.runs ?? "loading") : "idle"))
+  const publishPeek = state.computed(() => String(cacheCounter.peek({ key: "publish-demo" })?.runs ?? "(none)"))
+  function startPublish() { publishStarted = true }
+  // value-form: replace the retained value in place — the server handler never runs.
+  function publishValueForm() { cacheCounter.publish({ key: "publish-demo" }, { key: "publish-demo", runs: 999 }) }
+  // updater-form: derive the next value from the current — also local, no re-fetch.
+  function publishUpdater() { cacheCounter.publish({ key: "publish-demo" }, (current) => ({ key: "publish-demo", runs: (current?.runs ?? 0) + 100 })) }
+</script>
+
+<ul class="grid">
+  <li>Value (runs): <strong data-testid="publish-value">{publishValue}</strong></li>
+  <li>peek(): <strong data-testid="publish-peek">{publishPeek}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="publish-start" onclick={startPublish}>Load</button>
+  <button data-testid="publish-value-form" onclick={publishValueForm}>publish → 999</button>
+  <button data-testid="publish-updater" onclick={publishUpdater}>publish +100</button>
+</div>

@@ -136,7 +136,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
         TEST_TIMEOUT,
     )
 
-    // 3. Positive: A joins its OWN channel (own args) → an amend on that channel delivers exactly the
+    // 3. Positive: A joins its OWN channel (own args) → an publish on that channel delivers exactly the
     //    value-form frame.
     test(
         "authorized join receives its own channel's broadcast",
@@ -150,9 +150,9 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             await a.ready()
             await delay(80)
 
-            const value = { id: 'A', secret: 'amended' }
-            profile.amend({ id: 'A' }, value)
-            expect(await nextOrTimeout(stream, TEST_TIMEOUT)).toEqual({ verb: 'amend', value })
+            const value = { id: 'A', secret: 'published' }
+            profile.publish({ id: 'A' }, value)
+            expect(await nextOrTimeout(stream, TEST_TIMEOUT)).toEqual({ verb: 'publish', value })
         },
         TEST_TIMEOUT,
     )
@@ -176,7 +176,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             await delay(80)
 
             // A legitimate broadcast onto channel-A must NOT reach the spoofing subscription.
-            profile.amend({ id: 'A' }, { id: 'A', secret: 'x' })
+            profile.publish({ id: 'A' }, { id: 'A', secret: 'x' })
             expect(await nextOrTimeout(stream, 250)).toBe(TIMEOUT)
         },
         TEST_TIMEOUT,
@@ -198,12 +198,12 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             await a.ready()
             await delay(80)
 
-            profile.amend({ id: 'A' }, { id: 'A', secret: 'ok' })
-            profile.amend({ id: 'B' }, { id: 'B', secret: 'leak' })
+            profile.publish({ id: 'A' }, { id: 'A', secret: 'ok' })
+            profile.publish({ id: 'B' }, { id: 'B', secret: 'leak' })
 
             // The allowed channel delivers; the forbidden one on the SAME connection stays silent.
             expect(await nextOrTimeout(allowedStream, TEST_TIMEOUT)).toEqual({
-                verb: 'amend',
+                verb: 'publish',
                 value: { id: 'A', secret: 'ok' },
             })
             expect(await nextOrTimeout(deniedStream, 250)).toBe(TIMEOUT)
@@ -228,11 +228,11 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             await anon.ready()
             await delay(80)
 
-            profile.amend({ id: 'A' }, { id: 'A', secret: 'nope' })
-            open.amend({ id: 'A' }, { id: 'A', open: true })
+            profile.publish({ id: 'A' }, { id: 'A', secret: 'nope' })
+            open.publish({ id: 'A' }, { id: 'A', open: true })
 
             expect(await nextOrTimeout(publicStream, TEST_TIMEOUT)).toEqual({
-                verb: 'amend',
+                verb: 'publish',
                 value: { id: 'A', open: true },
             })
             expect(await nextOrTimeout(guardedStream, 250)).toBe(TIMEOUT)

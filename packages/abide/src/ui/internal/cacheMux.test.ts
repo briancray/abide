@@ -4,7 +4,7 @@
 //      with the right args" unit (this IS the handler the client proxy registers on the mux).
 //   2. clientProxy auto-subscribe — a `shared` read joins its `@rpc:` channel with the RAW args,
 //      dedups per args, and a NON-shared read never subscribes (fake WS, no real network/server).
-//   3. End-to-end delivery — the real router broadcasts a `shared` amend to an AUTHORIZED WS
+//   3. End-to-end delivery — the real router broadcasts a `shared` publish to an AUTHORIZED WS
 //      subscriber (the same frame protocol the mux speaks); the frame drives applyCacheFrame into a
 //      real client cell, mirroring the server value locally.
 
@@ -37,9 +37,9 @@ test('applyCacheFrame drives the matching local cell verb with the subscribed ar
     let calls = 0
     const c = cell<{ id: string }, string>(async ({ id }) => `load-${id}#${++calls}`)
 
-    // amend value-form → the local value reflects the broadcast value for THOSE args.
+    // publish value-form → the local value reflects the broadcast value for THOSE args.
     c.seed({ id: 'A' }, 'seed-A')
-    applyCacheFrame(c, { id: 'A' }, { verb: 'amend', value: 'broadcast-A' })
+    applyCacheFrame(c, { id: 'A' }, { verb: 'publish', value: 'broadcast-A' })
     expect(c.peek({ id: 'A' })).toBe('broadcast-A')
 
     // invalidate → the slot drops to idle (lazy reload on next read), value cleared.
@@ -149,7 +149,7 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
 // 4. End-to-end: real server broadcast → authorized WS subscriber → applyCacheFrame mirrors locally.
 // ---------------------------------------------------------------------------
 
-test('server shared-amend broadcast reaches an authorized subscriber and applies to a local cell', async () => {
+test('server shared-publish broadcast reaches an authorized subscriber and applies to a local cell', async () => {
     const prof = GET(({ id }: { id: string }) => ({ id, secret: `secret-${id}` }), {
         cache: { shared: true },
     })
@@ -161,13 +161,13 @@ test('server shared-amend broadcast reaches an authorized subscriber and applies
     await socket.ready()
     await delay(80) // let the async authorize+join complete before publishing
 
-    const value = { id: 'A', secret: 'amended' }
-    ;(prof as Rpc<{ id: string }, { id: string; secret: string }>).amend(args, value)
+    const value = { id: 'A', secret: 'published' }
+    ;(prof as Rpc<{ id: string }, { id: string; secret: string }>).publish(args, value)
 
     const iterator = stream[Symbol.asyncIterator]()
     const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 5000))
     const frame = await Promise.race([iterator.next().then((r) => r.value), timeout])
-    expect(frame).toEqual({ verb: 'amend', value })
+    expect(frame).toEqual({ verb: 'publish', value })
 
     // Drive the received frame into a fresh client cell — its local value mirrors the server broadcast.
     const clientCell = cell<{ id: string }, { id: string; secret: string }>(async () => ({

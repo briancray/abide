@@ -53,7 +53,7 @@ function pageCallable(entry: Route): unknown {
         isError: rpc.isError,
         refresh: rpc.refresh,
         invalidate: rpc.invalidate,
-        amend: rpc.amend,
+        publish: rpc.publish,
         snapshot: rpc.snapshot,
         seed: rpc.seed,
         __rpc: rpc.__rpc,

@@ -766,13 +766,13 @@ export function createApp(config: AppConfig = {}): App {
     // §8 broadcast seam (PR2): bind each SHARED read route's transport-free cell `notify` sink to a
     // publish onto its `(rpc,args)` channel. The route NAME is the `config.routes` key — known only
     // here — so createApp is the sole owner of both name and registry; cell/makeRpc stay
-    // transport-free. Value-form `amend` carries a `value`; invalidate/refresh do not.
+    // transport-free. Value-form `publish` carries a `value`; invalidate/refresh do not.
     for (const [name, route] of Object.entries(routes)) {
         const meta = route.__rpc
         if (meta.read && meta.options.cache !== false && meta.options.cache?.shared === true) {
             // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
             ;(route as Rpc<any, any>).bindBroadcast((verb, args, value): void => {
-                const frame: CacheFrame = verb === 'amend' ? { verb, value } : { verb }
+                const frame: CacheFrame = verb === 'publish' ? { verb, value } : { verb }
                 publishCacheFrame(cacheChannelName(name, args), frame)
             })
         }

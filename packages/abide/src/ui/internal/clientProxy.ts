@@ -96,7 +96,7 @@ function mutationInit(method: string, args: unknown): RequestInit {
 // A single client proxy for BOTH reads and mutations — full symmetry with the server. The only
 // differences are transport (a read GETs with `?__abide_args=`; a mutation POSTs the body + CSRF header) and
 // the default cache policy (carried by the spec's `ttl`: reads retain, mutations coalesce-only). Every
-// probe/verb (peek/pending/refreshing/refresh/invalidate/amend/watch/chunks/done/raw) is attached for
+// probe/verb (peek/pending/refreshing/refresh/invalidate/publish/watch/chunks/done/raw) is attached for
 // both, so an author who caches a mutation (`cache: { ttl }`) gets the identical reactive surface.
 export function clientProxy<Args = unknown, T = unknown>(
     name: string,
@@ -201,8 +201,8 @@ export function clientProxy<Args = unknown, T = unknown>(
             (e as Record<string, unknown>).name === name)
     rpc.refresh = (args?: Args): void => backing.refresh(args)
     rpc.invalidate = (args?: Args): void => backing.invalidate(args)
-    rpc.amend = (args: Args, next: T | ((current: T | undefined) => T)): void =>
-        backing.amend(args, next)
+    rpc.publish = (args: Args, next: T | ((current: T | undefined) => T)): void =>
+        backing.publish(args, next)
     rpc.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
     rpc.seed = (args: Args, value: T): void => backing.seed(args, value)
     rpc.seedStream = (

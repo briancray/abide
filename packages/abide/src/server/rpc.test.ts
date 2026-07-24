@@ -153,7 +153,7 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
             'watch',
             'refresh',
             'invalidate',
-            'amend',
+            'publish',
             'snapshot',
             'seed',
             'raw',

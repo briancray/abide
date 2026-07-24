@@ -171,17 +171,17 @@ describe('cell — refresh / invalidate', () => {
     })
 })
 
-describe('cell — amend', () => {
+describe('cell — publish', () => {
     test('value-form and updater-form update peek', async () => {
         await withContext(async () => {
             const c = cell(async (n: number) => `v${n}`)
             await c.load(1)
             expect(c.peek(1)).toBe('v1')
 
-            c.amend(1, 'X')
+            c.publish(1, 'X')
             expect(c.peek(1)).toBe('X')
 
-            c.amend(1, (current) => `${current}!`)
+            c.publish(1, (current) => `${current}!`)
             expect(c.peek(1)).toBe('X!')
         })
     })
@@ -192,7 +192,7 @@ describe('cell — amend', () => {
             await c.load(1)
             const seen: (number | undefined)[] = []
             const dispose = c.watch(1, (value) => seen.push(value))
-            c.amend(1, 99)
+            c.publish(1, 99)
             await tick()
             dispose()
             expect(seen).toContain(99)

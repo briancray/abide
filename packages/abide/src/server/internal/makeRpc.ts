@@ -12,7 +12,7 @@
 //
 // MUTATIONS (POST/PUT/PATCH/DELETE) route through a cell exactly like reads and expose the SAME
 // surface (`MutationSurface` = `Rpc` for a value handler, `StreamRead` for a streaming one) — full
-// symmetry: `peek`/`pending`/`refreshing`/`error`/`watch`/`refresh`/`invalidate`/`amend`/`snapshot`/
+// symmetry: `peek`/`pending`/`refreshing`/`error`/`watch`/`refresh`/`invalidate`/`publish`/`snapshot`/
 // `seed`/`raw`/`isError` and the streaming chunk probes all work. The ONLY differences are transport
 // (method + args-in-body + the CSRF gate, enforced by the router off `__rpc.read`) and the default
 // cache policy: a mutation defaults to `cache: { ttl: 0 }` (replayable-streams.md §1) — coalesce
@@ -145,7 +145,7 @@ export interface Rpc<Args, T> {
     invalidate(args?: Partial<Args> | Args): void
     // Mutate the retained value in place (value-form or updater-form); mirrors `Cell`. On a `shared`
     // read this broadcasts (value-form directly, updater-form resolves server-side then broadcasts).
-    amend(args: Args, next: T | ((current: T | undefined) => T)): void
+    publish(args: Args, next: T | ((current: T | undefined) => T)): void
     // §5 hydration: `snapshot()` records this read's resolved slots for the seed; `seed()` replays a
     // recorded (args, value) into the cache so the client resolves from cache instead of re-fetching.
     snapshot(): Array<{ args: Args; value: T }>
@@ -167,7 +167,7 @@ export interface Rpc<Args, T> {
 
 // A STREAMING read — a handler that yields an `AsyncIterable<C>` (replayable-streams.md §4). The read
 // resolves to a fresh replay-then-live `consume()` cursor, and the surface is stream-correct: reactive
-// chunk probes (`latest`/`chunks`/`done`) instead of the value-shaped `peek`/`amend`/`snapshot`, which
+// chunk probes (`latest`/`chunks`/`done`) instead of the value-shaped `peek`/`publish`/`snapshot`, which
 // are meaningless (or throw) on a stream slot. This is what a user's editor sees for a streaming read.
 export interface StreamRead<Args, C> {
     // THE READ: awaitable; resolves to a fresh cursor that replays the transcript so far then goes live.
@@ -200,7 +200,7 @@ export type ReadSurface<Args, R> = [Payload<R>] extends [AsyncIterable<infer C>]
     ? StreamRead<Args, C>
     : Rpc<Args, Payload<R>>
 
-// A value MUTATION shares the FULL `Rpc` surface (peek/pending/refreshing/refresh/invalidate/amend/
+// A value MUTATION shares the FULL `Rpc` surface (peek/pending/refreshing/refresh/invalidate/publish/
 // watch/snapshot/seed/raw/isError/…) — full symmetry with a read. It only widens the CALL to also
 // accept a `FormData` body (TODO #8 multipart upload), which bypasses the cell; a zero-arg mutation
 // keeps the argument optional. The `.raw` here still carries the mutation body + CSRF header on the
@@ -267,8 +267,8 @@ function attachSurface<Args, T>(
     callable.isError = (e: unknown, name: string): boolean => isTypedError(e, name)
     callable.refresh = (args?: Partial<Args> | Args): void => backing.refresh(args)
     callable.invalidate = (args?: Partial<Args> | Args): void => backing.invalidate(args)
-    callable.amend = (args: Args, next: T | ((current: T | undefined) => T)): void =>
-        backing.amend(args, next)
+    callable.publish = (args: Args, next: T | ((current: T | undefined) => T)): void =>
+        backing.publish(args, next)
     callable.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
     callable.seed = (args: Args, value: T): void => backing.seed(args, value)
     callable.seedStream = (

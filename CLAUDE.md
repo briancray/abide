@@ -177,9 +177,9 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 | --- | --- |
 | `fn.invalidate(args?)` — partial-object match; `()` = whole callable | `invalidate({ tags })` |
 | `fn.refresh(args?)` | `refresh({ tags })` |
-| `fn.amend(args, value \| updater)` | — |
+| `fn.publish(args, value \| updater)` | — |
 
-`amend`: value-form broadcasts server→clients (via the `(fn,args)` channel); updater-form is local
+`publish`: value-form broadcasts server→clients (via the `(fn,args)` channel); updater-form is local
 (client) or runs on a durable **shared** slot (server) — server updater on a per-request slot errors.
 Partial args match every superset slot.
 
@@ -232,7 +232,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate. A mutation call is the same, but posts args in the body (default `ttl:0` retains nothing) |
 | `fn.peek(args)` | reactive `T \| undefined` snapshot — subscribes + kicks a coalesced load; the non-blocking display read |
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
-| `fn.refresh(args?)` / `fn.invalidate(args?)` / `fn.amend(args, v)` | cache verbs (partial match) |
+| `fn.refresh(args?)` / `fn.invalidate(args?)` / `fn.publish(args, v)` | cache verbs (partial match) |
 | `fn.peek` / `fn.pending` / `fn.refreshing` / `fn.error` / `fn.watch` | reactive probes |
 | `fn.isError(e, name)` | narrow a typed error |
 | bare call on a streaming handler | resolves to a fresh replay-then-live `AsyncIterable<C>` cursor (per caller, over one shared run) |

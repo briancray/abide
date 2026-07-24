@@ -6,7 +6,7 @@
 
 <main class="page">
   <h1>The cell primitive</h1>
-  <p class="lead"><code>cell(fn)</code> wraps ANY async function into a memoized slot: cache, in-flight coalescing, and a reactive read surface (<code>peek</code>/<code>pending</code>/<code>refreshing</code>/<code>error</code>/<code>watch</code> + <code>refresh</code>/<code>invalidate</code>/<code>amend</code>). <strong>RPC and sockets are cell + a transport</strong> — the same slot machinery, reached the same way on both sides. Here it runs entirely in the browser over a plain async function.</p>
+  <p class="lead"><code>cell(fn)</code> wraps ANY async function into a memoized slot: cache, in-flight coalescing, and a reactive read surface (<code>peek</code>/<code>pending</code>/<code>refreshing</code>/<code>error</code>/<code>watch</code> + <code>refresh</code>/<code>invalidate</code>/<code>publish</code>). <strong>RPC and sockets are cell + a transport</strong> — the same slot machinery, reached the same way on both sides. Here it runs entirely in the browser over a plain async function.</p>
 
   <p>The handler counts how many times it actually ran. Load once, then read again and again — the count <strong>holds</strong> because the slot is reused (and concurrent reads coalesce onto one run). <code>invalidate</code> drops the slot, so the next read re-runs and the count <strong>climbs</strong>.</p>
   <Demo id="cell-reuse" title="<code>cell(fn)</code> — a memoized slot over a plain promise" client="src/ui/demos/caching/CellReuseDemo.abide" tab="client">

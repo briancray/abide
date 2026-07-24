@@ -2,7 +2,7 @@
 // (replayable-streams.md §1): coalesce identical CONCURRENT in-flight calls (per-request scope, so
 // inert for the normal one-call-per-request case), retain nothing. `cache: false` opts out entirely; a
 // FormData body always bypasses the cell. Exposes the FULL `Rpc`/`StreamRead` surface (peek/refresh/
-// amend/chunks/…) — symmetric with a read; mounted at `/__abide/rpc/<name>`.
+// publish/chunks/…) — symmetric with a read; mounted at `/__abide/rpc/<name>`.
 
 import type { StandardSchemaV1 } from '../shared/StandardSchema.ts'
 import {

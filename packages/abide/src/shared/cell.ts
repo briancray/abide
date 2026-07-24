@@ -2,11 +2,11 @@
 //
 // `cell(fn)` wraps any async function into a smart-read callable: per-context caching,
 // in-flight coalescing, and a reactive read surface (peek/pending/error/refreshing/watch/
-// refresh/invalidate/amend). RPC/socket helpers bake this behavior in; users reach for
+// refresh/invalidate/publish). RPC/socket helpers bake this behavior in; users reach for
 // `cell()` to wrap their OWN third-party async functions and get identical ergonomics.
 //
 // Each cache slot `(cellId, canonicalKey(args))` IS a signal (§7.2): reading it in a
-// tracking context subscribes; resolve/invalidate/amend re-run subscribers. The slot is a
+// tracking context subscribes; resolve/invalidate/publish re-run subscribers. The slot is a
 // state machine idle -> pending -> value | error, with a `refreshing` flag while
 // revalidating over a retained value. pending/error/refreshing/peek are derived views of
 // the one slot, not separate channels.
@@ -77,11 +77,11 @@ interface Slot<Args, T> {
 }
 
 // SERVER-ONLY broadcast sink (rpc-core §8, PR2). A shared cell calls this when a verb changes a
-// slot: `invalidate`/`refresh` pass `(verb, args)`; value-form `amend` passes `(verb, args, value)`.
+// slot: `invalidate`/`refresh` pass `(verb, args)`; value-form `publish` passes `(verb, args, value)`.
 // The sink is transport-free from the cell's view — `createApp` binds it to a channel publish. `args`
 // is the selector as given to the verb (partial or full), typed loosely since it may be a subset.
 export type CacheNotify = (
-    verb: 'invalidate' | 'refresh' | 'amend',
+    verb: 'invalidate' | 'refresh' | 'publish',
     args: unknown,
     value?: unknown,
 ) => void
@@ -139,7 +139,7 @@ export interface Cell<Args, T> {
     // Drop matching slot(s) back to idle; lazy reload on next read.
     invalidate(args?: Partial<Args> | Args): void
     // Mutate the retained value in place: value-form or updater-form.
-    amend(args: Args, next: T | ((current: T | undefined) => T)): void
+    publish(args: Args, next: T | ((current: T | undefined) => T)): void
     // Run handler on slot change; returns a dispose function. Per-cardinality: a VALUE slot fires on an
     // actual value change (a `refreshing` flag-flip is not one); a STREAM slot fires per chunk append,
     // handing over the LATEST chunk (coalesced per flush, like `peek`). Firing is by chunk COUNT, so the
@@ -253,7 +253,7 @@ export function cell<Args, T>(
     // Fire the broadcast sink for a slot-changing verb — ONLY on a shared cell (broadcast is a
     // shared-slot concept). Transport-free: the cell just calls the injected function.
     function broadcast(
-        verb: 'invalidate' | 'refresh' | 'amend',
+        verb: 'invalidate' | 'refresh' | 'publish',
         args: unknown,
         value?: unknown,
     ): void {
@@ -718,7 +718,7 @@ export function cell<Args, T>(
         broadcast('invalidate', args)
     }
 
-    c.amend = (args: Args, next: T | ((current: T | undefined) => T)): void => {
+    c.publish = (args: Args, next: T | ((current: T | undefined) => T)): void => {
         const slot = ensureSlot(args)
         const current = slot.signal.peek()
         let value: T
@@ -727,10 +727,10 @@ export function cell<Args, T>(
             // updater runs against the durable value here, then broadcasts its RESULT as a value-form
             // frame. A SERVER per-request (non-shared) slot inside a request scope has nothing durable to
             // broadcast an updater against → error. On the client (or a bare/default-context server call
-            // with no request scope), an updater-form amend stays a local mutation.
+            // with no request scope), an updater-form publish stays a local mutation.
             if (!shared && !isBrowser && currentScope() !== undefined) {
                 throw new Error(
-                    'amend updater-form is not supported on a per-request cell; pass a value instead',
+                    'publish updater-form is not supported on a per-request cell; pass a value instead',
                 )
             }
             value = untrack(() => (next as (current: T | undefined) => T)(current.value))
@@ -738,9 +738,9 @@ export function cell<Args, T>(
             value = next
         }
         setState(slot, { status: 'value', value, error: undefined, refreshing: current.refreshing })
-        log.channel('abide:cache').trace(`amend ${id}`)
+        log.channel('abide:cache').trace(`publish ${id}`)
         // Both forms broadcast the resolved VALUE (value-form frame) on a shared slot.
-        broadcast('amend', args, value)
+        broadcast('publish', args, value)
     }
 
     c.snapshot = (): Array<{ args: Args; value: T }> =>

@@ -43,7 +43,7 @@ export class ReplayableStream<T> {
     overflowed = false
     // Live attachments currently iterating a `consume()`. Drives the cell's dispose-on-drain (step 1b).
     refCount = 0
-    // Bumped by a future amend/rewrite so cursors re-replay from 0 (append verb deferred; see spec).
+    // Bumped by a future publish/rewrite so cursors re-replay from 0 (append verb deferred; see spec).
     generation = 0
     // Transport encoding the handler chose (jsonl(...) / sse(...)), carried so the router re-serves the
     // same wire format after replay. Undefined for a bare async-generator source (router defaults jsonl).

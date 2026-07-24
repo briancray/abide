@@ -105,7 +105,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
     watched.watch({ id: 1 }, (value) => {
         watchSink = value
     })
-    // Seeded well clear of the slot's loaded value (`a.id` = 1) so the FIRST amend is a real change —
+    // Seeded well clear of the slot's loaded value (`a.id` = 1) so the FIRST publish is a real change —
     // otherwise `watch`'s value-dedup (cell.ts:789) correctly suppresses it and iteration one times nothing.
     let watchSeed = 1000
 
@@ -266,7 +266,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             note: 'publish + flush on a watched value slot (fires once)',
             run: async () => {
                 watchSink = undefined
-                watched.amend({ id: 1 }, ++watchSeed)
+                watched.publish({ id: 1 }, ++watchSeed)
                 await afterFlush()
                 if (watchSink === undefined)
                     throw new Error(

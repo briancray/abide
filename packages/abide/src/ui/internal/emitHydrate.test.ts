@@ -498,8 +498,8 @@ describe('{#await} block — claim the settled branch (PR5)', () => {
         // (5) no write on pass 1 — the server-resolved "Bob" is trusted verbatim.
         expect(serverText.data).toBe('Bob')
 
-        // (6) an invalidation-style update (amend) rebuilds the branch with the new value.
-        getName.amend({ id: 1 }, 'Alice')
+        // (6) an invalidation-style update (publish) rebuilds the branch with the new value.
+        getName.publish({ id: 1 }, 'Alice')
         await tick()
         await tick()
         expect(must(host.querySelector('p')).textContent).toBe('Alice')

@@ -2,7 +2,7 @@
 //
 // A SHARED cell declaring `cache: { tags: [...] }` registers itself here (server-only) under each
 // tag. The global verbs `invalidate({ tags })` / `refresh({ tags })` — the ONLY global cache-verb
-// form (per-callable `fn.invalidate/refresh/amend` stay canonical) — select every registered cell
+// form (per-callable `fn.invalidate/refresh/publish` stay canonical) — select every registered cell
 // carrying ANY listed tag and run its local drop/revalidate, which (through the cell's already-bound
 // transport-free `notify` sink) broadcasts a per-slot frame on each `@rpc:` channel. A per-tag frame
 // is also emitted on the reserved `@tag:<tag>` channel so a tag-level subscriber mirrors it (client

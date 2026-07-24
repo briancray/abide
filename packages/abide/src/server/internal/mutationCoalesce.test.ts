@@ -149,7 +149,7 @@ describe('mutation public surface mirrors a read (full symmetry)', () => {
         const m = POST((_args: { x: number }) => 1) as unknown as Record<string, unknown>
         expect(typeof m).toBe('function')
         expect(typeof m.peek).toBe('function')
-        expect(typeof m.amend).toBe('function')
+        expect(typeof m.publish).toBe('function')
         expect(typeof m.pending).toBe('function')
         expect(typeof m.refresh).toBe('function')
         expect(typeof m.refreshing).toBe('function')

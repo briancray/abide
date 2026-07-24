@@ -2,7 +2,7 @@ import { expect, type Page, test } from '@playwright/test'
 
 // Drives the /caching page in a real browser: SSR → hydration → cache VERBS + behaviour over live RPC
 // fetches. Every assertion is RELATIVE (server run counters are process-global and monotonic), so the
-// specs prove behaviour — reuse, re-fetch, partial match, amend, shared, ttl — not absolute numbers.
+// specs prove behaviour — reuse, re-fetch, partial match, publish, shared, ttl — not absolute numbers.
 // The reactive probes moved to /rpc/probes + /caching/probes; the global tag selectors to /caching/global.
 
 async function intOf(page: Page, testId: string): Promise<number> {
@@ -74,21 +74,23 @@ test('invalidate with a partial selector matches every superset slot (red re-fet
     await expect(page.getByTestId('metric-blue1')).toHaveText(String(blueBefore))
 })
 
-test('amend(args, value|updater) mutates the slot in place with no re-fetch', async ({ page }) => {
+test('publish(args, value|updater) mutates the slot in place with no re-fetch', async ({
+    page,
+}) => {
     await page.goto('/caching')
 
-    await page.getByTestId('amend-start').click()
-    await expect(page.getByTestId('amend-value')).toHaveText(/^\d+$/)
+    await page.getByTestId('publish-start').click()
+    await expect(page.getByTestId('publish-value')).toHaveText(/^\d+$/)
 
     // value-form: the slot value is replaced by 999 (not a server run count) — proof it never re-ran.
-    await page.getByTestId('amend-value-form').click()
-    await expect(page.getByTestId('amend-value')).toHaveText('999')
-    await expect(page.getByTestId('amend-peek')).toHaveText('999')
+    await page.getByTestId('publish-value-form').click()
+    await expect(page.getByTestId('publish-value')).toHaveText('999')
+    await expect(page.getByTestId('publish-peek')).toHaveText('999')
 
     // updater-form: derive the next value from the current (999 + 100).
-    await page.getByTestId('amend-updater').click()
-    await expect(page.getByTestId('amend-value')).toHaveText('1099')
-    await expect(page.getByTestId('amend-peek')).toHaveText('1099')
+    await page.getByTestId('publish-updater').click()
+    await expect(page.getByTestId('publish-value')).toHaveText('1099')
+    await expect(page.getByTestId('publish-peek')).toHaveText('1099')
 })
 
 test('cache: { shared } is a cross-request cache; a per-request read climbs', async ({ page }) => {

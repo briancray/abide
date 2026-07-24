@@ -27,7 +27,7 @@ function makeScope(name: string): RequestScope {
 // standing up a server. Kept identical to router.createApp so the two stay in lock-step.
 function bindLikeCreateApp<Args, T>(route: Rpc<Args, T>, name: string): void {
     route.bindBroadcast((verb, args, value): void => {
-        const frame: CacheFrame = verb === 'amend' ? { verb, value } : { verb }
+        const frame: CacheFrame = verb === 'publish' ? { verb, value } : { verb }
         publishCacheFrame(cacheChannelName(name, args), frame)
     })
 }
@@ -63,7 +63,7 @@ describe('cacheChannels — broadcast substrate', () => {
         await refIter.return?.()
     })
 
-    test("shared read value-form amend broadcasts {verb:'amend', value}", async () => {
+    test("shared read value-form publish broadcasts {verb:'publish', value}", async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id, count: 0 }), {
             cache: { shared: true },
         })
@@ -71,12 +71,12 @@ describe('cacheChannels — broadcast substrate', () => {
 
         const iter = cacheChannelHub(cacheChannelName('profileB', { id: 1 })).subscribe()
         const value = { id: 1, count: 7 }
-        profile.amend({ id: 1 }, value)
-        expect((await iter.next()).value).toEqual({ verb: 'amend', value })
+        profile.publish({ id: 1 }, value)
+        expect((await iter.next()).value).toEqual({ verb: 'publish', value })
         await iter.return?.()
     })
 
-    test('shared read updater-form amend broadcasts the RESOLVED value', async () => {
+    test('shared read updater-form publish broadcasts the RESOLVED value', async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id, count: 1 }), {
             cache: { shared: true },
         })
@@ -88,9 +88,9 @@ describe('cacheChannels — broadcast substrate', () => {
         })
 
         const iter = cacheChannelHub(cacheChannelName('profileC', { id: 1 })).subscribe()
-        profile.amend({ id: 1 }, (current) => ({ id: 1, count: (current?.count ?? 0) + 41 }))
+        profile.publish({ id: 1 }, (current) => ({ id: 1, count: (current?.count ?? 0) + 41 }))
         // Durable value was { id:1, count:1 } → updater result { id:1, count:42 } broadcast value-form.
-        expect((await iter.next()).value).toEqual({ verb: 'amend', value: { id: 1, count: 42 } })
+        expect((await iter.next()).value).toEqual({ verb: 'publish', value: { id: 1, count: 42 } })
         await iter.return?.()
     })
 
@@ -100,7 +100,7 @@ describe('cacheChannels — broadcast substrate', () => {
 
         const iter = cacheChannelHub(cacheChannelName('profileD', { id: 1 })).subscribe()
         profile.invalidate({ id: 1 })
-        profile.amend({ id: 1 }, { id: 99 })
+        profile.publish({ id: 1 }, { id: 99 })
         expect(await nextOrTimeout(iter, 25)).toBe(TIMEOUT)
         await iter.return?.()
     })

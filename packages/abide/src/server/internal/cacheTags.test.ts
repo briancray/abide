@@ -35,7 +35,7 @@ function makeScope(name: string): RequestScope {
 // router.createApp / cacheChannels.test.ts).
 function bindLikeCreateApp<Args, T>(route: Rpc<Args, T>, name: string): void {
     route.bindBroadcast((verb, args, value): void => {
-        const frame: CacheFrame = verb === 'amend' ? { verb, value } : { verb }
+        const frame: CacheFrame = verb === 'publish' ? { verb, value } : { verb }
         publishCacheFrame(cacheChannelName(name, args), frame)
     })
 }

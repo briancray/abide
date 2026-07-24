@@ -116,7 +116,7 @@ Import `abide/server/{VERB}`; handler takes one positional object arg. Reads →
 | `PUT(fn, opts?)` — mutating | PW+RT | [~] (verb supported; browser demo consolidated to POST + DELETE on /rpc/mutations) |
 | `PATCH(fn, opts?)` — mutating | PW+RT | [~] (verb supported; browser demo consolidated to POST + DELETE on /rpc/mutations) |
 | `DELETE(fn, opts?)` — mutating | PW+RT | [x] (/rpc/mutations) |
-| Mutations expose the FULL read surface (peek/pending/refreshing/refresh/invalidate/amend/watch/snapshot/seed/raw/isError + streaming chunk probes) — read/mutation symmetry | PW+RT | [x] (/rpc/mutations cached-mutation demo drives `.peek`/`.refresh`/`.refreshing` on a POST) |
+| Mutations expose the FULL read surface (peek/pending/refreshing/refresh/invalidate/publish/watch/snapshot/seed/raw/isError + streaming chunk probes) — read/mutation symmetry | PW+RT | [x] (/rpc/mutations cached-mutation demo drives `.peek`/`.refresh`/`.refreshing` on a POST) |
 | Cached mutation — `cache: { ttl }` on a mutation retains (repeat call hits cache, `.refresh()` re-runs) | PW+RT | [x] (/rpc/mutations cached-mutation; `rpcBumpCounter`) |
 | Streaming mutation — a POST yielding `jsonl` consumed via `{#for await x of mutation()}` | PW+RT | [x] (/rpc/streaming streaming-mutation; `rpcStreamJob`) |
 | RPC `opts.schemas` (input/output/files; type-derived when absent) | RT | [ ] |
@@ -153,8 +153,8 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | --- | --- | --- |
 | `fn.invalidate(args?)` — partial-object match; `()` = whole callable | PW+RT | [x] (/caching: counter + partial-match) |
 | `fn.refresh(args?)` | PW+RT | [x] (/caching: counter + refreshing) |
-| `fn.amend(args, value)` — broadcasts server→clients | PW+RT | [x] (/caching AmendDemo: value-form rewrites the slot, no re-fetch) |
-| `fn.amend(args, updater)` — local / shared-slot | PW+RT | [x] (/caching AmendDemo: updater-form derives next value locally) |
+| `fn.publish(args, value)` — broadcasts server→clients | PW+RT | [x] (/caching PublishDemo: value-form rewrites the slot, no re-fetch) |
+| `fn.publish(args, updater)` — local / shared-slot | PW+RT | [x] (/caching PublishDemo: updater-form derives next value locally) |
 | Partial-args match (superset slots) | RT | [x] (/caching: invalidate `{team:"red"}`) |
 | Global `invalidate({ tags })` | PW+RT | [x] (/caching TagsInvalidateDemo: `invalidate({tags:["docs"]})` drops both tagged shared reads) |
 | Global `refresh({ tags })` | PW+RT | [x] (/caching TagsRefreshDemo: `refresh({tags:["docs"]})` revalidates both in place) |
