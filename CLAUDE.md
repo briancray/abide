@@ -125,17 +125,24 @@ traced request also carries `traceresponse` (alongside the echoed `traceparent`)
 ### Sockets
 | Import | Signature |
 | --- | --- |
-| `abide/server/socket` | `socket<T>(opts?)`; opts: `{ tail?, ttl?, clientPublish?, schema?, clients?, handler? }` |
+| `abide/server/socket` | `socket<T, Args=void>(opts?)`; opts: `{ tail?, ttl?, clientPublish?, schema?, clients?, middleware? }` |
 
-`Socket<T>` is an isomorphic `AsyncIterable<T>` with an **identical surface on both sides** (one
-`.d.ts`): `for await` + `publish(msg): void` + the reactive memo-probe vocabulary — `peek()` (latest,
-`ttl`-windowed), `chunks()` (session transcript, `tail`-capped), `pending()`/`refreshing()`/`done()`/
-`error()`. A `.abide` that imports a socket from `server/sockets/<name>.ts` gets the real hub on the
-server and a **browser proxy** (the RPC-style module-swap) on the client — same import, same name.
-Subscribe by iterating; **publish via `socket.publish(msg)`** (server always; client when
-`clientPublish`; fire-and-forget). ACTIVE probes (`iterate`/`peek`/`chunks`) open a subscription over
-the shared WS mux; STATUS probes only observe it. `handler` mediates client publishes
-(transform/reject/drop). Under SSR a socket iterates as **tail-snapshot-then-complete** (never hangs
+`Socket<T, Args=void>` is an isomorphic `AsyncIterable<T>` with an **identical surface on both sides**
+(one `.d.ts`): `for await` + `publish(msg): void` + the reactive memo-probe vocabulary — `peek()`
+(latest, `ttl`-windowed), `chunks()` (session transcript, `tail`-capped), `pending()`/`refreshing()`/
+`done()`/`error()`. A `.abide` that imports a socket from `server/sockets/<name>.ts` gets the real hub
+on the server and a **browser proxy** (the RPC-style module-swap) on the client — same import, same name.
+Subscribe by iterating; **publish via `socket.publish(msg)`** (server always; client when `clientPublish`
+admits it; fire-and-forget). ACTIVE probes (`iterate`/`peek`/`chunks`) open a subscription over the shared
+WS mux; STATUS probes only observe it.
+- **`clientPublish`** = `false | true | fn`: `false`/omitted = clients may not publish · `true` =
+  unmediated · a **function** `(msg) => T | DROP` = mediated (transform the untrusted message, or `DROP`
+  to suppress). The fn form REPLACES the old `handler` — the mediator *is* the permission, so a mediator
+  on a closed path is unrepresentable (a server `publish` always bypasses it).
+- **`Args`** names the ROOM (ADR 0023). `Args=void` = single topic (today's socket); a non-void `Args`
+  gives per-room isolation — `sock({room})` iterates a room, `sock.publish({room}, msg)`/`sock.peek({room})`
+  address it. **`middleware`** authorizes each room subscribe+publish (the socket analog of an rpc's
+  middleware; absent ⇒ connect-authed). Rooms + auth key the same way on both sides (server + client proxy). Under SSR a socket iterates as **tail-snapshot-then-complete** (never hangs
 the render); the client re-subscribes live on hydrate. HTTP face `/__abide/sockets/<name>` (SSE
 subscribe / POST publish). Server-side cache broadcasts ride authorized `(rpc,args)` channels on the
 mux. Full design + transport protocol: `docs/spec/client-sockets.md`.

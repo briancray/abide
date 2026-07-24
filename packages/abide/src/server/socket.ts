@@ -2,8 +2,8 @@
 // `channel` + transport (ADR 0023): it builds on a single-topic `channel()` for the pub/sub core and
 // adds the transport internals. Subscribe by iterating (`for await (const m of sock)`), unsubscribe by
 // breaking. `publish(msg)` is the server broadcast path. Client-mediated publishes go through the
-// socket-layer `ingressPublish` (runs the `handler`, then server-publishes — surfaced on `__socket` for
-// the transport to call; the channel itself is pure pub/sub).
+// socket-layer `ingressPublish` (runs the `clientPublish` mediator, then server-publishes — surfaced on
+// `__socket` for the transport to call; the channel itself is pure pub/sub).
 //
 // The reactive PROBE surface (client-sockets.md CS1/CS4) — `peek`/`chunks`/`pending`/`refreshing`/
 // `done`/`error` — is identical on both sides so the browser proxy (`ui/internal/socketProxy`) is the
@@ -23,21 +23,35 @@ import { DROP } from './internal/socketHub.ts'
 // memo's slot and the `@rpc:` broadcast channel.
 type Room<Args> = [Args] extends [void] ? [] : [args: Args]
 
-// A mediating handler may return the transformed value to publish, or `void`/`DROP` to suppress the
-// client publish. `DROP` is the explicit drop signal; a bare `void`/`undefined` return drops too.
+// The client-publish policy (ADR 0023 §composition). `false`/omitted = clients may not publish; `true` =
+// unmediated; a FUNCTION = mediated — it TRANSFORMS the untrusted message (or returns `DROP` to suppress),
+// and its mere presence PERMITS the publish. Folding the mediator into the permission makes "a mediator on
+// a closed publish path" unrepresentable, and matches the house `false | true | config` idiom.
+// biome-ignore lint/suspicious/noConfusingVoidType: void lets a side-effect-only mediator (returns nothing → treated as DROP) be assignable.
+export type ClientPublish<T> =
+    | boolean
+    | ((message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>)
+
 export interface SocketOptions<T, Args = void> {
     tail?: number
     ttl?: number
-    clientPublish?: boolean
+    // `false`/omitted = no client publish · `true` = unmediated · fn = mediated (transform + DROP). The fn
+    // form REPLACES the old `handler` — the mediator IS the permission.
+    clientPublish?: ClientPublish<T>
     schema?: unknown
     clients?: unknown
-    // biome-ignore lint/suspicious/noConfusingVoidType: void lets a side-effect-only handler (returns nothing) be assignable; undefined would force an explicit return
-    handler?: (message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>
     // Per-SUBSCRIBE (per-room) authorization — the socket analog of an rpc's `middleware`, run at each
     // room join with the connection's identity + the room args (a short-circuit denies). ABSENT ⇒ the
     // socket is connect-authed (any connected client may join any room), exactly like a middleware-less
     // rpc is public. This is the opt-in per-room security boundary (auth.md; ADR 0023 rooms).
     middleware?: Middleware[]
+}
+
+// Whether a client publish is PERMITTED at all — `true` (unmediated) or a mediator fn both admit it;
+// `false`/omitted rejects. The single source of truth shared by the transport gate (router/mcp), the
+// registry, and the client spec, so "is publish allowed" can never diverge from "is it mediated".
+export function clientPublishAllowed(clientPublish: unknown): boolean {
+    return clientPublish === true || typeof clientPublish === 'function'
 }
 
 // Internal handle carried on `__socket`: the resolved options + the per-room transport paths. Every path
@@ -68,10 +82,10 @@ export interface Socket<T, Args = void> extends AsyncIterable<T> {
 
 // The transport-boundary view of a socket: the mux registry holds heterogeneous sockets, so BOTH the
 // message type and the room args are erased. `any` (not `unknown`) is required — the contravariant
-// `handler` param means a concrete `Socket<number, …>` is NOT assignable to `Socket<unknown, …>`; `any`
-// is the only supertype every socket flows into. The transport touches only `__socket` (whose per-room
-// paths take the room through) + the `AsyncIterable` face, never the public variadic surface.
-// biome-ignore lint/suspicious/noExplicitAny: erased existential — see above; `unknown` breaks assignability through the contravariant handler param.
+// `clientPublish` mediator param means a concrete `Socket<number, …>` is NOT assignable to
+// `Socket<unknown, …>`; `any` is the only supertype every socket flows into. The transport touches only
+// `__socket` (whose per-room paths take the room through) + the `AsyncIterable` face, never the surface.
+// biome-ignore lint/suspicious/noExplicitAny: erased existential — see above; `unknown` breaks assignability through the contravariant clientPublish param.
 export type ErasedSocket = Socket<any, any>
 
 export function socket<T, Args = void>(options: SocketOptions<T, Args> = {}): Socket<T, Args> {
@@ -109,15 +123,17 @@ export function socket<T, Args = void>(options: SocketOptions<T, Args> = {}): So
     sock.error = (): unknown | undefined => undefined
     ;(sock as { __socket: SocketInternals<T, Args> }).__socket = {
         options,
-        // Client-publish mediation lives HERE (the channel is pure pub/sub): run the handler, then
-        // server-publish the transformed value into the room. A `void`/`DROP` return suppresses.
+        // Client-publish mediation lives HERE (the channel is pure pub/sub). `clientPublish === true` =
+        // unmediated pass-through; a mediator fn TRANSFORMS the untrusted message and may `DROP`/void it;
+        // `false`/omitted = not permitted → drop (defense in depth — the transport gate already rejects).
         ingressPublish: async (args: Args, message: T): Promise<void> => {
-            const handler = options.handler
-            if (handler === undefined) {
+            const clientPublish = options.clientPublish
+            if (clientPublish === true) {
                 ch.__hub(args).publish(message)
                 return
             }
-            const result = await handler(message)
+            if (typeof clientPublish !== 'function') return
+            const result = await clientPublish(message)
             if (result === undefined || (result as unknown) === DROP) return
             ch.__hub(args).publish(result as T)
         },

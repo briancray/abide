@@ -11,6 +11,7 @@
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
+import { clientPublishAllowed } from '../socket.ts'
 import type { AppConfig, Route } from './router.ts'
 
 // Per-surface exposure flags (§13.3). All default-on: an absent flag means "exposed". Only an
@@ -113,7 +114,7 @@ export function buildRegistry(config: AppConfig): Registry {
         const options = socket.__socket.options
         const entry: SocketEntry = {
             name,
-            clientPublish: options.clientPublish === true,
+            clientPublish: clientPublishAllowed(options.clientPublish),
             tail: typeof options.tail === 'number' ? options.tail : 0,
             ttl: typeof options.ttl === 'number' ? options.ttl : Infinity,
             clients: resolveClients(options.clients),

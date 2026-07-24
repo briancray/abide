@@ -125,9 +125,9 @@ describe('socket — unsubscribe lifecycle', () => {
     })
 })
 
-describe('socket — ingressPublish (client-mediated)', () => {
-    test('no handler — ingressPublish is a pass-through relay', async () => {
-        const sock = socket<number>()
+describe('socket — ingressPublish (clientPublish mediation)', () => {
+    test('clientPublish:true — ingressPublish is an unmediated relay', async () => {
+        const sock = socket<number>({ clientPublish: true })
         const got = collect(sock, 1)
         await delay(5)
         await sock.__socket.ingressPublish(undefined, 7)
@@ -135,8 +135,8 @@ describe('socket — ingressPublish (client-mediated)', () => {
         expect(await got).toEqual([7])
     })
 
-    test('handler transforms — the transformed value is republished', async () => {
-        const sock = socket<number>({ handler: (n) => n * 10 })
+    test('clientPublish fn transforms — the transformed value is republished', async () => {
+        const sock = socket<number>({ clientPublish: (n) => n * 10 })
         const got = collect(sock, 1)
         await delay(5)
         await sock.__socket.ingressPublish(undefined, 4)
@@ -144,8 +144,8 @@ describe('socket — ingressPublish (client-mediated)', () => {
         expect(await got).toEqual([40])
     })
 
-    test('handler returning DROP suppresses the publish', async () => {
-        const sock = socket<number>({ handler: (n) => (n < 0 ? DROP : n) })
+    test('clientPublish fn returning DROP suppresses the publish', async () => {
+        const sock = socket<number>({ clientPublish: (n) => (n < 0 ? DROP : n) })
         const got = collect(sock, 1)
         await delay(5)
         await sock.__socket.ingressPublish(undefined, -1) // dropped
@@ -154,9 +154,25 @@ describe('socket — ingressPublish (client-mediated)', () => {
         expect(await got).toEqual([9])
     })
 
-    test('handler that throws rejects the publisher and delivers nothing', async () => {
+    test('clientPublish omitted — ingressPublish drops (publish not permitted)', async () => {
+        const sock = socket<number>()
+        const relay = socket<number>({ clientPublish: true })
+        const got = collect(sock, 1)
+        const relayGot = collect(relay, 1)
+        await delay(5)
+        await sock.__socket.ingressPublish(undefined, 1) // dropped — no clientPublish
+        relay.publish(2) // prove the collector is otherwise live via a sibling
+        await sock.__socket.ingressPublish(undefined, 3) // still dropped
+
+        expect(await relayGot).toEqual([2])
+        // `sock` never received an ingress publish; a direct server publish proves it is live.
+        sock.publish(9)
+        expect(await got).toEqual([9])
+    })
+
+    test('clientPublish fn that throws rejects the publisher and delivers nothing', async () => {
         const sock = socket<number>({
-            handler: (n) => {
+            clientPublish: (n) => {
                 if (n === 13) throw new Error('unlucky')
                 return n
             },
@@ -169,11 +185,11 @@ describe('socket — ingressPublish (client-mediated)', () => {
         expect(await got).toEqual([5])
     })
 
-    test('server publish bypasses the handler', async () => {
-        const sock = socket<number>({ handler: () => DROP })
+    test('server publish bypasses the clientPublish mediator', async () => {
+        const sock = socket<number>({ clientPublish: () => DROP })
         const got = collect(sock, 1)
         await delay(5)
-        sock.publish(1) // server path ignores the drop-everything handler
+        sock.publish(1) // server path ignores the drop-everything mediator
 
         expect(await got).toEqual([1])
     })

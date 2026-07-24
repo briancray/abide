@@ -34,7 +34,7 @@ import { validationError } from '../../shared/ValidationErrorData.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { jsonl } from '../jsonl.ts'
-import type { ErasedSocket } from '../socket.ts'
+import { clientPublishAllowed, type ErasedSocket } from '../socket.ts'
 import { sse } from '../sse.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
 import {
@@ -440,7 +440,7 @@ async function wsPublish(
     if (typeof name !== 'string') return
     const sock = sockets[name]
     if (sock === undefined) return
-    if (sock.__socket.options.clientPublish !== true) return
+    if (!clientPublishAllowed(sock.__socket.options.clientPublish)) return
     if (!(await authorizeSocketJoin(name, sock, args, ws.data, config))) {
         log.channel('abide:socket').warn(`publish denied — room not authorized: ${name}`)
         return
@@ -467,7 +467,7 @@ async function socketHttpFace(
         return sse(sock)
     }
     if (method === 'POST') {
-        if (sock.__socket.options.clientPublish !== true) {
+        if (!clientPublishAllowed(sock.__socket.options.clientPublish)) {
             return error(403, `socket: client publish is disabled for ${name}.`)
         }
         const body = await request.text()
