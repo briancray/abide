@@ -20,7 +20,7 @@ the next depends on it.
 - `shared/internal/reactive` — fine-grained signals: `signal`/`computed`/`effect`/`batch`/`untrack`; push-notify + pull-recompute, microtask-batched, glitch-free (rpc-core §7).
 - `shared/internal/codec` — `canonicalKey(v)` (deterministic keyer) + `encode`/`decode` rich value codec for **hydration only** (Date/Map/Set/BigInt/RegExp/TypedArray/circular); RPC wire is JSON (rpc-core §4/§11).
 - `shared/internal/context` — ambient cache context: per-request (AsyncLocalStorage, server) / per-session singleton (client); `getContext()`/`runIn` (rpc-core §2).
-- `shared/cell` — the memoizer: `cell(asyncFn, opts)` → smart read callable + `.peek/.pending/.error/.refresh/.invalidate/.amend/.watch`; slot state machine `idle→pending→value|error` (+refreshing); coalescing by `canonicalKey`; TTL; partial-object invalidation (rpc-core §1–3, §7.2, §8).
+- `shared/cell` — the memoizer: `cell(asyncFn, opts)` → smart read callable + `.peek/.pending/.error/.refresh/.invalidate/.publish/.watch`; slot state machine `idle→pending→value|error` (+refreshing); coalescing by `canonicalKey`; TTL; partial-object invalidation (rpc-core §1–3, §7.2, §8).
 
 ### M2 — server core
 - `server/request`/`cookies`/`server`/`context` + `shared/route` accessors; Bun.serve host; router (`/rpc/<name>`); `server/json`/`error`/`redirect`/`jsonl`/`sse`; `GET`/`POST`/… wrapping a handler in a `cell` (in-proc dispatch first); onion `middleware`; `test/createTestApp`.

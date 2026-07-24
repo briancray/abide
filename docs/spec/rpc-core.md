@@ -16,7 +16,7 @@ unless it explicitly says "transport" or "HTTP."
 
 - The primitive is **`cell`**: `cell(asyncFn)` wraps *any* async function to give it the
   smart-read surface: caching, in-flight coalescing, and reactive reads (`.pending`,
-  `.error`, `.refreshing`, `.peek`, `.watch`, `.refresh`, `.invalidate`, `.amend`). Its type
+  `.error`, `.refreshing`, `.peek`, `.watch`, `.refresh`, `.invalidate`, `.publish`). Its type
   is **`Cell`** (the `AsyncCell` referenced by selector signatures elsewhere = `Cell`).
 - abide's own `GET`/`POST`/`socket` **bake the behavior in** — users never call `cell` to
   get RPC behavior. Users reach for `cell()` only to wrap **their own third-party async
@@ -43,7 +43,7 @@ Same code, ambient scope differs by side:
 - Calling a wrapped fn with **no ambient context** (bare script, cron, background task)
   lazily uses a default ambient context — it still works, just without per-request
   isolation. Does not throw.
-- Server-side `invalidate`/`refresh`/`amend` with a per-request (non-shared) slot has no
+- Server-side `invalidate`/`refresh`/`publish` with a per-request (non-shared) slot has no
   durable local target → **broadcast-only** (see §10). With a **shared** slot it has a
   durable target → mutates the shared entry **and** broadcasts.
 
@@ -180,12 +180,12 @@ One imported callable means two things:
    are its public face (`.abide`), the RPC read surface consumes the same graph. Fine-
    grained **signals** (Solid/Vue/Preact-signals family), not VDOM diff.
 2. **Each cache slot `(callSiteId, args)` *is* a signal.** Reading it in a tracking context
-   subscribes; changes (resolve, `invalidate`, `amend`, socket broadcast) re-run
+   subscribes; changes (resolve, `invalidate`, `publish`, socket broadcast) re-run
    subscribers. The slot is a state machine: `idle → pending → value | error`, with a
    `refreshing` flag when revalidating over a retained value. `.pending`/`.error`/
    `.refreshing`/`.peek` are **derived views of the one slot**, not separate channels.
 3. **Update semantics: push-notify + pull-recompute, microtask-batched, glitch-free
-   (topological).** A burst of writes (5 socket amends) → one recompute; no intermediate
+   (topological).** A burst of writes (5 socket publishes) → one recompute; no intermediate
    inconsistent state observed.
 4. **Server renders once, but flush effects are re-runnable.** SSR paints the DOM once — there is no
    live re-render of the served HTML after flush. (`watch`/effects themselves are isomorphic and DO fire
@@ -199,14 +199,14 @@ One imported callable means two things:
 ## 8. Mutation → read consistency
 
 1. **Manual, not automatic.** No automatic read/write dependency graph. Handlers/callers
-   explicitly call `invalidate`/`refresh`/`amend`. (Explicit = debuggable, stack-visible.)
+   explicitly call `invalidate`/`refresh`/`publish`. (Explicit = debuggable, stack-visible.)
 2. **Selector granularity — the method form is canonical:**
    - **Whole callable:** `user.invalidate()` (no args) drops every slot for the callable.
    - **Specific slot:** `user.invalidate(args)` (method form, args in — **never**
      `invalidate(user(42))`, which would *execute* the read as a side effect).
    - **Partial-object match:** `user.invalidate({ id })` matches **every slot whose args
      include `{ id }`**; `undefined`/no-arg recedes to the whole callable. Same shape for
-     `refresh`/`amend`.
+     `refresh`/`publish`.
    - **Tags:** a read declares `cache: { tags: [...] }`; the tag selector is the **only**
      form kept on the `abide/shared` globals — `invalidate({ tags })` / `refresh({ tags })` /
      `pending({ tags })` / `refreshing({ tags })`. Every per-callable op uses the method form.
@@ -219,9 +219,9 @@ One imported callable means two things:
      value** (or forces a nav refresh), so the slot is never stranded on a refetch the client
      cannot perform (§5.2).
    - `user.refresh(args)`: like invalidate but eager reload; server-broadcast eager.
-   - `user.amend(...)` — one name, two signatures; a slot is *shared* iff its RPC/`cell` sets
+   - `user.publish(...)` — one name, two signatures; a slot is *shared* iff its RPC/`cell` sets
      `cache: { shared: true }`:
-     | Caller | value-form `amend(args, v)` | updater-form `amend(args, cur => next)` |
+     | Caller | value-form `publish(args, v)` | updater-form `publish(args, cur => next)` |
      | --- | --- | --- |
      | Client (any slot) | local swap | local swap |
      | Server, shared slot | durable write + broadcast | updater on the durable value + broadcast |
@@ -231,7 +231,7 @@ One imported callable means two things:
    to all mux clients; the dev-reload and invalidation channels are the only reserved
    *internal* channels. A client receives a channel only if it has **joined** it, and
    **joining requires authorization to read that slot** (you cannot join `profile:B`'s
-   channel unless allowed to read `profile(B)`). This is precisely why value-form `amend` may
+   channel unless allowed to read `profile(B)`). This is precisely why value-form `publish` may
    broadcast the value safely — the joins are authorized. **Best-effort real-time**, no
    guaranteed delivery queue in this slice; offline/socketless clients revalidate on next
    natural read or reconnect. Socket connects lazily on first broadcasting verb / socket use.
@@ -355,7 +355,7 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    refcount).
 6. **Anything can stream** — streaming is orthogonal to method. A `POST` can return
    `jsonl`/`sse` (progress, LLM tokens). A streaming mutation still runs its
-   `invalidate`/`amend` broadcasts; stream-end = completion.
+   `invalidate`/`publish` broadcasts; stream-end = completion.
 
 ## 13. Multi-client exposure (humans **and** machines)
 
@@ -395,7 +395,7 @@ pages — nothing is reserved outside `/__abide/*`.
    they can never collide with a handler's own arg field named `args`/`from`. Safe/idempotent,
    cacheable, coalesced. **Mutations
    (`POST`/`PUT`/`PATCH`/`DELETE`): args in the body** (value codec), may
-   `invalidate`/`amend`/`refresh`; **not read-cached, not coalesced (today).** **SUPERSEDED
+   `invalidate`/`publish`/`refresh`; **not read-cached, not coalesced (today).** **SUPERSEDED
    (designed, not yet built — `replayable-streams.md`):** mutations would route through the
    cell too and **coalesce by default** (`cache: { ttl: 0 }` — dedupe identical *concurrent*
    calls, retain nothing after settle, so sequential mutations each execute); opt in to
@@ -439,7 +439,7 @@ pages — nothing is reserved outside `/__abide/*`.
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
 | `fn.refresh()` / `fn.refresh(args)` | eager refetch, keep stale visible (partial-args match) |
 | `fn.invalidate()` / `fn.invalidate(args)` | drop cached slot(s), lazy reload (partial-args match; no arg = whole callable) |
-| `fn.amend(args, value \| updater)` | swap retained value — value-form broadcasts server-side; server per-request updater-form errors |
+| `fn.publish(args, value \| updater)` | swap retained value — value-form broadcasts server-side; server per-request updater-form errors |
 | `fn.peek` | synchronous retained value |
 | `fn.pending` / `fn.refreshing` / `fn.error` | reactive slot-state probes |
 | `fn.watch` | trigger on change |

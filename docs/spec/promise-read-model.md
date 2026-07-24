@@ -32,7 +32,7 @@ The bare read call becomes the (coalesced) load promise; the non-blocking peek b
 rpc(args): Promise<T>          // the read — awaitable; coalesced + cached
 rpc.peek(args): T | undefined  // reactive sync snapshot (was today's bare call)
 rpc.pending/error/refreshing(args): …   // probes (unchanged)
-rpc.refresh/invalidate/amend(…): …      // cache verbs (unchanged)
+rpc.refresh/invalidate/publish(…): …      // cache verbs (unchanged)
 // rpc.load — REMOVED (=== the bare call now); deprecated alias during migration only
 ```
 
@@ -68,7 +68,7 @@ and the type-safe path coincide. Optional future sugar: `{#if rpc.peek() as v}` 
 
 ## The one open crux — await-interpolation reactivity
 
-Today `{fn()}` (peek) re-renders on `invalidate`/`amend` because the peek subscribes. Under this model
+Today `{fn()}` (peek) re-renders on `invalidate`/`publish` because the peek subscribes. Under this model
 the reactive form `{rpc.peek()}` still subscribes ✓, but the blocking form `{await rpc()}` must ALSO
 re-await when the underlying cell invalidates — otherwise a blocking read goes stale after a mutation.
 So the await-interpolation has to subscribe-and-re-await. **This is the hardest design point and the

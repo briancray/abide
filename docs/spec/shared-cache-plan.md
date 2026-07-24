@@ -10,7 +10,7 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
   `getContext().cache` (`cell.ts:114`) = per-request Map on server (`scope.ts:75`). No cross-request
   store today; `cache.shared`/`cache.tags` parsed but IGNORED (`makeRpc.ts:83`).
 - Verbs exist locally: `refresh`/`invalidate` over `selectSlots` (`cell.ts:219-236`, superset match
-  `matchesSelector` `:96-105`), `amend` value/updater (`:238-246`) — none broadcast.
+  `matchesSelector` `:96-105`), `publish` value/updater (`:238-246`) — none broadcast.
 - Mux complete for named user sockets: `wsSubscribe` looks up `config.sockets` (`router.ts:158`);
   upgrade carries NO identity (`Bun.ServerWebSocket<undefined>`, `:370`); `resolveIdentity`
   (`auth.ts:40`) runs only in HTTP `fetch` (`:387`).
@@ -26,7 +26,7 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
    + rpc-core §8.4 OVERRIDE this for `@rpc:` cache channels specifically: joining `profile:B` re-runs
    `profile`'s chain for `{id:B}`. Stance: user-socket subscribe stays connect-authed; the new `@rpc:`
    join path is the explicit exception, re-runs per subscribe. Record in sockets.md S4.4.
-2. **`amend` updater on a shared slot.** A closure can't cross the wire → on a shared slot the updater
+2. **`publish` updater on a shared slot.** A closure can't cross the wire → on a shared slot the updater
    runs against the durable value server-side, then broadcasts the RESULT as a value-form frame; a
    server per-request slot updater-form errors. Value-form always broadcasts. Record in docs.
 
@@ -46,7 +46,7 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
 - **PR4 — Tags.** `CellOptions.tags`; global `invalidate/refresh({tags})` broadcast on `@tag:<t>`.
   Risk: MED.
 - **PR5 — Client auto-subscribe + apply.** Browser cell reading a `shared` RPC joins its channel
-  (lazy one-WS-per-tab mux) and applies inbound frames via its own `invalidate/refresh/amend`. Risk:
+  (lazy one-WS-per-tab mux) and applies inbound frames via its own `invalidate/refresh/publish`. Risk:
   MED.
 - **PR6 — Docs.** Flip rpc-core §2/§8 status, sockets S4.4 exception, remove `cell.ts:14` TODO, TODO
   #4 → DONE.
@@ -68,7 +68,7 @@ opposite ends.
 ### 2.2 Broadcast channels
 `cacheChannelName(rpc,args) = "@rpc:" + rpc + ":" + canonicalKey(args)` (reserved `@` namespace; user
 sockets are bare names, no `:`). Reuse `SocketHub` (`socketHub.ts:70`) verbatim. `CacheFrame = {verb:
-"invalidate"|"refresh"|"amend", value?}`. Route-name seam: `createApp` binds each shared read's cell
+"invalidate"|"refresh"|"publish", value?}`. Route-name seam: `createApp` binds each shared read's cell
 `notify` to `publishCacheFrame(cacheChannelName(name, args), …)` (only `createApp` knows both name +
 registry; cell/makeRpc stay transport-free).
 
@@ -91,7 +91,7 @@ for Y). The auth run uses the verified args.
 Tags: `@tag:<t>` channels; global `invalidate/refresh({tags})` broadcasts per tag. Client: one lazy
 mux WS/tab; `shared` flag flows from `__rpc.options.cache.shared` into `makeClientImports` specs;
 first read auto-subscribes `{t:"sub", name, args}`; inbound frame → the SAME local cell verb
-(`invalidate`→lazy reload, `refresh`→eager, value-`amend`→`amend(args,value)`). No new client cache
+(`invalidate`→lazy reload, `refresh`→eager, value-`publish`→`publish(args,value)`). No new client cache
 logic. Auto-subscribe (reading in a tracking context is the trigger); dispose unsubscribes.
 
 ## 3. Security test strategy (PR3, `channelAuth.test.ts`)
@@ -99,7 +99,7 @@ Build on `createTestApp` + `.as(identity)` + the WS `socketClient` (extend `subs
 `profile` = shared GET read with middleware that `error(403)`s unless `identity().id === args.id`.
 1. `.as({id:A})` reads `profile({id:A})` → 200 baseline. 2. A subscribes `@rpc:profile:<key(B)>` args
 `{id:B}` → broadcast to B, A's stream TIMES OUT (denied = silent, no fanout). 3. Positive: A subscribes
-own channel → a server `profile.amend({id:A}, v)` delivers exactly `{verb:"amend", value:v}`. 4.
+own channel → a server `profile.publish({id:A}, v)` delivers exactly `{verb:"publish", value:v}`. 4.
 **Args-spoof:** subscribe name for A but args `{id:B}` → rejected on channel-name mismatch. 5.
 **Per-subscribe:** one connection joins allowed then attempts forbidden → first joins, second denied.
 6. **Anonymous WS:** no identity → forbidden channels denied, only public (middleware-less) shared

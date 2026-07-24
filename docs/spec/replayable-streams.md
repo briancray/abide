@@ -65,7 +65,7 @@ An implementer must know the starting point; the spec is honest about the gap.
   JSON.stringify(value).length` recorded **once at settle** (`cell.ts:126-133,283-288`). That measure
   yields ≈0 for a stream/Response object, so a buffered transcript is invisible to the LRU.
 - **The cache mux carries verbs, not chunks.** A shared cell broadcasts through an injectable `CacheNotify
-  = (verb: "invalidate"|"refresh"|"amend", args, value?) => void` (`cell.ts:64`); the wire frame is
+  = (verb: "invalidate"|"refresh"|"publish", args, value?) => void` (`cell.ts:64`); the wire frame is
   `CacheFrame = { verb, value? }` (`cacheChannels.ts:23`) over an ephemeral `SocketHub` with **no tail
   replay** (`cacheChannels.ts:53`). Channels are keyed by **route name**, not cell identity:
   `cacheChannelName(rpc,args) = "@rpc:"+rpc+":"+canonicalKey(args)` (`cacheChannelName.ts:16`). Join is
@@ -142,7 +142,7 @@ hand-built `Response` returned by a handler is likewise `cache: false` (opaque, 
 replayable — see §4).
 
 **Mutation public surface mirrors a read (full symmetry).** A cell-backed mutation exposes the SAME
-surface as a read — `peek`/`pending`/`refreshing`/`refresh`/`invalidate`/`amend`/`watch`/`snapshot`/
+surface as a read — `peek`/`pending`/`refreshing`/`refresh`/`invalidate`/`publish`/`watch`/`snapshot`/
 `seed`/`raw`/`isError` plus the streaming chunk probes (`makeRpc.ts` `attachSurface`). POST/PUT/PATCH/
 DELETE return `MutationSurface<Args, R>` (`Mutation extends Rpc` for a value handler, `StreamMutation
 extends StreamRead` for a streaming one). The only differences are transport (method + args-in-body +
@@ -245,7 +245,7 @@ interface ReplayableStream<T> {
   aborted: boolean      // terminal: torn down by policy/invalidate (a distinct terminal from error)
   bytes: number         // running Σ measureBytes(chunk), for LRU/cap accounting
   refCount: number      // live attachments (consumers currently iterating)
-  generation: number    // bumped by amend/refresh; cursors re-replay from 0 on change
+  generation: number    // bumped by publish/refresh; cursors re-replay from 0 on change
   abort: () => void      // aborts the owning source's AbortController (§3)
   consume(): AsyncIterable<T>  // a FRESH cursor view — one per consumer
 }
@@ -275,7 +275,7 @@ wire.
 **Streaming read surface + reactive peek (typed, built).** `GET`/`HEAD` return a **conditional** type:
 a handler yielding `AsyncIterable<C>` produces a `StreamRead<Args, C>`, a value handler the usual
 `Rpc<Args, T>`. `StreamRead` keeps `peek` as the canonical "current value" read (so it means the same
-thing on both surfaces) and drops the meaningless value verbs (`amend`/`snapshot`):
+thing on both surfaces) and drops the meaningless value verbs (`publish`/`snapshot`):
 - `fn.peek(args): C | undefined` — the non-blocking **most-recent chunk** (a stream's "current value"),
   reactive (re-renders as chunks arrive; reading it also kicks the source). This is the "just the latest
   value" read — `peek()` *is* the latest, no `.at(-1)`.
@@ -286,7 +286,7 @@ thing on both surfaces) and drops the meaningless value verbs (`amend`/`snapshot
 Reactivity rides a **separate per-slot `streamTick` signal** bumped on each chunk push and on the
 terminal — kept distinct from the state-machine `signal` the bare read subscribes to, so per-chunk
 `peek()` updates never restart a `{#for await}`. The editor distinguishes the two surfaces at author
-time (stream reads reject `.amend`/`.snapshot`; value reads reject `.chunks`/`.done`), closing the
+time (stream reads reject `.publish`/`.snapshot`; value reads reject `.chunks`/`.done`), closing the
 auxiliary-surface typing gap the earlier resolution left open.
 
 **Byte accounting & the buffer bound (built).** A stream's transcript is measured **incrementally** — the
@@ -354,10 +354,10 @@ page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`)
   throws** `error` (partial progress preserved before the failure surfaces). An errored/aborted stream
   is retained per `ttl` with the clock starting at error/abort time (like a cell error slot,
   `cell.ts:226-231`); a joiner within `ttl` replays-then-throws, after `ttl` re-runs.
-- **`amend` is not overloaded onto streams.** `amend(args, T | updater)` (`cell.ts:375-395`) replaces
+- **`publish` is not overloaded onto streams.** `publish(args, T | updater)` (`cell.ts:375-395`) replaces
   the whole slot value and broadcasts a JSON `CacheFrame`; for a stream slot `T` is the whole transcript,
   not a chunk, and the ReplayableStream (with its live `waiters`) is not JSON-serializable. First build:
-  **`amend`/`refresh` on an open stream throw** a clear error ("amend is not supported on a streaming
+  **`publish`/`refresh` on an open stream throw** a clear error ("publish is not supported on a streaming
   cache slot; invalidate to re-run"). `invalidate` on an open stream is defined: **abort the source**
   (`slot.abort()`), terminate live consumers gracefully at chunks-so-far (set `aborted`), bump
   `generation`, and remove the slot. A future `fn.append(args, chunk: T)` verb with its own JSON frame
@@ -493,7 +493,7 @@ and dropped until then.
 
 | Frame kind | Shape | Channel / transport | Carries |
 | --- | --- | --- | --- |
-| Cache verb | `CacheFrame { verb, value? }` (`cacheChannels.ts:23`) | `@rpc:<name>:<key>` mux | invalidate/refresh/amend — **verbs only, never chunks** |
+| Cache verb | `CacheFrame { verb, value? }` (`cacheChannels.ts:23`) | `@rpc:<name>:<key>` mux | invalidate/refresh/publish — **verbs only, never chunks** |
 | Stream replay | `jsonl`/`sse` body | `GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>` | replay `chunks[from..]` then live — **read-only**: a streaming mutation is consumable client-side via `{#for await}`, but the `?__abide_from=` RESUME endpoint stays `GET`-only (`router.ts` gates it on `__rpc.read`), since replaying a POST/PUT/… over a GET would re-trigger the effect. This is the one deliberate read/mutation asymmetry. |
 | Seed (value) | `SeedRead { name, args, value }` (`pages.ts:170`) | hydration payload | a resolved value |
 | Seed (stream) | `StreamHandle { listId, name, args, done, count, values? }` | hydration payload | inline transcript (A) or slot handle (B) |
@@ -512,7 +512,7 @@ and dropped until then.
   cap and the BOUNDED/OVERFLOWED split (§4). A full-history infinite feed is a **socket** (tail policy),
   which this converges with. Finite completions (the primary case) buffer wholly and cheaply.
 - **`invalidate` mid-stream** aborts the source and terminates live consumers at chunks-so-far
-  (`aborted` terminal); `amend`/`refresh` on an open stream throw (§4). Whole-callable / partial-args
+  (`aborted` terminal); `publish`/`refresh` on an open stream throw (§4). Whole-callable / partial-args
   `invalidate()` still only broadcasts on its own `(name, args)` channel — remote fan-out for non-exact
   args is the pre-existing shared-cache limit, not changed here.
 
@@ -589,7 +589,7 @@ FormData/hand-built-Response always `cache: false`. Tests:
 - two distinct concurrent **file** uploads → never collide, both execute (file-bearing FormData is
   `cache: false`).
 - Mutation public surface mirrors a read (full symmetry): `peek`/`pending`/`refreshing`/`refresh`/
-  `invalidate`/`amend`/`watch`/`snapshot`/`seed`/`raw` all present, plus the streaming chunk probes for
+  `invalidate`/`publish`/`watch`/`snapshot`/`seed`/`raw` all present, plus the streaming chunk probes for
   a streaming mutation. The default `ttl: 0` slot is transient, so the probes reflect a retained value
   only when the author opts into `cache: { ttl }`; `__rpc.read` stays `false` (transport still keys off
   it — args in body + CSRF gate).
@@ -646,7 +646,7 @@ refactor on the critical path.
 
 ## Deferred (explicitly out of scope for the first build)
 - **`fn.append(args, chunk: T)`** stream-delta verb + its `{ verb: "append", chunk }` frame and
-  remote-apply (§4). First build forbids `amend`/`refresh` on an open stream.
+  remote-apply (§4). First build forbids `publish`/`refresh` on an open stream.
 - **Cross-instance replay** (horizontal backplane, `sockets.md` S3.3).
 - **Multi-source `{#for await}`** blocks and their `max(timeout)` budget (§6).
 - **Client-side cross-tab chunk relay** (a `BroadcastChannel` transcript) — server-mediated only for now.

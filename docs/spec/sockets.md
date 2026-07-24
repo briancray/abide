@@ -64,7 +64,7 @@ replayable*. Declarative by default (validated pass-through relay); server logic
 
 1. **One multiplexed WebSocket per client** (`/__abide/sockets`); all sockets share it,
    framed by name (not a separate connection). **§8 cache-coherence broadcasts
-   (`amend`/`invalidate`/`refresh`) ride authorized `(rpc, args)` channels on this same
+   (`publish`/`invalidate`/`refresh`) ride authorized `(rpc, args)` channels on this same
    mux** (e.g. `profile:A`), **not** a single global-fanout socket: a client receives a
    channel only if it has **joined** it, and joining a channel **requires authorization to
    read that slot** (you can't join `profile:B`'s channel unless allowed to read

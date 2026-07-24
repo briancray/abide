@@ -53,7 +53,7 @@ the known shortcuts and gaps. Ordered by impact.
    `docs/spec/shared-cache-plan.md`). `cache:{shared:true}` stores slots in a process-global
    `sharedStore()` with LRU (`ABIDE_MAX_SHARED_CACHE_SIZE`) and runs the handler **fail-closed**
    (scope-exited so `identity()` throws → never caches per-user data; ambient reads without a scope
-   error). Invalidate/refresh/amend on a shared slot **broadcast** a `CacheFrame` over the socket mux
+   error). Invalidate/refresh/publish on a shared slot **broadcast** a `CacheFrame` over the socket mux
    on `@rpc:<name>:<key>` channels (`cacheChannels.ts`); `cache:{tags}` + global
    `invalidate/refresh({tags})` fan out across tagged cells (`cacheTags.ts`, `shared/{invalidate,
    refresh,pending,refreshing}.ts`). **Channel-join auth (the security crux, DECIDED):** `wsSubscribe`
@@ -639,7 +639,7 @@ the known shortcuts and gaps. Ordered by impact.
     - **DONE (implemented during the audit):** `fn.raw` / `fn.isError` / `fn.refreshing` / `fn.watch`
       were documented but unwired — now on the server `Rpc` + client proxy (`makeRpc.ts`,
       `clientProxy.ts`), tested (`rpc.test.ts`). `pageCallable` (`server/internal/pages.ts`) now
-      forwards the FULL read surface (it silently dropped `watch/refreshing/amend/raw/isError/snapshot/
+      forwards the FULL read surface (it silently dropped `watch/refreshing/publish/raw/isError/snapshot/
       seed` on the SSR side → `undefined` in templates). Distinct samples added across the docs for the
       whole RPC call surface + `cache:{tags,shared,ttl}` + global `invalidate/refresh/pending({tags})`
       + PUT/PATCH/DELETE split + component-prop spread + `middleware` onion + `log.channel`.
