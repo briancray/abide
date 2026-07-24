@@ -208,7 +208,7 @@ describe('cell-value widening header', () => {
         const { code } = emitCheck('<p>{x}</p>', parse('<p>{x}</p>'))
         expect(code).toContain('type __AbideWiden<__T>')
         expect(code).toContain(
-            'declare function __abideUnwrap<__T>(cell: __AbideStateCell<__T>): __AbideWiden<__T>;',
+            'declare function __abideUnwrap<__T>(cell: __AbideState<__T>): __AbideWiden<__T>;',
         )
     })
 })

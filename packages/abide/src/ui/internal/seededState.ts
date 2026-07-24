@@ -17,7 +17,7 @@
 
 import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { decode } from '../../shared/internal/codec.ts'
-import type { State, StateCell } from '../../shared/state.ts'
+import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
 
 // `seed.states` is the rich-codec `encode(...)` string of the whole per-component bucket structure (a
@@ -40,20 +40,17 @@ function decodeStates(encoded: HydrationSeed['states']): unknown[][] | undefined
 export function makeSeededState(
     seed: HydrationSeed,
     isHydrating: () => boolean = () => true,
-): State {
+): StateFactory {
     const buckets = decodeStates(seed.states)
     // The shared mount-order component counter — bumped once per component instance (page = 0). Shared by
     // the root and every `.forComponent()` descendant so ids line up with the server's record order.
     let nextComponentId = -1
 
-    function forComponent(): State {
+    function forComponent(): StateFactory {
         nextComponentId++
         const bucket = buckets !== undefined ? buckets[nextComponentId] : undefined
         let ordinal = 0
-        const local = function seededState<T>(
-            initial: T,
-            transform?: (value: T) => T,
-        ): StateCell<T> {
+        const local = function seededState<T>(initial: T, transform?: (value: T) => T): State<T> {
             // Only REPLAY (and advance the local ordinal) while CLAIMING server nodes. In CREATE mode —
             // a fresh mount, or a create-fallback re-mount — there are no server nodes to match, so use
             // the LITERAL initial and DON'T touch the ordinal.
@@ -64,7 +61,7 @@ export function makeSeededState(
                     ? (bucket[index] as T)
                     : initial
             return state(value, transform)
-        } as State
+        } as StateFactory
         // `.computed`/`.linked`/`.shared` never consumed a seed slot; `.forComponent` dispenses the next
         // component's bucket (same shared counter), so a component adapter can localize its child.
         return Object.assign(local, {
@@ -72,7 +69,7 @@ export function makeSeededState(
             linked: state.linked,
             shared: state.shared,
             forComponent,
-        }) as State
+        }) as StateFactory
     }
 
     return forComponent() // the page/root = component bucket 0

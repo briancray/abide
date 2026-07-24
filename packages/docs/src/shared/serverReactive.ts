@@ -7,7 +7,7 @@ import { watch } from 'abide/shared/watch'
 //
 // NOTE the explicit `.read()` / `.write()` calls below. In a `.abide` `<script>` you write bare
 // `total` / `total = x` and the compiler rewrites those to `total.read()` / `total.write(x)` for you.
-// There is no compiler here — plain `.ts` — so you call the `StateCell` methods yourself:
+// There is no compiler here — plain `.ts` — so you call the `State` methods yourself:
 //   total.read()      // tracked read (subscribes the surrounding computed/watch)
 //   total.write(next) // publish a new value
 //   total.peek()      // untracked read (no subscription)

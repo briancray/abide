@@ -19,7 +19,7 @@ import { getContext, runInContext } from '../../shared/internal/context.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
-import type { State, StateCell } from '../../shared/state.ts'
+import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
@@ -102,21 +102,21 @@ function pageImports(
 // instance in mount order; `forComponent()` opens the next bucket and returns a recorder bound to it. The
 // page + its layouts share the root bucket (bucket 0); each `<Component/>` adapter opens its own, so a
 // component's `state()`-sequence divergence stays inside its bucket. See §5 / decision 10.
-function makeRecordingState(): State {
+function makeRecordingState(): StateFactory {
     const buckets = getContext().states as unknown as unknown[][]
-    function forComponent(): State {
+    function forComponent(): StateFactory {
         const bucket: unknown[] = []
         buckets.push(bucket)
-        const rec = function recordState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
+        const rec = function recordState<T>(initial: T, transform?: (value: T) => T): State<T> {
             bucket.push(initial)
             return state(initial, transform)
-        } as State
+        } as StateFactory
         return Object.assign(rec, {
             computed: state.computed,
             linked: state.linked,
             shared: state.shared,
             forComponent,
-        }) as State
+        }) as StateFactory
     }
     return forComponent() // the page/root = component bucket 0
 }

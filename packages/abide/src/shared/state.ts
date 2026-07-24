@@ -5,7 +5,7 @@
 // this declaration returns and rewrites every reference — `count` → `count.read()`, `count = x` →
 // `count.write(x)` — so the bare name reads and writes the underlying signal.
 //
-// A `StateCell` is a small branded record over the M1 signal substrate. The brand is a global-registry
+// A `State` is a small branded record over the M1 signal substrate. The brand is a global-registry
 // symbol so the analysis can detect a cell (syntactically, at the declaration) without importing
 // anything from here (keeps the one-export-per-file rule intact). Cells are NOT callable — the
 // `.read()/.write()` rewrite is what makes `count` behave like a plain value.
@@ -25,7 +25,7 @@ const isClient = typeof document !== 'undefined'
 
 // A branded reactive cell. `read()` tracks; `write()` publishes; `peek()` reads untracked. `computed`
 // cells throw on `write`.
-export interface StateCell<T> {
+export interface State<T> {
     [STATE_CELL]: StateKind
     read(): T
     write(value: T): void
@@ -34,19 +34,19 @@ export interface StateCell<T> {
 
 // The public `state` surface: callable to make a writable cell, with `.computed` / `.linked` /
 // `.shared` factories.
-export interface State {
-    <T>(initial: T, transform?: (value: T) => T): StateCell<T>
-    computed<T>(fn: () => T): StateCell<T>
+export interface StateFactory {
+    <T>(initial: T, transform?: (value: T) => T): State<T>
+    computed<T>(fn: () => T): State<T>
     // Two overloads so the value type is precise in BOTH shapes: without a transform the cell holds the
-    // SOURCE type (`state.linked(() => count)` → `StateCell<number>`), with one it holds the transform's
+    // SOURCE type (`state.linked(() => count)` → `State<number>`), with one it holds the transform's
     // RETURN type. A single `transform?` param cannot express this — it would leave the no-transform value
     // type uninferable (`unknown`/`any`).
-    linked<S>(source: () => S): StateCell<S>
-    linked<S, T>(source: () => S, transform: (value: S) => T): StateCell<T>
-    shared<T>(key: string, initial: T): StateCell<T>
+    linked<S>(source: () => S): State<S>
+    linked<S, T>(source: () => S, transform: (value: S) => T): State<T>
+    shared<T>(key: string, initial: T): State<T>
 }
 
-function makeState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
+function makeState<T>(initial: T, transform?: (value: T) => T): State<T> {
     const backing = signal<T>(transform ? transform(initial) : initial)
     return {
         [STATE_CELL]: 'state',
@@ -56,7 +56,7 @@ function makeState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
     }
 }
 
-function makeComputed<T>(fn: () => T): StateCell<T> {
+function makeComputed<T>(fn: () => T): State<T> {
     const derived = computed<T>(fn)
     return {
         [STATE_CELL]: 'computed',
@@ -70,7 +70,7 @@ function makeComputed<T>(fn: () => T): StateCell<T> {
 
 // A writable cell whose value is reseeded whenever `source` changes. Local writes hold until the next
 // reseed. The reseed effect lives for the component's lifetime (owned by the instance scope).
-function makeLinked<S, T>(source: () => S, transform?: (value: S) => T): StateCell<T> {
+function makeLinked<S, T>(source: () => S, transform?: (value: S) => T): State<T> {
     const backing = signal<T>(undefined as unknown as T)
     let seeded = false
     effect(() => {
@@ -124,7 +124,7 @@ function ensureChannel(): BroadcastChannel | undefined {
     return sharedChannel
 }
 
-function makeShared<T>(key: string, initial: T): StateCell<T> {
+function makeShared<T>(key: string, initial: T): State<T> {
     if (!isClient) {
         // Server: isolated per-render cell (no cross-request registry).
         const backing = signal<T>(initial)
@@ -160,7 +160,7 @@ function makeShared<T>(key: string, initial: T): StateCell<T> {
     }
 }
 
-export const state: State = Object.assign(makeState as State, {
+export const state: StateFactory = Object.assign(makeState as StateFactory, {
     computed: makeComputed,
     linked: makeLinked,
     shared: makeShared,

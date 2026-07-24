@@ -9,7 +9,7 @@
 import { expect, test } from 'bun:test'
 import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { encode } from '../../shared/internal/codec.ts'
-import type { State, StateCell } from '../../shared/state.ts'
+import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
 import { loadEmitted } from './emit.ts'
 import { makeSeededState } from './seededState.ts'
@@ -62,12 +62,12 @@ test('.computed / .linked pass through and do NOT advance the ordinal', () => {
 })
 
 // A recording `state` for the SERVER side of the round-trip: pushes each raw initial in call order.
-function recordingState(recorded: unknown[]): State {
+function recordingState(recorded: unknown[]): StateFactory {
     return Object.assign(
-        function record<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
+        function record<T>(initial: T, transform?: (value: T) => T): State<T> {
             recorded.push(initial)
             return state(initial, transform)
-        } as State,
+        } as StateFactory,
         { computed: state.computed, linked: state.linked },
     )
 }

@@ -6,10 +6,10 @@
 //   imports are real errors), the script DECLARATIONS/statements, AND the template body as real
 //   lexically-scoped TS so TS's own scoping + narrowing flow through it. One rewrite: a top-level
 //   `let/const/var x = <init>` becomes `let x = __abideUnwrap(<init>)`. `__abideUnwrap` maps a
-//   `StateCell<T>` to its VALUE type `T` (with `__AbideWiden` repairing degenerate empty/nullish inits)
+//   `State<T>` to its VALUE type `T` (with `__AbideWiden` repairing degenerate empty/nullish inits)
 //   and is identity for everything else — mirroring the runtime `$def` accessor, where a `.abide` script
 //   reads/writes a state var as its underlying value (`count++`), so a state var must type-check as `T`,
-//   not `StateCell<T>`. Without this every use of a cell would be a false positive.
+//   not `State<T>`. Without this every use of a cell would be a false positive.
 //   The generated module is type-checked with TypeScript 7 (the same `typescript/unstable` sync API
 //   `deriveSchema` uses; under Bun that API cannot open its pipe, so — exactly like `deriveSchema` —
 //   we bridge through a `node` subprocess running THIS file). Diagnostics are mapped back to the

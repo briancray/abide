@@ -38,9 +38,9 @@ export interface CheckModule {
 
 // Synthetic preamble. Self-contained (no imports → resolves in any project). `__abideUnwrap` models the
 // runtime `$def` accessor: in a `.abide` script a state var reads/writes as its underlying VALUE, so a
-// cell must type as its value `__T` (not `StateCell<__T>`) — that is what gives `let bar = state<T>(x)`,
+// cell must type as its value `__T` (not `State<__T>`) — that is what gives `let bar = state<T>(x)`,
 // `let bar: T = state(x)`, and inferred `let bar = state(x)` the SAME `bar: T` a plain `let` would have,
-// across `state`/`.linked`/`.computed`/`.shared` (all `StateCell`-shaped). `__AbideWiden` repairs the one
+// across `state`/`.linked`/`.computed`/`.shared` (all `State`-shaped). `__AbideWiden` repairs the one
 // place bare inference diverges from a plain `let`: an empty/nullish initializer flows through the generic
 // factory CALL and so misses TS's evolving-any special-case (`state([])` → `never[]`, `state(null)` →
 // `null`), which would false-positive on the very reassignments those slots exist for — widen them back to
@@ -48,9 +48,9 @@ export interface CheckModule {
 // an expression to be type-checked without an unused-expression lint; `__entries` types `{#for item, i}`
 // as `[index, item]`; `children` is the intrinsic slot callable.
 const HEADER =
-    `interface __AbideStateCell<__T> { read(): __T; write(value: __T): void; peek(): __T; }\n` +
+    `interface __AbideState<__T> { read(): __T; write(value: __T): void; peek(): __T; }\n` +
     `type __AbideWiden<__T> = [__T] extends [never] ? any : __T extends readonly never[] ? any[] : [__T] extends [null | undefined] ? any : __T;\n` +
-    `declare function __abideUnwrap<__T>(cell: __AbideStateCell<__T>): __AbideWiden<__T>;\n` +
+    `declare function __abideUnwrap<__T>(cell: __AbideState<__T>): __AbideWiden<__T>;\n` +
     `declare function __abideUnwrap<__T>(value: __T): __T;\n` +
     `declare function __ref(value: unknown): void;\n` +
     `declare function __entries<__T>(list: Iterable<__T> | ArrayLike<__T>): IterableIterator<[number, __T]>;\n` +
