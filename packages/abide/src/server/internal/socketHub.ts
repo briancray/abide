@@ -46,6 +46,13 @@ export class SocketHub<T> {
         for (const subscriber of this.subscribers) subscriber.push(message)
     }
 
+    // Drop the retained state (tail + last) WITHOUT detaching live subscribers — the room's `invalidate`:
+    // future joiners replay nothing until the next publish; current subscribers keep receiving live.
+    clearTail(): void {
+        this.tail.length = 0
+        this.last = undefined
+    }
+
     // The `ttl`-windowed latest message — backs the isomorphic `peek()` (CS4.2). `undefined` before
     // the first publish or once the last message ages past `ttl` (matches what a fresh subscriber
     // would replay). `ttl: Infinity` (the default) → sticky.
