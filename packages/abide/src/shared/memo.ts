@@ -27,6 +27,7 @@ import { getContext, serverDefaultCache } from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
 import { effect, type Signal, signal, untrack } from './internal/reactive.ts'
+import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
 import { markSettled } from './internal/settledRead.ts'
@@ -105,26 +106,18 @@ export interface MemoOptions {
     tags?: string[]
 }
 
-export interface Memo<Args, T> {
+// A `memo` is the SCOPED / LOSSLESS / PULL implementation of the shared `ReactiveReadSurface` (the
+// probe/verb vocabulary — peek/pending/refreshing/error/chunks/done/refresh/invalidate/publish/watch,
+// inherited below), plus the memo-specific extras: the awaitable bare read, hydration seed/snapshot, and
+// stream resume. A `socket`/`channel` implements the SAME surface over its hub (ADR 0023 step 6).
+export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     // THE READ (Promise-read model): the bare call is the awaitable, coalesced load. It ALSO subscribes
     // the calling reactive context to the slot, so a reactive `{await memo()}` re-runs and re-awaits when
     // the slot invalidates. Resolves with the value or rejects with the error.
     (args: Args): Promise<T>
-    // Reactive PEEK: the non-blocking snapshot. Subscribes to the slot and kicks a coalesced load when
-    // cold, returning the current value or undefined while pending (this was the old bare call).
-    peek(args: Args): T | undefined
     // @deprecated Use the bare call — `memo(args)` IS the load now. Retained as a non-subscribing alias
     // during migration (identical to the bare call minus the reactive subscription).
     load(args: Args): Promise<T>
-    // No value yet (first load in flight). Reactive.
-    pending(args: Args): boolean
-    // Retained error or undefined (a stream slot's error is read off the ReplayableStream). Reactive.
-    error(args: Args): unknown
-    // STREAM probes (replayable-streams.md §4). Reactive; undefined/false for a non-stream slot. `peek()`
-    // above returns the most-recent chunk for a stream; `chunks` = a copy of the transcript so far,
-    // `done` = the stream has closed.
-    chunks(args: Args): unknown[] | undefined
-    done(args: Args): boolean
     // Resume a RETAINED stream transcript from chunk index `from` (replay `chunks[from..]` then live) —
     // the server side of the SSR→client attach (replayable-streams.md §5). `fresh: true` (with no cursor)
     // means no retained transcript exists, so the caller must run fresh from 0 and REPLACE, not append.
@@ -132,19 +125,6 @@ export interface Memo<Args, T> {
         args: Args,
         from: number,
     ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean }
-    // Revalidating over a retained value. Reactive.
-    refreshing(args: Args): boolean
-    // Re-run the load, keep the stale value visible (refreshing=true) until it resolves.
-    refresh(args?: Partial<Args> | Args): void
-    // Drop matching slot(s) back to idle; lazy reload on next read.
-    invalidate(args?: Partial<Args> | Args): void
-    // Mutate the retained value in place: value-form or updater-form.
-    publish(args: Args, next: T | ((current: T | undefined) => T)): void
-    // Run handler on slot change; returns a dispose function. Per-cardinality: a VALUE slot fires on an
-    // actual value change (a `refreshing` flag-flip is not one); a STREAM slot fires per chunk append,
-    // handing over the LATEST chunk (coalesced per flush, like `peek`). Firing is by chunk COUNT, so the
-    // settling terminal does not re-deliver.
-    watch(args: Args, handler: (value: T | undefined) => void): () => void
     // Every resolved slot in the active context — the SSR record source for the hydration seed
     // (rpc-core §5). Only `value`-state slots are reported; pending/error/idle are skipped.
     snapshot(): Array<{ args: Args; value: T }>
