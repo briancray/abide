@@ -7,12 +7,17 @@ import { request } from 'abide/server/request'
 // The RPC middleware ONION, two layers deep. Each layer is `(next) => Response`; it owns the call to
 // the layer beneath. `next()` runs the rest of the chain (and eventually the handler).
 
-// Layer 1 — authorize. A GET carries its args as JSON under the `?args=` query param; the middleware
-// reads the raw request URL and inspects them. When `allow` is "no" it returns an `error(403)`
-// Response WITHOUT calling `next()` — a short-circuit, so layer 2 and the handler never run.
+// Layer 1 — authorize. A read carries its args in the URL in EITHER documented form: the canonical
+// `?__abide_args=<json>` blob a machine caller (the browser proxy) emits, or flat per-field params
+// (`?allow=no`) for hand-testing. The reserved param is namespaced so it can never collide with a
+// handler's own field. When `allow` is "no" this returns an `error(403)` Response WITHOUT calling
+// `next()` — a short-circuit, so layer 2 and the handler never run.
 const authorize = (next: () => Response | Promise<Response>) => {
-    const raw = new URL(request().url).searchParams.get('args')
-    let allow = 'yes'
+    const params = new URL(request().url).searchParams
+    // Flat form first as the default, then let the canonical blob win if present (same precedence the
+    // router applies).
+    let allow = params.get('allow') ?? 'yes'
+    const raw = params.get('__abide_args')
     if (raw !== null) {
         try {
             const parsed = JSON.parse(raw) as { allow?: string }

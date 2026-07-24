@@ -57,9 +57,11 @@ test('loadApp prefers a baked dist/schemas.json over live derivation (no tsgo)',
     const dir = await materializeApp('read', THING_RPC)
     // A SENTINEL baked schema that live derivation would NEVER produce — if the route ends up with it,
     // loadApp used the baked file (not tsgo).
+    // `as const` on the `type` fields: a widened `string` is not assignable to `JSONSchema['type']`
+    // (`JSONSchemaType | JSONSchemaType[]`), which fails the assertion's overload resolution.
     const sentinel = {
-        type: 'object',
-        properties: { id: { type: 'string' } }, // deliberately `string`, not the real `number`
+        type: 'object' as const,
+        properties: { id: { type: 'string' as const } }, // deliberately `string`, not the real `number`
         required: ['id'],
     }
     await mkdir(join(dir, 'dist'), { recursive: true })
