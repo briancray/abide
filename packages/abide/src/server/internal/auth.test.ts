@@ -5,6 +5,7 @@ import {
     isProd,
     requireSecretForAuthedSet,
     resolveIdentity,
+    unrecognizedNodeEnv,
 } from './auth.ts'
 import type { Principal } from './scope.ts'
 import { seal } from './seal.ts'
@@ -132,6 +133,52 @@ describe('isProd / requireSecretForAuthedSet', () => {
         expect(isProd()).toBe(false)
         if (originalNodeEnv === undefined) delete Bun.env.NODE_ENV
         else Bun.env.NODE_ENV = originalNodeEnv
+    })
+
+    // H2: isProd is the single gate for the Secure cookie, HSTS, and the identity-secret fail-fast, so a
+    // case/whitespace misconfig must fail SAFE (enable the prod posture), and unset must be non-prod.
+    test.each([
+        ['production', true],
+        ['Production', true],
+        ['PRODUCTION', true],
+        ['  production  ', true],
+        ['development', false],
+        ['test', false],
+        ['prod', false],
+        ['staging', false],
+        ['', false],
+    ])('isProd(%p) === %p (case/whitespace-insensitive, fail-safe)', (value, expected) => {
+        Bun.env.NODE_ENV = value
+        expect(isProd()).toBe(expected)
+        if (originalNodeEnv === undefined) delete Bun.env.NODE_ENV
+        else Bun.env.NODE_ENV = originalNodeEnv
+    })
+
+    test('isProd is false when NODE_ENV is unset', () => {
+        delete Bun.env.NODE_ENV
+        expect(isProd()).toBe(false)
+        if (originalNodeEnv !== undefined) Bun.env.NODE_ENV = originalNodeEnv
+    })
+
+    // unrecognizedNodeEnv drives the boot warning: only a SET, non-standard value is flagged.
+    test.each([
+        ['production', undefined],
+        ['Production', undefined],
+        ['development', undefined],
+        ['test', undefined],
+        ['prod', 'prod'],
+        ['staging', 'staging'],
+    ])('unrecognizedNodeEnv(%p) === %p', (value, expected) => {
+        Bun.env.NODE_ENV = value
+        expect(unrecognizedNodeEnv()).toBe(expected)
+        if (originalNodeEnv === undefined) delete Bun.env.NODE_ENV
+        else Bun.env.NODE_ENV = originalNodeEnv
+    })
+
+    test('unrecognizedNodeEnv is undefined when NODE_ENV is unset (conventional dev, not flagged)', () => {
+        delete Bun.env.NODE_ENV
+        expect(unrecognizedNodeEnv()).toBeUndefined()
+        if (originalNodeEnv !== undefined) Bun.env.NODE_ENV = originalNodeEnv
     })
 
     test('does not throw for an anonymous set', () => {

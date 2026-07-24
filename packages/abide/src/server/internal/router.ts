@@ -34,7 +34,13 @@ import { jsonl } from '../jsonl.ts'
 import type { Socket } from '../socket.ts'
 import { sse } from '../sse.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
-import { clearIdentityCookieHeader, identityCookieHeader, isProd, resolveIdentity } from './auth.ts'
+import {
+    clearIdentityCookieHeader,
+    identityCookieHeader,
+    isProd,
+    resolveIdentity,
+    unrecognizedNodeEnv,
+} from './auth.ts'
 import {
     type CacheFrame,
     cacheChannelHub,
@@ -748,7 +754,7 @@ async function dispatch(
     // M8a output validation — DEV ONLY contract-drift catch. A mismatch logs loudly but never becomes
     // a client error.
     const outputSchema = meta.options.schemas?.output
-    if (outputSchema !== undefined && Bun.env.NODE_ENV !== 'production') {
+    if (outputSchema !== undefined && !isProd()) {
         const checked = await validateStandard(asStandardSchema(outputSchema), result)
         if (!checked.ok) {
             log.channel('abide:rpc').warn(
@@ -776,6 +782,15 @@ export function createApp(config: AppConfig = {}): App {
     if (isProd() && (Bun.env.APP_URL === undefined || Bun.env.APP_URL.length === 0)) {
         log.warn(
             'APP_URL is unset in production — the CSRF Origin/Referer check and the CSWSH WebSocket-upgrade gate are DISABLED (both fall open). Set APP_URL to your public origin to enable them.',
+        )
+    }
+    // AU5/AU8: NODE_ENV is the single production gate (Secure cookie, HSTS, the identity-secret fail-fast).
+    // A set-but-unrecognized value (`prod`, `staging`, …) is treated as non-production and silently relaxes
+    // all three — warn once so a misconfigured deploy is loud rather than insecure-by-typo.
+    const badNodeEnv = unrecognizedNodeEnv()
+    if (badNodeEnv !== undefined) {
+        log.warn(
+            `NODE_ENV="${badNodeEnv}" is not recognized — treating as non-production. The Secure cookie flag, HSTS, and the authenticated identity.set() secret requirement are all OFF. Set NODE_ENV=production to enable the production security posture.`,
         )
     }
     // CO2.4: server bind time — the clock for `/__abide/health`'s `startedAt`/`uptime`. Captured here

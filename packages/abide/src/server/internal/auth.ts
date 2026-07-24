@@ -16,8 +16,25 @@ import { seal, ttlMs, unseal } from './seal.ts'
 
 const APP_OWNER: Principal = { id: 'app-owner', authenticated: true, appOwner: true }
 
+// The single production gate — drives the `Secure` cookie flag, HSTS, and the authenticated
+// `identity.set()` secret fail-fast (AU5.3). Case/whitespace-insensitive ON PURPOSE: a `Production` /
+// `PRODUCTION ` misconfiguration must still enable the prod security posture (fail-SAFE) rather than
+// silently degrade it. An unset NODE_ENV is development, per the Node convention. A set-but-unrecognized
+// value (`prod`, `staging`) is treated as non-production and warned once at boot — see `createApp`.
 export function isProd(): boolean {
-    return Bun.env.NODE_ENV === 'production'
+    return (Bun.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+}
+
+// A NODE_ENV value that is set but is not one of the recognized modes — the case that silently relaxes
+// the security posture and therefore warrants a loud boot warning. `undefined`/empty (→ development) is
+// conventional and not flagged.
+export function unrecognizedNodeEnv(): string | undefined {
+    const raw = Bun.env.NODE_ENV
+    if (raw === undefined || raw.length === 0) return undefined
+    const normalized = raw.trim().toLowerCase()
+    if (normalized === 'production' || normalized === 'development' || normalized === 'test')
+        return undefined
+    return raw
 }
 
 // Constant-time string comparison — avoids leaking how much of ABIDE_APP_TOKEN matched via

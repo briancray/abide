@@ -252,7 +252,11 @@ handler/helper/middleware stays in control):
 2. **`Referrer-Policy: strict-origin-when-cross-origin`** on all — the modern browser default,
    made explicit.
 3. **`Strict-Transport-Security: max-age=63072000; includeSubDomains`** in **production only**
-   (dev is plain http; sending HSTS there would poison `localhost`).
+   (dev is plain http; sending HSTS there would poison `localhost`). "Production" = `NODE_ENV` matching
+   `production` **case/whitespace-insensitively** (so `Production` fails *safe* into the prod posture, not
+   out of it) — the single gate that also drives the `Secure` cookie flag and the AU5.3 identity-secret
+   fail-fast. Unset `NODE_ENV` is development (Node convention); a *set-but-unrecognized* value (`prod`,
+   `staging`) is treated as non-production and **warned once at boot** so the relaxed posture is loud.
 4. **`X-Frame-Options: SAMEORIGIN`** on HTML documents (clickjacking) — an app that must be
    framed overrides it.
 5. **Default cache posture `Cache-Control: private, no-cache` + `Vary: Cookie`** for any
