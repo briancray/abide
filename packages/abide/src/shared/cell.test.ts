@@ -198,6 +198,49 @@ describe('cell — amend', () => {
             expect(seen).toContain(99)
         })
     })
+
+    // REGRESSION GUARD for the per-cardinality watch fix: `refresh` flips `refreshing` on over the
+    // retained value and then settles it. That flag-flip is NOT a value change, so a refresh landing one
+    // new value must fire the handler exactly once — never twice.
+    test('watch fires exactly once for a refresh that lands one new value', async () => {
+        await withContext(async () => {
+            let next = 1
+            const c = cell(async (_n: number) => next++)
+            await c.load(1)
+            const seen: (number | undefined)[] = []
+            const dispose = c.watch(1, (value) => seen.push(value))
+            c.refresh(1)
+            await tick()
+            await tick()
+            dispose()
+            expect(seen).toEqual([2])
+        })
+    })
+
+    // `watch` used to be DEAD on a stream slot: its effect read `state.value`, which is permanently
+    // undefined for a stream, so the handler never fired at all.
+    test('watch fires per chunk on a stream slot, handing over the latest chunk', async () => {
+        await withContext(async () => {
+            const c = cell(async function* (_n: number) {
+                for (const value of ['a', 'b', 'c']) {
+                    yield value
+                    await delay(5)
+                }
+            })
+            const seen: unknown[] = []
+            const dispose = c.watch(1, (value) => seen.push(value))
+            for await (const _ of (await c.load(1)) as AsyncIterable<string>) {
+                // drain so the transcript fills chunk by chunk
+            }
+            await tick()
+            dispose()
+            // Delivers the newest chunk each time it fires, and the settling terminal does not
+            // re-deliver the final chunk a second time.
+            expect(seen.length).toBeGreaterThan(0)
+            expect(seen.at(-1)).toBe('c')
+            expect(seen.filter((v) => v === 'c').length).toBe(1)
+        })
+    })
 })
 
 describe('cell — reactive probes', () => {

@@ -140,7 +140,10 @@ export interface Cell<Args, T> {
     invalidate(args?: Partial<Args> | Args): void
     // Mutate the retained value in place: value-form or updater-form.
     amend(args: Args, next: T | ((current: T | undefined) => T)): void
-    // Run handler on slot change; returns a dispose function.
+    // Run handler on slot change; returns a dispose function. Per-cardinality: a VALUE slot fires on an
+    // actual value change (a `refreshing` flag-flip is not one); a STREAM slot fires per chunk append,
+    // handing over the LATEST chunk (coalesced per flush, like `peek`). Firing is by chunk COUNT, so the
+    // settling terminal does not re-deliver.
     watch(args: Args, handler: (value: T | undefined) => void): () => void
     // Every resolved slot in the active context — the SSR record source for the hydration seed
     // (rpc-core §5). Only `value`-state slots are reported; pending/error/idle are skipped.
@@ -775,8 +778,35 @@ export function cell<Args, T>(
         const slot = ensureSlot(args)
         let first = true
         let last: T | undefined
+        // Chunk count for a STREAM slot. An append advances it; the terminal ALSO bumps the tick
+        // (see startStream's finally) but does not advance the count — so settling never re-delivers a
+        // chunk the handler already saw.
+        let lastCount = 0
         return effect(() => {
             const state = slot.signal()
+            // STREAM slot: `value` is permanently undefined here (§4), so the scalar path below could
+            // never fire — `watch` was silently dead on every stream and socket. Subscribe to the
+            // per-chunk tick and deliver the LATEST chunk, the same "current value" meaning `peek`
+            // already carries for a stream (and the same cast precedent). Effect runs are COALESCED:
+            // several appends inside one flush deliver once, with the newest chunk — `watch` reports
+            // *that it changed*; iterate the stream when you need every chunk.
+            if (state.status === 'stream' && state.stream !== undefined) {
+                if (slot.streamTick !== undefined) slot.streamTick()
+                const chunks = state.stream.chunks
+                const count = chunks.length
+                const latest = (count > 0 ? chunks[count - 1] : undefined) as T | undefined
+                if (first) {
+                    first = false
+                    lastCount = count
+                    last = latest
+                    return
+                }
+                if (count === lastCount) return
+                lastCount = count
+                last = latest
+                untrack(() => handler(latest))
+                return
+            }
             const value = state.value
             // Fire ONLY on an actual value change — not on non-value transitions (e.g. `refresh` flips
             // the `refreshing` flag on over the retained value, then settles the new one: the flag flip

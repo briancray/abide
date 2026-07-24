@@ -52,8 +52,11 @@ const BOUNDS: Bound[] = [
         numerator: 'watch/stream-baseline',
         denominator: 'stream/cell-drain',
         max: 2.5,
-        observed: '≈1.0×',
-        why: 'step 1 makes watch fire per append — a modest rise is intended, a large one is not',
+        // Moved 1.00× → 1.38× when step 1 landed: watch now fires per append instead of being dead on
+        // streams. That rise is INTENDED. The bound guards against it climbing further (e.g. firing per
+        // subscriber × chunk); ~1.8× of headroom remains.
+        observed: '≈1.38× — was 1.0× before the per-cardinality fix',
+        why: 'watch fires per append — a modest rise is intended, a large one is not',
     },
     {
         numerator: 'codec/jsonl-decode',
