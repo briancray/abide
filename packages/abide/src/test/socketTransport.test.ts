@@ -4,7 +4,11 @@
 // closed in cleanup so a stray subscription never hangs the run.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { error } from '../server/error.ts'
+import { identity } from '../server/identity.ts'
+import type { Middleware } from '../server/internal/middleware.ts'
 import { socket } from '../server/socket.ts'
+import { route } from '../shared/route.ts'
 import { createTestApp, type SocketClient, type TestApp } from './createTestApp.ts'
 
 const TEST_TIMEOUT = 5000
@@ -235,6 +239,113 @@ describe('socket transport — HTTP face', () => {
             const app = await start({ sockets: {} })
             const response = await app.fetch('/__abide/sockets/nope')
             expect(response.status).toBe(404)
+        },
+        TEST_TIMEOUT,
+    )
+})
+
+// A per-room guard: the `secret` room is admissible only to the `owner` identity; every other room
+// is public. Reads the room off `route().params` (where the socket-join re-auth places the room args)
+// and the connection identity off `identity()` — the exact rpc middleware model (ADR 0023 rooms).
+const roomGuard: Middleware = (next) => {
+    const room = (route().params as { room?: string }).room
+    if (room === 'secret' && identity().id !== 'owner') return error(403, 'denied')
+    return next()
+}
+
+describe('socket transport — rooms + per-room auth', () => {
+    test(
+        'rooms — a subscriber to room A does not receive room B over the mux',
+        async () => {
+            const feed = socket<string, { room: string }>({ tail: 2 })
+            const app = await start({ sockets: { feed } })
+
+            const c = client(app)
+            const a = c.subscribe<string>('feed', { room: 'a' })
+            await c.ready()
+            await delay(30)
+
+            feed.publish({ room: 'b' }, 'to-b') // must NOT reach room a
+            feed.publish({ room: 'a' }, 'to-a')
+            expect(await take(a, 1, TEST_TIMEOUT)).toEqual(['to-a'])
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'per-room auth — an unauthorized identity is DENIED the guarded room but allowed a public one',
+        async () => {
+            const feed = socket<string, { room: string }>({ tail: 2, middleware: [roomGuard] })
+            const app = await start({ sockets: { feed } })
+
+            const c = client(app) // anonymous
+            c.subscribe('feed', { room: 'secret' })
+            c.subscribe('feed', { room: 'public' })
+            await c.ready()
+
+            expect(
+                await withTimeout(c.ack('feed', { room: 'secret' }), TEST_TIMEOUT, 'ack secret'),
+            ).toBe('error')
+            expect(
+                await withTimeout(c.ack('feed', { room: 'public' }), TEST_TIMEOUT, 'ack public'),
+            ).toBe('ok')
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'per-room auth — the owner identity is admitted to the guarded room and receives its messages',
+        async () => {
+            const feed = socket<string, { room: string }>({ tail: 2, middleware: [roomGuard] })
+            const app = await start({ sockets: { feed } })
+
+            const owner = app.as({ id: 'owner', authenticated: true })
+            const c = owner.socket()
+            openClients.push(c)
+            const s = c.subscribe<string>('feed', { room: 'secret' })
+            await c.ready()
+
+            expect(await withTimeout(c.ack('feed', { room: 'secret' }), TEST_TIMEOUT, 'ack')).toBe(
+                'ok',
+            )
+            await delay(20)
+            feed.publish({ room: 'secret' }, 'classified')
+            expect(await take(s, 1, TEST_TIMEOUT)).toEqual(['classified'])
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'per-room publish auth — an unauthorized client CANNOT publish into a guarded room',
+        async () => {
+            const feed = socket<string, { room: string }>({
+                tail: 2,
+                middleware: [roomGuard],
+                clientPublish: true,
+            })
+            const app = await start({ sockets: { feed } })
+
+            // The owner legitimately subscribes to the guarded room.
+            const owner = app.as({ id: 'owner', authenticated: true })
+            const sub = owner.socket()
+            openClients.push(sub)
+            const s = sub.subscribe<string>('feed', { room: 'secret' })
+            await sub.ready()
+            expect(
+                await withTimeout(sub.ack('feed', { room: 'secret' }), TEST_TIMEOUT, 'ack'),
+            ).toBe('ok')
+            await delay(20)
+
+            // An anonymous client attempts to inject into the guarded room — denied at the publish gate.
+            const attacker = client(app)
+            await attacker.ready()
+            attacker.publish('feed', 'injected', { room: 'secret' })
+            await delay(60)
+
+            // A legitimate server publish proves the room is otherwise live; the injected message must
+            // never have arrived (the owner sees only 'legit').
+            feed.publish({ room: 'secret' }, 'legit')
+            expect(await take(s, 1, TEST_TIMEOUT)).toEqual(['legit'])
         },
         TEST_TIMEOUT,
     )

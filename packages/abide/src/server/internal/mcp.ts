@@ -186,11 +186,12 @@ async function callSocketTool(
         if (sock === undefined) continue
 
         if (name === `${entry.name}_tail`) {
-            return { result: textResult(sock.__socket.tailSnapshot()) }
+            // MCP addresses a socket as a single topic — the void room.
+            return { result: textResult(sock.__socket.tailSnapshot(undefined)) }
         }
         if (entry.clientPublish && name === `${entry.name}_publish`) {
             try {
-                await sock.__socket.ingressPublish(args)
+                await sock.__socket.ingressPublish(undefined, args)
                 return { result: textResult({ ok: true }) }
             } catch (caught) {
                 return {

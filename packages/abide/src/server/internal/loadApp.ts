@@ -68,9 +68,15 @@ function isRoute(value: unknown): value is Route {
     return typeof value === 'function' && '__rpc' in (value as object)
 }
 
-// A socket module's export is a `Socket` — it carries the `__socket` internals handle.
+// A socket module's export is a `Socket` — it carries the `__socket` internals handle. A `Socket` is a
+// CALLABLE (`socket({room})` picks a room; ADR 0023), so it is a `function`, not an `object` — accept
+// either callable or object as long as it carries `__socket`.
 function isSocket(value: unknown): value is Socket<unknown> {
-    return typeof value === 'object' && value !== null && '__socket' in value
+    return (
+        (typeof value === 'object' || typeof value === 'function') &&
+        value !== null &&
+        '__socket' in value
+    )
 }
 
 // rpc/<a>/<b>.ts → "<a>/<b>". Relative path already POSIX from Bun.Glob; strip the `.ts` suffix.

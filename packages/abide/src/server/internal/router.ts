@@ -20,6 +20,7 @@
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
 import { health } from '../../shared/health.ts'
+import { canonicalKey } from '../../shared/internal/codec.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
@@ -33,7 +34,7 @@ import { validationError } from '../../shared/ValidationErrorData.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { jsonl } from '../jsonl.ts'
-import type { Socket } from '../socket.ts'
+import type { ErasedSocket } from '../socket.ts'
 import { sse } from '../sse.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
 import {
@@ -49,7 +50,12 @@ import {
     cacheChannelName,
     publishCacheFrame,
 } from './cacheChannels.ts'
-import { authorizeChannelJoin, isCacheChannel, type SocketConnectionData } from './channelAuth.ts'
+import {
+    authorizeChannelJoin,
+    authorizeSocketJoin,
+    isCacheChannel,
+    type SocketConnectionData,
+} from './channelAuth.ts'
 import { type ClientBuild, clientBuildFor } from './clientBundle.ts'
 import {
     applyCors,
@@ -201,8 +207,7 @@ export type Route = Rpc<any, any> | StreamRead<any, any>
 export interface AppConfig {
     routes?: Record<string, Route>
     middleware?: Middleware[]
-    // biome-ignore lint/suspicious/noExplicitAny: existential socket registry — per-socket message type is erased here; `unknown` breaks assignability through the invariant Socket message type.
-    sockets?: Record<string, Socket<any>>
+    sockets?: Record<string, ErasedSocket>
     // M5a: page.abide sources keyed by exact request path (e.g. '/' → "<h1>…</h1>"). A GET/HEAD nav
     // request matching a page path is SSR'd to a full HTML document. File-based page discovery is M5b.
     pages?: Record<string, string>
@@ -251,9 +256,17 @@ export interface AppConfig {
 }
 
 // Per-connection state on the multiplexed socket WS: the set of live subscriptions this client
-// holds, keyed by socket name → the draining async iterator (so unsub/close can `return()` it).
+// holds, keyed by `subscriptionKey(name, args)` → the draining async iterator (so unsub/close can
+// `return()` it). The key folds in the room so one connection can hold several rooms of one socket.
 interface SocketConnection {
     subscriptions: Map<string, AsyncIterator<unknown>>
+}
+
+// The connection-local key for a subscription. A void socket / `@rpc:` cache channel (no room) keys by
+// bare `name`, identical to before; a roomed user socket folds in `canonicalKey(args)` so distinct rooms
+// of the same socket are distinct subscriptions on one connection.
+function subscriptionKey(name: string, args: unknown): string {
+    return args === undefined ? name : `${name} ${canonicalKey(args)}`
 }
 
 // The multiplexed socket transport (sockets.md S3). One WS per client at `/__abide/sockets`
@@ -275,21 +288,27 @@ function socketOriginAllowed(request: Request): boolean {
     }
 }
 
-// Drain one socket's iterator into the WS, framing each message `{ name, msg }`. Ends when the
-// iterator completes, the client unsubscribed (replaced/removed in the map), or the WS closed.
+// Drain one socket's iterator into the WS, framing each message `{ name, args?, msg }`. `subKey` guards
+// the subscription slot (roomed sockets share a `name`); `args` (the room, or `undefined`) is echoed so
+// the client routes to the right per-room subscription. Ends when the iterator completes, the client
+// unsubscribed (replaced/removed in the map), or the WS closed.
 async function pumpSocketToWs(
     ws: Bun.ServerWebSocket<SocketConnectionData>,
     connection: SocketConnection,
+    subKey: string,
     name: string,
+    args: unknown,
     iterator: AsyncIterator<unknown>,
 ): Promise<void> {
     try {
         while (true) {
             const result = await iterator.next()
             if (result.done === true) break
-            if (connection.subscriptions.get(name) !== iterator) break
+            if (connection.subscriptions.get(subKey) !== iterator) break
             if (ws.readyState !== 1) break
-            ws.send(JSON.stringify({ name, msg: result.value } satisfies MuxDownstream))
+            const frame: MuxDownstream =
+                args === undefined ? { name, msg: result.value } : { name, args, msg: result.value }
+            ws.send(JSON.stringify(frame))
         }
     } catch {
         // Swallow — the connection is tearing down; cleanup happens in `finally`.
@@ -304,23 +323,38 @@ function wsSubscribe(
     name: unknown,
     args: unknown,
     replay: unknown,
-    // biome-ignore lint/suspicious/noExplicitAny: existential socket registry — per-socket message type is erased here; `unknown` breaks assignability through the invariant Socket message type.
-    sockets: Record<string, Socket<any>>,
+    sockets: Record<string, ErasedSocket>,
     config: AppConfig,
 ): void {
     if (typeof name !== 'string') return
-    if (connection.subscriptions.has(name)) return
     // `@rpc:` cache-invalidation channel — the S4.4 exception: per-subscribe authorization against
     // the connection's identity, re-running the target rpc's read gate for the presented args. Cache
     // channels keep SILENT-DENY (their TTL self-heals a missed frame); user sockets do not (below).
     if (isCacheChannel(name)) {
+        if (connection.subscriptions.has(name)) return
         void subscribeCacheChannel(ws, connection, name, args, config)
         return
     }
-    // Bare user-socket path (connect-authed, no per-subscribe recheck; S4.4). Unlike cache channels,
-    // user sockets are OFF silent-deny (client-sockets.md CS2): an unknown socket gets a terminal
-    // sub-error frame (→ client `error()`), a successful join gets a sub-ack (→ clears client
-    // `pending()`). `replay: false` is the hydration join — SSR already painted the backlog (CS5).
+    void subscribeUserSocket(ws, connection, name, args, replay, sockets, config)
+}
+
+// Authorize + join a USER SOCKET room (ADR 0023 rooms). `args` is the room (undefined = the void
+// socket). Unlike cache channels, user sockets are OFF silent-deny (client-sockets.md CS2): an unknown
+// socket OR a denied room gets a terminal sub-error frame (→ client `error()`); a successful join gets a
+// sub-ack (→ clears client `pending()`). Per-room auth re-runs the socket's `middleware` for the room
+// args (`authorizeSocketJoin`); a middleware-less socket is connect-authed. `replay: false` is the
+// hydration join — SSR already painted the backlog (CS5).
+async function subscribeUserSocket(
+    ws: Bun.ServerWebSocket<SocketConnectionData>,
+    connection: SocketConnection,
+    name: string,
+    args: unknown,
+    replay: unknown,
+    sockets: Record<string, ErasedSocket>,
+    config: AppConfig,
+): Promise<void> {
+    const key = subscriptionKey(name, args)
+    if (connection.subscriptions.has(key)) return
     const sock = sockets[name]
     if (sock === undefined) {
         log.channel('abide:socket').warn(`subscribe rejected — unknown socket: ${name}`)
@@ -332,11 +366,28 @@ function wsSubscribe(
         )
         return
     }
-    const iterator = sock.__socket.subscribe(replay !== false)
-    connection.subscriptions.set(name, iterator)
-    ws.send(JSON.stringify({ name, ok: true } satisfies MuxDownstream))
+    const allowed = await authorizeSocketJoin(name, sock, args, ws.data, config)
+    if (!allowed) {
+        log.channel('abide:socket').warn(`subscribe denied — room not authorized: ${name}`)
+        ws.send(
+            JSON.stringify({
+                name,
+                args,
+                error: { message: 'not authorized' },
+            } satisfies MuxDownstream),
+        )
+        return
+    }
+    // Re-check across the await: a racing unsub/dup-sub for the same room, or a closed socket, must
+    // not leave a dangling join.
+    if (connection.subscriptions.has(key)) return
+    if (ws.readyState !== 1) return
+    const iterator = sock.__socket.subscribe(args, replay !== false)
+    connection.subscriptions.set(key, iterator)
+    const ack: MuxDownstream = args === undefined ? { name, ok: true } : { name, args, ok: true }
+    ws.send(JSON.stringify(ack))
     log.channel('abide:socket').info(`subscribe ${name} replay=${replay !== false}`)
-    void pumpSocketToWs(ws, connection, name, iterator)
+    void pumpSocketToWs(ws, connection, key, name, args, iterator)
 }
 
 // Authorize + join an `@rpc:` cache channel. On DENY do nothing (silent — matches the existing
@@ -362,31 +413,40 @@ async function subscribeCacheChannel(
     const iterator = cacheChannelHub(name).subscribe()
     connection.subscriptions.set(name, iterator)
     log.channel('abide:socket').trace(`cache-channel join: ${name}`)
-    void pumpSocketToWs(ws, connection, name, iterator)
+    void pumpSocketToWs(ws, connection, name, name, undefined, iterator)
 }
 
-function wsUnsubscribe(connection: SocketConnection, name: unknown): void {
+function wsUnsubscribe(connection: SocketConnection, name: unknown, args: unknown): void {
     if (typeof name !== 'string') return
-    const iterator = connection.subscriptions.get(name)
+    const key = isCacheChannel(name) ? name : subscriptionKey(name, args)
+    const iterator = connection.subscriptions.get(key)
     if (iterator === undefined) return
-    connection.subscriptions.delete(name)
+    connection.subscriptions.delete(key)
     void iterator.return?.()
 }
 
-// Client publish over the WS. Ignored unless the socket opted into `clientPublish`; routed
-// through the hub's `ingressPublish` so a mediating handler can transform / drop / reject.
+// Client publish over the WS into room `args` (undefined = the void socket). Ignored unless the socket
+// opted into `clientPublish`; a roomed publish is ALSO per-room authorized (`authorizeSocketJoin`) — the
+// same gate as subscribe, so a client cannot publish into a room it may not join. Routed through the
+// socket's `ingressPublish` so a mediating `handler` can transform / drop / reject.
 async function wsPublish(
+    ws: Bun.ServerWebSocket<SocketConnectionData>,
     name: unknown,
+    args: unknown,
     message: unknown,
-    // biome-ignore lint/suspicious/noExplicitAny: existential socket registry — per-socket message type is erased here; `unknown` breaks assignability through the invariant Socket message type.
-    sockets: Record<string, Socket<any>>,
+    sockets: Record<string, ErasedSocket>,
+    config: AppConfig,
 ): Promise<void> {
     if (typeof name !== 'string') return
     const sock = sockets[name]
     if (sock === undefined) return
     if (sock.__socket.options.clientPublish !== true) return
+    if (!(await authorizeSocketJoin(name, sock, args, ws.data, config))) {
+        log.channel('abide:socket').warn(`publish denied — room not authorized: ${name}`)
+        return
+    }
     try {
-        await sock.__socket.ingressPublish(message)
+        await sock.__socket.ingressPublish(args, message)
     } catch {
         // A handler reject is surfaced to WS publishers as a silent drop (no request/response pair).
     }
@@ -396,8 +456,7 @@ async function wsPublish(
 async function socketHttpFace(
     request: Request,
     url: URL,
-    // biome-ignore lint/suspicious/noExplicitAny: existential socket registry — per-socket message type is erased here; `unknown` breaks assignability through the invariant Socket message type.
-    sockets: Record<string, Socket<any>>,
+    sockets: Record<string, ErasedSocket>,
 ): Promise<Response> {
     const name = decodeURIComponent(url.pathname.slice('/__abide/sockets/'.length))
     const sock = sockets[name]
@@ -414,7 +473,8 @@ async function socketHttpFace(
         const body = await request.text()
         const message = body.length > 0 ? JSON.parse(body) : undefined
         try {
-            await sock.__socket.ingressPublish(message)
+            // The WS-less HTTP face operates on the void room (no room selector in the URL).
+            await sock.__socket.ingressPublish(undefined, message)
         } catch (caught) {
             return error(400, caught instanceof Error ? caught.message : 'socket publish rejected')
         }
@@ -996,9 +1056,10 @@ export function createApp(config: AppConfig = {}): App {
                         sockets,
                         config,
                     )
-                else if (frame.t === MUX_UPSTREAM.unsub) wsUnsubscribe(connection, frame.name)
+                else if (frame.t === MUX_UPSTREAM.unsub)
+                    wsUnsubscribe(connection, frame.name, frame.args)
                 else if (frame.t === MUX_UPSTREAM.pub)
-                    void wsPublish(frame.name, frame.msg, sockets)
+                    void wsPublish(ws, frame.name, frame.args, frame.msg, sockets, config)
                 // An unrecognized frame type is dropped — but LOUDLY, not silently: a drifted discriminant
                 // would otherwise fail open (e.g. an ignored `unsub` keeps a stream pumping). Gated channel,
                 // so it never spams prod logs unless DEBUG names it.

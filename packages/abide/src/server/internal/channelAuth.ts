@@ -16,10 +16,11 @@
 // presenting args-for-B (which its identity is allowed to read) and slip past the gate.
 
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import type { Socket } from '../socket.ts'
 import { cacheChannelName, RPC_CHANNEL_PREFIX } from './cacheChannels.ts'
-import { compose } from './middleware.ts'
+import { compose, type Middleware } from './middleware.ts'
 import type { AppConfig } from './router.ts'
-import { type Principal, type RequestScope, runInScope } from './scope.ts'
+import { type Principal, type RequestScope, type RouteKind, runInScope } from './scope.ts'
 
 // Identity + request resolved ONCE at the WS upgrade (cookie/bearer via the same ladder as HTTP)
 // and carried on the connection for the life of the socket. Every `@rpc:` join re-authorizes
@@ -74,15 +75,63 @@ export async function authorizeChannelJoin(
     // ARGS-SPOOF DEFENSE: the presented args must be exactly the ones that name this channel.
     if (cacheChannelName(rpcName, presentedArgs) !== channelName) return false
 
-    // Reconstruct the scope the HTTP GET read of `(rpcName, presentedArgs)` would have run in:
-    // identity resolved at upgrade (same cookie/bearer ladder), args reachable both on the request
-    // URL query (`?__abide_args=` — where a read handler's middleware reads them) AND in route().params.
-    const rpcUrl = new URL(`/__abide/rpc/${rpcName}`, new URL(connData.request.url).origin)
-    rpcUrl.searchParams.set(RPC_QUERY_PARAMS.args, JSON.stringify(presentedArgs))
-    const syntheticRequest = new Request(rpcUrl, {
-        method: 'GET',
-        headers: connData.request.headers,
-    })
+    const globalMiddleware = config.middleware ?? []
+    const rpcMiddleware = route.__rpc.options.middleware ?? []
+    return reauthorize('rpc', rpcName, `/__abide/rpc/${rpcName}`, presentedArgs, connData, [
+        ...globalMiddleware,
+        ...rpcMiddleware,
+    ])
+}
+
+// Decide whether `connData.identity` may join a USER SOCKET's room `roomArgs`. This is the socket
+// analog of `authorizeChannelJoin`: opt-in per-room authorization via the socket's own `middleware`
+// (auth.md; ADR 0023 rooms). A socket with NO `middleware` stays CONNECT-authed (returns true — any
+// connected client may join any room, exactly as a middleware-less rpc is public); a socket WITH
+// `middleware` re-enters `compose(global, socket.middleware)` for the room args on EVERY join, so
+// per-room row-level auth is enforced (joining room `B` re-runs the chain for `{room:B}`).
+//
+// No args-spoof defense is needed here (unlike the `@rpc:` case): the room the client JOINS is exactly
+// the args it presents, and it receives only that room's messages — there is no opaque channel-name
+// hash to lie about. Auth runs on the same args the subscription is keyed by.
+export async function authorizeSocketJoin(
+    socketName: string,
+    // biome-ignore lint/suspicious/noExplicitAny: existential socket registry — the per-socket message type is erased at the transport boundary.
+    sock: Socket<any>,
+    roomArgs: unknown,
+    connData: SocketConnectionData,
+    config: AppConfig,
+): Promise<boolean> {
+    const socketMiddleware = sock.__socket.options.middleware ?? []
+    // No per-room gate configured → connect-authed (today's behavior). The global chain already ran at
+    // the WS upgrade; without socket `middleware` there is no per-room refinement to enforce.
+    if (socketMiddleware.length === 0) return true
+    const globalMiddleware = config.middleware ?? []
+    return reauthorize(
+        'socket-subscribe',
+        socketName,
+        `/__abide/sockets/${socketName}`,
+        roomArgs,
+        connData,
+        [...globalMiddleware, ...socketMiddleware],
+    )
+}
+
+// Shared re-auth core (rpc cache-channel + user-socket room). Rebuild the scope a normal request for
+// `(name, presentedArgs)` would have run in — identity resolved at upgrade (same cookie/bearer ladder),
+// args reachable both on the request URL query (`?__abide_args=` — where a handler's middleware reads
+// them) AND in `route().params` — then run `chain` to its terminal. PASS iff nothing short-circuited
+// (identity `===` on the sentinel, NOT a status check, so a middleware's own 200 still counts as DENY).
+async function reauthorize(
+    kind: RouteKind,
+    name: string,
+    path: string,
+    presentedArgs: unknown,
+    connData: SocketConnectionData,
+    middleware: Middleware[],
+): Promise<boolean> {
+    const url = new URL(path, new URL(connData.request.url).origin)
+    url.searchParams.set(RPC_QUERY_PARAMS.args, JSON.stringify(presentedArgs))
+    const syntheticRequest = new Request(url, { method: 'GET', headers: connData.request.headers })
     const scope: RequestScope = {
         request: syntheticRequest,
         cookies: new Bun.CookieMap(connData.request.headers.get('cookie') ?? ''),
@@ -90,22 +139,18 @@ export async function authorizeChannelJoin(
         identity: { ...connData.identity },
         bag: {},
         route: {
-            kind: 'rpc',
-            name: rpcName,
+            kind,
+            name,
             params:
                 presentedArgs !== null && typeof presentedArgs === 'object'
                     ? (presentedArgs as Record<string, unknown>)
                     : {},
-            url: rpcUrl,
+            url,
             navigating: false,
         },
         cache: new Map<string, unknown>(),
     }
-
-    const globalMiddleware = config.middleware ?? []
-    const rpcMiddleware = route.__rpc.options.middleware ?? []
-    const chain = compose([...globalMiddleware, ...rpcMiddleware], () => AUTHORIZED_SENTINEL)
-
+    const chain = compose(middleware, () => AUTHORIZED_SENTINEL)
     const result = await runInScope(scope, chain)
     return result === AUTHORIZED_SENTINEL
 }

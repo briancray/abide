@@ -130,7 +130,7 @@ describe('socket — ingressPublish (client-mediated)', () => {
         const sock = socket<number>()
         const got = collect(sock, 1)
         await delay(5)
-        await sock.__socket.ingressPublish(7)
+        await sock.__socket.ingressPublish(undefined, 7)
 
         expect(await got).toEqual([7])
     })
@@ -139,7 +139,7 @@ describe('socket — ingressPublish (client-mediated)', () => {
         const sock = socket<number>({ handler: (n) => n * 10 })
         const got = collect(sock, 1)
         await delay(5)
-        await sock.__socket.ingressPublish(4)
+        await sock.__socket.ingressPublish(undefined, 4)
 
         expect(await got).toEqual([40])
     })
@@ -148,8 +148,8 @@ describe('socket — ingressPublish (client-mediated)', () => {
         const sock = socket<number>({ handler: (n) => (n < 0 ? DROP : n) })
         const got = collect(sock, 1)
         await delay(5)
-        await sock.__socket.ingressPublish(-1) // dropped
-        await sock.__socket.ingressPublish(9) // delivered
+        await sock.__socket.ingressPublish(undefined, -1) // dropped
+        await sock.__socket.ingressPublish(undefined, 9) // delivered
 
         expect(await got).toEqual([9])
     })
@@ -163,8 +163,8 @@ describe('socket — ingressPublish (client-mediated)', () => {
         })
         const got = collect(sock, 1)
         await delay(5)
-        await expect(sock.__socket.ingressPublish(13)).rejects.toThrow('unlucky')
-        await sock.__socket.ingressPublish(5)
+        await expect(sock.__socket.ingressPublish(undefined, 13)).rejects.toThrow('unlucky')
+        await sock.__socket.ingressPublish(undefined, 5)
 
         expect(await got).toEqual([5])
     })

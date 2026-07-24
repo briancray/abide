@@ -11,7 +11,11 @@
 // (ADR 0023 step 3, narrow scope: the full HTTP-stream + WS-mux `Frame` unification with one dispatcher is
 // deferred to after step 6, when the memo and socket read-surfaces converge — merging the two disjoint
 // metadata sets earlier is the flattening the adversarial review flagged.)
+// `args` is the ROOM key for a roomed user socket (ADR 0023 rooms): the same value the client presented
+// on the `sub` frame, echoed back so the client routes the frame to the right per-room subscription.
+// OMITTED for a void (single-topic) socket and for `@rpc:` cache channels (whose name already embeds the
+// args) — so existing consumers that ignore `args` are unaffected.
 export type MuxDownstream<T = unknown> =
-    | { name: string; msg: T }
-    | { name: string; ok: true }
-    | { name: string; error: unknown }
+    | { name: string; args?: unknown; msg: T }
+    | { name: string; args?: unknown; ok: true }
+    | { name: string; args?: unknown; error: unknown }

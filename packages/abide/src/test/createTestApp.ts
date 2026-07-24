@@ -23,7 +23,9 @@ import type { Middleware } from '../server/internal/middleware.ts'
 import { type App, createApp, type Route } from '../server/internal/router.ts'
 import type { Principal } from '../server/internal/scope.ts'
 import { seal } from '../server/internal/seal.ts'
-import type { Socket } from '../server/socket.ts'
+import type { ErasedSocket } from '../server/socket.ts'
+import { RPC_CHANNEL_PREFIX } from '../shared/internal/cacheChannelName.ts'
+import { canonicalKey } from '../shared/internal/codec.ts'
 import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
 
 // A thin test client over the multiplexed socket WS (`/__abide/sockets`). `subscribe(name)`
@@ -31,10 +33,13 @@ import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
 // it (or the app) to release the connection.
 export interface SocketClient {
     ready(): Promise<void>
-    // `args` is sent alongside an `@rpc:` cache-channel subscribe (the raw args that must NAME the
-    // channel — the args-spoof defense); it is ignored for bare user-socket subscriptions.
+    // `args` is the ROOM for a roomed user socket (ADR 0023) — and the raw args that must NAME the
+    // channel for an `@rpc:` cache-channel subscribe (the args-spoof defense). Omit for a void socket.
     subscribe<T = unknown>(name: string, args?: unknown): AsyncIterable<T>
-    publish(name: string, message: unknown): void
+    publish(name: string, message: unknown, args?: unknown): void
+    // Resolves to the server's subscribe verdict for `(name, args)`: `'ok'` (sub-ack) or `'error'`
+    // (sub-error — unknown socket or a denied room). Lets a test assert per-room authorization.
+    ack(name: string, args?: unknown): Promise<'ok' | 'error'>
     close(): void
 }
 
@@ -55,7 +60,7 @@ export interface TestAppConfig {
     routes?: Record<string, Route>
     middleware?: Middleware[]
     // biome-ignore lint/suspicious/noExplicitAny: heterogeneous socket record; Socket is contravariant in its message type so `unknown` rejects concrete `Socket<T>` values
-    sockets?: Record<string, Socket<any>>
+    sockets?: Record<string, ErasedSocket>
     pages?: Record<string, string>
     layouts?: Record<string, string>
     // TODO #20: absolute source dirs (keyed like `pages`/`layouts`) so the client bundle can resolve a
@@ -119,7 +124,19 @@ class MessageQueue<T> implements AsyncIterable<T> {
 }
 
 function socketClient(origin: string, identity: Partial<Principal> | undefined): SocketClient {
+    // Keyed by `routeKey(name, args)` so distinct rooms of one socket are distinct subscriptions.
     const queues = new Map<string, MessageQueue<unknown>[]>()
+    // Subscribe verdicts, keyed the same way. `waiters` holds a pending `ack()` resolver; `settled`
+    // buffers a verdict that arrived before `ack()` was called (so the ack is never missed on a race).
+    const waiters = new Map<string, (verdict: 'ok' | 'error') => void>()
+    const settled = new Map<string, 'ok' | 'error'>()
+    // Only a roomed USER socket folds the room into the key: the server echoes `args` on those frames.
+    // An `@rpc:` cache channel already embeds its args in the NAME and its downstream frames carry no
+    // `args`, so it (and a void socket) keys by bare name — matching what the server sends back.
+    const routeKey = (name: string, args: unknown): string =>
+        args === undefined || name.startsWith(RPC_CHANNEL_PREFIX)
+            ? name
+            : `${name} ${canonicalKey(args)}`
     let ws: WebSocket | undefined
 
     // Seal the impersonated identity into a Bearer header BEFORE opening the WS so the upgrade
@@ -136,17 +153,34 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
             ws = new WebSocket(url)
         }
         ws.addEventListener('message', (event) => {
-            let frame: { name?: unknown; msg?: unknown; ok?: unknown; error?: unknown }
+            let frame: {
+                name?: unknown
+                args?: unknown
+                msg?: unknown
+                ok?: unknown
+                error?: unknown
+            }
             try {
                 frame = JSON.parse(String(event.data))
             } catch {
                 return
             }
             if (typeof frame.name !== 'string') return
-            // Skip user-socket control frames (sub-ack `{name,ok}` / sub-error `{name,error}`,
-            // client-sockets.md CS2) — only data frames `{name,msg}` are delivered to subscribers.
-            if (frame.ok !== undefined || frame.error !== undefined) return
-            const list = queues.get(frame.name)
+            const key = routeKey(frame.name, frame.args)
+            // User-socket control frames (sub-ack `{name,ok}` / sub-error `{name,error}`, CS2): resolve
+            // the pending ack, don't deliver as data.
+            if (frame.ok !== undefined || frame.error !== undefined) {
+                const verdict = frame.error !== undefined ? 'error' : 'ok'
+                const waiter = waiters.get(key)
+                if (waiter !== undefined) {
+                    waiters.delete(key)
+                    waiter(verdict)
+                } else {
+                    settled.set(key, verdict)
+                }
+                return
+            }
+            const list = queues.get(key)
             if (list === undefined) return
             for (const queue of list) queue.push(frame.msg)
         })
@@ -160,11 +194,12 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
     return {
         ready: (): Promise<void> => opened,
         subscribe<T = unknown>(name: string, args?: unknown): AsyncIterable<T> {
+            const key = routeKey(name, args)
             const queue = new MessageQueue<T>()
-            let list = queues.get(name) as MessageQueue<T>[] | undefined
+            let list = queues.get(key) as MessageQueue<T>[] | undefined
             if (list === undefined) {
                 list = []
-                queues.set(name, list as MessageQueue<unknown>[])
+                queues.set(key, list as MessageQueue<unknown>[])
             }
             list.push(queue)
             const frame = args !== undefined ? { t: 'sub', name, args } : { t: 'sub', name }
@@ -174,11 +209,24 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
             })
             return queue
         },
-        publish(name: string, message: unknown): void {
+        publish(name: string, message: unknown, args?: unknown): void {
+            const frame =
+                args !== undefined
+                    ? { t: 'pub', name, args, msg: message }
+                    : { t: 'pub', name, msg: message }
             void opened.then(() => {
                 if (ws === undefined) throw new Error('socket not connected')
-                ws.send(JSON.stringify({ t: 'pub', name, msg: message }))
+                ws.send(JSON.stringify(frame))
             })
+        },
+        ack(name: string, args?: unknown): Promise<'ok' | 'error'> {
+            const key = routeKey(name, args)
+            const already = settled.get(key)
+            if (already !== undefined) {
+                settled.delete(key)
+                return Promise.resolve(already)
+            }
+            return new Promise((resolve) => waiters.set(key, resolve))
         },
         close(): void {
             for (const list of queues.values()) for (const queue of list) queue.close()

@@ -14,11 +14,18 @@
 // is single-process (S3.3) — tail buffer + fanout live in one server process.
 
 import { type ChannelOptions, channel } from './channel.ts'
+import type { Middleware } from './internal/middleware.ts'
 import { DROP } from './internal/socketHub.ts'
+
+// The ROOM key positional: `[]` for a single-topic (void) socket, `[args]` for a roomed one. A void
+// socket keeps today's argless surface (`publish(msg)`, `peek()`); a roomed socket adds the room key
+// (`publish({room}, msg)`, `peek({room})`). Same primitive — `Args` names the room, exactly as it keys a
+// memo's slot and the `@rpc:` broadcast channel.
+type Room<Args> = [Args] extends [void] ? [] : [args: Args]
 
 // A mediating handler may return the transformed value to publish, or `void`/`DROP` to suppress the
 // client publish. `DROP` is the explicit drop signal; a bare `void`/`undefined` return drops too.
-export interface SocketOptions<T> {
+export interface SocketOptions<T, Args = void> {
     tail?: number
     ttl?: number
     clientPublish?: boolean
@@ -26,73 +33,97 @@ export interface SocketOptions<T> {
     clients?: unknown
     // biome-ignore lint/suspicious/noConfusingVoidType: void lets a side-effect-only handler (returns nothing) be assignable; undefined would force an explicit return
     handler?: (message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>
+    // Per-SUBSCRIBE (per-room) authorization — the socket analog of an rpc's `middleware`, run at each
+    // room join with the connection's identity + the room args (a short-circuit denies). ABSENT ⇒ the
+    // socket is connect-authed (any connected client may join any room), exactly like a middleware-less
+    // rpc is public. This is the opt-in per-room security boundary (auth.md; ADR 0023 rooms).
+    middleware?: Middleware[]
 }
 
-// Internal handle carried on `__socket`: the resolved options, the transport ingress path, and the
-// live subscribe used by the WS/HTTP transport (`replay: false` is the hydration join, CS5).
-export interface SocketInternals<T> {
-    options: SocketOptions<T>
-    ingressPublish(message: T): Promise<void>
-    tailSnapshot(): T[]
-    subscribe(replay?: boolean): AsyncIterator<T>
+// Internal handle carried on `__socket`: the resolved options + the per-room transport paths. Every path
+// takes the room `args` (the void socket passes `undefined`). `replay: false` is the hydration join (CS5).
+export interface SocketInternals<T, Args = void> {
+    options: SocketOptions<T, Args>
+    ingressPublish(args: Args, message: T): Promise<void>
+    tailSnapshot(args: Args): T[]
+    subscribe(args: Args, replay?: boolean): AsyncIterator<T>
 }
 
-export interface Socket<T> extends AsyncIterable<T> {
-    publish(message: T): void
+export interface Socket<T, Args = void> extends AsyncIterable<T> {
+    // Subscribe to a room — a fresh replay-then-live cursor. A void socket also iterates directly
+    // (`for await m of socket`); a roomed socket picks a room (`socket({room})`).
+    (...room: Room<Args>): AsyncIterable<T>
+    // Server publish. Void: `publish(msg)`. Roomed: `publish({room}, msg)`.
+    publish(...args: [...Room<Args>, message: T]): void
     // ACTIVE probes (client-sockets.md CS4.1) — reading these drives a subscription on the client.
-    peek(): T | undefined
-    chunks(): T[] | undefined
+    peek(...room: Room<Args>): T | undefined
+    chunks(...room: Room<Args>): T[] | undefined
     // STATUS probes — observe the subscription lifecycle without driving it.
-    pending(): boolean
-    refreshing(): boolean
-    done(): boolean
-    error(): unknown | undefined
-    readonly __socket: SocketInternals<T>
+    pending(...room: Room<Args>): boolean
+    refreshing(...room: Room<Args>): boolean
+    done(...room: Room<Args>): boolean
+    error(...room: Room<Args>): unknown | undefined
+    readonly __socket: SocketInternals<T, Args>
 }
 
-export function socket<T>(options: SocketOptions<T> = {}): Socket<T> {
-    // A socket IS a channel + transport (ADR 0023). Build on a single-topic (void) channel for the
+// The transport-boundary view of a socket: the mux registry holds heterogeneous sockets, so BOTH the
+// message type and the room args are erased. `any` (not `unknown`) is required — the contravariant
+// `handler` param means a concrete `Socket<number, …>` is NOT assignable to `Socket<unknown, …>`; `any`
+// is the only supertype every socket flows into. The transport touches only `__socket` (whose per-room
+// paths take the room through) + the `AsyncIterable` face, never the public variadic surface.
+// biome-ignore lint/suspicious/noExplicitAny: erased existential — see above; `unknown` breaks assignability through the contravariant handler param.
+export type ErasedSocket = Socket<any, any>
+
+export function socket<T, Args = void>(options: SocketOptions<T, Args> = {}): Socket<T, Args> {
+    // A socket IS a channel + transport (ADR 0023). Build on the `channel` primitive for the per-room
     // pub/sub core; the socket layer adds the transport internals + client-publish mediation. `ttl` is
-    // the socket's name for the channel's per-message `maxAge`.
+    // the socket's name for the channel's per-message `maxAge`. `Args = void` → one hub under the void
+    // key (today's single-topic socket); a non-void `Args` gives per-room hubs, created lazily.
     const channelOptions: ChannelOptions = {}
     if (options.tail !== undefined) channelOptions.tail = options.tail
     if (options.ttl !== undefined) channelOptions.maxAge = options.ttl
-    const ch = channel<T, void>(channelOptions)
-    const hub = ch.__hub(undefined)
-    return {
-        publish(message: T): void {
-            hub.publish(message)
-        },
-        peek: (): T | undefined => hub.peekLatest(),
-        // Server chunks() = the in-window tail (what an SSR render paints / a fresh subscriber replays).
-        chunks: (): T[] | undefined => hub.tailSnapshot(),
-        // Degenerate on the server — an in-proc topic is immediately live, never reconnecting/errored,
-        // and not torn down while the page is rendered (the client re-subscribes on hydrate).
-        pending: (): boolean => false,
-        refreshing: (): boolean => false,
-        done: (): boolean => false,
-        error: (): unknown | undefined => undefined,
-        // Delegate to the channel, which yields the tail snapshot inside an SSR render (never hangs) and a
-        // live subscription otherwise (CS5).
-        [Symbol.asyncIterator](): AsyncIterator<T> {
-            return ch[Symbol.asyncIterator]()
-        },
-        __socket: {
-            options,
-            // Client-publish mediation lives HERE now (the channel is pure pub/sub): run the handler,
-            // then server-publish the transformed value. A `void`/`DROP` return suppresses.
-            ingressPublish: async (message: T): Promise<void> => {
-                const handler = options.handler
-                if (handler === undefined) {
-                    hub.publish(message)
-                    return
-                }
-                const result = await handler(message)
-                if (result === undefined || (result as unknown) === DROP) return
-                hub.publish(result as T)
-            },
-            tailSnapshot: (): T[] => hub.tailSnapshot(),
-            subscribe: (replay?: boolean): AsyncIterator<T> => hub.subscribe(replay),
-        },
+    const ch = channel<T, Args>(channelOptions)
+    // The room key for a probe/publish call: void → `undefined` (0 room args), roomed → the sole room arg.
+    const room = (args: unknown[]): Args =>
+        args.length > 0 ? (args[0] as Args) : (undefined as Args)
+
+    const sock = ((...room: Room<Args>): AsyncIterable<T> =>
+        ch(room.length > 0 ? (room[0] as Args) : (undefined as Args))) as Socket<T, Args>
+
+    // Direct iteration (`for await m of socket`) subscribes the DEFAULT (void) room.
+    sock[Symbol.asyncIterator] = (): AsyncIterator<T> => ch[Symbol.asyncIterator]()
+    // publish(...): void → `[message]`; roomed → `[room, message]`. The message is always last.
+    sock.publish = (...args: [...Room<Args>, message: T]): void => {
+        const message = args[args.length - 1] as T
+        const roomArgs = args.length > 1 ? (args[0] as Args) : (undefined as Args)
+        ch.__hub(roomArgs).publish(message)
     }
+    sock.peek = (...r: Room<Args>): T | undefined => ch.__hub(room(r)).peekLatest()
+    // Server chunks() = the in-window tail (what an SSR render paints / a fresh subscriber replays).
+    sock.chunks = (...r: Room<Args>): T[] | undefined => ch.__hub(room(r)).tailSnapshot()
+    // Degenerate on the server — an in-proc topic is immediately live, never reconnecting/errored, and not
+    // torn down while the page is rendered (the client re-subscribes on hydrate).
+    sock.pending = (): boolean => false
+    sock.refreshing = (): boolean => false
+    sock.done = (): boolean => false
+    sock.error = (): unknown | undefined => undefined
+    ;(sock as { __socket: SocketInternals<T, Args> }).__socket = {
+        options,
+        // Client-publish mediation lives HERE (the channel is pure pub/sub): run the handler, then
+        // server-publish the transformed value into the room. A `void`/`DROP` return suppresses.
+        ingressPublish: async (args: Args, message: T): Promise<void> => {
+            const handler = options.handler
+            if (handler === undefined) {
+                ch.__hub(args).publish(message)
+                return
+            }
+            const result = await handler(message)
+            if (result === undefined || (result as unknown) === DROP) return
+            ch.__hub(args).publish(result as T)
+        },
+        tailSnapshot: (args: Args): T[] => ch.__hub(args).tailSnapshot(),
+        subscribe: (args: Args, replay?: boolean): AsyncIterator<T> =>
+            ch.__hub(args).subscribe(replay),
+    }
+    return sock
 }
