@@ -340,6 +340,28 @@ share a reactive-read *surface*; storage differs").
 **Deferred (out of scope):** echo/reconciliation for an egressing `publish` needs message identity — the
 optimism-with-reconcile *feature* is unbuildable until that lands (nothing regresses; today has no optimism).
 
+**REJECTED — a channel buffer as an immutable `signal<ring>`.** Explored, then refuted by a stress-test that
+built the prototype and measured it against the real substrate. Rejected on **soundness, not perf** — do not
+resurrect:
+- **`tail` defaults to 0, and every cache-broadcast channel is `tail: 0`** (`cacheChannels.ts:45` — "cache
+  frames are ephemeral"). A ring-sized buffer holds nothing between publishes: measured `[]` vs today's `[42]`
+  (`socket.test.ts:21-30`). Breaks the default socket *and* the whole cache-sync substrate.
+- **It fuses two deliberately-independent buffers.** `Subscriber`'s capacity is 1024, *independent of `tail`*
+  (`subscriber.ts:9,17`). Making delivery capacity *be* `tail` silently drops messages for an **on-time**
+  consumer on any synchronous burst — measured `tail:4`/burst 10 → `[7,8,9,10]` vs `1..10`. The `reactive.ts:96`
+  dedup that prevents a notification storm is the *same* mechanism that causes this loss.
+- **It does not retire `Subscriber`.** A cursor still needs a monotonic seq, a parking slot, and a bounded
+  queue. Proof: `socketProxy.ts` *already* keeps an immutable `signal<unknown[]>` for `chunks` **and**
+  `localSubs: Set<Subscriber>` — a signal cannot serve the `for await` path. The experiment was already run
+  here; the answer was "both."
+- Perf was never the objection: `tail ≤ ~100` is a non-issue and the proposal's fanout is *faster*
+  (1.10M vs 0.72M msg/s). (Two premises were wrong: JSC's `shift` is not O(n) here; the immutable copy *is*
+  O(tail), biting only at `tail ≥ 1000`.)
+
+**Optional salvage (modest):** keep `last`, keep the per-consumer FIFO, and make *only* the late-join replay
+ring a `signal<{seq, ring}>` so probes get reactivity for free — roughly what `socketProxy.ts:35-49` already
+is. It does **not** retire `Subscriber`, and must never be applied to `cacheChannels.ts:45`.
+
 ## Implementation sequence
 
 Trunk-based, small green PRs. The high-risk buffer surgery is **gone** (no `ReplayableStream` rewrite), so
@@ -355,8 +377,10 @@ the sequence is materially safer than the original.
    (backed by `slotCache`) as-is. No behavior change; pins the vocabulary. **Encode the per-cardinality
    semantics in the *typed* contract** (not just the §4 prose) — especially socket `invalidate` = no
    source-abort — so the shared interface can't silently drift into a "uniform-but-lying" type over time.
-5. **Author the gate tests the current gate lacks** — a `?__abide_from` resume e2e, a `tail:0` socket, and
-   an SSR-painted-socket hydration (`replay:false` join) test. *Before* touching sockets.
+5. **Author the gate tests the current gate lacks** — a `?__abide_from` resume e2e, a **burst test** (N
+   synchronous publishes with N > `tail` against a *parked* consumer), and an SSR-painted-socket hydration
+   (`replay:false` join) test. *Before* touching sockets. (A `tail:0` socket is **already covered** —
+   `socket.test.ts:21-30`, `:55-60`; an earlier draft wrongly listed it as missing.)
 6. **Socket implements `ReactiveReadSurface`** — incremental behind the stable `Socket<T>` surface:
    (6a) server `socket.ts` exposes the surface over the hub (move all read paths — `subscribe`/
    `tailSnapshot`/`peekLatest`/`snapshotIterator` — in one commit); (6b) client `socketProxy` implements
