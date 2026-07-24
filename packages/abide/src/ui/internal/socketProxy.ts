@@ -9,6 +9,7 @@
 // ACTIVE probes (iterate / `peek` / `chunks`) open the subscription; STATUS probes (`pending` /
 // `refreshing` / `done` / `error`) only observe it (CS11). `publish` is fire-and-forget (CS3.4).
 
+import { canonicalKey } from '../../shared/internal/codec.ts'
 import { signal } from '../../shared/internal/reactive.ts'
 import { Subscriber } from '../../shared/internal/subscriber.ts'
 import { muxPublish, muxSubscribe } from './cacheMux.ts'
@@ -30,7 +31,21 @@ interface LatestEntry {
     time: number
 }
 
-function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown {
+// One ROOM's client state + reactive probes, backed by a single mux subscription (client-sockets.md
+// CS3/CS4). A void socket has exactly one room (`args: undefined`); a roomed socket lazily makes one per
+// distinct room key. Same shape the server socket exposes per hub.
+interface RoomProxy {
+    publish(message: unknown): void
+    peek(): unknown
+    chunks(): unknown[]
+    pending(): boolean
+    refreshing(): boolean
+    done(): boolean
+    error(): unknown
+    iterate(): AsyncIterator<unknown>
+}
+
+function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: string): RoomProxy {
     const cap = spec.tail > 0 ? spec.tail : 1024
     const status = signal<Status>('idle')
     const latest = signal<LatestEntry | undefined>(undefined)
@@ -63,7 +78,8 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown 
         muxSubscribe(
             name,
             {
-                args: undefined,
+                name,
+                args,
                 replay: true,
                 onMessage: deliver,
                 onAck: (): void => {
@@ -88,7 +104,7 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown 
             if (!spec.clientPublish) {
                 throw new Error(`socket "${name}": client publish is disabled (clientPublish)`)
             }
-            muxPublish(name, message, base)
+            muxPublish(name, message, base, args)
         },
         // ACTIVE probes — drive the subscription.
         peek(): unknown {
@@ -117,7 +133,7 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown 
         error(): unknown {
             return status() === 'error' ? errorValue : undefined
         },
-        [Symbol.asyncIterator](): AsyncIterator<unknown> {
+        iterate(): AsyncIterator<unknown> {
             ensureSubscribed()
             const sub = new Subscriber<unknown>(cap)
             localSubs.add(sub)
@@ -131,6 +147,46 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown 
             }
         },
     }
+}
+
+// The isomorphic `Socket<T, Args>` browser proxy: a CALLABLE that mirrors the server socket. A void
+// socket uses the single (undefined) room — direct iteration + argless probes/`publish`. A roomed socket
+// picks a room: `sock({room})` iterates it, `sock.peek({room})` / `sock.publish({room}, msg)` address it.
+// One `RoomProxy` (⇒ one mux subscription) per distinct room, created lazily.
+function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown {
+    const rooms = new Map<string, RoomProxy>()
+    const roomFor = (args: unknown): RoomProxy => {
+        const key = canonicalKey(args)
+        let room = rooms.get(key)
+        if (room === undefined) {
+            room = makeRoomProxy(name, args, spec, base)
+            rooms.set(key, room)
+        }
+        return room
+    }
+    // A probe call's room key: void → undefined (0 room args), roomed → the sole room arg.
+    const roomArg = (r: unknown[]): unknown => (r.length > 0 ? r[0] : undefined)
+
+    const proxy = ((...room: unknown[]): AsyncIterable<unknown> => ({
+        [Symbol.asyncIterator]: (): AsyncIterator<unknown> => roomFor(roomArg(room)).iterate(),
+    })) as Record<string, unknown> & ((...room: unknown[]) => AsyncIterable<unknown>)
+
+    // Direct iteration (`for await m of socket`) subscribes the DEFAULT (void) room.
+    ;(proxy as { [Symbol.asyncIterator]?: () => AsyncIterator<unknown> })[Symbol.asyncIterator] =
+        () => roomFor(undefined).iterate()
+    // publish(...): void → `[message]`; roomed → `[room, message]`. The message is always last.
+    proxy.publish = (...args: unknown[]): void => {
+        const message = args[args.length - 1]
+        const room = args.length > 1 ? args[0] : undefined
+        roomFor(room).publish(message)
+    }
+    proxy.peek = (...r: unknown[]): unknown => roomFor(roomArg(r)).peek()
+    proxy.chunks = (...r: unknown[]): unknown[] => roomFor(roomArg(r)).chunks()
+    proxy.pending = (...r: unknown[]): boolean => roomFor(roomArg(r)).pending()
+    proxy.refreshing = (...r: unknown[]): boolean => roomFor(roomArg(r)).refreshing()
+    proxy.done = (...r: unknown[]): boolean => roomFor(roomArg(r)).done()
+    proxy.error = (...r: unknown[]): unknown => roomFor(roomArg(r)).error()
+    return proxy
 }
 
 // Build the imports map injected into a page's client `$scope`: socket name → its client proxy

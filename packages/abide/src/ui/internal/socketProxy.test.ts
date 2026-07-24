@@ -145,6 +145,49 @@ test('a sub-error frame sets terminal error() and ends the iterators', async () 
     expect(done.done).toBe(true)
 })
 
+// A roomed socket is the SAME proxy, called with a room key. `sock({room})` iterates that room;
+// `sock.peek({room})` / `sock.publish({room}, msg)` address it.
+interface RoomedSocketLike {
+    (room: unknown): AsyncIterable<unknown>
+    peek(room?: unknown): unknown
+    publish(room: unknown, message: unknown): void
+}
+
+function roomedProxy(spec: Partial<SocketSpec> = {}): RoomedSocketLike {
+    const full: SocketSpec = { clientPublish: true, tail: 5, ttl: null, ...spec }
+    return makeClientSocketImports({ feed: full }).feed as RoomedSocketLike
+}
+
+test('rooms: subscribing a room sends args; a frame routes ONLY to its room', async () => {
+    const feed = roomedProxy()
+    const a = feed({ room: 'a' })[Symbol.asyncIterator]()
+    const b = feed({ room: 'b' })[Symbol.asyncIterator]()
+    const ws = lastWs()
+
+    // Two distinct subscribe frames, each carrying its room.
+    const subs = ws.sent.map((raw) => JSON.parse(raw)).filter((f) => f.t === 'sub')
+    expect(subs).toEqual([
+        { t: 'sub', name: 'feed', args: { room: 'a' } },
+        { t: 'sub', name: 'feed', args: { room: 'b' } },
+    ])
+
+    // A room-a data frame reaches a, never b.
+    ws.inbound({ name: 'feed', args: { room: 'a' }, msg: 'to-a' })
+    expect(feed.peek({ room: 'a' })).toBe('to-a')
+    expect(feed.peek({ room: 'b' })).toBeUndefined()
+    expect(await a.next()).toEqual({ value: 'to-a', done: false })
+
+    void a.return?.()
+    void b.return?.()
+})
+
+test('rooms: publish carries the room args on the pub frame', () => {
+    const feed = roomedProxy({ clientPublish: true })
+    feed.publish({ room: 'a' }, 'hi-a')
+    const frames = lastWs().sent.map((raw) => JSON.parse(raw))
+    expect(frames).toContainEqual({ t: 'pub', name: 'feed', args: { room: 'a' }, msg: 'hi-a' })
+})
+
 test('two iterators of the same socket share ONE mux subscription (local fan-out)', () => {
     const chat = makeProxy()
     const a = chat[Symbol.asyncIterator]()

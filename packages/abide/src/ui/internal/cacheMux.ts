@@ -10,6 +10,8 @@
 // total no-op under SSR (no `window`/`WebSocket`), like the rest of the client-only surface.
 
 import type { CacheFrame } from '../../server/internal/cacheChannels.ts'
+import { RPC_CHANNEL_PREFIX } from '../../shared/internal/cacheChannelName.ts'
+import { canonicalKey } from '../../shared/internal/codec.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 
 // Reconnect backoff bounds (CS2.4). Doubles from MIN to MAX, reset on a clean open.
@@ -23,11 +25,13 @@ function isTerminalClose(code: number): boolean {
     return code === 1008 || (code >= 4000 && code <= 4999)
 }
 
-// One active subscription on the mux, keyed by channel/socket name. `onMessage` receives each data
-// frame's payload; `onAck`/`onError` (sockets only) receive the control frames. `replay` is sent on
+// One active subscription on the mux, keyed by `subKey(name, args)`. `name` is the WIRE name (socket /
+// channel); `args` is the ROOM (undefined for a void socket / cache channel). `onMessage` receives each
+// data frame's payload; `onAck`/`onError` (sockets only) receive the control frames. `replay` is sent on
 // the NEXT subscribe frame and then forced true — the first join may be a `replay:false` hydration
 // handoff (CS5), but every RECONNECT replays the tail to catch up (CS2.4).
 interface Subscription {
+    name: string
     args: unknown
     replay: boolean
     onMessage: (payload: unknown) => void
@@ -36,6 +40,16 @@ interface Subscription {
     // Called on a transient disconnect (before a reconnect attempt) so a socket sub can surface
     // `refreshing()`. Undefined for cache channels (no visible transport lifecycle).
     onReconnecting: (() => void) | undefined
+}
+
+// The local subscription key. A roomed USER socket folds the room into the key so distinct rooms of one
+// socket coexist on the tab's single mux (mirrors the server's `subscriptionKey`). A void socket / an
+// `@rpc:` cache channel (whose args are already baked into its NAME, and whose downstream frames carry
+// no `args`) keys by bare name — matching what the server echoes back.
+function subKey(name: string, args: unknown): string {
+    return args === undefined || name.startsWith(RPC_CHANNEL_PREFIX)
+        ? name
+        : `${name} ${canonicalKey(args)}`
 }
 
 const subscriptions = new Map<string, Subscription>()
@@ -66,14 +80,14 @@ function socketUrl(): string {
     return `${scheme}//${location.host}${base}/__abide/sockets`
 }
 
-function sendSubscribe(name: string, sub: Subscription): void {
+function sendSubscribe(sub: Subscription): void {
     if (socket === undefined || socket.readyState !== 1) return
     // Only carry `replay` when it's the non-default `false` (the CS5 hydration join) — the server
     // treats an absent flag as `replay: true`, keeping the cache-channel wire format unchanged.
     const frame =
         sub.replay === false
-            ? { t: MUX_UPSTREAM.sub, name, args: sub.args, replay: false }
-            : { t: MUX_UPSTREAM.sub, name, args: sub.args }
+            ? { t: MUX_UPSTREAM.sub, name: sub.name, args: sub.args, replay: false }
+            : { t: MUX_UPSTREAM.sub, name: sub.name, args: sub.args }
     socket.send(JSON.stringify(frame))
     // After the first send the initial (possibly `false`) replay is spent — a reconnect catches up.
     sub.replay = true
@@ -83,14 +97,16 @@ function sendSubscribe(name: string, sub: Subscription): void {
 // narrowed by field presence. Loose ON PURPOSE — the field NAMES must match `MuxDownstream`; the producer
 // guarantees it sends only conforming frames (`satisfies MuxDownstream` at each send site in router.ts).
 function onMessage(event: MessageEvent): void {
-    let framed: { name?: unknown; msg?: unknown; ok?: unknown; error?: unknown }
+    let framed: { name?: unknown; args?: unknown; msg?: unknown; ok?: unknown; error?: unknown }
     try {
         framed = JSON.parse(String(event.data))
     } catch {
         return
     }
     if (typeof framed.name !== 'string') return
-    const sub = subscriptions.get(framed.name)
+    // Route by the same room-aware key the sub registered under (the server echoes `args` on roomed
+    // frames; omits it for void sockets / cache channels).
+    const sub = subscriptions.get(subKey(framed.name, framed.args))
     if (sub === undefined) return
     if (framed.error !== undefined) {
         sub.onError?.(framed.error)
@@ -123,7 +139,7 @@ function ensureSocket(): void {
         reconnectDelay = RECONNECT_MIN_MS
         // (Re)send every active subscription — this is both the first-join path and the reconnect
         // replay (CS2.4). Then flush buffered publishes.
-        for (const [name, sub] of subscriptions) sendSubscribe(name, sub)
+        for (const sub of subscriptions.values()) sendSubscribe(sub)
         for (const frame of pendingPublishes) ws.send(frame)
         pendingPublishes.length = 0
     })
@@ -153,37 +169,46 @@ function ensureSocket(): void {
     })
 }
 
-// Join the mux channel `name`. `sub` carries the data handler plus optional socket control handlers.
-// Idempotent per name (dedup) — the caller (clientProxy for cache channels, socketProxy for sockets,
-// which refcounts above this) ensures one subscription per name. No-op under SSR.
+// Join the mux channel `name` (room `sub.args`). Idempotent per `(name, room)` (dedup) — the caller
+// (clientProxy for cache channels, socketProxy for sockets, which refcounts above this) ensures one
+// subscription per room. No-op under SSR.
 export function muxSubscribe(name: string, sub: Subscription, mountBase?: string): void {
     if (!isBrowser()) return
-    if (subscriptions.has(name)) return
+    const key = subKey(name, sub.args)
+    if (subscriptions.has(key)) return
     if (mountBase !== undefined) base = mountBase
-    subscriptions.set(name, sub)
+    subscriptions.set(key, sub)
     // Capture openness BEFORE ensureSocket: if the socket was ALREADY open, the open handler won't
     // re-fire for this new sub, so send it now. If it wasn't, `ensureSocket`'s open handler sends every
     // registered subscription (including this one) — sending here too would double-subscribe.
     const wasOpen = isOpen
     ensureSocket()
-    if (wasOpen) sendSubscribe(name, sub)
+    if (wasOpen) sendSubscribe(sub)
 }
 
-// Leave the mux channel `name`. Sends `{t:"unsub"}` when open; always drops the local subscription.
-export function muxUnsubscribe(name: string): void {
+// Leave the mux channel `name` (room `args`). Sends `{t:"unsub"}` when open; always drops the local sub.
+export function muxUnsubscribe(name: string, args?: unknown): void {
     if (!isBrowser()) return
-    subscriptions.delete(name)
+    subscriptions.delete(subKey(name, args))
     if (isOpen && socket !== undefined && socket.readyState === 1) {
-        socket.send(JSON.stringify({ t: MUX_UPSTREAM.unsub, name }))
+        const frame =
+            args === undefined
+                ? { t: MUX_UPSTREAM.unsub, name }
+                : { t: MUX_UPSTREAM.unsub, name, args }
+        socket.send(JSON.stringify(frame))
     }
 }
 
-// Publish one message upstream on socket `name` (fire-and-forget, CS3.4). Buffered and flushed on
-// (re)open if the socket is mid-connect. No-op under SSR.
-export function muxPublish(name: string, msg: unknown, mountBase?: string): void {
+// Publish one message upstream on socket `name` into room `args` (fire-and-forget, CS3.4). Buffered and
+// flushed on (re)open if the socket is mid-connect. No-op under SSR.
+export function muxPublish(name: string, msg: unknown, mountBase?: string, args?: unknown): void {
     if (!isBrowser()) return
     if (mountBase !== undefined) base = mountBase
-    const frame = JSON.stringify({ t: MUX_UPSTREAM.pub, name, msg })
+    const frame = JSON.stringify(
+        args === undefined
+            ? { t: MUX_UPSTREAM.pub, name, msg }
+            : { t: MUX_UPSTREAM.pub, name, args, msg },
+    )
     if (isOpen && socket !== undefined && socket.readyState === 1) socket.send(frame)
     else {
         pendingPublishes.push(frame)
@@ -204,6 +229,7 @@ export function subscribeCacheChannel(
     muxSubscribe(
         channelName,
         {
+            name: channelName,
             args,
             replay: true,
             onMessage: (payload) => apply(payload as CacheFrame),
