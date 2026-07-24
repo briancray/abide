@@ -45,7 +45,7 @@ import { serve } from ${JSON.stringify(servePath)};
 ${MATERIALIZE}
 await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
-const { url, stop } = await serve(${JSON.stringify(dir)}, { dev: true });
+const { url, stop } = await serve(${JSON.stringify(dir)}, { dev: true, port: 0 });
 // Fetch the SSR + client graph BEFORE polluting globals; the server stays up so the graph fetch works.
 const ssr = await (await fetch(url + "/")).text();
 // Real browser condition: window present before the bundle runs.
@@ -122,11 +122,11 @@ async function graphBytes(url, ssr) {
 }
 await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
-const dev = await serve(${JSON.stringify(dir)}, { dev: true });
+const dev = await serve(${JSON.stringify(dir)}, { dev: true, port: 0 });
 const devSsr = await (await fetch(dev.url + "/")).text();
 const devBytes = await graphBytes(dev.url, devSsr);
 await dev.stop();
-const prod = await serve(${JSON.stringify(dir)}, { dev: false });
+const prod = await serve(${JSON.stringify(dir)}, { dev: false, port: 0 });
 const ssr = await (await fetch(prod.url + "/")).text();
 const prodBytes = await graphBytes(prod.url, ssr);
 if (!(prodBytes < devBytes * 0.9)) { console.log("RESULT: not-minified prod=" + prodBytes + " dev=" + devBytes); await prod.stop(); process.exit(6); }
@@ -182,7 +182,7 @@ ${MATERIALIZE}
 await Bun.write(${JSON.stringify(dir)} + "/src/server/rpc/greet.ts", "import { GET } from " + ${JSON.stringify(JSON.stringify(getPath))} + "\\nexport default GET(({ name }) => 'hi ' + name)\\n");
 await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import greet from '../../server/rpc/greet'</script><p>{await greet({name:'ada'})}</p>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
-const { url, stop } = await serve(${JSON.stringify(dir)}, { dev: true });
+const { url, stop } = await serve(${JSON.stringify(dir)}, { dev: true, port: 0 });
 const ssr = await (await fetch(url + "/")).text();
 if (!ssr.includes("hi ada")) { console.log("RESULT: ssr-missing-value"); await stop(); process.exit(3); }
 // Pre-materialize the client graph to disk (real fetch) BEFORE installing the RPC fetch spy.
