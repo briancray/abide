@@ -29,8 +29,9 @@ export interface ReactiveReadSurface<Args, T> {
     // pulled source the way a memo-stream's `invalidate` does.
     invalidate(args?: Partial<Args> | Args): void
     // The single write verb, cardinality-polymorphic: REPLACE on a scalar slot, APPEND on a stream/socket
-    // slot. Updater-form is scalar-only.
-    publish(args: Args, next: T | ((current: T | undefined) => T)): void
+    // slot. Takes a VALUE — the read-modify-write updater form is scalar-only and lives on `Memo` (a
+    // channel only appends, so an updater is meaningless there), so it is NOT in the shared surface.
+    publish(args: Args, next: T): void
     // Run `handler` on slot change; returns a dispose fn. Scalar: fires on an actual value change (a
     // `refreshing` flag-flip is not one). Stream/socket: fires per chunk/message append, handing over the
     // latest (coalesced per flush).

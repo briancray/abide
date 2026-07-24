@@ -115,6 +115,10 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     // the calling reactive context to the slot, so a reactive `{await memo()}` re-runs and re-awaits when
     // the slot invalidates. Resolves with the value or rejects with the error.
     (args: Args): Promise<T>
+    // Widens the shared `publish` with the scalar UPDATER form (read-modify-write): a `Memo` value slot
+    // may be mutated from its current value. A channel/socket only appends, so this overload is
+    // memo-specific. The value form is inherited from ReactiveReadSurface.
+    publish(args: Args, next: T | ((current: T | undefined) => T)): void
     // @deprecated Use the bare call — `memo(args)` IS the load now. Retained as a non-subscribing alias
     // during migration (identical to the bare call minus the reactive subscription).
     load(args: Args): Promise<T>
