@@ -195,8 +195,12 @@ user code), exploiting abide's fetch-based RPC model:
    set those; a cross-site `fetch` that tries triggers a **CORS preflight** that fails under
    the crossOrigin-closed default (§14.3). The server **rejects mutations lacking the shape.**
 3. **Origin/Referer verified against `APP_URL` on mutations** — defense-in-depth for SameSite
-   edge cases / older browsers. A mismatched `Origin` is rejected **unless** the RPC opted into
-   `crossOrigin` and its allowlist admits that origin (CORS is the sanctioned cross-origin path).
+   edge cases / older browsers. The unforgeable `Origin` is preferred; when a browser omits it the
+   check falls back to the `Referer`'s origin (when **neither** is present the mutation is admitted —
+   the non-simple-shape gate in item 2 is the primary defense, and a `no-referrer` policy must not break
+   a legitimate request). A mismatch is rejected **unless** the RPC opted into `crossOrigin` and its
+   allowlist admits that origin (CORS is the sanctioned cross-origin path). Like CX8.1, this check
+   **requires `APP_URL` configured**; an unset `APP_URL` disables it (prod-warned at boot).
 4. **No CSRF tokens** — 1+2+3 fully cover a same-origin fetch app with an abide-controlled
    client; tokens would add ceremony for nothing.
 5. **`crossOrigin` opt-in (§14.3) shifts responsibility to the declared allowlist** — a
@@ -217,9 +221,12 @@ A WS handshake can be opened cross-origin, **sends the cookie**, is **not subjec
 has **inconsistent SameSite**, and **cannot carry custom headers** — so CX-2 defenses (1,2)
 don't apply. Therefore:
 
-1. **Mandatory automatic `Origin` check at `socket-connect`.** The browser always sends an
+1. **Automatic `Origin` check at `socket-connect`.** The browser always sends an
    unforgeable `Origin` on a WS handshake; abide **rejects any upgrade whose `Origin` ≠
-   `APP_URL`** before establishing the connection. Automatic, not user code.
+   `APP_URL`** before establishing the connection. Automatic, not user code. **Requires `APP_URL`
+   configured** — with `APP_URL` unset the gate falls open (legitimate in dev / hand-built apps); in
+   **production** an unset `APP_URL` is warned once at boot, since it disables this gate *and* the AU8.3
+   CSRF Origin/Referer check.
 2. **Cookie-auth WS requires a matching `Origin`; token-auth WS does not.** Non-browser
    clients send no `Origin` and authenticate via bearer/app-token (nothing ambient to hijack).
    Rule: a cookie-authenticated WS **demands** a valid same-origin `Origin`; a bearer/app-token

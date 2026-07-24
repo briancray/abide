@@ -34,7 +34,7 @@ import { jsonl } from '../jsonl.ts'
 import type { Socket } from '../socket.ts'
 import { sse } from '../sse.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
-import { clearIdentityCookieHeader, identityCookieHeader, resolveIdentity } from './auth.ts'
+import { clearIdentityCookieHeader, identityCookieHeader, isProd, resolveIdentity } from './auth.ts'
 import {
     type CacheFrame,
     cacheChannelHub,
@@ -115,21 +115,31 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
         )
     }
 
-    const origin = request.headers.get('origin')
     const appUrl = Bun.env.APP_URL
-    if (origin !== null && appUrl !== undefined && appUrl.length > 0) {
-        let originHost: string
-        let appHost: string
-        try {
-            originHost = new URL(origin).origin
-            appHost = new URL(appUrl).origin
-        } catch {
-            return error(403, 'CSRF: could not verify request Origin against APP_URL.')
-        }
-        // A mismatched Origin is rejected UNLESS this RPC opted into cross-origin access for it (the
-        // `crossOrigin` allowlist) — CORS is the sanctioned way to admit a foreign origin.
-        if (originHost !== appHost && corsAllowOrigin(cors ?? NO_CORS, origin) === undefined) {
-            return error(403, 'CSRF: request Origin does not match APP_URL.')
+    if (appUrl !== undefined && appUrl.length > 0) {
+        // AU8.3 Origin/Referer check. Prefer the unforgeable `Origin`; fall back to `Referer` when a
+        // browser omitted `Origin` on the mutation (older browsers / some same-origin navs). When NEITHER
+        // is present we ALLOW — the non-simple-shape gate above is the primary CSRF defense, and a
+        // `no-referrer` policy must not break a legitimate request. `Referer` is a full URL; `Origin` is
+        // already an origin — `new URL(x).origin` normalizes both to a comparable origin.
+        const claimed = request.headers.get('origin') ?? request.headers.get('referer')
+        if (claimed !== null) {
+            let claimedOrigin: string
+            let appHost: string
+            try {
+                claimedOrigin = new URL(claimed).origin
+                appHost = new URL(appUrl).origin
+            } catch {
+                return error(403, 'CSRF: could not verify request Origin/Referer against APP_URL.')
+            }
+            // A mismatch is rejected UNLESS this RPC opted into cross-origin access for it (the
+            // `crossOrigin` allowlist) — CORS is the sanctioned way to admit a foreign origin.
+            if (
+                claimedOrigin !== appHost &&
+                corsAllowOrigin(cors ?? NO_CORS, claimedOrigin) === undefined
+            ) {
+                return error(403, 'CSRF: request Origin/Referer does not match APP_URL.')
+            }
         }
     }
 
@@ -758,6 +768,16 @@ export function createApp(config: AppConfig = {}): App {
     const routes = config.routes ?? {}
     const globalMiddleware = config.middleware ?? []
     const sockets = config.sockets ?? {}
+
+    // AU8.3 / CX8.1: the Origin/Referer CSRF check and the CSWSH WebSocket-upgrade gate both key off
+    // `APP_URL`. An unset `APP_URL` is legitimate in dev (and for hand-built/test apps), so those gates
+    // fall OPEN rather than block — but in production that silently disables two same-origin defenses.
+    // Warn ONCE at boot (root channel → always emitted, even without DEBUG) so the omission is loud.
+    if (isProd() && (Bun.env.APP_URL === undefined || Bun.env.APP_URL.length === 0)) {
+        log.warn(
+            'APP_URL is unset in production — the CSRF Origin/Referer check and the CSWSH WebSocket-upgrade gate are DISABLED (both fall open). Set APP_URL to your public origin to enable them.',
+        )
+    }
     // CO2.4: server bind time — the clock for `/__abide/health`'s `startedAt`/`uptime`. Captured here
     // (not per request) so uptime measures the process, and survives `abide dev`'s in-place config reloads
     // (the router keeps running; createApp is not re-invoked).

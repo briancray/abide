@@ -145,4 +145,77 @@ describe('CORS via crossOrigin', () => {
             await openApp.stop()
         }
     })
+
+    // AU8.3 Referer fallback: when a browser omits `Origin` on a mutation, the check falls back to the
+    // `Referer` header's origin (a full URL, reduced to its origin). Origin is preferred when present.
+    test('a mutation with only a foreign Referer (no Origin) is CSRF-rejected', async () => {
+        Bun.env.APP_URL = 'https://app.example'
+        const app = await createTestApp({ routes: { save: POST(() => ({ ok: true })) } })
+        try {
+            const rejected = await app.fetch('/__abide/rpc/save', {
+                method: 'POST',
+                headers: { referer: `${FOREIGN}/some/page`, 'content-type': 'application/json' },
+                body: '{}',
+            })
+            expect(rejected.status).toBe(403)
+            await rejected.text()
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('a mutation with a same-origin Referer (no Origin) is allowed', async () => {
+        Bun.env.APP_URL = 'https://app.example'
+        const app = await createTestApp({ routes: { save: POST(() => ({ ok: true })) } })
+        try {
+            const allowed = await app.fetch('/__abide/rpc/save', {
+                method: 'POST',
+                headers: {
+                    referer: 'https://app.example/dashboard',
+                    'content-type': 'application/json',
+                },
+                body: '{}',
+            })
+            expect(allowed.status).toBe(200)
+            await allowed.text()
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('a mutation with NEITHER Origin nor Referer is allowed (no-referrer must not break)', async () => {
+        Bun.env.APP_URL = 'https://app.example'
+        const app = await createTestApp({ routes: { save: POST(() => ({ ok: true })) } })
+        try {
+            const allowed = await app.fetch('/__abide/rpc/save', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: '{}',
+            })
+            expect(allowed.status).toBe(200)
+            await allowed.text()
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('Origin is preferred over Referer — a matching Origin admits despite a foreign Referer', async () => {
+        Bun.env.APP_URL = 'https://app.example'
+        const app = await createTestApp({ routes: { save: POST(() => ({ ok: true })) } })
+        try {
+            const allowed = await app.fetch('/__abide/rpc/save', {
+                method: 'POST',
+                headers: {
+                    origin: 'https://app.example',
+                    referer: `${FOREIGN}/page`,
+                    'content-type': 'application/json',
+                },
+                body: '{}',
+            })
+            expect(allowed.status).toBe(200)
+            await allowed.text()
+        } finally {
+            await app.stop()
+        }
+    })
 })
