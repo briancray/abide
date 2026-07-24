@@ -615,7 +615,7 @@ fresh from 0 and sets `x-abide-stream-resume: fresh` so the client REPLACES its 
 captures its decoded values + registers a `StreamHandle` (`streamScope.ts`/`context.ts`), `collectSeed`
 emits the `streams` seed section (+ inline `values` / `data-ab-count`; `pages.ts`), the emitter tags a
 known-RPC head `{ attachable, rpcName?, args }` (`emitServer.ts`), and `bootstrap.replayStreams` warms the
-cell via `cell.seedStream` — the `values` transcript (A) or a `resumeStreamSource` prefix+`?from` resume
+cell via `cell.seedStream` — the `values` transcript (A) or a `resumeStreamSource` prefix+`?__abide_from` resume
 (B, `fresh`-replaces on attach-miss / prefix-stands on offline) — so `forBlock`'s reactive drain re-reads
 the warm cell with no re-invoke (no separate DOM handoff). Tests (`emitStreamAttach.test.ts`):
 - completed SSR stream → client renders identical items, **RPC source spy shows zero client-side

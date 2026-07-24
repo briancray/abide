@@ -51,9 +51,9 @@ expect(await app.rpc.greet(&#123; name: 'x' &#125;)).toEqual(&#123; greeting: 'h
 expect(await app.rpc.bump(&#123; by: 2 &#125;)).toEqual(&#123; total: 2 &#125;)</code></pre>
 
   <h2 id="fetch">Raw fetch</h2>
-  <p>Drop to <code>fetch(path, init?)</code> against the live origin when you need to assert status codes, headers, or transport details the proxy hides. This is the same <code>Request</code> → <code>Response</code> path the browser hits.</p>
+  <p>Drop to <code>fetch(path, init?)</code> against the live origin when you need to assert status codes, headers, or transport details the proxy hides. This is the same <code>Request</code> → <code>Response</code> path the browser hits. Building the URL by hand means naming the reserved transport param yourself: a read's canonical JSON args blob is <code>?__abide_args=&lt;json&gt;</code> (the <code>__abide_</code> prefix is what stops it colliding with a handler's own arg field). Flat per-field params — <code>?name=x</code> — work too, coerced by the input schema.</p>
   <pre class="code" data-lang="ts"><code>const res = await app.fetch(
-  `/__abide/rpc/greet?args=$&#123;encodeURIComponent(JSON.stringify(&#123; name: 'x' &#125;))&#125;`,
+  `/__abide/rpc/greet?__abide_args=$&#123;encodeURIComponent(JSON.stringify(&#123; name: 'x' &#125;))&#125;`,
 )
 expect(res.status).toBe(200)
 expect(res.headers.get('content-type')).toContain('application/json')
@@ -85,7 +85,7 @@ const loginRes = await app.fetch('/__abide/rpc/login', &#123;
 &#125;)
 const cookie = identityCookie(loginRes) // "abide-identity=…"
 
-const follow = await app.fetch('/__abide/rpc/whoami?args=%7B%7D', &#123; headers: &#123; cookie &#125; &#125;)
+const follow = await app.fetch('/__abide/rpc/whoami?__abide_args=%7B%7D', &#123; headers: &#123; cookie &#125; &#125;)
 expect((await follow.json()).authenticated).toBe(true)</code></pre>
 
   <h2 id="sockets">Sockets</h2>

@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test'
 import { collectSeed, type HydrationSeed } from '../../server/internal/pages.ts'
 import { cell } from '../../shared/cell.ts'
 import { createContext, runInContext } from '../../shared/internal/context.ts'
+import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { resumeStreamSource } from './bootstrap.ts'
 import { loadEmitted } from './emit.ts'
 import { createStreamScope, drainPatches } from './streamScope.ts'
@@ -221,7 +222,9 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?__abide_from=<count>
             expect(clientCalls).toBe(0) // the RPC source was NEVER re-invoked
             expect(fetchUrls.length).toBe(1)
             expect(fetchUrls[0]).toContain('/__abide/rpc/complete?__abide_from=2')
-            expect(fetchUrls[0]).toContain('args=')
+            // The RESERVED namespaced param, not a bare `args=` — a stale name would decode as a flat
+            // arg field called "args" and the real args would silently vanish.
+            expect(fetchUrls[0]).toContain(`&${RPC_QUERY_PARAMS.args}=`)
             const lis = host.querySelectorAll('li')
             expect(Array.from(lis).map((li) => li.textContent)).toEqual([
                 't0',

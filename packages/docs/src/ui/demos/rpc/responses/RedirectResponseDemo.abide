@@ -3,10 +3,14 @@
 
   // A handler returning `redirect(url, status)` is followed transparently by the browser fetch —
   // the resolved `Response` reports `redirected` and the final `url`.
+  //
+  // Hand-built URL, so it names the RESERVED transport param itself: `__abide_args` carries the
+  // canonical JSON args blob. The `__abide_` prefix is what keeps it from ever colliding with a
+  // handler's own arg field.
   let redirectInfo = state(null)
 
   async function followRedirect() {
-    const response = await fetch("/__abide/rpc/rpcGoHome?args=" + encodeURIComponent(JSON.stringify({ to: "/rpc" })))
+    const response = await fetch("/__abide/rpc/rpcGoHome?__abide_args=" + encodeURIComponent(JSON.stringify({ to: "/rpc/reads" })))
     redirectInfo = { redirected: response.redirected, url: new URL(response.url).pathname }
   }
 </script>

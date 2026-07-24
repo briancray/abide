@@ -120,10 +120,18 @@ test.describe('Response helpers', () => {
         await expect(result).toContainText('retryAfter 30')
     })
 
-    test('redirect() is observed by the browser fetch', async ({ page }) => {
+    // The demo builds its RPC URL BY HAND, so it names the reserved transport param itself
+    // (`?__abide_args=<json>`). Its `to` arg is deliberately NOT the handler's default (`/rpc`): a stale
+    // param name decodes as a flat arg field called "args", `to` falls back to the default, and this
+    // assertion fails loudly instead of the guard silently doing nothing.
+    test('redirect() is observed by the browser fetch (hand-built ?__abide_args reaches the handler)', async ({
+        page,
+    }) => {
         await page.goto('/rpc/responses')
         await page.getByTestId('redirect-btn').click()
-        await expect(page.getByTestId('redirect-result')).toHaveText('redirected: true → /rpc')
+        await expect(page.getByTestId('redirect-result')).toHaveText(
+            'redirected: true → /rpc/reads',
+        )
     })
 })
 
@@ -176,6 +184,19 @@ test.describe('Streaming', () => {
         const items = page.getByTestId('sse-list').locator('li')
         await expect(items).toHaveCount(3)
         await expect(items.last()).toHaveText('#3 — final')
+    })
+
+    // The native `EventSource` face of the same sse endpoint. Like the redirect demo it builds the URL by
+    // hand, so it must name the reserved `__abide_args` param; `count: 5` is NOT the handler's default
+    // (3), so a stale param name yields 3 frames and fails here rather than passing by accident.
+    test('sse() is consumable via the native EventSource (hand-built ?__abide_args reaches the handler)', async ({
+        page,
+    }) => {
+        await page.goto('/rpc/streaming')
+        await page.getByTestId('es-btn').click()
+        const items = page.getByTestId('es-list').locator('li')
+        await expect(items).toHaveCount(5, { timeout: 5000 })
+        await expect(items.last()).toHaveText('#5 — final')
     })
 
     test('streaming mutation: a POST yielding jsonl renders each step via {#for await}', async ({

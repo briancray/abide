@@ -385,4 +385,32 @@ describe('flat query-param reads (the hand-testable form)', () => {
             await app.stop()
         }
     })
+
+    // The flip side of the namespacing, and the reason a stale caller fails SILENTLY: a bare `?args=`
+    // is now just an ordinary flat field named "args". The blob is NOT decoded, the handler's real
+    // fields fall back to their defaults, and nothing errors. Any hand-built RPC URL must say
+    // `__abide_args`.
+    test('a bare ?args= is an ordinary arg field, NOT the canonical blob', async () => {
+        const app = await createTestApp({
+            routes: {
+                counter: GET((args: Record<string, unknown>) => ({
+                    key: args.key ?? 'alpha',
+                    keys: Object.keys(args),
+                })),
+            },
+        })
+        try {
+            const res = await app.fetch(
+                `/__abide/rpc/counter?args=${encodeURIComponent(JSON.stringify({ key: 'gamma' }))}`,
+            )
+            expect(res.status).toBe(200)
+            // The blob was NOT unpacked — `key` never arrived, and "args" landed as a literal field.
+            expect(await res.json()).toEqual({
+                key: 'alpha',
+                keys: ['args'],
+            })
+        } finally {
+            await app.stop()
+        }
+    })
 })
