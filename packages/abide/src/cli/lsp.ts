@@ -387,7 +387,7 @@ function overlaySignature(files: Record<string, string>, open: string[]): string
         mix(path)
         mix(files[path] ?? '')
     }
-    mix('')
+    mix('\u0001')
     for (const path of open) mix(path)
     return (hash >>> 0).toString(16)
 }

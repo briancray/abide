@@ -214,7 +214,9 @@ async function emitOne(
     // alone would make the second reuse the first's compiled module (wrong client bundle / hydration
     // mismatch). A component keys by its absolute path (already dir-unique).
     const key =
-        absolutePath !== undefined ? `path:${absolutePath}` : `src:${sourceDir ?? ''} ${source}`
+        absolutePath !== undefined
+            ? `path:${absolutePath}`
+            : `src:${sourceDir ?? ''}\u0000${source}`
     const existing = visited.get(key)
     if (existing !== undefined) return existing
 
