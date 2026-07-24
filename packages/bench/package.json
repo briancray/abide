@@ -11,6 +11,7 @@
     "bench": "bun run run.ts",
     "bench:server": "bun run server.ts",
     "bench:delta": "bun run delta.ts",
+    "bench:gate": "bun run gate.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

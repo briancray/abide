@@ -381,12 +381,23 @@ false-about-the-future. **But each PR carries its own truth-surface delta**: a s
 is wrong the moment it merges. Deferring all doc work to a final sweep is exactly how drift accumulated
 before (it's why `/audit` exists). Step 7 is therefore only the *conceptual* rewrite, not a doc backlog.
 
-0. **Establish the perf baseline** — *before* any hot-path change, because a baseline captured afterwards is
-   worthless. **Six of the eight hot paths this ADR touches have zero measurement today**: probe reads, stream
-   chunk-push, `watch`, channel fanout, the frame codec, and the signal substrate (only SSR render is properly
-   gated). Add microbenches extending `packages/bench/src/serverBenches.ts`'s pattern, then extend `delta.ts`
-   beyond `run.ts` to the server/primitive corpus, and capture baselines on the current commit. Without this,
-   steps 1/3/4/5/6 could each land an unbounded per-probe or per-message regression with `verify` still green.
+0. **Establish the perf baseline — ✅ DONE.** Six of the eight hot paths this ADR touches had *zero*
+   measurement (probe reads, stream chunk-push, `watch`, channel fanout, the frame codec, the signal
+   substrate — only SSR render was gated), so steps 1/3/4/5/6 could each have landed an unbounded per-probe
+   or per-message regression with `verify` green. Now in place:
+   - `packages/bench/src/reactiveBenches.ts` — microbenches for all six, wired into `bench:server`.
+   - `packages/bench/gate.ts` (`bench:gate`) — a **hardware-neutral ratio gate** now run by `verify`.
+     Absolute ns can't gate (machine-specific); ratios between neighbouring benches in one process can —
+     the same trick `bench.spec.ts` uses for SSR's O(n) shape. Bounds sit ≈2–2.5× above observed.
+   - `bench:delta` extended beyond `run.ts` to the server/primitive corpus and now **exits non-zero** on a
+     regression. (It was also *broken*: workspace-local installs aren't hoisted, so the worktree couldn't
+     resolve `@happy-dom/global-registrator` — fixed by linking the per-package `node_modules`.)
+
+   Baselines worth knowing: `probe/peek-scalar` **227 ns**; `stream/push-raw` **51 ns/chunk** vs
+   `stream/cell-drain` **257 ns/chunk** (the cell's per-chunk hooks cost ~5× the raw push — steps 1 and 3
+   **compound** here, so this is the most likely casualty); `codec/jsonl-decode` **306 ns/frame** vs
+   **79 ns/frame** to encode (step 3 replaces the expensive side); `watch/stream-baseline` ≈ `cell-drain`,
+   empirically confirming `watch` fires **0×** on streams today.
 1. **`watch` tick-fix** — per-cardinality (keep scalar dedup, add stream/socket append; stream payload =
    latest chunk). Standalone bug PR.
 2. **`amend`→`publish` rename** — coordinated across `cell.ts`, `router.ts`, `CacheFrame.verb`,

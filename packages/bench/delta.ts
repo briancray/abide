@@ -1,11 +1,22 @@
-// FRONTEND BENCH DELTA.
+// BENCH DELTA — A/B the working tree against a base git ref.
 //
-// Runs the standard bench corpus against the WORKING TREE and against a base git ref (default HEAD),
-// then reports the per-metric change. The point is to answer "did my uncommitted abide changes speed up
-// or slow down render/mount/update vs what's committed?".
+// Runs BOTH corpora against the WORKING TREE and against a base git ref (default HEAD), then reports the
+// per-metric change. The point is to answer "did my uncommitted abide changes speed up or slow down…":
+//   • the UI triad — render / mount / update (`run.ts`)
+//   • the server + reactive/stream/channel primitives (`server.ts`) — route, cache-key, cell, signal,
+//     probe, stream, watch, fanout, codec. Loopback `dispatch/*` rows are included but are the noisiest
+//     (they carry a TCP floor); read those relative to `dispatch/health`.
 //
 //   bun run bench:delta            # working tree vs HEAD
 //   bun run bench:delta -- <ref>   # working tree vs <ref> (branch, tag, or SHA)
+//   bun run bench:delta -- --no-fail   # report only; do not exit non-zero on a regression
+//
+// Exits NON-ZERO when any metric regresses past the threshold, so it can gate a change deliberately.
+// (`bun run verify` uses the cheaper hardware-neutral `bench:gate` instead — this one needs a worktree
+// and runs every bench twice.)
+//
+// Run at the DEFAULT budget for a trustworthy verdict: a short ABIDE_BENCH_TIME makes ±5–10% swings
+// routine and will flag phantom regressions on identical source.
 //
 // The base ref is checked out into a throwaway git worktree. Bench now imports `abide` by package name
 // (not relative `../src`), so to bench the BASE library we run the CURRENT harness with its `abide`
@@ -14,10 +25,11 @@
 // execute identical measurement code against different abide source. A metric is flagged when it moves
 // more than ABIDE_BENCH_THRESHOLD percent (default 5).
 
-import { cp, mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readdir, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BenchReport, ScenarioResult } from './run.ts'
+import type { ServerBenchReport } from './server.ts'
 import type { MetricResult } from './src/measure.ts'
 
 const BENCH_PKG_DIR = import.meta.dir
@@ -25,6 +37,7 @@ const REPO_ROOT = join(BENCH_PKG_DIR, '..', '..')
 const THRESHOLD = Number(process.env.ABIDE_BENCH_THRESHOLD ?? 5)
 
 const baseRef = process.argv.slice(2).find((a) => !a.startsWith('-')) ?? 'HEAD'
+const noFail = process.argv.includes('--no-fail')
 
 async function git(args: string[], cwd: string): Promise<string> {
     const proc = Bun.spawn(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' })
@@ -37,26 +50,39 @@ async function git(args: string[], cwd: string): Promise<string> {
     return out.trim()
 }
 
-// Run the bench harness at `cwd` and parse its JSON report (last JSON line of stdout).
-async function runBenchAt(cwd: string): Promise<BenchReport> {
-    const proc = Bun.spawn(['bun', 'run', 'run.ts', '--json'], {
+// Run one bench harness at `cwd` and parse its JSON report (last JSON line of stdout).
+async function runScriptAt<T>(cwd: string, script: string): Promise<T> {
+    const proc = Bun.spawn(['bun', 'run', script, '--json'], {
         cwd,
         stdout: 'pipe',
         stderr: 'inherit',
         env: process.env,
     })
     const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-    if (code !== 0) throw new Error(`bench run at ${cwd} exited ${code}`)
+    if (code !== 0) throw new Error(`${script} at ${cwd} exited ${code}`)
     const line = out
         .trim()
         .split('\n')
         .filter((l) => l.startsWith('{'))
         .at(-1)
-    if (!line) throw new Error(`bench run at ${cwd} produced no JSON:\n${out}`)
-    return JSON.parse(line) as BenchReport
+    if (!line) throw new Error(`${script} at ${cwd} produced no JSON:\n${out}`)
+    return JSON.parse(line) as T
 }
 
-async function benchBaseRef(): Promise<BenchReport> {
+interface Corpora {
+    frontend: BenchReport
+    server: ServerBenchReport
+}
+
+async function runBenchAt(cwd: string): Promise<Corpora> {
+    // Sequential, not parallel: the server corpus binds loopback sockets and both sides must not
+    // contend for CPU, or the numbers stop being comparable.
+    const frontend = await runScriptAt<BenchReport>(cwd, 'run.ts')
+    const server = await runScriptAt<ServerBenchReport>(cwd, 'server.ts')
+    return { frontend, server }
+}
+
+async function benchBaseRef(): Promise<Corpora> {
     const worktree = await mkdtemp(join(tmpdir(), 'abide-bench-'))
     const worktreeBench = join(worktree, 'packages', 'bench')
     try {
@@ -64,14 +90,33 @@ async function benchBaseRef(): Promise<BenchReport> {
         // node_modules is gitignored (absent in the fresh worktree); reuse this checkout's install for
         // every dependency EXCEPT abide, which the local symlink below pins to the worktree's base source.
         await symlink(join(REPO_ROOT, 'node_modules'), join(worktree, 'node_modules'), 'dir')
+        // Workspace-local installs are NOT hoisted to the root node_modules — `@happy-dom/global-registrator`
+        // lives in packages/{abide,bench}/node_modules — and a fresh worktree has none. Link the base abide
+        // package's install so its own modules (notably `src/test/happydom.ts`) resolve.
+        await symlink(
+            join(REPO_ROOT, 'packages', 'abide', 'node_modules'),
+            join(worktree, 'packages', 'abide', 'node_modules'),
+            'dir',
+        )
         // Run the CURRENT harness (overlay it over the base bench package) so measurement code is fixed.
         await rm(worktreeBench, { recursive: true, force: true })
         await cp(BENCH_PKG_DIR, worktreeBench, {
             recursive: true,
             filter: (src) => !src.includes('node_modules'),
         })
-        // Repoint `abide` to the worktree's BASE source: bench resolves it from its own node_modules first.
+        // Give the overlaid harness this checkout's bench deps, entry by entry, so `abide` can be pinned to
+        // the BASE source below rather than inheriting the workspace link.
         await mkdir(join(worktreeBench, 'node_modules'), { recursive: true })
+        const benchModules = join(REPO_ROOT, 'packages', 'bench', 'node_modules')
+        for (const entry of await readdir(benchModules)) {
+            if (entry === 'abide') continue
+            await symlink(
+                join(benchModules, entry),
+                join(worktreeBench, 'node_modules', entry),
+                'dir',
+            )
+        }
+        // Repoint `abide` to the worktree's BASE source: bench resolves it from its own node_modules first.
         await symlink(
             join(worktree, 'packages', 'abide'),
             join(worktreeBench, 'node_modules', 'abide'),
@@ -92,25 +137,36 @@ interface Row {
     deltaPct: number
 }
 
-function collect(base: BenchReport, current: BenchReport): Row[] {
-    const baseByName = new Map(base.scenarios.map((s) => [s.name, s]))
+function row(label: string, base: number, current: number): Row {
+    return { label, base, current, deltaPct: ((current - base) / base) * 100 }
+}
+
+function collect(base: Corpora, current: Corpora): Row[] {
     const rows: Row[] = []
+
+    // UI triad
+    const baseByName = new Map(base.frontend.scenarios.map((s) => [s.name, s]))
     const metrics: (keyof Omit<ScenarioResult, 'name'>)[] = ['render', 'mount', 'update']
-    for (const cur of current.scenarios) {
+    for (const cur of current.frontend.scenarios) {
         const b = baseByName.get(cur.name)
         if (!b) continue
         for (const metric of metrics) {
             const cm = cur[metric] as MetricResult | null
             const bm = b[metric] as MetricResult | null
             if (!cm || !bm) continue
-            rows.push({
-                label: `${cur.name} · ${metric}`,
-                base: bm.nsPerOp,
-                current: cm.nsPerOp,
-                deltaPct: ((cm.nsPerOp - bm.nsPerOp) / bm.nsPerOp) * 100,
-            })
+            rows.push(row(`${cur.name} · ${metric}`, bm.nsPerOp, cm.nsPerOp))
         }
     }
+
+    // Server + reactive/stream/channel primitives
+    const baseByLabel = new Map(base.server.results.map((r) => [`${r.group}/${r.name}`, r]))
+    for (const cur of current.server.results) {
+        const label = `${cur.group}/${cur.name}`
+        const b = baseByLabel.get(label)
+        if (!b) continue
+        rows.push(row(label, b.metric.nsPerOp, cur.metric.nsPerOp))
+    }
+
     return rows
 }
 
@@ -149,4 +205,14 @@ console.log(`benchmarking base ref: ${baseRef} …`)
 const base = await benchBaseRef()
 console.log('benchmarking working tree …')
 const current = await runBenchAt(BENCH_PKG_DIR)
-printDelta(collect(base, current))
+const rows = collect(base, current)
+printDelta(rows)
+
+const regressed = rows.filter((r) => r.deltaPct > THRESHOLD)
+if (regressed.length > 0 && !noFail) {
+    console.error(
+        `\n\x1b[31m✗ ${regressed.length} metric(s) regressed past ${THRESHOLD}% vs ${baseRef}\x1b[0m`,
+    )
+    console.error('Re-run with --no-fail to report without failing.')
+    process.exit(1)
+}

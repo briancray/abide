@@ -1,0 +1,132 @@
+// HOT-PATH SHAPE GATE — the fast, hardware-neutral perf check that `bun run verify` runs.
+//
+//   bun run bench:gate
+//
+// Why ratios and not absolute ns: a committed absolute baseline is machine-specific and goes stale the
+// moment anyone benches on different hardware. RATIOS between two benches measured in the SAME process on
+// the SAME machine are hardware-neutral — which is exactly the trick `packages/docs/e2e/bench.spec.ts`
+// already uses to gate SSR's O(n) shape. So each bound below compares a hot path against a neighbour and
+// fails only on a genuine constant-factor blowup, not on noise or a slow laptop.
+//
+// Bounds are set ≈2–2.5× above the observed ratio so they absorb short-budget variance while still
+// catching the class of regression ADR 0023 risks (an interface, a per-append effect, or a codec
+// dispatcher silently multiplying a per-read or per-message cost).
+//
+// This runs the PRIMITIVE tiers only — it deliberately skips `server.ts`'s loopback `dispatch/*` benches,
+// which boot a real server and carry a TCP floor (slow and noisy for a gate). Use `bun run bench:server`
+// for the full table and `bun run bench:delta` to A/B a specific change.
+
+import { measure } from './src/measure.ts'
+import { createReactiveBenches } from './src/reactiveBenches.ts'
+import { createServerBenches } from './src/serverBenches.ts'
+
+const MIN_TIME_MS = Number(process.env.ABIDE_BENCH_GATE_TIME ?? 80)
+const MIN_ITERS = Number(process.env.ABIDE_BENCH_GATE_ITERS ?? 10)
+
+interface Bound {
+    // `numerator / denominator` must stay under `max`.
+    numerator: string
+    denominator: string
+    max: number
+    observed: string
+    why: string
+}
+
+// Each bound names the ADR 0023 step that puts it at risk.
+const BOUNDS: Bound[] = [
+    {
+        numerator: 'probe/peek-scalar',
+        denominator: 'signal/get',
+        max: 12,
+        observed: '≈5.7×',
+        why: 'step 4 wraps every probe in a ReactiveReadSurface interface',
+    },
+    {
+        numerator: 'stream/cell-drain',
+        denominator: 'stream/push-raw',
+        max: 12,
+        observed: '≈5.0×',
+        why: "the cell's per-chunk hooks (tick + byte accounting); steps 1 and 3 COMPOUND here",
+    },
+    {
+        numerator: 'watch/stream-baseline',
+        denominator: 'stream/cell-drain',
+        max: 2.5,
+        observed: '≈1.0×',
+        why: 'step 1 makes watch fire per append — a modest rise is intended, a large one is not',
+    },
+    {
+        numerator: 'codec/jsonl-decode',
+        denominator: 'codec/jsonl-encode',
+        max: 10,
+        observed: '≈3.9×',
+        why: 'step 3 replaces the decode side with a union codec + dispatcher',
+    },
+    {
+        numerator: 'fanout/push-100',
+        denominator: 'fanout/push-10',
+        max: 20,
+        observed: '≈8.6× (linear would be 10×)',
+        why: 'step 6 moves channel reads onto the new surface; catches superlinear fanout',
+    },
+    {
+        numerator: 'cell/read-warm',
+        denominator: 'signal/get',
+        max: 20,
+        observed: '≈8.8×',
+        why: 'the dominant in-process RPC read path',
+    },
+]
+
+const timings = new Map<string, number>()
+for (const bench of [...(await createServerBenches()), ...(await createReactiveBenches())]) {
+    const metric = await measure(bench.run, { minTimeMs: MIN_TIME_MS, minIters: MIN_ITERS })
+    timings.set(`${bench.group}/${bench.name}`, metric.nsPerOp)
+}
+
+interface Checked {
+    bound: Bound
+    ratio: number
+    ok: boolean
+}
+
+const checked: Checked[] = []
+for (const bound of BOUNDS) {
+    const numerator = timings.get(bound.numerator)
+    const denominator = timings.get(bound.denominator)
+    if (numerator === undefined || denominator === undefined) {
+        console.error(
+            `✗ bench gate: missing bench for ${bound.numerator} / ${bound.denominator} — was a recipe renamed?`,
+        )
+        process.exit(1)
+    }
+    const ratio = numerator / denominator
+    checked.push({ bound, ratio, ok: ratio <= bound.max })
+}
+
+const labelWidth = Math.max(
+    ...checked.map((c) => `${c.bound.numerator} / ${c.bound.denominator}`.length),
+)
+console.log(`hot-path shape gate (${MIN_TIME_MS}ms/${MIN_ITERS} iters per bench)\n`)
+for (const { bound, ratio, ok } of checked) {
+    const label = `${bound.numerator} / ${bound.denominator}`.padEnd(labelWidth)
+    const mark = ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'
+    console.log(
+        `${mark} ${label}  ${`${ratio.toFixed(2)}×`.padStart(8)}  ≤ ${`${bound.max}×`.padStart(5)}  (was ${bound.observed})`,
+    )
+}
+
+const failures = checked.filter((c) => !c.ok)
+if (failures.length > 0) {
+    console.error(`\n\x1b[31m✗ ${failures.length} hot-path ratio(s) regressed\x1b[0m`)
+    for (const { bound, ratio } of failures) {
+        console.error(
+            `  ${bound.numerator} / ${bound.denominator} = ${ratio.toFixed(2)}× (max ${bound.max}×) — ${bound.why}`,
+        )
+    }
+    console.error(
+        '\nRun `bun run bench:server` for the full table, `bun run bench:delta` to A/B it.',
+    )
+    process.exit(1)
+}
+console.log(`\n\x1b[32m✓ all ${checked.length} hot-path ratios within bounds\x1b[0m`)

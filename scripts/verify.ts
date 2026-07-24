@@ -6,7 +6,10 @@
 //   4. abide     — `abide check` on the docs app + the scaffold starter: type-checks EVERY .abide
 //                  sample, the site itself, and the app `abide scaffold` actually emits
 //   5. test      — abide unit + browser-bundle suite (`bun test`)
-//   6. e2e       — docs + starter Playwright suites (serial + 1 retry; browser coverage of the
+//   6. bench     — hot-path SHAPE gate: hardware-neutral ratio bounds over the reactive/stream/channel
+//                  primitives, so a constant-factor blowup in a per-read or per-message path fails the
+//                  push instead of shipping silently (absolute ns can't gate — it's machine-specific)
+//   7. e2e       — docs + starter Playwright suites (serial + 1 retry; browser coverage of the
 //                  samples and of the scaffolded app end-to-end)
 //
 // Fails fast on the first hard error and exits non-zero, so it can gate a push (CI job or a git
@@ -33,6 +36,7 @@ const steps: Step[] = [
   { name: "abide check — .abide samples + site", run: () => $`bun run --filter docs abide-check` },
   { name: "abide check — scaffold starter", run: () => $`bun run --filter starter abide-check` },
   { name: "test — abide bun test", run: () => $`bun run --filter abide test` },
+  { name: "bench — hot-path shape gate", run: () => $`bun run bench:gate` },
   { name: "e2e — docs Playwright (serial)", run: () => $`bun run --filter docs e2e:ci` },
   { name: "e2e — starter Playwright (serial)", run: () => $`bun run --filter starter e2e:ci` },
 ];

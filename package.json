@@ -11,6 +11,7 @@
     "bench": "bun run --filter @abide/bench bench",
     "bench:server": "bun run --filter @abide/bench bench:server",
     "bench:delta": "bun run --filter @abide/bench bench:delta",
+    "bench:gate": "bun run --filter @abide/bench bench:gate",
     "e2e": "bun run --filter docs e2e:ci && bun run --filter starter e2e:ci",
     "verify": "bun run scripts/verify.ts",
     "verify:fix": "bun run scripts/verify.ts --fix-only"
