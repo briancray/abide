@@ -10,6 +10,7 @@
 // total no-op under SSR (no `window`/`WebSocket`), like the rest of the client-only surface.
 
 import type { CacheFrame } from '../../server/internal/cacheChannels.ts'
+import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 
 // Reconnect backoff bounds (CS2.4). Doubles from MIN to MAX, reset on a clean open.
 const RECONNECT_MIN_MS = 500
@@ -71,8 +72,8 @@ function sendSubscribe(name: string, sub: Subscription): void {
     // treats an absent flag as `replay: true`, keeping the cache-channel wire format unchanged.
     const frame =
         sub.replay === false
-            ? { t: 'sub', name, args: sub.args, replay: false }
-            : { t: 'sub', name, args: sub.args }
+            ? { t: MUX_UPSTREAM.sub, name, args: sub.args, replay: false }
+            : { t: MUX_UPSTREAM.sub, name, args: sub.args }
     socket.send(JSON.stringify(frame))
     // After the first send the initial (possibly `false`) replay is spent — a reconnect catches up.
     sub.replay = true
@@ -170,7 +171,7 @@ export function muxUnsubscribe(name: string): void {
     if (!isBrowser()) return
     subscriptions.delete(name)
     if (isOpen && socket !== undefined && socket.readyState === 1) {
-        socket.send(JSON.stringify({ t: 'unsub', name }))
+        socket.send(JSON.stringify({ t: MUX_UPSTREAM.unsub, name }))
     }
 }
 
@@ -179,7 +180,7 @@ export function muxUnsubscribe(name: string): void {
 export function muxPublish(name: string, msg: unknown, mountBase?: string): void {
     if (!isBrowser()) return
     if (mountBase !== undefined) base = mountBase
-    const frame = JSON.stringify({ t: 'pub', name, msg })
+    const frame = JSON.stringify({ t: MUX_UPSTREAM.pub, name, msg })
     if (isOpen && socket !== undefined && socket.readyState === 1) socket.send(frame)
     else {
         pendingPublishes.push(frame)

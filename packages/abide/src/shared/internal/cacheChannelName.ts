@@ -8,8 +8,10 @@
 import { canonicalKey } from './codec.ts'
 
 // Reserved `@rpc:` namespace keeps a cache channel distinct from a bare user-socket name (which
-// never carries `@`/`:`). Kept in lockstep with the server prefix in cacheChannels.ts / channelAuth.ts.
-const RPC_CHANNEL_PREFIX = '@rpc:'
+// never carries `@`/`:`). Exported as the SINGLE source of truth — `channelAuth.ts` (the security-
+// critical `@rpc:`-vs-user-socket discriminator) imports it rather than restating the literal, so the
+// two can't drift apart.
+export const RPC_CHANNEL_PREFIX = '@rpc:'
 
 // Deterministic channel name for a `(rpc,args)` pair. Stable for canonically-equal args, distinct
 // for different args or a different rpc.

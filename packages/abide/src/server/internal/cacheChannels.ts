@@ -10,13 +10,13 @@
 // collide with a user socket name. The WS-facing join path (with auth) is PR3 — this slice only
 // wires server→hub publishing plus a hub registry that a test can subscribe to directly.
 
-import { cacheChannelName } from '../../shared/internal/cacheChannelName.ts'
+import { cacheChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/cacheChannelName.ts'
 import { SocketHub } from './socketHub.ts'
 
 // Re-exported from the client-safe module so existing server importers keep importing it from here.
 // The name must be IDENTICAL on server and client (the browser mux computes it too), so it lives in
 // `shared/` where both sides can reach it without pulling server transport into the client bundle.
-export { cacheChannelName }
+export { cacheChannelName, RPC_CHANNEL_PREFIX }
 
 // One broadcast frame on a `(rpc,args)` channel. `value` is present ONLY for value-form `publish`
 // (an updater-form publish on a shared slot resolves server-side and broadcasts its RESULT here).

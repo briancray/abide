@@ -22,6 +22,7 @@
 import { health } from '../../shared/health.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
+import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
@@ -979,7 +980,7 @@ export function createApp(config: AppConfig = {}): App {
                 if (frame === null || typeof frame !== 'object') return
                 const connection = connections.get(ws)
                 if (connection === undefined) return
-                if (frame.t === 'sub')
+                if (frame.t === MUX_UPSTREAM.sub)
                     wsSubscribe(
                         ws,
                         connection,
@@ -989,8 +990,14 @@ export function createApp(config: AppConfig = {}): App {
                         sockets,
                         config,
                     )
-                else if (frame.t === 'unsub') wsUnsubscribe(connection, frame.name)
-                else if (frame.t === 'pub') void wsPublish(frame.name, frame.msg, sockets)
+                else if (frame.t === MUX_UPSTREAM.unsub) wsUnsubscribe(connection, frame.name)
+                else if (frame.t === MUX_UPSTREAM.pub)
+                    void wsPublish(frame.name, frame.msg, sockets)
+                // An unrecognized frame type is dropped — but LOUDLY, not silently: a drifted discriminant
+                // would otherwise fail open (e.g. an ignored `unsub` keeps a stream pumping). Gated channel,
+                // so it never spams prod logs unless DEBUG names it.
+                else if (frame.t !== undefined)
+                    log.channel('abide:socket').warn('dropped unknown mux frame type:', frame.t)
             },
             close(ws): void {
                 const connection = connections.get(ws)

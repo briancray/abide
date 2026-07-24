@@ -16,7 +16,7 @@
 // presenting args-for-B (which its identity is allowed to read) and slip past the gate.
 
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
-import { cacheChannelName } from './cacheChannels.ts'
+import { cacheChannelName, RPC_CHANNEL_PREFIX } from './cacheChannels.ts'
 import { compose } from './middleware.ts'
 import type { AppConfig } from './router.ts'
 import { type Principal, type RequestScope, runInScope } from './scope.ts'
@@ -28,8 +28,6 @@ export interface SocketConnectionData {
     request: Request
     identity: Principal
 }
-
-const RPC_CHANNEL_PREFIX = '@rpc:'
 
 // A unique 200 Response that is returned ONLY when the composed chain reaches its terminal
 // untouched (no middleware short-circuited). Identity comparison (`===`) — not a status check —

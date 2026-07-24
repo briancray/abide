@@ -56,7 +56,10 @@ export function normalizeCrossOrigin(option: unknown): NormalizedCors | undefine
     else if (typeof spec.origin === 'string') origins = [spec.origin]
     else if (Array.isArray(spec.origin))
         origins = spec.origin.filter((value): value is string => typeof value === 'string')
-    else origins = true
+    // A malformed `origin` (null, a number, an object, a misspelled key…) fails CLOSED — an empty
+    // allowlist admits nothing — NOT open to every origin. Matches the array branch's fail-closed filter;
+    // a config typo must never silently expose an RPC cross-origin. (Runs per request, so no warn here.)
+    else origins = []
     return {
         origins,
         methods: Array.isArray(spec.methods) ? spec.methods.join(', ') : DEFAULT_METHODS,

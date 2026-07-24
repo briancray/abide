@@ -34,8 +34,10 @@ export function applyResponseHeaders(response: Response): Response {
         headers.set('referrer-policy', 'strict-origin-when-cross-origin')
     if (isProd() && !headers.has('strict-transport-security'))
         headers.set('strict-transport-security', 'max-age=63072000; includeSubDomains')
+    // Case-insensitive: a `Content-Type` is a case-insensitive token, and `Text/HTML` must not slip past
+    // the clickjacking guard (the CSRF gate in router.ts normalizes the same way).
     if (
-        (headers.get('content-type') ?? '').startsWith('text/html') &&
+        (headers.get('content-type') ?? '').toLowerCase().startsWith('text/html') &&
         !headers.has('x-frame-options')
     )
         headers.set('x-frame-options', 'SAMEORIGIN')

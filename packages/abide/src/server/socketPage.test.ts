@@ -7,6 +7,7 @@
 
 import { expect, test } from 'bun:test'
 import { createTestApp } from '../test/createTestApp.ts'
+import { GET } from './GET.ts'
 import { buildClient } from './internal/clientBundle.ts'
 import type { AppConfig } from './internal/router.ts'
 import { socket } from './socket.ts'
@@ -64,6 +65,18 @@ test('importing a non-browser-reachable socket into a UI page is a build error (
         sockets: { secret: socket<string>({ clients: { browser: false } }) },
         pages: {
             '/': "<script>import { secret } from '../server/sockets/secret.ts'</script><p>{secret.peek()}</p>",
+        },
+    }
+    await expect(buildClient(config)).rejects.toThrow(/not browser-reachable/)
+})
+
+// M6: symmetric with the socket case above — rpcSpecs previously copied a browser:false RPC into the
+// client bundle SILENTLY (the flag was honored only by OpenAPI curation). Now it's a build error too.
+test('importing a non-browser-reachable RPC into a UI page is a build error (M6, symmetric with sockets)', async () => {
+    const config: AppConfig = {
+        routes: { secret: GET(() => ({ ok: true }), { clients: { browser: false } }) },
+        pages: {
+            '/': "<script>import secret from '../server/rpc/secret.ts'</script><p>{secret.peek()}</p>",
         },
     }
     await expect(buildClient(config)).rejects.toThrow(/not browser-reachable/)
