@@ -57,7 +57,7 @@ reserved transport params are namespaced (`__abide_args`, `__abide_from`) so the
 handler's own arg fields; the JSON blob wins when both are present.
 
 **RPC `opts`**: `{ schemas?: { input?, output?, files? }, clients?: { browser?, mcp?, cli? },
-middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, shared?, tags? } }`.
+middleware?, crossOrigin?, maxBodySize?, timeout?, memo?: false | { ttl?, shared?, tags? } }`.
 - **No schema** → input/output JSON Schema is **type-derived** (TS7), runtime-enforced, loud on
   unrepresentable types. The handler arg needs no annotation when a destructuring **default** types it
   (`GET(({ n = 0 }) => …)` derives `{ n?: number }`); an annotation or explicit generic still works. A
@@ -71,12 +71,12 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
   authorization** — auth is `middleware`. `{ browser: { validate: false | true } }`; `true` ships
   the real validator client-side for parity.
 - **`middleware`**: `Array<(next) => Response>` run for this RPC (composed inside the global chain).
-- **`cache`** (unified across verbs; `docs/spec/replayable-streams.md`): `ttl` (ms; **reads** default ∞,
+- **`memo`** (unified across verbs; `docs/spec/replayable-streams.md`): `ttl` (ms; **reads** default ∞,
   **mutations** default `0` = coalesce identical concurrent in-flight calls, retain nothing — a mutation
-  that sets `cache: { ttl }` retains like a read on **both** the server and client memo, so its
+  that sets `memo: { ttl }` retains like a read on **both** the server and client memo, so its
   `peek`/`refresh`/`refreshing` probes come alive), `shared` (opt-in cross-request server cache;
   ambient-scope reads fail-closed; pure-over-args), `tags`.
-  `cache: false` opts a call OUT of the memo entirely (every call runs; a mutation's at-least-once). A
+  `memo: false` opts a call OUT of the memo entirely (every call runs; a mutation's at-least-once). A
   `FormData` mutation body always bypasses (can't be keyed). A streaming handler that yields an
   `AsyncIterable` (or `jsonl(gen())`, which sees through to it) is stored as a **ReplayableStream**
   (replay-then-live; ttl clock from stream CLOSE; open streams pinned; per-stream cap
@@ -232,7 +232,7 @@ This surface is **identical for reads and mutations** (full symmetry). A read (`
 `StreamRead`; a mutation (`POST`/`PUT`/`PATCH`/`DELETE`) is a `MutationSurface` = `Mutation extends Rpc`
 (value) or `StreamMutation extends StreamRead` (streaming) — every probe/verb below is present on both.
 Mutations differ only in transport (args in body + CSRF gate) and the default TTL (`0` vs a read's ∞), so
-`peek`/`refresh`/`refreshing` reflect a retained value only when a mutation opts into `cache: { ttl }`.
+`peek`/`refresh`/`refreshing` reflect a retained value only when a mutation opts into `memo: { ttl }`.
 
 | Form | Meaning |
 | --- | --- |

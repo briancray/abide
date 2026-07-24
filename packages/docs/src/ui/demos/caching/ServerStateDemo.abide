@@ -9,7 +9,7 @@
   // `watch`. Bump → the write propagates through the derived value and fires the subscription, all on the
   // server. Nothing here is client state except this snapshot of the last read.
   let snap = state<{ total: number; doubled: number; fires: number } | null>(null)
-  // The read is `cache: false`, so each bare call re-fetches the live server value (no client cache). A
+  // The read is `memo: false`, so each bare call re-fetches the live server value (no client cache). A
   // read AFTER the bump lands once the server-side `watch` has fired (it's scheduled on a microtask), so
   // `fires` reflects the write; `doubled` is a pull-based `computed`, always current.
   async function refresh() { snap = await serverReactiveRead() }

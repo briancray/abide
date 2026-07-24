@@ -76,7 +76,7 @@ const guardOwnRow: Middleware = (next) => {
 // channel registry from sharing a hub across tests.
 function guardedProfile(): Rpc<{ id: string }, { id: string; secret: string }> {
     return makeRead('GET', async ({ id }: { id: string }) => ({ id, secret: `secret-${id}` }), {
-        cache: { shared: true },
+        memo: { shared: true },
         middleware: [guardOwnRow],
     })
 }
@@ -89,7 +89,7 @@ function publicProfile(): Rpc<{ id: string }, { id: string; open: boolean }> {
             id,
             open: true,
         }),
-        { cache: { shared: true } },
+        { memo: { shared: true } },
     )
 }
 

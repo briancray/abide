@@ -1,6 +1,6 @@
 import { POST } from 'abide/server/POST'
 
-// A CACHED mutation. `cache: { ttl }` opts this POST into retention, so it gains the full read surface
+// A CACHED mutation. `memo: { ttl }` opts this POST into retention, so it gains the full read surface
 // on the client: a repeat call within the ttl HITS the cache (handler not re-run), `.peek(args)` returns
 // the retained value, and `.refresh(args)` re-runs the handler (`.refreshing(args)` is true meanwhile).
 // The module `runs` counter makes each real execution observable — a cache hit keeps the number, a
@@ -11,5 +11,5 @@ export default POST(
         runs++
         return { id, runs }
     },
-    { cache: { ttl: 60_000 } },
+    { memo: { ttl: 60_000 } },
 )

@@ -871,7 +871,7 @@ export function createApp(config: AppConfig = {}): App {
     // transport-free. Value-form `publish` carries a `value`; invalidate/refresh do not.
     for (const [name, route] of Object.entries(routes)) {
         const meta = route.__rpc
-        if (meta.read && meta.options.cache !== false && meta.options.cache?.shared === true) {
+        if (meta.read && meta.options.memo !== false && meta.options.memo?.shared === true) {
             // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
             ;(route as Rpc<any, any>).bindBroadcast((verb, args, value): void => {
                 const frame: CacheFrame = verb === 'publish' ? { verb, value } : { verb }

@@ -11,5 +11,5 @@ export default GET(
         runs++
         return { tag, runs }
     },
-    { cache: { shared: true, tags: ['docs'] } },
+    { memo: { shared: true, tags: ['docs'] } },
 )

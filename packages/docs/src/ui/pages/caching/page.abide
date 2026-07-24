@@ -17,8 +17,8 @@
     <CounterCacheDemo />
   </Demo>
 
-  <p>The opposite of the default: <code>cache: false</code> opts a call OUT of the memo entirely — every call runs, on both sides (no retain, no coalesced reuse, no client cache). Read both below: the <code>cache: false</code> counter <strong>climbs</strong> on every read while the default cached one <strong>holds</strong>. (A <code>cache: false</code> mutation is the same — every call runs, at-least-once; a <code>FormData</code> body always bypasses too, since it can't be cache-keyed.)</p>
-  <Demo id="cache-false" title="<code>cache: false</code> — every call runs" server="src/server/rpc/cacheOff.ts" client="src/ui/demos/caching/CacheFalseDemo.abide" tab="server">
+  <p>The opposite of the default: <code>memo: false</code> opts a call OUT of the memo entirely — every call runs, on both sides (no retain, no coalesced reuse, no client cache). Read both below: the <code>memo: false</code> counter <strong>climbs</strong> on every read while the default cached one <strong>holds</strong>. (A <code>memo: false</code> mutation is the same — every call runs, at-least-once; a <code>FormData</code> body always bypasses too, since it can't be cache-keyed.)</p>
+  <Demo id="cache-false" title="<code>memo: false</code> — every call runs" server="src/server/rpc/cacheOff.ts" client="src/ui/demos/caching/CacheFalseDemo.abide" tab="server">
     <CacheFalseDemo />
   </Demo>
 
@@ -33,12 +33,12 @@
   </Demo>
 
   <p>A <code>shared</code> read's slot is process-global. Each <code>raw()</code> is a separate request: the shared read returns the <strong>same</strong> run count both times (one handler run served both), while a per-request (non-shared) read re-runs and <strong>climbs</strong>. The shared handler is identity-independent and fail-closed.</p>
-  <Demo id="shared" title="<code>cache: {'{'} shared: true {'}'}</code> — cross-request cache" server="src/server/rpc/cacheShared.ts" client="src/ui/demos/caching/SharedDemo.abide" tab="server">
+  <Demo id="shared" title="<code>memo: {'{'} shared: true {'}'}</code> — cross-request cache" server="src/server/rpc/cacheShared.ts" client="src/ui/demos/caching/SharedDemo.abide" tab="server">
     <SharedDemo />
   </Demo>
 
   <p>A shared read with a 700ms TTL. Two reads inside the window return the same count (served from cache); after the window elapses the next read re-runs the handler and the count climbs.</p>
-  <Demo id="ttl" title="<code>cache: {'{'} ttl {'}'}</code> — the slot expires + re-fetches" server="src/server/rpc/cacheTtl.ts" client="src/ui/demos/caching/TtlDemo.abide" tab="server">
+  <Demo id="ttl" title="<code>memo: {'{'} ttl {'}'}</code> — the slot expires + re-fetches" server="src/server/rpc/cacheTtl.ts" client="src/ui/demos/caching/TtlDemo.abide" tab="server">
     <TtlDemo />
   </Demo>
 </main>

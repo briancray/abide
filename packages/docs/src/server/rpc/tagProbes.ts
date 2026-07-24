@@ -27,5 +27,5 @@ export default GET(
             refreshingAfterRefresh,
         }
     },
-    { cache: false },
+    { memo: false },
 )

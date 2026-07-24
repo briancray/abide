@@ -48,7 +48,7 @@ describe('cacheChannels — broadcast substrate', () => {
         const profile = makeRead(
             'GET',
             async ({ id }: { id: number }) => ({ id, name: `n${id}` }),
-            { cache: { shared: true } },
+            { memo: { shared: true } },
         )
         bindLikeCreateApp(profile, 'profileA')
 
@@ -65,7 +65,7 @@ describe('cacheChannels — broadcast substrate', () => {
 
     test("shared read value-form publish broadcasts {verb:'publish', value}", async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id, count: 0 }), {
-            cache: { shared: true },
+            memo: { shared: true },
         })
         bindLikeCreateApp(profile, 'profileB')
 
@@ -78,7 +78,7 @@ describe('cacheChannels — broadcast substrate', () => {
 
     test('shared read updater-form publish broadcasts the RESOLVED value', async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id, count: 1 }), {
-            cache: { shared: true },
+            memo: { shared: true },
         })
         bindLikeCreateApp(profile, 'profileC')
 
@@ -107,7 +107,7 @@ describe('cacheChannels — broadcast substrate', () => {
 
     test('createApp binds shared read broadcast via the route name seam', async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id }), {
-            cache: { shared: true },
+            memo: { shared: true },
         })
         const app = createApp({ routes: { profileE: profile } })
         try {

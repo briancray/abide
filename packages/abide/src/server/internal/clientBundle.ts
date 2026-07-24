@@ -74,11 +74,11 @@ function rpcSpecs(
     importedNames: Set<string>,
 ): Record<
     string,
-    { method: string; read: boolean; shared: boolean; cache: boolean; ttl: number | null }
+    { method: string; read: boolean; shared: boolean; memo: boolean; ttl: number | null }
 > {
     const specs: Record<
         string,
-        { method: string; read: boolean; shared: boolean; cache: boolean; ttl: number | null }
+        { method: string; read: boolean; shared: boolean; memo: boolean; ttl: number | null }
     > = {}
     for (const entry of buildRegistry(config).rpcs) {
         if (!importedNames.has(entry.name)) continue
@@ -91,7 +91,7 @@ function rpcSpecs(
             method: entry.method,
             read: entry.read,
             shared: entry.shared,
-            cache: entry.cache,
+            memo: entry.memo,
             ttl: entry.ttl,
         }
     }

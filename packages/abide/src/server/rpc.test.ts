@@ -174,14 +174,14 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
         })
     })
 
-    test('an author-cached mutation (cache: { ttl }) RETAINS and its probes reflect it', async () => {
+    test('an author-cached mutation (memo: { ttl }) RETAINS and its probes reflect it', async () => {
         let calls = 0
         const post = POST(
             async (n: number) => {
                 calls++
                 return n * 10
             },
-            { cache: { ttl: 60_000 } },
+            { memo: { ttl: 60_000 } },
         )
         await runInScope(makeScope(), async () => {
             expect(await post(5)).toBe(50)
@@ -197,14 +197,14 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
         })
     })
 
-    test('cache: false opts the CALL out of the memo (at-least-once) but keeps the surface', async () => {
+    test('memo: false opts the CALL out of the memo (at-least-once) but keeps the surface', async () => {
         let calls = 0
         const post = POST(
             async (n: number) => {
                 calls++
                 return n
             },
-            { cache: false },
+            { memo: false },
         )
         await runInScope(makeScope(), async () => {
             await post(1)
@@ -238,7 +238,7 @@ describe('__rpc router metadata', () => {
 
     test('__rpc carries the original handler and the passed options', () => {
         const handler = (n: number) => n
-        const options = { timeout: 1000, cache: { ttl: 50 } }
+        const options = { timeout: 1000, memo: { ttl: 50 } }
         const get = GET(handler, options)
         expect(get.__rpc.handler).toBe(handler)
         expect(get.__rpc.options).toBe(options)

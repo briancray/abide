@@ -97,18 +97,18 @@ function mutationInit(method: string, args: unknown): RequestInit {
 // differences are transport (a read GETs with `?__abide_args=`; a mutation POSTs the body + CSRF header) and
 // the default cache policy (carried by the spec's `ttl`: reads retain, mutations coalesce-only). Every
 // probe/verb (peek/pending/refreshing/refresh/invalidate/publish/watch/chunks/done/raw) is attached for
-// both, so an author who caches a mutation (`cache: { ttl }`) gets the identical reactive surface.
+// both, so an author who caches a mutation (`memo: { ttl }`) gets the identical reactive surface.
 export function clientProxy<Args = unknown, T = unknown>(
     name: string,
     method: string,
-    opts?: { base?: string; shared?: boolean; cache?: boolean; ttl?: number | null },
+    opts?: { base?: string; shared?: boolean; memo?: boolean; ttl?: number | null },
 ): Rpc<Args, T> | Mutation<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
-    // A read OR mutation whose author set `cache: false` bypasses the client memo on the bare call
+    // A read OR mutation whose author set `memo: false` bypasses the client memo on the bare call
     // (direct fetch every time; at-least-once for a mutation), mirroring the server. Default reads and
     // mutations are memoed.
-    const memoed = opts?.cache !== false
+    const memoed = opts?.memo !== false
 
     // Transport + decode: a jsonl/sse response decodes to an AsyncIterable (ReplayableStream) so a
     // streaming handler is consumed identically on both sides (`{#for await x of rpc()}`); a value
@@ -125,7 +125,7 @@ export function clientProxy<Args = unknown, T = unknown>(
     }
 
     // `ttl: null`/undefined → the memo default (Infinity, retain until invalidate) — a read's policy. A
-    // mutation's spec carries `ttl: 0` by default (coalesce concurrent, retain nothing); `cache: { ttl }`
+    // mutation's spec carries `ttl: 0` by default (coalesce concurrent, retain nothing); `memo: { ttl }`
     // carries the author's value so a cached mutation retains on the client too.
     const ttl = opts?.ttl
     const loadForMemo = load as (args: Args) => Promise<T>
@@ -153,7 +153,7 @@ export function clientProxy<Args = unknown, T = unknown>(
     }
 
     // THE CALL (Promise-read model): a memoed read or mutation routes through the memo (coalesce +
-    // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `cache: false` call
+    // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `memo: false` call
     // (read OR mutation) bypasses the memo — every call runs (direct fetch; at-least-once for a
     // mutation), mirroring the server. A FormData mutation body always bypasses (can't be keyed).
     const rpc = ((args: Args | FormData): Promise<T> => {
@@ -219,7 +219,7 @@ export function clientProxy<Args = unknown, T = unknown>(
 export function makeClientImports(
     specs: Record<
         string,
-        { method: string; read: boolean; shared?: boolean; cache?: boolean; ttl?: number | null }
+        { method: string; read: boolean; shared?: boolean; memo?: boolean; ttl?: number | null }
     >,
     base?: string,
 ): Record<string, unknown> {
@@ -229,7 +229,7 @@ export function makeClientImports(
             base: base ?? '',
             shared: spec.shared === true,
             // Absent → memoed (default); only an explicit `false` opts the call out of the memo.
-            cache: spec.cache !== false,
+            memo: spec.memo !== false,
             ttl: spec.ttl ?? null,
         })
     }

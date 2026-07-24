@@ -1,6 +1,6 @@
-// POST — mutating RPC helper (rpc-core §4). Routes through a memo defaulting to `cache: { ttl: 0 }`
+// POST — mutating RPC helper (rpc-core §4). Routes through a memo defaulting to `memo: { ttl: 0 }`
 // (replayable-streams.md §1): coalesce identical CONCURRENT in-flight calls (per-request scope, so
-// inert for the normal one-call-per-request case), retain nothing. `cache: false` opts out entirely; a
+// inert for the normal one-call-per-request case), retain nothing. `memo: false` opts out entirely; a
 // FormData body always bypasses the memo. Exposes the FULL `Rpc`/`StreamRead` surface (peek/refresh/
 // publish/chunks/…) — symmetric with a read; mounted at `/__abide/rpc/<name>`.
 

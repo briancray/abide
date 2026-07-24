@@ -19,5 +19,5 @@
   <Demo id="server-state" title="<code>state</code> + <code>computed</code> + <code>watch</code> across server modules" server="src/shared/serverReactive.ts" client="src/ui/demos/caching/ServerStateDemo.abide" tab="server">
     <ServerStateDemo />
   </Demo>
-  <p class="note">Module-level server <code>state</code> is <strong>process-global</strong> (one value across all requests) — right for a global like this counter; for mutable per-request or per-user state, reach for <code>cache: {'{'} shared {'}'}</code> instead, which is guarded and identity-safe.</p>
+  <p class="note">Module-level server <code>state</code> is <strong>process-global</strong> (one value across all requests) — right for a global like this counter; for mutable per-request or per-user state, reach for <code>memo: {'{'} shared {'}'}</code> instead, which is guarded and identity-safe.</p>
 </main>

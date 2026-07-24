@@ -1,6 +1,6 @@
 // Cache TAG registry + global tag selectors — rpc-core §8, shared-cache-plan §2.4 (PR4).
 //
-// A SHARED memo declaring `cache: { tags: [...] }` registers itself here (server-only) under each
+// A SHARED memo declaring `memo: { tags: [...] }` registers itself here (server-only) under each
 // tag. The global verbs `invalidate({ tags })` / `refresh({ tags })` — the ONLY global cache-verb
 // form (per-callable `fn.invalidate/refresh/publish` stay canonical) — select every registered memo
 // carrying ANY listed tag and run its local drop/revalidate, which (through the memo's already-bound

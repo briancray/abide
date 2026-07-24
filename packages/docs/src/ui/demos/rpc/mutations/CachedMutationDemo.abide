@@ -2,7 +2,7 @@
   import { state } from "abide/shared/state"
   import rpcBumpCounter from "$server/rpc/rpcBumpCounter"
 
-  // A mutation opted into caching (`cache: { ttl }`) gets the SAME reactive surface as a read. Calling
+  // A mutation opted into caching (`memo: { ttl }`) gets the SAME reactive surface as a read. Calling
   // it retains the value: a second call HITS the cache (the run number stays), while `.refresh()` re-runs
   // the handler (the run number bumps). `.peek()` snapshots the retained value; `.refreshing()` reports
   // the revalidation. This is the read/mutation symmetry — the exact same probes a GET exposes.

@@ -54,7 +54,7 @@ An implementer must know the starting point; the spec is honest about the gap.
   Promise.resolve(fn(args))` with no memo, no key, no coalescing (`makeRpc.ts:176-181`). So today
   identical *concurrent* mutations **each execute** — coalescing them is new behavior, not the status
   quo.
-- **`RpcOptions.cache` is `{ ttl?, shared?, tags? }`** (`makeRpc.ts:53`) — there is no `cache: false`.
+- **`RpcOptions.memo` is `{ ttl?, shared?, tags? }`** (`makeRpc.ts:53`) — there is no `memo: false`.
 - **Streaming handlers return encoded bytes.** `jsonl(iterable)` / `sse(iterable)` return a `Response`
   wrapping a `ReadableStream<Uint8Array>`; the `T` values are JSON-encoded to bytes *before* the memo
   sees the return value, and the router passes the Response through untouched (`if (result instanceof
@@ -92,11 +92,11 @@ Every verb routes through the same memo (coalesce + cache + reactive slot). The 
 distinction narrows to (a) the **wire** (method, args-in-URL vs args-in-body, CSRF) — unchanged — and
 (b) the **default cache policy**:
 
-- **Reads (`GET`/`HEAD`)** default `cache: { ttl: ∞ }` — coalesce concurrent identical calls within a
+- **Reads (`GET`/`HEAD`)** default `memo: { ttl: ∞ }` — coalesce concurrent identical calls within a
   scope, and cache the settled value (cross-request only under `shared: true`; a non-shared read's slot
   lives in the per-request `getContext().cache` and dies with the request — `memo.ts:174`). Current
   behavior.
-- **Mutations (`POST`/`PUT`/`PATCH`/`DELETE`)** default **`cache: { ttl: 0 }`** — coalesce identical
+- **Mutations (`POST`/`PUT`/`PATCH`/`DELETE`)** default **`memo: { ttl: 0 }`** — coalesce identical
   concurrent in-flight calls, retain nothing after settle (dispose once the live ref-count drains, §2).
 
 **What `ttl: 0` coalescing actually dedupes — scope matters, and it makes `ttl: 0` a safe default.** A
@@ -111,16 +111,16 @@ effects into one run is always an explicit author choice — never a silent defa
 `ttl: 0` is safe as the default: the "two POSTs → one execution" case only arises under an opt-in
 `shared` mutation, where the pure-over-args contract already applies.
 
-`cache: false` is the escape hatch: opt OUT of the memo entirely so **even intra-scope concurrent
+`memo: false` is the escape hatch: opt OUT of the memo entirely so **even intra-scope concurrent
 identical calls each execute** — for a genuinely non-idempotent handler (mint an idempotency key, append
-a log line twice) where every call must run. `cache: { … }` overrides the per-verb default.
+a log line twice) where every call must run. `memo: { … }` overrides the per-verb default.
 
 | Option | Enters memo? | Concurrent-identical (same scope) | After settle | Cache verbs | Default for |
 | --- | --- | --- | --- | --- | --- |
-| `cache: { ttl: ∞ }` | yes | coalesce | retain until LRU | full | reads |
-| `cache: { ttl: 0 }` | yes | **coalesce** to one run | dispose on drain | full (surface present; slot is transient) | **mutations** |
-| `cache: { ttl: n }` | yes | coalesce | retain n ms after settle | full | opt-in: cacheable POST; late-join replay window |
-| `cache: false` | no | each executes | nothing | none | opt-out: non-idempotent handlers; file-bearing FormData; hand-built `Response` |
+| `memo: { ttl: ∞ }` | yes | coalesce | retain until LRU | full | reads |
+| `memo: { ttl: 0 }` | yes | **coalesce** to one run | dispose on drain | full (surface present; slot is transient) | **mutations** |
+| `memo: { ttl: n }` | yes | coalesce | retain n ms after settle | full | opt-in: cacheable POST; late-join replay window |
+| `memo: false` | no | each executes | nothing | none | opt-out: non-idempotent handlers; file-bearing FormData; hand-built `Response` |
 
 Type change: `cache?: false | { ttl?: number; shared?: boolean; tags?: string[] }` (`makeRpc.ts:53`).
 
@@ -135,10 +135,10 @@ required regardless: a raw `FormData` is a class instance, so `canonicalKey` **t
 the non-`Object.prototype` guard — `codec.ts:90-92` — it does not silently collide.) The one part with
 **no** cheap canonical value is a **`File`/`Blob`** field: hashing metadata (name/size) can conflate two
 different files, and hashing bytes is expensive and defeats streaming uploads. So a `FormData` **carrying
-file parts** is `cache: false` (or the author supplies an explicit `key`); a **file-free** `FormData` of
+file parts** is `memo: false` (or the author supplies an explicit `key`); a **file-free** `FormData` of
 scalar/array fields coalesces normally via its coerced args — a distinct concurrent upload of *different*
-files (user A `cat.jpg`, user B `dog.jpg`) is `cache: false` and each executes, never conflated. A
-hand-built `Response` returned by a handler is likewise `cache: false` (opaque, single-consumption, not
+files (user A `cat.jpg`, user B `dog.jpg`) is `memo: false` and each executes, never conflated. A
+hand-built `Response` returned by a handler is likewise `memo: false` (opaque, single-consumption, not
 replayable — see §4).
 
 **Mutation public surface mirrors a read (full symmetry).** A memo-backed mutation exposes the SAME
@@ -147,9 +147,9 @@ surface as a read — `peek`/`pending`/`refreshing`/`refresh`/`invalidate`/`publ
 DELETE return `MutationSurface<Args, R>` (`Mutation extends Rpc` for a value handler, `StreamMutation
 extends StreamRead` for a streaming one). The only differences are transport (method + args-in-body +
 the CSRF gate, keyed off `__rpc.read`) and the default TTL: a mutation defaults to `ttl: 0`, so the slot
-is transient and the probes just report "nothing retained" — until the author opts into `cache: { ttl }`,
+is transient and the probes just report "nothing retained" — until the author opts into `memo: { ttl }`,
 at which point retention + `peek`/`refresh`/`refreshing` behave exactly like a read (on both the server
-and the client memo; `cache: false` bypasses the client memo too). Cross-callable invalidation is
+and the client memo; `memo: false` bypasses the client memo too). Cross-callable invalidation is
 unchanged — a mutation handler still invalidates *other* reads by calling their verbs (`todos.invalidate()`).
 
 ### 2. TTL semantics: the clock starts at "settled" — resolve for a value, CLOSE for a stream; slots are ref-counted while open
@@ -174,7 +174,7 @@ inflight-start is after the previous identical call's ref-count hit 0 re-execute
 coalesces.*
 
 **Empty-refcount policy (keyed on ttl).** When the live ref-count drops to 0 *before* the source closes:
-- `cache: false` / `cache: { ttl: 0 }` / non-shared → **abort the source** (`slot.abort()`) and dispose
+- `memo: false` / `memo: { ttl: 0 }` / non-shared → **abort the source** (`slot.abort()`) and dispose
   the slot. No retention to protect, so stop paying (satisfies Why #3).
 - `shared` with `ttl > 0` (incl. `∞`) → **run the source to completion** decoupled from consumers
   (populate the buffer for late joiners within the window); abort only on `invalidate`/`refresh`.
@@ -197,7 +197,7 @@ source. The source is aborted only by (a) the empty-refcount policy (§2) or (b)
 teardown (§4). This makes the "two viewers, one run" guarantee survive the initiating viewer leaving.
 
 The **pure-over-args** contract is the author's responsibility for any cached/coalesced call, exactly as
-for `shared` today; `cache: false` (§1) is the opt-out when it can't hold.
+for `shared` today; `memo: false` (§1) is the opt-out when it can't hold.
 
 ### 4. `ReplayableStream`: consume once, buffer decoded chunks, fan out replay-then-live by cursor
 A streaming read whose slot is **actually shared or cached** (`shared: true`, or `ttl > 0`, or a second
@@ -210,7 +210,7 @@ slot fans out.
 yields a raw `AsyncIterable<T>` (or returns one) — *not* a pre-encoded `Response`. The ReplayableStream
 taps that iterable to fill `chunks: T[]`; the **router** applies `jsonl`/`sse` transport encoding
 downstream, once per HTTP consumer, over a fresh `consume()`. A handler that returns a hand-built
-`Response` opts out of replay (`cache: false`, §1). This is the only way the memo can obtain decoded `T`
+`Response` opts out of replay (`memo: false`, §1). This is the only way the memo can obtain decoded `T`
 without re-parsing wire bytes, and decoded values are what make the transcript replayable, seedable, and
 reactively re-mountable (§5).
 
@@ -257,7 +257,7 @@ cursor (`T` = the `AsyncIterable<chunk>` the handler yields). So `{await fn()}` 
 `{#for await x of fn()}` consumes it, with no change to the memo's `Promise<T>` read signature —
 concurrent/late callers each `.then` into their own cursor over the one shared buffer. A streaming
 handler is detected by its result being an `AsyncIterable` that is **not** a `Response`/`ReadableStream`
-(those stay opaque byte bodies / `cache: false`), so existing value and `jsonl`/`sse` reads are
+(those stay opaque byte bodies / `memo: false`), so existing value and `jsonl`/`sse` reads are
 untouched.
 
 **Client-side consumption (built).** In the browser the RPC proxy (`clientProxy.ts`) reaches the handler
@@ -303,7 +303,7 @@ new stream under the same key is never corrupted by the old stream's callbacks.
 
 **Build status.** Steps 1a (standalone `ReplayableStream`), 1b (memo integration: `"stream"` slot
 status, ttl-from-close, per-`consume()` ref-count → dispose-on-drain / empty-refcount abort, `invalidate`
-teardown), 2 (mutations route through a memo at `cache: { ttl: 0 }`; `cache: false` opt-out; FormData
+teardown), 2 (mutations route through a memo at `memo: { ttl: 0 }`; `memo: false` opt-out; FormData
 bypass), the **typed streaming read surface** (`StreamRead<Args, C>` via a conditional `GET`/`HEAD`
 return, with reactive `peek`/`chunks`/`done`), and 3 (shared streaming + incremental byte accounting +
 open-stream pinning + per-stream cap/overflow) are **built and tested** (`replayableStream.ts`,
@@ -531,17 +531,17 @@ implementation unmodified. A socket remains the right tool for an **unbounded, a
 ## Superseded prior decisions
 - **`rpc-core.md` §14.1** (verbatim: "Mutations … **not read-cached, not coalesced (today)**"; it
   already carries an inline SUPERSEDED back-reference here) → mutations route through the same memo and
-  default **`cache: { ttl: 0 }`** — coalesce identical concurrent in-flight calls (per-request scope, so
+  default **`memo: { ttl: 0 }`** — coalesce identical concurrent in-flight calls (per-request scope, so
   inert for the normal one-call-per-request case; cross-caller dedup only under opt-in `shared`), retain
-  nothing after settle; `cache: false` opts out entirely; keying is over coerced typed args (file-free
-  FormData coalesces and matches JSON; file-bearing FormData is `cache: false`) (§1).
+  nothing after settle; `memo: false` opts out entirely; keying is over coerced typed args (file-free
+  FormData coalesces and matches JSON; file-bearing FormData is `memo: false`) (§1).
 - **`rpc-core.md` §12.2** (verbatim: "A stream is a subscription, not a scalar value slot — no `.peek`
   scalar, not in the hydration payload as a value") → a stream whose slot is shared/cached stores a
   `ReplayableStream` of decoded chunks and **is** seedable (as a handle or inline transcript, §5).
 - **`rpc-core.md` §12.3** (subscription-level coalescing: "identical-arg consumers share one upstream
   connection, fan out to N; ref-counted; torn down when the last leaves") → realized concretely as the
   slot-owned source + cursor fan-out (§3–4); **replay becomes available** for an HTTP stream, opt-in via
-  `cache` (`ttl: 0` = coalesce-only, no post-close replay; `ttl: n` = an `n`-ms late-join window).
+  `memo` (`ttl: 0` = coalesce-only, no post-close replay; `ttl: n` = an `n`-ms late-join window).
 - *Note:* the "replay/tail is a socket feature, not an HTTP-stream feature" wording lives in
   `sockets.md` (S1.1/S2.1), not rpc-core §12; this spec supersedes that stance too.
 
@@ -575,26 +575,26 @@ cache-hit gain stream branches; disposal removes the slot from the map. Tests:
 - ttl:0: joiner before close coalesces; strictly after close re-runs; slot removed from map on drain.
 - empty-refcount: ttl:0 non-shared aborts source on last-leave; shared ttl>0 runs to completion.
 
-**2. Mutation routing** ✅ **built** — `cache?: false | {…}`; mutations default `cache: { ttl: 0 }`;
-FormData/hand-built-Response always `cache: false`. Tests:
+**2. Mutation routing** ✅ **built** — `cache?: false | {…}`; mutations default `memo: { ttl: 0 }`;
+FormData/hand-built-Response always `memo: false`. Tests:
 - default (`ttl: 0`), same request scope: two identical concurrent calls → handler runs **once**, both
   get the same result; two **sequential** identical calls → runs twice (disposed on drain between them).
 - default (`ttl: 0`), the same two calls issued as **separate requests** → each executes (per-request
   scopes don't share) — cross-request backcompat preserved.
-- `cache: false`: even intra-scope concurrent identical calls each execute (opt-out proven).
+- `memo: false`: even intra-scope concurrent identical calls each execute (opt-out proven).
 - `shared` mutation `ttl: 0`: two concurrent identical cross-request calls coalesce to one scope-exited
   run; the coalesced handler's `other.invalidate()` fires exactly once (not per-joiner).
 - a file-free FormData POST and a JSON POST with the same logical args → identical key after schema
   coercion (`count="3"` matches `count: 3`), so they coalesce / cache-hit.
 - two distinct concurrent **file** uploads → never collide, both execute (file-bearing FormData is
-  `cache: false`).
+  `memo: false`).
 - Mutation public surface mirrors a read (full symmetry): `peek`/`pending`/`refreshing`/`refresh`/
   `invalidate`/`publish`/`watch`/`snapshot`/`seed`/`raw` all present, plus the streaming chunk probes for
   a streaming mutation. The default `ttl: 0` slot is transient, so the probes reflect a retained value
-  only when the author opts into `cache: { ttl }`; `__rpc.read` stays `false` (transport still keys off
+  only when the author opts into `memo: { ttl }`; `__rpc.read` stays `false` (transport still keys off
   it — args in body + CSRF gate).
 
-**3. Shared streaming reads + byte accounting** ✅ **built** — `cache: { shared }`/`ttl` on a streaming
+**3. Shared streaming reads + byte accounting** ✅ **built** — `memo: { shared }`/`ttl` on a streaming
 read wired to the ReplayableStream; **incremental** per-chunk byte accounting; open streams PINNED
 against LRU eviction; per-stream cap `ABIDE_MAX_STREAM_BUFFER_SIZE` (default unbounded) → OVERFLOW. Tests
 (`streamShared.test.ts`):

@@ -1,8 +1,8 @@
 // Mutation cache routing — build step 2 (replayable-streams.md §1).
 //
-// Mutations now route through a memo defaulting to `cache: { ttl: 0 }`: coalesce identical CONCURRENT
+// Mutations now route through a memo defaulting to `memo: { ttl: 0 }`: coalesce identical CONCURRENT
 // in-flight calls WITHIN a request scope, retain nothing after settle. Separate request scopes never
-// share a slot (at-least-once across requests preserved). `cache: false` opts out entirely; a FormData
+// share a slot (at-least-once across requests preserved). `memo: false` opts out entirely; a FormData
 // body always bypasses the memo (it can't be safely keyed).
 
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -84,7 +84,7 @@ describe('mutation ttl:0 default — coalesce concurrent within a scope', () => 
     })
 })
 
-describe('mutation cache: false — full opt-out', () => {
+describe('mutation memo: false — full opt-out', () => {
     test('concurrent identical calls each execute (no coalescing)', async () => {
         let runs = 0
         const m = POST(
@@ -93,7 +93,7 @@ describe('mutation cache: false — full opt-out', () => {
                 await sleep(5)
                 return runs
             },
-            { cache: false },
+            { memo: false },
         )
         await runInScope(makeScope(), async () => {
             await Promise.all([m({ x: 1 }), m({ x: 1 })])
@@ -111,7 +111,7 @@ describe('mutation shared ttl:0 — cross-request coalescing collapses side effe
                 await sleep(5)
                 return args.id
             },
-            { cache: { ttl: 0, shared: true } },
+            { memo: { ttl: 0, shared: true } },
         )
 
         const a = runInScope(makeScope(), () => m({ id: 7 }))

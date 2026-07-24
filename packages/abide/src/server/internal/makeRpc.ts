@@ -5,9 +5,9 @@
 //
 // READS (GET/HEAD) wrap the handler in a `memo` so in-process calls cache, coalesce, and are
 // reactive — `(args)` reactively peeks, `load/peek/pending/error/refresh/invalidate` mirror
-// the memo surface. cache.ttl flows into the memo; the remaining options (schemas/clients/
+// the memo surface. memo.ttl flows into the memo; the remaining options (schemas/clients/
 // crossOrigin/maxBodySize/timeout/middleware) are carried untouched for the router to enforce.
-// `cache: false` on a read means "don't retain" → the memo runs at ttl:0 (coalesce concurrent, never
+// `memo: false` on a read means "don't retain" → the memo runs at ttl:0 (coalesce concurrent, never
 // serve stale) while keeping the reactive surface.
 //
 // MUTATIONS (POST/PUT/PATCH/DELETE) route through a memo exactly like reads and expose the SAME
@@ -15,11 +15,11 @@
 // symmetry: `peek`/`pending`/`refreshing`/`error`/`watch`/`refresh`/`invalidate`/`publish`/`snapshot`/
 // `seed`/`raw`/`isError` and the streaming chunk probes all work. The ONLY differences are transport
 // (method + args-in-body + the CSRF gate, enforced by the router off `__rpc.read`) and the default
-// cache policy: a mutation defaults to `cache: { ttl: 0 }` (replayable-streams.md §1) — coalesce
+// cache policy: a mutation defaults to `memo: { ttl: 0 }` (replayable-streams.md §1) — coalesce
 // identical CONCURRENT in-flight calls, retain nothing after settle — where a read retains (ttl ∞).
 // A non-shared mutation's slot is per-request, so ttl:0 is inert for the normal one-call-per-request
 // case and preserves at-least-once across separate requests; cross-request dedup needs `shared: true`.
-// An author who WANTS a mutation cached sets `cache: { ttl }` and the whole surface reflects it. `cache:
+// An author who WANTS a mutation cached sets `memo: { ttl }` and the whole surface reflects it. `cache:
 // false` opts the bare CALL out of the memo (direct run, at-least-once) for a non-idempotent handler;
 // the probe surface stays present but reads an empty slot. A `FormData` body always bypasses the memo
 // (it can't be safely keyed — see §1).
@@ -70,7 +70,7 @@ export interface RpcOptions {
     // `false` opts a call OUT of the memo entirely (replayable-streams.md §1): a mutation runs every call
     // (no coalescing); a read runs at ttl:0. `{ … }` overrides the per-verb default (reads ttl:∞,
     // mutations ttl:0).
-    cache?: false | { ttl?: number; shared?: boolean; tags?: string[] }
+    memo?: false | { ttl?: number; shared?: boolean; tags?: string[] }
 }
 
 // An `output` schema, when present, must ACCEPT the handler's resolved return payload — its Standard
@@ -236,7 +236,7 @@ export function isTypedError(e: unknown, name: string): boolean {
 
 // Attach the FULL isomorphic surface (reactive probes + cache verbs + `raw` + stream chunk probes +
 // `__rpc` meta) to a memo-backed callable. Shared by reads and mutations — the only caller-specific
-// pieces are the bare CALL (built by the caller, so a mutation can bypass on FormData/`cache:false`)
+// pieces are the bare CALL (built by the caller, so a mutation can bypass on FormData/`memo:false`)
 // and the meta `read` flag. `rawSource` is the handler `.raw` runs in-process AND the meta handler
 // (the same function reference the router/OpenAPI/MCP invoke).
 function attachSurface<Args, T>(
@@ -302,19 +302,19 @@ export function makeRead<Args, T>(
 
     // Only forward set fields — exactOptionalPropertyTypes forbids an explicit undefined.
     const memoOptions: MemoOptions = {}
-    // `cache: false` on a read = don't retain → ttl:0 (coalesce-only, always revalidate), keeping the
+    // `memo: false` on a read = don't retain → ttl:0 (coalesce-only, always revalidate), keeping the
     // reactive memo surface (a full memo bypass is a mutation-only opt-out, since reads need the surface).
-    if (options.cache === false) {
+    if (options.memo === false) {
         memoOptions.ttl = 0
     } else {
-        const cacheConfig = options.cache
-        if (cacheConfig?.ttl !== undefined) memoOptions.ttl = cacheConfig.ttl
+        const memoConfig = options.memo
+        if (memoConfig?.ttl !== undefined) memoOptions.ttl = memoConfig.ttl
         // `shared` opts this read into the process-global cross-request cache (rpc-core §2). Server-only
         // and fail-closed inside the memo: the handler runs scope-exited and reads require a live scope.
-        if (cacheConfig?.shared === true) memoOptions.shared = true
+        if (memoConfig?.shared === true) memoOptions.shared = true
         // Tags register a shared read for the global `invalidate/refresh({ tags })` selectors (rpc-core
         // §8). Honored only on a shared memo (the tag registry is server-only); inert otherwise.
-        if (cacheConfig?.tags !== undefined) memoOptions.tags = cacheConfig.tags
+        if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
     }
     // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets
     // the actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
@@ -344,14 +344,14 @@ export function makeMutation<Args, R>(
 
     // A mutation is a memo + transport exactly like a read — the memo backs BOTH the coalescing call
     // and the whole probe surface. It differs only in the DEFAULT policy: ttl:0 (coalesce identical
-    // concurrent in-flight calls, retain nothing) where a read retains. `cache: { ttl }` opts a mutation
-    // into retention and the surface reflects it. `cache: false` still builds a memo so the surface
+    // concurrent in-flight calls, retain nothing) where a read retains. `memo: { ttl }` opts a mutation
+    // into retention and the surface reflects it. `memo: false` still builds a memo so the surface
     // exists (probes read an empty slot), but the bare CALL bypasses it for a direct at-least-once run.
-    const memoed = options.cache !== false
-    const cacheConfig = options.cache === false ? undefined : options.cache
-    const memoOptions: MemoOptions = { ttl: cacheConfig?.ttl ?? 0 }
-    if (cacheConfig?.shared === true) memoOptions.shared = true
-    if (cacheConfig?.tags !== undefined) memoOptions.tags = cacheConfig.tags
+    const memoed = options.memo !== false
+    const memoConfig = options.memo === false ? undefined : options.memo
+    const memoOptions: MemoOptions = { ttl: memoConfig?.ttl ?? 0 }
+    if (memoConfig?.shared === true) memoOptions.shared = true
+    if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
     let broadcast: CacheNotify | undefined
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
@@ -360,7 +360,7 @@ export function makeMutation<Args, R>(
 
     const mutation = ((args: Args | FormData): Promise<T> => {
         // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw
-        // FormData throws in canonicalKey), and `cache: false` opts the call out entirely → run the
+        // FormData throws in canonicalKey), and `memo: false` opts the call out entirely → run the
         // handler directly (at-least-once). Otherwise route through the memo (coalesce/retain).
         if (!memoed || (typeof FormData !== 'undefined' && args instanceof FormData)) {
             return Promise.resolve(handler(args as Args))

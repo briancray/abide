@@ -11,7 +11,7 @@
 // revalidating over a retained value. pending/error/refreshing/peek are derived views of
 // the one slot, not separate channels.
 //
-// The opt-in server SHARED cross-request cache (`cache: { shared: true }`, rpc-core §2) is wired
+// The opt-in server SHARED cross-request cache (`memo: { shared: true }`, rpc-core §2) is wired
 // here: a shared memo stores its slots in the process-global `sharedStore()` and runs its handler
 // fail-closed (scope-exited + ambient-guarded), server-only. A shared memo's verbs also fire an
 // injectable, TRANSPORT-FREE `notify` sink (rpc-core §8 broadcast, PR2): the memo just calls it —

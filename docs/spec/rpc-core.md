@@ -51,7 +51,7 @@ Same code, ambient scope differs by side:
 
 Opt-in deliberately crosses requests, so the auth-free property is made *structural*:
 
-1. **Opt-in per-call-site** via the `cache` opt (`{ shared: true, ttl }`). Not a global
+1. **Opt-in per-call-site** via the `memo` opt (`{ shared: true, ttl }`). Not a global
    mode; the default stays per-request-throwaway.
 2. **Key = `(callSiteId, serialize(args))` and nothing ambient** — no cookies/auth/request
    in the key. This is exactly why shared is only safe for functions pure over their args.
@@ -207,7 +207,7 @@ One imported callable means two things:
    - **Partial-object match:** `user.invalidate({ id })` matches **every slot whose args
      include `{ id }`**; `undefined`/no-arg recedes to the whole callable. Same shape for
      `refresh`/`publish`.
-   - **Tags:** a read declares `cache: { tags: [...] }`; the tag selector is the **only**
+   - **Tags:** a read declares `memo: { tags: [...] }`; the tag selector is the **only**
      form kept on the `abide/shared` globals — `invalidate({ tags })` / `refresh({ tags })` /
      `pending({ tags })` / `refreshing({ tags })`. Every per-callable op uses the method form.
    - **Rule:** neither form ever executes the read — args are passed, never `fn(args)`.
@@ -220,7 +220,7 @@ One imported callable means two things:
      cannot perform (§5.2).
    - `user.refresh(args)`: like invalidate but eager reload; server-broadcast eager.
    - `user.publish(...)` — one name, two signatures; a slot is *shared* iff its RPC/`memo` sets
-     `cache: { shared: true }`:
+     `memo: { shared: true }`:
      | Caller | value-form `publish(args, v)` | updater-form `publish(args, cur => next)` |
      | --- | --- | --- |
      | Client (any slot) | local swap | local swap |
@@ -345,7 +345,7 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    (designed, not yet built — `replayable-streams.md`): replay becomes available for an HTTP
    stream** — a cached streaming read/mutation would buffer decoded chunks and fan out
    **replay-then-live**, so a late joiner replays the transcript then continues. "No replay
-   *by default*" still holds: replay is opt-in via `cache` (`ttl: 0` = coalesce-only;
+   *by default*" still holds: replay is opt-in via `memo` (`ttl: 0` = coalesce-only;
    `ttl: n` = an `n`-ms late-join window). A *socket* remains the tool for an unbounded feed.
 4. **SSR drains only to a flush boundary / deadline**, never blocking on an unbounded
    stream. Finite streams stream into HTML incrementally; infinite streams render the
@@ -397,9 +397,9 @@ pages — nothing is reserved outside `/__abide/*`.
    (`POST`/`PUT`/`PATCH`/`DELETE`): args in the body** (value codec), may
    `invalidate`/`publish`/`refresh`; **not read-cached, not coalesced (today).** **SUPERSEDED
    (designed, not yet built — `replayable-streams.md`):** mutations would route through the
-   memo too and **coalesce by default** (`cache: { ttl: 0 }` — dedupe identical *concurrent*
+   memo too and **coalesce by default** (`memo: { ttl: 0 }` — dedupe identical *concurrent*
    calls, retain nothing after settle, so sequential mutations each execute); opt in to
-   caching/replay with `cache: { ttl, shared }`, opt OUT with `cache: false`. The read/mutation
+   caching/replay with `memo: { ttl, shared }`, opt OUT with `memo: false`. The read/mutation
    split would narrow to the wire (method, URL vs body, CSRF) + the default TTL (`∞`/`0`).
 2. **No request batching.** Coalescing (dedup identical in-flight) yes; batching (combine
    distinct calls in one tick into one round-trip) **no** — it couples requests (HOL),
@@ -418,7 +418,7 @@ pages — nothing is reserved outside `/__abide/*`.
    `ABIDE_RPC_TIMEOUT`, per-RPC overridable. The server deadline gives SSR peek reads their
    own bound (closing the slowloris hole where only streams had a deadline). **`maxBodySize`**
    = per-RPC override of `ABIDE_MAX_REQUEST_BODY_SIZE`, enforced pre-parse.
-5. **`cache` opt = the value-cache config for that RPC** (`{ ttl, shared, tags, … }`) —
+5. **`memo` opt = the value-cache config for that RPC** (`{ ttl, shared, tags, … }`) —
    the in-memory reactive/coalescing cache (§2–§3, §8 tags), **not** HTTP `Cache-Control`.
    HTTP response caching, if wanted, rides response-init headers separately. **Wire default:**
    the router stamps `Cache-Control: private, no-cache` + `Vary: Cookie` on any response that
@@ -449,7 +449,7 @@ pages — nothing is reserved outside `/__abide/*`.
 ## RPC options (consolidated)
 
 `{ schemas: { input?, output?, files? }, clients: { browser?, mcp?, cli? },
-crossOrigin?, maxBodySize?, timeout?, cache: { ttl?, shared?, tags?, … } }`
+crossOrigin?, maxBodySize?, timeout?, memo: { ttl?, shared?, tags?, … } }`
 (+ `stream` is not a flag — any handler may return a stream by returning `jsonl`/`sse`.)
 
 ---

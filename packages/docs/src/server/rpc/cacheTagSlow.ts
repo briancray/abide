@@ -10,5 +10,5 @@ export default GET(
         await new Promise((resolve) => setTimeout(resolve, 200))
         return runs
     },
-    { cache: { shared: true, tags: ['live'] } },
+    { memo: { shared: true, tags: ['live'] } },
 )
