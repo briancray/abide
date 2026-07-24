@@ -367,6 +367,26 @@ is. It does **not** retire `Subscriber`, and must never be applied to `cacheChan
 Trunk-based, small green PRs. The high-risk buffer surgery is **gone** (no `ReplayableStream` rewrite), so
 the sequence is materially safer than the original.
 
+**On "gates" — read this before trusting the word.** There is **no CI** in this repo (no `.github/`), and
+`scripts/verify.ts` (biome + typecheck + abide-check + `bun test` + Playwright) **runs no benchmark at all**.
+The only perf assertions that ever execute are two ratio gates inside the docs e2e suite (`bench.spec.ts`'s
+O(n) SSR shape; `nav-perf.spec.ts`). And `bench:delta` — the only A/B harness — covers `run.ts` (frontend
+render/mount/update) *exclusively* and **always exits 0**. So every "gate" below means **local discipline**,
+not enforcement. Step 0 exists partly to change that.
+
+**Build before the truth surfaces** — `CLAUDE.md`/`docs/spec/*` describe what *is*; this ADR is the home for
+what's *decided but unbuilt*. Updating them ahead of the code would just trade false-about-the-past for
+false-about-the-future. **But each PR carries its own truth-surface delta**: a step that changes public API
+(every rename below) updates the `CLAUDE.md` tables it invalidates *in the same commit*, or the reference doc
+is wrong the moment it merges. Deferring all doc work to a final sweep is exactly how drift accumulated
+before (it's why `/audit` exists). Step 7 is therefore only the *conceptual* rewrite, not a doc backlog.
+
+0. **Establish the perf baseline** — *before* any hot-path change, because a baseline captured afterwards is
+   worthless. **Six of the eight hot paths this ADR touches have zero measurement today**: probe reads, stream
+   chunk-push, `watch`, channel fanout, the frame codec, and the signal substrate (only SSR render is properly
+   gated). Add microbenches extending `packages/bench/src/serverBenches.ts`'s pattern, then extend `delta.ts`
+   beyond `run.ts` to the server/primitive corpus, and capture baselines on the current commit. Without this,
+   steps 1/3/4/5/6 could each land an unbounded per-probe or per-message regression with `verify` still green.
 1. **`watch` tick-fix** — per-cardinality (keep scalar dedup, add stream/socket append; stream payload =
    latest chunk). Standalone bug PR.
 2. **`amend`→`publish` rename** — coordinated across `cell.ts`, `router.ts`, `CacheFrame.verb`,
@@ -386,7 +406,9 @@ the sequence is materially safer than the original.
    `tailSnapshot`/`peekLatest`/`snapshotIterator` — in one commit); (6b) client `socketProxy` implements
    the surface over the hub, retiring its private probes/status. Hub + `Subscriber` stay. Mux frame
    contract is unchanged across 6a↔6b (proven interoperable by review).
-7. **Fix the four specs + CLAUDE.md thesis** to describe surface-unification.
+7. **Thesis rewrite** — the *conceptual* reframe in `CLAUDE.md` + the four specs (`rpc = memo + transport`,
+   `socket = channel + transport`, the node/edge model, the composition law). Small by construction, because
+   every prior PR already shipped its own doc delta.
 
 **`Subscriber` is not deleted** — it remains the socket/cacheChannel/approval buffer. The original 6c is
 removed.

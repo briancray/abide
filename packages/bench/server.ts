@@ -24,6 +24,7 @@ import {
     type MetricResult,
     measure,
 } from './src/measure.ts'
+import { createReactiveBenches } from './src/reactiveBenches.ts'
 import { createServerBenches } from './src/serverBenches.ts'
 
 export interface ServerBenchResult {
@@ -53,6 +54,11 @@ export async function runServerBench(): Promise<ServerBenchResult[]> {
 
     // ── PRIMITIVES (shared with the docs live bench) ────────────────────────────────────────────────
     for (const bench of await createServerBenches()) {
+        await record(bench.group, bench.name, bench.note, bench.run)
+    }
+
+    // ── REACTIVE / STREAM / CHANNEL PRIMITIVES (ADR 0023 baseline) ──────────────────────────────────
+    for (const bench of await createReactiveBenches()) {
         await record(bench.group, bench.name, bench.note, bench.run)
     }
 

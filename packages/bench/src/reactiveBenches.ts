@@ -1,0 +1,343 @@
+// THE REACTIVE / STREAM / CHANNEL PRIMITIVE BENCH RECIPES — the baseline for ADR 0023.
+//
+// `serverBenches.ts` covers route classification, cache-key building and the warm scalar cell read.
+// This file covers the six hot paths that ADR 0023 restructures and that had ZERO measurement before it:
+// the signal substrate, the probe/read surface (`peek`/`pending`/`chunks`/`done`), stream chunk push,
+// `cell.watch` fire cost, channel publish fanout, and the per-chunk frame codec.
+//
+// Why these exist: ADR 0023 step 4 puts a `ReactiveReadSurface` interface in front of every probe, step 1
+// converts `watch` from a value-change effect into a per-append one, and step 3 replaces jsonl/sse/decode
+// with one union codec + dispatcher. All three are per-read or per-message costs. Without a before-number
+// a regression in any of them is invisible — `verify` runs no benches.
+//
+// Batch ops report ns for the WHOLE batch; divide by the batch size in `note` for per-item cost.
+
+import { cell } from 'abide/shared/cell'
+import { decodeStreamResponse } from 'abide/shared/internal/decodeStreamResponse'
+import { computed, effect, signal } from 'abide/shared/internal/reactive'
+import { ReplayableStream } from 'abide/shared/internal/replayableStream'
+import { Subscriber } from 'abide/shared/internal/subscriber'
+import type { ServerBench } from './serverBenches.ts'
+
+const CHUNKS = 1000
+const FRAMES = 1000
+
+interface Chunk {
+    i: number
+    label: string
+}
+
+async function* chunkSource(n: number): AsyncGenerator<Chunk> {
+    for (let i = 0; i < n; i++) yield { i, label: 'row' }
+}
+
+function makeChunks(n: number): Chunk[] {
+    const out: Chunk[] = []
+    for (let i = 0; i < n; i++) out.push({ i, label: 'row' })
+    return out
+}
+
+// Resolve after the reactive flush: `set` queues the flush microtask first, so a microtask queued after it
+// runs once the effect queue has drained. That puts observer re-runs INSIDE the measured op.
+function afterFlush(): Promise<void> {
+    return new Promise((resolve) => {
+        queueMicrotask(resolve)
+    })
+}
+
+// Attach `count` effects to a signal and return a disposer, so fanout cost is the only variable.
+function attachObservers(source: () => unknown, count: number): () => void {
+    const disposers: Array<() => void> = []
+    for (let i = 0; i < count; i++) {
+        disposers.push(
+            effect(() => {
+                source()
+            }),
+        )
+    }
+    return () => {
+        for (const dispose of disposers) dispose()
+    }
+}
+
+export async function createReactiveBenches(): Promise<ServerBench[]> {
+    // ── signal substrate ────────────────────────────────────────────────────────────────────────────
+    const readSignal = signal(0)
+    const setSignal1 = signal(0)
+    const setSignal10 = signal(0)
+    const setSignal100 = signal(0)
+    attachObservers(setSignal1, 1)
+    attachObservers(setSignal10, 10)
+    attachObservers(setSignal100, 100)
+
+    // 5-deep computed chain: `set` marks the head DIRTY and the tail CHECK; reading the tail walks the
+    // chain through `updateIfNecessary`. This is the glitch-free pull cost.
+    const chainHead = signal(0)
+    let chainLink: () => number = chainHead
+    for (let depth = 0; depth < 5; depth++) {
+        const previous = chainLink
+        chainLink = computed(() => previous() + 1)
+    }
+    const chainTail = chainLink
+    let chainSeed = 0
+
+    // ── probe surface (warm scalar slot) ────────────────────────────────────────────────────────────
+    const scalar = cell<{ id: number }, number>((a) => a.id * 2)
+    await scalar({ id: 1 })
+
+    // ── probe surface (retained stream slot) ────────────────────────────────────────────────────────
+    // A finite source that settles: with the default ttl (Infinity) the transcript is retained, so the
+    // probes read a real 100-chunk transcript rather than an empty one.
+    const streamCell = cell<{ id: number }, AsyncIterable<Chunk>>(() => chunkSource(100))
+    for await (const _ of await streamCell({ id: 1 })) {
+        // drain once so the slot holds a settled 100-chunk transcript
+    }
+
+    // ── watch: current behaviour, the baseline ADR step 1 changes ───────────────────────────────────
+    // On a VALUE cell `watch` fires on actual value change (the dedup at cell.ts:789). On a STREAM cell it
+    // never fires today, because a stream slot's `value` is permanently undefined. Both numbers are the
+    // before-picture: step 1 makes the stream case fire per append.
+    const watched = cell<{ id: number }, number>((a) => a.id)
+    await watched({ id: 1 })
+    // Written by both watch handlers below and READ by `watch/value-fire`, which fails loudly if the watch
+    // never fired — a bench that silently times a no-op is worse than no bench at all.
+    let watchSink: number | undefined
+    watched.watch({ id: 1 }, (value) => {
+        watchSink = value
+    })
+    // Seeded well clear of the slot's loaded value (`a.id` = 1) so the FIRST amend is a real change —
+    // otherwise `watch`'s value-dedup (cell.ts:789) correctly suppresses it and iteration one times nothing.
+    let watchSeed = 1000
+
+    // ── channel fanout ──────────────────────────────────────────────────────────────────────────────
+    // Subscribers are never drained, so each settles at its 1024 cap and every subsequent push takes the
+    // drop-oldest `queue.shift()` branch — the steady state, and the O(n)-at-cap path the ADR flagged.
+    const fanout = (count: number): { subscribers: Subscriber<Chunk>[]; message: Chunk } => {
+        const subscribers: Subscriber<Chunk>[] = []
+        for (let i = 0; i < count; i++) subscribers.push(new Subscriber<Chunk>())
+        return { subscribers, message: { i: 0, label: 'row' } }
+    }
+    const fanout1 = fanout(1)
+    const fanout10 = fanout(10)
+    const fanout100 = fanout(100)
+    for (const set of [fanout1, fanout10, fanout100]) {
+        for (let i = 0; i < 1100; i++) for (const s of set.subscribers) s.push(set.message)
+    }
+
+    // ── frame codec ─────────────────────────────────────────────────────────────────────────────────
+    const frames = makeChunks(FRAMES)
+    const jsonlBody = `${frames.map((f) => JSON.stringify(f)).join('\n')}\n`
+
+    return [
+        {
+            group: 'signal',
+            name: 'get',
+            note: 'untracked read (currentObserver null)',
+            run: () => {
+                readSignal()
+            },
+        },
+        {
+            group: 'signal',
+            name: 'set-flush-1',
+            note: 'set + flush, 1 observer',
+            run: async () => {
+                setSignal1.set(setSignal1.peek() + 1)
+                await afterFlush()
+            },
+        },
+        {
+            group: 'signal',
+            name: 'set-flush-10',
+            note: 'set + flush, 10 observers',
+            run: async () => {
+                setSignal10.set(setSignal10.peek() + 1)
+                await afterFlush()
+            },
+        },
+        {
+            group: 'signal',
+            name: 'set-flush-100',
+            note: 'set + flush, 100 observers',
+            run: async () => {
+                setSignal100.set(setSignal100.peek() + 1)
+                await afterFlush()
+            },
+        },
+        {
+            group: 'signal',
+            name: 'computed-chain-5',
+            note: 'set head → read tail through 5 computeds',
+            run: () => {
+                chainHead.set(++chainSeed)
+                chainTail()
+            },
+        },
+
+        {
+            group: 'probe',
+            name: 'peek-scalar',
+            note: 'warm value slot (ADR step 4 wraps this)',
+            run: () => {
+                scalar.peek({ id: 1 })
+            },
+        },
+        {
+            group: 'probe',
+            name: 'pending-scalar',
+            note: 'warm value slot',
+            run: () => {
+                scalar.pending({ id: 1 })
+            },
+        },
+        {
+            group: 'probe',
+            name: 'error-scalar',
+            note: 'warm value slot',
+            run: () => {
+                scalar.error({ id: 1 })
+            },
+        },
+        {
+            group: 'probe',
+            name: 'peek-stream',
+            note: 'latest chunk of a 100-chunk transcript',
+            run: () => {
+                streamCell.peek({ id: 1 })
+            },
+        },
+        {
+            group: 'probe',
+            name: 'chunks-stream',
+            note: '100-chunk transcript — slice() copy per call',
+            run: () => {
+                streamCell.chunks({ id: 1 })
+            },
+        },
+        {
+            group: 'probe',
+            name: 'done-stream',
+            note: '100-chunk settled transcript',
+            run: () => {
+                streamCell.done({ id: 1 })
+            },
+        },
+
+        {
+            group: 'stream',
+            name: 'push-raw',
+            note: `fresh ReplayableStream, ${CHUNKS} pushes/op (no cell hooks)`,
+            run: () => {
+                const stream = new ReplayableStream<Chunk>()
+                for (let i = 0; i < CHUNKS; i++) stream.push({ i, label: 'row' })
+                stream.close()
+            },
+        },
+        {
+            group: 'stream',
+            name: 'cell-drain',
+            note: `${CHUNKS} chunks through a cell slot/op (incl. tick + byte accounting)`,
+            run: async () => {
+                const draining = cell<{ id: number }, AsyncIterable<Chunk>>(() =>
+                    chunkSource(CHUNKS),
+                )
+                for await (const _ of await draining({ id: 1 })) {
+                    // drain: exercises push → bumpStreamTick → accountStreamChunk → consume()
+                }
+            },
+        },
+        {
+            group: 'stream',
+            name: 'consume-replay',
+            note: `fresh cursor over a settled ${CHUNKS}-chunk transcript`,
+            run: async () => {
+                const stream = new ReplayableStream<Chunk>()
+                for (let i = 0; i < CHUNKS; i++) stream.push({ i, label: 'row' })
+                stream.close()
+                for await (const _ of stream.consume()) {
+                    // replay-only drain
+                }
+            },
+        },
+
+        {
+            group: 'watch',
+            name: 'value-fire',
+            note: 'publish + flush on a watched value slot (fires once)',
+            run: async () => {
+                watchSink = undefined
+                watched.amend({ id: 1 }, ++watchSeed)
+                await afterFlush()
+                if (watchSink === undefined)
+                    throw new Error(
+                        'watch/value-fire: handler never fired — bench measures nothing',
+                    )
+            },
+        },
+        {
+            group: 'watch',
+            name: 'stream-baseline',
+            note: `${CHUNKS} chunks under a watch — fires 0× TODAY (step 1 changes this)`,
+            run: async () => {
+                const watchedStream = cell<{ id: number }, AsyncIterable<Chunk>>(() =>
+                    chunkSource(CHUNKS),
+                )
+                watchedStream.watch({ id: 1 }, (value) => {
+                    watchSink = value as number | undefined
+                })
+                for await (const _ of await watchedStream({ id: 1 })) {
+                    // drain under an attached watch
+                }
+            },
+        },
+
+        {
+            group: 'fanout',
+            name: 'push-1',
+            note: '1 subscriber at cap (drop-oldest branch)',
+            run: () => {
+                for (const s of fanout1.subscribers) s.push(fanout1.message)
+            },
+        },
+        {
+            group: 'fanout',
+            name: 'push-10',
+            note: '10 subscribers at cap',
+            run: () => {
+                for (const s of fanout10.subscribers) s.push(fanout10.message)
+            },
+        },
+        {
+            group: 'fanout',
+            name: 'push-100',
+            note: '100 subscribers at cap',
+            run: () => {
+                for (const s of fanout100.subscribers) s.push(fanout100.message)
+            },
+        },
+
+        {
+            group: 'codec',
+            name: 'jsonl-encode',
+            note: `${FRAMES} frames/op → newline-delimited JSON`,
+            run: () => {
+                const parts: string[] = []
+                for (const frame of frames) parts.push(`${JSON.stringify(frame)}\n`)
+                parts.join('')
+            },
+        },
+        {
+            group: 'codec',
+            name: 'jsonl-decode',
+            note: `${FRAMES} frames/op ← decodeStreamResponse`,
+            run: async () => {
+                const response = new Response(jsonlBody, {
+                    headers: { 'content-type': 'application/jsonl' },
+                })
+                for await (const _ of decodeStreamResponse(response)) {
+                    // decode-only drain
+                }
+            },
+        },
+    ]
+}
