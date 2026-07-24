@@ -23,6 +23,7 @@ import { health } from '../../shared/health.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
+import type { MuxDownstream } from '../../shared/internal/muxDownstream.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
@@ -288,7 +289,7 @@ async function pumpSocketToWs(
             if (result.done === true) break
             if (connection.subscriptions.get(name) !== iterator) break
             if (ws.readyState !== 1) break
-            ws.send(JSON.stringify({ name, msg: result.value }))
+            ws.send(JSON.stringify({ name, msg: result.value } satisfies MuxDownstream))
         }
     } catch {
         // Swallow — the connection is tearing down; cleanup happens in `finally`.
@@ -323,12 +324,17 @@ function wsSubscribe(
     const sock = sockets[name]
     if (sock === undefined) {
         log.channel('abide:socket').warn(`subscribe rejected — unknown socket: ${name}`)
-        ws.send(JSON.stringify({ name, error: { message: `unknown socket: ${name}` } }))
+        ws.send(
+            JSON.stringify({
+                name,
+                error: { message: `unknown socket: ${name}` },
+            } satisfies MuxDownstream),
+        )
         return
     }
     const iterator = sock.__socket.subscribe(replay !== false)
     connection.subscriptions.set(name, iterator)
-    ws.send(JSON.stringify({ name, ok: true }))
+    ws.send(JSON.stringify({ name, ok: true } satisfies MuxDownstream))
     log.channel('abide:socket').info(`subscribe ${name} replay=${replay !== false}`)
     void pumpSocketToWs(ws, connection, name, iterator)
 }

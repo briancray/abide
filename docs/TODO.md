@@ -716,3 +716,9 @@ From the adversarial review — recorded so they're deliberate:
   byte-idle SSE stream; resolved with `idleTimeout: 255` + a heartbeat in `server/sse.ts`. Tests green.
 - **`abide` on PATH may resolve to a different sibling repo** (`~/Code/abide`) in some shells; use the
   workspace bin (`packages/docs` `bun run abide-check`, or `bun run ../abide/src/lib/cli/bin.ts`).
+- **`abide-lsp` dogfood is broken (not in `verify`).** `packages/docs/scripts/lsp-dogfood.ts` points at a
+  dead page `src/ui/pages/machines/page.abide` (moved to `platform/machines/`). Fixing that path reveals a
+  DEEPER failure: the LSP publishes **no** diagnostics for that page (`no diagnostics published for clean
+  page …`). So the dogfood needs both the path fix AND an investigation of why the machines page gets no
+  LSP diagnostics. Found 2026-07-24 during the cell→memo rename; deliberately left untouched (out of scope,
+  and `scripts/verify.ts` does not run `abide-lsp`).

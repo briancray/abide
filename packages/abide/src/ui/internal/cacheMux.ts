@@ -79,6 +79,9 @@ function sendSubscribe(name: string, sub: Subscription): void {
     sub.replay = true
 }
 
+// Untrusted JSON parsed into a loose superset of `MuxDownstream` (the shared server→client contract), then
+// narrowed by field presence. Loose ON PURPOSE — the field NAMES must match `MuxDownstream`; the producer
+// guarantees it sends only conforming frames (`satisfies MuxDownstream` at each send site in router.ts).
 function onMessage(event: MessageEvent): void {
     let framed: { name?: unknown; msg?: unknown; ok?: unknown; error?: unknown }
     try {
