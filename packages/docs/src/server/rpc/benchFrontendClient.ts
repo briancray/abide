@@ -60,7 +60,10 @@ function resolveModuleImports(client: string, src: string): string {
         if (seen.has(specifier)) continue
         seen.add(specifier)
         const absolute = Bun.resolveSync(specifier, import.meta.dir)
-        out = out.replaceAll(`from ${JSON.stringify(specifier)}`, `from ${JSON.stringify(absolute)}`)
+        out = out.replaceAll(
+            `from ${JSON.stringify(specifier)}`,
+            `from ${JSON.stringify(absolute)}`,
+        )
     }
     return out
 }

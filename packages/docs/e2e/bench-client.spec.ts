@@ -53,12 +53,18 @@ test('run measures every scenario across all three hot paths', async ({ page }) 
     const timing = /\d+(\.\d+)?\s*(ns|µs|ms)/
     for (const name of RENDER_SCENARIOS) {
         const mountRow = mountRows.filter({ has: page.getByRole('cell', { name, exact: true }) })
-        const hydrateRow = hydrateRows.filter({ has: page.getByRole('cell', { name, exact: true }) })
+        const hydrateRow = hydrateRows.filter({
+            has: page.getByRole('cell', { name, exact: true }),
+        })
         await expect(mountRow).toContainText(timing)
         await expect(hydrateRow).toContainText(timing)
     }
-    await expect(mountRows.filter({ has: page.getByRole('cell', { name: 'for-list-10000', exact: true }) })).toContainText('µs')
-    await expect(hydrateRows.filter({ has: page.getByRole('cell', { name: 'static-text', exact: true }) })).toContainText('—')
+    await expect(
+        mountRows.filter({ has: page.getByRole('cell', { name: 'for-list-10000', exact: true }) }),
+    ).toContainText('µs')
+    await expect(
+        hydrateRows.filter({ has: page.getByRole('cell', { name: 'static-text', exact: true }) }),
+    ).toContainText('—')
 
     // Every update row measured a reactive patch.
     for (const name of UPDATE_SCENARIOS) {
@@ -104,8 +110,13 @@ test('the update scenarios genuinely patch the live DOM (reactivity propagates t
 
         return {
             state: await drive('state-update', (h) => h.querySelector('span')!.textContent ?? ''),
-            append: await drive('list-append-update', (h) => String(h.querySelectorAll('li').length)),
-            reverse: await drive('list-reverse-1000', (h) => h.querySelector('li')!.textContent ?? ''),
+            append: await drive('list-append-update', (h) =>
+                String(h.querySelectorAll('li').length),
+            ),
+            reverse: await drive(
+                'list-reverse-1000',
+                (h) => h.querySelector('li')!.textContent ?? '',
+            ),
             toggle: await drive('if-toggle', (h) => h.querySelector('p')!.textContent ?? ''),
         }
     })

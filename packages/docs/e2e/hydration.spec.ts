@@ -5,21 +5,23 @@ import { expect, test } from '@playwright/test'
 // must NOT replay/advance the seed ordinal (create mode has no server nodes to match) — otherwise every
 // sibling component's seeded `state()` gets a shifted value. Here each Demo's open source tab is a seeded
 // state; a desync left panels with no `active` class (code hidden until you clicked the tab).
-test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded', async ({ page }) => {
-  await page.goto('/templating/reactivity')
-  await page.getByRole('link', { name: 'Async blocks', exact: true }).click() // soft-nav → /templating/async
-  await expect(page).toHaveURL(/\/templating\/async$/)
-  // `toHaveURL` resolves on the history push — BEFORE the soft-nav content swap. Wait for the destination
-  // page's own content to be in the DOM before counting `.sample`, else under load we count the OUTGOING
-  // page's samples (a different number) and assert on stale indices. Then: every sample has exactly one
-  // active source panel (matching its default tab), none hidden.
-  await expect(page.locator('h1')).toHaveText('Async control flow')
-  const samples = page.locator('.sample')
-  const n = await samples.count()
-  expect(n).toBeGreaterThan(0)
-  for (let i = 0; i < n; i++) {
-    await expect(samples.nth(i).locator('.tab-panel.active')).toHaveCount(1)
-  }
+test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded', async ({
+    page,
+}) => {
+    await page.goto('/templating/reactivity')
+    await page.getByRole('link', { name: 'Async blocks', exact: true }).click() // soft-nav → /templating/async
+    await expect(page).toHaveURL(/\/templating\/async$/)
+    // `toHaveURL` resolves on the history push — BEFORE the soft-nav content swap. Wait for the destination
+    // page's own content to be in the DOM before counting `.sample`, else under load we count the OUTGOING
+    // page's samples (a different number) and assert on stale indices. Then: every sample has exactly one
+    // active source panel (matching its default tab), none hidden.
+    await expect(page.locator('h1')).toHaveText('Async control flow')
+    const samples = page.locator('.sample')
+    const n = await samples.count()
+    expect(n).toBeGreaterThan(0)
+    for (let i = 0; i < n; i++) {
+        await expect(samples.nth(i).locator('.tab-panel.active')).toHaveCount(1)
+    }
 })
 
 // /pages/hydration embeds a HydrationProbe in every hydration scenario (static, {#if}, {#for},
@@ -39,51 +41,51 @@ const RICH_PROBE = '[data-testid="rich-probe"]'
 // survives JSON fine, so the string-only probes above would stay green through a codec regression — this
 // probe is the guard that DOES catch it: its `data-ok` flips false the instant a rich seed loses its type.
 async function expectRichSeedRoundTrips(probe: import('@playwright/test').Locator): Promise<void> {
-  await expect(probe).toHaveCount(1)
-  await expect(probe).toHaveAttribute('data-date-ok', 'true') // Date survived as a Date (same epoch)
-  await expect(probe).toHaveAttribute('data-big-ok', 'true') // BigInt survived as a bigint (not a number)
-  await expect(probe).toHaveAttribute('data-map-ok', 'true') // Map survived with its entries
-  await expect(probe).toHaveAttribute('data-ok', 'true')
+    await expect(probe).toHaveCount(1)
+    await expect(probe).toHaveAttribute('data-date-ok', 'true') // Date survived as a Date (same epoch)
+    await expect(probe).toHaveAttribute('data-big-ok', 'true') // BigInt survived as a bigint (not a number)
+    await expect(probe).toHaveAttribute('data-map-ok', 'true') // Map survived with its entries
+    await expect(probe).toHaveAttribute('data-ok', 'true')
 }
 
 test('every hydration scenario hydrates to its contract on a hard load (no mismatched probe)', async ({
-  page,
+    page,
 }) => {
-  const warnings: string[] = []
-  page.on('console', (m) => {
-    if (m.type() === 'warning' || m.type() === 'error') warnings.push(m.text())
-  })
+    const warnings: string[] = []
+    page.on('console', (m) => {
+        if (m.type() === 'warning' || m.type() === 'error') warnings.push(m.text())
+    })
 
-  await page.goto('/pages/hydration')
-  // The streamed scenarios settle after their reads; wait for the last chunk, then assert the matrix.
-  await expect(page.locator(`${PROBE}[data-label="chunk-3"]`)).toBeVisible()
-  await expect(page.locator(`${PROBE}`)).toHaveCount(10)
-  await expect(page.locator(`${PROBE}[data-ok="false"]`)).toHaveCount(0)
-  // The claiming blocks (all but the 3 {#for await} chunks) genuinely CLAIMED — server-origin.
-  await expect(page.locator(`${PROBE}[data-origin="server"]`)).toHaveCount(7)
-  // Rich-typed state() seed initials (Date/BigInt/Map) round-trip through the hydration value codec.
-  await expectRichSeedRoundTrips(page.locator(RICH_PROBE))
-  expect(warnings.filter((t) => /hydrat/i.test(t))).toEqual([])
+    await page.goto('/pages/hydration')
+    // The streamed scenarios settle after their reads; wait for the last chunk, then assert the matrix.
+    await expect(page.locator(`${PROBE}[data-label="chunk-3"]`)).toBeVisible()
+    await expect(page.locator(`${PROBE}`)).toHaveCount(10)
+    await expect(page.locator(`${PROBE}[data-ok="false"]`)).toHaveCount(0)
+    // The claiming blocks (all but the 3 {#for await} chunks) genuinely CLAIMED — server-origin.
+    await expect(page.locator(`${PROBE}[data-origin="server"]`)).toHaveCount(7)
+    // Rich-typed state() seed initials (Date/BigInt/Map) round-trip through the hydration value codec.
+    await expectRichSeedRoundTrips(page.locator(RICH_PROBE))
+    expect(warnings.filter((t) => /hydrat/i.test(t))).toEqual([])
 })
 
 test('every hydration scenario still hydrates to its contract when reached by a soft-nav', async ({
-  page,
+    page,
 }) => {
-  // Soft-nav exercises the streamed-patch-adoption path (the fill/append/complete frames): a streamed
-  // {#await}:then branch that failed to adopt would create-fallback and its "await-then" probe would
-  // flip to "client" (a mismatch). So this is the observable, non-seed-masked guard for that path.
-  await page.goto('/pages/structure')
-  await page.locator('aside.sidebar').getByRole('link', { name: 'Hydration health' }).click()
-  await expect(page).toHaveURL(/\/pages\/hydration$/)
-  await expect(page.locator(`${PROBE}[data-label="chunk-3"]`)).toBeVisible()
-  await expect(page.locator(`${PROBE}`)).toHaveCount(10)
-  await expect(page.locator(`${PROBE}[data-ok="false"]`)).toHaveCount(0)
-  // The streamed single-{#await} claimed cleanly across the soft-nav (the fix's real coverage).
-  await expect(page.locator(`${PROBE}[data-label="await-then"]`)).toHaveAttribute(
-    'data-origin',
-    'server',
-  )
-  // The rich-typed state() seed also survives its codec round-trip when the page arrives via a soft-nav
-  // (the seed rides the soft-nav envelope, then decodes into the grafted subtree).
-  await expectRichSeedRoundTrips(page.locator(RICH_PROBE))
+    // Soft-nav exercises the streamed-patch-adoption path (the fill/append/complete frames): a streamed
+    // {#await}:then branch that failed to adopt would create-fallback and its "await-then" probe would
+    // flip to "client" (a mismatch). So this is the observable, non-seed-masked guard for that path.
+    await page.goto('/pages/structure')
+    await page.locator('aside.sidebar').getByRole('link', { name: 'Hydration health' }).click()
+    await expect(page).toHaveURL(/\/pages\/hydration$/)
+    await expect(page.locator(`${PROBE}[data-label="chunk-3"]`)).toBeVisible()
+    await expect(page.locator(`${PROBE}`)).toHaveCount(10)
+    await expect(page.locator(`${PROBE}[data-ok="false"]`)).toHaveCount(0)
+    // The streamed single-{#await} claimed cleanly across the soft-nav (the fix's real coverage).
+    await expect(page.locator(`${PROBE}[data-label="await-then"]`)).toHaveAttribute(
+        'data-origin',
+        'server',
+    )
+    // The rich-typed state() seed also survives its codec round-trip when the page arrives via a soft-nav
+    // (the seed rides the soft-nav envelope, then decodes into the grafted subtree).
+    await expectRichSeedRoundTrips(page.locator(RICH_PROBE))
 })

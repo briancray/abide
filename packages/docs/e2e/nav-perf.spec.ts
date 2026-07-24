@@ -13,7 +13,8 @@ async function timeParamNav(page: import('@playwright/test').Page, pad: number):
     // Time the param nav alpha → bravo up to the reactive heading update (setClientRoute is synchronous;
     // the background middleware fetch is not on this path).
     return await page.evaluate(async () => {
-        const heading = () => document.querySelector('[data-testid="carousel-heading"]')?.textContent
+        const heading = () =>
+            document.querySelector('[data-testid="carousel-heading"]')?.textContent
         const start = performance.now()
         ;(document.querySelector('[data-testid="card-bravo"]') as HTMLElement).click()
         while (heading() !== 'Item: bravo') {

@@ -20,7 +20,12 @@ export default GET(
         await cacheTagSlow() // coalesce onto the in-flight refresh, await settle
         const refreshingAfterRefresh = refreshing({ tags: ['live'] })
 
-        return { pendingDuringLoad, pendingAfterLoad, refreshingDuringRefresh, refreshingAfterRefresh }
+        return {
+            pendingDuringLoad,
+            pendingAfterLoad,
+            refreshingDuringRefresh,
+            refreshingAfterRefresh,
+        }
     },
     { cache: false },
 )

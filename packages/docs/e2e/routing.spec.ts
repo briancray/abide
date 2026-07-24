@@ -16,9 +16,15 @@ test('hub page SSRs route() info and url()-built param links', async ({ page }) 
     await expect(page.getByTestId('route-url')).toHaveText('/pages/routing')
 
     // url("/pages/routing/[slug]", { slug }) filled the dynamic segment.
-    await expect(page.getByTestId('slug-link-alpha')).toHaveAttribute('href', '/pages/routing/alpha')
+    await expect(page.getByTestId('slug-link-alpha')).toHaveAttribute(
+        'href',
+        '/pages/routing/alpha',
+    )
     await expect(page.getByTestId('slug-link-beta')).toHaveAttribute('href', '/pages/routing/beta')
-    await expect(page.getByTestId('slug-link-gamma')).toHaveAttribute('href', '/pages/routing/gamma')
+    await expect(page.getByTestId('slug-link-gamma')).toHaveAttribute(
+        'href',
+        '/pages/routing/gamma',
+    )
 })
 
 test('url() builds hrefs with a query string — (path, params, query) and (path, query)', async ({
@@ -27,7 +33,9 @@ test('url() builds hrefs with a query string — (path, params, query) and (path
     await page.goto('/pages/routing')
 
     // url("/pages/routing/[slug]", { slug }, { ref, page }) fills the segment AND appends the query.
-    await expect(page.getByTestId('url-params-query')).toHaveText('/pages/routing/alpha?ref=docs&page=2')
+    await expect(page.getByTestId('url-params-query')).toHaveText(
+        '/pages/routing/alpha?ref=docs&page=2',
+    )
     // A no-[name] path collapses to url(path, query).
     await expect(page.getByTestId('url-query-only')).toHaveText('/pages/routing?tab=links')
     // The same built href flows straight into an <a href>.
@@ -321,7 +329,9 @@ test('a cross-route nav keeps the shared layout nodes alive (not rebuilt)', asyn
 
 // The definitive proof: a kept layout's `state` (not just its DOM node) survives, across BOTH a
 // cross-route nav and a param nav within its subtree.
-test('layout state survives cross-route and param navigation within the subtree', async ({ page }) => {
+test('layout state survives cross-route and param navigation within the subtree', async ({
+    page,
+}) => {
     await page.goto('/pages/layouts')
     for (let i = 0; i < 3; i++) await page.getByTestId('layout-inc').click()
     await expect(page.getByTestId('layout-count')).toHaveText('3')

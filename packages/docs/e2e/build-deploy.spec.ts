@@ -46,7 +46,10 @@ test('soft-nav from CLI to Deploy swaps content without a full reload', async ({
     await page.goto('/platform/cli')
     await page.evaluate(() => ((window as unknown as { __nav: boolean }).__nav = true))
     // The sidebar nav link (the CLI page prose also links to /deploy — scope to the sidebar).
-    await page.locator('.sidebar').getByRole('link', { name: 'Build & deploy', exact: true }).click()
+    await page
+        .locator('.sidebar')
+        .getByRole('link', { name: 'Build & deploy', exact: true })
+        .click()
     await expect(page.locator('h1')).toHaveText('Build & deploy')
     expect(await page.evaluate(() => (window as unknown as { __nav?: boolean }).__nav)).toBe(true)
 })

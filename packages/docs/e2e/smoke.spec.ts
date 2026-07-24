@@ -45,7 +45,9 @@ test('machines page loads', async ({ page }) => {
     await expect(page.locator('h1')).toHaveText('Machine surfaces')
     // Scope to the page content: the layout's scroll-spy also mirrors the `openapi` demo card's
     // heading as a `/openapi.json` sub-link in the sidebar, which would otherwise match too.
-    await expect(page.locator('.content').getByRole('link', { name: '/openapi.json' })).toBeVisible()
+    await expect(
+        page.locator('.content').getByRole('link', { name: '/openapi.json' }),
+    ).toBeVisible()
 })
 
 test('agent() loop streams AgentFrames — text, a tool run, and completion', async ({ page }) => {
