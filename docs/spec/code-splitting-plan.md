@@ -81,27 +81,27 @@ flushing a `:ok` comment prelude on connect — `onopen` now fires immediately (
   first load ships the loader entry + the matched route's chunk + shared chunks — a small fraction of the
   whole app; other routes load lazily on soft-nav. This is the dominant "much smaller" win.
 - A trivial page's shared **runtime floor** is ~26 KB min / 9.5 KB gz (loader entry: bootstrap + navigate
-  + registry + clientProxy + cell + runtime, factored into the entry + a shared chunk).
+  + registry + clientProxy + memo + runtime, factored into the entry + a shared chunk).
 
 ## Deferred — shared runtime-floor reduction (the "shrink the runtime" follow-up)
 
-The always-shipped floor is dominated by `shared/cell.ts` (~14.6 KB min / 5.1 KB gz client closure),
-which the client pulls in whole even for a page with no RPC / no state. cell drags SERVER-ONLY code into
+The always-shipped floor is dominated by `shared/memo.ts` (~14.6 KB min / 5.1 KB gz client closure),
+which the client pulls in whole even for a page with no RPC / no state. memo drags SERVER-ONLY code into
 the client: the `ReplayableStream` machinery + stream probes (client streaming is handled in `runtime.ts`,
-not the cell — `.chunks`/`.done`/`.resumeStream` are dead client-side), the cross-request SHARED store +
+not the memo — `.chunks`/`.done`/`.resumeStream` are dead client-side), the cross-request SHARED store +
 LRU accounting, cache-tag registration, the `notify` broadcast sink, and request-scope guards. All are
 already `!isBrowser`-gated at RUNTIME, but esbuild can't tree-shake them because always-live scalar paths
 (`startLoad`, `coalescedLoad`, `mapRead`) reference them.
 
-Measured ceiling: a lean client cell = **−6.6 KB min / −2 KB gz off every app** (floor −27% min).
+Measured ceiling: a lean client memo = **−6.6 KB min / −2 KB gz off every app** (floor −27% min).
 
 Two ways to get it, both rejected/deferred for now:
-- **(a) A parallel `cellClient.ts`** the browser build aliases to — DUPLICATES cell's scalar read/verb
+- **(a) A parallel `memoClient.ts`** the browser build aliases to — DUPLICATES memo's scalar read/verb
   logic, so the two drift. Rejected (not worth the maintenance/divergence risk for ~2 KB gz).
 - **(b) Non-duplicating `define`-gated dead-code elimination**: introduce a single build-time flag
   (`define: { __ABIDE_CLIENT__: true }` for the browser build) and gate every server-only branch AND the
   `startStream`/shared/tags helpers behind it, so esbuild proves them dead and drops them + their imports
-  (ReplayableStream, sharedCache, cacheTags, scope, responseSource). Keeps ONE `cell.ts` (no drift). This
+  (ReplayableStream, sharedCache, cacheTags, scope, responseSource). Keeps ONE `memo.ts` (no drift). This
   is a moderate refactor of the most bug-prone module's hot path — worth doing as its own focused,
   well-tested change, not bolted onto the splitting work. Plain `define` with the code as-is measured
   zero effect (the branches are runtime `isBrowser` checks esbuild can't prove dead); the refactor is what

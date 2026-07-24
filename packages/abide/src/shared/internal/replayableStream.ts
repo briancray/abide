@@ -7,10 +7,10 @@
 // and live are the SAME read — a lagging consumer just reads the shared array slower; nothing is
 // ever dropped for a finite stream (unlike the socket tail's drop-oldest fan-out).
 //
-// This primitive is cell-independent: it owns no cache slot, no TTL, no LRU. The cell wires it into
+// This primitive is memo-independent: it owns no cache slot, no TTL, no LRU. The memo wires it into
 // a slot (close/fail stamp the slot clock, per-consume ref-counting drives disposal) in step 1b.
 
-// Byte size of one decoded chunk, for the transcript accounting the cell/LRU will consume later.
+// Byte size of one decoded chunk, for the transcript accounting the memo/LRU will consume later.
 // A non-serializable chunk contributes 0 rather than throwing — accounting is best-effort.
 function measureChunkBytes(chunk: unknown): number {
     try {
@@ -21,7 +21,7 @@ function measureChunkBytes(chunk: unknown): number {
     }
 }
 
-// Lifecycle hooks the cell wires in; all optional so the standalone primitive needs none.
+// Lifecycle hooks the memo wires in; all optional so the standalone primitive needs none.
 export interface ReplayableStreamHooks {
     onAbort?: () => void
     onRefCountZero?: () => void
@@ -41,7 +41,7 @@ export class ReplayableStream<T> {
     // Exceeded the per-stream buffer cap (replayable-streams.md §4). An overflowed stream is aborted
     // (bounded memory), drops replay eligibility, and a new read re-runs instead of replaying.
     overflowed = false
-    // Live attachments currently iterating a `consume()`. Drives the cell's dispose-on-drain (step 1b).
+    // Live attachments currently iterating a `consume()`. Drives the memo's dispose-on-drain (step 1b).
     refCount = 0
     // Bumped by a future publish/rewrite so cursors re-replay from 0 (append verb deferred; see spec).
     generation = 0
@@ -55,10 +55,10 @@ export class ReplayableStream<T> {
     // Aborts the owning source (its AbortController), invoked once on abort(). Optional for a standalone
     // stream with no source to cancel.
     private readonly onAbort: (() => void) | undefined
-    // Fired whenever the live ref-count returns to 0 (after any consumer detaches). The cell uses this to
+    // Fired whenever the live ref-count returns to 0 (after any consumer detaches). The memo uses this to
     // drive TTL-keyed lifecycle: dispose-on-drain for a settled slot, or abort a source everyone left.
     private readonly onRefCountZero: (() => void) | undefined
-    // Fired after each chunk is appended. The cell uses this to bump a reactive tick so `latest`/`chunks`
+    // Fired after each chunk is appended. The memo uses this to bump a reactive tick so `latest`/`chunks`
     // re-run as the transcript grows — WITHOUT touching the state-machine signal the bare read subscribes.
     private readonly onPush: (() => void) | undefined
 
@@ -106,7 +106,7 @@ export class ReplayableStream<T> {
     }
 
     // The transcript exceeded its per-stream cap: bound memory by aborting the source, and flag it so the
-    // cell drops replay eligibility (a new read re-runs). Buffered chunks stay for current consumers.
+    // memo drops replay eligibility (a new read re-runs). Buffered chunks stay for current consumers.
     markOverflowed(): void {
         if (this.overflowed) return
         this.overflowed = true

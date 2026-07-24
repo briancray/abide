@@ -3,14 +3,14 @@
 // A verb helper turns a plain handler `fn(args)` into an `Rpc`: an isomorphic callable the
 // router mounts (via `__rpc` metadata) and that server/client code invokes directly.
 //
-// READS (GET/HEAD) wrap the handler in a `cell` so in-process calls cache, coalesce, and are
+// READS (GET/HEAD) wrap the handler in a `memo` so in-process calls cache, coalesce, and are
 // reactive — `(args)` reactively peeks, `load/peek/pending/error/refresh/invalidate` mirror
-// the cell surface. cache.ttl flows into the cell; the remaining options (schemas/clients/
+// the memo surface. cache.ttl flows into the memo; the remaining options (schemas/clients/
 // crossOrigin/maxBodySize/timeout/middleware) are carried untouched for the router to enforce.
-// `cache: false` on a read means "don't retain" → the cell runs at ttl:0 (coalesce concurrent, never
+// `cache: false` on a read means "don't retain" → the memo runs at ttl:0 (coalesce concurrent, never
 // serve stale) while keeping the reactive surface.
 //
-// MUTATIONS (POST/PUT/PATCH/DELETE) route through a cell exactly like reads and expose the SAME
+// MUTATIONS (POST/PUT/PATCH/DELETE) route through a memo exactly like reads and expose the SAME
 // surface (`MutationSurface` = `Rpc` for a value handler, `StreamRead` for a streaming one) — full
 // symmetry: `peek`/`pending`/`refreshing`/`error`/`watch`/`refresh`/`invalidate`/`publish`/`snapshot`/
 // `seed`/`raw`/`isError` and the streaming chunk probes all work. The ONLY differences are transport
@@ -20,12 +20,12 @@
 // A non-shared mutation's slot is per-request, so ttl:0 is inert for the normal one-call-per-request
 // case and preserves at-least-once across separate requests; cross-request dedup needs `shared: true`.
 // An author who WANTS a mutation cached sets `cache: { ttl }` and the whole surface reflects it. `cache:
-// false` opts the bare CALL out of the cell (direct run, at-least-once) for a non-idempotent handler;
-// the probe surface stays present but reads an empty slot. A `FormData` body always bypasses the cell
+// false` opts the bare CALL out of the memo (direct run, at-least-once) for a non-idempotent handler;
+// the probe surface stays present but reads an empty slot. A `FormData` body always bypasses the memo
 // (it can't be safely keyed — see §1).
 
-import { type CacheNotify, type Cell, type CellOptions, cell } from '../../shared/cell.ts'
 import type { Payload } from '../../shared/internal/responseSource.ts'
+import { type CacheNotify, type Memo, type MemoOptions, memo } from '../../shared/memo.ts'
 
 export type { Payload } from '../../shared/internal/responseSource.ts'
 
@@ -67,7 +67,7 @@ export interface RpcOptions {
     crossOrigin?: CrossOriginOption
     maxBodySize?: number
     timeout?: number
-    // `false` opts a call OUT of the cell entirely (replayable-streams.md §1): a mutation runs every call
+    // `false` opts a call OUT of the memo entirely (replayable-streams.md §1): a mutation runs every call
     // (no coalescing); a read runs at ttl:0. `{ … }` overrides the per-verb default (reads ttl:∞,
     // mutations ttl:0).
     cache?: false | { ttl?: number; shared?: boolean; tags?: string[] }
@@ -135,15 +135,15 @@ export interface Rpc<Args, T> {
     error(...args: RpcCallArgs<Args>): unknown
     // Run `handler` whenever this slot's value changes; returns a dispose function. Reactive probe.
     watch(args: Args, handler: (value: T | undefined) => void): () => void
-    // Raw `Response`, full bypass of the cell (rpc-core call surface): on the client a bare fetch to
+    // Raw `Response`, full bypass of the memo (rpc-core call surface): on the client a bare fetch to
     // `/__abide/rpc/<name>`; on the server the handler run wrapped in a JSON `Response` (or its own Response).
     raw(args: Args, init?: RequestInit): Promise<Response>
     // Narrow a caught value to this RPC's typed error by name (`fn.isError(e, "RateLimited")`).
     isError(e: unknown, name: string): boolean
-    // Partial selector matches every superset slot (spec: partial-object match); mirrors `Cell`.
+    // Partial selector matches every superset slot (spec: partial-object match); mirrors `Memo`.
     refresh(args?: Partial<Args> | Args): void
     invalidate(args?: Partial<Args> | Args): void
-    // Mutate the retained value in place (value-form or updater-form); mirrors `Cell`. On a `shared`
+    // Mutate the retained value in place (value-form or updater-form); mirrors `Memo`. On a `shared`
     // read this broadcasts (value-form directly, updater-form resolves server-side then broadcasts).
     publish(args: Args, next: T | ((current: T | undefined) => T)): void
     // §5 hydration: `snapshot()` records this read's resolved slots for the seed; `seed()` replays a
@@ -159,7 +159,7 @@ export interface Rpc<Args, T> {
         encoding?: 'jsonl' | 'sse',
     ): void
     // SERVER-ONLY broadcast seam (rpc-core §8, PR2). `createApp` calls this on a `shared` read to bind
-    // the cell's transport-free `notify` sink to a channel publish. Transport stays out of makeRpc —
+    // the memo's transport-free `notify` sink to a channel publish. Transport stays out of makeRpc —
     // the sink is supplied by createApp (which alone knows the route NAME). A no-op until bound.
     bindBroadcast(sink: CacheNotify): void
     readonly __rpc: RpcMeta<Args, T>
@@ -202,7 +202,7 @@ export type ReadSurface<Args, R> = [Payload<R>] extends [AsyncIterable<infer C>]
 
 // A value MUTATION shares the FULL `Rpc` surface (peek/pending/refreshing/refresh/invalidate/publish/
 // watch/snapshot/seed/raw/isError/…) — full symmetry with a read. It only widens the CALL to also
-// accept a `FormData` body (TODO #8 multipart upload), which bypasses the cell; a zero-arg mutation
+// accept a `FormData` body (TODO #8 multipart upload), which bypasses the memo; a zero-arg mutation
 // keeps the argument optional. The `.raw` here still carries the mutation body + CSRF header on the
 // client and returns the untouched `Response` (no parse, no `!ok` throw).
 export interface Mutation<Args, T> extends Rpc<Args, T> {
@@ -235,13 +235,13 @@ export function isTypedError(e: unknown, name: string): boolean {
 }
 
 // Attach the FULL isomorphic surface (reactive probes + cache verbs + `raw` + stream chunk probes +
-// `__rpc` meta) to a cell-backed callable. Shared by reads and mutations — the only caller-specific
+// `__rpc` meta) to a memo-backed callable. Shared by reads and mutations — the only caller-specific
 // pieces are the bare CALL (built by the caller, so a mutation can bypass on FormData/`cache:false`)
 // and the meta `read` flag. `rawSource` is the handler `.raw` runs in-process AND the meta handler
 // (the same function reference the router/OpenAPI/MCP invoke).
 function attachSurface<Args, T>(
     callable: Rpc<Args, T>,
-    backing: Cell<Args, T>,
+    backing: Memo<Args, T>,
     rawSource: (args: Args) => Promise<T> | T,
     method: string,
     options: RpcOptions,
@@ -301,28 +301,28 @@ export function makeRead<Args, T>(
     const options = opts ?? {}
 
     // Only forward set fields — exactOptionalPropertyTypes forbids an explicit undefined.
-    const cellOptions: CellOptions = {}
+    const memoOptions: MemoOptions = {}
     // `cache: false` on a read = don't retain → ttl:0 (coalesce-only, always revalidate), keeping the
-    // reactive cell surface (a full cell bypass is a mutation-only opt-out, since reads need the surface).
+    // reactive memo surface (a full memo bypass is a mutation-only opt-out, since reads need the surface).
     if (options.cache === false) {
-        cellOptions.ttl = 0
+        memoOptions.ttl = 0
     } else {
         const cacheConfig = options.cache
-        if (cacheConfig?.ttl !== undefined) cellOptions.ttl = cacheConfig.ttl
+        if (cacheConfig?.ttl !== undefined) memoOptions.ttl = cacheConfig.ttl
         // `shared` opts this read into the process-global cross-request cache (rpc-core §2). Server-only
-        // and fail-closed inside the cell: the handler runs scope-exited and reads require a live scope.
-        if (cacheConfig?.shared === true) cellOptions.shared = true
+        // and fail-closed inside the memo: the handler runs scope-exited and reads require a live scope.
+        if (cacheConfig?.shared === true) memoOptions.shared = true
         // Tags register a shared read for the global `invalidate/refresh({ tags })` selectors (rpc-core
-        // §8). Honored only on a shared cell (the tag registry is server-only); inert otherwise.
-        if (cacheConfig?.tags !== undefined) cellOptions.tags = cacheConfig.tags
+        // §8). Honored only on a shared memo (the tag registry is server-only); inert otherwise.
+        if (cacheConfig?.tags !== undefined) memoOptions.tags = cacheConfig.tags
     }
-    // Late-bound broadcast target: the cell gets a stable, transport-free sink now; `createApp` sets
+    // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets
     // the actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
     let broadcast: CacheNotify | undefined
-    cellOptions.notify = (verb, args, value): void => {
+    memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }
-    const backing = cell<Args, T>(fn, cellOptions)
+    const backing = memo<Args, T>(fn, memoOptions)
 
     const rpc = ((args: Args): Promise<T> => backing(args)) as Rpc<Args, T>
     attachSurface(rpc, backing, fn, method, options, true, (sink) => {
@@ -339,30 +339,30 @@ export function makeMutation<Args, R>(
     const options = opts ?? {}
     type T = Payload<R>
 
-    // `fn` returns the (possibly transport-wrapped) `R`; the cell sees through it to the payload `T`.
+    // `fn` returns the (possibly transport-wrapped) `R`; the memo sees through it to the payload `T`.
     const handler = fn as unknown as (args: Args) => Promise<T> | T
 
-    // A mutation is a cell + transport exactly like a read — the cell backs BOTH the coalescing call
+    // A mutation is a memo + transport exactly like a read — the memo backs BOTH the coalescing call
     // and the whole probe surface. It differs only in the DEFAULT policy: ttl:0 (coalesce identical
     // concurrent in-flight calls, retain nothing) where a read retains. `cache: { ttl }` opts a mutation
-    // into retention and the surface reflects it. `cache: false` still builds a cell so the surface
+    // into retention and the surface reflects it. `cache: false` still builds a memo so the surface
     // exists (probes read an empty slot), but the bare CALL bypasses it for a direct at-least-once run.
-    const celled = options.cache !== false
+    const memoed = options.cache !== false
     const cacheConfig = options.cache === false ? undefined : options.cache
-    const cellOptions: CellOptions = { ttl: cacheConfig?.ttl ?? 0 }
-    if (cacheConfig?.shared === true) cellOptions.shared = true
-    if (cacheConfig?.tags !== undefined) cellOptions.tags = cacheConfig.tags
+    const memoOptions: MemoOptions = { ttl: cacheConfig?.ttl ?? 0 }
+    if (cacheConfig?.shared === true) memoOptions.shared = true
+    if (cacheConfig?.tags !== undefined) memoOptions.tags = cacheConfig.tags
     let broadcast: CacheNotify | undefined
-    cellOptions.notify = (verb, args, value): void => {
+    memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }
-    const backing = cell<Args, T>(handler, cellOptions)
+    const backing = memo<Args, T>(handler, memoOptions)
 
     const mutation = ((args: Args | FormData): Promise<T> => {
         // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw
         // FormData throws in canonicalKey), and `cache: false` opts the call out entirely → run the
-        // handler directly (at-least-once). Otherwise route through the cell (coalesce/retain).
-        if (!celled || (typeof FormData !== 'undefined' && args instanceof FormData)) {
+        // handler directly (at-least-once). Otherwise route through the memo (coalesce/retain).
+        if (!memoed || (typeof FormData !== 'undefined' && args instanceof FormData)) {
             return Promise.resolve(handler(args as Args))
         }
         return backing(args as Args)

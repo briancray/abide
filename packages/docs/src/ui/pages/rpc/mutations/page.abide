@@ -18,7 +18,7 @@
   </Demo>
 
   <h2>Full read/mutation symmetry</h2>
-  <p>A mutation is <code>cell + transport</code> just like a read, so it exposes the <strong>same surface</strong>. The only differences are transport (method + body + CSRF gate) and the default TTL. Opt a mutation into caching with <code>cache</code> and its reactive probes come alive — here a cached <code>POST</code> where a repeat <em>call</em> hits the cache (the run number holds) while <code>.refresh()</code> re-runs the handler, driven entirely through <code>.peek()</code> / <code>.refreshing()</code>:</p>
+  <p>A mutation is <code>memo + transport</code> just like a read, so it exposes the <strong>same surface</strong>. The only differences are transport (method + body + CSRF gate) and the default TTL. Opt a mutation into caching with <code>cache</code> and its reactive probes come alive — here a cached <code>POST</code> where a repeat <em>call</em> hits the cache (the run number holds) while <code>.refresh()</code> re-runs the handler, driven entirely through <code>.peek()</code> / <code>.refreshing()</code>:</p>
   <Demo id="cached-mutation" title="Cached mutation — <code>POST</code> with a <code>cache</code> TTL" server="src/server/rpc/rpcBumpCounter.ts" client="src/ui/demos/rpc/mutations/CachedMutationDemo.abide" tab="server">
     <CachedMutationDemo />
   </Demo>

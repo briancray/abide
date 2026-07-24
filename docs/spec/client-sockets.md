@@ -5,12 +5,12 @@ knobs are deferred from v1 — see Deferred/parked (client-side `validate`, refc
 Scope: the **browser half** of `socket(...)` — the client `Socket<T>` proxy, its module-swap,
 the reactive probe surface, and the SSR→hydrate handoff. Builds on `docs/spec/sockets.md`
 (S-refs: the server hub, transport, auth), `docs/spec/rpc-core.md` (the RPC module-swap this
-mirrors), `docs/spec/promise-read-model.md` (the cell-probe vocabulary), and
+mirrors), `docs/spec/promise-read-model.md` (the memo-probe vocabulary), and
 `docs/spec/abide-compiler.md` (C-refs: emit/bundle). `docs/spec/sockets.md` §S4.1 promised the
 browser an "isomorphic `Socket<T>` over the WS mux"; this slice defines it.
 
 Through-line: **the same import, the same name, the same surface — `for await` + `publish` +
-the cell-probe vocabulary — on both sides.** A `.abide` reads `server/sockets/<name>.ts`; the
+the memo-probe vocabulary — on both sides.** A `.abide` reads `server/sockets/<name>.ts`; the
 server render gets the real hub, the browser gets a swapped proxy that is byte-for-byte the same
 `Socket<T>` TypeScript type. Sockets stay best-effort, at-most-once, no-cursor (S2) — the client
 adds no durability the server never had.
@@ -35,7 +35,7 @@ adds no durability the server never had.
    }
    ```
 
-   Probes are **zero-arg** (a socket is one topic, not an args-keyed cell — contrast the RPC
+   Probes are **zero-arg** (a socket is one topic, not an args-keyed memo — contrast the RPC
    read's `fn.peek(args)`).
 2. **Module-swap, parallel to the RPC proxy (rpc-core §6).** On the server a `.abide` imports the
    real `Socket` (in-proc hub). At build the bundler swaps a `server/sockets/*` import for a

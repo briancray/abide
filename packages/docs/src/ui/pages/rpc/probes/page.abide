@@ -8,7 +8,7 @@
 
 <main class="page">
   <h1>Reactive probes</h1>
-  <p class="lead">An RPC read is a <a href="/caching/cell">cell</a> with a transport, so it carries the same reactive read surface — the <strong>probes</strong> — as any cell. <code>peek(args)</code> is the non-blocking snapshot, <code>pending(args)</code>/<code>refreshing(args)</code> track first-load vs revalidation, <code>error(args)</code> holds a rejected read, and <code>watch(args, cb)</code> fires on every change. Same vocabulary as the <a href="/caching/probes">generic-cell</a> and <a href="/sockets/probes">socket</a> probes — here over live <code>GET</code> fetches.</p>
+  <p class="lead">An RPC read is a <a href="/caching/memo">memo</a> with a transport, so it carries the same reactive read surface — the <strong>probes</strong> — as any memo. <code>peek(args)</code> is the non-blocking snapshot, <code>pending(args)</code>/<code>refreshing(args)</code> track first-load vs revalidation, <code>error(args)</code> holds a rejected read, and <code>watch(args, cb)</code> fires on every change. Same vocabulary as the <a href="/caching/probes">generic-memo</a> and <a href="/sockets/probes">socket</a> probes — here over live <code>GET</code> fetches.</p>
 
   <h2><code>peek()</code> / <code>pending()</code> / <code>error()</code> in a template</h2>
   <p><code>fn.peek(args)</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves — all reactive, straight in the markup.</p>

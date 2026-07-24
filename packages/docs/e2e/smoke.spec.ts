@@ -12,7 +12,7 @@ test('home page loads with the abide heading and capability nav', async ({ page 
     const sidebar = page.locator('aside.sidebar')
     await expect(sidebar.getByRole('link', { name: 'Home' })).toBeVisible()
     await expect(sidebar.getByRole('link', { name: 'Reactive primitives' })).toBeVisible()
-    await expect(sidebar.getByRole('link', { name: 'The cell primitive' })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: 'The memo primitive' })).toBeVisible()
     await expect(sidebar.getByRole('link', { name: 'Machine surfaces' })).toBeVisible()
 
     // The capability cards (in the page content) are rendered from the `capabilities` RPC.

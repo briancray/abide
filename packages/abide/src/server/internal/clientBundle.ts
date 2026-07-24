@@ -12,7 +12,7 @@
 // imported by the entry so `Bun.build` resolves the runtime + tree-shakes. Only `runtime.ts` and the
 // emitted module strings reach the browser; the build/SSR TS7 modules (`parse.ts`/`analyzeScope.ts`/
 // `emit*.ts`) never do — the whole no-eval/CSP win. This is still the module-swap point (rpc-core §6): the page imported real server `Rpc`s during
-// SSR; the emitted mount instead reads client fetch proxies over the SAME cell surface off `$scope`
+// SSR; the emitted mount instead reads client fetch proxies over the SAME memo surface off `$scope`
 // (built by `bootstrapPage` via `makeClientImports`).
 //
 // The build is cached per config (a config's pages + routes are fixed for the app's lifetime).

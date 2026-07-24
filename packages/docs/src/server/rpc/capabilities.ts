@@ -7,7 +7,7 @@ export interface Capability {
 }
 
 // Zero-arg read RPC: the capability index that powers the home page and the machine surface. Cached
-// and coalesced by the cell like any read; reachable over HTTP at /rpc/capabilities, OpenAPI, and MCP.
+// and coalesced by the memo like any read; reachable over HTTP at /rpc/capabilities, OpenAPI, and MCP.
 // #demo capabilities
 export default GET((): Capability[] => [
     {

@@ -1,12 +1,12 @@
-# Design — the Promise-read model (RPC/cell read semantics)
+# Design — the Promise-read model (RPC/memo read semantics)
 
-> **STATUS: IMPLEMENTED.** The bare cell/RPC call now returns `Promise<T>` (subscribing coalesced
+> **STATUS: IMPLEMENTED.** The bare memo/RPC call now returns `Promise<T>` (subscribing coalesced
 > load); `fn.peek(args): T | undefined` is the reactive snapshot; `.load` is retained as a `@deprecated`
 > non-subscribing alias (migration only). **The open crux below is SOLVED:** the bare call does a
 > tracked `slot.signal()` read before returning the load promise, so the interpolation/await effect
 > re-runs and re-awaits on invalidate. Seed-primed synchronous hydration claim is preserved via a
 > runtime-only settled-value hint on the promise (`shared/internal/settledRead.ts`) — the public type
-> stays a clean `Promise<T>`. Refs: `shared/cell.ts`, `server/internal/makeRpc.ts`,
+> stays a clean `Promise<T>`. Refs: `shared/memo.ts`, `server/internal/makeRpc.ts`,
 > `ui/internal/clientProxy.ts`, `server/internal/pages.ts`, `ui/internal/runtime.ts` (`claimAwait`).
 > Note: the runtime AUTO-AWAITS a thenable interpolation, so a bare `{fn()}` renders the awaited value
 > (better than the projected `[object Promise]`); `{fn().field}` is still a checker type error.
@@ -70,7 +70,7 @@ and the type-safe path coincide. Optional future sugar: `{#if rpc.peek() as v}` 
 
 Today `{fn()}` (peek) re-renders on `invalidate`/`publish` because the peek subscribes. Under this model
 the reactive form `{rpc.peek()}` still subscribes ✓, but the blocking form `{await rpc()}` must ALSO
-re-await when the underlying cell invalidates — otherwise a blocking read goes stale after a mutation.
+re-await when the underlying memo invalidates — otherwise a blocking read goes stale after a mutation.
 So the await-interpolation has to subscribe-and-re-await. **This is the hardest design point and the
 thing to nail before implementing.** (`{rpc.peek()}` reactivity is free; `{await rpc()}` reactivity is
 new behavior.)
@@ -83,7 +83,7 @@ new behavior.)
   `{#await fn.load(args)}` — see below).
 - CLAUDE.md contract flips: "`{fn(args)}` = non-blocking peek" → "`{fn.peek(args)}` = non-blocking
   peek; `{fn(args)}` / `{await fn(args)}` = the read (promise)."
-- Seed/SSR/hydration: smaller than other B-variants (cell internals barely move — only which method the
+- Seed/SSR/hydration: smaller than other B-variants (memo internals barely move — only which method the
   bare call forwards to). Re-prove `snapshot`/`seed` under `{await rpc()}`-driven SSR resolution.
 
 ## Interim (what #11 ships on, before this model)

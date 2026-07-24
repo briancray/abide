@@ -7,7 +7,7 @@ import { PATCH } from './PATCH.ts'
 import { POST } from './POST.ts'
 import { PUT } from './PUT.ts'
 
-// Every test runs inside a fresh request scope so the read cell has a cache to write into and
+// Every test runs inside a fresh request scope so the read memo has a cache to write into and
 // slots never leak between tests.
 function makeScope(overrides?: Partial<RequestScope>): RequestScope {
     const url = new URL('http://localhost/test')
@@ -99,7 +99,7 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
             expect(get.isError({ kind: 'Other' }, 'RateLimited')).toBe(false)
             expect(get.isError(new Error('x'), 'RateLimited')).toBe(false)
 
-            // refreshing + watch are forwarded from the cell.
+            // refreshing + watch are forwarded from the memo.
             expect(typeof get.refreshing).toBe('function')
             expect(get.refreshing({ n: 1 })).toBe(false)
             const seen: unknown[] = []
@@ -197,7 +197,7 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
         })
     })
 
-    test('cache: false opts the CALL out of the cell (at-least-once) but keeps the surface', async () => {
+    test('cache: false opts the CALL out of the memo (at-least-once) but keeps the surface', async () => {
         let calls = 0
         const post = POST(
             async (n: number) => {

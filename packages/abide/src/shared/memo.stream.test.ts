@@ -1,13 +1,13 @@
-// Cell streaming integration — build step 1b (replayable-streams.md §2, §4, §Build).
+// Memo streaming integration — build step 1b (replayable-streams.md §2, §4, §Build).
 //
 // A handler that yields a raw AsyncIterable is wrapped in a ReplayableStream on the slot: concurrent /
 // late reads fan out over ONE source run, ttl clocks from stream CLOSE, ttl:0 disposes on drain, and an
-// open stream is never expired. Value-slot behavior is covered by the existing cell.test.ts (regression
+// open stream is never expired. Value-slot behavior is covered by the existing memo.test.ts (regression
 // guard = the full suite staying green).
 
 import { describe, expect, test } from 'bun:test'
-import { cell } from './cell.ts'
 import { effect } from './internal/reactive.ts'
+import { memo } from './memo.ts'
 
 async function drain<T>(iter: AsyncIterable<T>): Promise<{ values: T[]; thrown?: unknown }> {
     const values: T[] = []
@@ -21,10 +21,10 @@ async function drain<T>(iter: AsyncIterable<T>): Promise<{ values: T[]; thrown?:
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-describe('cell streaming — one source run, fanned out', () => {
+describe('memo streaming — one source run, fanned out', () => {
     test('two concurrent reads share ONE source run; each gets the full transcript', async () => {
         let runs = 0
-        const c = cell<{ n: number }, AsyncIterable<number>>(async function* (args) {
+        const c = memo<{ n: number }, AsyncIterable<number>>(async function* (args) {
             runs++
             for (let i = 0; i < args.n; i++) yield i
         })
@@ -38,7 +38,7 @@ describe('cell streaming — one source run, fanned out', () => {
 
     test('a late joiner within ttl replays the full transcript with NO re-run', async () => {
         let runs = 0
-        const c = cell<{ n: number }, AsyncIterable<number>>(
+        const c = memo<{ n: number }, AsyncIterable<number>>(
             async function* (args) {
                 runs++
                 for (let i = 0; i < args.n; i++) yield i
@@ -52,10 +52,10 @@ describe('cell streaming — one source run, fanned out', () => {
     })
 })
 
-describe('cell streaming — TTL lifecycle', () => {
+describe('memo streaming — TTL lifecycle', () => {
     test('ttl:0 disposes on drain; the next read is a cold re-run', async () => {
         let runs = 0
-        const c = cell<{ n: number }, AsyncIterable<number>>(
+        const c = memo<{ n: number }, AsyncIterable<number>>(
             async function* (args) {
                 runs++
                 for (let i = 0; i < args.n; i++) yield i
@@ -71,7 +71,7 @@ describe('cell streaming — TTL lifecycle', () => {
 
     test('the ttl clock starts at CLOSE: within-ttl replays, past-ttl re-runs', async () => {
         let runs = 0
-        const c = cell<{ n: number }, AsyncIterable<number>>(
+        const c = memo<{ n: number }, AsyncIterable<number>>(
             async function* (args) {
                 runs++
                 for (let i = 0; i < args.n; i++) yield i
@@ -90,9 +90,9 @@ describe('cell streaming — TTL lifecycle', () => {
     })
 })
 
-describe('cell streaming — reactive peek (latest) / chunks / done', () => {
+describe('memo streaming — reactive peek (latest) / chunks / done', () => {
     test('peek returns the latest chunk reactively; chunks/done reflect the transcript', async () => {
-        const c = cell<Record<string, never>, AsyncIterable<number>>(async function* () {
+        const c = memo<Record<string, never>, AsyncIterable<number>>(async function* () {
             for (let i = 0; i < 3; i++) {
                 await sleep(5)
                 yield i
@@ -117,8 +117,8 @@ describe('cell streaming — reactive peek (latest) / chunks / done', () => {
         expect(seen).toContain(2)
     })
 
-    test('chunks/done are inert on a value cell; peek still returns the value', async () => {
-        const c = cell<Record<string, never>, number>(() => 42)
+    test('chunks/done are inert on a value memo; peek still returns the value', async () => {
+        const c = memo<Record<string, never>, number>(() => 42)
         await c({})
         expect(c.peek({})).toBe(42) // value read: peek is the value, unchanged
         expect(c.chunks({})).toBeUndefined()
@@ -127,7 +127,7 @@ describe('cell streaming — reactive peek (latest) / chunks / done', () => {
 
     test("error() surfaces a stream's terminal failure (not the slot state)", async () => {
         const boom = new Error('stream-err')
-        const c = cell<Record<string, never>, AsyncIterable<number>>(async function* () {
+        const c = memo<Record<string, never>, AsyncIterable<number>>(async function* () {
             yield 0
             throw boom
         })
@@ -136,10 +136,10 @@ describe('cell streaming — reactive peek (latest) / chunks / done', () => {
     })
 })
 
-describe('cell streaming — error & invalidate', () => {
+describe('memo streaming — error & invalidate', () => {
     test('a source that throws mid-stream replays the prefix then throws to every consumer', async () => {
         const boom = new Error('mid-stream')
-        const c = cell<Record<string, never>, AsyncIterable<number>>(async function* () {
+        const c = memo<Record<string, never>, AsyncIterable<number>>(async function* () {
             yield 0
             yield 1
             throw boom
@@ -156,7 +156,7 @@ describe('cell streaming — error & invalidate', () => {
             release = resolve
         })
         let runs = 0
-        const c = cell<Record<string, never>, AsyncIterable<number>>(async function* () {
+        const c = memo<Record<string, never>, AsyncIterable<number>>(async function* () {
             runs++
             yield 0
             yield 1
@@ -190,7 +190,7 @@ describe('cell streaming — error & invalidate', () => {
 
     test('invalidate on a retained (closed) stream drops it; the next read re-runs', async () => {
         let runs = 0
-        const c = cell<Record<string, never>, AsyncIterable<number>>(
+        const c = memo<Record<string, never>, AsyncIterable<number>>(
             async function* () {
                 runs++
                 yield 0

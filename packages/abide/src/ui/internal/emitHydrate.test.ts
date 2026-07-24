@@ -9,8 +9,8 @@
 // (`Hi {name}!`) and the empty-value lazy-create case. Blocks are PR4 — not exercised here.
 
 import { describe, expect, spyOn, test } from 'bun:test'
-import { cell } from '../../shared/cell.ts'
 import { signal } from '../../shared/internal/reactive.ts'
+import { memo } from '../../shared/memo.ts'
 import { loadEmitted } from './emit.ts'
 
 function tick(): Promise<void> {
@@ -49,7 +49,7 @@ const TEXT = 3
 const COMMENT = 8
 
 // A scope whose signal-backed entries read their CURRENT value through a getter (so both the server
-// render and the client hydrate read the same live cell), plus any plain values passed through.
+// render and the client hydrate read the same live memo), plus any plain values passed through.
 function makeScope(
     signals: Record<string, ReturnType<typeof signal>>,
     plain: Record<string, unknown> = {},
@@ -476,7 +476,7 @@ describe('attribute — suppress-write then in-place update', () => {
 
 describe('{#await} block — claim the settled branch (PR5)', () => {
     test('seed-primed RPC read: claims the SAME then-branch node, no write on pass 1', async () => {
-        const getName = cell<{ id: number }, string>(async ({ id }) => `loaded-${id}`)
+        const getName = memo<{ id: number }, string>(async ({ id }) => `loaded-${id}`)
         getName.seed({ id: 1 }, 'Bob') // prime the slot so the read is synchronously settled
         const scope = { getName }
         const emitted = await loadEmitted(

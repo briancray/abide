@@ -1,0 +1,18 @@
+{
+  "languages": {
+    "Abide": {
+      "semantic_tokens": "combined"
+    }
+  },
+  "lsp": {
+    "abide": {
+      "binary": {
+        "path": "bun",
+        "arguments": [
+          "~/Code/abideclean/packages/abide/src/cli/bin.ts",
+          "lsp"
+        ]
+      }
+    }
+  }
+}

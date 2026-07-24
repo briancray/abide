@@ -29,7 +29,7 @@ type TypedArrayName = keyof typeof TYPED_ARRAY_CONSTRUCTORS
 // ---------------------------------------------------------------------------
 
 export function canonicalKey(value: unknown): string {
-    // Scalar fast path — the overwhelmingly common cell-read arg. Returns without the cycle-guard Map:
+    // Scalar fast path — the overwhelmingly common memo-read arg. Returns without the cycle-guard Map:
     // a scalar can never form a cycle, so allocating one per read was dead work on the hottest path.
     if (value === null) return 'N'
     const kind = typeof value

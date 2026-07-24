@@ -128,14 +128,14 @@ export function getContext(): CacheContext {
 }
 
 // The persistent server default-context cache Map, or undefined on the client / before it is
-// created. Used by the cell primitive to recognise (and LRU-bound) the ambient default cache.
+// created. Used by the memo primitive to recognise (and LRU-bound) the ambient default cache.
 export function serverDefaultCache(): Map<string, unknown> | undefined {
     return serverDefaultContext?.cache
 }
 
 // Run fn with NO active cache context so getContext() falls back to the server default context.
-// The server-side half of scope isolation for `shared` cells: while a shared handler runs
-// scope-exited, a nested non-shared cell must land in the neutral default context, never a
+// The server-side half of scope isolation for `shared` memos: while a shared handler runs
+// scope-exited, a nested non-shared memo must land in the neutral default context, never a
 // request's Map. On the client (no async isolation) this is a plain call.
 export function runOutsideContext<T>(fn: () => T): T {
     if (isBrowser || requestStorage === undefined) return fn()

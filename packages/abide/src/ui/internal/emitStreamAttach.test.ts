@@ -8,9 +8,9 @@
 
 import { describe, expect, test } from 'bun:test'
 import { collectSeed, type HydrationSeed } from '../../server/internal/pages.ts'
-import { cell } from '../../shared/cell.ts'
 import { createContext, runInContext } from '../../shared/internal/context.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { memo } from '../../shared/memo.ts'
 import { resumeStreamSource } from './bootstrap.ts'
 import { loadEmitted } from './emit.ts'
 import { createStreamScope, drainPatches } from './streamScope.ts'
@@ -84,7 +84,7 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
         // fires. This is the headline invariant: the source is never re-invoked on the client at hydrate.
         let clientCalls = 0
         const bumped: string[] = []
-        const complete = cell((_args: { n: number }): AsyncIterable<string> => {
+        const complete = memo((_args: { n: number }): AsyncIterable<string> => {
             clientCalls++
             return (async function* () {})()
         })
@@ -123,7 +123,7 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
 
         // On refresh the client source IS run — it yields a DIFFERENT transcript so the repaint is visible.
         let runs = 0
-        const complete = cell((_args: { n: number }): AsyncIterable<string> => {
+        const complete = memo((_args: { n: number }): AsyncIterable<string> => {
             runs++
             return (async function* () {
                 yield 'r0'
@@ -146,8 +146,8 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
         expect(text()).toEqual(['t0', 't1', 't2'])
         expect(complete.chunks({ n: 3 })).toEqual(['t0', 't1', 't2'])
         expect(complete.done({ n: 3 })).toBe(true)
-        // `peek` on a raw cell is typed as the source value (`AsyncIterable`); on a stream slot it returns
-        // the latest CHUNK at runtime (the RPC surface types this as `C` — here it is a bare cell).
+        // `peek` on a raw memo is typed as the source value (`AsyncIterable`); on a stream slot it returns
+        // the latest CHUNK at runtime (the RPC surface types this as `C` — here it is a bare memo).
         expect(complete.peek({ n: 3 }) as unknown).toBe('t2')
 
         // refresh() re-runs the source and the list re-streams from the fresh transcript (clear-and-restream).
@@ -178,10 +178,10 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?__abide_from=<count>
         handle.count = 2
         handle.values = ['t0', 't1']
 
-        // The source is modeled as a seeded cell — `replayStreams` warms an OPEN handle with
+        // The source is modeled as a seeded memo — `replayStreams` warms an OPEN handle with
         // `resumeStreamSource` (prefix + `?__abide_from=` resume). The spy counts NETWORK re-invokes (must stay 0).
         let clientCalls = 0
-        const complete = cell((_args: { n: number }): AsyncIterable<string> => {
+        const complete = memo((_args: { n: number }): AsyncIterable<string> => {
             clientCalls++
             return (async function* () {})()
         })

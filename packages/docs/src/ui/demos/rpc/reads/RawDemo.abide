@@ -2,7 +2,7 @@
   import { state } from "abide/shared/state"
   import rpcGreet from "$server/rpc/rpcGreet"
 
-  // Raw bypass: `fn.raw(args, init?)` returns the UNTOUCHED Response — no cell, no cache, no
+  // Raw bypass: `fn.raw(args, init?)` returns the UNTOUCHED Response — no memo, no cache, no
   // coalescing, no error-throw. Works on any RPC, read or mutation (a mutation's `.raw` sends the body
   // + CSRF header; see the onError demo). On the client it is a bare fetch of the RPC's HTTP face; the
   // caller reads the raw `.status`, headers, and body itself.

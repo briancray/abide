@@ -10,14 +10,14 @@
 
 <main class="page">
   <h1>Cache verbs</h1>
-  <p class="lead">A read is a memoized <a href="/caching/cell">cell</a> slot: reuse it, <code>refresh</code> it over the stale value, <code>invalidate</code> it to force a lazy re-fetch, <code>publish</code> it in place. This page is the verbs and the cache behaviour (partial match, <code>shared</code>, <code>ttl</code>); the reactive <a href="/caching/probes">probes</a> and the <a href="/caching/global">global</a> tag selectors have their own pages. Every demo below drives a real RPC (in-process on the server, a fetch from the browser).</p>
+  <p class="lead">A read is a <a href="/caching/memo">memo</a> slot: reuse it, <code>refresh</code> it over the stale value, <code>invalidate</code> it to force a lazy re-fetch, <code>publish</code> it in place. This page is the verbs and the cache behaviour (partial match, <code>shared</code>, <code>ttl</code>); the reactive <a href="/caching/probes">probes</a> and the <a href="/caching/global">global</a> tag selectors have their own pages. Every demo below drives a real RPC (in-process on the server, a fetch from the browser).</p>
 
   <p>The server counts how many times the handler actually ran. Read again and again — the count <strong>holds</strong> because the slot is reused. <code>invalidate</code> drops the slot, so the next read re-fetches and the count <strong>climbs</strong>.</p>
   <Demo id="counter" title="Cached read is reused (call count holds)" server="src/server/rpc/cacheCounter.ts" client="src/ui/demos/caching/CounterCacheDemo.abide" tab="server">
     <CounterCacheDemo />
   </Demo>
 
-  <p>The opposite of the default: <code>cache: false</code> opts a call OUT of the cell entirely — every call runs, on both sides (no retain, no coalesced reuse, no client cache). Read both below: the <code>cache: false</code> counter <strong>climbs</strong> on every read while the default cached one <strong>holds</strong>. (A <code>cache: false</code> mutation is the same — every call runs, at-least-once; a <code>FormData</code> body always bypasses too, since it can't be cache-keyed.)</p>
+  <p>The opposite of the default: <code>cache: false</code> opts a call OUT of the memo entirely — every call runs, on both sides (no retain, no coalesced reuse, no client cache). Read both below: the <code>cache: false</code> counter <strong>climbs</strong> on every read while the default cached one <strong>holds</strong>. (A <code>cache: false</code> mutation is the same — every call runs, at-least-once; a <code>FormData</code> body always bypasses too, since it can't be cache-keyed.)</p>
   <Demo id="cache-false" title="<code>cache: false</code> — every call runs" server="src/server/rpc/cacheOff.ts" client="src/ui/demos/caching/CacheFalseDemo.abide" tab="server">
     <CacheFalseDemo />
   </Demo>

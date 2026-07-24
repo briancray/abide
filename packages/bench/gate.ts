@@ -42,15 +42,15 @@ const BOUNDS: Bound[] = [
         why: 'step 4 wraps every probe in a ReactiveReadSurface interface',
     },
     {
-        numerator: 'stream/cell-drain',
+        numerator: 'stream/memo-drain',
         denominator: 'stream/push-raw',
         max: 12,
         observed: '≈5.0×',
-        why: "the cell's per-chunk hooks (tick + byte accounting); steps 1 and 3 COMPOUND here",
+        why: "the memo's per-chunk hooks (tick + byte accounting); steps 1 and 3 COMPOUND here",
     },
     {
         numerator: 'watch/stream-baseline',
-        denominator: 'stream/cell-drain',
+        denominator: 'stream/memo-drain',
         max: 2.5,
         // Moved 1.00× → 1.38× when step 1 landed: watch now fires per append instead of being dead on
         // streams. That rise is INTENDED. The bound guards against it climbing further (e.g. firing per
@@ -73,7 +73,7 @@ const BOUNDS: Bound[] = [
         why: 'step 6 moves channel reads onto the new surface; catches superlinear fanout',
     },
     {
-        numerator: 'cell/read-warm',
+        numerator: 'memo/read-warm',
         denominator: 'signal/get',
         max: 20,
         observed: '≈8.8×',

@@ -7,7 +7,7 @@
 //
 // runInScope activates BOTH the scope (via its own AsyncLocalStorage, so accessors can find
 // it) AND the M1 cache context — sharing the SAME Map — so that getContext().cache (which the
-// cell primitive reads) is identical to scope.cache. Entering them together keeps a cell load
+// memo primitive reads) is identical to scope.cache. Entering them together keeps a memo load
 // inside a request writing into that request's cache and nowhere else.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -67,7 +67,7 @@ export function anonymousPrincipal(): Principal {
 }
 
 // Per-request scope storage. Separate from M1's cache context so accessors can retrieve the
-// full scope while the cell primitive still sees only its cache context.
+// full scope while the memo primitive still sees only its cache context.
 //
 // AsyncLocalStorage is server-only (node:async_hooks). This module is reachable from the client
 // bundle via the isomorphic route() (shared/route.ts imports currentScope), so the ALS must be
@@ -93,9 +93,9 @@ export function currentScope(): RequestScope | undefined {
 }
 
 // Run fn with NEITHER the request scope NOR the cache context active. The fail-closed lever for
-// `shared` cells (rpc-core §2): a shared handler runs here so identity()/cookies()/request()/
+// `shared` memos (rpc-core §2): a shared handler runs here so identity()/cookies()/request()/
 // context() THROW if it touches request scope — the read rejects and the value is never cached, in
-// dev AND prod. Exiting the cache context too routes any nested non-shared cell to the neutral
+// dev AND prod. Exiting the cache context too routes any nested non-shared memo to the neutral
 // default context instead of the request's Map. On the client this is a plain call.
 export function runOutsideScope<T>(fn: () => T): T {
     const store = storage()

@@ -76,7 +76,7 @@ test('reached via soft-nav, the streamed list still adopts and re-runs (seedOver
     page,
 }) => {
     // A streamed top-level `{#for await}` reached by IN-APP navigation seeds through the soft-nav envelope
-    // (`seedOverride`), not the inline first-load script. Prove that path warms the cell too: the table
+    // (`seedOverride`), not the inline first-load script. Prove that path warms the memo too: the table
     // fills after the soft-nav, and the re-run button re-measures — a regression here would strand #52's
     // sibling on the soft-nav route.
     await page.goto('/platform')

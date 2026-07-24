@@ -70,7 +70,7 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // `Socket` proxy + reactive probe surface + the shared reconnecting mux, shipped alongside the RPC
     // proxy for every app); 78→80 KB (`interpolate` adopts server-rendered mountable subtrees on hydrate
     // — `{#component}` call / `{children()}` — instead of stranding them). FUTURE (TODO #3): extract the
-    // server-only byte-accounting/pin/cap + shared-cache path out of the isomorphic cell to shrink the
+    // server-only byte-accounting/pin/cap + shared-cache path out of the isomorphic memo to shrink the
     // client floor.
     // NOTE: temporarily raised 80 KB → 100 KB while the `rewrite` branch sits over the historical
     // floor; revisit and tighten once the client-floor extraction (TODO #3) lands.

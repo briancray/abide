@@ -10,7 +10,7 @@
   //
   // `expect` is what this block SHOULD read: "server" for a claiming block (the default), or "client"
   // for a block that re-renders on the client BY DESIGN — a `{#for await}` list, whose server paint is
-  // a discarded placeholder (the client redraws it from the warmed cell). The chip is GREEN when origin
+  // a discarded placeholder (the client redraws it from the warmed memo). The chip is GREEN when origin
   // matches `expect`, RED when it doesn't. So "all green" = every block hydrated the way it should; a
   // RED chip = a block that claimed/re-rendered against its contract — a real regression to eyeball.
   const { label = "", expect = "server" } = props()

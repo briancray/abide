@@ -8,7 +8,7 @@ import { type TypedResponse, tagResponseSource } from '../shared/internal/respon
 export function json<T>(data: T, init?: ResponseInit): TypedResponse<T> {
     const headers = new Headers(init?.headers)
     if (!headers.has('content-type')) headers.set('content-type', 'application/json')
-    // Tag with the pre-encoding value so a cell-backed read caches/seeds `data` exactly like a handler
+    // Tag with the pre-encoding value so a memo-backed read caches/seeds `data` exactly like a handler
     // that returned `data` raw (replayable-streams.md §4). `fn.raw` still gets this real Response. The
     // `TypedResponse<T>` brand carries `T` so a read/mutation infers the value type, not `Response`.
     return tagResponseSource(new Response(JSON.stringify(data), { ...init, headers }), {

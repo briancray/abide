@@ -3,7 +3,7 @@
   import lifecycleThrow from "$server/rpc/lifecycleThrow"
 
   // Browser-only: call the throwing RPC and show the response onError SHAPED. `.raw()` bypasses the
-  // cell and returns the untouched Response (no parse, no !ok throw), so the exact HTTP status + body
+  // memo and returns the untouched Response (no parse, no !ok throw), so the exact HTTP status + body
   // the server produced is visible — the mutation proxy still sends the body + CSRF header for us.
   let result = state(null)
 

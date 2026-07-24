@@ -1,14 +1,14 @@
 <script>
   import { state } from "abide/shared/state"
-  import { cell } from "abide/shared/cell"
+  import { memo } from "abide/shared/memo"
 
   // error(args): the retained error, or undefined. A rejected load lands on the slot; a subsequent
   // invalidate + successful read clears it. The `started` gate keeps SSR from kicking the failing load
   // (an ungated peek during render would reject before any click).
   let started = state(false)
   let failing = state(true)
-  const flaky = cell(async ({ id }: { id: string }) => {
-    if (failing) throw new Error(`cell boom for ${id}`)
+  const flaky = memo(async ({ id }: { id: string }) => {
+    if (failing) throw new Error(`memo boom for ${id}`)
     return `ok ${id}`
   })
   const errorText = state.computed(() => {
@@ -22,10 +22,10 @@
 </script>
 
 <ul class="grid">
-  <li><code>error()</code>: <strong data-testid="cellerror-error">{errorText}</strong></li>
-  <li>Value: <strong data-testid="cellerror-value">{value}</strong></li>
+  <li><code>error()</code>: <strong data-testid="memoerror-error">{errorText}</strong></li>
+  <li>Value: <strong data-testid="memoerror-value">{value}</strong></li>
 </ul>
 <div class="row">
-  <button data-testid="cellerror-trigger" onclick={trigger}>Trigger failure</button>
-  <button data-testid="cellerror-fix" onclick={fixAndRetry}>Fix &amp; retry</button>
+  <button data-testid="memoerror-trigger" onclick={trigger}>Trigger failure</button>
+  <button data-testid="memoerror-fix" onclick={fixAndRetry}>Fix &amp; retry</button>
 </div>

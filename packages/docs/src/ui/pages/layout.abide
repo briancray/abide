@@ -39,8 +39,8 @@
       { href: "/pages/ssr", label: "Streaming SSR" },
       { href: "/pages/hydration", label: "Hydration health" },
     ] },
-    { title: "Caching & cells", items: [
-      { href: "/caching/cell", label: "The cell primitive" },
+    { title: "Caching & memos", items: [
+      { href: "/caching/memo", label: "The memo primitive" },
       { href: "/caching", label: "Cache verbs" },
       { href: "/caching/probes", label: "Reactive probes" },
       { href: "/caching/global", label: "Global probes" },

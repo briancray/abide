@@ -1,7 +1,7 @@
 // ReplayableStream standalone primitive — build step 1a test matrix (replayable-streams.md §4, §Build).
 //
-// Cell-independent: exercises buffer + replay-then-live fan-out + terminals + ref-count + abort with no
-// cache/TTL/LRU. Every invariant here must hold before the cell integration (step 1b) is attempted.
+// Memo-independent: exercises buffer + replay-then-live fan-out + terminals + ref-count + abort with no
+// cache/TTL/LRU. Every invariant here must hold before the memo integration (step 1b) is attempted.
 
 import { describe, expect, test } from 'bun:test'
 import { ReplayableStream } from './replayableStream.ts'

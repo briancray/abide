@@ -1,9 +1,9 @@
 // THE REACTIVE / STREAM / CHANNEL PRIMITIVE BENCH RECIPES — the baseline for ADR 0023.
 //
-// `serverBenches.ts` covers route classification, cache-key building and the warm scalar cell read.
+// `serverBenches.ts` covers route classification, cache-key building and the warm scalar memo read.
 // This file covers the six hot paths that ADR 0023 restructures and that had ZERO measurement before it:
 // the signal substrate, the probe/read surface (`peek`/`pending`/`chunks`/`done`), stream chunk push,
-// `cell.watch` fire cost, channel publish fanout, and the per-chunk frame codec.
+// `memo.watch` fire cost, channel publish fanout, and the per-chunk frame codec.
 //
 // Why these exist: ADR 0023 step 4 puts a `ReactiveReadSurface` interface in front of every probe, step 1
 // converts `watch` from a value-change effect into a per-append one, and step 3 replaces jsonl/sse/decode
@@ -12,11 +12,11 @@
 //
 // Batch ops report ns for the WHOLE batch; divide by the batch size in `note` for per-item cost.
 
-import { cell } from 'abide/shared/cell'
 import { decodeStreamResponse } from 'abide/shared/internal/decodeStreamResponse'
 import { computed, effect, signal } from 'abide/shared/internal/reactive'
 import { ReplayableStream } from 'abide/shared/internal/replayableStream'
 import { Subscriber } from 'abide/shared/internal/subscriber'
+import { memo } from 'abide/shared/memo'
 import type { ServerBench } from './serverBenches.ts'
 
 const CHUNKS = 1000
@@ -82,22 +82,22 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
     let chainSeed = 0
 
     // ── probe surface (warm scalar slot) ────────────────────────────────────────────────────────────
-    const scalar = cell<{ id: number }, number>((a) => a.id * 2)
+    const scalar = memo<{ id: number }, number>((a) => a.id * 2)
     await scalar({ id: 1 })
 
     // ── probe surface (retained stream slot) ────────────────────────────────────────────────────────
     // A finite source that settles: with the default ttl (Infinity) the transcript is retained, so the
     // probes read a real 100-chunk transcript rather than an empty one.
-    const streamCell = cell<{ id: number }, AsyncIterable<Chunk>>(() => chunkSource(100))
-    for await (const _ of await streamCell({ id: 1 })) {
+    const streamMemo = memo<{ id: number }, AsyncIterable<Chunk>>(() => chunkSource(100))
+    for await (const _ of await streamMemo({ id: 1 })) {
         // drain once so the slot holds a settled 100-chunk transcript
     }
 
     // ── watch: current behaviour, the baseline ADR step 1 changes ───────────────────────────────────
-    // On a VALUE cell `watch` fires on actual value change (the dedup at cell.ts:789). On a STREAM cell it
+    // On a VALUE memo `watch` fires on actual value change (the dedup at memo.ts:789). On a STREAM memo it
     // never fires today, because a stream slot's `value` is permanently undefined. Both numbers are the
     // before-picture: step 1 makes the stream case fire per append.
-    const watched = cell<{ id: number }, number>((a) => a.id)
+    const watched = memo<{ id: number }, number>((a) => a.id)
     await watched({ id: 1 })
     // Written by both watch handlers below and READ by `watch/value-fire`, which fails loudly if the watch
     // never fired — a bench that silently times a no-op is worse than no bench at all.
@@ -106,7 +106,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
         watchSink = value
     })
     // Seeded well clear of the slot's loaded value (`a.id` = 1) so the FIRST publish is a real change —
-    // otherwise `watch`'s value-dedup (cell.ts:789) correctly suppresses it and iteration one times nothing.
+    // otherwise `watch`'s value-dedup (memo.ts:789) correctly suppresses it and iteration one times nothing.
     let watchSeed = 1000
 
     // ── channel fanout ──────────────────────────────────────────────────────────────────────────────
@@ -203,7 +203,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'peek-stream',
             note: 'latest chunk of a 100-chunk transcript',
             run: () => {
-                streamCell.peek({ id: 1 })
+                streamMemo.peek({ id: 1 })
             },
         },
         {
@@ -211,7 +211,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'chunks-stream',
             note: '100-chunk transcript — slice() copy per call',
             run: () => {
-                streamCell.chunks({ id: 1 })
+                streamMemo.chunks({ id: 1 })
             },
         },
         {
@@ -219,14 +219,14 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'done-stream',
             note: '100-chunk settled transcript',
             run: () => {
-                streamCell.done({ id: 1 })
+                streamMemo.done({ id: 1 })
             },
         },
 
         {
             group: 'stream',
             name: 'push-raw',
-            note: `fresh ReplayableStream, ${CHUNKS} pushes/op (no cell hooks)`,
+            note: `fresh ReplayableStream, ${CHUNKS} pushes/op (no memo hooks)`,
             run: () => {
                 const stream = new ReplayableStream<Chunk>()
                 for (let i = 0; i < CHUNKS; i++) stream.push({ i, label: 'row' })
@@ -235,10 +235,10 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
         },
         {
             group: 'stream',
-            name: 'cell-drain',
-            note: `${CHUNKS} chunks through a cell slot/op (incl. tick + byte accounting)`,
+            name: 'memo-drain',
+            note: `${CHUNKS} chunks through a memo slot/op (incl. tick + byte accounting)`,
             run: async () => {
-                const draining = cell<{ id: number }, AsyncIterable<Chunk>>(() =>
+                const draining = memo<{ id: number }, AsyncIterable<Chunk>>(() =>
                     chunkSource(CHUNKS),
                 )
                 for await (const _ of await draining({ id: 1 })) {
@@ -279,7 +279,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'stream-baseline',
             note: `${CHUNKS} chunks under a watch — fires 0× TODAY (step 1 changes this)`,
             run: async () => {
-                const watchedStream = cell<{ id: number }, AsyncIterable<Chunk>>(() =>
+                const watchedStream = memo<{ id: number }, AsyncIterable<Chunk>>(() =>
                     chunkSource(CHUNKS),
                 )
                 watchedStream.watch({ id: 1 }, (value) => {

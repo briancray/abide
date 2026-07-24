@@ -1,9 +1,9 @@
 // Mutation cache routing — build step 2 (replayable-streams.md §1).
 //
-// Mutations now route through a cell defaulting to `cache: { ttl: 0 }`: coalesce identical CONCURRENT
+// Mutations now route through a memo defaulting to `cache: { ttl: 0 }`: coalesce identical CONCURRENT
 // in-flight calls WITHIN a request scope, retain nothing after settle. Separate request scopes never
 // share a slot (at-least-once across requests preserved). `cache: false` opts out entirely; a FormData
-// body always bypasses the cell (it can't be safely keyed).
+// body always bypasses the memo (it can't be safely keyed).
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { sharedStore } from '../../shared/internal/sharedCache.ts'
@@ -25,7 +25,7 @@ function makeScope(): RequestScope {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 afterEach(() => {
-    sharedStore().clear() // shared cells are process-global — isolate cross-test
+    sharedStore().clear() // shared memos are process-global — isolate cross-test
 })
 
 describe('mutation ttl:0 default — coalesce concurrent within a scope', () => {
@@ -123,7 +123,7 @@ describe('mutation shared ttl:0 — cross-request coalescing collapses side effe
     })
 })
 
-describe('mutation FormData — always bypasses the cell', () => {
+describe('mutation FormData — always bypasses the memo', () => {
     test('two distinct concurrent uploads both execute (never conflated to one key)', async () => {
         let runs = 0
         const m = POST(async (_form: { file: string }) => {

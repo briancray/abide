@@ -3,7 +3,7 @@
 // Runs BOTH corpora against the WORKING TREE and against a base git ref (default HEAD), then reports the
 // per-metric change. The point is to answer "did my uncommitted abide changes speed up or slow down…":
 //   • the UI triad — render / mount / update (`run.ts`)
-//   • the server + reactive/stream/channel primitives (`server.ts`) — route, cache-key, cell, signal,
+//   • the server + reactive/stream/channel primitives (`server.ts`) — route, cache-key, memo, signal,
 //     probe, stream, watch, fanout, codec. Loopback `dispatch/*` rows are included but are the noisiest
 //     (they carry a TCP floor); read those relative to `dispatch/health`.
 //

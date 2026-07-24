@@ -18,7 +18,7 @@ the current tree. Gates per PR: `bun test` (696/0 today) green and `bunx tsc --n
   `ifBlock :376`, `forBlock :580`, …) CREATE DOM in an `effect()` whose first run writes.
 - Seed: `collectSeed` (`pages.ts:95-108`), `HydrationSeed={reads?}` (`pages.ts:86-88`), router bundles
   into document + soft-nav envelope (`router.ts:292,296`), `bootstrap.replayReads :52-62` primes RPC
-  cells before mount. State cells (`state.ts:37-45`) re-evaluated client-side, no record/replay.
+  memos before mount. State cells (`state.ts:37-45`) re-evaluated client-side, no record/replay.
 - Scope injected identically both sides: `{...imports, state, watch, props}` (`pages.ts:73`,
   `bootstrap.ts:98`); `state`/`watch` reach emitted code by import-local off `$scope`
   (`emitSetup.ts:24-28`) — **the injection point for state record/replay; no `ui/state.ts` change.**
@@ -153,7 +153,7 @@ claimText(anchor, prefixLen): Text|null
 
 **PR5 — Async blocks: `{#await}` / async-for.** Riskiest overall. ✅
 - Server SSR-awaits the resolved branch; client `awaitBlock :446` mounts pending then swaps → naive
-  mismatch. Under `hydrating`, peek whether the read is already settled (seed-primed RPC → `cell.peek`
+  mismatch. Under `hydrating`, peek whether the read is already settled (seed-primed RPC → `memo.peek`
   has a value) and claim the then/catch branch directly, wiring the promise only for future
   invalidation; if unsettled (no seed), discard + create (pending). Same for async `forBlock
   :585-609`. Depends on PR2 seed.

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { cell } from './cell.ts'
 import { createContext, runInContext } from './internal/context.ts'
 import { effect } from './internal/reactive.ts'
+import { memo } from './memo.ts'
 
 // Effect re-runs are microtask-batched; a macrotask tick guarantees they have flushed.
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -12,10 +12,10 @@ function withContext<T>(fn: () => T): T {
     return runInContext(createContext(), fn)
 }
 
-describe('cell — read + load', () => {
+describe('memo — read + load', () => {
     test('first read triggers load and resolves via .load', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => n + 1)
+            const c = memo(async (n: number) => n + 1)
             // peek does not trigger a load
             expect(c.peek(1)).toBeUndefined()
             expect(await c.load(1)).toBe(2)
@@ -25,7 +25,7 @@ describe('cell — read + load', () => {
 
     test('peek is undefined while pending then holds the value', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 await delay(15)
                 return n * 3
             })
@@ -41,7 +41,7 @@ describe('cell — read + load', () => {
     test('concurrent .load for the same args share ONE fn call', async () => {
         await withContext(async () => {
             let calls = 0
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 calls++
                 await delay(15)
                 return n
@@ -56,7 +56,7 @@ describe('cell — read + load', () => {
     test('distinct args produce distinct slots', async () => {
         await withContext(async () => {
             let calls = 0
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 calls++
                 return n * 10
             })
@@ -71,7 +71,7 @@ describe('cell — read + load', () => {
     test('cached value is returned without re-calling fn', async () => {
         await withContext(async () => {
             let calls = 0
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 calls++
                 return n * 2
             })
@@ -84,7 +84,7 @@ describe('cell — read + load', () => {
 
     test('reactive c.peek() in an effect eventually shows the resolved value', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 await delay(10)
                 return n * 2
             })
@@ -103,11 +103,11 @@ describe('cell — read + load', () => {
     })
 })
 
-describe('cell — refresh / invalidate', () => {
+describe('memo — refresh / invalidate', () => {
     test('refresh re-calls fn and keeps the stale value visible meanwhile', async () => {
         await withContext(async () => {
             let calls = 0
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 calls++
                 await delay(30)
                 return `${n}:${calls}`
@@ -129,7 +129,7 @@ describe('cell — refresh / invalidate', () => {
     test('invalidate drops the slot; next read re-calls fn', async () => {
         await withContext(async () => {
             let calls = 0
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 calls++
                 return n * 2
             })
@@ -146,7 +146,7 @@ describe('cell — refresh / invalidate', () => {
 
     test('partial-object invalidate matches superset slots only', async () => {
         await withContext(async () => {
-            const c = cell(async (args: { id: number; page: number }) => `${args.id}-${args.page}`)
+            const c = memo(async (args: { id: number; page: number }) => `${args.id}-${args.page}`)
             await c.load({ id: 1, page: 1 })
             await c.load({ id: 1, page: 2 })
             await c.load({ id: 2, page: 1 })
@@ -159,9 +159,9 @@ describe('cell — refresh / invalidate', () => {
         })
     })
 
-    test('whole-cell invalidate drops every slot', async () => {
+    test('whole-memo invalidate drops every slot', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => n * 2)
+            const c = memo(async (n: number) => n * 2)
             await c.load(1)
             await c.load(2)
             c.invalidate()
@@ -171,10 +171,10 @@ describe('cell — refresh / invalidate', () => {
     })
 })
 
-describe('cell — publish', () => {
+describe('memo — publish', () => {
     test('value-form and updater-form update peek', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => `v${n}`)
+            const c = memo(async (n: number) => `v${n}`)
             await c.load(1)
             expect(c.peek(1)).toBe('v1')
 
@@ -188,7 +188,7 @@ describe('cell — publish', () => {
 
     test('watch fires the handler on slot change', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => n * 2)
+            const c = memo(async (n: number) => n * 2)
             await c.load(1)
             const seen: (number | undefined)[] = []
             const dispose = c.watch(1, (value) => seen.push(value))
@@ -205,7 +205,7 @@ describe('cell — publish', () => {
     test('watch fires exactly once for a refresh that lands one new value', async () => {
         await withContext(async () => {
             let next = 1
-            const c = cell(async (_n: number) => next++)
+            const c = memo(async (_n: number) => next++)
             await c.load(1)
             const seen: (number | undefined)[] = []
             const dispose = c.watch(1, (value) => seen.push(value))
@@ -221,7 +221,7 @@ describe('cell — publish', () => {
     // undefined for a stream, so the handler never fired at all.
     test('watch fires per chunk on a stream slot, handing over the latest chunk', async () => {
         await withContext(async () => {
-            const c = cell(async function* (_n: number) {
+            const c = memo(async function* (_n: number) {
                 for (const value of ['a', 'b', 'c']) {
                     yield value
                     await delay(5)
@@ -243,10 +243,10 @@ describe('cell — publish', () => {
     })
 })
 
-describe('cell — reactive probes', () => {
+describe('memo — reactive probes', () => {
     test('pending is reactive via an effect', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 await delay(15)
                 return n * 2
             })
@@ -266,7 +266,7 @@ describe('cell — reactive probes', () => {
 
     test('error is reactive; fn rejection sets error and .load rejects', async () => {
         await withContext(async () => {
-            const c = cell(async (n: number) => {
+            const c = memo(async (n: number) => {
                 await delay(10)
                 if (n < 0) throw new Error('negative')
                 return n
@@ -288,11 +288,11 @@ describe('cell — reactive probes', () => {
     })
 })
 
-describe('cell — ttl', () => {
+describe('memo — ttl', () => {
     test('value re-loads after ttl expiry', async () => {
         await withContext(async () => {
             let calls = 0
-            const c = cell(
+            const c = memo(
                 async (n: number) => {
                     calls++
                     return n * 2
@@ -310,10 +310,10 @@ describe('cell — ttl', () => {
     })
 })
 
-describe('cell — context isolation', () => {
+describe('memo — context isolation', () => {
     test('separate contexts have independent caches', async () => {
         let calls = 0
-        const c = cell(async (n: number) => {
+        const c = memo(async (n: number) => {
             calls++
             return n * 2
         })
@@ -328,10 +328,10 @@ describe('cell — context isolation', () => {
     })
 })
 
-describe('cell — snapshot + seed (§5 hydration)', () => {
+describe('memo — snapshot + seed (§5 hydration)', () => {
     test('snapshot reports only resolved (value) slots with their args', async () => {
         await withContext(async () => {
-            const c = cell(async (args: { name: string }) => `hi ${args.name}`)
+            const c = memo(async (args: { name: string }) => `hi ${args.name}`)
             await c.load({ name: 'ada' })
             await c.load({ name: 'bo' })
             c.peek({ name: 'pending-never-loaded' }) // stays idle → excluded
@@ -347,7 +347,7 @@ describe('cell — snapshot + seed (§5 hydration)', () => {
     test('seed replays a value so a matching load resolves from cache without calling fn', async () => {
         await withContext(async () => {
             let calls = 0
-            const c = cell(async (args: { name: string }) => {
+            const c = memo(async (args: { name: string }) => {
                 calls++
                 return `fetched ${args.name}`
             })
@@ -365,7 +365,7 @@ describe('cell — snapshot + seed (§5 hydration)', () => {
 
     test('snapshot → seed round-trips across contexts (SSR record → client replay)', async () => {
         let calls = 0
-        const server = cell(async (args: { id: number }) => {
+        const server = memo(async (args: { id: number }) => {
             calls++
             return { id: args.id, label: `row-${args.id}` }
         })
@@ -375,7 +375,7 @@ describe('cell — snapshot + seed (§5 hydration)', () => {
         })
 
         let clientCalls = 0
-        const client = cell(async (args: { id: number }) => {
+        const client = memo(async (args: { id: number }) => {
             clientCalls++
             return { id: args.id, label: 'refetched' }
         })

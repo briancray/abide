@@ -9,7 +9,7 @@
 
 <main class="page">
   <h1>Global probes</h1>
-  <p class="lead">The <a href="/caching/probes">per-slot probes</a> read one cell. These are their app-wide siblings — probes and verbs that act across slots or over the whole process: <code>reachable(host)</code> and <code>online()</code> report connectivity, and the tag selectors (<code>invalidate({'{'}tags{'}'})</code> / <code>refresh({'{'}tags{'}'})</code>) drop or revalidate every slot carrying a tag at once.</p>
+  <p class="lead">The <a href="/caching/probes">per-slot probes</a> read one memo. These are their app-wide siblings — probes and verbs that act across slots or over the whole process: <code>reachable(host)</code> and <code>online()</code> report connectivity, and the tag selectors (<code>invalidate({'{'}tags{'}'})</code> / <code>refresh({'{'}tags{'}'})</code>) drop or revalidate every slot carrying a tag at once.</p>
 
   <h2><code>reachable(host)</code></h2>
   <p><code>reachable(host)</code> actively probes a host: the app's own origin answers (true), a dead local port is refused (false).</p>

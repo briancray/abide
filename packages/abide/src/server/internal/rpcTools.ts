@@ -1,7 +1,7 @@
 // rpcTools — project a set of app RPCs into an `AgentSurface` (agent.md AG1.4 / AG2.2). Each RPC
 // becomes an `AgentTool`: the name is the route name, the `inputSchema` is the RPC's declared input
 // schema (MS2 tool schema, when it is a raw JSON Schema), and `run` calls the RPC in-process so the
-// call flows through the same handler (and, for reads, the same cell) as any request.
+// call flows through the same handler (and, for reads, the same memo) as any request.
 //
 // This is the mapping the app-config default surface is built from (all `clients.mcp` RPCs); it is
 // kept separate from agent() so the loop stays usable without any app config.
@@ -23,7 +23,7 @@ function toTool(name: string, route: Route): AgentTool {
     const meta = route.__rpc
     const tool: AgentTool = {
         name,
-        // Reads go through the cell (load resolves the cached/coalesced value); mutations call directly.
+        // Reads go through the memo (load resolves the cached/coalesced value); mutations call directly.
         run: (args: unknown): Promise<unknown> =>
             meta.read
                 ? (route as Rpc<unknown, unknown>).load(args)

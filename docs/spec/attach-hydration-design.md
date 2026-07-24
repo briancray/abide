@@ -5,7 +5,7 @@ fresh-mount-over-SSR to true C2 attach-hydration. Every decision below was chose
 alternatives considered are noted so the reasoning survives.
 
 Prerequisite already landed: the §5 hydration seed (RPC reads recorded into `#__abide-seed` + the
-soft-nav envelope, replayed into client cells before mount). See `rpc-core.md` §5.
+soft-nav envelope, replayed into client memos before mount). See `rpc-core.md` §5.
 
 ## Resolved decision tree
 

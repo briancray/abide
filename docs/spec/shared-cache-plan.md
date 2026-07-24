@@ -6,10 +6,10 @@ anchors in the current tree. Per-PR gates: `bun test` (739/0) green + `bunx tsc 
 passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's own middleware chain.
 
 ## 0. Orienting facts
-- The cell is the only cache primitive, isomorphic (`shared/cell.ts`); every slot lives in
-  `getContext().cache` (`cell.ts:114`) = per-request Map on server (`scope.ts:75`). No cross-request
+- The memo is the only cache primitive, isomorphic (`shared/memo.ts`); every slot lives in
+  `getContext().cache` (`memo.ts:114`) = per-request Map on server (`scope.ts:75`). No cross-request
   store today; `cache.shared`/`cache.tags` parsed but IGNORED (`makeRpc.ts:83`).
-- Verbs exist locally: `refresh`/`invalidate` over `selectSlots` (`cell.ts:219-236`, superset match
+- Verbs exist locally: `refresh`/`invalidate` over `selectSlots` (`memo.ts:219-236`, superset match
   `matchesSelector` `:96-105`), `publish` value/updater (`:238-246`) — none broadcast.
 - Mux complete for named user sockets: `wsSubscribe` looks up `config.sockets` (`router.ts:158`);
   upgrade carries NO identity (`Bun.ServerWebSocket<undefined>`, `:370`); `resolveIdentity`
@@ -33,22 +33,22 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
 ## 1. Ordered PRs (each keeps `bun test` green)
 - **PR1 — Shared storage + fail-closed purity** (no transport). `shared/internal/sharedCache.ts`:
   process-global `Map` + `sharedStore()` + `sharedCacheEvictIfNeeded()` (LRU by
-  `ABIDE_MAX_SHARED_CACHE_SIZE`, JSON-byte measure). `CellOptions.shared?`; `ensureSlot`/`selectSlots`
+  `ABIDE_MAX_SHARED_CACHE_SIZE`, JSON-byte measure). `MemoOptions.shared?`; `ensureSlot`/`selectSlots`
   route through `slotCache()`. Fail-closed = two checkpoints (§2.1). LRU lands here. Risk: LOW-MED.
 - **PR2 — Broadcast substrate** (server→server). `server/internal/cacheChannels.ts`:
-  `Map<channel, SocketHub<CacheFrame>>` + `cacheChannelName(rpc,args)` + `publishCacheFrame`. Cell gets
+  `Map<channel, SocketHub<CacheFrame>>` + `cacheChannelName(rpc,args)` + `publishCacheFrame`. Memo gets
   an injectable `notify?(verb,args,value?)` sink (stays transport-free); `createApp` binds each shared
   read route's `notify`. Risk: LOW.
 - **PR3 — Channel-join AUTH (SECURITY-CRITICAL, isolate + hard-test).** WS data → `{request,
   identity}` resolved at upgrade; `wsSubscribe` branches on `@rpc:` prefix → `authorizeChannelJoin`
   re-runs the target RPC's `compose(global, rpc.middleware)` with a no-op terminal; pass ⇒ join, any
   short-circuit Response ⇒ silent deny. Risk: HIGH.
-- **PR4 — Tags.** `CellOptions.tags`; global `invalidate/refresh({tags})` broadcast on `@tag:<t>`.
+- **PR4 — Tags.** `MemoOptions.tags`; global `invalidate/refresh({tags})` broadcast on `@tag:<t>`.
   Risk: MED.
-- **PR5 — Client auto-subscribe + apply.** Browser cell reading a `shared` RPC joins its channel
+- **PR5 — Client auto-subscribe + apply.** Browser memo reading a `shared` RPC joins its channel
   (lazy one-WS-per-tab mux) and applies inbound frames via its own `invalidate/refresh/publish`. Risk:
   MED.
-- **PR6 — Docs.** Flip rpc-core §2/§8 status, sockets S4.4 exception, remove `cell.ts:14` TODO, TODO
+- **PR6 — Docs.** Flip rpc-core §2/§8 status, sockets S4.4 exception, remove `memo.ts:14` TODO, TODO
   #4 → DONE.
 
 ## 2. Design highlights
@@ -59,18 +59,18 @@ sharedStore() : getContext().cache`. Fail-closed = TWO complementary checkpoints
    `runOutsideScope` via `scopeStorage.exit`) so `identity()`/`cookies()`/`request()` THROW → a shared
    handler touching request scope rejects, value NEVER cached, in dev AND prod (accessors throw
    unconditionally). This is §2.3.
-2. **Ambient-entry guard** — a shared READ with `currentScope() === undefined` throws "shared cell
+2. **Ambient-entry guard** — a shared READ with `currentScope() === undefined` throws "shared memo
    read requires an active request scope" (bare script/cron has no gate + no client to serve). Scoped
-   to shared cells only; the default-context LRU ceiling still applies to ordinary ambient reads.
+   to shared memos only; the default-context LRU ceiling still applies to ordinary ambient reads.
 The caller must be authorized (in a request); the handler must be blind to it (purity). Same call,
 opposite ends.
 
 ### 2.2 Broadcast channels
 `cacheChannelName(rpc,args) = "@rpc:" + rpc + ":" + canonicalKey(args)` (reserved `@` namespace; user
 sockets are bare names, no `:`). Reuse `SocketHub` (`socketHub.ts:70`) verbatim. `CacheFrame = {verb:
-"invalidate"|"refresh"|"publish", value?}`. Route-name seam: `createApp` binds each shared read's cell
+"invalidate"|"refresh"|"publish", value?}`. Route-name seam: `createApp` binds each shared read's memo
 `notify` to `publishCacheFrame(cacheChannelName(name, args), …)` (only `createApp` knows both name +
-registry; cell/makeRpc stay transport-free).
+registry; memo/makeRpc stay transport-free).
 
 ### 2.3 Channel-join AUTH (the crux)
 Identity resolved ONCE at upgrade (cookie/bearer via `resolveIdentity`), stored on the connection
@@ -90,7 +90,7 @@ for Y). The auth run uses the verified args.
 ### 2.4 Tags / 2.5 Client
 Tags: `@tag:<t>` channels; global `invalidate/refresh({tags})` broadcasts per tag. Client: one lazy
 mux WS/tab; `shared` flag flows from `__rpc.options.cache.shared` into `makeClientImports` specs;
-first read auto-subscribes `{t:"sub", name, args}`; inbound frame → the SAME local cell verb
+first read auto-subscribes `{t:"sub", name, args}`; inbound frame → the SAME local memo verb
 (`invalidate`→lazy reload, `refresh`→eager, value-`publish`→`publish(args,value)`). No new client cache
 logic. Auto-subscribe (reading in a tracking context is the trigger); dispose unsubscribes.
 
@@ -116,5 +116,5 @@ RPC values JSON-measured); client bare-tag-channel subscription; explicit subscr
 updater-form-over-the-wire (closures can't serialize).
 
 ## Critical files
-`shared/cell.ts` · `server/internal/router.ts` · `server/internal/makeRpc.ts` · `scope.ts` ·
+`shared/memo.ts` · `server/internal/router.ts` · `server/internal/makeRpc.ts` · `scope.ts` ·
 `server/internal/auth.ts`.

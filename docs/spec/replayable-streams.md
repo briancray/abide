@@ -9,8 +9,8 @@ below is grounded against the code it was designed against (anchors are `file:li
 not-coalesced/cached "today") and §12.2–3 (a stream bypasses the value cache; no replay buffer by
 default) — both recorded under *Superseded prior decisions* with the exact prior wording.
 
-This revision closes the gaps a first implementer hits: the cell slot is monomorphic and has nowhere to
-put a stream; streaming handlers hand the cell **encoded bytes**, not decoded `T`; there is no
+This revision closes the gaps a first implementer hits: the memo slot is monomorphic and has nowhere to
+put a stream; streaming handlers hand the memo **encoded bytes**, not decoded `T`; there is no
 ref-count, no close hook, and no source-abort plumbing; the cache mux frame carries **verbs, not
 chunks**; and "mutations coalesce by default at `ttl: 0`" needs its scope stated precisely (per-request
 coalescing is inert; only opt-in `shared` mutations dedupe across callers) so it never reads as silently
@@ -35,39 +35,39 @@ unboundedly and can't be cloned after the body is disturbed. The sound primitive
 **replay buffer that fans out replay-then-live**. Its *shape* already exists and is proven server-side
 (`SocketHub.subscribe` replays the tail then goes live, `socketHub.ts:120-137`), but that core is
 server-only, name-keyed, and **drop-oldest** — the opposite of what a finite replay needs. This spec
-defines the replay-safe primitive and unifies it with the cell.
+defines the replay-safe primitive and unifies it with the memo.
 
 ## Reality grounding (what exists today — the substrate this builds on)
 
 An implementer must know the starting point; the spec is honest about the gap.
 
-- **The cell slot is monomorphic.** `SlotState<T> = { status: "idle"|"pending"|"value"|"error", value:
-  T|undefined, error, refreshing }` (`cell.ts:36-45`) inside a `Slot` with a single `inflight:
-  Promise<T>|null` coalescing point and a `loadedAt` stamp (`cell.ts:47-58`). There is **no** open/
+- **The memo slot is monomorphic.** `SlotState<T> = { status: "idle"|"pending"|"value"|"error", value:
+  T|undefined, error, refreshing }` (`memo.ts:36-45`) inside a `Slot` with a single `inflight:
+  Promise<T>|null` coalescing point and a `loadedAt` stamp (`memo.ts:47-58`). There is **no** open/
   streaming status, **no** per-slot subscriber set, and **no** ref-count. A ReplayableStream needs a new
   slot status — net-new machinery, not a config flip.
-- **`loadedAt` is stamped at fn RESOLVE**, not stream close (`cell.ts:255,262`). For a streaming handler
+- **`loadedAt` is stamped at fn RESOLVE**, not stream close (`memo.ts:255,262`). For a streaming handler
   that is when the `AsyncIterable`/`Response` is *produced* — before the first chunk. "Settled = closed"
   has no hook today.
-- **Reads wrap the handler in a cell; mutations bypass it entirely.** `makeRead` builds `cell(fn,
-  cellOptions)` (`makeRpc.ts:131-174`); `makeMutation` is literally `(args) =>
-  Promise.resolve(fn(args))` with no cell, no key, no coalescing (`makeRpc.ts:176-181`). So today
+- **Reads wrap the handler in a memo; mutations bypass it entirely.** `makeRead` builds `memo(fn,
+  memoOptions)` (`makeRpc.ts:131-174`); `makeMutation` is literally `(args) =>
+  Promise.resolve(fn(args))` with no memo, no key, no coalescing (`makeRpc.ts:176-181`). So today
   identical *concurrent* mutations **each execute** — coalescing them is new behavior, not the status
   quo.
 - **`RpcOptions.cache` is `{ ttl?, shared?, tags? }`** (`makeRpc.ts:53`) — there is no `cache: false`.
 - **Streaming handlers return encoded bytes.** `jsonl(iterable)` / `sse(iterable)` return a `Response`
-  wrapping a `ReadableStream<Uint8Array>`; the `T` values are JSON-encoded to bytes *before* the cell
+  wrapping a `ReadableStream<Uint8Array>`; the `T` values are JSON-encoded to bytes *before* the memo
   sees the return value, and the router passes the Response through untouched (`if (result instanceof
-  Response) return result`, `router.ts:442`). At the point the cell would build `chunks: T[]`, the
+  Response) return result`, `router.ts:442`). At the point the memo would build `chunks: T[]`, the
   decoded `T` is gone.
 - **`sharedStore()` is real** — a process-global `Map<string,unknown>` (`sharedCache.ts:21`), backing
-  shared cells (`cell.ts:174`), LRU-bounded by `ABIDE_MAX_SHARED_CACHE_SIZE` via `measureBytes =
-  JSON.stringify(value).length` recorded **once at settle** (`cell.ts:126-133,283-288`). That measure
+  shared memos (`memo.ts:174`), LRU-bounded by `ABIDE_MAX_SHARED_CACHE_SIZE` via `measureBytes =
+  JSON.stringify(value).length` recorded **once at settle** (`memo.ts:126-133,283-288`). That measure
   yields ≈0 for a stream/Response object, so a buffered transcript is invisible to the LRU.
-- **The cache mux carries verbs, not chunks.** A shared cell broadcasts through an injectable `CacheNotify
-  = (verb: "invalidate"|"refresh"|"publish", args, value?) => void` (`cell.ts:64`); the wire frame is
+- **The cache mux carries verbs, not chunks.** A shared memo broadcasts through an injectable `CacheNotify
+  = (verb: "invalidate"|"refresh"|"publish", args, value?) => void` (`memo.ts:64`); the wire frame is
   `CacheFrame = { verb, value? }` (`cacheChannels.ts:23`) over an ephemeral `SocketHub` with **no tail
-  replay** (`cacheChannels.ts:53`). Channels are keyed by **route name**, not cell identity:
+  replay** (`cacheChannels.ts:53`). Channels are keyed by **route name**, not memo identity:
   `cacheChannelName(rpc,args) = "@rpc:"+rpc+":"+canonicalKey(args)` (`cacheChannelName.ts:16`). Join is
   gated by `authorizeChannelJoin(channelName, presentedArgs, connData, config)` (**4 params**;
   `channelAuth.ts:61`), which re-runs the RPC's middleware chain and passes only if it reaches the
@@ -87,20 +87,20 @@ An implementer must know the starting point; the spec is honest about the gap.
 
 ## Decisions
 
-### 1. All verbs route through one cell mechanism; the only default that differs is the cache policy
-Every verb routes through the same cell (coalesce + cache + reactive slot). The read/mutation
+### 1. All verbs route through one memo mechanism; the only default that differs is the cache policy
+Every verb routes through the same memo (coalesce + cache + reactive slot). The read/mutation
 distinction narrows to (a) the **wire** (method, args-in-URL vs args-in-body, CSRF) — unchanged — and
 (b) the **default cache policy**:
 
 - **Reads (`GET`/`HEAD`)** default `cache: { ttl: ∞ }` — coalesce concurrent identical calls within a
   scope, and cache the settled value (cross-request only under `shared: true`; a non-shared read's slot
-  lives in the per-request `getContext().cache` and dies with the request — `cell.ts:174`). Current
+  lives in the per-request `getContext().cache` and dies with the request — `memo.ts:174`). Current
   behavior.
 - **Mutations (`POST`/`PUT`/`PATCH`/`DELETE`)** default **`cache: { ttl: 0 }`** — coalesce identical
   concurrent in-flight calls, retain nothing after settle (dispose once the live ref-count drains, §2).
 
 **What `ttl: 0` coalescing actually dedupes — scope matters, and it makes `ttl: 0` a safe default.** A
-non-shared mutation's slot lives in the **per-request** `getContext().cache` (`cell.ts:174`), so `ttl:
+non-shared mutation's slot lives in the **per-request** `getContext().cache` (`memo.ts:174`), so `ttl:
 0` coalesces only identical concurrent calls **within one request scope** — which for a normal handler
 that calls its mutation once is inert, matching today's observable behavior. Two *separate* requests
 (two users, or one user's double-click — each is its own HTTP request and its own scope) do **not** share
@@ -111,11 +111,11 @@ effects into one run is always an explicit author choice — never a silent defa
 `ttl: 0` is safe as the default: the "two POSTs → one execution" case only arises under an opt-in
 `shared` mutation, where the pure-over-args contract already applies.
 
-`cache: false` is the escape hatch: opt OUT of the cell entirely so **even intra-scope concurrent
+`cache: false` is the escape hatch: opt OUT of the memo entirely so **even intra-scope concurrent
 identical calls each execute** — for a genuinely non-idempotent handler (mint an idempotency key, append
 a log line twice) where every call must run. `cache: { … }` overrides the per-verb default.
 
-| Option | Enters cell? | Concurrent-identical (same scope) | After settle | Cache verbs | Default for |
+| Option | Enters memo? | Concurrent-identical (same scope) | After settle | Cache verbs | Default for |
 | --- | --- | --- | --- | --- | --- |
 | `cache: { ttl: ∞ }` | yes | coalesce | retain until LRU | full | reads |
 | `cache: { ttl: 0 }` | yes | **coalesce** to one run | dispose on drain | full (surface present; slot is transient) | **mutations** |
@@ -125,7 +125,7 @@ a log line twice) where every call must run. `cache: { … }` overrides the per-
 Type change: `cache?: false | { ttl?: number; shared?: boolean; tags?: string[] }` (`makeRpc.ts:53`).
 
 **Keying is over the coerced typed args, not the wire encoding — and that resolves FormData.** A slot is
-keyed by `canonicalKey(args)` (`cell.ts:170,205`), which normalizes a plain object (keys sorted). The
+keyed by `canonicalKey(args)` (`memo.ts:170,205`), which normalizes a plain object (keys sorted). The
 key must be computed over the **coerced, schema-typed** args, not the raw request body — this is the
 general principle, and it keeps the encoding isomorphic: a form-encoded POST and a JSON POST carrying the
 same logical args produce the **same** key and coalesce. Concretely, the router coerces an incoming
@@ -141,7 +141,7 @@ files (user A `cat.jpg`, user B `dog.jpg`) is `cache: false` and each executes, 
 hand-built `Response` returned by a handler is likewise `cache: false` (opaque, single-consumption, not
 replayable — see §4).
 
-**Mutation public surface mirrors a read (full symmetry).** A cell-backed mutation exposes the SAME
+**Mutation public surface mirrors a read (full symmetry).** A memo-backed mutation exposes the SAME
 surface as a read — `peek`/`pending`/`refreshing`/`refresh`/`invalidate`/`publish`/`watch`/`snapshot`/
 `seed`/`raw`/`isError` plus the streaming chunk probes (`makeRpc.ts` `attachSurface`). POST/PUT/PATCH/
 DELETE return `MutationSurface<Args, R>` (`Mutation extends Rpc` for a value handler, `StreamMutation
@@ -149,12 +149,12 @@ extends StreamRead` for a streaming one). The only differences are transport (me
 the CSRF gate, keyed off `__rpc.read`) and the default TTL: a mutation defaults to `ttl: 0`, so the slot
 is transient and the probes just report "nothing retained" — until the author opts into `cache: { ttl }`,
 at which point retention + `peek`/`refresh`/`refreshing` behave exactly like a read (on both the server
-and the client cell; `cache: false` bypasses the client cell too). Cross-callable invalidation is
+and the client memo; `cache: false` bypasses the client memo too). Cross-callable invalidation is
 unchanged — a mutation handler still invalidates *other* reads by calling their verbs (`todos.invalidate()`).
 
 ### 2. TTL semantics: the clock starts at "settled" — resolve for a value, CLOSE for a stream; slots are ref-counted while open
 `ttl` = how long a **settled** slot is retained. For a value, settled = resolved (`loadedAt` at fn
-resolve, unchanged, `cell.ts:255`). For a stream, settled = **closed** (last chunk buffered +
+resolve, unchanged, `memo.ts:255`). For a stream, settled = **closed** (last chunk buffered +
 done/errored) — the ReplayableStream's `close()`/`fail()` stamps `slot.loadedAt`, **not** fn-resolve.
 While a slot is **in-flight** (pending value, or an open stream) it is retained **regardless of `ttl`**,
 ref-counted by attached consumers, and **not** LRU-evictable (§4).
@@ -168,7 +168,7 @@ ref-counted by attached consumers, and **not** LRU-evictable (§4).
 
 `isExpired` gains a stream branch: **while `status === "stream"` and not `done`, never expired** (open
 streams outlive any ttl). Disposal must **remove the slot from the backing map**, not merely reset it to
-idle — today `dropSlot` only resets state (`cell.ts:362-367`), which for `ttl:0` leaks an idle slot and
+idle — today `dropSlot` only resets state (`memo.ts:362-367`), which for `ttl:0` leaks an idle slot and
 leaves the "coalesce vs re-execute" boundary undefined. The observable guarantee: *a call whose
 inflight-start is after the previous identical call's ref-count hit 0 re-executes; otherwise it
 coalesces.*
@@ -185,8 +185,8 @@ cross-user safety, unchanged from the shared-cache contract:
 - **Per-request (non-shared)** coalescing is within one request scope → one identity → identity-safe by
   construction. (Rarely fires for streaming reads unless the same read is issued twice in a render.)
 - **Cross-request (`shared: true`)** coalescing spans requests/users → the handler runs **scope-exited**
-  (`runOutsideScope`, `cell.ts:275`; `identity()`/`cookies()` throw, fail-closed via `guardSharedRead`,
-  `cell.ts:189-193`) so it is pure over its args. This is what makes "two users, same prompt → one run"
+  (`runOutsideScope`, `memo.ts:275`; `identity()`/`cookies()` throw, fail-closed via `guardSharedRead`,
+  `memo.ts:189-193`) so it is pure over its args. This is what makes "two users, same prompt → one run"
   safe — the run cannot depend on who triggered it.
 
 **Source ownership.** The running source is owned by the **slot**, never by the first consumer. The slot
@@ -210,7 +210,7 @@ slot fans out.
 yields a raw `AsyncIterable<T>` (or returns one) — *not* a pre-encoded `Response`. The ReplayableStream
 taps that iterable to fill `chunks: T[]`; the **router** applies `jsonl`/`sse` transport encoding
 downstream, once per HTTP consumer, over a fresh `consume()`. A handler that returns a hand-built
-`Response` opts out of replay (`cache: false`, §1). This is the only way the cell can obtain decoded `T`
+`Response` opts out of replay (`cache: false`, §1). This is the only way the memo can obtain decoded `T`
 without re-parsing wire bytes, and decoded values are what make the transcript replayable, seedable, and
 reactively re-mountable (§5).
 
@@ -218,11 +218,11 @@ reactively re-mountable (§5).
 change the cache/stream semantics: `json(x)` caches/seeds exactly like returning `x`, and `jsonl(gen())`
 is replayable exactly like returning `gen()`. So each helper **tags** its `Response` with the
 pre-encoding payload (`responseSource.ts`) and carries the payload TYPE in its return
-(`json(): TypedResponse<T>`, `jsonl()`/`sse(): StreamResponse<C>`); the cell reads the tag and taps the
+(`json(): TypedResponse<T>`, `jsonl()`/`sse(): StreamResponse<C>`); the memo reads the tag and taps the
 source, and `ReadSurface`/`Payload` unwrap the brand so `GET(() => json(x))` infers `Rpc<Args, typeof x>`
 and `GET(() => jsonl(gen()))` / `GET(() => sse(gen()))` infer `StreamRead<Args, C>` — identical to the raw
 forms, at author time and at runtime (verified by type-probe + HTTP tests). Two requirements this exposed:
-(a) `jsonl` **and `sse`** are now **lazy** (pull-based, `highWaterMark: 0`) so a Response the cell sees
+(a) `jsonl` **and `sse`** are now **lazy** (pull-based, `highWaterMark: 0`) so a Response the memo sees
 through and discards unread never drains its source (eager consumption would double-consume the one
 generator); (b) `fn.raw` still returns the real encoded `Response` (tag/init intact). **`sse` is now
 see-through too (built).** The lazy `sse` tags its source like `jsonl` and **defers its `:ok` prelude +
@@ -251,10 +251,10 @@ interface ReplayableStream<T> {
 }
 ```
 
-**Read-return type (Promise-vs-AsyncIterable, resolved).** The cell stores the `ReplayableStream` on the
+**Read-return type (Promise-vs-AsyncIterable, resolved).** The memo stores the `ReplayableStream` on the
 slot but the bare read stays `Promise<T>`: for a stream slot it resolves to a fresh `stream.consume()`
 cursor (`T` = the `AsyncIterable<chunk>` the handler yields). So `{await fn()}` yields an iterable and
-`{#for await x of fn()}` consumes it, with no change to the cell's `Promise<T>` read signature —
+`{#for await x of fn()}` consumes it, with no change to the memo's `Promise<T>` read signature —
 concurrent/late callers each `.then` into their own cursor over the one shared buffer. A streaming
 handler is detected by its result being an `AsyncIterable` that is **not** a `Response`/`ReadableStream`
 (those stay opaque byte bodies / `cache: false`), so existing value and `jsonl`/`sse` reads are
@@ -264,7 +264,7 @@ untouched.
 over HTTP; a streaming read's response (`application/jsonl` / `text/event-stream`) is decoded by
 content-type (`shared/internal/decodeStreamResponse.ts` — the inverse of the `jsonl`/`sse` encoders, an
 async generator that cancels its reader on early exit) into an `AsyncIterable` of chunks, which the SAME
-`cell` routes to a `ReplayableStream` slot. So a browser `{#for await x of rpc()}` — including a client
+`memo` routes to a `ReplayableStream` slot. So a browser `{#for await x of rpc()}` — including a client
 re-run of a known-RPC source with no SSR seed (the `{#if}`-gated / interaction-triggered case) — consumes
 a stream identically to SSR, with `peek`/`chunks`/`done`/`resumeStream` all live client-side, and
 `.refresh()` restarts it. The client `{#for await}` **awaits the read first** (a streaming read is
@@ -301,24 +301,24 @@ re-runs), and disposes on drain. Stale-callback safety: every stream-lifecycle c
 per-chunk accounting, the settle finally) is guarded by stream identity, so a slot that has re-run into a
 new stream under the same key is never corrupted by the old stream's callbacks.
 
-**Build status.** Steps 1a (standalone `ReplayableStream`), 1b (cell integration: `"stream"` slot
+**Build status.** Steps 1a (standalone `ReplayableStream`), 1b (memo integration: `"stream"` slot
 status, ttl-from-close, per-`consume()` ref-count → dispose-on-drain / empty-refcount abort, `invalidate`
-teardown), 2 (mutations route through a cell at `cache: { ttl: 0 }`; `cache: false` opt-out; FormData
+teardown), 2 (mutations route through a memo at `cache: { ttl: 0 }`; `cache: false` opt-out; FormData
 bypass), the **typed streaming read surface** (`StreamRead<Args, C>` via a conditional `GET`/`HEAD`
 return, with reactive `peek`/`chunks`/`done`), and 3 (shared streaming + incremental byte accounting +
 open-stream pinning + per-stream cap/overflow) are **built and tested** (`replayableStream.ts`,
-`cell.ts`, `makeRpc.ts`, `GET.ts`/`HEAD.ts`, `sharedCache.ts` + their `*.test.ts`; verified against the
+`memo.ts`, `makeRpc.ts`, `GET.ts`/`HEAD.ts`, `sharedCache.ts` + their `*.test.ts`; verified against the
 docs app). The transport half of step **4** is built — the router transport-encodes streaming reads
 (jsonl/sse) with HTTP-level fan-out AND serves the resumable `?__abide_from=<count>` replay endpoint (`router.ts`,
-`cell.resumeStream`, `ReplayableStream.consume(from)`, `responseSource.ts` see-through helpers +
+`memo.resumeStream`, `ReplayableStream.consume(from)`, `responseSource.ts` see-through helpers +
 `streamHttp.test.ts`). The **client half of 4b is now built** — the `StreamHandle` seed section
 (`pages.ts`, inline `values` + `data-ab-count`), the value capture + handoff records (`streamScope.ts`,
 `context.ts`), the emit-time source tag (`emitServer.ts`, `{ attachable, rpcName?, args }` for a
 known-RPC head under `src/server/rpc/`), and the `forBlock` reactive drain (`runtime.ts`) fed by a
-warm-seeded cell: `bootstrap.replayStreams` warms the cell via `cell.seedStream` — a completed
+warm-seeded memo: `bootstrap.replayStreams` warms the memo via `memo.seedStream` — a completed
 (mode-A) `values` transcript, or an open (mode-B) `resumeStreamSource` (prefix + `?__abide_from=<count>` resume,
 `fresh`-replace on attach-miss, prefix-stands on offline/failure). There is NO separate DOM handoff any
-more — the block just re-reads the warm cell (`emitStreamAttach.test.ts` proves the invariant: an RPC
+more — the block just re-reads the warm memo (`emitStreamAttach.test.ts` proves the invariant: an RPC
 `{#for await}` source is never re-invoked on the client; a non-RPC source still re-iterates; the
 `{#await}` claim path is unregressed). **Step 5 (source-derived SSR budget, §6) is now built** — the
 streamer races the global `ABIDE_SSR_STREAM_BUDGET` (default raised to 300 000 ms, last-resort) ONLY for a
@@ -352,9 +352,9 @@ page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`)
   ends deterministically.
 - **Errored replay.** A consumer attaching after an error replays all buffered chunks in order, **then
   throws** `error` (partial progress preserved before the failure surfaces). An errored/aborted stream
-  is retained per `ttl` with the clock starting at error/abort time (like a cell error slot,
-  `cell.ts:226-231`); a joiner within `ttl` replays-then-throws, after `ttl` re-runs.
-- **`publish` is not overloaded onto streams.** `publish(args, T | updater)` (`cell.ts:375-395`) replaces
+  is retained per `ttl` with the clock starting at error/abort time (like a memo error slot,
+  `memo.ts:226-231`); a joiner within `ttl` replays-then-throws, after `ttl` re-runs.
+- **`publish` is not overloaded onto streams.** `publish(args, T | updater)` (`memo.ts:375-395`) replaces
   the whole slot value and broadcasts a JSON `CacheFrame`; for a stream slot `T` is the whole transcript,
   not a chunk, and the ReplayableStream (with its live `waiters`) is not JSON-serializable. First build:
   **`publish`/`refresh` on an open stream throw** a clear error ("publish is not supported on a streaming
@@ -399,13 +399,13 @@ Two handoff modes, keyed on stream state at flush:
 
 - **(A) Completed-before-flush** (the primary finite case, e.g. a completion that finished within the
   SSR window): the seed carries the decoded transcript **inline** (`values: T[]`, same JSON path as a
-  value seed). On hydrate the client `replayStreams` **warms the RPC cell** from the transcript via
-  `cell.seedStream(args, values)` (the streaming analog of `cell.seed` — a closed ReplayableStream slot),
+  value seed). On hydrate the client `replayStreams` **warms the RPC memo** from the transcript via
+  `memo.seedStream(args, values)` (the streaming analog of `memo.seed` — a closed ReplayableStream slot),
   then the reactive `{#for await}` drains that warm slot: the server-painted region is discarded and each
   item is re-mounted reactively — **zero network** (the read hits the seeded slot, the source is never
   called), no cross-request slot needed, unaffected by eviction or offline. This is the common path.
 - **(B) Open-at-flush** (SSR flushed a partial or was cut off by the budget): the seed carries a **slot
-  handle** `(name, args, count, done: false)`. `replayStreams` seeds the cell (`cell.seedStream`) with a
+  handle** `(name, args, count, done: false)`. `replayStreams` seeds the memo (`memo.seedStream`) with a
   `resumeStreamSource` (`bootstrap.ts`) — an async source that yields the flushed prefix, then **resumes
   over a resumable HTTP replay**: `GET /__abide/rpc/<name>?__abide_from=<count>&__abide_args=<json>` returns a stream
   **re-encoded in the handler's original encoding** (`jsonl` resumes as `jsonl`, `sse` as `sse` — the
@@ -414,18 +414,18 @@ Two handoff modes, keyed on stream state at flush:
   lost window; reuses the initial streaming HTTP transport of rpc-core §5.5). If the retained transcript
   was evicted the endpoint answers `x-abide-stream-resume: fresh` — a full run from 0 that **replaces** the
   prefix; a failed/offline resume leaves the prefix standing and closes. The block then drains this warm
-  cell exactly like mode A, so probes + `refresh()` work the same.
+  memo exactly like mode A, so probes + `refresh()` work the same.
   **The `@rpc:` cache mux is never the chunk path** — it carries only verb frames.
 
 **Reactivity (`{#for await}` is not one-shot).** The client `{#for await}` mount wraps its source drain
-in an `effect` (`forBlock`, `runtime.ts`), so it subscribes to the backing cell's **state signal** (but
+in an `effect` (`forBlock`, `runtime.ts`), so it subscribes to the backing memo's **state signal** (but
 NOT the per-chunk `streamTick`, so arriving chunks never restart it). A `fn.refresh()`/`fn.invalidate()`
 — or a change to any reactive dep in the source expression (`{#for await x of fn(count)}`) — tears the
 list down and **re-streams it from the fresh run** (clear-and-restream). This holds for **both** modes:
-since both are warm-seeded into the cell, the block adopts with no re-invoke on hydrate AND
+since both are warm-seeded into the memo, the block adopts with no re-invoke on hydrate AND
 `fn.peek`/`fn.chunks`/`fn.done`/`fn.error`/`fn.refresh` all reflect the on-screen transcript. (Before this,
 a `{#for await}` was a one-shot mount that re-ran the source server-side on `refresh()` but never
-repainted, and an adopted stream's cell probes were dead.)
+repainted, and an adopted stream's memo probes were dead.)
 
 Mode (B) requires the slot (and its still-running source) to **outlive the SSR request**, which only the
 process-global `sharedStore()` does. Therefore: a `{#for await}` over an RPC stream that is **open at
@@ -469,9 +469,9 @@ timeout?: number }` (it already knows whether the head resolves to an RPC import
   fails (offline, `4xx`, no body) the flushed **prefix stands** and the seeded slot closes — no
   `online()`-flip auto-retry. A later (now reactive) `fn.refresh()` re-runs the source from scratch.
 - **No hydrate reorder.** There is no `<abide-list>` interception. `bootstrap.replayStreams` warm-seeds
-  the RPC cell via `cell.seedStream` **before** hydrate (mode-A `values` transcript / mode-B
+  the RPC memo via `memo.seedStream` **before** hydrate (mode-A `values` transcript / mode-B
   `resumeStreamSource`); the `{#for await}` mount then discards the server-painted placeholder region and
-  re-reads the warm cell — no separate DOM handoff, no source re-invoke.
+  re-reads the warm memo — no separate DOM handoff, no source re-invoke.
 
 ### 6. The SSR stream budget is source-derived, not a global constant — ✅ BUILT (step 5)
 The bound past which SSR stops waiting on a stream is the **source's own deadline**. Using the emit-time
@@ -530,7 +530,7 @@ implementation unmodified. A socket remains the right tool for an **unbounded, a
 
 ## Superseded prior decisions
 - **`rpc-core.md` §14.1** (verbatim: "Mutations … **not read-cached, not coalesced (today)**"; it
-  already carries an inline SUPERSEDED back-reference here) → mutations route through the same cell and
+  already carries an inline SUPERSEDED back-reference here) → mutations route through the same memo and
   default **`cache: { ttl: 0 }`** — coalesce identical concurrent in-flight calls (per-request scope, so
   inert for the normal one-call-per-request case; cross-caller dedup only under opt-in `shared`), retain
   nothing after settle; `cache: false` opts out entirely; keying is over coerced typed args (file-free
@@ -555,9 +555,9 @@ implementation unmodified. A socket remains the right tool for an **unbounded, a
 
 ## Build order (independently shippable, each with its test matrix)
 
-**1a. Standalone `ReplayableStream<T>` primitive** ✅ **built** — cell-independent: `push`/`close`/`fail`/`abort`,
+**1a. Standalone `ReplayableStream<T>` primitive** ✅ **built** — memo-independent: `push`/`close`/`fail`/`abort`,
 `consume(): AsyncIterable<T>`, `chunks`/`done`/`error`/`aborted`/`bytes`/`refCount`/`generation`. Its own
-unit tests, no cell:
+unit tests, no memo:
 - 100 concurrent `consume()` → one buffer, all receive the identical full transcript.
 - late joiner after chunk k, source at k+1 → sees k+1..end, no gap/dup.
 - chunk emitted during a joiner's replay loop → delivered exactly once after the replayed prefix.
@@ -565,10 +565,10 @@ unit tests, no cell:
 - consumer `break`s mid-replay → `refCount` decrements, others unaffected.
 - `abort()` → live consumers terminate at chunks-so-far; a racing late joiner replays-then-ends.
 
-**1b. Cell integration** ✅ **built** — `SlotState` gains `status:"stream"` + `stream` field; `close()`/`fail()`
+**1b. Memo integration** ✅ **built** — `SlotState` gains `status:"stream"` + `stream` field; `close()`/`fail()`
 stamp `slot.loadedAt`; per-`consume()` ref-count; `isExpired`/`measureBytes`/`snapshot`/`seed`/the sync
 cache-hit gain stream branches; disposal removes the slot from the map. Tests:
-- two concurrent reads through the cell = one source run + full replay for a late joiner.
+- two concurrent reads through the memo = one source run + full replay for a late joiner.
 - value slot's clock still starts at resolve (regression guard).
 - open stream is never LRU-evicted or ttl-expired mid-flight.
 - ttl-from-close boundary (fake clock): joiner at close+1 ms replays; at close+(n+1) ms re-runs.
@@ -609,15 +609,15 @@ the ROUTER transport-encodes a streaming read whose slot resolves to an AsyncIte
 `application/jsonl` (or SSE on `Accept: text/event-stream`), once per HTTP consumer, so a
 bare-async-generator read is HTTP-serviceable and concurrent HTTP consumers fan out over ONE
 ReplayableStream run; and **`?__abide_from=<count>` resumes a RETAINED transcript** (replay `chunks[from..]` then
-live via `ReplayableStream.consume(from)` + `cell.resumeStream`), or, when the transcript is gone, runs
+live via `ReplayableStream.consume(from)` + `memo.resumeStream`), or, when the transcript is gone, runs
 fresh from 0 and sets `x-abide-stream-resume: fresh` so the client REPLACES its painted prefix
 (`streamHttp.test.ts`). **Client half (4b)**: the SSR→client handoff — an attachable `{#for await}`
 captures its decoded values + registers a `StreamHandle` (`streamScope.ts`/`context.ts`), `collectSeed`
 emits the `streams` seed section (+ inline `values` / `data-ab-count`; `pages.ts`), the emitter tags a
 known-RPC head `{ attachable, rpcName?, args }` (`emitServer.ts`), and `bootstrap.replayStreams` warms the
-cell via `cell.seedStream` — the `values` transcript (A) or a `resumeStreamSource` prefix+`?__abide_from` resume
+memo via `memo.seedStream` — the `values` transcript (A) or a `resumeStreamSource` prefix+`?__abide_from` resume
 (B, `fresh`-replaces on attach-miss / prefix-stands on offline) — so `forBlock`'s reactive drain re-reads
-the warm cell with no re-invoke (no separate DOM handoff). Tests (`emitStreamAttach.test.ts`):
+the warm memo with no re-invoke (no separate DOM handoff). Tests (`emitStreamAttach.test.ts`):
 - completed SSR stream → client renders identical items, **RPC source spy shows zero client-side
   calls**, an `onclick` inside an item fires (reactive mount proven). ✅
 - cut-off SSR stream → client adopts partial + receives remaining chunks live via `?__abide_from=count`, source

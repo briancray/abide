@@ -47,7 +47,7 @@ test('read proxy coalesces/caches repeated loads (handler runs once)', async () 
     expect(calls).toBe(1)
 })
 
-test('a cache:false read bypasses the client cell — every bare call re-fetches', async () => {
+test('a cache:false read bypasses the client memo — every bare call re-fetches', async () => {
     let calls = 0
     const app = await boot({
         tick: GET(() => ++calls, { cache: false }),
@@ -57,7 +57,7 @@ test('a cache:false read bypasses the client cell — every bare call re-fetches
         cache: false,
     }) as Rpc<Record<string, never>, number>
 
-    // `cache: false` opts out of the cell entirely: each bare call runs the handler fresh.
+    // `cache: false` opts out of the memo entirely: each bare call runs the handler fresh.
     expect(await tick({})).toBe(1)
     expect(await tick({})).toBe(2)
     expect(await tick({})).toBe(3)

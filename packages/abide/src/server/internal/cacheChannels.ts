@@ -1,6 +1,6 @@
 // Cache-broadcast channel registry — rpc-core §8 broadcast substrate (server→server, PR2).
 //
-// When a SHARED cell slot is invalidated/refreshed/published, the verb is published onto a
+// When a SHARED memo slot is invalidated/refreshed/published, the verb is published onto a
 // per-`(rpc,args)` channel so subscribers elsewhere can mirror it. The transport is REUSED
 // verbatim: each channel is a `SocketHub<CacheFrame>` — the same bounded fanout that backs named
 // user sockets. No new transport is invented here.

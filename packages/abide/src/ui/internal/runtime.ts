@@ -142,8 +142,8 @@ export function endHydration(): void {
 }
 
 // Stream attach handoff (replayable-streams.md §5): the seed's `streams` section warms the client RPC
-// cell in `bootstrap.replayStreams` BEFORE hydrate (a completed mode-A transcript via `cell.seedStream`,
-// or a mode-B prefix+resume source). The `{#for await}` hydrate path then just re-reads the warm cell —
+// memo in `bootstrap.replayStreams` BEFORE hydrate (a completed mode-A transcript via `memo.seedStream`,
+// or a mode-B prefix+resume source). The `{#for await}` hydrate path then just re-reads the warm memo —
 // no separate DOM handoff, so there is no runtime-side handoff registry any more.
 
 const ELEMENT_NODE = 1
@@ -1028,7 +1028,7 @@ export function awaitBlock(
     // HTML (`then` or, on rejection, `catch`) followed by `finally` — never `pending`. The create path
     // below mounts `pending` first and swaps on a microtask, so a naive hydrate would repaint. Instead:
     // PEEK whether the awaited expression is already SETTLED at hydrate time. It is settled iff calling
-    // `read()` returns a NON-thenable (a seed-primed RPC/cell smart-read returns its value
+    // `read()` returns a NON-thenable (a seed-primed RPC/memo smart-read returns its value
     // synchronously; a plain non-promise resolves to itself) or throws synchronously (→ the `catch`
     // branch). A real, still-pending Promise is a thenable we cannot inspect synchronously — that is the
     // one unavoidable case, and it falls back to CREATE (clear the server region + mount `pending`).
@@ -1318,7 +1318,7 @@ export function forBlock(
 ): Disposer {
     // Async `{#for await}` hydrate (replayable-streams.md §5). The server streamed the source into an
     // `<abide-list>` placeholder; on hydrate the client discards it and re-reads the source. For a
-    // known-RPC source `replayStreams` (bootstrap) has already WARM-SEEDED the cell from the handoff (a
+    // known-RPC source `replayStreams` (bootstrap) has already WARM-SEEDED the memo from the handoff (a
     // completed mode-A transcript, or a mode-B prefix+resume source), so the read replays with NO client
     // re-invoke. A non-RPC source simply re-iterates. Clear the server region before the effect re-mounts.
     if (hydrating && options.isAwait && open !== null) clearBetween(open.nextSibling, anchor)
@@ -1332,7 +1332,7 @@ export function forBlock(
         // Wrap the drain in an effect so a source `.refresh()`/`.invalidate()` — or any tracked reactive
         // dep in the source expression — tears the list down and re-streams it (clear-and-restream);
         // previously a `{#for await}` was a ONE-SHOT mount that ignored every post-mount change (issue
-        // #52). For an SSR-adopted stream the cell was warm-seeded (`replayStreams`), so this first drain
+        // #52). For an SSR-adopted stream the memo was warm-seeded (`replayStreams`), so this first drain
         // replays the transcript with NO client re-invoke; a fresh/non-RPC source loads as before.
         let generation = 0
         let catchDispose: Disposer | null = null
@@ -1345,8 +1345,8 @@ export function forBlock(
             }
         }
         const stop = effect(() => {
-            // Reading the source subscribes this effect to the backing cell's STATE signal (invalidate/
-            // refresh) plus any reactive dep in the args — but NOT to per-chunk growth (the cell keeps
+            // Reading the source subscribes this effect to the backing memo's STATE signal (invalidate/
+            // refresh) plus any reactive dep in the args — but NOT to per-chunk growth (the memo keeps
             // that on a separate `streamTick`), so live chunks arriving never restart the block.
             const source = options.read()
             const runGen = ++generation
@@ -1354,7 +1354,7 @@ export function forBlock(
             untrack(() => {
                 clearRun()
                 let index = 0
-                // A STREAMING RPC read is `Promise<AsyncIterable<C>>` (the cell read is async), and `for
+                // A STREAMING RPC read is `Promise<AsyncIterable<C>>` (the memo read is async), and `for
                 // await` cannot iterate a Promise; awaiting a non-thenable `gen()` is identity, so a plain
                 // async-generator source is unchanged. Mirrors `toIterator`.
                 void (async () => {

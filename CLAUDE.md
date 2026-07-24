@@ -29,8 +29,8 @@
 * do not worry about backwards compatibility if there is a better way to do something at any level unless it changes a public api - then discuss
 
 > The authoritative design lives in `docs/spec/*.md`. This file is the generated public-API
-> reference. Core model: the primitive is **`cell`** — a generic isomorphic memoizer for async
-> functions (cache + coalesce + reactive read surface); RPC is `cell` + transport. RPC inputs/outputs
+> reference. Core model: the primitive is **`memo`** — a generic isomorphic memoizer for async
+> functions (cache + coalesce + reactive read surface); RPC is `memo` + transport. RPC inputs/outputs
 > are **JSON-serializable only**; the rich value codec applies only to hydrated non-RPC values.
 
 # abide — Public API & Template Feature Reference
@@ -73,27 +73,27 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
 - **`middleware`**: `Array<(next) => Response>` run for this RPC (composed inside the global chain).
 - **`cache`** (unified across verbs; `docs/spec/replayable-streams.md`): `ttl` (ms; **reads** default ∞,
   **mutations** default `0` = coalesce identical concurrent in-flight calls, retain nothing — a mutation
-  that sets `cache: { ttl }` retains like a read on **both** the server and client cell, so its
+  that sets `cache: { ttl }` retains like a read on **both** the server and client memo, so its
   `peek`/`refresh`/`refreshing` probes come alive), `shared` (opt-in cross-request server cache;
   ambient-scope reads fail-closed; pure-over-args), `tags`.
-  `cache: false` opts a call OUT of the cell entirely (every call runs; a mutation's at-least-once). A
+  `cache: false` opts a call OUT of the memo entirely (every call runs; a mutation's at-least-once). A
   `FormData` mutation body always bypasses (can't be keyed). A streaming handler that yields an
   `AsyncIterable` (or `jsonl(gen())`, which sees through to it) is stored as a **ReplayableStream**
   (replay-then-live; ttl clock from stream CLOSE; open streams pinned; per-stream cap
   `ABIDE_MAX_STREAM_BUFFER_SIZE`, default unbounded) so concurrent/late viewers share one run. Resume a
   retained transcript over `GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>` (re-encoded in the handler's ORIGINAL
-  encoding — jsonl resumes as jsonl, sse as sse). **Built:** primitive + cell + verb routing + shared
+  encoding — jsonl resumes as jsonl, sse as sse). **Built:** primitive + memo + verb routing + shared
   streaming + json/jsonl/**sse** see-through (all lazy) + resumable endpoint + the **SSR→client hydration
   handoff** — a `{#for await}` over a known-RPC source seeds its decoded transcript so hydrate re-reads the
-  source with NO client re-invoke: on hydrate `replayStreams` warms the RPC cell via `cell.seedStream` — a
+  source with NO client re-invoke: on hydrate `replayStreams` warms the RPC memo via `memo.seedStream` — a
   completed (mode-A) inline transcript, or an open (mode-B) **prefix + `?__abide_from=<count>` resume source** — and
-  the block drains that warm cell (a non-RPC source still re-iterates). There is no separate DOM handoff; the
+  the block drains that warm memo (a non-RPC source still re-iterates). There is no separate DOM handoff; the
   server paint is a discarded placeholder. **`{#for await}` is REACTIVE (not one-shot):** its client mount
-  wraps the drain in an effect subscribed to the cell's state signal (not per-chunk), so a
+  wraps the drain in an effect subscribed to the memo's state signal (not per-chunk), so a
   `fn.refresh()`/`.invalidate()` — or a change to any reactive dep in the source expression — tears the list
   down and re-streams it (clear-and-restream); this holds for BOTH modes, and the chunk probes
   (`peek`/`chunks`/`done`/`error`) read the adopted transcript. **Client-side consumption:** the browser RPC
-  proxy decodes a streaming response by content-type into an `AsyncIterable` (routed through the same cell),
+  proxy decodes a streaming response by content-type into an `AsyncIterable` (routed through the same memo),
   so `{#for await x of rpc()}` works in the browser identically to SSR; `sse` is also consumable via the
   native `EventSource`.
 - **`timeout`**: bilateral (client abort + server deadline); defaults to `ABIDE_RPC_TIMEOUT`.
@@ -108,7 +108,7 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
 ### Response
 | Import | Signature |
 | --- | --- |
-| `abide/server/json` | `json(data, init?)` → `TypedResponse<T>` (sees through to `data` in a cell-backed read/mutation) |
+| `abide/server/json` | `json(data, init?)` → `TypedResponse<T>` (sees through to `data` in a memo-backed read/mutation) |
 | `abide/server/jsonl` | `jsonl(iterable, init?)` → `StreamResponse<C>`, `application/jsonl` (lazy; sees through to the iterable → ReplayableStream) |
 | `abide/server/sse` | `sse(iterable, init?)` → `StreamResponse<C>`, `text/event-stream` (lazy; sees through to the iterable → ReplayableStream, on par with jsonl; also consumable via `EventSource`; adds `Cache-Control: no-cache` + `X-Accel-Buffering: no`) |
 | `abide/server/error` | `error(status, message?, init?)`; `error.typed(name, status, schema?)` (a `405` carries `Allow`) |
@@ -128,7 +128,7 @@ traced request also carries `traceresponse` (alongside the echoed `traceparent`)
 | `abide/server/socket` | `socket<T>(opts?)`; opts: `{ tail?, ttl?, clientPublish?, schema?, clients?, handler? }` |
 
 `Socket<T>` is an isomorphic `AsyncIterable<T>` with an **identical surface on both sides** (one
-`.d.ts`): `for await` + `publish(msg): void` + the reactive cell-probe vocabulary — `peek()` (latest,
+`.d.ts`): `for await` + `publish(msg): void` + the reactive memo-probe vocabulary — `peek()` (latest,
 `ttl`-windowed), `chunks()` (session transcript, `tail`-capped), `pending()`/`refreshing()`/`done()`/
 `error()`. A `.abide` that imports a socket from `server/sockets/<name>.ts` gets the real hub on the
 server and a **browser proxy** (the RPC-style module-swap) on the client — same import, same name.
@@ -160,17 +160,17 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 | --- | --- |
 | `abide/server/agent` | `agent(engine, messages, options?)` → `AgentFrame` stream. `options`: `{ model?, system?, tools?, approval?, … }`. `tools` default = all `clients.mcp` RPCs; `[]` = none. Types: `NeutralMessage`, `AgentFrame`, `AgentSurface`, `AgentEngine`. Ships a Claude engine (Anthropic Messages API over `fetch`) + a Claude Code engine (spawns the local `claude` CLI via `Bun.spawn`; **self-contained** — runs its own loop, engine tools OFF by default). |
 | `abide/server/appDataDir` | `appDataDir()` → per-user data dir |
-| `abide/shared/cell` | `cell(asyncFn, opts?)` → smart-read wrapper for any async fn (the memoizer primitive; isomorphic) |
+| `abide/shared/memo` | `memo(asyncFn, opts?)` → smart-read wrapper for any async fn (the memoizer primitive; isomorphic) |
 
 ## Isomorphic — `abide/shared/*`
 
 ### Reactive primitives
 | Import | Signature |
 | --- | --- |
-| `abide/shared/state` | `state(initial, transform?)`; `.computed(fn)`, `.linked(src, transform?)`, `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). Scope-free signal wrapper — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`state.computed`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `cell({ shared })`). |
+| `abide/shared/state` | `state(initial, transform?)`; `.computed(fn)`, `.linked(src, transform?)`, `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). Scope-free signal wrapper — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`state.computed`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `memo({ shared })`). |
 | `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too |
 
-`state`/`watch` are the sync/owned face of the same signal that `cell` (async/loaded) is built on — RPC and sockets are `cell` + transport. All four are isomorphic: same import, same call, both sides.
+`state`/`watch` are the sync/owned face of the same signal that `memo` (async/loaded) is built on — RPC and sockets are `memo` + transport. All four are isomorphic: same import, same call, both sides.
 
 ### Cache verbs (method form canonical; globals only for tags)
 | Method (per callable) | Global (tags only) |

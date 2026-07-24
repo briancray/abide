@@ -1,10 +1,10 @@
 // Client-side inverse of the `jsonl`/`sse` transport encoders (replayable-streams.md §4): decode a
 // streaming RPC `Response` body into an `AsyncIterable` of chunks, dispatched by `content-type`. The
-// RPC client proxy returns this from a read whose response is a stream, so `cell.isStreamSource` routes
+// RPC client proxy returns this from a read whose response is a stream, so `memo.isStreamSource` routes
 // it to a `ReplayableStream` slot — the browser consumes a streaming read exactly like the server does
 // (`{#for await x of rpc()}`), with no hand-rolled `fetch`/reader in app code.
 //
-// It is an async GENERATOR, so a consumer that stops early (unmount, `refresh`, the cell's
+// It is an async GENERATOR, so a consumer that stops early (unmount, `refresh`, the memo's
 // stream-refcount hitting zero → `.return()`) runs the `finally` and cancels the reader — the fetch
 // connection is torn down, never leaked. A malformed frame throws (surfaces to `{:catch}`), matching
 // the loud-failure posture of the server encoders.

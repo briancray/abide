@@ -1,6 +1,6 @@
 <main class="page">
   <h1>Testing</h1>
-  <p class="lead"><code>await createTestApp()</code> boots the <strong>real</strong> router in-process on an ephemeral port and hands back a tiny surface — no mocks, no divergent runtime. You test against the same request pipeline that ships: middleware, the CSRF gate, identity sealing, cache cells, sockets, and SSR all run for real. It is <strong>async</strong> — always <code>await</code> it.</p>
+  <p class="lead"><code>await createTestApp()</code> boots the <strong>real</strong> router in-process on an ephemeral port and hands back a tiny surface — no mocks, no divergent runtime. You test against the same request pipeline that ships: middleware, the CSRF gate, identity sealing, cache memos, sockets, and SSR all run for real. It is <strong>async</strong> — always <code>await</code> it.</p>
 
   <h2 id="modes">Two modes</h2>
   <p>How you call it decides what gets registered:</p>

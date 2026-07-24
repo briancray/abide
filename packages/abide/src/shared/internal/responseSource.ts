@@ -6,7 +6,7 @@
 // and `jsonl(gen())`/`sse(gen())` should be REPLAYABLE exactly like returning `gen()`.
 //
 // So each helper tags its Response with the pre-encoding source (and, for streams, the wire encoding it
-// chose). The cell reads the tag and taps the source; `fn.raw` and non-cell paths still get the real
+// chose). The memo reads the tag and taps the source; `fn.raw` and non-memo paths still get the real
 // Response. `STREAM_ENCODING` rides on the per-consumer cursor so the router re-serves the handler's
 // original encoding (jsonl vs sse) after replay.
 
@@ -23,7 +23,7 @@ export type ResponseSource =
 // (not optional) so a plain `Response` doesn't structurally match — only a branded helper result does.
 declare const VALUE_BRAND: unique symbol
 declare const CHUNK_BRAND: unique symbol
-// `json(data)` → a Response that also remembers it resolves (through the cell see-through) to `T`.
+// `json(data)` → a Response that also remembers it resolves (through the memo see-through) to `T`.
 export interface TypedResponse<T> extends Response {
     readonly [VALUE_BRAND]: T
 }
@@ -32,7 +32,7 @@ export interface StreamResponse<C> extends Response {
     readonly [CHUNK_BRAND]: C
 }
 
-// The runtime payload a handler return resolves to after the cell sees through a transport wrapper:
+// The runtime payload a handler return resolves to after the memo sees through a transport wrapper:
 // a stream helper → an AsyncIterable of its chunk; a json helper → its value; anything else unchanged.
 export type Payload<R> =
     R extends StreamResponse<infer C> ? AsyncIterable<C> : R extends TypedResponse<infer V> ? V : R

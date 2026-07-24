@@ -7,8 +7,8 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { anonymousPrincipal, type RequestScope, runInScope } from '../server/internal/scope.ts'
-import { cell } from './cell.ts'
 import { sharedStore } from './internal/sharedCache.ts'
+import { memo } from './memo.ts'
 
 function makeScope(): RequestScope {
     const url = new URL('http://localhost/test')
@@ -39,7 +39,7 @@ afterEach(() => {
 describe('shared streaming — one run across requests', () => {
     test('two concurrent cross-request reads share ONE run; a late joiner within ttl replays', async () => {
         let runs = 0
-        const c = cell<{ id: number }, AsyncIterable<number>>(
+        const c = memo<{ id: number }, AsyncIterable<number>>(
             async function* (args) {
                 runs++
                 for (let i = 0; i < args.id; i++) {
@@ -68,7 +68,7 @@ describe('shared streaming — byte accounting & eviction', () => {
         Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE = '100'
 
         let olderRuns = 0
-        const older = cell<{ k: string }, string>(
+        const older = memo<{ k: string }, string>(
             () => {
                 olderRuns++
                 return 'x'.repeat(40) // JSON ~42 bytes
@@ -78,7 +78,7 @@ describe('shared streaming — byte accounting & eviction', () => {
         await runInScope(makeScope(), () => older({ k: 'a' }))
         expect(olderRuns).toBe(1)
 
-        const streamer = cell<{ k: string }, AsyncIterable<string>>(
+        const streamer = memo<{ k: string }, AsyncIterable<string>>(
             async function* () {
                 yield 'y'.repeat(80) // JSON ~82 bytes → 42 + 82 = 124 > 100
             },
@@ -97,7 +97,7 @@ describe('shared streaming — per-stream cap (overflow)', () => {
         Bun.env.ABIDE_MAX_STREAM_BUFFER_SIZE = '60' // tiny cap
 
         let runs = 0
-        const c = cell<Record<string, never>, AsyncIterable<string>>(
+        const c = memo<Record<string, never>, AsyncIterable<string>>(
             async function* () {
                 runs++
                 for (let i = 0; i < 100; i++) {
@@ -127,7 +127,7 @@ describe('shared streaming — open stream is pinned', () => {
         const gate = new Promise<void>((resolve) => {
             release = resolve
         })
-        const c = cell<Record<string, never>, AsyncIterable<string>>(
+        const c = memo<Record<string, never>, AsyncIterable<string>>(
             async function* () {
                 runs++
                 yield 'a'.repeat(20) // ~22 bytes > 10 → eviction pressure while open

@@ -2,13 +2,13 @@
 // (`server.ts`) and the docs-app live server bench (`packages/docs/src/server/rpc/benchServer.ts`,
 // streamed to `/platform/bench/server`). These are the tight, in-process per-request/per-read primitives
 // on the hot path: route classification (`matchRoute`), cache-key building (`canonicalKey`), and the
-// `cell` read/verb surface. All import abide via its public exports, so they run identically in the CLI
+// `memo` read/verb surface. All import abide via its public exports, so they run identically in the CLI
 // and inside a docs page render — no server socket, no loopback (the end-to-end `createTestApp` dispatch
 // benches stay CLI-only in `server.ts`; booting a real server is wrong for a live page).
 
 import { matchRoute } from 'abide/server/internal/matchRoute'
-import { cell } from 'abide/shared/cell'
 import { canonicalKey } from 'abide/shared/internal/codec'
+import { memo } from 'abide/shared/memo'
 
 export interface ServerBench {
     group: string
@@ -46,18 +46,18 @@ export const BENCH_ROUTES: string[] = [
     '/legal/[...rest]',
 ]
 
-// Build the primitive recipes, doing any one-time setup (priming the warm cell, populating the slots the
-// verb scan walks). Async because the cell primes are awaited.
+// Build the primitive recipes, doing any one-time setup (priming the warm memo, populating the slots the
+// verb scan walks). Async because the memo primes are awaited.
 export async function createServerBenches(): Promise<ServerBench[]> {
-    // Warm cell: the dominant in-process RPC read path — ensureSlot → canonicalKey → touchOnRead →
+    // Warm memo: the dominant in-process RPC read path — ensureSlot → canonicalKey → touchOnRead →
     // signal → coalescedLoad over a retained slot. Prime once so the timed read is a cache hit.
-    const warm = cell<{ id: number }, number>((a) => a.id * 2)
+    const warm = memo<{ id: number }, number>((a) => a.id * 2)
     await warm({ id: 1 })
 
-    // Verb-scan cell: `invalidate` with an object selector runs `selectSlots` (full context-cache scan)
+    // Verb-scan memo: `invalidate` with an object selector runs `selectSlots` (full context-cache scan)
     // × `matchesSelector`. Populate 100 slots, then time a NO-MATCH selector so the full 100-slot scan
     // runs every op without mutating the slot set.
-    const many = cell<{ n: number; group: number }, number>((a) => a.n)
+    const many = memo<{ n: number; group: number }, number>((a) => a.n)
     for (let n = 0; n < 100; n++) await many({ n, group: n % 5 })
 
     return [
@@ -86,7 +86,7 @@ export async function createServerBenches(): Promise<ServerBench[]> {
             },
         },
         {
-            group: 'cell',
+            group: 'memo',
             name: 'read-warm',
             note: 'cache-hit read (same args)',
             run: async () => {
@@ -94,7 +94,7 @@ export async function createServerBenches(): Promise<ServerBench[]> {
             },
         },
         {
-            group: 'cell',
+            group: 'memo',
             name: 'invalidate-scan-100',
             note: 'full 100-slot selector scan (no match)',
             run: () => {

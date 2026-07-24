@@ -14,7 +14,7 @@
 
 /* Design tokens exposed to Tailwind utilities (bg-ink, text-signal, font-display, …). The palette is
    deliberately cool + precise — abide is infrastructure ("remain, endure"), not a warm editorial site.
-   `signal` = the electric blue of a reactive read; `live` = the green of a settled/streaming cell. */
+   `signal` = the electric blue of a reactive read; `live` = the green of a settled/streaming memo. */
 @theme {
   --color-ink: #0e1420;
   --color-ink-2: #161f2e;

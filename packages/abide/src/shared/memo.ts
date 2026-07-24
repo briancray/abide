@@ -1,26 +1,26 @@
 // The abide CELL primitive — a generic isomorphic async memoizer (rpc-core §1-3, §7.2, §8).
 //
-// `cell(fn)` wraps any async function into a smart-read callable: per-context caching,
+// `memo(fn)` wraps any async function into a smart-read callable: per-context caching,
 // in-flight coalescing, and a reactive read surface (peek/pending/error/refreshing/watch/
 // refresh/invalidate/publish). RPC/socket helpers bake this behavior in; users reach for
-// `cell()` to wrap their OWN third-party async functions and get identical ergonomics.
+// `memo()` to wrap their OWN third-party async functions and get identical ergonomics.
 //
-// Each cache slot `(cellId, canonicalKey(args))` IS a signal (§7.2): reading it in a
+// Each cache slot `(memoId, canonicalKey(args))` IS a signal (§7.2): reading it in a
 // tracking context subscribes; resolve/invalidate/publish re-run subscribers. The slot is a
 // state machine idle -> pending -> value | error, with a `refreshing` flag while
 // revalidating over a retained value. pending/error/refreshing/peek are derived views of
 // the one slot, not separate channels.
 //
 // The opt-in server SHARED cross-request cache (`cache: { shared: true }`, rpc-core §2) is wired
-// here: a shared cell stores its slots in the process-global `sharedStore()` and runs its handler
-// fail-closed (scope-exited + ambient-guarded), server-only. A shared cell's verbs also fire an
-// injectable, TRANSPORT-FREE `notify` sink (rpc-core §8 broadcast, PR2): the cell just calls it —
-// `createApp` binds it to the actual channel publish (the cell never imports transport). A shared
-// cell declaring `tags` (PR4) registers itself in the server tag registry so the global
+// here: a shared memo stores its slots in the process-global `sharedStore()` and runs its handler
+// fail-closed (scope-exited + ambient-guarded), server-only. A shared memo's verbs also fire an
+// injectable, TRANSPORT-FREE `notify` sink (rpc-core §8 broadcast, PR2): the memo just calls it —
+// `createApp` binds it to the actual channel publish (the memo never imports transport). A shared
+// memo declaring `tags` (PR4) registers itself in the server tag registry so the global
 // `invalidate/refresh({ tags })` selectors can drop/revalidate + broadcast its slots. TODO (later
 // PRs): the client-side channel join/apply.
 
-import { registerTaggedCell } from '../server/internal/cacheTags.ts'
+import { registerTaggedMemo } from '../server/internal/cacheTags.ts'
 import { currentScope, runOutsideScope } from '../server/internal/scope.ts'
 import { canonicalKey } from './internal/codec.ts'
 import { getContext, serverDefaultCache } from './internal/context.ts'
@@ -41,7 +41,7 @@ import {
 import { log } from './log.ts'
 
 // `shared` is a SERVER concept (cross-request store + scope isolation). On the client a shared-flagged
-// cell behaves like a normal client cell, so every shared-only branch below is gated on `!isBrowser`.
+// memo behaves like a normal client memo, so every shared-only branch below is gated on `!isBrowser`.
 
 // "stream" is the streaming-read slot (replayable-streams.md §4): the resolved value is not a scalar
 // but a ReplayableStream the read fans out via `consume()`. Scalar (`value`) and stream slots stay
@@ -76,9 +76,9 @@ interface Slot<Args, T> {
     streamTick?: Signal<number>
 }
 
-// SERVER-ONLY broadcast sink (rpc-core §8, PR2). A shared cell calls this when a verb changes a
+// SERVER-ONLY broadcast sink (rpc-core §8, PR2). A shared memo calls this when a verb changes a
 // slot: `invalidate`/`refresh` pass `(verb, args)`; value-form `publish` passes `(verb, args, value)`.
-// The sink is transport-free from the cell's view — `createApp` binds it to a channel publish. `args`
+// The sink is transport-free from the memo's view — `createApp` binds it to a channel publish. `args`
 // is the selector as given to the verb (partial or full), typed loosely since it may be a subset.
 export type CacheNotify = (
     verb: 'invalidate' | 'refresh' | 'publish',
@@ -86,34 +86,34 @@ export type CacheNotify = (
     value?: unknown,
 ) => void
 
-export interface CellOptions {
+export interface MemoOptions {
     // Retained-value TTL in ms. Default Infinity (SWR-style: retained until invalidate/refresh).
     ttl?: number
-    // Explicit, stable cell id. Auto-generated per instance when omitted.
+    // Explicit, stable memo id. Auto-generated per instance when omitted.
     key?: string
     // Opt-in server cross-request cache (rpc-core §2). Server-only; INERT on the client (a
-    // shared-flagged client cell behaves like a normal client cell). Slots live in the process-global
+    // shared-flagged client memo behaves like a normal client memo). Slots live in the process-global
     // `sharedStore()` keyed only by args — safe ONLY for functions pure over their args. Enforced
     // fail-closed: the handler runs outside the request scope and a read requires an active scope.
     shared?: boolean
-    // SERVER-ONLY broadcast sink (rpc-core §8, PR2). Only invoked on a `shared` cell — a non-shared
-    // cell never broadcasts even if a sink is present. Injected transport-free; `createApp` binds it.
+    // SERVER-ONLY broadcast sink (rpc-core §8, PR2). Only invoked on a `shared` memo — a non-shared
+    // memo never broadcasts even if a sink is present. Injected transport-free; `createApp` binds it.
     notify?: CacheNotify
-    // Cache tags (rpc-core §8, PR4). Server-only and honored ONLY on a `shared` cell: the cell
+    // Cache tags (rpc-core §8, PR4). Server-only and honored ONLY on a `shared` memo: the memo
     // registers under each tag so the global `invalidate/refresh({ tags })` selectors can drop/
-    // revalidate + broadcast its slots. Inert on the client and on a non-shared cell.
+    // revalidate + broadcast its slots. Inert on the client and on a non-shared memo.
     tags?: string[]
 }
 
-export interface Cell<Args, T> {
+export interface Memo<Args, T> {
     // THE READ (Promise-read model): the bare call is the awaitable, coalesced load. It ALSO subscribes
-    // the calling reactive context to the slot, so a reactive `{await cell()}` re-runs and re-awaits when
+    // the calling reactive context to the slot, so a reactive `{await memo()}` re-runs and re-awaits when
     // the slot invalidates. Resolves with the value or rejects with the error.
     (args: Args): Promise<T>
     // Reactive PEEK: the non-blocking snapshot. Subscribes to the slot and kicks a coalesced load when
     // cold, returning the current value or undefined while pending (this was the old bare call).
     peek(args: Args): T | undefined
-    // @deprecated Use the bare call — `cell(args)` IS the load now. Retained as a non-subscribing alias
+    // @deprecated Use the bare call — `memo(args)` IS the load now. Retained as a non-subscribing alias
     // during migration (identical to the bare call minus the reactive subscription).
     load(args: Args): Promise<T>
     // No value yet (first load in flight). Reactive.
@@ -162,7 +162,7 @@ export interface Cell<Args, T> {
     ): void
 }
 
-let cellCounter = 0
+let memoCounter = 0
 
 function idleState<T>(): SlotState<T> {
     return { status: 'idle', value: undefined, error: undefined, refreshing: false }
@@ -188,7 +188,7 @@ function measureBytes(value: unknown): number {
 }
 
 // A streaming handler yields a raw AsyncIterable<chunk> (replayable-streams.md §4) — that is what the
-// cell wraps in a ReplayableStream. A `Response` / `ReadableStream` is an opaque byte body (jsonl/sse or
+// memo wraps in a ReplayableStream. A `Response` / `ReadableStream` is an opaque byte body (jsonl/sse or
 // a raw fetch), NOT a decoded-chunk source, so it stays a scalar value and the existing pass-through
 // behavior is untouched.
 function isStreamSource(value: unknown): value is AsyncIterable<unknown> {
@@ -205,7 +205,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     return prototype === Object.prototype || prototype === null
 }
 
-// A selector's canonical keys, computed ONCE per verb call. `selectSlots` scans every slot of the cell,
+// A selector's canonical keys, computed ONCE per verb call. `selectSlots` scans every slot of the memo,
 // so deriving the selector side inside the per-slot match recomputed identical `canonicalKey(selector…)`
 // values (each with its own alloc) for every slot — O(slots × selectorKeys) → O(slots + selectorKeys).
 type CompiledSelector =
@@ -238,20 +238,20 @@ function matchesSelector(slotArgs: unknown, compiled: CompiledSelector): boolean
     return canonicalKey(slotArgs) === compiled.canonical
 }
 
-export function cell<Args, T>(
+export function memo<Args, T>(
     fn: (args: Args) => Promise<T> | T,
-    opts?: CellOptions,
-): Cell<Args, T> {
+    opts?: MemoOptions,
+): Memo<Args, T> {
     const ttl = opts?.ttl ?? Infinity
-    const id = opts?.key ?? `cell#${++cellCounter}`
+    const id = opts?.key ?? `memo#${++memoCounter}`
     // `shared` is server-only; on the client it is inert (falls through to the client context cache).
     const shared = opts?.shared === true && !isBrowser
     const notify = opts?.notify
-    // Tags are honored only on a shared (server) cell — the tag registry is a server concept.
+    // Tags are honored only on a shared (server) memo — the tag registry is a server concept.
     const tags = shared ? (opts?.tags ?? []) : []
 
-    // Fire the broadcast sink for a slot-changing verb — ONLY on a shared cell (broadcast is a
-    // shared-slot concept). Transport-free: the cell just calls the injected function.
+    // Fire the broadcast sink for a slot-changing verb — ONLY on a shared memo (broadcast is a
+    // shared-slot concept). Transport-free: the memo just calls the injected function.
     function broadcast(
         verb: 'invalidate' | 'refresh' | 'publish',
         args: unknown,
@@ -261,9 +261,9 @@ export function cell<Args, T>(
     }
     // Namespace slots within the backing cache map. \x00 keeps the prefix distinct from any
     // canonicalKey output.
-    const prefix = `\x00cell\x00${id}\x00`
+    const prefix = `\x00memo\x00${id}\x00`
 
-    // The cache Map backing this cell's slots: the process-global shared store for a `shared` cell,
+    // The cache Map backing this memo's slots: the process-global shared store for a `shared` memo,
     // otherwise the ambient per-context cache (per-request on the server, singleton on the client).
     function slotCache(): Map<string, unknown> {
         return shared ? sharedStore() : getContext().cache
@@ -283,7 +283,7 @@ export function cell<Args, T>(
     // throws rather than silently touching the cross-request store. Server-only; inert on the client.
     function guardSharedRead(): void {
         if (shared && currentScope() === undefined) {
-            throw new Error('shared cell read requires an active request scope')
+            throw new Error('shared memo read requires an active request scope')
         }
     }
 
@@ -312,7 +312,7 @@ export function cell<Args, T>(
         return slot
     }
 
-    // Every slot belonging to this cell in the active context (optionally filtered by selector).
+    // Every slot belonging to this memo in the active context (optionally filtered by selector).
     function selectSlots(selector: Partial<Args> | Args | undefined): Slot<Args, T>[] {
         const cache = slotCache()
         const result: Slot<Args, T>[] = []
@@ -406,8 +406,8 @@ export function cell<Args, T>(
 
         // Fail-closed checkpoint (a), rpc-core §2: a shared handler runs OUTSIDE the request scope, so
         // identity()/cookies()/request()/context() throw if it touches request scope → the read rejects
-        // (error slot) and the value is never cached, in dev AND prod. A nested non-shared cell lands in
-        // the neutral default context. Non-shared cells keep running in the ambient scope.
+        // (error slot) and the value is never cached, in dev AND prod. A nested non-shared memo lands in
+        // the neutral default context. Non-shared memos keep running in the ambient scope.
         const promise = shared ? runOutsideScope(runLoad) : runLoad()
 
         slot.inflight = promise
@@ -599,7 +599,7 @@ export function cell<Args, T>(
 
     // THE READ (Promise-read model): the bare call is the awaitable coalesced load AND subscribes the
     // calling reactive context to the slot (the tracked `slot.signal()` read). So a reactive `{await
-    // cell()}` / `{#await cell()}` re-runs and re-awaits when the slot invalidates — the crux the model
+    // memo()}` / `{#await memo()}` re-runs and re-awaits when the slot invalidates — the crux the model
     // needed. The load itself runs untracked (it reads `signal.peek()`), so only the subscription tracks.
     const c = ((args: Args) => {
         guardSharedRead()
@@ -607,7 +607,7 @@ export function cell<Args, T>(
         touchOnRead(slot)
         slot.signal()
         return untrack(() => coalescedLoad(slot))
-    }) as Cell<Args, T>
+    }) as Memo<Args, T>
 
     // @deprecated alias for the bare call, minus the reactive subscription (back-compat during migration).
     c.load = (args: Args): Promise<T> => {
@@ -730,7 +730,7 @@ export function cell<Args, T>(
             // with no request scope), an updater-form publish stays a local mutation.
             if (!shared && !isBrowser && currentScope() !== undefined) {
                 throw new Error(
-                    'publish updater-form is not supported on a per-request cell; pass a value instead',
+                    'publish updater-form is not supported on a per-request memo; pass a value instead',
                 )
             }
             value = untrack(() => (next as (current: T | undefined) => T)(current.value))
@@ -822,11 +822,11 @@ export function cell<Args, T>(
         })
     }
 
-    // Tag registry hooks (rpc-core §8, PR4). A shared cell carrying tags registers these so the global
+    // Tag registry hooks (rpc-core §8, PR4). A shared memo carrying tags registers these so the global
     // `invalidate/refresh({ tags })` selectors can act on it. Tag invalidate/refresh act on ALL current
     // slots and broadcast PER SLOT on that slot's `(rpc,args)` channel (unlike a bare-args verb, which
     // broadcasts once for the selector) so per-args subscribers each receive their own frame. pending/
-    // refreshing are LOCAL reactive aggregates over the cell's current slot signals — no broadcast.
+    // refreshing are LOCAL reactive aggregates over the memo's current slot signals — no broadcast.
     function invalidateForTags(): void {
         for (const slot of selectSlots(undefined)) {
             dropSlot(slot)
@@ -855,7 +855,7 @@ export function cell<Args, T>(
     }
 
     if (shared && tags.length > 0) {
-        registerTaggedCell({
+        registerTaggedMemo({
             tags,
             invalidate: invalidateForTags,
             refresh: refreshForTags,

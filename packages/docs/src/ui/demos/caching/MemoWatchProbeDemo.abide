@@ -1,13 +1,13 @@
 <script>
   import { state } from "abide/shared/state"
-  import { cell } from "abide/shared/cell"
+  import { memo } from "abide/shared/memo"
 
   // watch(args, cb): run cb whenever THIS slot's value changes (the method form, distinct from the
   // auto-tracked watch(thunk)). Returns a dispose function. Here every load/refresh fires the callback.
   let started = state(false)
   let runs = state(0)
   let hits = state(0)
-  const counter = cell(async ({ id }: { id: string }) => {
+  const counter = memo(async ({ id }: { id: string }) => {
     runs++
     await new Promise((resolve) => setTimeout(resolve, 150))
     return runs
@@ -19,10 +19,10 @@
 </script>
 
 <ul class="grid">
-  <li>Value (run #): <strong data-testid="cellwatch-value">{value}</strong></li>
-  <li><code>watch(args, cb)</code> fires: <strong data-testid="cellwatch-hits">{hits}</strong></li>
+  <li>Value (run #): <strong data-testid="memowatch-value">{value}</strong></li>
+  <li><code>watch(args, cb)</code> fires: <strong data-testid="memowatch-hits">{hits}</strong></li>
 </ul>
 <div class="row">
-  <button data-testid="cellwatch-read" onclick={read}>Load</button>
-  <button data-testid="cellwatch-refresh" onclick={refresh}>Refresh</button>
+  <button data-testid="memowatch-read" onclick={read}>Load</button>
+  <button data-testid="memowatch-refresh" onclick={refresh}>Refresh</button>
 </div>

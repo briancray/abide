@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // The live server-dispatch bench (`/platform/bench/server`) — the counterpart to the frontend render
 // bench. A streaming `GET` times abide's in-process per-request/per-read primitives (route classification,
-// cache-key building, the `cell` read + cache-verb surface) with the SHARED `@abide/bench` recipes the CLI
+// cache-key building, the `memo` read + cache-verb surface) with the SHARED `@abide/bench` recipes the CLI
 // `bun run bench:server` uses, `jsonl`-streaming one row per bench so the page's top-level `{#for await}`
 // fills the table live. Unlike the CLI runner it omits the loopback `createTestApp` dispatch benches.
 

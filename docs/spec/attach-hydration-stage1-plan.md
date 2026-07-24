@@ -20,7 +20,7 @@ below is an anchor in the current code.
 - Client: `clientBundle.ts:74` inlines `{source, prepared}` JSON, `Bun.build`s it; the browser
   RE-PARSES source at runtime via `mountPrepared` → `parse` + `compileClient`. So `parse.ts`,
   `renderClient.ts`, `assembleCore.ts` all ship to the browser today.
-- Seed replay: `bootstrap.ts` `readSeed`/`replayReads` push recorded reads into RPC cells
+- Seed replay: `bootstrap.ts` `readSeed`/`replayReads` push recorded reads into RPC memos
   (`clientProxy.ts:85` `.seed`) BEFORE mount.
 - Gates: `bundleSize.test.ts` asserts no `SyntaxKind`/`typescript` in the bundle, `< 150 KB`, and
   `toContain("bootstrapPage")`; `clientBundle.test.ts` asserts `toContain("Home")`;

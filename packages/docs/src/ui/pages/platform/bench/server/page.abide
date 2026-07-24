@@ -14,7 +14,7 @@
   <p class="lead">
     The other half of every request the <a href="/platform/bench">frontend bench</a> doesn't touch: the
     in-process per-request / per-read primitives on abide's hot path — route classification
-    (<code>matchRoute</code>), cache-key building (<code>canonicalKey</code>), and the <code>cell</code>
+    (<code>matchRoute</code>), cache-key building (<code>canonicalKey</code>), and the <code>memo</code>
     read + cache-verb surface. This runs the same <code>@abide/bench/serverBenches</code> recipes the CLI
     <code>bun run bench:server</code> measures, timed with the same loop, streamed one row per bench via
     <code>jsonl</code> so the table fills live via <code>&#123;#for await&#125;</code>. Refresh to re-run.

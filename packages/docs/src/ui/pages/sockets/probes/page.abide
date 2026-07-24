@@ -7,7 +7,7 @@
 
 <main class="page">
   <h1>Reactive probes</h1>
-  <p class="lead">A <a href="/sockets">socket</a> is a <a href="/caching/cell">cell</a> over a live topic, so it carries the same reactive read surface — the <strong>probes</strong> — as any cell, adapted to a stream: <code>peek()</code> is the latest message, <code>chunks()</code> is the tail transcript, <code>done()</code> reports whether the topic is idle (no live subscription), and <code>pending()</code>/<code>refreshing()</code>/<code>error()</code> report connection status. Same vocabulary as the <a href="/caching/probes">generic-cell</a> and <a href="/rpc/probes">RPC</a> probes. The <code>peek</code>/<code>chunks</code> demos share the one <code>socketsChat</code> topic, so a publish anywhere updates both.</p>
+  <p class="lead">A <a href="/sockets">socket</a> is a <a href="/caching/memo">memo</a> over a live topic, so it carries the same reactive read surface — the <strong>probes</strong> — as any memo, adapted to a stream: <code>peek()</code> is the latest message, <code>chunks()</code> is the tail transcript, <code>done()</code> reports whether the topic is idle (no live subscription), and <code>pending()</code>/<code>refreshing()</code>/<code>error()</code> report connection status. Same vocabulary as the <a href="/caching/probes">generic-memo</a> and <a href="/rpc/probes">RPC</a> probes. The <code>peek</code>/<code>chunks</code> demos share the one <code>socketsChat</code> topic, so a publish anywhere updates both.</p>
 
   <h2><code>peek()</code> — the latest message</h2>
   <p>The most recent message on the topic, reactive, with no list to maintain. Reading it opens the subscription, so it updates live as messages arrive.</p>

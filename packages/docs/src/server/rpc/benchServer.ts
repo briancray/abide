@@ -7,7 +7,7 @@ import { jsonl } from 'abide/server/jsonl'
 //
 // The other half of every request the frontend bench (`/platform/bench`) doesn't touch: the in-process
 // per-request/per-read primitives on the hot path — route classification (`matchRoute`), cache-key
-// building (`canonicalKey`), and the `cell` read/verb surface. Drives the SAME `@abide/bench/serverBenches`
+// building (`canonicalKey`), and the `memo` read/verb surface. Drives the SAME `@abide/bench/serverBenches`
 // recipes the CLI runner (`packages/bench/server.ts`) does, timed with the SAME `@abide/bench/measure`
 // loop, so the docs numbers and CLI numbers never drift. Streams one row at a time via `jsonl`, so the
 // page fills its table live with `{#for await}`. Unlike the CLI runner this omits the end-to-end

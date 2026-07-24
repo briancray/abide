@@ -1,6 +1,6 @@
 // PR4 — cache TAGS: the global `invalidate/refresh({ tags })` selectors + per-tag channel
 // (rpc-core §8, shared-cache-plan §2.4). These run "server-side" (the bunfig preload deletes global
-// `window`) so the cell's shared/tag branch is active.
+// `window`) so the memo's shared/tag branch is active.
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { sharedStore } from '../../shared/internal/sharedCache.ts'
@@ -101,7 +101,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         expect(callsY).toBe(2)
     })
 
-    test("a cell tagged 'a' is NOT affected by invalidate({ tags: ['b'] })", async () => {
+    test("a memo tagged 'a' is NOT affected by invalidate({ tags: ['b'] })", async () => {
         let calls = 0
         const read = makeRead(
             'GET',
@@ -126,7 +126,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         expect(calls).toBe(1)
     })
 
-    test('multiple tags on one cell — a partial tag match still selects it', async () => {
+    test('multiple tags on one memo — a partial tag match still selects it', async () => {
         let calls = 0
         const read = makeRead(
             'GET',
@@ -150,7 +150,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         expect(calls).toBe(2)
     })
 
-    test('selects each cell once even when it carries several listed tags', async () => {
+    test('selects each memo once even when it carries several listed tags', async () => {
         const read = makeRead('GET', async ({ id }: { id: number }) => id, {
             cache: { shared: true, tags: ['a', 'b'] },
         })
@@ -160,7 +160,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         const iter = cacheChannelHub(cacheChannelName('readDedup', { id: 1 })).subscribe()
         invalidate({ tags: ['a', 'b'] })
         expect((await iter.next()).value).toEqual({ verb: 'invalidate' })
-        // Exactly ONE frame — the cell is not touched once per matching tag.
+        // Exactly ONE frame — the memo is not touched once per matching tag.
         expect(await nextOrTimeout(iter, 25)).toBe(TIMEOUT)
         await iter.return?.()
     })
@@ -208,7 +208,7 @@ describe('cache tags — @tag channel', () => {
         await tagIter.return?.()
     })
 
-    test('refresh({ tags }) emits a refresh frame on the @tag channel even with no registered cells', async () => {
+    test('refresh({ tags }) emits a refresh frame on the @tag channel even with no registered memos', async () => {
         const tagIter = cacheChannelHub(tagChannelName('ghost')).subscribe()
         refresh({ tags: ['ghost'] })
         expect((await tagIter.next()).value).toEqual({ verb: 'refresh' })

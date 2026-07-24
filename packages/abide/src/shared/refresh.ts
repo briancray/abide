@@ -2,7 +2,7 @@
 // canonical for args). Eagerly revalidates every SHARED slot carrying any listed tag (stale value
 // retained while refreshing) and broadcasts to affected subscribers (rpc-core §8, §2.4).
 //
-// Server concept: inert on the client (the tag registry is populated only by server shared cells).
+// Server concept: inert on the client (the tag registry is populated only by server shared memos).
 
 import { refreshTags } from '../server/internal/cacheTags.ts'
 

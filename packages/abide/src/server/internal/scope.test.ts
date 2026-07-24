@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { cell } from '../../shared/cell.ts'
 import { getContext } from '../../shared/internal/context.ts'
+import { memo } from '../../shared/memo.ts'
 import { route } from '../../shared/route.ts'
 import { context } from '../context.ts'
 import { cookies } from '../cookies.ts'
@@ -114,9 +114,9 @@ describe('M1 cache integration', () => {
         })
     })
 
-    test('a cell load inside the scope stores into scope.cache', async () => {
+    test('a memo load inside the scope stores into scope.cache', async () => {
         const scope = makeScope()
-        const double = cell(async (n: number) => n * 2)
+        const double = memo(async (n: number) => n * 2)
 
         await runInScope(scope, async () => {
             expect(scope.cache.size).toBe(0)
@@ -129,8 +129,8 @@ describe('M1 cache integration', () => {
         expect(scope.cache.size).toBeGreaterThan(0)
     })
 
-    test('cell caches are isolated per scope', async () => {
-        const double = cell(async (n: number) => n * 2)
+    test('memo caches are isolated per scope', async () => {
+        const double = memo(async (n: number) => n * 2)
         const a = makeScope()
         const b = makeScope()
 

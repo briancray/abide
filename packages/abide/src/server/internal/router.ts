@@ -799,9 +799,9 @@ export function createApp(config: AppConfig = {}): App {
     // (the router keeps running; createApp is not re-invoked).
     const startedAt = Date.now()
 
-    // §8 broadcast seam (PR2): bind each SHARED read route's transport-free cell `notify` sink to a
+    // §8 broadcast seam (PR2): bind each SHARED read route's transport-free memo `notify` sink to a
     // publish onto its `(rpc,args)` channel. The route NAME is the `config.routes` key — known only
-    // here — so createApp is the sole owner of both name and registry; cell/makeRpc stay
+    // here — so createApp is the sole owner of both name and registry; memo/makeRpc stay
     // transport-free. Value-form `publish` carries a `value`; invalidate/refresh do not.
     for (const [name, route] of Object.entries(routes)) {
         const meta = route.__rpc

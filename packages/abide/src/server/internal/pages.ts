@@ -1,7 +1,7 @@
 // SERVER-SIDE PAGE SSR (M5a) — abide-compiler C6 (pages/routing), C6-nav (first load = full SSR).
 //
 // `renderPage` assembles a `page.abide` source and renders it inside the CURRENT request scope,
-// producing the inner SSR HTML. In-template RPC reads (C3) run in-proc through the cell during
+// producing the inner SSR HTML. In-template RPC reads (C3) run in-proc through the memo during
 // render, so the page's data lands inline in the HTML. `renderDocument` wraps that inner HTML in a
 // full HTML document with the hydration-seed script placeholder.
 //
@@ -93,7 +93,7 @@ function pageImports(
 // during render and `collectSeed` records them.
 // The `state` binding a page sees during SSR: a recorder over the real `state`, PER-COMPONENT-LOCALIZED
 // (the mirror of the client `makeSeededState`). Each `state(...)` call pushes its RAW initial
-// (pre-transform) into the CURRENT component's bucket in call order, then delegates to the real cell
+// (pre-transform) into the CURRENT component's bucket in call order, then delegates to the real memo
 // factory (behaviour identical). We record the raw initial — not the post-transform value — because the
 // client replays it as `state(seed, transform)`, so the transform is re-applied there; recording the
 // post-transform value would double-apply it. `.computed`/`.linked` are passed through untouched (they
@@ -264,7 +264,7 @@ export interface StreamHandle {
 export interface HydrationSeed {
     reads?: SeedRead[]
     // Recorded `state(initial)` initials, grouped per component in call order, so the client seeds each
-    // cell with the same value the server rendered (decision 10). Present only when the page declared
+    // memo with the same value the server rendered (decision 10). Present only when the page declared
     // state. These are hydrated NON-RPC values, so — unlike the JSON-only RPC `reads`/`streams` — the
     // whole `unknown[][]` bucket structure is serialized with the rich value codec (`encode`), preserving
     // Date/Map/Set/BigInt/TypedArray and shared/circular references across the record. The field holds

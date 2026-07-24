@@ -2,17 +2,16 @@
 //
 // On the server a page imports the real `Rpc` (its handler runs in-process, cache-backed). At
 // build time the bundler swaps that import for a synthesized CLIENT proxy that speaks the SAME
-// cell surface but reaches the handler over HTTP. The page code is unchanged — same callable,
+// memo surface but reaches the handler over HTTP. The page code is unchanged — same callable,
 // same name, same intent (isomorphism by default).
 //
-// READS (GET/HEAD) get wrapped in a `cell`, so the browser proxy caches, coalesces, and is
+// READS (GET/HEAD) get wrapped in a `memo`, so the browser proxy caches, coalesces, and is
 // reactive exactly like the server Rpc: `(args)` reactive peek, `.load`, `.peek`, `.pending`,
-// `.error`, `.refresh`, `.invalidate`. The cell's inner fn fetches `/rpc/<name>?__abide_args=…` and
+// `.error`, `.refresh`, `.invalidate`. The memo's inner fn fetches `/rpc/<name>?__abide_args=…` and
 // parses JSON. MUTATIONS (POST/PUT/PATCH/DELETE) are a plain async callable — a JSON-body POST
 // with `Content-Type: application/json` (satisfies the CSRF gate), never cached.
 
 import type { Mutation, Rpc } from '../../server/internal/makeRpc.ts'
-import { cell } from '../../shared/cell.ts'
 import { cacheChannelName } from '../../shared/internal/cacheChannelName.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import {
@@ -20,6 +19,7 @@ import {
     isStreamContentType,
 } from '../../shared/internal/decodeStreamResponse.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { memo } from '../../shared/memo.ts'
 import { applyCacheFrame } from './applyCacheFrame.ts'
 import { subscribeCacheChannel } from './cacheMux.ts'
 
@@ -105,10 +105,10 @@ export function clientProxy<Args = unknown, T = unknown>(
 ): Rpc<Args, T> | Mutation<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
-    // A read OR mutation whose author set `cache: false` bypasses the client cell on the bare call
+    // A read OR mutation whose author set `cache: false` bypasses the client memo on the bare call
     // (direct fetch every time; at-least-once for a mutation), mirroring the server. Default reads and
-    // mutations are celled.
-    const celled = opts?.cache !== false
+    // mutations are memoed.
+    const memoed = opts?.cache !== false
 
     // Transport + decode: a jsonl/sse response decodes to an AsyncIterable (ReplayableStream) so a
     // streaming handler is consumed identically on both sides (`{#for await x of rpc()}`); a value
@@ -124,18 +124,18 @@ export function clientProxy<Args = unknown, T = unknown>(
         return (await response.json()) as T
     }
 
-    // `ttl: null`/undefined → the cell default (Infinity, retain until invalidate) — a read's policy. A
+    // `ttl: null`/undefined → the memo default (Infinity, retain until invalidate) — a read's policy. A
     // mutation's spec carries `ttl: 0` by default (coalesce concurrent, retain nothing); `cache: { ttl }`
     // carries the author's value so a cached mutation retains on the client too.
     const ttl = opts?.ttl
-    const loadForCell = load as (args: Args) => Promise<T>
+    const loadForMemo = load as (args: Args) => Promise<T>
     const backing =
         ttl === null || ttl === undefined
-            ? cell<Args, T>(loadForCell)
-            : cell<Args, T>(loadForCell, { ttl })
+            ? memo<Args, T>(loadForMemo)
+            : memo<Args, T>(loadForMemo, { ttl })
 
     // A `shared` route broadcasts cache verbs on its `(rpc,args)` channel (rpc-core §8). On the FIRST
-    // read for a given args the browser cell auto-joins that channel and mirrors inbound frames through
+    // read for a given args the browser memo auto-joins that channel and mirrors inbound frames through
     // its own verbs. Dedup by canonicalKey; a non-shared route never subscribes. No-op under SSR.
     const shared = opts?.shared === true
     const subscribed = new Set<string>()
@@ -152,12 +152,12 @@ export function clientProxy<Args = unknown, T = unknown>(
         )
     }
 
-    // THE CALL (Promise-read model): a celled read or mutation routes through the cell (coalesce +
+    // THE CALL (Promise-read model): a memoed read or mutation routes through the memo (coalesce +
     // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `cache: false` call
-    // (read OR mutation) bypasses the cell — every call runs (direct fetch; at-least-once for a
+    // (read OR mutation) bypasses the memo — every call runs (direct fetch; at-least-once for a
     // mutation), mirroring the server. A FormData mutation body always bypasses (can't be keyed).
     const rpc = ((args: Args | FormData): Promise<T> => {
-        if (!celled || (!read && typeof FormData !== 'undefined' && args instanceof FormData)) {
+        if (!memoed || (!read && typeof FormData !== 'undefined' && args instanceof FormData)) {
             return load(args)
         }
         ensureSubscribed(args as Args)
@@ -185,7 +185,7 @@ export function clientProxy<Args = unknown, T = unknown>(
     streamRpc.done = (args: Args): boolean => backing.done(args)
     rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
         backing.watch(args, handler)
-    // Raw fetch, full bypass of the cell — the untouched `Response` (no parse, no `!ok` throw). A read
+    // Raw fetch, full bypass of the memo — the untouched `Response` (no parse, no `!ok` throw). A read
     // GETs `?__abide_args=`; a mutation POSTs the body + CSRF header. `init` overrides wholesale.
     rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> =>
         read
@@ -228,7 +228,7 @@ export function makeClientImports(
         imports[name] = clientProxy(name, spec.method, {
             base: base ?? '',
             shared: spec.shared === true,
-            // Absent → celled (default); only an explicit `false` opts the call out of the cell.
+            // Absent → memoed (default); only an explicit `false` opts the call out of the memo.
             cache: spec.cache !== false,
             ttl: spec.ttl ?? null,
         })

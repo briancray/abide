@@ -1,13 +1,13 @@
 // PR1 — server SHARED cross-request cache + fail-closed purity (rpc-core §2, shared-cache-plan §2.1).
 //
 // Storage + the two fail-closed checkpoints, no transport. These run "server-side" (the bunfig
-// preload deletes global `window`) so the cell's shared branch is active.
+// preload deletes global `window`) so the memo's shared branch is active.
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { identity } from '../../server/identity.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from '../../server/internal/scope.ts'
 import { request } from '../../server/request.ts'
-import { cell } from '../cell.ts'
+import { memo } from '../memo.ts'
 import { sharedStore } from './sharedCache.ts'
 
 function makeScope(overrides?: Partial<RequestScope>): RequestScope {
@@ -42,7 +42,7 @@ afterEach(() => {
 describe('shared store — cross-request memoization', () => {
     test('a shared read runs its handler ONCE across two distinct requests', async () => {
         let calls = 0
-        const c = cell(
+        const c = memo(
             async (n: number) => {
                 calls++
                 return n * 2
@@ -73,7 +73,7 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
             if (nodeEnv === undefined) delete Bun.env.NODE_ENV
             else Bun.env.NODE_ENV = nodeEnv
             try {
-                const c = cell(
+                const c = memo(
                     async (_n: number) => {
                         // Touching request scope from a shared (scope-exited) handler must throw.
                         return `secret-for-${identity().id}`
@@ -97,14 +97,14 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
     }
 
     test('a shared handler calling request() also rejects and does not cache', async () => {
-        const c = cell(async (_n: number) => request().url, { shared: true })
+        const c = memo(async (_n: number) => request().url, { shared: true })
         const promise = runInScope(makeScope(), () => c.load(2))
         await expect(promise).rejects.toThrow(/no active request scope/)
         expect(hasCachedValue()).toBe(false)
     })
 
     test('a shared handler that is pure over its args caches and serves from the shared store', async () => {
-        const c = cell(async (n: number) => n + 100, { shared: true })
+        const c = memo(async (n: number) => n + 100, { shared: true })
         const value = await runInScope(makeScope(), () => c.load(7))
         expect(value).toBe(107)
         expect(hasCachedValue()).toBe(true)
@@ -113,17 +113,17 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
 
 describe('fail-closed checkpoint (b) — ambient-entry guard', () => {
     test('a shared read with no active request scope throws a clear error', () => {
-        const c = cell(async (n: number) => n, { shared: true })
+        const c = memo(async (n: number) => n, { shared: true })
         // The guard runs at the read entry (synchronously) on both the reactive peek and load paths.
-        expect(() => c(1)).toThrow('shared cell read requires an active request scope')
-        expect(() => c.load(1)).toThrow('shared cell read requires an active request scope')
+        expect(() => c(1)).toThrow('shared memo read requires an active request scope')
+        expect(() => c.load(1)).toThrow('shared memo read requires an active request scope')
     })
 })
 
-describe('non-shared cells are unaffected (per-context isolation preserved)', () => {
-    test('an ordinary cell re-runs its handler per request scope', async () => {
+describe('non-shared memos are unaffected (per-context isolation preserved)', () => {
+    test('an ordinary memo re-runs its handler per request scope', async () => {
         let calls = 0
-        const c = cell(async (n: number) => {
+        const c = memo(async (n: number) => {
             calls++
             return n * 3
         }) // no `shared`
@@ -137,8 +137,8 @@ describe('non-shared cells are unaffected (per-context isolation preserved)', ()
         expect(sharedStore().size).toBe(0)
     })
 
-    test('an ordinary cell works with no scope (bare script) — no ambient guard', async () => {
-        const c = cell(async (n: number) => n + 1)
+    test('an ordinary memo works with no scope (bare script) — no ambient guard', async () => {
+        const c = memo(async (n: number) => n + 1)
         expect(await c.load(9)).toBe(10)
     })
 })
@@ -148,7 +148,7 @@ describe('LRU eviction by ABIDE_MAX_SHARED_CACHE_SIZE', () => {
         // Each value is a 10-char string → ~12 JSON bytes ("xxxxxxxxxx" with quotes). Ceiling 30 bytes
         // holds ~2 slots; a 3rd load overflows and evicts the oldest.
         Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE = '30'
-        const c = cell(async (_n: number) => `${'v'.repeat(10)}`, { shared: true, key: 'lru-cell' })
+        const c = memo(async (_n: number) => `${'v'.repeat(10)}`, { shared: true, key: 'lru-memo' })
 
         await runInScope(makeScope(), () => c.load(1))
         await runInScope(makeScope(), () => c.load(2))

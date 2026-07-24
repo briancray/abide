@@ -1,5 +1,5 @@
 // M5a — server-side page SSR. A `page.abide` source served as a full HTML document via the router,
-// with in-proc RPC reads (cell) during render and route() available in the template. Pages run
+// with in-proc RPC reads (memo) during render and route() available in the template. Pages run
 // through the middleware onion like any request.
 
 import { expect, test } from 'bun:test'

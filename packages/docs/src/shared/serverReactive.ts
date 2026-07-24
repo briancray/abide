@@ -13,7 +13,7 @@ import { watch } from 'abide/shared/watch'
 //   total.peek()      // untracked read (no subscription)
 //
 // Module-level state is PROCESS-GLOBAL (one value across all requests) — fine for this global counter;
-// for mutable per-request/per-user state, use `cell({ shared })` instead.
+// for mutable per-request/per-user state, use `memo({ shared })` instead.
 export const total = state(0)
 
 // A derived value in the same module — recomputes off `total` on read. `total.read()` inside the

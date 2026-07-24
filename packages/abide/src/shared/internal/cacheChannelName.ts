@@ -3,7 +3,7 @@
 // here — importable from BOTH the server broadcast registry (`server/internal/cacheChannels.ts`) and
 // the browser mux (`ui/internal/cacheMux.ts`) WITHOUT dragging any server-only transport (SocketHub)
 // into the client bundle. The server and the client MUST compute the identical name so an auto-
-// subscribing browser cell joins exactly the channel the server publishes on.
+// subscribing browser memo joins exactly the channel the server publishes on.
 
 import { canonicalKey } from './codec.ts'
 

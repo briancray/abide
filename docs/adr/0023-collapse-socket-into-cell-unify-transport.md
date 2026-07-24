@@ -394,9 +394,9 @@ before (it's why `/audit` exists). Step 7 is therefore only the *conceptual* rew
      resolve `@happy-dom/global-registrator` — fixed by linking the per-package `node_modules`.)
 
    Baselines worth knowing: `probe/peek-scalar` **227 ns**; `stream/push-raw` **51 ns/chunk** vs
-   `stream/cell-drain` **257 ns/chunk** (the cell's per-chunk hooks cost ~5× the raw push — steps 1 and 3
+   `stream/memo-drain` **257 ns/chunk** (the memo's per-chunk hooks cost ~5× the raw push — steps 1 and 3
    **compound** here, so this is the most likely casualty); `codec/jsonl-decode` **306 ns/frame** vs
-   **79 ns/frame** to encode (step 3 replaces the expensive side); `watch/stream-baseline` ≈ `cell-drain`,
+   **79 ns/frame** to encode (step 3 replaces the expensive side); `watch/stream-baseline` ≈ `memo-drain`,
    empirically confirming `watch` fires **0×** on streams today.
 1. **`watch` tick-fix** — per-cardinality (keep scalar dedup, add stream/socket append; stream payload =
    latest chunk). Standalone bug PR.

@@ -1,4 +1,4 @@
-// GET — read-only RPC helper (rpc-core §4). The handler is wrapped in a cell so in-process
+// GET — read-only RPC helper (rpc-core §4). The handler is wrapped in a memo so in-process
 // calls cache, coalesce, and are reactive; the router mounts it at `/__abide/rpc/<name>` via `__rpc`.
 
 import type { StandardSchemaV1 } from '../shared/StandardSchema.ts'

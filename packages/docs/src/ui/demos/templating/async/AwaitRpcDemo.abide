@@ -2,7 +2,7 @@
   import controlGreet from "$server/rpc/controlGreet"
 
   // Server-resolved {#await} of a real RPC. The read blocks SSR, so the value is already in the
-  // initial HTML. "Run again" re-fires the one-shot read directly: refreshing the RPC cell
+  // initial HTML. "Run again" re-fires the one-shot read directly: refreshing the RPC memo
   // invalidates its slot and the {#await} re-awaits it.
 </script>
 

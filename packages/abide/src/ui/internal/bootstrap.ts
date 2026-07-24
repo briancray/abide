@@ -2,7 +2,7 @@
 //
 // The client bundle's entry (built by clientBundle.ts) calls `bootstrapPage(hydrate, rpcSpecs)` on
 // load, where `hydrate` is the page's AOT-emitted client hydrate. In the browser this synthesizes the
-// client RPC proxies (the module-swap of rpc-core §6 — the same cell surface a page imported on the
+// client RPC proxies (the module-swap of rpc-core §6 — the same memo surface a page imported on the
 // server, now backed by fetch), builds the injected `$scope` (RPC proxies + framework bindings the
 // emitted code reads by import local name), and hydrates (claims) the SSR'd page in `#__abide-app`.
 //
@@ -19,7 +19,7 @@
 //
 // The §5 hydration seed comes from the `#__abide-seed` script on first load, or from the soft-nav
 // envelope (passed as `seedOverride`) on subsequent navigations. Its `reads` are replayed into the
-// client RPC cells BEFORE mount, so an SSR-computed read resolves from cache instead of re-fetching;
+// client RPC memos BEFORE mount, so an SSR-computed read resolves from cache instead of re-fetching;
 // any remaining keys become mount props.
 
 import type { HydrationSeed } from '../../server/internal/pages.ts'
@@ -60,7 +60,7 @@ function readSeed(): HydrationSeed {
     return {}
 }
 
-// Replay the seed's recorded SSR reads into the client RPC cells so a matching read resolves from
+// Replay the seed's recorded SSR reads into the client RPC memos so a matching read resolves from
 // cache instead of re-fetching. Unknown RPC names and malformed records are skipped defensively.
 function replayReads(seed: HydrationSeed, imports: Record<string, unknown>): void {
     const reads = seed.reads
@@ -110,8 +110,8 @@ export async function* resumeStreamSource(
     yield* decodeStreamResponse(response)
 }
 
-// Replay the seed's stream handoffs into the client RPC cells so an SSR-adopted `{#for await}` warms its
-// cell without re-invoking the source, and `peek`/`chunks`/`done`/`refresh` all work on the adopted stream
+// Replay the seed's stream handoffs into the client RPC memos so an SSR-adopted `{#for await}` warms its
+// memo without re-invoking the source, and `peek`/`chunks`/`done`/`refresh` all work on the adopted stream
 // (§5). A COMPLETED (mode-A) handle seeds its inline transcript; an OPEN (mode-B) handle seeds a source
 // that replays the flushed prefix then resumes the tail over `?__abide_from=<count>`. Unknown names / malformed
 // records are skipped.
@@ -138,7 +138,7 @@ function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, ba
 
 // Build the merged `$scope` an emitted mount reads (mirrors the SSR scope in server/internal/pages.ts):
 // the RPC + socket proxies (keyed by the local import name), the seed's recorded reads/streams replayed
-// into those cells BEFORE mount (so a seeded read never re-fetches), plus the framework bindings —
+// into those memos BEFORE mount (so a seeded read never re-fetches), plus the framework bindings —
 // `state` (the seed-replaying wrapper; its ordinal resets per call and consumes `seed.states` in order),
 // `watch`, `props()`, and the isomorphic `route`/`url`/`navigate`. Reused for both the whole-page mount
 // and a same-chain soft-nav's diverging-suffix sub-hydrate (C6.2), each with its own (partial) seed.
@@ -188,7 +188,7 @@ export function bootstrapPage(
     // Attach-hydration (Stage 2, PR7): CLAIM the SSR DOM in place — no container clear. The emitted
     // `hydrate` seeds its cursor from the server DOM, claims each node (suppressing the initial write —
     // the server already rendered the seeded value), and whole-page-falls-back to a fresh mount if the
-    // root structure is unrecoverable. A streamed `{#for await}` re-reads its cell (warmed above by
+    // root structure is unrecoverable. A streamed `{#for await}` re-reads its memo (warmed above by
     // `replayStreams`) — no separate DOM handoff.
     return hydrate(container, scope)
 }

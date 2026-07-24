@@ -2,7 +2,7 @@
   import rpcGreet from "$server/rpc/rpcGreet"
 
   // The reactive `{#await}` block: pending / `{:then}` value / `{:catch}` failure. The read into slot
-  // `{ name: "await block" }` also warms the global cell cache the `fn.peek` probe demo reads back.
+  // `{ name: "await block" }` also warms the global memo cache the `fn.peek` probe demo reads back.
 </script>
 
 {#await rpcGreet({ name: "await block" })}

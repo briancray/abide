@@ -1,11 +1,11 @@
 // SYNCHRONOUS SETTLED-VALUE HINT for the Promise-read model (rpc-core §5 hydration).
 //
-// Under the Promise-read model the bare cell/RPC call returns `Promise<T>` even when the slot is
+// Under the Promise-read model the bare memo/RPC call returns `Promise<T>` even when the slot is
 // ALREADY settled (seed-primed by SSR). Attach-hydration must CLAIM the server-rendered `{#await
 // fn()}` then-branch synchronously — but a promise's resolved value can't be read synchronously. So a
 // coalesced load that resolves from an already-settled slot tags its promise with this hint, letting
 // the client (`claimAwait`) adopt the server DOM instead of re-mounting. Runtime-only marker (a
-// symbol property); the public type stays a clean `Promise<T>`. A genuinely-pending / non-cell promise
+// symbol property); the public type stays a clean `Promise<T>`. A genuinely-pending / non-memo promise
 // carries no hint and correctly falls back to create-mount.
 
 const SETTLED: unique symbol = Symbol.for('abide.settledRead')

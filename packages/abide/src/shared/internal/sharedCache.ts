@@ -1,19 +1,19 @@
 // SHARED cross-request cache store — rpc-core §2 ("Shared server cache contract").
 //
-// A process-global `Map` that opt-in `shared` cells (server only) store their slots in, so
+// A process-global `Map` that opt-in `shared` memos (server only) store their slots in, so
 // identical `(callSiteId, serialize(args))` reads coalesce ACROSS requests. Keyed exactly like a
 // per-request slot — nothing ambient (no cookies/identity/request) — which is why shared is only
-// safe for functions pure over their args; that purity is enforced fail-closed in `cell.ts`.
+// safe for functions pure over their args; that purity is enforced fail-closed in `memo.ts`.
 //
 // Optional bounding: a global byte ceiling `ABIDE_MAX_SHARED_CACHE_SIZE` with LRU eviction.
 // Default = NO LIMIT (unbounded) — a consciously accepted memory-exhaustion tradeoff; the env var
 // is the operator mitigation. Byte measure = the settled value's JSON length, recorded on settle.
 // Recency = touch-on-read. The same ceiling also bounds the persistent server default-context
-// cache (the `abide run`/cron/worker path); `cell.ts` passes that store to these same helpers.
+// cache (the `abide run`/cron/worker path); `memo.ts` passes that store to these same helpers.
 
 import { positiveEnvBytes } from './positiveEnvBytes.ts'
 
-// The one process-global shared store. Holds cell slots keyed by `prefix + canonicalKey(args)`.
+// The one process-global shared store. Holds memo slots keyed by `prefix + canonicalKey(args)`.
 const sharedCache = new Map<string, unknown>()
 
 // Per-store byte accounting, keyed by the store Map itself so the shared store and the default

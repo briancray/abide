@@ -20,13 +20,13 @@ the next depends on it.
 - `shared/internal/reactive` — fine-grained signals: `signal`/`computed`/`effect`/`batch`/`untrack`; push-notify + pull-recompute, microtask-batched, glitch-free (rpc-core §7).
 - `shared/internal/codec` — `canonicalKey(v)` (deterministic keyer) + `encode`/`decode` rich value codec for **hydration only** (Date/Map/Set/BigInt/RegExp/TypedArray/circular); RPC wire is JSON (rpc-core §4/§11).
 - `shared/internal/context` — ambient cache context: per-request (AsyncLocalStorage, server) / per-session singleton (client); `getContext()`/`runIn` (rpc-core §2).
-- `shared/cell` — the memoizer: `cell(asyncFn, opts)` → smart read callable + `.peek/.pending/.error/.refresh/.invalidate/.publish/.watch`; slot state machine `idle→pending→value|error` (+refreshing); coalescing by `canonicalKey`; TTL; partial-object invalidation (rpc-core §1–3, §7.2, §8).
+- `shared/memo` — the memoizer: `memo(asyncFn, opts)` → smart read callable + `.peek/.pending/.error/.refresh/.invalidate/.publish/.watch`; slot state machine `idle→pending→value|error` (+refreshing); coalescing by `canonicalKey`; TTL; partial-object invalidation (rpc-core §1–3, §7.2, §8).
 
 ### M2 — server core
-- `server/request`/`cookies`/`server`/`context` + `shared/route` accessors; Bun.serve host; router (`/rpc/<name>`); `server/json`/`error`/`redirect`/`jsonl`/`sse`; `GET`/`POST`/… wrapping a handler in a `cell` (in-proc dispatch first); onion `middleware`; `test/createTestApp`.
+- `server/request`/`cookies`/`server`/`context` + `shared/route` accessors; Bun.serve host; router (`/rpc/<name>`); `server/json`/`error`/`redirect`/`jsonl`/`sse`; `GET`/`POST`/… wrapping a handler in a `memo` (in-proc dispatch first); onion `middleware`; `test/createTestApp`.
 
 ### M3 — isomorphism
-- Bun.build pipeline + module-swap plugin (server specifier → synthesized client fetch proxy over the same `cell` surface); hydration payload (`<script type=application/json>`, record/replay); SSR streaming.
+- Bun.build pipeline + module-swap plugin (server specifier → synthesized client fetch proxy over the same `memo` surface); hydration payload (`<script type=application/json>`, record/replay); SSR streaming.
 
 ### M4 — `.abide` compiler (SYNTAX frontend only; types are TS7's)
 - abide compiles only the `.abide` *syntax* (TS7/browser can't parse it) → client DOM-wiring module + server string-stream module (AOT); bindings/control-flow/components/snippets; `route()`; nav (three emission modes). Pattern = Svelte/Vue/JSX: framework owns syntax+codegen, delegates types.
@@ -37,8 +37,8 @@ the next depends on it.
 
 ## Status
 - M0 scaffold: done (package.json, tsconfig, structure).
-- M1 spine: DONE (reactive/codec/context/cell, 93 tests, tsc clean).
-- M2 server core: DONE (scope, responses, middleware, RPC over cell, router, createTestApp; 146 tests, tsc clean).
+- M1 spine: DONE (reactive/codec/context/memo, 93 tests, tsc clean).
+- M2 server core: DONE (scope, responses, middleware, RPC over memo, router, createTestApp; 146 tests, tsc clean).
 - M7 auth: DONE (sealed identity, bearer/app-token ladder, rolling TTL, CSRF; 173 tests, tsc clean).
 - M6 sockets: DONE (socket primitive, mux WS, HTTP face, tail, CSWSH; 193 tests, tsc clean).
 - M8a validation: in progress (explicit Standard Schema; type-derivation M8b is TS7-API-gated).

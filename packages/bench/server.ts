@@ -1,14 +1,14 @@
 // SERVER BENCH RUNNER.
 //
 // The frontend bench (`run.ts`) covers the UI triad (render/mount/update). This harness covers the
-// OTHER half of every request: the server-dispatch + cell/RPC hot paths.
+// OTHER half of every request: the server-dispatch + memo/RPC hot paths.
 //
 //   bun run bench:server            # human table
 //   bun run bench:server -- --json  # machine-readable JSON
 //
 // Two tiers:
 //   • PRIMITIVES — the shared recipes from `src/serverBenches.ts` (also streamed live by the docs
-//     `/platform/bench/server` page): `matchRoute`, `canonicalKey`, and the `cell` read/verb surface,
+//     `/platform/bench/server` page): `matchRoute`, `canonicalKey`, and the `memo` read/verb surface,
 //     called directly so the number is the primitive's own cost.
 //   • END-TO-END — a real `createTestApp` driven over its loopback socket. CLI-only (booting a server is
 //     wrong for a live page). Includes the TCP floor, so read `dispatch/*` RELATIVE to `dispatch/health`.

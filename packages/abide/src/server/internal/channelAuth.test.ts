@@ -242,7 +242,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
 
     // 7. FANOUT ISOLATION: A and B each join ONLY their own channel; a per-row broadcast reaches only
     //    the matching channel's subscriber. (The whole-callable `invalidate()` broadcasts the bare
-    //    selector, not per-slot — see shared-cache-plan §3 / cell broadcast semantics — so isolation
+    //    selector, not per-slot — see shared-cache-plan §3 / memo broadcast semantics — so isolation
     //    is exercised with the per-row invalidates that name each slot's channel.)
     test(
         "fanout isolation — each channel's subscriber receives only its own slot's frame",

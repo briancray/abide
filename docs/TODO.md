@@ -42,10 +42,10 @@ the known shortcuts and gaps. Ordered by impact.
    framework works — the docs e2e is the real gate.
 3. ~~**Hydration seed payload is empty `{}`.**~~ **DONE** — SSR reads are recorded into the page
    (`#__abide-seed`) and the soft-nav envelope as `{ reads: [{name,args,value}] }`, and the client
-   replays them into the RPC cells before mount, so no re-fetch on hydration (rpc-core §5). Values
-   are output-shaped (see #5). Cell gained `snapshot()`/`seed()`. Verified end-to-end in the browser
+   replays them into the RPC memos before mount, so no re-fetch on hydration (rpc-core §5). Values
+   are output-shaped (see #5). Memo gained `snapshot()`/`seed()`. Verified end-to-end in the browser
    lane (no-refetch assertion). Refs: `pages.ts` (`collectSeed`), `router.ts`, `bootstrap.ts`
-   (`replayReads`), `navigate.ts`, `shared/cell.ts`.
+   (`replayReads`), `navigate.ts`, `shared/memo.ts`.
 
 ## Tier 2 — feature gaps
 
@@ -55,14 +55,14 @@ the known shortcuts and gaps. Ordered by impact.
    (scope-exited so `identity()` throws → never caches per-user data; ambient reads without a scope
    error). Invalidate/refresh/publish on a shared slot **broadcast** a `CacheFrame` over the socket mux
    on `@rpc:<name>:<key>` channels (`cacheChannels.ts`); `cache:{tags}` + global
-   `invalidate/refresh({tags})` fan out across tagged cells (`cacheTags.ts`, `shared/{invalidate,
+   `invalidate/refresh({tags})` fan out across tagged memos (`cacheTags.ts`, `shared/{invalidate,
    refresh,pending,refreshing}.ts`). **Channel-join auth (the security crux, DECIDED):** `wsSubscribe`
    re-runs the target RPC's OWN middleware chain per subscribe with the connection's upgrade-resolved
    identity (`channelAuth.ts`) — plus an **args-spoof defense** (`cacheChannelName(rpc,presentedArgs)
-   === channelName`, verified before middleware). Client cells reading a `shared` RPC auto-subscribe
+   === channelName`, verified before middleware). Client memos reading a `shared` RPC auto-subscribe
    (`@rpc:` only) and apply frames via their local verbs (`cacheMux.ts`). 782 tests green; adversarial
    auth matrix (`channelAuth.test.ts`) + auth code reviewed by hand. Deferred (parked): horizontal
-   backplane (single-process only), client `@tag:` subscription, `canSubscribe`. Refs: `shared/cell.ts`,
+   backplane (single-process only), client `@tag:` subscription, `canSubscribe`. Refs: `shared/memo.ts`,
    `shared/internal/sharedCache.ts`, `server/internal/{cacheChannels,cacheTags,channelAuth}.ts`,
    `ui/internal/{cacheMux,applyCacheFrame}.ts`.
 5. ~~**Output-shaping** — RPC/hydration output isn't trimmed to the declared schema fields.~~
@@ -104,11 +104,11 @@ the known shortcuts and gaps. Ordered by impact.
    `ui/navigate.ts`, `cli/main.ts`. **Bonus (surfaced by async hydration):** `server/sse.ts` now flushes a
    `:ok` comment prelude on connect so an empty-tail socket's `onopen`/"live" fires immediately instead of
    ~15s late (socket e2e first test 16.8s → 1.3s). **Deferred follow-up — shrink the shared runtime FLOOR**
-   (~26 KB min): `shared/cell.ts` drags server-only code (ReplayableStream/stream probes — dead on the
+   (~26 KB min): `shared/memo.ts` drags server-only code (ReplayableStream/stream probes — dead on the
    client, shared-store + LRU, cache-tags, broadcast, scope guards) into every client bundle (~14.6 KB
-   client closure). A lean client cell = −6.6 KB min / −2 KB gz off every app, BUT only via (a) a parallel
-   `cellClient.ts` = code duplication + drift (rejected) or (b) a non-duplicating `define`-gated dead-code
-   pass over cell.ts's hot path (a focused, well-tested standalone refactor — plain `define` measured
+   client closure). A lean client memo = −6.6 KB min / −2 KB gz off every app, BUT only via (a) a parallel
+   `memoClient.ts` = code duplication + drift (rejected) or (b) a non-duplicating `define`-gated dead-code
+   pass over memo.ts's hot path (a focused, well-tested standalone refactor — plain `define` measured
    zero-effect because the branches are runtime `isBrowser` checks esbuild can't prove dead). See the plan's
    "Deferred" section.
 7. ~~**`layout.abide` not wired**~~ **DONE** — `loadApp` now discovers `layout.abide` alongside
@@ -270,7 +270,7 @@ the known shortcuts and gaps. Ordered by impact.
     guards for the `T|undefined` peek model (`{#await fn.load()}` for display reads, `{fn()?.foo}` +
     `?.` for interactive/peek reads, route-param casts, explicit `props<T>()` on `Sample.abide`). **Docs
     e2e passes** (88 passed; 2 sockets FLAKY-not-regression, confirmed passing on retry).
-    **Read-model decision (grill) → `docs/spec/promise-read-model.md`: ✅ IMPLEMENTED.** The bare cell/
+    **Read-model decision (grill) → `docs/spec/promise-read-model.md`: ✅ IMPLEMENTED.** The bare memo/
     RPC call now returns `Promise<T>` (coalesced load), `rpc.peek(args): T|undefined` is the reactive
     snapshot, and `.load` is kept only as a `@deprecated` non-subscribing alias (migration; the spec's
     "REMOVED" softened to deprecate-alias to avoid churning 8 test files + the machine-surface callers).
@@ -280,10 +280,10 @@ the known shortcuts and gaps. Ordered by impact.
     settled-value hint on the promise (`shared/internal/settledRead.ts`) — public type stays a clean
     `Promise<T>`; `claimAwait` reads the hint. Note: the runtime auto-awaits a thenable interpolation, so
     a bare `{rpc()}` renders the awaited value (better than the projected `[object Promise]`); the checker
-    still errors on `{rpc().field}`. Migration: cell `readReactive` behavior moved to `.peek` (now auto-
+    still errors on `{rpc().field}`. Migration: memo `readReactive` behavior moved to `.peek` (now auto-
     loads); docs dogfooded — bare-as-value peeks → `.peek()` (cache/async-reads), `{#await fn.load()}` →
     `{#await fn()}`, CLAUDE.md call-surface + async-reads tables flipped. Verified: 885 framework tests +
-    tsc + `abide check packages/docs` + docs Playwright e2e green. Refs: `shared/cell.ts`,
+    tsc + `abide check packages/docs` + docs Playwright e2e green. Refs: `shared/memo.ts`,
     `server/internal/makeRpc.ts`, `ui/internal/clientProxy.ts`, `server/internal/pages.ts`,
     `ui/internal/runtime.ts`, `shared/internal/settledRead.ts`.
     **PR2 LANDED (cross-file component-prop typing):** `emitCheck.componentDts(source, root)` derives a
@@ -486,13 +486,13 @@ the known shortcuts and gaps. Ordered by impact.
     a stream (single-consumption, no tee/buffer). The sound primitive is a **ReplayableStream**
     (consume-once + buffer decoded chunks + replay-then-live fan-out) keyed by `(fn,args)` in the shared
     store — which converges with the socket tail. Folded into that design: **all verbs route through the
-    cell** (mutations coalesce by default, `cache:{ttl:0}`; `cache:false` opts out); **ttl clock starts
+    memo** (mutations coalesce by default, `cache:{ttl:0}`; `cache:false` opts out); **ttl clock starts
     at stream CLOSE** (`ttl:0` = coalesce-only, `ttl:n` = n-ms late-join replay window); **client
     ATTACHES to the slot** (replay + subscribe, reactive item mount) instead of re-running; **budget =
     the source's own RPC timeout** (global cap only for non-abide sources). Limits: single-process
     (backplane parked), buffer bound for infinite streams. PR6 is the shipped SSR substrate underneath.
     Spec supersedes rpc-core §14.1 (mutations never coalesced) + §12.2–3 (no HTTP-stream replay); CLAUDE.md
-    cache opt updated. **Build order in the spec.** Steps 1a–4 (primitive, cell integration, mutation
+    cache opt updated. **Build order in the spec.** Steps 1a–4 (primitive, memo integration, mutation
     routing, shared streaming, client attach + resume transport) shipped previously.
     **STEP 5 LANDED — source-derived SSR budget (§6):** the `{#for await}` SSR streamer no longer applies
     one flat global cap to every source. An abide RPC source (the emitter's `attachable` tag) awaits its
@@ -659,7 +659,7 @@ the known shortcuts and gaps. Ordered by impact.
         server-isolated per-render (no cross-request leak). Plumbed through `recordingState`/
         `seededState`/`analyzeScope.cellKind`. Sample + e2e: `reactivity/demo` (`SharedTally.abide`,
         cross-instance + cross-tab). `state.share` was never designed — dropped from CLAUDE.md.
-      - Doc-accuracy fixes from the audit: `abide/server/cell` → `abide/shared/cell` (wrong path);
+      - Doc-accuracy fixes from the audit: `abide/server/memo` → `abide/shared/memo` (wrong path);
         `abide/server/appDataDir` + `abide/shared/withJsonSchema` implemented (were documented-only).
         **Follow-up:** a public `abide/server/render(path, params?, query?)` → HTML string is still
         unimplemented (needs ambient app-config + route matching, not just a doc entry) — removed from

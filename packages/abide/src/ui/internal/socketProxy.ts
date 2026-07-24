@@ -2,7 +2,7 @@
 //
 // The build swaps a `server/sockets/<name>.ts` import for one of these proxies (parallel to the RPC
 // module-swap, rpc-core §6): same `Socket<T>` surface — `for await` + `publish` + the reactive
-// cell-probe vocabulary — reached over the shared WS mux instead of an in-proc hub. Fan-out is local:
+// memo-probe vocabulary — reached over the shared WS mux instead of an in-proc hub. Fan-out is local:
 // ONE mux subscription per socket name, many local `Subscriber` iterators (CS3). The probes are
 // backed by reactive `signal`s so `{chat.peek()}` / `{#if chat.pending()}` re-render on change.
 //

@@ -1,6 +1,6 @@
 <main class="page">
   <h1>Isomorphic RPC</h1>
-  <p class="lead">An RPC is defined once on the server and called by the same name everywhere — in-process on the server, a fetch in the browser. Reads are cached and coalesced by the underlying <code>cell</code>; mutations post their args and run every call. Live, interactive demos of the whole surface follow.</p>
+  <p class="lead">An RPC is defined once on the server and called by the same name everywhere — in-process on the server, a fetch in the browser. Reads are cached and coalesced by the underlying <code>memo</code>; mutations post their args and run every call. Live, interactive demos of the whole surface follow.</p>
   <p class="note">Each demo imports its RPC through the <code>$server</code> alias — e.g. <code>import greet from "$server/rpc/greet"</code> resolves to <code>src/server/rpc/greet.ts</code>. The same <code>$server</code> / <code>$ui</code> / <code>$shared</code> aliases work in any <code>.abide</code> or <code>.ts</code> file; see each demo's source tab.</p>
   <ul class="list">
     <li><a href="/rpc/reads">Reads</a> — <code>GET</code>/<code>HEAD</code> and the async-read forms in templates (<code>{'{'}await fn(){'}'}</code>, <code>{'{'}fn.peek(){'}'}</code>, <code>{'{'}#await{'}'}</code>) plus raw bypass and probes.</li>

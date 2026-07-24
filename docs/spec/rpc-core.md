@@ -14,15 +14,15 @@ unless it explicitly says "transport" or "HTTP."
 
 ## 1. The primitive
 
-- The primitive is **`cell`**: `cell(asyncFn)` wraps *any* async function to give it the
+- The primitive is **`memo`**: `memo(asyncFn)` wraps *any* async function to give it the
   smart-read surface: caching, in-flight coalescing, and reactive reads (`.pending`,
   `.error`, `.refreshing`, `.peek`, `.watch`, `.refresh`, `.invalidate`, `.publish`). Its type
-  is **`Cell`** (the `AsyncCell` referenced by selector signatures elsewhere = `Cell`).
-- abide's own `GET`/`POST`/`socket` **bake the behavior in** — users never call `cell` to
-  get RPC behavior. Users reach for `cell()` only to wrap **their own third-party async
+  is **`Memo`** (the `AsyncMemo` referenced by selector signatures elsewhere = `Memo`).
+- abide's own `GET`/`POST`/`socket` **bake the behavior in** — users never call `memo` to
+  get RPC behavior. Users reach for `memo()` only to wrap **their own third-party async
   functions** (a Stripe SDK call, a DB driver, a pure computation) and get identical
   ergonomics.
-- Design `cell` as genuinely standalone/public with a clean seam; RPC = `cell` +
+- Design `memo` as genuinely standalone/public with a clean seam; RPC = `memo` +
   (serialization, network fetch, SSR in-proc dispatch, schema validation).
 
 ## 2. Cache scope (the security-critical decision)
@@ -72,7 +72,7 @@ Opt-in deliberately crosses requests, so the auth-free property is made *structu
 ## 3. Cache key & TTL
 
 - **Cache key** = `(callSiteId, canonicalKey(args))`. `callSiteId` is the route name for
-  RPC (`/__abide/rpc/<name>`); for wrapped third-party `cell`s it is auto-generated (stable enough
+  RPC (`/__abide/rpc/<name>`); for wrapped third-party `memo`s it is auto-generated (stable enough
   for per-request use) or an explicit `key` opt (§6).
 - **TTL** = `ttl: <ms>` option **everywhere**, default **∞** (entries are retained until
   explicitly `invalidate`/`refresh`; SWR-style retained-value store, not time-expiry).
@@ -95,7 +95,7 @@ Two distinct jobs:
 1. **Canonical keyer** (`args → cache-key string`): deterministic/canonical (sorted keys),
    may be lossy/opaque, never decodes back. `f({a,b})` and `f({b,a})` → same key. Args are
    JSON, so keying is over JSON.
-2. **Rich value codec** — used **ONLY for non-RPC hydrated values**: the wrapped-`cell`
+2. **Rich value codec** — used **ONLY for non-RPC hydrated values**: the wrapped-`memo`
    `key`-hydration path (§5.2) **and the `state()`-initializer hydration seed** (§5.1), where a
    server-computed value travels in the hydration `<script>` and never goes through JSON-Schema
    validation. Round-trip fidelity, encode-on-server / decode-to-equal-value-on-client. "Codec" =
@@ -129,7 +129,7 @@ Makes the *value* travel with zero SSR/client coordination:
    never diverges from the server. The recorded initials ride the **rich value codec**
    (§4.2, lossy mode) — a `state(new Date())` / `state(new Map())` / `state(9n)` seed
    round-trips with its type intact instead of JSON-flattening to `null`.
-2. **Third-party `cell`s are server-only** and don't hydrate as themselves (a Stripe call
+2. **Third-party `memo`s are server-only** and don't hydrate as themselves (a Stripe call
    can't run in the browser). A server-computed value opts into hydration via an explicit
    `key`; the client can then **read** it (`.peek`) but **never recompute/refresh** it (no
    client transport for it). Keys auto-set otherwise. **Output-shaping:** before any value
@@ -219,7 +219,7 @@ One imported callable means two things:
      value** (or forces a nav refresh), so the slot is never stranded on a refetch the client
      cannot perform (§5.2).
    - `user.refresh(args)`: like invalidate but eager reload; server-broadcast eager.
-   - `user.publish(...)` — one name, two signatures; a slot is *shared* iff its RPC/`cell` sets
+   - `user.publish(...)` — one name, two signatures; a slot is *shared* iff its RPC/`memo` sets
      `cache: { shared: true }`:
      | Caller | value-form `publish(args, v)` | updater-form `publish(args, cur => next)` |
      | --- | --- | --- |
@@ -397,7 +397,7 @@ pages — nothing is reserved outside `/__abide/*`.
    (`POST`/`PUT`/`PATCH`/`DELETE`): args in the body** (value codec), may
    `invalidate`/`publish`/`refresh`; **not read-cached, not coalesced (today).** **SUPERSEDED
    (designed, not yet built — `replayable-streams.md`):** mutations would route through the
-   cell too and **coalesce by default** (`cache: { ttl: 0 }` — dedupe identical *concurrent*
+   memo too and **coalesce by default** (`cache: { ttl: 0 }` — dedupe identical *concurrent*
    calls, retain nothing after settle, so sequential mutations each execute); opt in to
    caching/replay with `cache: { ttl, shared }`, opt OUT with `cache: false`. The read/mutation
    split would narrow to the wire (method, URL vs body, CSRF) + the default TTL (`∞`/`0`).

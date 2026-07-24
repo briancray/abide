@@ -1,19 +1,19 @@
 // PR5 — CLIENT auto-subscribe + apply for the server SHARED cache broadcast (shared-cache-plan
 // §2.5). Three layers of coverage:
-//   1. applyCacheFrame — the focused "given an inbound CacheFrame, drive the right local cell verb
+//   1. applyCacheFrame — the focused "given an inbound CacheFrame, drive the right local memo verb
 //      with the right args" unit (this IS the handler the client proxy registers on the mux).
 //   2. clientProxy auto-subscribe — a `shared` read joins its `@rpc:` channel with the RAW args,
 //      dedups per args, and a NON-shared read never subscribes (fake WS, no real network/server).
 //   3. End-to-end delivery — the real router broadcasts a `shared` publish to an AUTHORIZED WS
 //      subscriber (the same frame protocol the mux speaks); the frame drives applyCacheFrame into a
-//      real client cell, mirroring the server value locally.
+//      real client memo, mirroring the server value locally.
 
 import { afterEach, expect, test } from 'bun:test'
 import { GET } from '../../server/GET.ts'
 import type { CacheFrame } from '../../server/internal/cacheChannels.ts'
 import type { Rpc } from '../../server/internal/makeRpc.ts'
-import { cell } from '../../shared/cell.ts'
 import { cacheChannelName } from '../../shared/internal/cacheChannelName.ts'
+import { memo } from '../../shared/memo.ts'
 import { createTestApp, type TestApp } from '../../test/createTestApp.ts'
 import { applyCacheFrame } from './applyCacheFrame.ts'
 import { subscribeCacheChannel } from './cacheMux.ts'
@@ -33,9 +33,9 @@ function delay(ms: number): Promise<void> {
 // 1. applyCacheFrame — frame → local verb mapping
 // ---------------------------------------------------------------------------
 
-test('applyCacheFrame drives the matching local cell verb with the subscribed args', () => {
+test('applyCacheFrame drives the matching local memo verb with the subscribed args', () => {
     let calls = 0
-    const c = cell<{ id: string }, string>(async ({ id }) => `load-${id}#${++calls}`)
+    const c = memo<{ id: string }, string>(async ({ id }) => `load-${id}#${++calls}`)
 
     // publish value-form → the local value reflects the broadcast value for THOSE args.
     c.seed({ id: 'A' }, 'seed-A')
@@ -149,7 +149,7 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
 // 4. End-to-end: real server broadcast → authorized WS subscriber → applyCacheFrame mirrors locally.
 // ---------------------------------------------------------------------------
 
-test('server shared-publish broadcast reaches an authorized subscriber and applies to a local cell', async () => {
+test('server shared-publish broadcast reaches an authorized subscriber and applies to a local memo', async () => {
     const prof = GET(({ id }: { id: string }) => ({ id, secret: `secret-${id}` }), {
         cache: { shared: true },
     })
@@ -169,14 +169,14 @@ test('server shared-publish broadcast reaches an authorized subscriber and appli
     const frame = await Promise.race([iterator.next().then((r) => r.value), timeout])
     expect(frame).toEqual({ verb: 'publish', value })
 
-    // Drive the received frame into a fresh client cell — its local value mirrors the server broadcast.
-    const clientCell = cell<{ id: string }, { id: string; secret: string }>(async () => ({
+    // Drive the received frame into a fresh client memo — its local value mirrors the server broadcast.
+    const clientMemo = memo<{ id: string }, { id: string; secret: string }>(async () => ({
         id: 'A',
         secret: 'stale',
     }))
-    clientCell.seed(args, { id: 'A', secret: 'stale' })
-    applyCacheFrame(clientCell, args, frame as CacheFrame)
-    expect(clientCell.peek(args)).toEqual(value)
+    clientMemo.seed(args, { id: 'A', secret: 'stale' })
+    applyCacheFrame(clientMemo, args, frame as CacheFrame)
+    expect(clientMemo.peek(args)).toEqual(value)
 
     socket.close()
 })

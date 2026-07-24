@@ -21,7 +21,7 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
   binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, raw SSR-emitter bytes,
   and machine surfaces fetched from the browser.
   - `rpc` (20), `routing` (19), `bindings` (15), `platform` (14), `ssr-emit` (10), `control` (9),
-    `sockets` (8), `reactivity` (8), `caching-cells` (7), `cache` (6), `caching-global` (5),
+    `sockets` (8), `reactivity` (8), `caching-memos` (7), `cache` (6), `caching-global` (5),
     `build-deploy` (5), `smoke` (4), `rpc-probes` (4), `bench` (4), `streaming` (3), `bench-client` (3),
     `hydration` (3), `uploads` (2), `bench-server` (2), `styling` (1), `nav-perf` (1).
   - Note: `hydration.spec.ts` "soft-nav … keeps every demo tab correctly seeded" was flaky under CPU
@@ -92,10 +92,10 @@ verbs); the runtime was already correct, so the fixes are type-only:
    parser; `props` is injected into the scope by local name), so any importing page ran fine but failed
    `tsc` / `abide check` with `TS2307`. Fix: added `src/ui/html.ts` (`html`, `RawHtml`) and
    `src/ui/props.ts` (`props<T>()`) as the type/identity surface.
-2. **`Rpc.invalidate` / `Rpc.refresh` rejected partial selectors.** `Cell<Args,T>` types these as
+2. **`Rpc.invalidate` / `Rpc.refresh` rejected partial selectors.** `Memo<Args,T>` types these as
    `args?: Partial<Args> | Args` (the documented partial-object match), but the RPC wrapper narrowed
    them to `args?: Args`, so the canonical `cacheMetric.invalidate({ team: "red" })` partial-invalidate
-   demo failed to type-check. Fix: `makeRpc.ts` now mirrors `Cell` (`Partial<Args> | Args`).
+   demo failed to type-check. Fix: `makeRpc.ts` now mirrors `Memo` (`Partial<Args> | Args`).
 
 Resolved: a **zero-input RPC handler** (`GET(async () => …)`) infers `Args = unknown`, and
 `RpcCallArgs<unknown>` makes the call argument **optional** — so a bare `fn()` / `fn.peek()` /
@@ -144,7 +144,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | --- | --- | --- |
 | `fn(args)` — smart read (cache + coalesce + reactive; SSR in-proc → browser fetch) | PW+RT | [x] (/rpc/reads) |
 | `fn.raw(args, init?)` — raw `Response`, full bypass (reads AND mutations) | PW+RT | [x] (/rpc/reads `rpcGreet.raw`; platform/lifecycle `lifecycleThrow.raw({})` on a POST) |
-| bare call on a streaming handler → replay-then-live `AsyncIterable<C>` (client proxy decodes jsonl/sse by content-type → same cell → stream slot) | PW+RT | [x] (/rpc/streaming; browser `{#for await x of rpc()}` for jsonl + sse, verified streaming + re-run) |
+| bare call on a streaming handler → replay-then-live `AsyncIterable<C>` (client proxy decodes jsonl/sse by content-type → same memo → stream slot) | PW+RT | [x] (/rpc/streaming; browser `{#for await x of rpc()}` for jsonl + sse, verified streaming + re-run) |
 | `fn.peek` — reactive probe | PW | [x] (/rpc/reads) |
 | Read URL args — two forms: canonical `?__abide_args=<json>` blob (browser proxy / test app / MCP) OR flat per-field query params (`?key=beta&n=5`, curl-friendly; coerced to each input-schema field type, raw passthrough when undeclared) | RT | [ ] (abide `decodeQueryArgs`/router unit tests; no docs-app demo) |
 
@@ -167,14 +167,14 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `done(iterable)` → boolean | PW+RT | [x] (/templating/async: `done-status` streaming→complete + restart) |
 | `online()` → reactive boolean | PW | [x] (/caching/global OnlineDemo + platform/observability: online-flag + offline-toggle reactivity) |
 | `reachable(host)` → await boolean | PW+RT | [x] (/caching/global ReachableDemo: `cacheReachable` RPC, self vs dead port) |
-| `abide/shared/cell` — the memoizer primitive | PW+RT | [x] (/caching/cell CellReuseDemo: repeated reads reuse one slot; ServerStateDemo: an isomorphic server-owned `state`+`watch` graph driven by RPCs) |
-| `cell.*` probes on a bare `cell()` (`peek`/`pending`/`refreshing`/`error`/`watch`) | PW | [x] (/caching/probes Cell{Peek,Pending,Refreshing,Error,Watch}ProbeDemo) |
-| `cache: false` — opt a read/mutation OUT of the cell (every call runs) | PW+RT | [x] (/caching CacheFalseDemo: `cacheOff` climbs every call, `cacheOn` holds) |
+| `abide/shared/memo` — the memoizer primitive | PW+RT | [x] (/caching/memo MemoReuseDemo: repeated reads reuse one slot; ServerStateDemo: an isomorphic server-owned `state`+`watch` graph driven by RPCs) |
+| `memo.*` probes on a bare `memo()` (`peek`/`pending`/`refreshing`/`error`/`watch`) | PW | [x] (/caching/probes Memo{Peek,Pending,Refreshing,Error,Watch}ProbeDemo) |
+| `cache: false` — opt a read/mutation OUT of the memo (every call runs) | PW+RT | [x] (/caching CacheFalseDemo: `cacheOff` climbs every call, `cacheOn` holds) |
 
 ## 5. Reactivity (isomorphic — `abide/shared/*` state/watch; UI — `abide/ui/*`)
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `state(initial, transform?)` — writable cell (isomorphic: `abide/shared/state`, server-usable) | PW+RT | [x] (/templating/reactivity; server-side in `src/shared/serverReactive.ts` → /caching/cell ServerStateDemo) |
+| `state(initial, transform?)` — writable cell (isomorphic: `abide/shared/state`, server-usable) | PW+RT | [x] (/templating/reactivity; server-side in `src/shared/serverReactive.ts` → /caching/memo ServerStateDemo) |
 | `state.computed(...)` — read-only derived | PW | [x] (/templating/reactivity; also server-side in ServerStateDemo) |
 | `state.linked(src, transform?)` — reseeded writable | PW | [x] (/templating/reactivity) |
 | `state.shared(key, initial)` — cell shared by key (instances + tabs) | PW | [x] (/templating/reactivity: `SharedTally.abide` ×2, cross-instance + cross-tab) |
@@ -311,7 +311,7 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | `abide dev` (watch + live-reload over mux) | RT | [ ] |
 | `abide build` (content-addressed client bundle + baked `dist/schemas.json` type-derived schema map) | PW+RT | [~] (/platform/deploy page + e2e/build-deploy.spec; also /platform/cli, /platform/bench, /platform/bench/server pages) |
 | Boot-time type-derived schemas (batched `node`/tsgo pass; `ABIDE_DERIVE_SCHEMAS=0` opts out; `abide build` bakes, `abide start` prefers the bake) | RT | [ ] (abide `bakeSchemas.test.ts` / `deriveSchema.test.ts`) |
-| Server-dispatch microbench (`route`/`cache-key`/`cell` hot paths) | PW+RT | [x] (/platform/bench/server + e2e/bench-server.spec) |
+| Server-dispatch microbench (`route`/`cache-key`/`memo` hot paths) | PW+RT | [x] (/platform/bench/server + e2e/bench-server.spec) |
 | Raw SSR-emitter byte fixture (static attrs, class/style merge, spread override, escaping, null-attr omission, block anchors) | PW | [x] (/__e2e/ssr-emit + e2e/ssr-emit.spec) |
 | `abide start` | RT | [ ] |
 | `abide run <file>` | RT | [ ] |
