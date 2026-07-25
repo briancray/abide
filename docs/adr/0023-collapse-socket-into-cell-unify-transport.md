@@ -423,3 +423,242 @@ before (it's why `/audit` exists). Step 7 is therefore only the *conceptual* rew
 
 **`Subscriber` is not deleted** — it remains the socket/cacheChannel/approval buffer. The original 6c is
 removed.
+
+## Exploration — `pipe` as the edge operator (2026-07-24)
+
+**Status: DESIGN ONLY, nothing built.** This refines "Nodes, edges (`pipe`), and the source/sink grid".
+An initial pass over-reached (one `pipe` inferring effect-vs-derive from the return type; "functions are
+edges, not data"; drop read-only `computed`; always-writable derives; drive/sample via `peek`). A **4-lens
+adversarial review** (thesis-drift / ergonomics / soundness / codebase-reality, all grounded in
+`reactive.ts`) refuted those, and a follow-up walk-through resolved the rest. What is recorded below is the
+**post-review landing**, not the first pass. Nothing here is on the critical path — socket rooms, the
+`clientPublish` collapse, and `cache→memo` shipped independently; this feeds step 7's node/edge docs only.
+
+### The model that survives
+
+Three node **identities** — `signal` (owned scalar) / `memo` (keyed cache) / `channel` (retained stream) —
+plus **`pipe`, the one edge concept**. `computed`, `linked`, `watch`, `map`, `fold`, and cache-sync all
+*are* pipe shapes; documenting them as one edge is a true and useful thesis. But `pipe` is the **engine +
+opt-in composition operator**, NOT the mandatory spelling (see "primary vs opt-in").
+
+### Named arms, not return-type inference (the key correction)
+
+The first pass discriminated effect-vs-derive by the transform's **return** (value → lazy node, void →
+eager effect). This is **unsound both ways** and the review's central kill:
+- **Runtime:** lazy-vs-eager is a construction-time `isEffect` flag (`reactive.ts:39,274,282`), fixed
+  *before* the fn runs — you cannot read a return without running, so you can't classify a lazy derive
+  without defeating its laziness or firing an effect's side effect.
+- **Type:** TS void-assignability means `(v) => number` is assignable to `(v) => void`, so a value-fn
+  silently matches the effect overload.
+
+**Resolution — name the arm** (still one operator): `pipe(a, fn)` **derives**; `pipe.effect(a, fn)` (or the
+retained `watch`) **runs an effect**; `pipe(a, node)` **forwards** into a sink. The engine is *told* which,
+exactly as it is today. This single move dissolves a cluster of findings at once:
+- **"functions are edges, not data" is DROPPED — not needed.** A returned function is a *value* in `pipe`
+  (function-valued derives work) and a *teardown* in `pipe.effect` — disambiguated by the arm, not a global
+  invariant. Keep function-as-node-value (a **tested** capability, `reactive.ts:38` + `reactive.test.ts`);
+  no `.of()` escape hatch; the `pipe(mode, m => handlers[m])` footgun (value invoked as teardown,
+  `reactive.ts:161`) cannot occur.
+- **Read-only `computed` is KEPT.** `computed` = read-only lazy derive; `linked` = writable derive; both are
+  named arms. No contradiction with the writable-column table above; write-ownership stays an honest fact.
+  (`publish`/`invalidate` semantics on a derive only need defining *if* you opt into the writable arm:
+  override-until-next-dep-change; `invalidate` = drop-override + recompute.)
+- **The `undefined`/void collision and the `.push`-returns-a-length trap dissolve** — no return is being
+  inspected. (Edge-3 "meant an effect, wrote an expression" degrades to a lint, not a language rule.)
+
+### Eagerness = cardinality × arm (fixes the message-loss hole)
+
+The flat "value → lazy" law let a channel-driven derive be classified lazy, where reference-dedup
+(`reactive.ts:84`) drops all-but-the-last of a synchronous burst — re-deriving the exact loss the
+`signal<ring>` rejection already found. Correct rule, two axes:
+- scalar source + derive → **lazy memo**
+- stream source + derive → **eager channel** (map/filter — lossless, publishes per message)
+- effect arm → **eager**
+- returns a branded node → **eager switch** (`switchMap`: forward the inner, tear down the old on change)
+
+Only the scalar-derive corner is lazy; everything with a stream or a side effect is eager.
+
+### The body runs **untracked** (fixes drive/sample)
+
+`peek()` *subscribes* on abide's surface (`memo.ts:515`), so "sample = peek in the body" was a no-op. Fix:
+because the deps in `pipe([a,b], fn)` are **explicit**, run the transform inside an implicit `untrack` — the
+deps list is then the *complete* driver set, and every read inside the body (bare or `peek`) is a **sample**
+(the subscription is suppressed; a memo read still kicks its load and hands back the current value). So
+**deps drive, body samples**, uniformly, with no per-read ambiguity and no separate `sample()` primitive.
+(Verify: surface `peek` subscribes via the observer stack `untrack` clears, not a side subscriber set —
+almost certainly true, `{fn.peek()}` re-render wiring.)
+
+### Async correctness = keyed slots, `pending` vs `refreshing` = args-identity
+
+The "async diamond" glitch (a combiner reading a new id directly + an async arm still holding the old id's
+value → a `#2 — Alice` frame) is an artifact of modeling the async arm as a **single reseeded value**. In
+the keyed model it doesn't arise:
+- **`pending`** = *these args have no fetched value yet* (new/invalidated key); `peek(args)` is `undefined`.
+- **`refreshing`** = *these args already have a value, being re-validated* (same key, `refresh()`/ttl);
+  `peek(args)` is the retained value — keep-stale is correct here *because it's the value for these args*.
+
+`memo(1)` and `memo(2)` are different slots. When the arg changes 1→2 the combiner reads `memo(2)` — an
+empty (pending) slot → the **lift** (output as weak as its weakest input: any pending input ⇒ pending
+output) makes the combiner pending; `memo(1)`'s stale value sits unread. No glitch, structurally.
+Sync-topological batching (which the core already does, `reactive.ts:1-5`) orders the *marking* so the
+combiner reliably sees pending, not the old value. The keyed async read participates via the
+**promise-read model** (`{await fn()}`: suspend on pending, resume on settle) — separate from the standing
+dep on the arg source and from the untracked body. The flicker-free-*and*-consistent variant (hold the
+whole previous frame across a multi-input settle) needs **epoch/generation** tags and is a per-screen
+premium, not core.
+
+### Explicit-sink push is sugar for a write-effect
+
+`pipe(a, node)` ≡ `pipe.effect(a, v => { node.receive(v) })`, `receive` = `set` (signal) / `publish`
+(channel, append) / `publish` (memo, override). So `pipe(channel, memo)` *is* the existing cache-broadcast
+pattern (`cacheChannelHub` → `applyCacheFrame` → memo verbs) — a real, code-grounded observation, kept as
+description. Multi-source into a scalar sink needs a transform (`pipe([a,b], sig, (a,b)=>a+b)`); single
+source is identity.
+
+### Primary vs opt-in (the one open judgment call)
+
+Auto-tracked named front-ends (`computed(() => a()+b())`, `watch(thunk)`) are **less ceremony** than
+explicit-deps `pipe([a,b], …)` for the common path, and they don't reintroduce a React-style dependency
+array. Recommendation (3 of 4 reviewers concur): **keep `computed`/`linked`/`watch` as the named,
+auto-tracked front and let `pipe` be the explicit-deps composition operator + shared engine** — same
+unification (everything's-a-pipe as the *model*), without the dep-array tax on everyday code. `pipe`'s
+value shows in multi-input combine, stream map/fold, cache-sync, and switch.
+
+### Open items
+
+- Whether `pipe` is primary or opt-in-over-named-front-ends (recommended: opt-in).
+- Edge-3 lint ("derive/effect result discarded"); the `switch`/passthrough (returns-a-node) semantics.
+- Confirm surface `peek` subscribes via the observer stack `untrack` clears.
+- Epoch tier for flicker-free-and-consistent async combines (premium, not core).
+- How `pipe`'s `from`/combine composes with roomed channels (`channel<T, Args>`).
+
+## Landing — the reactive model (consolidated 2026-07-24, after 3 adversarial rounds)
+
+**Status: DESIGN. This section supersedes the whole `pipe` exploration above AND the earlier
+"Landing / Corrections / Alignment / Performance" appends, which had accreted into a stratigraphy of
+reversals** (a 3rd review found live contradictions: `.peek()` public-then-not, `.signal()` cached-vs-
+per-use, the slot-handle built-then-killed). It is written as ONE statement so a top-to-bottom reader
+implements the right thing. It is split into **Shipped** (true in code today — the durable core),
+**Design** (not built; opt-in; honest status), and **Refuted** (ambitions the reviews killed — do NOT
+build these). The recurring lesson across all three rounds: *the code-grounded model is solid; every
+ambition layered on top of it broke.*
+
+### Shipped — the durable core (verified in code)
+
+- **Three node identities + one effect verb.** `signal` (owned scalar), `memo` (lazy, keyed, cached
+  derive — subsumes `computed`), `channel` (retained stream), and `watch` (the effect). `rpc = memo +
+  transport`, `socket = channel + transport`.
+- **`memo` is lazy/passive** (`reactive.ts` recompute only in `get()`; `memo.ts` runs `fn` only on read):
+  no reader → no work; an `invalidate` with no subscriber is a no-op (dirty until next read).
+- **Rendering IS `watch` specialized to DOM.** The emitter makes ONE fine-grained `effect` per binding
+  (`emitClient.ts:377-392` → `runtime.ts` `hydratableEffect`) — no VDOM diff. `{expr}` and `watch(fn)`
+  are the same primitive with a different sink. Corollary: **a read is reactive iff it is inside a watch**
+  (a render-watch or an explicit `watch`); a bare `<script>` read is a one-shot snapshot.
+- **Args-on-methods.** The read/probe/verb surface takes args per method: `fn.peek(args)`,
+  `fn.pending(args)`, `fn.refresh(args)`, … (`memo.ts`, `makeRpc.ts`; CLAUDE.md). `fn(args)` is the
+  awaitable read. **Partial/superset match applies to the VERBS only** (`refresh`/`invalidate`/tags →
+  `selectSlots`/`matchesSelector`); the **read probes are exact-slot** (`ensureSlot`) — a partial arg to a
+  read would mint a bogus slot, so partial reads are not a thing.
+- **`.peek(args)`** is the reactive, non-blocking, tracked read (subscribes inside a watch; `T |
+  undefined`; `memo.ts:608`) — the cheap display read. It stays.
+- **`rpc = transport-wrapped memo`; in-proc bypasses transport.** Same-process (`SSR`, one handler
+  calling another, a test app), `rpc(args)` *is* the memo — direct, cached/coalesced, no fetch/serialize;
+  the wire only fires across a process boundary. The awaitable is uniformly `Promise` (isomorphism +
+  async fill), resolved immediately in-proc for a sync handler.
+
+### Design — not built; opt-in; honest status
+
+- **`computed`/`linked` are not primitives — just `memo` forms.** `computed` = `memo(() => …)` (0-arg,
+  auto-tracks its body); the writable-derived (`linked`) is a *projection* of a memo (below). The tracking
+  split is the one real semantic distinction: **`memo(() => …)` auto-tracks** (re-runs on any read's
+  change, incl. a keyed-async `refresh()` — the sound form); an explicit-source `memo([a], fn)` samples
+  its body reads (re-runs on the listed sources only). *Ship the auto-track form for anything that must
+  react to an async read.*
+- **`.signal()` — the writable projection (KEPT; earlier "refuted" was an over-retraction, 2026-07-24).**
+  `.signal()` produces a **per-use copy-on-write writable cell** over a slot (read passes through to the
+  slot; a local write forks an override held until the source reseeds). This is the writability layer, and
+  it **stays** — the design we had before the reviews. Two clarifications the reviews *did* pin (neither
+  kills it):
+  1. It must be **per-use / component-scoped** (its own COW cell, disposed on unmount) — a *shared-per-slot*
+     cell aliases (one component's write corrupts another) and leaks. Cold, bind-site cost, not hot-path.
+  2. It is **not compiler-lowered by context** — the emitter is a syntactic, bare-identifier-only rewriter
+     (`cellKind`/`rewriteCellRefs` never touch `.member` chains, no type info), so "auto-emit a cheap read
+     vs a writable cell per site" is not buildable. `.signal()` is therefore an **explicit method** the
+     author writes; losing the lowering only means a `.signal()` display read costs ~1 edge + branch more
+     than a raw read (cheap, not free). Reading `{node.signal()}` in a template needs the interpolation leaf
+     to auto-read an expression-produced signal (small runtime add), not just bare identifiers.
+- **`.peek()` stays for now; removing it is the LAST step, bench-gated (decided 2026-07-24).** `.peek()`
+  (cheap tracked display read) and `.signal()` (COW writable) coexist through all the other changes.
+  Whether to collapse to a **single `.signal()` accessor** (accept the small COW read cost, drop `.peek()`)
+  is deferred to a **side-by-side benchmark run after everything else lands** — not decided on paper. The
+  perf delta is small enough that it's an empirical call, sequenced last so nothing else waits on it.
+- **The `switchMap` / async-source node — mostly already exists; not the "one real capability" (revised
+  2026-07-24).** Earlier framed as the deepest new build. But its common case — *follow a changing
+  selection to a stream, tearing down the old one* — is **already handled by reactive `{#for await}`**:
+  `{#for await m of socket(sel())}` tears the block down (closing the old iterator/subscription) and
+  re-streams when `sel()` changes. So `switchMap`-as-a-primitive is redundant for the common path. What a
+  named async-source/refcounted node adds over that is narrow: the same switching as a **shared, probeable
+  node consumed outside a `{#for await}`** (e.g. fold "latest message of the selected room" to a scalar) —
+  real but rare, and hand-rollable (`watch(sel, …)` → a signal). Downgraded from "must build" to "niche,
+  defer." If built: a node subscribing to an async source, **refcounted** (open on first observer, close on
+  last), lazy/passive-consistent. `channel` is `{tail, maxAge}`-only today.
+- **The keyed-async re-fire gap (unresolved).** An explicit-source body untracks its reads, which severs
+  the async re-await subscription (`memo.ts:592` `slot.signal()` is the subscription; single-channel
+  `untrack` nulls it). So `memo([id], id => rpcUser(id))` won't re-fire on `rpcUser(id).refresh()` at a
+  stable `id`. Fix = a **two-channel observer** (a promise-read register `untrack` leaves alone) — but
+  that adds an observer check to *every* tracked `get()`, so it is NOT free and NOT shipped. The sound
+  workaround needs no new machinery: **use the auto-track form** (`memo(() => rpcUser(id())…)`), which
+  tracks both.
+
+### Refuted — do NOT build these (the reviews killed them)
+
+- **`.signal()` as a *shared-per-slot* cell** — aliasing (one component's write corrupts another) +
+  per-args leak. (The *per-use* COW `.signal()` is KEPT — see Design. Only the shared variant is dead.
+  Whether `.signal()` becomes the *sole* accessor is a deferred bench decision, not a refutation.)
+- **Compiler-lowering `.signal()` by context** — not buildable on the current syntactic emitter; needs
+  type-directed rewriting it deliberately avoids; `{node.signal}` (no call) wouldn't even render. (`.signal()`
+  as an *explicit* method is fine — only the auto-lowering is dead.)
+- **The slot-handle `node(args).x()`** (args-named-once, a thenable-with-methods) — per-render allocation,
+  the `.then`-strips-the-method-bag hazard, and it contradicts the shipped args-on-methods surface. Keep
+  args-on-methods.
+- **Partial-match on the read probes** — verbs-only; a partial arg to `pending`/`peek` mints a bogus slot.
+- **"functions are edges, not data"**, **dropping read-only `computed`**, and the whole return-type-
+  inference `pipe` (killed in rounds 1–2).
+
+### Signals-proposal alignment (forward-compat)
+
+`signal` ↔ `Signal.State` (clean 1:1). `memo` is a **superset** of `Signal.Computed` (adds async + keyed) —
+build it *on* sync signals (a slot is a `Signal.State<SlotState>`), and never expose it *as* a
+`Signal.Computed` interface. `channel` has no proposal equivalent (additive). `watch` ↔ `Signal.subtle.
+Watcher` + an effect layer. Reads map to `.get()`; any untracked sampling maps to `Signal.subtle.untrack`
+(internal, not a public method today). Keep the *core* (tracking, glitch-freedom, lazy, untrack) matching
+the proposal so a future native-signals swap is a substitution, not a rewrite; keep async/keyed in the
+`memo`/`channel` layers. The one divergence to hold deliberately: **async** — layer it, never claim
+interface-identity.
+
+### Performance
+
+**Net-zero on the shipped hot path, pay-for-use on the new opt-in builds.** The core is the existing
+engine (lazy memo, one effect per binding, glitch-free batching, in-proc bypass) — literally unchanged, so
+the template display read (`.peek`) costs exactly what it costs today. The *opt-in* additions each cost
+only when used: a writable projection is a cold per-bind `linked` cell (~1 extra edge + branch on its
+reads); the async-source/refcounted-channel node costs only when instantiated. The **one** build that
+would touch the hot read path is the two-channel observer (an extra register consulted in `get()`) — which
+is why it stays unresolved/opt-in and must not be sold under a "runtime unchanged" headline. **There is no
+speed *win* here; the payoff is coherence / DX / ecosystem-alignment + the one real capability (async-
+source/switch).** Do not sell any of this as a performance change.
+
+### Open items
+
+- **Sequenced LAST + bench-gated:** whether to collapse to a single `.signal()` accessor and drop
+  `.peek()`. Land every other change first, then bench `.peek()` vs `.signal()`-COW side by side; the small
+  read delta makes this an empirical call, not a paper one.
+- `.signal()`'s template read path — the interpolation leaf must auto-read an expression-produced signal
+  (`{node.signal()}`), not just bare identifiers. Small runtime/compiler add.
+- Whether to build the **two-channel observer** (enables keyed-async in an explicit-source body) or accept
+  "use the auto-track form" as the answer.
+- The **async-source refcounted node** — DOWNGRADED to niche/defer (its common case is covered by reactive
+  `{#for await}`). If ever built: teardown contract, out-of-order-settle race, retention on scalar→stream.
+- `.peek()` naming vs the Solid/Preact/proposal convention where `peek` = *untracked* (abide's is
+  *tracked*): rename, or document the difference, in step 7.
+- Roomed-channel (`channel<T, Args>`) composition with the async-source node.
