@@ -285,8 +285,8 @@ thing on both surfaces) and drops the meaningless value verbs (`publish`/`snapsh
   rendering history or joining deltas — the genuinely different need a scalar `peek` can't serve.
 - `fn.done(args): boolean` / `fn.error(args)` — reactive closed/failed probes.
 
-Reactivity rides a **separate per-slot `streamTick` signal** bumped on each chunk push and on the
-terminal — kept distinct from the state-machine `signal` the bare read subscribes to, so per-chunk
+Reactivity rides a **separate per-slot `streamTick` state** bumped on each chunk push and on the
+terminal — kept distinct from the state-machine `state` the bare read subscribes to, so per-chunk
 `peek()` updates never restart a `{#for await}`. The editor distinguishes the two surfaces at author
 time (stream reads reject `.publish`/`.snapshot`; value reads reject `.chunks`/`.done`), closing the
 auxiliary-surface typing gap the earlier resolution left open.
@@ -420,7 +420,7 @@ Two handoff modes, keyed on stream state at flush:
   **The `@rpc:` cache mux is never the chunk path** — it carries only verb frames.
 
 **Reactivity (`{#for await}` is not one-shot).** The client `{#for await}` mount wraps its source drain
-in an `effect` (`forBlock`, `runtime.ts`), so it subscribes to the backing memo's **state signal** (but
+in an `effect` (`forBlock`, `runtime.ts`), so it subscribes to the backing memo's **slot state** (but
 NOT the per-chunk `streamTick`, so arriving chunks never restart it). A `fn.refresh()`/`fn.invalidate()`
 — or a change to any reactive dep in the source expression (`{#for await x of fn(count)}`) — tears the
 list down and **re-streams it from the fresh run** (clear-and-restream). This holds for **both** modes:

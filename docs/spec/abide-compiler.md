@@ -4,8 +4,8 @@ Status: draft, derived from design interview 2026-07-17.
 Scope: the `.abide` template compiler and its runtime. Builds directly on the RPC / read
 core (`docs/spec/rpc-core.md`); section refs like §7 point there, C-refs point here.
 
-Through-line: `.abide` is a **Svelte-family AOT compiler over the §7 fine-grained signal
-substrate**. There is no VDOM and no runtime template interpreter. Components are
+Through-line: `.abide` is a **Svelte-family AOT compiler over the §7 fine-grained `state`
+substrate** (the atom was called `signal` until ADR 0023 retired the name). There is no VDOM and no runtime template interpreter. Components are
 structured collections of §7 effects. The server render path (→ HTML) and the client
 attach path (→ hydrate) are each **single paths reused for first load and every
 navigation**.
@@ -14,11 +14,11 @@ navigation**.
 
 ## C1. Compilation model
 
-1. **No-VDOM, fine-grained, signal-driven.** `{expr}` → text node + effect subscribed to
+1. **No-VDOM, fine-grained, state-driven.** `{expr}` → text node + effect subscribed to
    the read; on change, write `node.textContent` directly. `{#if}` → mount/unmount a
    subtree. `{#for … by key}` → keyed reconciler over real DOM. No diffing.
 2. **One `.abide` file → two compiled outputs**, selected by build (mirrors §6 module-swap):
-   - **client module** — DOM-construction + signal-wiring instructions;
+   - **client module** — DOM-construction + reactive-wiring instructions;
    - **server module** — incremental HTML string/stream producer (out-of-order, §5/§6)
      with the §5 hydration payload woven in.
 3. **Components are effect-scopes over the shared substrate (§7)** — no parallel component-
@@ -52,7 +52,7 @@ navigation**.
 
 ## C3. Async reads in templates (the RPC seam)
 
-1. **`{fn(args)}` = reactive peek** — an effect reading the §7 slot signal; renders
+1. **`{fn(args)}` = reactive peek** — an effect reading the §7 slot state; renders
    `undefined` while pending, the value when resolved, re-renders on change/invalidate.
    Composes with `?.`, `??`, `{#if}`, `{#switch}`, `{#for}`, attributes (pending = treated
    as `undefined`).
@@ -74,7 +74,7 @@ navigation**.
 ## C4. Components
 
 1. **Reactive destructured props.** `const { name = fallback, ...rest } = props()` —
-   reads compile to §7 signal reads; parent `name={expr}` change updates the child; defaults
+   reads compile to §7 state reads; parent `name={expr}` change updates the child; defaults
    apply on absent/`undefined`; `...rest` is a reactive collection.
 2. **One default slot — `<slot/>`** (renders the default children; `{children()}` is the equivalent
    interpolation form); **no named slots.** Fallback = `{#if children}<slot/>{:else}…{/if}`. Named-slot /
@@ -85,7 +85,7 @@ navigation**.
    fragment-builder (client) / string-builder
    (server); **first-class values passable as props**. `<slot/>` renders the default children; a
    nested `{#component X()}` inside `<Foo>…</Foo>` is forwarded to Foo as its `X` prop (the
-   render-prop/named-slot mechanism). A cell-named tag (`const C = state.computed(…)`) is a **reactive**
+   render-prop/named-slot mechanism). A cell- or memo-named tag (`const C = memo(…)`) is a **reactive**
    component that re-mounts on identity change. A component-valued prop types as `Component<Props>`.
 4. **`{...expr}` spread** — props onto components, attributes onto elements; reactive.
 5. **No `onMount`/`onDestroy`.** `<script>` body = setup; effect/`watch`/`bind:element`-fn
@@ -241,7 +241,7 @@ Mechanism:
    (prod unaffected). **Index `i` is reactive but wired only when referenced** — if the body
    doesn't use `i`, no index tracking (zero cost, the common case); when used, `i` updates on
    reorder/splice without remount (a head-splice's O(n) updates are correct-by-necessity but
-   are signal writes only — keys preserve DOM identity, no reflow).
+   are state writes only — keys preserve DOM identity, no reflow).
 3. **`{#for await item of source}`** — consumes an `AsyncIterable`/`Stream` (§12), rendering
    items as they arrive; `{:catch e}` handles stream error; SSR drains to a boundary (§12.4).
 4. **`{#switch subj}{:case v}{:default}`** — reactive subject mounts the matching case;
@@ -262,13 +262,32 @@ Mechanism:
 3. **Root `<script>` = per-instance setup** (runs once per instance; fresh `state`; imports
    + functions). **`<script module>` = module-once** (shared constants/singletons, run once
    regardless of instance count) — **in scope**.
-4. **Nested `<script>` = branch/iteration-local reactive state** — `state`/`computed`/
-   `linked` created on branch mount, disposed on unmount, reusing root imports. In `{#for}`
-   this is **per-item state**.
+4. **Nested `<script>` = branch/iteration-local reactive state** — `state`/`memo` created on
+   branch mount, disposed on unmount, reusing root imports. In `{#for}` this is **per-item state**.
 5. **Leaf directives:** `class:name={cond}` toggles a class reactively; `style:prop={val}`
    sets one style property reactively; `{html(expr)}` injects raw unescaped HTML (author
    owns XSS — all other `{expr}` is escaped by default); `{...expr}` spread (C4.4).
-6. **Two `<script>` lowerings, one scanner.** The RUNTIME lowering (`analyzeScope` → the emitted
+6. **Reference rewriting: a binding IS its value (ADR 0024).** `analyzeScope` classifies each simple
+   declaration and rewrites every reference to it:
+   - `let n = state(…)` / `state.shared(…)` / `memo(…).state()` → a **cell**: read `n` → `n()`, write
+     `n = x` → `n.set(x)` (plus compound/`++`/`--`).
+   - `const d = memo(…)` → an **auto-called memo**: read `d` → `d()`. Read-only, so a write form is left
+     verbatim and the `const` binding makes it a loud `TypeError`.
+   - **A member access reads the VALUE, for both** — `{d.length}` is `d().length`, not the memo object's
+     `length`. The consequence is that a memo's own surface is NOT reachable through the binding; probes
+     belong to RPC/socket callables, which are imports, and imports are never rewritten. `abide check`
+     unwraps the binding to its value, so `d.peek()` fails on both sides rather than silently returning
+     the wrong thing.
+   - **Except in DEPENDENCY position.** The sole first argument of `watch(…)` / `memo(…)` is a source
+     NODE, so a bare cell/memo there is left alone: `watch(count, handler)` and `memo(a, (v) => v + 2)`
+     both pass the node. This is a compiler-only change with no runtime or type change (a cell already
+     IS `(): T`, which is what a `source: () => T` expects), and it removes the wart that used to force
+     `watch(() => count, h)`. An explicit generic (`memo<T>(a, t)`) still resolves the callee.
+   - **Auto-call needs a visible argless fn literal at the declaration** — `memo(() => …)`, or a bare
+     node in the two-argument source form. `memo(someFnRef)` is opaque, and an `async` body would
+     produce a promise-returning read that blanks the server-rendered text (see
+     `promise-read-model.md`); neither auto-calls, so both stay plain `const` bindings.
+7. **Two `<script>` lowerings, one scanner.** The RUNTIME lowering (`analyzeScope` → the emitted
    `render`/`mount`) runs in-process on the SSR/build hot path; the TYPE-CHECK lowering (C10) runs
    out-of-process in `tsgo`. Both are **token-scanner-based, not AST-based** — TS7 ships **no
    in-process parser** (`typescript/unstable/ast` exposes only `createScanner`; the Go port's parse+
@@ -277,7 +296,7 @@ Mechanism:
    - **Type-only imports are erased from the runtime scope** — `import type { T }` and a `{ type T }`
      specifier are dropped (never aliased to `$scope`); a `{ type as x }` VALUE binding is kept. They
      stay resolvable in the check pass (which copies the raw `<script>` verbatim).
-   - **Generic call forms are recognised** — `state<Foo[]>(…)`, `state.computed<T>(…)`, `props<T>()`
+   - **Generic call forms are recognised** — `state<Foo[]>(…)`, `memo<T>(…)`, `props<T>()`
      lower as cells/props (a balanced `<…>`, incl. nested `>>` and `=>`, is skipped before the `(`); a
      `state < 5` comparison is not misread.
    - **Known limit:** a generic type arg with a TOP-LEVEL COMMA (`state<Map<K, V>>(…)`) is NOT

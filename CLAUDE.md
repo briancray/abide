@@ -29,9 +29,11 @@
 * do not worry about backwards compatibility if there is a better way to do something at any level unless it changes a public api - then discuss
 
 > The authoritative design lives in `docs/spec/*.md`. This file is the generated public-API
-> reference. Core model: the primitive is **`memo`** — a generic isomorphic memoizer for async
-> functions (cache + coalesce + reactive read surface); RPC is `memo` + transport. RPC inputs/outputs
-> are **JSON-serializable only**; the rich value codec applies only to hydrated non-RPC values.
+> reference. Core model: three isomorphic primitives — **`state`** (own), **`memo`** (load), **`channel`**
+> (subscribe) — and two transport laws over them: `rpc = memo + transport`, `socket = channel + transport`.
+> `memo` is a generic memoizer (cache + coalesce + reactive read surface) whose dependencies are its
+> DECLARED INPUTS: args = the cache key, no args = inferred from the body. RPC inputs/outputs are
+> **JSON-serializable only**; the rich value codec applies only to hydrated non-RPC values.
 
 # abide — Public API & Template Feature Reference
 
@@ -167,19 +169,20 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 | --- | --- |
 | `abide/server/agent` | `agent(engine, messages, options?)` → `AgentFrame` stream. `options`: `{ model?, system?, tools?, approval?, … }`. `tools` default = all `clients.mcp` RPCs; `[]` = none. Types: `NeutralMessage`, `AgentFrame`, `AgentSurface`, `AgentEngine`. Ships a Claude engine (Anthropic Messages API over `fetch`) + a Claude Code engine (spawns the local `claude` CLI via `Bun.spawn`; **self-contained** — runs its own loop, engine tools OFF by default). |
 | `abide/server/appDataDir` | `appDataDir()` → per-user data dir |
-| `abide/shared/memo` | `memo(asyncFn, opts?)` → smart-read wrapper for any async fn (the memoizer primitive; isomorphic) |
 
 ## Isomorphic — `abide/shared/*`
 
 ### Reactive primitives
 | Import | Signature |
 | --- | --- |
-| `abide/shared/state` | `state(initial, transform?)`; `.computed(fn)`, `.linked(src, transform?)`, `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). Scope-free signal wrapper — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`state.computed`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `memo({ shared })`). |
-| `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too |
+| `abide/shared/state` | `state(initial, transform?)`; `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). `state` keeps only what it OWNS (ADR 0024) — derivation is `memo`'s job. Scope-free reactive atom — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`memo`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `memo({ shared })`). |
+| `abide/shared/memo` | `memo(asyncFn, opts?)` — the memoizer. Its DEPENDENCIES ARE ITS DECLARED INPUTS (ADR 0024): declare an arg and they are the cache key (today's memo/RPC, unchanged); declare none and they are inferred from the body. An **argless + synchronous** body is AUTO-TRACKED and its bare call returns `T`, not `Promise<T>` (a promise-returning derived read would blank the SSR text and refill a microtask later). An argless **async** body is not tracked — half-tracked is worse than untracked — and re-fills on `refresh`/`invalidate` only. `memo(source, transform)` tracks the source ONLY, transform untracked (mirrors `watch(source, handler)`). Naming `ttl` or `shared` keeps the classic pulled path. A `(...args)`/`(args = {})` param is a LOUD construction-time error (it reports `fn.length` 0 and would silently reclassify an args-keyed memo). |
+| `abide/shared/channel` | `channel<T>(source?, opts?)` — the pub/sub primitive on a `ChannelHub`; `socket` is its authorization+transport shell. Isomorphic (`shared/`), so a browser bundle carries it. |
+| `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too. In a `.abide`, a bare cell/memo in the source slot stays the NODE (ADR 0024 §5), so `watch(count, handler)` is the form — no thunk needed. |
 
-`state`/`watch` are the sync/owned face of the same signal that `memo` (async/loaded) is built on — and `channel` is its push/subscribe face. The two transport laws follow the pull/push split: `rpc = memo + transport`, `socket = channel + transport`. All are isomorphic: same import, same call, both sides.
+`state`/`watch` are the sync/owned face of the same atom that `memo` (async/loaded) is built on — and `channel` is its push/subscribe face. The two transport laws follow the pull/push split: `rpc = memo + transport`, `socket = channel + transport`. All three primitives are isomorphic: same import, same call, both sides.
 
-### Cache verbs (method form canonical; globals only for tags)
+### Surface verbs (method form canonical; globals only for tags) — shared by `memo` AND `channel`
 | Method (per callable) | Global (tags only) |
 | --- | --- |
 | `fn.invalidate(args?)` — partial-object match; `()` = whole callable | `invalidate({ tags })` |
@@ -207,7 +210,7 @@ Partial args match every superset slot.
 | `abide/shared/route` | `route()` (see above) |
 | `abide/shared/url` | `url(path \| URL, params?, query?)` — in-app href resolver; `params` fill dynamic segments (`[name]` required, `[[name]]` optional, `[...name]` rest — a `/`-joined string; typed from the path literal), `query` appends a query string. No-dynamic-segment path (or a `URL`) collapses to `url(target, query?)` |
 | `abide/shared/health` | `health()` → `Promise<{ reachable, version, ... }>` — isomorphic: server returns the baseline in-proc, client `await`s a fetch of `/__abide/health` (full merged doc) |
-| `abide/shared/log` | `log(...)`, `.info/.warn/.error/.trace`, `.channel(name)`. Every line carries a channel label — the un-channeled `log(...)` uses the **app name** (`ABIDE_APP_NAME`/package.json/`"abide"`, always on); `.channel('abide:…')` names a framework channel gated by `DEBUG` (server) / `localStorage.debug` (browser). `error` always emits; `warn/info/trace` gated. Channels: `abide:{rpc,cache,router,ssr,socket,identity,agent,mcp,hydrate,stream,bundle,cli}` |
+| `abide/shared/log` | `log(...)`, `.info/.warn/.error/.trace`, `.channel(name)`. Every line carries a channel label — the un-channeled `log(...)` uses the **app name** (`ABIDE_APP_NAME`/package.json/`"abide"`, always on); `.channel('abide:…')` names a framework channel gated by `DEBUG` (server) / `localStorage.debug` (browser). `error` always emits; `warn/info/trace` gated. Channels: `abide:{bundle,cli,health,hydrate,identity,memo,router,rpc,socket,ssr,stream}` |
 | `abide/shared/trace` | `trace()` → W3C traceparent \| undefined |
 
 ## UI — `abide/ui/*` (client-only)
@@ -239,7 +242,8 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate. A mutation call is the same, but posts args in the body (default `ttl:0` retains nothing) |
 | `fn.peek(args)` | reactive `T \| undefined` snapshot — subscribes + kicks a coalesced load; the non-blocking display read |
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
-| `fn.refresh(args?)` / `fn.invalidate(args?)` / `fn.publish(args, v)` | cache verbs (partial match) |
+| `memo.state(args)` | the WRITABLE PROJECTION of one slot (`memo` only): a live cell over that slot whose `set` IS `publish`, so a local write is provisional until the next re-fill |
+| `fn.refresh(args?)` / `fn.invalidate(args?)` / `fn.publish(args, v)` | surface verbs (partial match) |
 | `fn.peek` / `fn.pending` / `fn.refreshing` / `fn.error` / `fn.watch` | reactive probes |
 | `fn.isError(e, name)` | narrow a typed error |
 | bare call on a streaming handler | resolves to a fresh replay-then-live `AsyncIterable<C>` cursor (per caller, over one shared run) |
@@ -251,8 +255,9 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | Form | Meaning |
 | --- | --- |
 | `let x = state(v, transform?)` | writable cell |
-| `state.computed(…)` | read-only derived (lazy, never serialized) |
-| `state.linked(src, transform?)` | writable cell reseeded on dep change |
+| `const d = memo(() => …)` | derived value — auto-tracked, lazy, never serialized. A bare `d` reads the VALUE (so does `d.length`); the memo's own surface is not reachable through the binding |
+| `let x = memo(…).state()` | the writable projection: `set` IS `publish`, so a local write holds until the next re-fill |
+| `memo(a, (v) => …)` / `watch(a, h)` | dependency position — a bare cell/memo here stays the NODE, not its value |
 | `state.shared(key, initial)` | writable cell shared by key across instances + browser tabs |
 | `watch(source, handler)` / `watch(thunk)` | reaction / auto-tracked effect |
 | `const { name = fallback, ...rest } = props()` | reactive prop reader |
@@ -291,7 +296,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 ### Components / pages
 | Feature | Notes |
 | --- | --- |
-| Capitalised tags | component invocation (`<Name/>`) · `<slot/>` renders default children (`{children()}` is the equivalent interpolation form) · nested inline-component defs = named component props (render-prop) · a cell-named tag (`const C = state.computed(…)`; `<C/>`) is a **reactive** component (re-mounts on change) · a component-valued prop types as `Component<Props>` |
+| Capitalised tags | component invocation (`<Name/>`) · `<slot/>` renders default children (`{children()}` is the equivalent interpolation form) · nested inline-component defs = named component props (render-prop) · a cell- or memo-named tag (`const C = memo(…)`; `<C/>`) is a **reactive** component (re-mounts on change) · a component-valued prop types as `Component<Props>` |
 | `<script>` per-instance · `<script module>` once-per-module · nested `<script>` branch-local |
 | `<style>` component-scoped · nested `<style>` subtree-scoped · tailwind optional |
 | `src/ui/pages/**/page.abide` / `layout.abide` | routes; `[name]` → `route().params.name` (required); `[[name]]` optional segment (absent → param omitted); `[...name]` rest/catch-all (terminal) → `route().params.name` is the `/`-joined remaining segments. Precedence: literal > required > optional > rest |

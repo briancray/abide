@@ -1,8 +1,23 @@
 # ADR 0023 — Step 7 conceptual reframe (DRAFT for review)
 
-**Status: proposed, NOT applied.** This stages the *framing-heavy* half of step 7 for review before it
-touches the primary docs. The *objective* corrections (now-false statements) already landed in commit
-`898f0ba6` (CLAUDE.md law line, client-sockets zero-arg probes, replayable-streams stale build note).
+**Status: proposed, NOT applied — and PARTLY SUPERSEDED. Re-read before applying.** This stages the
+*framing-heavy* half of step 7 for review before it touches the primary docs. The *objective* corrections
+(now-false statements) already landed in commit `898f0ba6` (CLAUDE.md law line, client-sockets zero-arg
+probes, replayable-streams stale build note).
+
+> **What has changed under this draft since it was written** (do not apply §1 or §3 verbatim):
+> - The atom is no longer called `signal` — ADR 0023's rename landed and it is **`state`**. Every
+>   `signal` below should read `state`.
+> - "`channel`'s isomorphic face is the `socket`" is **false**. `channel` moved to `shared/` on a
+>   `ChannelHub` and is isomorphic in its own right; `socket` is its authorization+transport shell.
+> - **§1 is effectively done.** CLAUDE.md's preamble now states the three-primitive tree and both
+>   transport laws, corrected for the two points above. What is still unapplied there is only the
+>   *additional* voice-setting prose (fine-grained rendering; "a read is reactive iff it runs inside a
+>   watch"), which is what still needs approval.
+> - ADR 0024 has since landed: `state.computed`/`state.linked` are gone and derivation is `memo`'s job.
+>   Any framing that lists a `state` family needs to reflect that.
+> - **§2 (sockets.md `handler` → `clientPublish`) is unaffected** by all of the above and still stands
+>   as written.
 
 What remains is additive/voice-setting prose the design conversation earned but that you should approve:
 the CLAUDE.md concept-tree preamble, the `sockets.md` S1 reframe off the retired `handler` model, and an

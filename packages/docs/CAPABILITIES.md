@@ -178,6 +178,8 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `memo(fn)` — auto-tracked derived value (ADR 0024) | PW | [x] (/templating/reactivity; also server-side in ServerStateDemo) |
 | `memo(src, transform?).state()` — writable projection, provisional until re-fill | PW | [x] (/templating/reactivity) |
 | `state.shared(key, initial)` — cell shared by key (instances + tabs) | PW | [x] (/templating/reactivity: `SharedTally.abide` ×2, cross-instance + cross-tab) |
+| `memo(source, transform)` — tracks the source only, transform untracked | PW | [x] (/templating/reactivity MemoProjectionDemo) |
+| Dependency position — a bare cell/memo as `watch`/`memo`'s first argument stays the NODE (no thunk) | PW | [x] (/templating/reactivity WatchSourceDemo: `watch(count, handler)`) |
 | `watch(source, handler)` / `watch(thunk)` — isomorphic (`abide/shared/watch`; fires server-side too) | PW+RT | [x] (/templating/reactivity; server-side in ServerStateDemo's `serverReactive.ts`) |
 | `props<T>()` — reactive prop reader | PW | [~] (/templating/components — props read reactively by a child component; the degenerate page-level reader demo was removed) |
 | `html(str)` / `` html`…` `` — raw HTML | PW | [x] (/templating/bindings RawHtmlDemo) |

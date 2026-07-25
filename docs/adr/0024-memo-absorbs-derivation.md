@@ -1,12 +1,23 @@
 # ADR 0024 — `memo` absorbs derivation; `state` keeps only what it owns
 
-- **Status:** Accepted (design) — 2026-07-25. Not yet implemented.
+- **Status:** Accepted and IMPLEMENTED — 2026-07-25.
 - **Amends:** ADR 0023 — specifically its `state` family table (§"Nodes, edges (`pipe`), and the
   source/sink grid", the `state`/`state.linked`/`state.computed` rows) and the line describing `state` as
   carrying `.computed`/`.linked`/`.shared`. Those rows are **superseded** by this ADR; the rest of 0023
   (three primitives, two transport laws, `socket : channel :: rpc : memo`) stands unchanged.
-- **Updates on implementation:** root `CLAUDE.md`, `docs/spec/{abide-compiler,promise-read-model}.md`,
-  the `packages/docs` app, `packages/starter`.
+- **Updated on implementation:** root `CLAUDE.md`, `docs/spec/{abide-compiler,promise-read-model,
+  rpc-core,replayable-streams}.md`, the `packages/docs` app (~40 call sites + CAPABILITIES). `packages/starter`
+  needed no change — it uses neither retired factory.
+- **One thing the design did not anticipate.** §Consequences assumed server memo slots are long-lived; a
+  non-`shared` slot is per-REQUEST. So an auto-tracked fill created during a request subscribes to whatever
+  the body read — often a MODULE-level `state` that outlives it — and without teardown each request would
+  leave a dead observer there forever (unbounded memory, O(requests) work per write). The backing now
+  registers teardown on its `MemoContext` and the request disposes it (after the drain, for a streamed
+  reply). See `shared/internal/context.ts`'s `onContextDispose`/`disposeContext`.
+- **§5 refined by contact with the docs app.** "A member access reads the VALUE" is not optional: leaving a
+  memo alone before `.` made `{transcript.length}` render the callable's ARITY (`1`). A memo binding is
+  cell-parity, so its own surface is not reachable through the binding — which costs nothing, because
+  probes belong to RPC/socket callables, and those are imports.
 - **Deciders:** Brian Cray
 
 ## Context

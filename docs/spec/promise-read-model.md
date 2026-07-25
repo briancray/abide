@@ -36,17 +36,23 @@ rpc.refresh/invalidate/publish(…): …      // cache verbs (unchanged)
 // rpc.load — REMOVED (=== the bare call now); deprecated alias during migration only
 ```
 
-**No render magic.** The interpolation runtime is unchanged: `{X}` renders `String(X)` for any `X`.
-A bare `{rpc()}` therefore renders `[object Promise]` — a deliberate, loud "you rendered a promise"
-signal, and `{rpc().field}` is a **TS error** caught by the #11 checker (`Property 'field' does not
-exist on Promise<T>`). Misuse fails at both the type layer and the screen; never silently.
+**The interpolation runtime auto-awaits.** A bare `{rpc()}` renders the AWAITED value, not
+`[object Promise]`: the server awaits every interpolation (`emitServer.ts`, the `interp` chunk) and the
+client's `interpolate` detects a thenable, clears the text node and fills it when the promise settles
+(`ui/internal/runtime.ts`). What is still loud is the TYPE: `{rpc().field}` is a **TS error** caught by
+the #11 checker (`Property 'field' does not exist on Promise<T>`) — bind through `{#await}` or use
+`.peek()`.
+
+> The clear-then-fill is exactly why an ARGLESS SYNCHRONOUS `memo`'s bare call returns `T` rather than
+> `Promise<T>` (ADR 0024 §3): a promise-returning derived read would blank the server-rendered text and
+> refill it a microtask later — a visible flash on every derived value.
 
 ### The four template contexts
 
 | Template | Type | Semantics |
 | --- | --- | --- |
 | `{rpc.peek()}` / `{rpc.peek()?.foo}` | `T \| undefined` | non-blocking, reactive |
-| `{rpc()}` (bare) | `Promise<T>` → `[object Promise]` | discouraged; loud failure |
+| `{rpc()}` (bare) | `Promise<T>` → the awaited value | renders once settled; `.field` on it is a type error |
 | `{await rpc()}` | `T` | blocking (SSR value-in-HTML) |
 | `{#await rpc()}{:then v}` | `v: T` | reactive await block |
 

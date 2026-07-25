@@ -176,10 +176,12 @@ One imported callable means two things:
 
 ## 7. Reactivity (shared substrate)
 
-1. **One shared reactivity substrate** in `shared/`; `state`/`computed`/`linked`/`watch`
-   are its public face (`.abide`), the RPC read surface consumes the same graph. Fine-
-   grained **signals** (Solid/Vue/Preact-signals family), not VDOM diff.
-2. **Each cache slot `(callSiteId, args)` *is* a signal.** Reading it in a tracking context
+1. **One shared reactivity substrate** in `shared/`; `state`/`memo`/`watch` are its public face
+   (`.abide`), the RPC read surface consumes the same graph. Fine-grained reactive **atoms**
+   (Solid/Vue/Preact-signals family), not VDOM diff. The atom is named `state` — ADR 0023 retired the
+   name `signal` so nothing collides with the future TC39 `Signal`; derivation is `memo`'s job, so
+   `state.computed`/`state.linked` are gone (ADR 0024).
+2. **Each cache slot `(callSiteId, args)` *is* a `state`.** Reading it in a tracking context
    subscribes; changes (resolve, `invalidate`, `publish`, socket broadcast) re-run
    subscribers. The slot is a state machine: `idle → pending → value | error`, with a
    `refreshing` flag when revalidating over a retained value. `.pending`/`.error`/

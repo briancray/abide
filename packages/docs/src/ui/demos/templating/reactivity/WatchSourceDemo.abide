@@ -3,10 +3,12 @@
   import { watch } from "abide/shared/watch"
 
   // watch(source, handler) — runs the handler on change only (not on the initial read). Here every
-  // count change pushes a side effect that increments a separate `changes` cell.
+  // count change pushes a side effect that increments a separate `changes` cell. `count` is passed
+  // BARE: the first argument of `watch` is dependency position, so the compiler leaves it as the node
+  // instead of reading it — no `() => count` thunk needed (ADR 0024).
   let count = state(0)
   let changes = state(0)
-  watch(() => count, () => { changes = changes + 1 })
+  watch(count, () => { changes = changes + 1 })
 </script>
 
 <div class="row">
