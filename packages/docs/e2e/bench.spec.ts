@@ -7,6 +7,10 @@ import { expect, test } from '@playwright/test'
 // a regression there floods the page with stray patches and pegs the render. This drives the real
 // browser to prove the table fills, streams against a `<template>` list sentinel, hydrates, and re-runs
 // on demand.
+//
+// The row-count assertions carry an explicit timeout: every scenario is now measured TWICE (abide, then
+// its hand-written vanilla baseline), so a full corpus takes noticeably longer than Playwright's 5s
+// default to stream in.
 
 // The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus, in corpus order (the
 // four `server: false` interaction-only scenarios are not render-benched). Kept in sync with that corpus.
@@ -38,7 +42,7 @@ test('bench table fills live from the streamed corpus and stays bounded', async 
 
     // Every scenario lands one row; the corpus is fixed so the count is exact.
     const rows = page.getByTestId('bench-row')
-    await expect(rows).toHaveCount(SCENARIOS.length)
+    await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
     for (const name of SCENARIOS) {
         await expect(page.getByTestId('bench-table')).toContainText(name)
     }
@@ -58,17 +62,17 @@ test('re-run button re-invokes the corpus and repaints the table', async ({ page
     await page.goto('/platform/bench')
 
     const rows = page.getByTestId('bench-row')
-    await expect(rows).toHaveCount(SCENARIOS.length)
+    await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
 
     // Capture the first scenario's iteration count, then re-run: `.refresh()` re-invokes the streaming
     // source, the table repaints from the fresh transcript, and it settles back to the full corpus. The
     // iteration count is measured live so it will differ run-to-run — proving a genuine re-measure.
-    const iterCell = rows.filter({ hasText: 'static-text' }).locator('td').last()
+    const iterCell = rows.filter({ hasText: 'static-text' }).getByTestId('bench-iters')
     const before = (await iterCell.textContent())?.trim() ?? ''
 
     await page.getByTestId('rerun').click()
 
-    await expect(rows).toHaveCount(SCENARIOS.length)
+    await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
     await expect(iterCell).not.toHaveText(before)
     await expect(page.getByTestId('bench-table')).not.toContainText('bench failed')
 })
@@ -89,7 +93,7 @@ test('reached via soft-nav, the streamed list still adopts and re-runs (seedOver
     await expect(page).toHaveURL(/\/platform\/bench$/)
 
     const rows = page.getByTestId('bench-row')
-    await expect(rows).toHaveCount(SCENARIOS.length)
+    await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
 
     // It was a soft-nav (no full document reload wiped the marker).
     const survived = await page.evaluate(
@@ -98,10 +102,10 @@ test('reached via soft-nav, the streamed list still adopts and re-runs (seedOver
     expect(survived).toBe(true)
 
     // The adopted stream is reactive after the soft-nav: re-run re-measures the corpus.
-    const iterCell = rows.filter({ hasText: 'static-text' }).locator('td').last()
+    const iterCell = rows.filter({ hasText: 'static-text' }).getByTestId('bench-iters')
     const before = (await iterCell.textContent())?.trim() ?? ''
     await page.getByTestId('rerun').click()
-    await expect(rows).toHaveCount(SCENARIOS.length)
+    await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
     await expect(iterCell).not.toHaveText(before)
     await expect(page.getByTestId('bench-table')).not.toContainText('bench failed')
 })

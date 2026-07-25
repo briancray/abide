@@ -9,6 +9,12 @@
     return ns.toFixed(0) + " ns"
   }
 
+  // abide ÷ vanilla — what the framework costs over the same DOM work written by hand.
+  function fmtRatio(row) {
+    if (row.ratio === null || row.ratio === undefined) return "—"
+    return row.ratio.toFixed(2) + "×"
+  }
+
   function range(n) {
     const out = []
     for (let i = 0; i < n; i++) out.push(i)
@@ -19,7 +25,7 @@
   // `benchFrontendClient.ts`). A fresh object every call so no state leaks across timed ops. Interactive
   // scenarios inject `{ state, watch }` (their `<script>` reads them from scope) plus any list `seed`.
   // Their `state`/`watch` come from the BUNDLE (`mod.state`/`mod.watch`, threaded in per run) — the
-  // page's own copies are a different module instance whose signals the bundled effects can't track.
+  // page's own copies are a different module instance whose state the bundled effects can not track.
   function scopesFor(mod) {
     return [
       { name: "static-text", scope: () => ({}) },
@@ -169,7 +175,10 @@
       const scopes = scopesFor(mod)
       const scopeFor = (name) => scopes.find((s) => s.name === name)?.scope
 
-      // Mount pass — build the DOM from scratch (the pure-render corpus).
+      // Mount pass — build the DOM from scratch (the pure-render corpus). Each scenario is timed twice,
+      // back to back: abide's `mount`, then the hand-written equivalent that builds the same DOM with
+      // plain `createElement` calls. In a real browser that second number is what the DOM itself costs,
+      // so the ratio is the only part of the figure that is actually abide.
       const mounts = []
       for (const scenario of bundle.scenarios) {
         if (scenario.update) continue
@@ -177,12 +186,17 @@
         const scope = scopeFor(scenario.name)
         if (entry === undefined || scope === undefined) continue
         const { nsPerOp, iters } = measureMount(entry.mount, scope)
+        const baseline = mod.VANILLA_BASELINES[scenario.name]
+        const vanilla = baseline ? measureMount(baseline.mount, scope) : null
         mounts.push({
           name: scenario.name,
           nsPerOp,
           iters,
           rows: scenario.rows,
           nsPerRow: scenario.rows ? nsPerOp / scenario.rows : null,
+          vanillaNsPerOp: vanilla ? vanilla.nsPerOp : null,
+          vanillaNote: baseline ? baseline.note : null,
+          ratio: vanilla ? nsPerOp / vanilla.nsPerOp : null,
         })
         mountRows = [...mounts]
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -207,7 +221,8 @@
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
 
-      // Update pass — the interactive corpus (reactive patch cost).
+      // Update pass — the interactive corpus (reactive patch cost). The vanilla baseline mounts its own
+      // `<button>` wired to a direct DOM write, so the SAME click-and-flush loop times both sides.
       const updates = []
       for (const scenario of bundle.scenarios) {
         if (!scenario.update) continue
@@ -215,7 +230,16 @@
         const scope = scopeFor(scenario.name)
         if (entry === undefined || scope === undefined) continue
         const { nsPerOp, iters } = await measureUpdate(entry.mount, scope)
-        updates.push({ name: scenario.name, nsPerOp, iters })
+        const baseline = mod.VANILLA_BASELINES[scenario.name]
+        const vanilla = baseline ? await measureUpdate(baseline.mount, scope) : null
+        updates.push({
+          name: scenario.name,
+          nsPerOp,
+          iters,
+          vanillaNsPerOp: vanilla ? vanilla.nsPerOp : null,
+          vanillaNote: baseline ? baseline.note : null,
+          ratio: vanilla ? nsPerOp / vanilla.nsPerOp : null,
+        })
         updateRows = [...updates]
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
@@ -239,6 +263,14 @@
     measurement the CLI <code>bun run bench</code> makes under happy-dom.
   </p>
 
+  <p class="lead">
+    <code>mount</code> and <code>update</code> are each timed <strong>twice</strong>: once through abide,
+    once through a hand-written, framework-free equivalent that builds the same DOM (the shared
+    <code>@abide/bench/vanillaBaselines</code> corpus, bundled in alongside the scenarios). The
+    <strong>×</strong> column is abide ÷ vanilla — the only figure on this page that isn't mostly a
+    measurement of your browser.
+  </p>
+
   <button
     data-testid="run"
     class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white disabled:opacity-50"
@@ -256,27 +288,36 @@
   <p class="mb-3 text-sm text-slate-500">
     Constructing the DOM. Watch <strong>ns/row</strong> as the list grows 100&nbsp;→&nbsp;1000&nbsp;→&nbsp;10000:
     unlike <code>render</code> (abide-bound, flat), mount's per-row cost is dominated by the DOM backend's
-    O(n) <code>insertBefore</code> — it reflects your browser, not abide.
+    O(n) <code>insertBefore</code> — it reflects your browser, not abide. Which is exactly what the
+    <strong>vanilla JS</strong> column is for: the same DOM built by hand with plain
+    <code>createElement</code> calls, timed in this tab moments later. Your browser's cost is in both
+    numbers, so it cancels — the <strong>×</strong> is what abide adds.
   </p>
   <table class="mb-8 w-full border-collapse text-sm" data-testid="mount-table">
     <thead>
       <tr class="border-b border-slate-300 text-left">
         <th class="py-1.5 pr-4">scenario</th>
         <th class="py-1.5 pr-4 text-right">mount (ns/op)</th>
+        <th class="py-1.5 pr-4 text-right">vanilla JS</th>
+        <th class="py-1.5 pr-4 text-right">×</th>
         <th class="py-1.5 pr-4 text-right">ns/row</th>
-        <th class="py-1.5 text-right">iters</th>
+        <th class="py-1.5 pr-4 text-right">iters</th>
+        <th class="py-1.5">hand-written as</th>
       </tr>
     </thead>
     <tbody>
       {#if mountRows.length === 0 && !running}
-        <tr><td colspan="4" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
+        <tr><td colspan="7" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
       {/if}
       {#for row of mountRows by row.name}
         <tr class="border-b border-slate-100" data-testid="mount-row">
           <td class="py-1.5 pr-4 font-mono">{row.name}</td>
           <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
           <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-          <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+          <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
         </tr>
       {/for}
     </tbody>
@@ -288,7 +329,8 @@
     hydration anchors to wire listeners and adopt the existing nodes — no DOM built from scratch. Compare
     each row against its <strong>mount</strong> figure above: skipping node creation makes hydrate the
     cheaper path for most scenarios, though walking a very large tree (<code>for-list-10000</code>) can
-    rival or exceed a fresh clone-based mount.
+    rival or exceed a fresh clone-based mount. No vanilla column here: adopting server-rendered markup is
+    a thing only a framework does, so there is nothing hand-written to compare it against.
   </p>
   <table class="mb-8 w-full border-collapse text-sm" data-testid="hydrate-table">
     <thead>
@@ -318,25 +360,34 @@
   <p class="mb-3 text-sm text-slate-500">
     Each op clicks the scenario's <code>&lt;button&gt;</code> — a <code>state</code> change — and awaits the
     flushed DOM patch. This is where abide's fine-grained reactivity shows: a single text patch touches one
-    node, and even a 1000-row keyed reverse only reconciles, it doesn't rebuild.
+    node, and even a 1000-row keyed reverse only reconciles, it doesn't rebuild. The vanilla row does the
+    same mutation by hand from a click handler (write the <code>textContent</code>, append the
+    <code>&lt;li&gt;</code>, re-append the reversed node array) — so a <strong>×</strong> near or below
+    1.00× means the reactive patch costs about what you'd have written yourself.
   </p>
   <table class="w-full border-collapse text-sm" data-testid="update-table">
     <thead>
       <tr class="border-b border-slate-300 text-left">
         <th class="py-1.5 pr-4">scenario</th>
         <th class="py-1.5 pr-4 text-right">update (ns/op)</th>
-        <th class="py-1.5 text-right">iters</th>
+        <th class="py-1.5 pr-4 text-right">vanilla JS</th>
+        <th class="py-1.5 pr-4 text-right">×</th>
+        <th class="py-1.5 pr-4 text-right">iters</th>
+        <th class="py-1.5">hand-written as</th>
       </tr>
     </thead>
     <tbody>
       {#if updateRows.length === 0 && !running}
-        <tr><td colspan="3" class="py-2 text-slate-400">—</td></tr>
+        <tr><td colspan="6" class="py-2 text-slate-400">—</td></tr>
       {/if}
       {#for row of updateRows by row.name}
         <tr class="border-b border-slate-100" data-testid="update-row">
           <td class="py-1.5 pr-4 font-mono">{row.name}</td>
           <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-          <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+          <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
         </tr>
       {/for}
     </tbody>

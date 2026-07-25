@@ -71,6 +71,21 @@ test('run measures every scenario across all three hot paths', async ({ page }) 
         const row = updateRows.filter({ has: page.getByRole('cell', { name, exact: true }) })
         await expect(row).toContainText(timing)
     }
+
+    // The vanilla baseline ran too: mount and update each carry a hand-written figure AND the abide ÷
+    // vanilla multiplier, in this same tab. A missing baseline (or one that failed to bundle) would leave
+    // the em-dash placeholder, so asserting the ratio format is what proves both sides were measured.
+    const ratio = /\d+\.\d{2}×/
+    for (const name of RENDER_SCENARIOS) {
+        const mountRow = mountRows.filter({ has: page.getByRole('cell', { name, exact: true }) })
+        await expect(mountRow).toContainText(ratio)
+    }
+    for (const name of UPDATE_SCENARIOS) {
+        const row = updateRows.filter({ has: page.getByRole('cell', { name, exact: true }) })
+        await expect(row).toContainText(ratio)
+    }
+    // Hydrate has no framework-free equivalent — that table has no vanilla column at all.
+    await expect(page.getByTestId('hydrate-table')).not.toContainText('vanilla')
 })
 
 test('the update scenarios genuinely patch the live DOM (reactivity propagates through the bundle)', async ({

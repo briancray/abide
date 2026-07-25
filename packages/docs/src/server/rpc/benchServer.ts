@@ -1,4 +1,4 @@
-import { measure } from '@abide/bench/measure'
+import { measure, measureFloor, NEAR_FLOOR_FACTOR } from '@abide/bench/measure'
 import { createServerBenches } from '@abide/bench/serverBenches'
 import { GET } from 'abide/server/GET'
 import { jsonl } from 'abide/server/jsonl'
@@ -22,23 +22,36 @@ export interface ServerBenchRow {
     note: string
     nsPerOp: number
     iters: number
+    // The same work hand-written with no framework (`ServerBench.baseline`), timed by the same loop in
+    // the same request — so `ratio` (abide ÷ vanilla) is a hardware-neutral figure.
+    vanillaNsPerOp: number | null
+    vanillaNote: string | null
+    ratio: number | null
+    // Either side is within `NEAR_FLOOR_FACTOR` of the timing loop's own per-iteration cost, which is
+    // added to both — so the ratio is squashed toward 1.00× and understates the real one.
+    nearFloor: boolean
 }
+
+const BUDGET = { minTimeMs: 100, minIters: 15, warmupIters: 5 }
 
 export default GET(() => {
     async function* run(): AsyncIterable<ServerBenchRow> {
+        const floor = await measureFloor(BUDGET)
+        const limit = floor.nsPerOp * NEAR_FLOOR_FACTOR
         const benches = await createServerBenches()
         for (const bench of benches) {
-            const metric = await measure(bench.run, {
-                minTimeMs: 100,
-                minIters: 15,
-                warmupIters: 5,
-            })
+            const metric = await measure(bench.run, BUDGET)
+            const vanilla = bench.baseline ? await measure(bench.baseline.run, BUDGET) : null
             yield {
                 group: bench.group,
                 name: bench.name,
                 note: bench.note,
                 nsPerOp: metric.nsPerOp,
                 iters: metric.iters,
+                vanillaNsPerOp: vanilla?.nsPerOp ?? null,
+                vanillaNote: bench.baseline?.note ?? null,
+                ratio: vanilla ? metric.nsPerOp / vanilla.nsPerOp : null,
+                nearFloor: vanilla !== null && (metric.nsPerOp < limit || vanilla.nsPerOp < limit),
             }
             await new Promise((resolve) => setTimeout(resolve, 40))
         }

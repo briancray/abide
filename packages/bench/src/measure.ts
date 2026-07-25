@@ -42,6 +42,17 @@ export async function measure(
     return { nsPerOp: elapsed / iters, iters }
 }
 
+// The harness's own per-iteration cost: an empty op through the same loop (the `await` alone costs a
+// microtask turn). It is ADDITIVE on both sides of a vanilla comparison, so any bench within a few
+// multiples of it is floor-bound — its ratio is squashed toward 1.00× and understates the real one.
+// Runners measure this once and mark the affected rows rather than silently reporting a flattering
+// number. `NEAR_FLOOR_FACTOR` is the "too close to trust" line.
+export const NEAR_FLOOR_FACTOR = 3
+
+export function measureFloor(opts?: MeasureOptions): Promise<MetricResult> {
+    return measure(() => {}, opts)
+}
+
 export function fmtNs(metric: MetricResult | null): string {
     if (metric === null) return '        —'
     const ns = metric.nsPerOp

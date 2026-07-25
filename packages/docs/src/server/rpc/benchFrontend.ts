@@ -1,4 +1,6 @@
+import { measure, measureFloor, NEAR_FLOOR_FACTOR } from '@abide/bench/measure'
 import { SCENARIOS } from '@abide/bench/scenarios'
+import { VANILLA_BASELINES } from '@abide/bench/vanillaBaselines'
 import { GET } from 'abide/server/GET'
 import { jsonl } from 'abide/server/jsonl'
 import { getContext } from 'abide/shared/internal/context'
@@ -13,12 +15,16 @@ import { loadEmittedServer } from 'abide/ui/internal/emit'
 // server-renderable scenarios are timed (`server !== false` skips the interaction-only ones). Results
 // stream one scenario at a time via `jsonl`, so the page fills its table live with `{#for await}`; a
 // short sleep between scenarios keeps the streaming visible. Refresh re-runs the whole corpus.
+//
+// Each scenario is timed TWICE — abide's `render`, then the hand-written framework-free equivalent from
+// `@abide/bench/vanillaBaselines` that builds the same markup with string concatenation — so every row
+// carries the baseline and the `×` multiplier. The ns figures describe whatever machine serves this page;
+// the ratio is the part that doesn't.
 
 const RENDERABLE = SCENARIOS.filter((scenario) => scenario.server !== false)
 
-const MIN_TIME_MS = 120
-const MIN_ITERS = 20
-const WARMUP = 5
+// Shorter than the CLI budget so a page load stays snappy; same adaptive loop (`@abide/bench/measure`).
+const BUDGET = { minTimeMs: 120, minIters: 20, warmupIters: 5 }
 
 // This bench runs INSIDE a page render: the docs `/platform/bench` page consumes it with a top-level
 // `{#for await}`, so `benchFrontend()` executes in that request's ambient context. A scenario template's
@@ -47,34 +53,48 @@ export interface BenchRow {
     iters: number
     rows: number | null
     nsPerRow: number | null
+    // The same markup built by hand with no framework (`@abide/bench/vanillaBaselines`), timed by the
+    // same loop in the same request — so `ratio` (abide ÷ vanilla) is a hardware-neutral figure.
+    vanillaNsPerOp: number | null
+    vanillaNote: string | null
+    ratio: number | null
+    // Either side is within `NEAR_FLOOR_FACTOR` of the timing loop's own per-iteration cost, which is
+    // added to both — so the ratio is squashed toward 1.00× and understates the real one.
+    nearFloor: boolean
 }
 
 export default GET(() => {
     async function* run(): AsyncIterable<BenchRow> {
+        const floor = await measureFloor(BUDGET)
         for (const scenario of RENDERABLE) {
             const mod = await loadEmittedServer(scenario.src)
-            const render = () => mod.render(scenario.scope())
+            const abide = await measure(
+                () => renderIsolated(() => mod.render(scenario.scope())),
+                BUDGET,
+            )
 
-            for (let i = 0; i < WARMUP; i++) await renderIsolated(render)
+            // The baseline is a plain string build — no ambient stream to isolate it from.
+            const baseline = VANILLA_BASELINES[scenario.name]
+            const vanillaRender = baseline?.render
+            const vanilla = vanillaRender
+                ? await measure(async () => {
+                      await vanillaRender(scenario.scope())
+                  }, BUDGET)
+                : null
 
-            let iters = 0
-            const start = Bun.nanoseconds()
-            let elapsed = 0
-            const budgetNs = MIN_TIME_MS * 1e6
-            do {
-                await renderIsolated(render)
-                iters++
-                elapsed = Bun.nanoseconds() - start
-            } while (elapsed < budgetNs || iters < MIN_ITERS)
-
-            const nsPerOp = elapsed / iters
+            const nsPerOp = abide.nsPerOp
             const rows = scenario.rows ?? null
+            const limit = floor.nsPerOp * NEAR_FLOOR_FACTOR
             yield {
                 name: scenario.name,
                 nsPerOp,
-                iters,
+                iters: abide.iters,
                 rows,
                 nsPerRow: rows ? nsPerOp / rows : null,
+                vanillaNsPerOp: vanilla?.nsPerOp ?? null,
+                vanillaNote: baseline?.note ?? null,
+                ratio: vanilla ? nsPerOp / vanilla.nsPerOp : null,
+                nearFloor: vanilla !== null && (nsPerOp < limit || vanilla.nsPerOp < limit),
             }
             await new Promise((resolve) => setTimeout(resolve, 40))
         }

@@ -18,6 +18,11 @@ import { parse } from 'abide/ui/internal/parse'
 //                the server produced here, so it walks real hydration anchors, not a mount-shaped clone)
 //   • update   — a reactive state change flushed to the DOM (the interactive `<button>` scenarios)
 // This is the same measurement the CLI `bun run bench` makes with happy-dom, but in a genuine browser.
+//
+// The bundle also carries the hand-written `@abide/bench/vanillaBaselines` corpus, so the page can time
+// `mount` and `update` against a framework-free equivalent of the same scenario in the same tab — the
+// only way to tell abide's cost apart from the browser's own DOM cost. (`hydrate` has no vanilla analog:
+// adopting server-rendered markup is a thing only a framework does.)
 
 interface Scenario {
     name: string
@@ -111,10 +116,14 @@ async function buildBundle(): Promise<ClientBenchBundle> {
         // Re-export the bundle's OWN `state`/`watch` (a `<script>`'s `state` import is compiled to a
         // `$scope.state` read, so interactive scenarios get their reactive primitives from scope). These
         // must be the copies that share THIS bundle's runtime scheduler — the page's own `state` is a
-        // separate module instance whose signals the bundled effects would never track. The page passes
+        // separate module instance whose state the bundled effects would never track. The page passes
         // `mod.state`/`mod.watch` in the scope for update scenarios.
         entry += `export { state } from ${JSON.stringify(Bun.resolveSync('abide/shared/state', import.meta.dir))}\n`
         entry += `export { watch } from ${JSON.stringify(Bun.resolveSync('abide/shared/watch', import.meta.dir))}\n`
+        // Ship the hand-written baselines into the SAME bundle so the page can time abide's `mount`/
+        // `update` against a framework-free equivalent of the same scenario, back to back in one tab.
+        // They are plain DOM code with no imports — the browser is their native habitat.
+        entry += `export { VANILLA_BASELINES } from ${JSON.stringify(Bun.resolveSync('@abide/bench/vanillaBaselines', import.meta.dir))}\n`
         const entryPath = join(dir, 'entry.ts')
         await Bun.write(entryPath, entry)
 
