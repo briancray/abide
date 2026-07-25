@@ -2,7 +2,7 @@
 //
 // When a SHARED memo slot is invalidated/refreshed/published, the verb is published onto a
 // per-`(rpc,args)` channel so subscribers elsewhere can mirror it. The transport is REUSED
-// verbatim: each channel is a `SocketHub<MemoFrame>` — the same bounded fanout that backs named
+// verbatim: each channel is a `ChannelHub<MemoFrame>` — the same bounded fanout that backs named
 // user sockets. No new transport is invented here.
 //
 // Channel naming lives in the reserved `@` namespace (`@rpc:<rpc>:<canonicalKey(args)>`). User
@@ -10,8 +10,8 @@
 // collide with a user socket name. The WS-facing join path (with auth) is PR3 — this slice only
 // wires server→hub publishing plus a hub registry that a test can subscribe to directly.
 
+import { ChannelHub } from '../../shared/internal/channelHub.ts'
 import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannelName.ts'
-import { SocketHub } from './socketHub.ts'
 
 // Re-exported from the client-safe module so existing server importers keep importing it from here.
 // The name must be IDENTICAL on server and client (the browser mux computes it too), so it lives in
@@ -28,7 +28,7 @@ export interface MemoFrame {
 const TAG_CHANNEL_PREFIX = '@tag:'
 
 // Lazy per-channel hubs. A channel exists only once something subscribes (or publishes) to it.
-const channels = new Map<string, SocketHub<MemoFrame>>()
+const channels = new Map<string, ChannelHub<MemoFrame>>()
 
 // Deterministic channel name for a cache TAG (rpc-core §8, shared-cache-plan §2.4). A global
 // `invalidate/refresh({ tags })` publishes one frame here per listed tag so a client subscribed at
@@ -39,10 +39,10 @@ export function tagChannelName(tag: string): string {
 }
 
 // Get-or-create the hub for a channel. Tests (and PR3's WS join path) subscribe through this.
-export function memoChannelHub(name: string): SocketHub<MemoFrame> {
+export function memoChannelHub(name: string): ChannelHub<MemoFrame> {
     let hub = channels.get(name)
     if (hub === undefined) {
-        hub = new SocketHub<MemoFrame>({})
+        hub = new ChannelHub<MemoFrame>({})
         channels.set(name, hub)
     }
     return hub

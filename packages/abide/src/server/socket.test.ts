@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DROP } from './internal/socketHub.ts'
+import { DROP } from './DROP.ts'
 import { socket } from './socket.ts'
 
 function delay(ms: number): Promise<void> {
@@ -76,7 +76,7 @@ describe('socket — fanout & ordering', () => {
     })
 
     // BURST — the gap ADR 0023's storage stress-test exposed, and the case that killed the proposed
-    // `signal<ring>` channel buffer. A SYNCHRONOUS burst of N publishes with N >> `tail`, against a
+    // `state<ring>` channel buffer. A SYNCHRONOUS burst of N publishes with N >> `tail`, against a
     // consumer that is parked and keeping up, must deliver ALL N in order.
     //
     // It works today because delivery capacity and replay depth are INDEPENDENT: a subscriber's FIFO

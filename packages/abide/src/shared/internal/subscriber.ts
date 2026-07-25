@@ -2,7 +2,7 @@
 // by construction — exactly one iterator drains it, so a lone `waiting` resolver is sufficient. On
 // overflow the OLDEST queued message is dropped (at-most-once, best-effort; sockets.md S3.4).
 //
-// Lifted to `lib/shared/internal` (client-sockets.md CS3) so BOTH the server hub (`socketHub`) and
+// Lifted to `lib/shared/internal` (client-sockets.md CS3) so BOTH the channel hub (`channelHub`) and
 // the browser socket proxy (`socketProxy`) queue identically — one FIFO implementation, isomorphic
 // overflow behavior. Transport-free: a producer calls `push`, the lone consumer awaits `next`.
 

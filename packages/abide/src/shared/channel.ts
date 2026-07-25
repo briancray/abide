@@ -10,13 +10,17 @@
 //
 // This core is LOCAL (in-process): no transport, no auth. `socket = channel + transport + per-args auth`
 // exposes it over the network (that's where authorization lives). The reactive probes are DEGENERATE here
-// (read the hub directly), as on today's server socket; the client proxy is where they become reactive.
+// (read the hub directly); the client socket proxy is where they become reactive.
+//
+// `channel` is ISOMORPHIC — same import, same call, both sides — which is why it lives in `shared`
+// alongside `state` and `memo`. Nothing it touches is server-only: the `ChannelHub` it runs on is pure
+// in-memory pub/sub. A browser module can own a channel and fan messages out locally exactly as a server
+// module can; `socket` is what puts one on the wire between them.
 
-import { canonicalKey } from '../shared/internal/codec.ts'
-import { getContext } from '../shared/internal/context.ts'
-import type { ReactiveReadSurface } from '../shared/internal/reactiveReadSurface.ts'
-import { SocketHub } from './internal/socketHub.ts'
-import type { SocketOptions } from './socket.ts'
+import { ChannelHub, type ChannelHubOptions } from './internal/channelHub.ts'
+import { canonicalKey } from './internal/codec.ts'
+import { getContext } from './internal/context.ts'
+import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 
 export interface ChannelOptions {
     // Replay depth for a late joiner (per room). Default 0.
@@ -31,7 +35,7 @@ export interface Channel<T, Args = void> extends ReactiveReadSurface<Args, T>, A
     (args: Args): AsyncIterable<T>
     // TRANSPORT hook (internal): the room's hub, for the server-form (`socket`) to wire replay-controlled
     // subscribe / tail snapshot / server publish onto the mux. Not part of the public pub/sub surface.
-    __hub(args: Args): SocketHub<T>
+    __hub(args: Args): ChannelHub<T>
 }
 
 // True while an SSR page render is in flight — a live subscription would never close and would hang the
@@ -43,17 +47,17 @@ function inRender(): boolean {
 export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T, Args> {
     // Built once (same for every room). Only set present keys — exactOptionalPropertyTypes rejects
     // `{ tail: undefined }` against `tail?: number`. `maxAge` is the channel's name for the hub's `ttl`.
-    const hubOptions: SocketOptions<T> = {}
+    const hubOptions: ChannelHubOptions = {}
     if (options.tail !== undefined) hubOptions.tail = options.tail
     if (options.maxAge !== undefined) hubOptions.ttl = options.maxAge
 
-    // One SocketHub per room, keyed by canonicalKey(args). `Args = void` → a single hub under the void key.
-    const hubs = new Map<string, SocketHub<T>>()
-    const hubFor = (args: Args): SocketHub<T> => {
+    // One ChannelHub per room, keyed by canonicalKey(args). `Args = void` → a single hub under the void key.
+    const hubs = new Map<string, ChannelHub<T>>()
+    const hubFor = (args: Args): ChannelHub<T> => {
         const key = canonicalKey(args)
         let hub = hubs.get(key)
         if (hub === undefined) {
-            hub = new SocketHub<T>(hubOptions)
+            hub = new ChannelHub<T>(hubOptions)
             hubs.set(key, hub)
         }
         return hub
@@ -67,7 +71,7 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
 
     // Direct iteration (`for await m of channel`) subscribes the DEFAULT (void) room.
     ch[Symbol.asyncIterator] = (): AsyncIterator<T> => cursor(undefined as Args)
-    ch.__hub = (args: Args): SocketHub<T> => hubFor(args)
+    ch.__hub = (args: Args): ChannelHub<T> => hubFor(args)
     ch.publish = (args: Args, message: T): void => {
         hubFor(args).publish(message)
     }

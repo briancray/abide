@@ -1,41 +1,43 @@
-// SocketHub — the single-process pub/sub core behind `socket(...)` (sockets.md S1-S2).
+// ChannelHub — the single-process pub/sub core behind ONE room of a `channel(...)` (ADR 0023).
 //
-// A hub is one named topic's in-memory state: a bounded tail ring buffer for replay and a set
-// of live subscribers, each backed by its own bounded FIFO queue. `publish` is the server path
-// (bypasses the mediator); `ingressPublish` is the transport path for client publishes — it runs
-// the client-publish mediator (transform → publish, DROP/void → drop, throw → reject) before
-// fanning out. Delivery is at-most-once, best-effort: on a subscriber queue overflow the oldest
-// message is dropped for that subscriber (S3.4).
+// A hub is one topic's in-memory state: a bounded tail ring buffer for replay and a set of live
+// subscribers, each backed by its own bounded FIFO queue. `publish` appends to the tail and fans out.
+// Delivery is at-most-once, best-effort: on a subscriber queue overflow the oldest message is dropped
+// for that subscriber (S3.4).
+//
+// This is pure pub/sub with NO transport, auth, or mediation — that is why it lives in `shared`: the
+// same hub backs a `channel` on the server AND in the browser. `socket = channel + transport` layers
+// the mediator (`clientPublish`/`DROP`) and per-room auth on top, in `server/socket.ts`.
 
-import { Subscriber } from '../../shared/internal/subscriber.ts'
-import type { SocketOptions } from '../socket.ts'
-
-// A mediator returning DROP (or nothing) suppresses the client publish. Exported so mediators
-// can signal an explicit drop without republishing.
-export const DROP: unique symbol = Symbol('abide.socket.drop')
+import { Subscriber } from './subscriber.ts'
 
 interface TailEntry<T> {
     message: T
     time: number
 }
 
-export class SocketHub<T> {
-    readonly options: SocketOptions<T>
+// The hub's own config — deliberately NOT a socket's options, so the pub/sub core carries no transport
+// vocabulary. `channel`'s public `maxAge` maps onto `ttl` here.
+export interface ChannelHubOptions {
+    tail?: number
+    ttl?: number
+}
+
+export class ChannelHub<T> {
     private readonly tailSize: number
     private readonly ttl: number
     private readonly tail: TailEntry<T>[] = []
     private readonly subscribers = new Set<Subscriber<T>>()
-    // The most-recently-published message, retained INDEPENDENT of `tail` size so a `tail: 0` socket
+    // The most-recently-published message, retained INDEPENDENT of `tail` size so a `tail: 0` channel
     // still has a `peek()` (client-sockets.md CS4.2). `ttl`-windowed on read.
     private last: TailEntry<T> | undefined
 
-    constructor(options: SocketOptions<T>) {
-        this.options = options
+    constructor(options: ChannelHubOptions) {
         this.tailSize = options.tail ?? 0
         this.ttl = options.ttl ?? Infinity
     }
 
-    // Server publish — append to the tail buffer and fan out. Never runs the mediator (S1.3).
+    // Publish — append to the tail buffer and fan out. The mediator, if any, ran in the socket layer above (S1.3).
     publish(message: T): void {
         const time = Date.now()
         this.last = { message, time }

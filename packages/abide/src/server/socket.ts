@@ -13,9 +13,9 @@
 // One socket per file in `src/server/sockets/<name>.ts`; the name comes from the filename. This core
 // is single-process (S3.3) — tail buffer + fanout live in one server process.
 
-import { type ChannelOptions, channel } from './channel.ts'
+import { type ChannelOptions, channel } from '../shared/channel.ts'
+import { DROP } from './DROP.ts'
 import type { Middleware } from './internal/middleware.ts'
-import { DROP } from './internal/socketHub.ts'
 
 // The ROOM key positional: `[]` for a single-topic (void) socket, `[args]` for a roomed one. A void
 // socket keeps today's argless surface (`publish(msg)`, `peek()`); a roomed socket adds the room key

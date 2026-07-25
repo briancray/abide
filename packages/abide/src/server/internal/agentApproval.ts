@@ -1,7 +1,7 @@
 // agentApproval — the socket-mux transport for the agent tool-approval decision (agent.md AG2.5,
 // TODO #10 DECIDED). A running loop that needs a decision publishes an approval REQUEST on a
 // per-run `(agentRun, toolCallId)` channel and awaits a DECISION message published back on that
-// same channel. Each channel is a `SocketHub` — the identical bounded fanout that backs cache-
+// same channel. Each channel is a `ChannelHub` — the identical bounded fanout that backs cache-
 // broadcast channels and named user sockets; no new transport is invented, the decision rides the
 // same mux.
 //
@@ -10,8 +10,8 @@
 // and `publishApprovalDecision(...)` is the wire path a UI/approver (over the mux HTTP/WS face)
 // calls to resolve a pending approval.
 
+import { ChannelHub } from '../../shared/internal/channelHub.ts'
 import type { ApprovalDecision, ApprovalRequest } from './agentTypes.ts'
-import { SocketHub } from './socketHub.ts'
 
 // Reserved `@agent:` namespace — distinct from `@rpc:` / `@tag:` cache channels and bare user
 // socket names (which never carry `@`/`:`), so an approval channel can never collide with either.
@@ -31,12 +31,12 @@ export type ApprovalChannelFrame =
 // Lazy per-channel hubs keyed by channel name. A short tail lets an approver that subscribes AFTER
 // the loop published the request still replay the pending request (a channel is per-toolCallId, so
 // it carries exactly one request in its lifetime — no stale cross-talk).
-const channels = new Map<string, SocketHub<ApprovalChannelFrame>>()
+const channels = new Map<string, ChannelHub<ApprovalChannelFrame>>()
 
-export function agentApprovalHub(name: string): SocketHub<ApprovalChannelFrame> {
+export function agentApprovalHub(name: string): ChannelHub<ApprovalChannelFrame> {
     let hub = channels.get(name)
     if (hub === undefined) {
-        hub = new SocketHub<ApprovalChannelFrame>({ tail: 64 })
+        hub = new ChannelHub<ApprovalChannelFrame>({ tail: 64 })
         channels.set(name, hub)
     }
     return hub
