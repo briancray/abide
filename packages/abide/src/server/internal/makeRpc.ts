@@ -15,11 +15,11 @@
 // symmetry: `peek`/`pending`/`refreshing`/`error`/`watch`/`refresh`/`invalidate`/`publish`/`snapshot`/
 // `seed`/`raw`/`isError` and the streaming chunk probes all work. The ONLY differences are transport
 // (method + args-in-body + the CSRF gate, enforced by the router off `__rpc.read`) and the default
-// cache policy: a mutation defaults to `memo: { ttl: 0 }` (replayable-streams.md §1) — coalesce
+// memo policy: a mutation defaults to `memo: { ttl: 0 }` (replayable-streams.md §1) — coalesce
 // identical CONCURRENT in-flight calls, retain nothing after settle — where a read retains (ttl ∞).
 // A non-shared mutation's slot is per-request, so ttl:0 is inert for the normal one-call-per-request
 // case and preserves at-least-once across separate requests; cross-request dedup needs `shared: true`.
-// An author who WANTS a mutation cached sets `memo: { ttl }` and the whole surface reflects it. `cache:
+// An author who WANTS a mutation cached sets `memo: { ttl }` and the whole surface reflects it. `memo:
 // false` opts the bare CALL out of the memo (direct run, at-least-once) for a non-idempotent handler;
 // the probe surface stays present but reads an empty slot. A `FormData` body always bypasses the memo
 // (it can't be safely keyed — see §1).

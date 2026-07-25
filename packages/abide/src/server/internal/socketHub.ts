@@ -2,16 +2,16 @@
 //
 // A hub is one named topic's in-memory state: a bounded tail ring buffer for replay and a set
 // of live subscribers, each backed by its own bounded FIFO queue. `publish` is the server path
-// (bypasses the handler); `ingressPublish` is the transport path for client publishes — it runs
-// the content-mediation handler (transform → publish, DROP/void → drop, throw → reject) before
+// (bypasses the mediator); `ingressPublish` is the transport path for client publishes — it runs
+// the client-publish mediator (transform → publish, DROP/void → drop, throw → reject) before
 // fanning out. Delivery is at-most-once, best-effort: on a subscriber queue overflow the oldest
 // message is dropped for that subscriber (S3.4).
 
 import { Subscriber } from '../../shared/internal/subscriber.ts'
 import type { SocketOptions } from '../socket.ts'
 
-// A handler returning DROP (or nothing) suppresses the client publish. Exported so mediating
-// handlers can signal an explicit drop without republishing.
+// A mediator returning DROP (or nothing) suppresses the client publish. Exported so mediators
+// can signal an explicit drop without republishing.
 export const DROP: unique symbol = Symbol('abide.socket.drop')
 
 interface TailEntry<T> {
@@ -35,7 +35,7 @@ export class SocketHub<T> {
         this.ttl = options.ttl ?? Infinity
     }
 
-    // Server publish — append to the tail buffer and fan out. Never runs the handler (S1.3).
+    // Server publish — append to the tail buffer and fan out. Never runs the mediator (S1.3).
     publish(message: T): void {
         const time = Date.now()
         this.last = { message, time }
