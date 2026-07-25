@@ -177,7 +177,7 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 | `abide/shared/state` | `state(initial, transform?)`; `.computed(fn)`, `.linked(src, transform?)`, `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). Scope-free signal wrapper — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`state.computed`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `memo({ shared })`). |
 | `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too |
 
-`state`/`watch` are the sync/owned face of the same signal that `memo` (async/loaded) is built on — RPC and sockets are `memo` + transport. All four are isomorphic: same import, same call, both sides.
+`state`/`watch` are the sync/owned face of the same signal that `memo` (async/loaded) is built on — and `channel` is its push/subscribe face. The two transport laws follow the pull/push split: `rpc = memo + transport`, `socket = channel + transport`. All are isomorphic: same import, same call, both sides.
 
 ### Cache verbs (method form canonical; globals only for tags)
 | Method (per callable) | Global (tags only) |

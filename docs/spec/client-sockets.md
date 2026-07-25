@@ -35,8 +35,9 @@ adds no durability the server never had.
    }
    ```
 
-   Probes are **zero-arg** (a socket is one topic, not an args-keyed memo — contrast the RPC
-   read's `fn.peek(args)`).
+   Probes are **zero-arg for a void (single-topic) socket**; a roomed socket (`Args`, ADR 0023)
+   keys them by the room, exactly like an args-keyed memo — `peek(room)`/`chunks(room)`/… (on par
+   with the RPC read's `fn.peek(args)`).
 2. **Module-swap, parallel to the RPC proxy (rpc-core §6).** On the server a `.abide` imports the
    real `Socket` (in-proc hub). At build the bundler swaps a `server/sockets/*` import for a
    synthesized **client proxy** speaking the same surface over the WS mux. Keyed on **import

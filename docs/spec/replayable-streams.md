@@ -4,7 +4,7 @@
 streaming) is shipped (`streaming-ssr-plan.md` PR1–6). The `ReplayableStream` primitive, unified verb
 routing, and client-attach handoff described here are **built through step 5** (the SSR→client handoff,
 §5, landed as the client half of 4b — see *Build order* step 4; the source-derived SSR budget, §6, is
-step 5); **only step 6 (optional socket-core convergence) remains**. Every decision
+step 5); the socket-core convergence (step 6) **landed via ADR 0023** — a socket is now `channel + transport`, the channel and memo sharing one `ReactiveReadSurface`. Every decision
 below is grounded against the code it was designed against (anchors are `file:line` as of writing). This spec supersedes two earlier `rpc-core.md` decisions — §14.1 (mutations
 not-coalesced/cached "today") and §12.2–3 (a stream bypasses the value cache; no replay buffer by
 default) — both recorded under *Superseded prior decisions* with the exact prior wording.
@@ -324,7 +324,7 @@ more — the block just re-reads the warm memo (`emitStreamAttach.test.ts` prove
 streamer races the global `ABIDE_SSR_STREAM_BUDGET` (default raised to 300 000 ms, last-resort) ONLY for a
 non-abide source; an abide RPC source (`attachable`) awaits its items with no global cap, bounded by its
 own bilateral timeout. The budget timer is LAZILY armed (memoized `scope.budget()`), so an all-abide-source
-page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`). Only step 6 remains.
+page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`). Step 6 (socket-core convergence) has since landed via ADR 0023.
 
 - The **first** consumer starts the source (owned by the slot, §3). Each chunk is `chunks.push(chunk)`,
   `bytes += measureBytes(chunk)`, then the `waiters` are drained (resolve-and-clear). `done`/`error`/
