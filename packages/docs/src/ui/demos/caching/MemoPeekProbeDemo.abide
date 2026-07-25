@@ -9,7 +9,7 @@
     await new Promise((resolve) => setTimeout(resolve, 300))
     return `hello ${id}`
   })
-  const snapshot = state.computed(() => (started ? (greeting.peek({ id: "a" }) ?? "undefined (pending)") : "idle"))
+  const snapshot = memo(() => (started ? (greeting.peek({ id: "a" }) ?? "undefined (pending)") : "idle"))
   function read() { started = true }
 </script>
 

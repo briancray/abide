@@ -1,6 +1,7 @@
-// reactive/dynamic component names — `<C/>` where `const C = state.computed(() => done ?
-// Done : Pending)`. The selected components must be SCRIPT-scoped (imports/props), since a cell lives in
-// the `<script>`. Proves SSR renders the current branch, and flipping the cell swaps the mounted one.
+// reactive/dynamic component names — `<C/>` where `const C = memo(() => done ? Done : Pending)`. The
+// selected components must be SCRIPT-scoped (imports/props), since the binding lives in the `<script>`.
+// Proves SSR renders the current branch, and flipping the state swaps the mounted one — and that
+// reactive-component detection keys on MEMOS as well as cells (ADR 0024).
 
 import { describe, expect, test } from 'bun:test'
 import { state } from '../../shared/state.ts'
@@ -20,10 +21,11 @@ const DONE = `<span data-testid="d">done</span>`
 const PAGE =
     `<script>` +
     `import { state } from "abide/shared/state"; ` +
+    `import { memo } from "abide/shared/memo"; ` +
     `import Pending from "./Pending.abide"; ` +
     `import Done from "./Done.abide"; ` +
     `let done = state(false); ` +
-    `const Current = state.computed(() => done ? Done : Pending)` +
+    `const Current = memo(() => done ? Done : Pending)` +
     `</script>` +
     `<div><Current/></div>` +
     `<button onclick={() => done = true}>finish</button>`

@@ -23,7 +23,7 @@ export default GET((): Capability[] => [
     {
         name: 'Reactivity',
         path: '/templating/reactivity',
-        blurb: 'state + state.computed + state.linked drive fine-grained DOM updates.',
+        blurb: 'state + memo derivation drive fine-grained DOM updates.',
     },
     {
         name: 'Bindings & directives',

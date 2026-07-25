@@ -15,7 +15,7 @@
 
 import { encode } from '../../shared/internal/codec.ts'
 import type { MemoContext } from '../../shared/internal/context.ts'
-import { getContext, runInContext } from '../../shared/internal/context.ts'
+import { disposeContext, getContext, runInContext } from '../../shared/internal/context.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
@@ -96,9 +96,9 @@ function pageImports(
 // (pre-transform) into the CURRENT component's bucket in call order, then delegates to the real memo
 // factory (behaviour identical). We record the raw initial — not the post-transform value — because the
 // client replays it as `state(seed, transform)`, so the transform is re-applied there; recording the
-// post-transform value would double-apply it. `.computed`/`.linked` are passed through untouched (they
-// carry no serializable initial and never consume a seed slot on the client), so a bucket's local ordinal
-// count stays identical on both sides. `context.states` is `unknown[][]` — one bucket per component
+// post-transform value would double-apply it. `.shared` is passed through untouched (it carries no
+// serializable initial and never consumes a seed slot on the client), so a bucket's local ordinal count
+// stays identical on both sides. `context.states` is `unknown[][]` — one bucket per component
 // instance in mount order; `forComponent()` opens the next bucket and returns a recorder bound to it. The
 // page + its layouts share the root bucket (bucket 0); each `<Component/>` adapter opens its own, so a
 // component's `state()`-sequence divergence stays inside its bucket. See §5 / decision 10.
@@ -112,8 +112,6 @@ function makeRecordingState(): StateFactory {
             return state(initial, transform)
         } as StateFactory
         return Object.assign(rec, {
-            computed: state.computed,
-            linked: state.linked,
             shared: state.shared,
             forComponent,
         }) as StateFactory
@@ -451,6 +449,7 @@ export function streamPageDocument(
             enc(documentTail(seed, opts))
             controller.close()
             ctx.stream = undefined // per-render scope — never leak deferreds onto a reused context.
+            disposeContext(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
         },
     })
 }
@@ -521,6 +520,7 @@ export function streamSoftNav(
                 }
             }
             ctx.stream = undefined
+            disposeContext(ctx)
         },
     })
 }

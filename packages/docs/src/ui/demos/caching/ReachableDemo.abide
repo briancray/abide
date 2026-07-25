@@ -1,12 +1,13 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import cacheReachable from "$server/rpc/cacheReachable"
 
   // reachable(host) actively probes a host: the app's own origin answers (true), a dead local port
   // is refused (false).
   let reachStarted = state(false)
-  const reachSelf = state.computed(() => (reachStarted ? String(cacheReachable.peek()?.self ?? "…") : "idle"))
-  const reachDead = state.computed(() => (reachStarted ? String(cacheReachable.peek()?.dead ?? "…") : "idle"))
+  const reachSelf = memo(() => (reachStarted ? String(cacheReachable.peek()?.self ?? "…") : "idle"))
+  const reachDead = memo(() => (reachStarted ? String(cacheReachable.peek()?.dead ?? "…") : "idle"))
   function startReach() { reachStarted = true }
 </script>
 

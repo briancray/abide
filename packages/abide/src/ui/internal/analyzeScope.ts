@@ -47,11 +47,27 @@ export interface ImportBinding {
     named: { imported: string; local: string }[]
 }
 
-export type BindingKind = 'state' | 'computed' | 'linked' | 'const' | 'function' | 'prop' | 'import'
+export type BindingKind = 'state' | 'memo' | 'const' | 'function' | 'prop' | 'import'
 
 export interface Binding {
     name: string
     kind: BindingKind
+}
+
+// Everything `rewriteCellRefs` needs to decide what a bare identifier MEANS (ADR 0024 §5).
+//
+// `cells` are writable state cells: a read becomes `n()`, a write becomes `n.set(x)`.
+// `memos` are auto-called memos: only the BARE reference becomes `m()`. A memo is read-only and carries a
+// surface, so `m.peek()` / `m.refresh()` / `m.state()` and an explicit `m()` are left alone — reach into
+// the VALUE with `{m}` or `{m().field}`.
+// `depCallees` are the callees whose FIRST argument is DEPENDENCY position (`watch`, `memo`). A bare
+// cell/memo there is the NODE, not its value, so the auto-call is suppressed — the wart that used to force
+// `watch(() => count, h)`. A cell already IS `(): T`, which is what a `source: () => T` expects, so this is
+// a compiler-only change with no runtime or type change.
+export interface CellScope {
+    cells: Set<string>
+    memos: Set<string>
+    depCallees: Set<string>
 }
 
 export interface ScriptInfo {
@@ -79,6 +95,10 @@ export interface ScopeAnalysis {
     module: ScriptInfo | null
     instance: ScriptInfo | null
     cellNames: Set<string>
+    // Everything a template-expression rewrite needs: cells, auto-called memos, dependency-position
+    // callees. `cellNames` above is `cellScope.cells` — kept as its own field because WRITABILITY (not
+    // auto-call) is what `bind:` and the seeded-state plumbing key on.
+    cellScope: CellScope
     declared: Set<string>
     // All side-effect CSS import specifiers across module + instance scripts, in source order.
     cssImports: string[]
@@ -766,13 +786,15 @@ function rhsExtent(tokens: Tok[], start: number): number {
     return last
 }
 
-export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
-    if (cellNames.size === 0) return code
+export function rewriteCellRefs(code: string, scope: CellScope): string {
+    const { cells: cellNames, memos: memoNames, depCallees } = scope
+    if (cellNames.size === 0 && memoNames.size === 0) return code
     const tokens = tokenize(code)
     if (tokens.length === 0) return code
     const braces = analyzeBraces(tokens)
     const { enclBraceOpen, isObjectBrace } = braces
-    const { declNameIdx, shadows } = buildScopes(tokens, braces, (name) => cellNames.has(name))
+    const named = (name: string): boolean => cellNames.has(name) || memoNames.has(name)
+    const { declNameIdx, shadows } = buildScopes(tokens, braces, named)
 
     // Is `tokens[i]` (a cell-named Identifier) a genuine reference we should rewrite?
     const isCellRef = (i: number): boolean => {
@@ -781,6 +803,33 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
         if (declNameIdx.has(i)) return false // declaration / parameter name
         if (isShadowed(shadows, tokenAt(tokens, i).text, i)) return false
         return true
+    }
+
+    // Is `tokens[i]` the sole first argument of a DEPENDENCY-POSITION callee (`watch(count, h)`,
+    // `memo(a, t)`)? There the bare identifier is the NODE — auto-calling it would hand the API a value.
+    const inDependencyPosition = (i: number): boolean => {
+        if (depCallees.size === 0) return false
+        const after = tokens[i + 1]?.kind
+        if (after !== K.CommaToken && after !== K.CloseParenToken) return false
+        if (i === 0 || tokenAt(tokens, i - 1).kind !== K.OpenParenToken) return false
+        let j = i - 2
+        if (j < 0) return false
+        // Walk back over an explicit generic argument list (`memo<Foo>(a, t)`) to reach the callee name.
+        const arity = greaterArity(tokenAt(tokens, j).kind)
+        if (arity > 0) {
+            let depth = arity
+            j--
+            while (j >= 0 && depth > 0) {
+                const kind = tokenAt(tokens, j).kind
+                if (kind === K.LessThanToken) depth--
+                else depth += greaterArity(kind)
+                j--
+            }
+            if (depth !== 0) return false
+        }
+        if (j < 0) return false
+        const callee = tokenAt(tokens, j)
+        return isIdentifierLike(callee.kind) && depCallees.has(callee.text)
     }
 
     // Object-literal property key or method name (`{ n: … }`, `{ n() {} }`) — not a reference.
@@ -873,12 +922,46 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
             continue
         }
 
-        if (isIdentifierLike(kind) && cellNames.has(t.text) && isCellRef(i)) {
+        if (isIdentifierLike(kind) && named(t.text) && isCellRef(i)) {
             const name = t.text
             const next = tokens[i + 1]
             const nextKind = next?.kind
 
             if (isObjectKey(i)) {
+                i++
+                continue
+            }
+
+            // A bare cell/memo in dependency position stays the NODE (ADR 0024 §5).
+            if (inDependencyPosition(i)) {
+                i++
+                continue
+            }
+
+            // A MEMO is read-only and carries its own surface, so only the bare reference auto-calls:
+            // `m.peek()` / `m.refresh()` / `m.state()` and an explicit `m(...)` are left verbatim, as is any
+            // write form (`const m = memo(…)` makes an assignment a loud TypeError on its own).
+            if (memoNames.has(name)) {
+                if (
+                    nextKind === K.DotToken ||
+                    nextKind === K.QuestionDotToken ||
+                    nextKind === K.OpenParenToken ||
+                    nextKind === K.EqualsToken ||
+                    (nextKind !== undefined && COMPOUND_OP.has(nextKind))
+                ) {
+                    i++
+                    continue
+                }
+                if (isObjectShorthand(i)) {
+                    flush(t.start)
+                    out += `${name}: ${name}()`
+                    cursor = t.end
+                    i++
+                    continue
+                }
+                flush(t.start)
+                out += `${name}()`
+                cursor = t.end
                 i++
                 continue
             }
@@ -1449,19 +1532,96 @@ function callFollows(rest: string): boolean {
     return rest.charAt(index) === '('
 }
 
-// Recognise a cell initializer (`state(...)`, `state.computed(...)`, `state.linked(...)`) — including
-// the generic call form (`state<T>(...)`) — where `stateLocal` is the local bound to `abide/shared/state`.
-function cellKind(init: string, stateLocal: string): 'state' | 'computed' | 'linked' | null {
+// Recognise a cell initializer (`state(...)`, `state.shared(...)`) — including the generic call form
+// (`state<T>(...)`) — where `stateLocal` is the local bound to `abide/shared/state`. Derivation is not
+// here: `state.computed`/`state.linked` are retired in favour of `memo` (ADR 0024), see `memoKind`.
+function cellKind(init: string, stateLocal: string): 'state' | null {
     const esc = escapeRegExp(stateLocal)
-    const method = init.match(new RegExp(`^${esc}\\s*\\.\\s*(computed|linked|shared)\\b`))
-    if (method !== null) {
-        if (!callFollows(init.slice(method[0].length))) return null
-        // `state.shared(key, initial)` is a writable cell — treated like `state(...)` for the read/write
-        // reference rewrite; its cross-instance/cross-tab sharing is a pure runtime concern.
-        return method[1] === 'computed' ? 'computed' : method[1] === 'linked' ? 'linked' : 'state'
-    }
+    // `state.shared(key, initial)` is a writable cell — treated like `state(...)` for the read/write
+    // reference rewrite; its cross-instance/cross-tab sharing is a pure runtime concern.
+    const method = init.match(new RegExp(`^${esc}\\s*\\.\\s*shared\\b`))
+    if (method !== null) return callFollows(init.slice(method[0].length)) ? 'state' : null
     const bare = init.match(new RegExp(`^${esc}`))
     if (bare !== null && callFollows(init.slice(bare[0].length))) return 'state'
+    return null
+}
+
+// Index of the call `(` that follows a callee at the start of `rest` (skipping an explicit generic
+// argument list), or -1 when no call follows. The index form of `callFollows`.
+function callOpenIndex(rest: string): number {
+    let index = 0
+    while (index < rest.length && /\s/.test(rest.charAt(index))) index++
+    if (rest.charAt(index) === '<') {
+        let depth = 0
+        for (; index < rest.length; index++) {
+            const char = rest.charAt(index)
+            if (char === '<') depth++
+            else if (char === '>') {
+                if (rest.charAt(index - 1) === '=') continue // `=>` arrow in a function-type arg
+                depth--
+                if (depth === 0) {
+                    index++
+                    break
+                }
+            }
+        }
+        if (depth !== 0) return -1
+        while (index < rest.length && /\s/.test(rest.charAt(index))) index++
+    }
+    return rest.charAt(index) === '(' ? index : -1
+}
+
+// Index of the `)` matching the `(` at `open`, skipping string/template literals, or -1.
+function matchingParen(text: string, open: number): number {
+    let depth = 0
+    for (let index = open; index < text.length; index++) {
+        const char = text.charAt(index)
+        if (char === "'" || char === '"' || char === '`') {
+            index++
+            while (index < text.length && text.charAt(index) !== char) {
+                if (text.charAt(index) === '\\') index++
+                index++
+            }
+            continue
+        }
+        if (char === '(' || char === '[' || char === '{') depth++
+        else if (char === ')' || char === ']' || char === '}') {
+            depth--
+            if (depth === 0) return index
+        }
+    }
+    return -1
+}
+
+// Recognise a `memo(...)` initializer and classify it (ADR 0024 §5), where `memoLocal` is the local bound
+// to `abide/shared/memo` and `known` is every cell/memo already declared above this one.
+//   'cell' — `memo(…).state()`: the WRITABLE projection, indistinguishable from `state(…)` at the
+//            reference-rewrite level (read `n()`, write `n.set(x)`).
+//   'memo' — auto-called: the compiler can SEE an argless, non-async fn literal (or, in the two-argument
+//            source form, a bare cell/memo node), so a bare reference reads as the value.
+//   null   — anything opaque (`memo(someFnRef)`, an async body, an arged handler): a plain const binding.
+//            Guessing wrong would emit a call with undefined args, or a promise-returning read that blanks
+//            the server-rendered text and refills it a microtask later (ADR 0024 §3).
+function memoKind(init: string, memoLocal: string, known: Set<string>): 'memo' | 'cell' | null {
+    const bare = init.match(new RegExp(`^${escapeRegExp(memoLocal)}\\b`))
+    if (bare === null) return null
+    const rest = init.slice(bare[0].length)
+    const open = callOpenIndex(rest)
+    if (open === -1) return null
+    const close = matchingParen(rest, open)
+    if (close === -1) return null
+
+    const after = rest.slice(close + 1).trim()
+    const projection = after.match(/^\.\s*state\b/)
+    if (projection !== null && callFollows(after.slice(projection[0].length))) return 'cell'
+
+    const args = splitTopLevelCommas(rest.slice(open + 1, close)).map((part) => part.trim())
+    const source = args[0] ?? ''
+    const transform = args[1]
+    if (transform !== undefined && /^async\b/.test(transform)) return null
+    if (/^\(\s*\)\s*=>/.test(source)) return 'memo'
+    if (/^function\s*\*?\s*\(\s*\)/.test(source)) return 'memo'
+    if (/^[A-Za-z_$][\w$]*$/.test(source) && known.has(source)) return 'memo'
     return null
 }
 
@@ -1606,6 +1766,8 @@ interface RawScript {
     imports: ImportBinding[]
     bindings: Binding[]
     cells: Set<string>
+    memos: Set<string>
+    depCallees: Set<string>
     declared: Set<string>
     cssImports: string[]
     componentImports: ComponentImport[]
@@ -1630,7 +1792,9 @@ function localForSpecifier(
     return fallback
 }
 
-function analyzeScript(content: string): RawScript {
+// `outerNodes` carries the cells/memos of an enclosing script (the module script, when analysing the
+// instance one) so the two-argument `memo(source, transform)` form still recognises a node declared there.
+function analyzeScript(content: string, outerNodes?: Set<string>): RawScript {
     const records = scanTopLevel(content)
     const imports: ImportBinding[] = []
     const cssImports: string[] = []
@@ -1659,9 +1823,17 @@ function analyzeScript(content: string): RawScript {
 
     const stateLocal = localForSpecifier(imports, 'abide/shared/state', 'state', 'state')
     const propsLocal = localForSpecifier(imports, 'abide/ui/props', 'props', 'props')
+    const memoLocal = localForSpecifier(imports, 'abide/shared/memo', 'memo', 'memo')
+    const watchLocal = localForSpecifier(imports, 'abide/shared/watch', 'watch', 'watch')
+    // The two APIs whose FIRST argument is a source NODE, not a value (ADR 0024 §5).
+    const depCallees = new Set<string>([memoLocal, watchLocal])
 
     const bindings: Binding[] = []
     const cells = new Set<string>()
+    const memos = new Set<string>()
+    // Every node in scope at this point of the walk — declaration order matters, so `memo(a, t)` only
+    // recognises `a` when it was declared above.
+    const nodes = new Set<string>(outerNodes)
     const declared = new Set<string>()
 
     for (const record of records) {
@@ -1703,9 +1875,20 @@ function analyzeScript(content: string): RawScript {
             let kind: BindingKind = 'const'
             if (isSimpleIdentifier(pattern)) {
                 const cell = cellKind(init, stateLocal)
+                const derived = cell === null ? memoKind(init, memoLocal, nodes) : null
                 if (cell) {
                     kind = cell
                     cells.add(pattern)
+                    nodes.add(pattern)
+                } else if (derived === 'cell') {
+                    // `memo(…).state()` — the writable projection reads and writes exactly like a cell.
+                    kind = 'state'
+                    cells.add(pattern)
+                    nodes.add(pattern)
+                } else if (derived === 'memo') {
+                    kind = 'memo'
+                    memos.add(pattern)
+                    nodes.add(pattern)
                 } else if (isPropsInit(init, propsLocal)) {
                     kind = 'prop'
                 }
@@ -1730,6 +1913,8 @@ function analyzeScript(content: string): RawScript {
         imports,
         bindings,
         cells,
+        memos,
+        depCallees,
         declared,
         cssImports,
         componentImports,
@@ -1740,21 +1925,35 @@ function analyzeScript(content: string): RawScript {
 
 export function analyzeScope(root: Root): ScopeAnalysis {
     const moduleRaw = root.moduleScript ? analyzeScript(root.moduleScript.content) : null
-    const instanceRaw = root.instanceScript ? analyzeScript(root.instanceScript.content) : null
+    const instanceRaw = root.instanceScript
+        ? analyzeScript(
+              root.instanceScript.content,
+              moduleRaw === null ? undefined : new Set([...moduleRaw.cells, ...moduleRaw.memos]),
+          )
+        : null
 
     const cellNames = new Set<string>()
+    const memoNames = new Set<string>()
+    const depCallees = new Set<string>()
     const declared = new Set<string>()
     for (const raw of [moduleRaw, instanceRaw]) {
         if (!raw) continue
         for (const name of raw.cells) cellNames.add(name)
+        for (const name of raw.memos) memoNames.add(name)
+        for (const name of raw.depCallees) depCallees.add(name)
         for (const name of raw.declared) declared.add(name)
     }
+    const cellScope: CellScope = { cells: cellNames, memos: memoNames, depCallees }
 
     // Module setup can only reference module cells; instance setup can reference both (module bindings
     // are in scope for the instance).
     const module: ScriptInfo | null = moduleRaw
         ? {
-              setupCode: rewriteCellRefs(moduleRaw.strippedCode, moduleRaw.cells),
+              setupCode: rewriteCellRefs(moduleRaw.strippedCode, {
+                  cells: moduleRaw.cells,
+                  memos: moduleRaw.memos,
+                  depCallees: moduleRaw.depCallees,
+              }),
               imports: moduleRaw.imports,
               bindings: moduleRaw.bindings,
               cssImports: moduleRaw.cssImports,
@@ -1762,7 +1961,7 @@ export function analyzeScope(root: Root): ScopeAnalysis {
         : null
     const instance: ScriptInfo | null = instanceRaw
         ? {
-              setupCode: rewriteCellRefs(instanceRaw.strippedCode, cellNames),
+              setupCode: rewriteCellRefs(instanceRaw.strippedCode, cellScope),
               imports: instanceRaw.imports,
               bindings: instanceRaw.bindings,
               cssImports: instanceRaw.cssImports,
@@ -1781,5 +1980,14 @@ export function analyzeScope(root: Root): ScopeAnalysis {
     if (moduleRaw !== null) for (const m of moduleRaw.moduleImports) moduleImports.push(m)
     if (instanceRaw !== null) for (const m of instanceRaw.moduleImports) moduleImports.push(m)
 
-    return { module, instance, cellNames, declared, cssImports, componentImports, moduleImports }
+    return {
+        module,
+        instance,
+        cellNames,
+        cellScope,
+        declared,
+        cssImports,
+        componentImports,
+        moduleImports,
+    }
 }

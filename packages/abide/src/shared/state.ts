@@ -11,18 +11,13 @@
 // file rule intact). The cell is CALLABLE — `count()` reads and `count.set(x)` writes, exactly the
 // atom's own call/`set`/`peek`.
 
-import {
-    computed,
-    effect,
-    type State as ReactiveState,
-    state as reactiveState,
-} from './internal/reactive.ts'
+import { type State as ReactiveState, state as reactiveState } from './internal/reactive.ts'
 
 // Global-registry brand so `analyzeScope.ts` recognises a cell by identity without a shared import.
 const STATE_CELL = Symbol.for('abide.ui.stateCell')
 
-// The reactive kinds a cell can be. `computed` cells are read-only (no setter installed).
-type StateKind = 'state' | 'computed' | 'linked' | 'shared'
+// The reactive kinds a cell can be. Both are OWNED and writable — derivation is `memo`'s job (ADR 0024).
+type StateKind = 'state' | 'shared'
 
 // Client (browser DOM) vs SSR (bun, no DOM). `document` is the reliable discriminator: present in a
 // real browser AND under the test DOM, absent on the abide server — where a process-global shared
@@ -30,22 +25,17 @@ type StateKind = 'state' | 'computed' | 'linked' | 'shared'
 const isClient = typeof document !== 'undefined'
 
 // A callable branded reactive cell — the atom's shape (`()` tracks, `set()` publishes, `peek()` reads
-// untracked) plus the kind brand. `computed` cells throw on `set`.
+// untracked) plus the kind brand.
 export interface State<T> extends ReactiveState<T> {
     [STATE_CELL]: StateKind
 }
 
-// The public `state` surface: callable to make a writable cell, with `.computed` / `.linked` /
-// `.shared` factories.
+// The public `state` surface: callable to make a writable cell, plus the `.shared` factory. `state` keeps
+// only what it OWNS (ADR 0024) — `.computed` and `.linked` were never owned state, they were fed, and both
+// are one mechanism: a `memo`. `memo(() => …)` is the old `computed`; `memo(() => …).state()` is the old
+// `linked`, where a local write holds until the next re-fill.
 export interface StateFactory {
     <T>(initial: T, transform?: (value: T) => T): State<T>
-    computed<T>(fn: () => T): State<T>
-    // Two overloads so the value type is precise in BOTH shapes: without a transform the cell holds the
-    // SOURCE type (`state.linked(() => count)` → `State<number>`), with one it holds the transform's
-    // RETURN type. A single `transform?` param cannot express this — it would leave the no-transform value
-    // type uninferable (`unknown`/`any`).
-    linked<S>(source: () => S): State<S>
-    linked<S, T>(source: () => S, transform: (value: S) => T): State<T>
     shared<T>(key: string, initial: T): State<T>
 }
 
@@ -55,38 +45,6 @@ function makeState<T>(initial: T, transform?: (value: T) => T): State<T> {
     cell.set = (value: T) => backing.set(transform ? transform(value) : value)
     cell.peek = () => backing.peek()
     cell[STATE_CELL] = 'state'
-    return cell
-}
-
-function makeComputed<T>(fn: () => T): State<T> {
-    const derived = computed<T>(fn)
-    const cell = (() => derived()) as State<T>
-    cell.set = () => {
-        throw new TypeError('state.computed(...) is read-only and cannot be assigned')
-    }
-    cell.peek = () => derived.peek()
-    cell[STATE_CELL] = 'computed'
-    return cell
-}
-
-// A writable cell whose value is reseeded whenever `source` changes. Local writes hold until the next
-// reseed. The reseed effect lives for the component's lifetime (owned by the instance scope).
-function makeLinked<S, T>(source: () => S, transform?: (value: S) => T): State<T> {
-    const backing = reactiveState<T>(undefined as unknown as T)
-    let seeded = false
-    effect(() => {
-        const next = source()
-        const value = (transform ? transform(next) : (next as unknown as T)) as T
-        backing.set(value)
-        seeded = true
-    })
-    // Guard: if an effect flush has not yet run (server single-pass), the effect above ran synchronously
-    // on creation, so `seeded` is already true here.
-    void seeded
-    const cell = (() => backing()) as State<T>
-    cell.set = (value: T) => backing.set(value)
-    cell.peek = () => backing.peek()
-    cell[STATE_CELL] = 'linked'
     return cell
 }
 
@@ -159,7 +117,5 @@ function makeShared<T>(key: string, initial: T): State<T> {
 }
 
 export const state: StateFactory = Object.assign(makeState as StateFactory, {
-    computed: makeComputed,
-    linked: makeLinked,
     shared: makeShared,
 })

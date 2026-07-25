@@ -14,7 +14,7 @@
     await new Promise((resolve) => setTimeout(resolve, 150))
     return { key, at: runs }
   })
-  const value = state.computed(() => (started ? (counter.peek({ key: "alpha" })?.at ?? "loading") : "idle"))
+  const value = memo(() => (started ? (counter.peek({ key: "alpha" })?.at ?? "loading") : "idle"))
 
   function start() { started = true }
   function readAgain() { reads++; counter({ key: "alpha" }) }

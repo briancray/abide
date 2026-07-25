@@ -1,3 +1,4 @@
+import { memo } from 'abide/shared/memo'
 import { state } from 'abide/shared/state'
 import { watch } from 'abide/shared/watch'
 
@@ -16,9 +17,10 @@ import { watch } from 'abide/shared/watch'
 // for mutable per-request/per-user state, use `memo({ shared })` instead.
 export const total = state(0)
 
-// A derived value in the same module — recomputes off `total` on read. Calling `total()` inside the
-// `computed` callback is what wires the dependency (bare `total` would just capture the cell itself).
-export const doubled = state.computed(() => total() * 2)
+// A derived value in the same module — recomputes off `total` on read. An argless `memo` declares no
+// inputs, so they are inferred from the body (ADR 0024): calling `total()` inside it is what wires the
+// dependency, and the bare call `doubled()` returns the value, not a promise.
+export const doubled = memo(() => total() * 2)
 
 // A live server-side subscription: this `watch` fires whenever `total` changes, from ANY module that
 // writes it — proof the graph is reactive on the server, not just recompute-on-read.

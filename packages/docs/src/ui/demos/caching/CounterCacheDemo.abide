@@ -1,5 +1,6 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import cacheCounter from "$server/rpc/cacheCounter"
 
   // A cached read is a memoized slot. Repeated reads REUSE it — the server run count holds no matter how
@@ -7,7 +8,7 @@
   // (peek() here is just the non-blocking display of the value — its own demo lives on the Async reads page.)
   let started = state(false)
   let reads = state(0)
-  const runsText = state.computed(() => (started ? (cacheCounter.peek({ key: "alpha" })?.runs ?? "loading") : "idle"))
+  const runsText = memo(() => (started ? (cacheCounter.peek({ key: "alpha" })?.runs ?? "loading") : "idle"))
 
   function startCounter() { started = true }
   function readAgain() { reads++; cacheCounter({ key: "alpha" }) } // bare call = the load; cached → no re-run

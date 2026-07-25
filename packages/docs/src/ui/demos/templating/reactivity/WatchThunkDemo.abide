@@ -1,11 +1,12 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import { watch } from "abide/shared/watch"
 
   // watch(thunk) — an auto-tracked effect. It reads `doubled` and mirrors a derived value into a
   // separate cell, so the thunk re-runs whenever its tracked reads change (seeded once on mount).
   let count = state(0)
-  const doubled = state.computed(() => count * 2)
+  const doubled = memo(() => count * 2)
   let mirror = state(0)
   watch(() => { mirror = doubled + 1 })
 </script>

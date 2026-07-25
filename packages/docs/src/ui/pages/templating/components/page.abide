@@ -32,7 +32,7 @@
     <NamedSlotDemo />
   </Demo>
 
-  <p>A cell can hold a component. <code>&lt;Current/&gt;</code> where <code>Current</code> is a <code>state.computed</code> re-mounts whenever the computed selects a different component — a reactive component.</p>
+  <p>A cell or memo can hold a component. <code>&lt;Current/&gt;</code> where <code>Current</code> is a <code>memo</code> re-mounts whenever the derivation selects a different component — a reactive component.</p>
   <Demo id="reactive-component" title="Reactive component — a cell-named tag <code>&lt;Current/&gt;</code>" client="src/ui/demos/templating/components/ReactiveComponentDemo.abide">
     <ReactiveComponentDemo />
   </Demo>

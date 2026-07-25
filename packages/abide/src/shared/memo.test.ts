@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { createContext, runInContext } from './internal/context.ts'
+import { anonymousPrincipal, type RequestScope, runInScope } from '../server/internal/scope.ts'
+import { createContext, getContext, type MemoContext, runInContext } from './internal/context.ts'
 import { effect, state } from './internal/reactive.ts'
 import { memo } from './memo.ts'
 
@@ -639,5 +640,53 @@ describe('memo — loud on fn.length false zeros (ADR 0024 §Consequences)', () 
             const c = memo(({ n = 0 }: { n?: number }) => n + 1)
             expect(c.peek({ n: 1 })).toBeUndefined() // args-keyed: a cold peek kicks a load
         })
+    })
+})
+
+describe('memo — a per-request auto slot does not outlive its request', () => {
+    // REGRESSION GUARD: an auto-tracked fill subscribes to whatever the body reads, which is often a
+    // MODULE-level state that outlives the request. Its slot dies with the request context, so its node
+    // must be torn down with it — otherwise every request leaves a dead observer on that module state
+    // (unbounded memory, and O(requests) work on every write to it).
+    function makeScope(): RequestScope {
+        const url = new URL('http://localhost/test')
+        return {
+            request: new Request(url),
+            cookies: new Bun.CookieMap(),
+            identity: anonymousPrincipal(),
+            bag: {},
+            route: { kind: 'rpc', name: 'test', params: {}, url, navigating: false },
+            slots: new Map<string, unknown>(),
+        }
+    }
+
+    test('a REQUEST-scoped auto backing registers teardown on its context', () => {
+        const moduleState = state(1)
+        const derived = memo(() => moduleState() * 2)
+        runInScope(makeScope(), () => {
+            expect(derived()).toBe(2)
+            expect(getContext().disposers?.length).toBe(1)
+        })
+    })
+
+    test('a LONG-LIVED context registers nothing — its slots are long-lived too', () => {
+        const moduleState = state(1)
+        const derived = memo(() => moduleState() * 2)
+        const context = createContext()
+        runInContext(context, () => {
+            expect(derived()).toBe(2)
+        })
+        expect(context.disposers).toBeUndefined()
+    })
+
+    test('runInScope has already run the disposers by the time it returns', () => {
+        const moduleState = state(1)
+        const derived = memo(() => moduleState() * 2)
+        let seen: MemoContext | undefined
+        runInScope(makeScope(), () => {
+            derived()
+            seen = getContext()
+        })
+        expect(seen?.disposers).toBeUndefined()
     })
 })

@@ -609,10 +609,10 @@ class ClientEmitter {
                 throw new Error('component slot with children is missing its body')
             childrenFn = `() => (${this.mountable(body, '$scope')})`
         }
-        // A cell-named tag (`<C/>` where `const C = state.computed(...)`) is a REACTIVE component: read
-        // it in an effect and re-mount on identity change. Otherwise resolve the component once.
-        if (this.analysis.cellNames.has(name)) {
-            const read = rewriteCellRefs(name, this.analysis.cellNames)
+        // A cell- or memo-named tag (`<C/>` where `const C = memo(() => …)`) is a REACTIVE component:
+        // read it in an effect and re-mount on identity change. Otherwise resolve the component once.
+        if (this.analysis.cellScope.cells.has(name) || this.analysis.cellScope.memos.has(name)) {
+            const read = rewriteCellRefs(name, this.analysis.cellScope)
             props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${read}), $props, ${childrenFn}, $scope));\n`
         } else {
             props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${componentRef(this.analysis, name)}, $props, ${childrenFn}, $scope));\n`

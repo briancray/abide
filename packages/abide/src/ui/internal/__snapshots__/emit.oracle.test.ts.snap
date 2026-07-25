@@ -148,8 +148,6 @@ exports[`emit regression — server output numeric state 1`] = `"<span>42<!---->
 
 exports[`emit regression — server output props destructuring 1`] = `"x<!---->"`;
 
-exports[`emit regression — server output computed from state 1`] = `"<span>4<!----></span>"`;
-
 exports[`emit regression — server output const + function 1`] = `"<span>15<!----></span>"`;
 
 exports[`emit regression — server output injected import 1`] = `"hi bob<!---->"`;
@@ -318,8 +316,6 @@ exports[`emit regression — client DOM numeric state 1`] = `"<span>42<!----></s
 
 exports[`emit regression — client DOM props destructuring 1`] = `"x<!---->"`;
 
-exports[`emit regression — client DOM computed from state 1`] = `"<span>4<!----></span>"`;
-
 exports[`emit regression — client DOM const + function 1`] = `"<span>15<!----></span>"`;
 
 exports[`emit regression — client DOM injected import 1`] = `"hi bob<!---->"`;
@@ -340,18 +336,22 @@ exports[`emit regression — client DOM function handler mutates state 1`] = `"<
 
 exports[`emit regression — client DOM function handler mutates state 2`] = `"<button>+</button><span>1<!----></span>"`;
 
-exports[`emit regression — client DOM computed updates on state change 1`] = `"<button>+</button><span>4<!----></span>"`;
-
-exports[`emit regression — client DOM computed updates on state change 2`] = `"<button>+</button><span>6<!----></span>"`;
-
 exports[`emit regression — client DOM state drives if 1`] = `"<button>go</button><!--[--><!--if--><!--]-->"`;
 
 exports[`emit regression — client DOM state drives if 2`] = `"<button>go</button><!--[--><p>yes</p><!--if--><!--]-->"`;
 
-exports[`emit regression — client DOM state.linked reseeds 1`] = `"<button>+</button><span>10<!----></span>"`;
-
-exports[`emit regression — client DOM state.linked reseeds 2`] = `"<button>+</button><span>20<!----></span>"`;
-
 exports[`emit regression — client DOM event click updates via state 1`] = `"<button>0<!----></button>"`;
 
 exports[`emit regression — client DOM event click updates via state 2`] = `"<button>1<!----></button>"`;
+
+exports[`emit regression — server output memo derives from state 1`] = `"<span>4<!----></span>"`;
+
+exports[`emit regression — client DOM memo derives from state 1`] = `"<span>4<!----></span>"`;
+
+exports[`emit regression — client DOM memo re-fills on state change 1`] = `"<button>+</button><span>4<!----></span>"`;
+
+exports[`emit regression — client DOM memo re-fills on state change 2`] = `"<button>+</button><span>6<!----></span>"`;
+
+exports[`emit regression — client DOM memo writable projection reseeds 1`] = `"<button>+</button><span>10<!----></span>"`;
+
+exports[`emit regression — client DOM memo writable projection reseeds 2`] = `"<button>+</button><span>20<!----></span>"`;

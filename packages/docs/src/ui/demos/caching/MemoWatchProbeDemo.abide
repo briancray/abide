@@ -13,7 +13,7 @@
     return runs
   })
   counter.watch({ id: "a" }, () => { hits++ })
-  const value = state.computed(() => (started ? (counter.peek({ id: "a" }) ?? "loading") : "idle"))
+  const value = memo(() => (started ? (counter.peek({ id: "a" }) ?? "loading") : "idle"))
   function read() { started = true }
   function refresh() { counter.refresh({ id: "a" }) }
 </script>

@@ -1,5 +1,6 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import cacheFlaky from "$server/rpc/cacheFlaky"
 
   // A read that fails returns a 400; the `error` probe holds it as an HttpError.
@@ -11,7 +12,7 @@
   }
 
   let flakyStarted = state(false)
-  const flakyError = state.computed(() => (flakyStarted ? errorText(cacheFlaky.error({ fail: true })) : "idle"))
+  const flakyError = memo(() => (flakyStarted ? errorText(cacheFlaky.error({ fail: true })) : "idle"))
   function startFlaky() {
     flakyStarted = true
     cacheFlaky({ fail: true }).catch(() => {}) // bare call kicks the failing load; error lands on the slot

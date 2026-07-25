@@ -16,11 +16,11 @@
     <StateDemo />
   </Demo>
 
-  <Demo id="computed" title="<code>state.computed</code> — derived cell" client="src/ui/demos/templating/reactivity/ComputedDemo.abide">
+  <Demo id="computed" title="<code>memo(fn)</code> — derived value" client="src/ui/demos/templating/reactivity/ComputedDemo.abide">
     <ComputedDemo />
   </Demo>
 
-  <Demo id="linked" title="<code>state.linked</code> — reseeding writable cell" client="src/ui/demos/templating/reactivity/LinkedDemo.abide">
+  <Demo id="linked" title="<code>memo(fn).state()</code> — writable projection" client="src/ui/demos/templating/reactivity/LinkedDemo.abide">
     <LinkedDemo />
   </Demo>
 

@@ -175,8 +175,8 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | Capability | Kind | Status |
 | --- | --- | --- |
 | `state(initial, transform?)` — writable cell (isomorphic: `abide/shared/state`, server-usable) | PW+RT | [x] (/templating/reactivity; server-side in `src/shared/serverReactive.ts` → /caching/memo ServerStateDemo) |
-| `state.computed(...)` — read-only derived | PW | [x] (/templating/reactivity; also server-side in ServerStateDemo) |
-| `state.linked(src, transform?)` — reseeded writable | PW | [x] (/templating/reactivity) |
+| `memo(fn)` — auto-tracked derived value (ADR 0024) | PW | [x] (/templating/reactivity; also server-side in ServerStateDemo) |
+| `memo(src, transform?).state()` — writable projection, provisional until re-fill | PW | [x] (/templating/reactivity) |
 | `state.shared(key, initial)` — cell shared by key (instances + tabs) | PW | [x] (/templating/reactivity: `SharedTally.abide` ×2, cross-instance + cross-tab) |
 | `watch(source, handler)` / `watch(thunk)` — isomorphic (`abide/shared/watch`; fires server-side too) | PW+RT | [x] (/templating/reactivity; server-side in ServerStateDemo's `serverReactive.ts`) |
 | `props<T>()` — reactive prop reader | PW | [~] (/templating/components — props read reactively by a child component; the degenerate page-level reader demo was removed) |
@@ -212,7 +212,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `{#try}` / `{:catch}` / `{:finally}` — error boundary | PW | [x] (/templating/errors) |
 | Inline component `{#component Name()}` (TitleCase) invoked `<Name/>` + `<slot/>` + pass as prop | PW | [x] (/templating/components) |
 | Nested `{#component}` inside `<Foo>` → Foo's same-named prop (named slot) | PW | [x] (/templating/components) |
-| Reactive component — cell-named tag `<C/>` (`const C = state.computed(…)`) re-mounts on change | PW | [x] (/templating/components) |
+| Reactive component — cell/memo-named tag `<C/>` (`const C = memo(…)`) re-mounts on change | PW | [x] (/templating/components) |
 | Component-valued prop typing `Component<Props>` | unit (checkTemplate.test.ts) | [x] |
 | `<script>` / `<script module>` / nested branch-local scripts | PW | [~] |
 | `<style>` component-scoped / nested subtree-scoped | PW | [x] (/templating/styling ScopedStyleDemo + e2e/styling.spec) |

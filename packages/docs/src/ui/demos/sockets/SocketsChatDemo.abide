@@ -1,5 +1,6 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import socketsChat, { type ChatMessage } from "$server/sockets/socketsChat"
   import socketsPublish from "$server/rpc/socketsPublish"
 
@@ -12,7 +13,7 @@
   let clientDraft = state("hello from the client")
 
   // Status straight from the socket's reactive probes — no hand-rolled connection bookkeeping.
-  let status = state.computed(() =>
+  let status = memo(() =>
     socketsChat.error() ? "error" :
     socketsChat.refreshing() ? "reconnecting" :
     socketsChat.pending() ? "connecting" : "live",

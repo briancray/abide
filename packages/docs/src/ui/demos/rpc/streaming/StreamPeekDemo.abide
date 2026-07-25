@@ -1,11 +1,12 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import rpcTicker from "$server/rpc/rpcTicker"
 
   // On a STREAMING read, `peek(args)` is the LATEST chunk — the stream's current value, reactive, with
   // no list to maintain. Reading it kicks the shared run; it advances as each tick lands.
   let started = state(false)
-  const latest = state.computed(() => (started ? (rpcTicker.peek({ count: 4 })?.label ?? "…") : "idle"))
+  const latest = memo(() => (started ? (rpcTicker.peek({ count: 4 })?.label ?? "…") : "idle"))
   function start() { started = true; rpcTicker.peek({ count: 4 }) }
 </script>
 

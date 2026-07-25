@@ -1,12 +1,13 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import socketsChat from "$server/sockets/socketsChat"
 
   // `peek()` is a reactive status probe: the latest message on the topic, no list to maintain. Reading
   // it opens the subscription, so it updates live as messages arrive — including publishes from the
   // other demos on this page, since they all share the one `socketsChat` topic.
   let draft = state("latest wins")
-  const latest = state.computed(() => socketsChat.peek()?.text ?? "—")
+  const latest = memo(() => socketsChat.peek()?.text ?? "—")
   function publish() {
     socketsChat.publish({ id: crypto.randomUUID(), text: draft, via: "client" })
   }

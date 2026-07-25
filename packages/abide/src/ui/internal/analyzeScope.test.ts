@@ -3,13 +3,28 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import {
     analyzeScope,
+    type CellScope,
     collectFreeIdentifiers,
     rewriteCellRefs,
     rewriteFreeIdentifiers,
 } from './analyzeScope.ts'
 import { parse } from './parse.ts'
 
-const CELLS = (...names: string[]): Set<string> => new Set(names)
+const CELLS = (...names: string[]): CellScope => ({
+    cells: new Set(names),
+    memos: new Set(),
+    depCallees: new Set(),
+})
+
+// `collectFreeIdentifiers` / `rewriteFreeIdentifiers` take a plain set of DECLARED script bindings.
+const DECLARED = (...names: string[]): Set<string> => new Set(names)
+
+// An auto-called memo scope (ADR 0024 §5) with the framework dependency-position callees in place.
+const MEMOS = (...names: string[]): CellScope => ({
+    cells: new Set(),
+    memos: new Set(names),
+    depCallees: new Set(['memo', 'watch']),
+})
 
 // ---------------------------------------------------------------------------
 // rewriteCellRefs — reads
@@ -273,32 +288,32 @@ describe('rewriteCellRefs declarations and shadowing', () => {
 
 describe('collectFreeIdentifiers', () => {
     test('returns undeclared, non-global identifiers', () => {
-        const free = collectFreeIdentifiers('a + b + c', CELLS('a'))
+        const free = collectFreeIdentifiers('a + b + c', DECLARED('a'))
         expect([...free].sort()).toEqual(['b', 'c'])
     })
 
     test('skips property accesses and object keys', () => {
-        const free = collectFreeIdentifiers('obj.prop + { key: value }', CELLS())
+        const free = collectFreeIdentifiers('obj.prop + { key: value }', DECLARED())
         expect([...free].sort()).toEqual(['obj', 'value'])
     })
 
     test('object shorthand counts as a free read', () => {
-        const free = collectFreeIdentifiers('({ x })', CELLS())
+        const free = collectFreeIdentifiers('({ x })', DECLARED())
         expect([...free]).toEqual(['x'])
     })
 
     test('skips JS globals', () => {
-        const free = collectFreeIdentifiers('Math.max(a, undefined)', CELLS())
+        const free = collectFreeIdentifiers('Math.max(a, undefined)', DECLARED())
         expect([...free]).toEqual(['a'])
     })
 
     test('skips arrow parameters (locals)', () => {
-        const free = collectFreeIdentifiers('items.map(x => x + y)', CELLS())
+        const free = collectFreeIdentifiers('items.map(x => x + y)', DECLARED())
         expect([...free].sort()).toEqual(['items', 'y'])
     })
 
     test('skips declared names', () => {
-        const free = collectFreeIdentifiers('greet + state', CELLS('greet', 'state'))
+        const free = collectFreeIdentifiers('greet + state', DECLARED('greet', 'state'))
         expect([...free]).toEqual([])
     })
 })
@@ -308,7 +323,7 @@ describe('collectFreeIdentifiers', () => {
 // ---------------------------------------------------------------------------
 
 describe('rewriteFreeIdentifiers type-position operands', () => {
-    const rw = (code: string) => rewriteFreeIdentifiers(code, CELLS(), '$s')
+    const rw = (code: string) => rewriteFreeIdentifiers(code, DECLARED(), '$s')
 
     test('value operand rewritten, `as` type operand left alone', () => {
         expect(rw('(x as Foo).bar')).toBe('($s.x as Foo).bar')
@@ -375,29 +390,31 @@ describe('rewriteFreeIdentifiers type-position operands', () => {
 // ---------------------------------------------------------------------------
 
 describe('analyzeScope cell recognition', () => {
-    test('state / computed / linked recognized', () => {
+    test('state / memo / memo(...).state() recognized (ADR 0024)', () => {
         const root = parse(
-            "<script>import { state } from 'abide/shared/state'; let n = state(0); const d = state.computed(()=>n*2); let e = state.linked(()=>n)</script>{n}",
+            "<script>import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let n = state(0); const d = memo(()=>n*2); let e = memo(()=>n).state()</script>{n}",
         )
         const analysis = analyzeScope(root)
-        expect([...analysis.cellNames].sort()).toEqual(['d', 'e', 'n'])
+        // `cellNames` is WRITABILITY: the owned cell and the memo's writable projection, not the memo.
+        expect([...analysis.cellNames].sort()).toEqual(['e', 'n'])
+        expect([...analysis.cellScope.memos].sort()).toEqual(['d'])
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
         const kinds = Object.fromEntries(instance.bindings.map((b) => [b.name, b.kind]))
         expect(kinds.n).toBe('state')
-        expect(kinds.d).toBe('computed')
-        expect(kinds.e).toBe('linked')
+        expect(kinds.d).toBe('memo')
+        expect(kinds.e).toBe('state')
     })
 
     test('aliased state import (import { state as s })', () => {
         const root = parse(
-            "<script>import { state as s } from 'abide/shared/state'; let n = s(0); let d = s.linked(()=>n)</script>{n}",
+            "<script>import { state as s } from 'abide/shared/state'; let n = s(0); let d = s.shared('k', 0)</script>{n}",
         )
         const analysis = analyzeScope(root)
         expect([...analysis.cellNames].sort()).toEqual(['d', 'n'])
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
-        expect(instance.setupCode).toBe(' let n = s(0); let d = s.linked(()=>n())')
+        expect(instance.setupCode).toBe(" let n = s(0); let d = s.shared('k', 0)")
     })
 
     test('props() destructuring marks bindings as prop', () => {
@@ -540,7 +557,7 @@ describe('rewriteCellRefs fuzz/property', () => {
             //    no declarations, members, or object keys).
             for (const [i, tok] of tokens.entries()) {
                 if (tok.kind !== SyntaxKind.Identifier) continue
-                if (!cellSet.has(tok.text)) continue
+                if (!cellSet.cells.has(tok.text)) continue
                 const next = tokens[i + 1]
                 const after = tokens[i + 2]
                 const isRead = next !== undefined && next.kind === SyntaxKind.OpenParenToken
@@ -552,5 +569,147 @@ describe('rewriteCellRefs fuzz/property', () => {
                 expect(isRead || isWrite).toBe(true)
             }
         }
+    })
+})
+
+// ---------------------------------------------------------------------------
+// rewriteCellRefs — memo auto-call + dependency position (ADR 0024 §5)
+// ---------------------------------------------------------------------------
+
+describe('rewriteCellRefs memo auto-call', () => {
+    test('a bare memo reference auto-calls', () => {
+        expect(rewriteCellRefs('d + 1', MEMOS('d'))).toBe('d() + 1')
+    })
+
+    test('the memo SURFACE is left alone', () => {
+        expect(rewriteCellRefs('d.peek()', MEMOS('d'))).toBe('d.peek()')
+        expect(rewriteCellRefs('d.refresh()', MEMOS('d'))).toBe('d.refresh()')
+        expect(rewriteCellRefs('d?.peek()', MEMOS('d'))).toBe('d?.peek()')
+    })
+
+    test('an explicit call is left alone, so `{d().field}` reads the value', () => {
+        expect(rewriteCellRefs('d().field', MEMOS('d'))).toBe('d().field')
+    })
+
+    test('a memo is read-only: a write form is left verbatim (a const assignment throws)', () => {
+        expect(rewriteCellRefs('d = 5', MEMOS('d'))).toBe('d = 5')
+        expect(rewriteCellRefs('d += 5', MEMOS('d'))).toBe('d += 5')
+    })
+
+    test('object shorthand becomes a read', () => {
+        expect(rewriteCellRefs('({ d })', MEMOS('d'))).toBe('({ d: d() })')
+    })
+})
+
+describe('rewriteCellRefs dependency position', () => {
+    test('watch(count, handler) keeps the NODE — the wart the thunk used to work around', () => {
+        expect(
+            rewriteCellRefs('watch(count, handler)', {
+                ...CELLS('count'),
+                depCallees: new Set(['watch']),
+            }),
+        ).toBe('watch(count, handler)')
+    })
+
+    test('watch(count) — the single-argument thunk form — also keeps the node', () => {
+        expect(
+            rewriteCellRefs('watch(count)', { ...CELLS('count'), depCallees: new Set(['watch']) }),
+        ).toBe('watch(count)')
+    })
+
+    test('memo(a, transform) keeps the node; the transform body still reads', () => {
+        expect(
+            rewriteCellRefs('memo(a, (v) => v + b)', { ...MEMOS('a', 'b'), cells: new Set() }),
+        ).toBe('memo(a, (v) => v + b())')
+    })
+
+    test('an explicit generic argument list still resolves the callee', () => {
+        expect(rewriteCellRefs('memo<number>(a, t)', MEMOS('a'))).toBe('memo<number>(a, t)')
+    })
+
+    test('a cell in any OTHER argument position still reads', () => {
+        expect(
+            rewriteCellRefs('watch(source, count)', {
+                ...CELLS('count', 'source'),
+                depCallees: new Set(['watch']),
+            }),
+        ).toBe('watch(source, count())')
+    })
+
+    test('a cell passed to a non-dependency callee still reads', () => {
+        expect(
+            rewriteCellRefs('log(count)', { ...CELLS('count'), depCallees: new Set(['watch']) }),
+        ).toBe('log(count())')
+    })
+})
+
+// ---------------------------------------------------------------------------
+// analyzeScope — memo binding classification (ADR 0024 §5)
+// ---------------------------------------------------------------------------
+
+describe('analyzeScope memo bindings', () => {
+    const scopeOf = (script: string) =>
+        analyzeScope(parse(`<script>${script}</script><span>{d}</span>`))
+
+    test('an argless fn literal is auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo(() => 1)",
+        )
+        expect([...analysis.cellScope.memos]).toEqual(['d'])
+        expect([...analysis.cellScope.cells]).toEqual([])
+    })
+
+    test('memo(…).state() is a writable CELL, not an auto-called memo', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; let d = memo(() => 1).state()",
+        )
+        expect([...analysis.cellScope.cells]).toEqual(['d'])
+        expect([...analysis.cellScope.memos]).toEqual([])
+    })
+
+    test('an opaque fn reference is NOT auto-called (guessing would emit undefined args)', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo(loadThing)",
+        )
+        expect([...analysis.cellScope.memos]).toEqual([])
+    })
+
+    test('an ASYNC argless body is NOT auto-called (a promise read would blank the SSR text)', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo(async () => 1)",
+        )
+        expect([...analysis.cellScope.memos]).toEqual([])
+    })
+
+    test('an ARGED handler is NOT auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo((args) => args.id)",
+        )
+        expect([...analysis.cellScope.memos]).toEqual([])
+    })
+
+    test('the two-argument source form recognises a node declared above', () => {
+        const analysis = scopeOf(
+            "import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let a = state(1); const d = memo(a, (v) => v + 1)",
+        )
+        expect([...analysis.cellScope.memos]).toEqual(['d'])
+    })
+
+    test('watch and memo are registered as dependency-position callees', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; import { watch } from 'abide/shared/watch'; const d = memo(() => 1)",
+        )
+        expect([...analysis.cellScope.depCallees].sort()).toEqual(['memo', 'watch'])
+    })
+
+    test('a memo declared in the MODULE script is visible to the instance script', () => {
+        const analysis = analyzeScope(
+            parse(
+                "<script module>import { memo } from 'abide/shared/memo'; const base = memo(() => 1)</script>" +
+                    "<script>import { memo } from 'abide/shared/memo'; const d = memo(base, (v) => v + 1)</script>" +
+                    '<span>{d}</span>',
+            ),
+        )
+        expect([...analysis.cellScope.memos].sort()).toEqual(['base', 'd'])
     })
 })

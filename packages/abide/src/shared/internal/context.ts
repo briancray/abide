@@ -86,10 +86,33 @@ export interface MemoContext {
     // render it resolves to snapshot-then-complete (client-sockets.md CS5), so iterating a live topic
     // can't hang the render; an RPC/socket-transport/background request leaves it false → live subscribe.
     rendering?: boolean | undefined
+    // Teardown for reactive nodes whose lifetime is this context's. A per-request slot that takes `memo`'s
+    // AUTO-TRACKED fill path (ADR 0024 §2) owns a `computed` subscribed to whatever the body reads — often
+    // a MODULE-level `state`, which outlives the request. Without teardown each request would leave a dead
+    // observer on that module state forever: unbounded memory, and O(requests) work on every write.
+    disposers?: (() => void)[] | undefined
 }
 
 export function createContext(): MemoContext {
     return { slots: new Map<string, unknown>(), states: [] }
+}
+
+// Register teardown for a node whose lifetime is the ACTIVE context's. No-op bookkeeping on a long-lived
+// context (the client singleton / the server default), whose slots are long-lived too — the caller decides
+// whether a slot is request-scoped.
+export function onContextDispose(dispose: () => void): void {
+    const context = getContext()
+    if (context.disposers === undefined) context.disposers = [dispose]
+    else context.disposers.push(dispose)
+}
+
+// Tear down everything registered on `context`, once. Called when a request's work is finished — after the
+// response for a buffered reply, after the streamed drain for a streaming one.
+export function disposeContext(context: MemoContext): void {
+    const disposers = context.disposers
+    if (disposers === undefined) return
+    context.disposers = undefined
+    for (const dispose of disposers) dispose()
 }
 
 // Client-side single module-level cache (one per tab/session). Lazily created.

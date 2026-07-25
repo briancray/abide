@@ -200,10 +200,11 @@ function genComponent(
                 break // ignored on components (M4b)
         }
     }
-    // A cell-named tag is a reactive component; SSR is a snapshot, so read its current value once.
-    const componentExpr = analysis.cellNames.has(name)
-        ? rewriteCellRefs(name, analysis.cellNames)
-        : componentRef(analysis, name)
+    // A cell- OR memo-named tag is a reactive component; SSR is a snapshot, so read its value once.
+    const componentExpr =
+        analysis.cellScope.cells.has(name) || analysis.cellScope.memos.has(name)
+            ? rewriteCellRefs(name, analysis.cellScope)
+            : componentRef(analysis, name)
     out += `    const $c = ${componentExpr};\n`
     out += `    if (typeof $c !== "function") throw new Error(${JSON.stringify(`<${name}> is not a component in scope (expected a render function)`)});\n`
     if (hasChildren)

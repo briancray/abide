@@ -668,8 +668,8 @@ export const FIXTURES: Fixture[] = [
         props: () => ({ who: 'x' }),
     },
     {
-        name: 'computed from state',
-        src: "<script>import { state } from 'abide/shared/state'; let n = state(2); const d = state.computed(()=>n*2)</script><span>{d}</span>",
+        name: 'memo derives from state',
+        src: "<script>import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let n = state(2); const d = memo(()=>n*2)</script><span>{d}</span>",
         kind: 'script',
     },
     {
@@ -730,8 +730,8 @@ export const FIXTURES: Fixture[] = [
         },
     },
     {
-        name: 'computed updates on state change',
-        src: "<script>import { state } from 'abide/shared/state'; let n = state(2); const d = state.computed(()=>n*2)</script><button onclick={()=>n++}>+</button><span>{d}</span>",
+        name: 'memo re-fills on state change',
+        src: "<script>import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let n = state(2); const d = memo(()=>n*2)</script><button onclick={()=>n++}>+</button><span>{d}</span>",
         kind: 'script',
         server: false,
         interact: async (host) => {
@@ -754,8 +754,8 @@ export const FIXTURES: Fixture[] = [
         },
     },
     {
-        name: 'state.linked reseeds',
-        src: "<script>import { state } from 'abide/shared/state'; let a = state(1); let b = state.linked(()=>a * 10)</script><button onclick={()=>a++}>+</button><span>{b}</span>",
+        name: 'memo writable projection reseeds',
+        src: "<script>import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let a = state(1); let b = memo(()=>a * 10).state()</script><button onclick={()=>a++}>+</button><span>{b}</span>",
         kind: 'script',
         server: false,
         interact: async (host) => {

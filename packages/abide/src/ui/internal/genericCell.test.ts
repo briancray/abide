@@ -1,4 +1,4 @@
-// GENERIC cell/props call forms (`state<T>(...)`, `state.computed<T>(...)`, `props<T>()`) must be
+// GENERIC cell/props call forms (`state<T>(...)`, `memo<T>(...)`, `props<T>()`) must be
 // recognised by analyzeScope so the read/write reference rewrite still fires — otherwise a
 // `let n = state<number>(0)` is treated as a plain binding, `{n}` reads the cell object, and a spread
 // (`[...n]`) throws "{} is not iterable" at runtime. Bare forms are unchanged; a `state < 5` comparison
@@ -39,9 +39,9 @@ test('nested-generic `state<Array<number>>(...)` (no top-level comma) is still a
     expect(out).toContain('m()')
 })
 
-test('generic `state.computed<T>(...)` is recognised as a computed cell', () => {
+test('generic `memo<T>(...)` is recognised as an auto-called memo', () => {
     const out = emit(
-        `import { state } from "abide/shared/state"\n  let d = state.computed<number>(() => 1)`,
+        `import { memo } from "abide/shared/memo"\n  const d = memo<number>(() => 1)`,
         '<p>{d}</p>',
     )
     expect(out).toContain('d()')

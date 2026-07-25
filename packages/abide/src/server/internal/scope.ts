@@ -11,7 +11,12 @@
 // inside a request writing into that request's cache and nowhere else.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { type MemoContext, runInContext, runOutsideContext } from '../../shared/internal/context.ts'
+import {
+    disposeContext,
+    type MemoContext,
+    runInContext,
+    runOutsideContext,
+} from '../../shared/internal/context.ts'
 import { isBrowser } from '../../shared/internal/isBrowser.ts'
 
 export type RouteKind =
@@ -80,8 +85,21 @@ export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T 
     // Share the exact same Map with the M1 cache context so getContext().slots === scope.slots.
     const context: MemoContext = { slots: scope.slots, states: [] }
     const store = storage()
-    if (store === undefined) return runInContext(context, fn) // client fallback (no async isolation)
-    return store.run(scope, () => runInContext(context, fn))
+    const run = (): T | Promise<T> =>
+        store === undefined
+            ? runInContext(context, fn) // client fallback (no async isolation)
+            : store.run(scope, () => runInContext(context, fn))
+    const result = run()
+    // Tear the request's context-scoped reactive nodes down once its work is finished. A STREAMING page
+    // reply is not finished here — its drain runs off the response body — so that one disposes itself at
+    // the end of the drain (`renderDocumentStream`), which is also where the stream scope is cleared.
+    if (result instanceof Promise) {
+        return result.finally(() => {
+            if (context.stream === undefined) disposeContext(context)
+        }) as Promise<T>
+    }
+    if (context.stream === undefined) disposeContext(context)
+    return result
 }
 
 export function currentScope(): RequestScope | undefined {

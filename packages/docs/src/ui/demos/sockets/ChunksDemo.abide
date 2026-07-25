@@ -1,12 +1,13 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import socketsChat from "$server/sockets/socketsChat"
 
   // `chunks()` is the recent-message tail as a snapshot array (capped by the socket's `tail`). Render
   // it directly with a plain `{#for}` instead of appending in a `{#for await}` — same data, snapshot
   // rather than stream. Reading it opens the subscription, so the array grows live.
   let draft = state("into the tail")
-  const transcript = state.computed(() => socketsChat.chunks() ?? [])
+  const transcript = memo(() => socketsChat.chunks() ?? [])
   function publish() {
     socketsChat.publish({ id: crypto.randomUUID(), text: draft, via: "client" })
   }

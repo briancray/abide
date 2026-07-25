@@ -29,7 +29,7 @@
 import { registerTaggedMemo } from '../server/internal/memoTags.ts'
 import { currentScope, runOutsideScope } from '../server/internal/scope.ts'
 import { canonicalKey } from './internal/codec.ts'
-import { getContext, serverDefaultContext } from './internal/context.ts'
+import { getContext, onContextDispose, serverDefaultContext } from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
 import { type Computed, computed, effect, type State, state, untrack } from './internal/reactive.ts'
@@ -598,6 +598,15 @@ export function memo<Args, T>(
             const current = override()
             return current !== null && current.run === base.run ? current.state : base.state
         })
+        // A PER-REQUEST slot's backing must not outlive the request: its `fill` subscribes to whatever the
+        // body read, which is often a MODULE-level `state` that lives for the whole process. The slots of a
+        // long-lived context (client singleton / server default) are long-lived too, so they register nothing.
+        if (!isBrowser && currentScope() !== undefined) {
+            onContextDispose(() => {
+                merged.dispose()
+                fill.dispose()
+            })
+        }
         return { version, fill, override, merged, filled: () => ranOnce }
     }
 

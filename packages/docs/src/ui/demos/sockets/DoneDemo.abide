@@ -1,12 +1,13 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import socketsPulse from "$server/sockets/socketsPulse"
 
   // `done()` is the socket's lifecycle probe: TRUE while the topic is IDLE — no active read has opened
   // a subscription yet — and FALSE once a live read (iterate / peek / chunks) holds one. This topic is
   // untouched by the other demos, so it starts idle and reads yes. done() is a STATUS probe: reading it
   // only observes the lifecycle, it never opens the subscription itself.
-  const idle = state.computed(() => (socketsPulse.done() ? "yes" : "no"))
+  const idle = memo(() => (socketsPulse.done() ? "yes" : "no"))
   function open() { socketsPulse.peek() } // an ACTIVE probe opens the subscription → done() flips to no
 </script>
 

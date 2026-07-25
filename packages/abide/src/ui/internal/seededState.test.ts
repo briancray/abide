@@ -9,6 +9,7 @@
 import { expect, test } from 'bun:test'
 import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { encode } from '../../shared/internal/codec.ts'
+import { memo } from '../../shared/memo.ts'
 import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
 import { loadEmitted } from './emit.ts'
@@ -52,11 +53,11 @@ test('transform still applies to later writes on a seeded cell', () => {
     expect(cell.peek()).toBe(11)
 })
 
-test('.computed / .linked pass through and do NOT advance the ordinal', () => {
+test('a derivation never consumes a seed slot (ADR 0024: derivation is memo, not state)', () => {
     const s = makeSeededState(seed([[100, 200]]))
-    const c = s.computed(() => 1) // must not consume a state slot
-    expect(c.peek()).toBe(1)
-    // The next plain state() still consumes ordinal 0, proving computed did not advance it.
+    // A `memo` is not a `state` call at all, so it cannot advance the per-component ordinal.
+    const derived = memo(() => 1)
+    expect(derived()).toBe(1)
     expect(s(0).peek()).toBe(100)
     expect(s(0).peek()).toBe(200)
 })
@@ -68,7 +69,7 @@ function recordingState(recorded: unknown[]): StateFactory {
             recorded.push(initial)
             return state(initial, transform)
         } as StateFactory,
-        { computed: state.computed, linked: state.linked },
+        { shared: state.shared },
     )
 }
 

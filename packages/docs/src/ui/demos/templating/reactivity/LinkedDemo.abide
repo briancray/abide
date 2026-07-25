@@ -1,11 +1,12 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
 
-  // state.linked(source, transform?) — a writable cell reseeded whenever its source changes. A local
+  // memo(source, transform?).state() — a writable cell reseeded whenever its source changes. A local
   // write holds until the next reseed. Here the draft seeds to count × 100; bumping it edits locally,
   // and changing count reseeds and discards those edits.
   let count = state(0)
-  let draft = state.linked(() => count, (value) => value * 100)
+  let draft = memo(() => count, (value) => value * 100).state()
   function bumpDraft() { draft = draft + 1 }
 </script>
 

@@ -11,12 +11,12 @@
     if (failing) throw new Error(`memo boom for ${id}`)
     return `ok ${id}`
   })
-  const errorText = state.computed(() => {
+  const errorText = memo(() => {
     if (!started) return "idle"
     const e = flaky.error({ id: "a" })
     return e instanceof Error ? e.message : "none"
   })
-  const value = state.computed(() => (started ? (flaky.peek({ id: "a" }) ?? "—") : "idle"))
+  const value = memo(() => (started ? (flaky.peek({ id: "a" }) ?? "—") : "idle"))
   function trigger() { started = true; flaky({ id: "a" }).catch(() => {}) }
   function fixAndRetry() { failing = false; flaky.invalidate({ id: "a" }); flaky({ id: "a" }).catch(() => {}) }
 </script>

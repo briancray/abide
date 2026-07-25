@@ -62,11 +62,9 @@ export function makeSeededState(
                     : initial
             return state(value, transform)
         } as StateFactory
-        // `.computed`/`.linked`/`.shared` never consumed a seed slot; `.forComponent` dispenses the next
-        // component's bucket (same shared counter), so a component adapter can localize its child.
+        // `.shared` never consumed a seed slot; `.forComponent` dispenses the next component's bucket
+        // (same shared counter), so a component adapter can localize its child.
         return Object.assign(local, {
-            computed: state.computed,
-            linked: state.linked,
             shared: state.shared,
             forComponent,
         }) as StateFactory

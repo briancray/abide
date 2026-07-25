@@ -864,7 +864,7 @@ export function component(
     }
 }
 
-// A component whose identity is REACTIVE — the tag name is a cell (e.g. `const C = state.computed(() =>
+// A component whose identity is REACTIVE — the tag name is a cell or memo (e.g. `const C = memo(() =>
 // done ? Done : Pending)`, invoked `<C/>`). Reads the componentFn in an effect and, when it changes,
 // disposes the live instance and mounts the new one between the same slot anchors. The first run (under
 // hydration) claims the server nodes exactly like a static `component()`; later runs mount fresh.

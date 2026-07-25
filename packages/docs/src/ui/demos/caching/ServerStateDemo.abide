@@ -5,7 +5,7 @@
 
   // The SAME `state()` this component could use for local UI is, on the server, owned by a shared module
   // ($shared/serverReactive) and driven entirely by server code. These RPCs (two SEPARATE server
-  // modules) write and read it; `doubled` is a server-side `state.computed`, `fires` counts a server-side
+  // modules) write and read it; `doubled` is a server-side `memo`, `fires` counts a server-side
   // `watch`. Bump → the write propagates through the derived value and fires the subscription, all on the
   // server. Nothing here is client state except this snapshot of the last read.
   let snap = state<{ total: number; doubled: number; fires: number } | null>(null)

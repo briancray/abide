@@ -1,12 +1,13 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import Pending from "./StatusPending.abide"
   import Done from "./StatusDone.abide"
 
   // A cell can hold a COMPONENT. `<Current/>` where `Current` is a computed re-mounts whenever the
   // computed picks a different component — a reactive/dynamic component, no special syntax.
   let done = state(false)
-  const Current = state.computed(() => done ? Done : Pending)
+  const Current = memo(() => done ? Done : Pending)
 </script>
 
 <button data-testid="reactive-toggle" onclick={() => done = !done}>Toggle status</button>

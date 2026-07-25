@@ -1,12 +1,13 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
   import rpcTicker from "$server/rpc/rpcTicker"
 
   // On a STREAMING read, `done(args)` reports whether the stream has CLOSED — false while chunks are
   // still arriving, true once the run finishes. A pure status probe; here `peek` opens the run. Its own
   // key ({ count: 3 }) so this card owns its stream.
   let started = state(false)
-  const closed = state.computed(() => (started ? (rpcTicker.done({ count: 3 }) ? "yes" : "no") : "—"))
+  const closed = memo(() => (started ? (rpcTicker.done({ count: 3 }) ? "yes" : "no") : "—"))
   function start() { started = true; rpcTicker.peek({ count: 3 }) }
 </script>
 

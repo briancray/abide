@@ -35,7 +35,7 @@ test('state(v) counter increments, decrements, and clamps via its transform', as
     await expect(count).toHaveText('0')
 })
 
-test('state.computed derives reactively from the counter', async ({ page }) => {
+test('memo derives reactively from the counter', async ({ page }) => {
     await page.goto(PAGE)
     const doubled = page.getByTestId('doubled')
     await expect(doubled).toHaveText('0')
@@ -46,7 +46,7 @@ test('state.computed derives reactively from the counter', async ({ page }) => {
     await expect(doubled).toHaveText('4')
 })
 
-test('state.linked is independently writable and reseeds when its source changes', async ({
+test('a memo writable projection is independently writable and reseeds on re-fill', async ({
     page,
 }) => {
     await page.goto(PAGE)

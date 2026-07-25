@@ -1,14 +1,15 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
 
-  // state.computed(fn) — a read-only derived cell, recomputed lazily from whatever it reads. Drive
+  // memo(fn) — a read-only derived cell, recomputed lazily from whatever it reads. Drive
   // `count` and `doubled` follows with a fine-grained update to only its text node.
   let count = state(0)
-  const doubled = state.computed(() => count * 2)
+  const doubled = memo(() => count * 2)
 </script>
 
 <div class="row">
   <button data-testid="c-inc" onclick={() => count++}>Increment</button>
 </div>
 <p>Count: <strong data-testid="c-count">{count}</strong></p>
-<p>Doubled: <strong data-testid="doubled">{doubled}</strong> <span class="muted">(<code>state.computed</code>)</span></p>
+<p>Doubled: <strong data-testid="doubled">{doubled}</strong> <span class="muted">(<code>memo(fn)</code>)</span></p>

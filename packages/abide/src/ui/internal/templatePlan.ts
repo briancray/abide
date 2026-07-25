@@ -15,7 +15,7 @@
 // embed source. This module uses the TS7 scanner (through analyzeScope) and NEVER ships to the browser.
 
 import type { ScopeAnalysis } from './analyzeScope.ts'
-import { rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeScope.ts'
+import { type CellScope, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeScope.ts'
 import type { AttributeNode, Root, TemplateNode } from './ast.ts'
 
 // ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ export function scopeStyles(css: string, scopeAttr: string): string {
 // ---------------------------------------------------------------------------
 
 interface WalkContext {
-    cellNames: Set<string>
+    cellScope: CellScope
     declared: Set<string>
     scopeAttr: string | null
 }
@@ -250,7 +250,7 @@ interface LevelResult {
 }
 
 function rewriteExpr(ctx: WalkContext, expr: string): string {
-    const cellRewritten = rewriteCellRefs(expr, ctx.cellNames)
+    const cellRewritten = rewriteCellRefs(expr, ctx.cellScope)
     return rewriteFreeIdentifiers(cellRewritten, ctx.declared, '$scope')
 }
 
@@ -391,7 +391,7 @@ function planAttribute(ctx: WalkContext, attr: AttributeNode): AttrPlan {
             // SAME wrap (TODO #22): otherwise the cell collapses to `node()` and the node ref is never
             // assigned — `bindElement` writes the element through the `set`. An attach FN (`bind:element={fn}`)
             // is not a cell name, so it falls through to `rewriteExpr` and stays a callable.
-            if (ctx.cellNames.has(boundRaw)) {
+            if (ctx.cellScope.cells.has(boundRaw)) {
                 return {
                     kind: 'bind',
                     name: attr.name,
@@ -856,7 +856,7 @@ export function buildPlan(root: Root, analysis: ScopeAnalysis): TemplatePlan {
     const scopeAttr = styleNode ? `data-ab-${hashSource(styleNode.content)}` : null
     const scopedCss = styleNode && scopeAttr ? scopeStyles(styleNode.content, scopeAttr) : null
     const ctx: WalkContext = {
-        cellNames: analysis.cellNames,
+        cellScope: analysis.cellScope,
         declared: analysis.declared,
         scopeAttr,
     }

@@ -1,5 +1,6 @@
 <script>
   import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
 
   // A RICH-VALUE hydration-seed probe. Each `state` below is seeded with a value the OLD JSON seed could
   // not carry with its type intact — a Date, a BigInt past Number.MAX_SAFE_INTEGER, and a Map. The server
@@ -12,10 +13,10 @@
   let big = state(9007199254740993n)
   let tags = state(new Map([["a", 1], ["b", 2]]))
 
-  const dateOk = state.computed(() => at instanceof Date && at.getTime() === 1700000000000)
-  const bigOk = state.computed(() => typeof big === "bigint" && big === 9007199254740993n)
-  const mapOk = state.computed(() => tags instanceof Map && tags.get("a") === 1 && tags.get("b") === 2)
-  const allOk = state.computed(() => dateOk && bigOk && mapOk)
+  const dateOk = memo(() => at instanceof Date && at.getTime() === 1700000000000)
+  const bigOk = memo(() => typeof big === "bigint" && big === 9007199254740993n)
+  const mapOk = memo(() => tags instanceof Map && tags.get("a") === 1 && tags.get("b") === 2)
+  const allOk = memo(() => dateOk && bigOk && mapOk)
 </script>
 
 <style>
