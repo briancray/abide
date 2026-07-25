@@ -5,7 +5,7 @@
 // refresh/invalidate/publish). RPC/socket helpers bake this behavior in; users reach for
 // `memo()` to wrap their OWN third-party async functions and get identical ergonomics.
 //
-// Each cache slot `(memoId, canonicalKey(args))` IS a signal (§7.2): reading it in a
+// Each cache slot `(memoId, canonicalKey(args))` IS a state (§7.2): reading it in a
 // tracking context subscribes; resolve/invalidate/publish re-run subscribers. The slot is a
 // state machine idle -> pending -> value | error, with a `refreshing` flag while
 // revalidating over a retained value. pending/error/refreshing/peek are derived views of
@@ -26,7 +26,7 @@ import { canonicalKey } from './internal/codec.ts'
 import { getContext, serverDefaultContext } from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
-import { effect, type Signal, signal, untrack } from './internal/reactive.ts'
+import { effect, type State, state, untrack } from './internal/reactive.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
@@ -49,8 +49,8 @@ import { log } from './log.ts'
 // monomorphic in their own field — a stream slot's `value` is always undefined and vice versa.
 type Status = 'idle' | 'pending' | 'value' | 'error' | 'stream'
 
-// One immutable snapshot of a slot's state. Held inside the slot signal; every transition
-// replaces it with a fresh object so the signal's `===` comparison always fires.
+// One immutable snapshot of a slot's state. Held inside the slot state; every transition
+// replaces it with a fresh object so the state's `===` comparison always fires.
 interface SlotState<T> {
     status: Status
     value: T | undefined
@@ -64,7 +64,7 @@ interface Slot<Args, T> {
     args: Args
     // The full cache-map key (`prefix + canonicalKey(args)`), retained for LRU touch/size accounting.
     key: string
-    signal: Signal<SlotState<T>>
+    state: State<SlotState<T>>
     // The single in-flight load promise for this slot; the coalescing point.
     inflight: Promise<T> | null
     // When the current value/error settled (ms epoch), for TTL expiry. 0 while idle.
@@ -73,8 +73,8 @@ interface Slot<Args, T> {
     generation: number
     // Reactive chunk-progress tick for a STREAM slot (set on first stream start). Bumped on every chunk
     // push and on the terminal, so `latest`/`chunks`/`done` re-run as the transcript grows — kept SEPARATE
-    // from `signal` so per-chunk updates never re-run the bare read (which would restart a `{#for await}`).
-    streamTick?: Signal<number>
+    // from `state` so per-chunk updates never re-run the bare read (which would restart a `{#for await}`).
+    streamTick?: State<number>
 }
 
 // SERVER-ONLY broadcast sink (rpc-core §8, PR2). A shared memo calls this when a verb changes a
@@ -286,7 +286,7 @@ export function memo<Args, T>(
             slot = {
                 args,
                 key: slotKey,
-                signal: signal(idleState<T>()),
+                state: state(idleState<T>()),
                 inflight: null,
                 loadedAt: 0,
                 generation: 0,
@@ -312,7 +312,7 @@ export function memo<Args, T>(
 
     function isExpired(slot: Slot<Args, T>): boolean {
         if (ttl === Infinity) return false
-        const state = slot.signal.peek()
+        const state = slot.state.peek()
         if (state.status === 'stream') {
             // An OPEN stream is retained regardless of ttl (§2); a CLOSED one expires on the ttl-from-close
             // clock (`loadedAt` is stamped when the ReplayableStream settles, not when `fn` resolved).
@@ -325,7 +325,7 @@ export function memo<Args, T>(
     }
 
     function setState(slot: Slot<Args, T>, next: SlotState<T>): void {
-        slot.signal.set(next)
+        slot.state.set(next)
     }
 
     // Begin (or coalesce onto) a load for this slot. `keepStale` retains the current value and
@@ -333,7 +333,7 @@ export function memo<Args, T>(
     function startLoad(slot: Slot<Args, T>, keepStale: boolean): Promise<T> {
         if (slot.inflight !== null) return slot.inflight
 
-        const current = slot.signal.peek()
+        const current = slot.state.peek()
         if (keepStale && current.status === 'value') {
             setState(slot, {
                 status: 'value',
@@ -424,7 +424,7 @@ export function memo<Args, T>(
     // that should complete for a late joiner (§2 empty-refcount policy).
     function onStreamRefCountZero(slot: Slot<Args, T>, stream: ReplayableStream<unknown>): void {
         // A stale callback (the slot already re-ran into a NEW stream under the same key) must not touch it.
-        if (slot.signal.peek().stream !== stream) return
+        if (slot.state.peek().stream !== stream) return
         if (stream.settled) {
             // Dispose a ttl:0 slot, or an OVERFLOWED transcript (never retained for replay), on drain.
             if (ttl === 0 || stream.overflowed) disposeSlot(slot)
@@ -447,7 +447,7 @@ export function memo<Args, T>(
     // transcript grows so an OPEN stream pressures the LRU live, and OVERFLOW past the per-stream cap so a
     // runaway can't grow unbounded. Only the two bounded server stores account; per-request/client don't.
     function accountStreamChunk(slot: Slot<Args, T>, stream: ReplayableStream<unknown>): void {
-        if (slot.signal.peek().stream !== stream) return // stale (slot re-ran)
+        if (slot.state.peek().stream !== stream) return // stale (slot re-ran)
         const store = boundedStore(slots())
         if (store === undefined) return
         if (stream.bytes > streamBufferCap()) {
@@ -465,7 +465,7 @@ export function memo<Args, T>(
     ): ReplayableStream<unknown> {
         const controller = new AbortController()
         // A reactive tick for chunk-level probes (peek/chunks/done). Reused across re-runs of this slot.
-        if (slot.streamTick === undefined) slot.streamTick = signal(0)
+        if (slot.streamTick === undefined) slot.streamTick = state(0)
         const stream = new ReplayableStream<unknown>({
             onAbort: () => controller.abort(),
             onRefCountZero: () => onStreamRefCountZero(slot, stream),
@@ -496,7 +496,7 @@ export function memo<Args, T>(
                 stream.fail(caught)
             } finally {
                 // Only touch the slot if it STILL holds this stream (not superseded by an invalidate/re-run).
-                if (slot.signal.peek().stream === stream) {
+                if (slot.state.peek().stream === stream) {
                     // TTL-from-close (§2): the retention clock starts when the transcript settles, not at fn-resolve.
                     slot.loadedAt = Date.now()
                     // The transcript is now a CLOSED value: unpin (LRU-evictable) and record its final size.
@@ -514,7 +514,7 @@ export function memo<Args, T>(
 
     // Reactive-peek read path: subscribe to the slot, kick a coalesced load when cold or expired.
     function readReactive(slot: Slot<Args, T>): T | undefined {
-        const state = slot.signal()
+        const state = slot.state()
         untrack(() => {
             if (slot.inflight !== null) return
             if (state.status === 'idle') {
@@ -533,7 +533,7 @@ export function memo<Args, T>(
         slot: Slot<Args, T>,
         select: (chunks: readonly unknown[], stream: ReplayableStream<unknown>) => R,
     ): R | undefined {
-        const state = slot.signal()
+        const state = slot.state()
         untrack(() => {
             if (slot.inflight === null && state.status === 'idle') startLoad(slot, false)
         })
@@ -557,9 +557,9 @@ export function memo<Args, T>(
     }
 
     // The coalesced-load core: return the in-flight promise, the settled value/error/stream cursor, or
-    // start a load. Non-reactive on its own (uses `signal.peek()`); the bare call adds the subscription.
+    // start a load. Non-reactive on its own (uses `state.peek()`); the bare call adds the subscription.
     function coalescedLoad(slot: Slot<Args, T>): Promise<T> {
-        const state = slot.signal.peek()
+        const state = slot.state.peek()
         // A settled/open stream slot hands back a fresh cursor over the shared buffer with no re-run — unless
         // it OVERFLOWED (not a valid replay target), in which case fall through to a fresh run.
         if (
@@ -582,14 +582,14 @@ export function memo<Args, T>(
     }
 
     // THE READ (Promise-read model): the bare call is the awaitable coalesced load AND subscribes the
-    // calling reactive context to the slot (the tracked `slot.signal()` read). So a reactive `{await
+    // calling reactive context to the slot (the tracked `slot.state()` read). So a reactive `{await
     // memo()}` / `{#await memo()}` re-runs and re-awaits when the slot invalidates — the crux the model
-    // needed. The load itself runs untracked (it reads `signal.peek()`), so only the subscription tracks.
+    // needed. The load itself runs untracked (it reads `state.peek()`), so only the subscription tracks.
     const c = ((args: Args) => {
         guardSharedRead()
         const slot = ensureSlot(args)
         touchOnRead(slot)
-        slot.signal()
+        slot.state()
         return untrack(() => coalescedLoad(slot))
     }) as Memo<Args, T>
 
@@ -609,7 +609,7 @@ export function memo<Args, T>(
         guardSharedRead()
         const slot = ensureSlot(args)
         touchOnRead(slot)
-        if (slot.signal.peek().status === 'stream') {
+        if (slot.state.peek().status === 'stream') {
             return readStreamReactive(slot, (chunks) =>
                 chunks.length > 0 ? chunks[chunks.length - 1] : undefined,
             ) as T | undefined
@@ -617,11 +617,11 @@ export function memo<Args, T>(
         return readReactive(slot)
     }
 
-    c.pending = (args: Args): boolean => ensureSlot(args).signal().status === 'pending'
+    c.pending = (args: Args): boolean => ensureSlot(args).state().status === 'pending'
 
     c.error = (args: Args): unknown => {
         const slot = ensureSlot(args)
-        const state = slot.signal()
+        const state = slot.state()
         // A stream's error lives on the ReplayableStream, not the slot state; surface it reactively.
         if (state.status === 'stream' && state.stream !== undefined) {
             if (slot.streamTick !== undefined) slot.streamTick()
@@ -651,7 +651,7 @@ export function memo<Args, T>(
     ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean } => {
         guardSharedRead()
         const slot = ensureSlot(args)
-        const state = slot.signal.peek()
+        const state = slot.state.peek()
         // A retained, non-overflowed transcript is resumable — replay from `from` then continue live.
         if (
             state.status === 'stream' &&
@@ -670,7 +670,7 @@ export function memo<Args, T>(
         return { cursor: undefined, fresh: true } // slot gone/evicted → caller runs fresh from 0
     }
 
-    c.refreshing = (args: Args): boolean => ensureSlot(args).signal().refreshing
+    c.refreshing = (args: Args): boolean => ensureSlot(args).state().refreshing
 
     c.refresh = (args?: Partial<Args> | Args): void => {
         const slots = selectSlots(args)
@@ -680,10 +680,10 @@ export function memo<Args, T>(
     }
 
     // Drop one slot back to idle: bump generation so a superseded in-flight load discards its result,
-    // clear coalescing, and notify subscribers by resetting the (retained) signal to idle -> lazy
+    // clear coalescing, and notify subscribers by resetting the (retained) state to idle -> lazy
     // reload on next read. The slot stays in the map so existing subscriptions stay live.
     function dropSlot(slot: Slot<Args, T>): void {
-        const state = slot.signal.peek()
+        const state = slot.state.peek()
         // Invalidating an OPEN stream aborts its source and gracefully ends live consumers (§4) — a value
         // slot has nothing to tear down.
         if (state.status === 'stream' && state.stream !== undefined && !state.stream.settled) {
@@ -704,7 +704,7 @@ export function memo<Args, T>(
 
     c.publish = (args: Args, next: T | ((current: T | undefined) => T)): void => {
         const slot = ensureSlot(args)
-        const current = slot.signal.peek()
+        const current = slot.state.peek()
         let value: T
         if (typeof next === 'function') {
             // Updater-form. A closure can't cross the wire (rpc-core §2 tension): on a SHARED slot the
@@ -731,7 +731,7 @@ export function memo<Args, T>(
         untrack(() => {
             const result: Array<{ args: Args; value: T }> = []
             for (const slot of selectSlots(undefined)) {
-                const state = slot.signal.peek()
+                const state = slot.state.peek()
                 if (state.status === 'value')
                     result.push({ args: slot.args, value: state.value as T })
             }
@@ -767,7 +767,7 @@ export function memo<Args, T>(
         // chunk the handler already saw.
         let lastCount = 0
         return effect(() => {
-            const state = slot.signal()
+            const state = slot.state()
             // STREAM slot: `value` is permanently undefined here (§4), so the scalar path below could
             // never fire — `watch` was silently dead on every stream and socket. Subscribe to the
             // per-chunk tick and deliver the LATEST chunk, the same "current value" meaning `peek`
@@ -810,7 +810,7 @@ export function memo<Args, T>(
     // `invalidate/refresh({ tags })` selectors can act on it. Tag invalidate/refresh act on ALL current
     // slots and broadcast PER SLOT on that slot's `(rpc,args)` channel (unlike a bare-args verb, which
     // broadcasts once for the selector) so per-args subscribers each receive their own frame. pending/
-    // refreshing are LOCAL reactive aggregates over the memo's current slot signals — no broadcast.
+    // refreshing are LOCAL reactive aggregates over the memo's current slot states — no broadcast.
     function invalidateForTags(): void {
         for (const slot of selectSlots(undefined)) {
             dropSlot(slot)
@@ -826,14 +826,14 @@ export function memo<Args, T>(
     function anyPendingForTags(): boolean {
         let any = false
         for (const slot of selectSlots(undefined)) {
-            if (slot.signal().status === 'pending') any = true
+            if (slot.state().status === 'pending') any = true
         }
         return any
     }
     function anyRefreshingForTags(): boolean {
         let any = false
         for (const slot of selectSlots(undefined)) {
-            if (slot.signal().refreshing) any = true
+            if (slot.state().refreshing) any = true
         }
         return any
     }

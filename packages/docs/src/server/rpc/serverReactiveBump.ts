@@ -5,6 +5,6 @@ import { doubled, total, watchFires } from '$shared/serverReactive'
 // derived `doubled` and fires the `watch` back in serverReactive.ts — cross-module server reactivity.
 // Returns the fresh snapshot (a mutation's return is authoritative and uncached).
 export default POST(({ by = 1 }: { by?: number }) => {
-    total.write(total.peek() + by)
+    total.set(total.peek() + by)
     return { total: total.peek(), doubled: doubled.peek(), fires: watchFires() }
 })

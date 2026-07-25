@@ -99,9 +99,9 @@ test('a page with no <script> is skipped (no diagnostics)', async () => {
 // A `State`-shaped factory (matched structurally by the checker's `__abideUnwrap`) stands in for
 // `abide/shared/state`, so these exercise the real type engine without a workspace-resolution dependency.
 const CELL_MODULE =
-    'export interface Cell<T> { read(): T; write(v: T): void; peek(): T }\n' +
+    'export interface Cell<T> { (): T; set(v: T): void; peek(): T }\n' +
     'export function state<T>(initial: T): Cell<T> {\n' +
-    '  return { read: () => initial, write: () => {}, peek: () => initial }\n' +
+    '  return Object.assign(() => initial, { set: () => {}, peek: () => initial })\n' +
     '}\n'
 
 test('state vars type as their value: concrete inits keep inference, empty/nullish inits stay usable', async () => {

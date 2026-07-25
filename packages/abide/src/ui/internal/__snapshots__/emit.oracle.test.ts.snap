@@ -304,10 +304,6 @@ exports[`emit regression — client DOM reactive switch 1`] = `"<!--[-->one<!--s
 
 exports[`emit regression — client DOM reactive switch 2`] = `"<!--[-->two<!--switch--><!--]-->"`;
 
-exports[`emit regression — client DOM event click updates via signal 1`] = `"<button>0<!----></button>"`;
-
-exports[`emit regression — client DOM event click updates via signal 2`] = `"<button>1<!----></button>"`;
-
 exports[`emit regression — client DOM await inline resolves 1`] = `"<!---->"`;
 
 exports[`emit regression — client DOM await inline resolves 2`] = `"ok<!---->"`;
@@ -355,3 +351,7 @@ exports[`emit regression — client DOM state drives if 2`] = `"<button>go</butt
 exports[`emit regression — client DOM state.linked reseeds 1`] = `"<button>+</button><span>10<!----></span>"`;
 
 exports[`emit regression — client DOM state.linked reseeds 2`] = `"<button>+</button><span>20<!----></span>"`;
+
+exports[`emit regression — client DOM event click updates via state 1`] = `"<button>0<!----></button>"`;
+
+exports[`emit regression — client DOM event click updates via state 2`] = `"<button>1<!----></button>"`;

@@ -59,7 +59,7 @@ export class ReplayableStream<T> {
     // drive TTL-keyed lifecycle: dispose-on-drain for a settled slot, or abort a source everyone left.
     private readonly onRefCountZero: (() => void) | undefined
     // Fired after each chunk is appended. The memo uses this to bump a reactive tick so `latest`/`chunks`
-    // re-run as the transcript grows — WITHOUT touching the state-machine signal the bare read subscribes.
+    // re-run as the transcript grows — WITHOUT touching the state-machine atom the bare read subscribes.
     private readonly onPush: (() => void) | undefined
 
     constructor(hooks: ReplayableStreamHooks = {}) {

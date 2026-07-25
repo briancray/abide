@@ -32,7 +32,7 @@
     <WatchThunkDemo />
   </Demo>
 
-  <p>Two separate component instances call <code>state.shared("reactivity-tally", 0)</code> with the SAME key, so they share one backing signal — bump either and both update. The value also syncs across other open tabs of this app (via a <code>BroadcastChannel</code>).</p>
+  <p>Two separate component instances call <code>state.shared("reactivity-tally", 0)</code> with the SAME key, so they share one backing state — bump either and both update. The value also syncs across other open tabs of this app (via a <code>BroadcastChannel</code>).</p>
 
   <Demo id="shared" title="<code>state.shared(key, initial)</code> — cell shared by key" client="src/ui/demos/templating/reactivity/SharedTallyDemo.abide">
     <SharedTallyDemo />

@@ -15,6 +15,15 @@ export interface ServerBench {
     name: string
     note: string
     run: () => Promise<void> | void
+    // The SAME work hand-written with no framework, timed by the same loop so the recipe can be reported
+    // as a multiple of it (× = abide ÷ vanilla). Same honesty rules as the frontend corpus
+    // (`vanillaBaselines.ts`): same work, idiomatic hand-written code, no strawman in either direction.
+    // Absent where no framework-free equivalent is meaningful — or where the recipe is ALREADY vanilla
+    // (`codec/jsonl-encode` is a bare `JSON.stringify` loop; it is its own baseline).
+    baseline?: {
+        note: string
+        run: () => Promise<void> | void
+    }
 }
 
 // A representative page-route table (literal / required / optional / rest / multi-dynamic) — the shape
@@ -46,11 +55,46 @@ export const BENCH_ROUTES: string[] = [
     '/legal/[...rest]',
 ]
 
+const BENCH_PATH = '/users/42/posts/99'
+
+interface HandRolledRoute {
+    pattern: RegExp
+    keys: string[]
+}
+
+// The framework-free way to match the same table: precompile each pattern to a RegExp once, then scan in
+// order with `exec` and zip the captures into a params object. No route ranking, no precedence rules —
+// which is exactly the point of a baseline.
+function compileHandRolledRoutes(patterns: string[]): HandRolledRoute[] {
+    const routes: HandRolledRoute[] = []
+    for (const pattern of patterns) {
+        const keys: string[] = []
+        let source = '^'
+        for (const segment of pattern.split('/')) {
+            if (segment === '') continue
+            if (segment.startsWith('[...')) {
+                keys.push(segment.slice(4, -1))
+                source += '/(.*)'
+            } else if (segment.startsWith('[[')) {
+                keys.push(segment.slice(2, -2))
+                source += '(?:/([^/]+))?'
+            } else if (segment.startsWith('[')) {
+                keys.push(segment.slice(1, -1))
+                source += '/([^/]+)'
+            } else {
+                source += `/${segment}`
+            }
+        }
+        routes.push({ pattern: new RegExp(`${source}$`), keys })
+    }
+    return routes
+}
+
 // Build the primitive recipes, doing any one-time setup (priming the warm memo, populating the slots the
 // verb scan walks). Async because the memo primes are awaited.
 export async function createServerBenches(): Promise<ServerBench[]> {
     // Warm memo: the dominant in-process RPC read path — ensureSlot → canonicalKey → touchOnRead →
-    // signal → coalescedLoad over a retained slot. Prime once so the timed read is a cache hit.
+    // state → coalescedLoad over a retained slot. Prime once so the timed read is a cache hit.
     const warm = memo<{ id: number }, number>((a) => a.id * 2)
     await warm({ id: 1 })
 
@@ -60,13 +104,45 @@ export async function createServerBenches(): Promise<ServerBench[]> {
     const many = memo<{ n: number; group: number }, number>((a) => a.n)
     for (let n = 0; n < 100; n++) await many({ n, group: n % 5 })
 
+    // ── hand-written baselines ──────────────────────────────────────────────────────────────────────
+    const handRolledRoutes = compileHandRolledRoutes(BENCH_ROUTES)
+
+    // The memo a person writes by hand: stringify the args, hit a Map, compute on a miss.
+    const handRolledCache = new Map<string, number>()
+    const handRolledMemo = async (args: { id: number }): Promise<number> => {
+        const key = JSON.stringify(args)
+        const hit = handRolledCache.get(key)
+        if (hit !== undefined) return hit
+        const value = args.id * 2
+        handRolledCache.set(key, value)
+        return value
+    }
+    await handRolledMemo({ id: 1 })
+
+    // The hand-written analog of the verb scan: 100 entries in a Map, walked and filtered by field.
+    const handRolledSlots = new Map<string, { n: number; group: number }>()
+    for (let n = 0; n < 100; n++) handRolledSlots.set(`${n}:${n % 5}`, { n, group: n % 5 })
+
     return [
         {
             group: 'route',
             name: 'matchRoute',
             note: `${BENCH_ROUTES.length} patterns → deep dynamic path`,
             run: () => {
-                matchRoute(BENCH_ROUTES, '/users/42/posts/99')
+                matchRoute(BENCH_ROUTES, BENCH_PATH)
+            },
+            baseline: {
+                note: 'precompiled RegExp table, scanned in order',
+                run: () => {
+                    for (const route of handRolledRoutes) {
+                        const match = route.pattern.exec(BENCH_PATH)
+                        if (match === null) continue
+                        const params: Record<string, string> = {}
+                        for (let i = 0; i < route.keys.length; i++)
+                            params[route.keys[i]!] = match[i + 1] ?? ''
+                        break
+                    }
+                },
             },
         },
         {
@@ -76,6 +152,12 @@ export async function createServerBenches(): Promise<ServerBench[]> {
             run: () => {
                 canonicalKey(42)
             },
+            baseline: {
+                note: 'String(n)',
+                run: () => {
+                    String(42)
+                },
+            },
         },
         {
             group: 'cache-key',
@@ -83,6 +165,12 @@ export async function createServerBenches(): Promise<ServerBench[]> {
             note: '4-field object',
             run: () => {
                 canonicalKey({ id: 7, page: 2, sort: 'desc', filter: 'active' })
+            },
+            baseline: {
+                note: 'JSON.stringify (no key-order canonicalisation)',
+                run: () => {
+                    JSON.stringify({ id: 7, page: 2, sort: 'desc', filter: 'active' })
+                },
             },
         },
         {
@@ -92,6 +180,12 @@ export async function createServerBenches(): Promise<ServerBench[]> {
             run: async () => {
                 await warm({ id: 1 })
             },
+            baseline: {
+                note: 'JSON.stringify key → Map.get',
+                run: async () => {
+                    await handRolledMemo({ id: 1 })
+                },
+            },
         },
         {
             group: 'memo',
@@ -99,6 +193,14 @@ export async function createServerBenches(): Promise<ServerBench[]> {
             note: 'full 100-slot selector scan (no match)',
             run: () => {
                 many.invalidate({ group: 999 })
+            },
+            baseline: {
+                note: '100-entry Map walk, delete on field match',
+                run: () => {
+                    for (const [key, slot] of handRolledSlots) {
+                        if (slot.group === 999) handRolledSlots.delete(key)
+                    }
+                },
             },
         },
     ]

@@ -36,7 +36,7 @@ interface Bound {
 const BOUNDS: Bound[] = [
     {
         numerator: 'probe/peek-scalar',
-        denominator: 'signal/get',
+        denominator: 'state/get',
         max: 12,
         observed: '≈5.7×',
         why: 'step 4 wraps every probe in a ReactiveReadSurface interface',
@@ -74,7 +74,7 @@ const BOUNDS: Bound[] = [
     },
     {
         numerator: 'memo/read-warm',
-        denominator: 'signal/get',
+        denominator: 'state/get',
         max: 20,
         observed: '≈8.8×',
         why: 'the dominant in-process RPC read path',

@@ -10,7 +10,7 @@
 // and a whole-page fresh-`mount` fallback as last resort.
 //
 // No `new Function`, no `with`; script cells are lexical `let n = state(0)` with references rewritten to
-// `.read()/.write()`, and free/block-bound template identifiers read off `$scope`.
+// `()/.set()`, and free/block-bound template identifiers read off `$scope`.
 
 import type { ScopeAnalysis } from './analyzeScope.ts'
 import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
@@ -484,20 +484,20 @@ class ClientEmitter {
         }
 
         let createItem = '($p, $start, $end, $value, $index) => {\n'
-        createItem += '    const $itemSig = $rt.signal($value);\n'
-        createItem += '    const $indexSig = $rt.signal($index);\n'
+        createItem += '    const $itemState = $rt.state($value);\n'
+        createItem += '    const $indexState = $rt.state($index);\n'
         createItem += '    const $child = Object.create($scope);\n'
         if (simple) {
-            createItem += `    Object.defineProperty($child, ${JSON.stringify(item.trim())}, { get: () => $itemSig(), configurable: true });\n`
+            createItem += `    Object.defineProperty($child, ${JSON.stringify(item.trim())}, { get: () => $itemState(), configurable: true });\n`
         } else {
             createItem += `    ${bindPattern('$child', item, '$value')}\n`
         }
         if (index !== null) {
-            createItem += `    Object.defineProperty($child, ${JSON.stringify(index)}, { get: () => $indexSig(), configurable: true });\n`
+            createItem += `    Object.defineProperty($child, ${JSON.stringify(index)}, { get: () => $indexState(), configurable: true });\n`
         }
         createItem += `    const $dispose = $rt.untrack(() => $mount${bodyId}($p, $end, $child));\n`
         createItem += '    return {\n'
-        createItem += '      update: ($v, $i) => { $itemSig.set($v); $indexSig.set($i);'
+        createItem += '      update: ($v, $i) => { $itemState.set($v); $indexState.set($i);'
         if (!simple) createItem += ` ${bindPattern('$child', item, '$v')}`
         createItem += ' },\n'
         createItem += '      dispose: () => $dispose(),\n'

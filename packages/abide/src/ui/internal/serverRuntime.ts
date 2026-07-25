@@ -147,7 +147,7 @@ export function applyStyleDir(builder: AttributeBuilder, name: string, value: un
 }
 
 // Resolve a bound value through its accessor exactly as the client `boundAccessor` does: a writable
-// signal (callable with `.set`) is invoked, an explicit `{ get, set }` reads via `.get()`, otherwise
+// state (callable with `.set`) is invoked, an explicit `{ get, set }` reads via `.get()`, otherwise
 // the raw value passes through (bare state vars already evaluate to their value server-side).
 function resolveBound(bound: unknown): unknown {
     if (typeof bound === 'function' && typeof (bound as { set?: unknown }).set === 'function') {

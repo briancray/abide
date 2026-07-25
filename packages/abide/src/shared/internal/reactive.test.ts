@@ -1,24 +1,24 @@
 import { describe, expect, test } from 'bun:test'
-import { batch, computed, effect, signal, untrack } from './reactive.ts'
+import { batch, computed, effect, state, untrack } from './reactive.ts'
 
 // Effect re-runs are deferred to a microtask flush; a macrotask tick guarantees the
 // microtask queue has drained.
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
-describe('signal', () => {
+describe('state', () => {
     test('reads the initial value', () => {
-        const count = signal(1)
+        const count = state(1)
         expect(count()).toBe(1)
     })
 
     test('writes update the read value', () => {
-        const count = signal(1)
+        const count = state(1)
         count.set(2)
         expect(count()).toBe(2)
     })
 
     test('peek reads without tracking', () => {
-        const count = signal(5)
+        const count = state(5)
         let runs = 0
         effect(() => {
             runs++
@@ -31,15 +31,15 @@ describe('signal', () => {
 
     test('holds function values', () => {
         const fn = () => 42
-        const held = signal(fn)
+        const held = state(fn)
         expect(held()).toBe(fn)
         expect(held()()).toBe(42)
     })
 })
 
 describe('computed', () => {
-    test('derives from a signal', () => {
-        const count = signal(2)
+    test('derives from a state', () => {
+        const count = state(2)
         const doubled = computed(() => count() * 2)
         expect(doubled()).toBe(4)
         count.set(3)
@@ -47,7 +47,7 @@ describe('computed', () => {
     })
 
     test('is lazy: does not run until read', () => {
-        const count = signal(1)
+        const count = state(1)
         let runs = 0
         const derived = computed(() => {
             runs++
@@ -63,7 +63,7 @@ describe('computed', () => {
     })
 
     test('is memoized: no recompute while deps unchanged', () => {
-        const count = signal(1)
+        const count = state(1)
         let runs = 0
         const derived = computed(() => {
             runs++
@@ -76,7 +76,7 @@ describe('computed', () => {
     })
 
     test('returns a ===-stable reference while deps unchanged', () => {
-        const count = signal(1)
+        const count = state(1)
         const obj = computed(() => ({ value: count() }))
         const first = obj()
         const second = obj()
@@ -86,7 +86,7 @@ describe('computed', () => {
     })
 
     test('chained computeds propagate', () => {
-        const count = signal(1)
+        const count = state(1)
         const doubled = computed(() => count() * 2)
         const plusOne = computed(() => doubled() + 1)
         expect(plusOne()).toBe(3)
@@ -95,7 +95,7 @@ describe('computed', () => {
     })
 
     test('downstream does not recompute when an intermediate value is unchanged', () => {
-        const count = signal(2)
+        const count = state(2)
         const isEven = computed(() => count() % 2 === 0)
         let runs = 0
         const label = computed(() => {
@@ -115,7 +115,7 @@ describe('computed', () => {
 
 describe('effect', () => {
     test('runs immediately on creation', () => {
-        const count = signal(1)
+        const count = state(1)
         let seen = 0
         effect(() => {
             seen = count()
@@ -124,7 +124,7 @@ describe('effect', () => {
     })
 
     test('re-runs when a dep changes (microtask-batched)', async () => {
-        const count = signal(1)
+        const count = state(1)
         let seen = 0
         let runs = 0
         effect(() => {
@@ -139,9 +139,9 @@ describe('effect', () => {
         expect(seen).toBe(2)
     })
 
-    test('does not re-run when an unread signal changes', async () => {
-        const used = signal(1)
-        const unused = signal(1)
+    test('does not re-run when an unread state changes', async () => {
+        const used = state(1)
+        const unused = state(1)
         let runs = 0
         effect(() => {
             runs++
@@ -153,9 +153,9 @@ describe('effect', () => {
     })
 
     test('tracks dynamic dependencies', async () => {
-        const toggle = signal(true)
-        const a = signal('a')
-        const b = signal('b')
+        const toggle = state(true)
+        const a = state('a')
+        const b = state('b')
         let seen = ''
         let runs = 0
         effect(() => {
@@ -190,7 +190,7 @@ describe('effect', () => {
 
 describe('batching', () => {
     test('N sequential writes coalesce into one effect run (microtask)', async () => {
-        const count = signal(0)
+        const count = state(0)
         let runs = 0
         effect(() => {
             runs++
@@ -204,8 +204,8 @@ describe('batching', () => {
     })
 
     test('batch() flushes synchronously at the end and coalesces', () => {
-        const a = signal(1)
-        const b = signal(2)
+        const a = state(1)
+        const b = state(2)
         let runs = 0
         let sum = 0
         effect(() => {
@@ -223,7 +223,7 @@ describe('batching', () => {
     })
 
     test('nested batches flush once at the outermost boundary', () => {
-        const count = signal(0)
+        const count = state(0)
         let runs = 0
         effect(() => {
             runs++
@@ -244,7 +244,7 @@ describe('batching', () => {
 
 describe('glitch-freedom (diamond)', () => {
     test('effect observes a consistent state and runs once per batch', async () => {
-        const source = signal(1)
+        const source = state(1)
         const left = computed(() => source() + 1)
         const right = computed(() => source() * 2)
         const seen: string[] = []
@@ -268,7 +268,7 @@ describe('glitch-freedom (diamond)', () => {
     })
 
     test('deep diamond stays consistent under batch', () => {
-        const a = signal(1)
+        const a = state(1)
         const b = computed(() => a() * 2)
         const c = computed(() => a() * 3)
         const d = computed(() => b() + c())
@@ -292,8 +292,8 @@ describe('glitch-freedom (diamond)', () => {
 
 describe('untrack', () => {
     test('reads without subscribing', async () => {
-        const tracked = signal(1)
-        const hidden = signal(1)
+        const tracked = state(1)
+        const hidden = state(1)
         let runs = 0
         let combined = 0
         effect(() => {
@@ -313,13 +313,13 @@ describe('untrack', () => {
     })
 
     test('returns the inner value', () => {
-        const s = signal(7)
+        const s = state(7)
         expect(untrack(() => s() * 2)).toBe(14)
     })
 
     test('restores tracking after the untracked read', async () => {
-        const a = signal(1)
-        const b = signal(1)
+        const a = state(1)
+        const b = state(1)
         let runs = 0
         effect(() => {
             runs++
@@ -335,7 +335,7 @@ describe('untrack', () => {
 
 describe('teardown / dispose', () => {
     test('teardown runs before each re-run and on dispose', async () => {
-        const count = signal(0)
+        const count = state(0)
         const events: string[] = []
         const dispose = effect(() => {
             const value = count()
@@ -354,7 +354,7 @@ describe('teardown / dispose', () => {
     })
 
     test('disposed effect stops re-running', async () => {
-        const count = signal(0)
+        const count = state(0)
         let runs = 0
         const dispose = effect(() => {
             runs++
@@ -368,7 +368,7 @@ describe('teardown / dispose', () => {
     })
 
     test('dispose during a pending flush prevents the run', async () => {
-        const count = signal(0)
+        const count = state(0)
         let runs = 0
         const dispose = effect(() => {
             runs++
@@ -383,8 +383,8 @@ describe('teardown / dispose', () => {
 
 describe('no-leak after dispose', () => {
     test('disposing unsubscribes from all sources', async () => {
-        const a = signal(1)
-        const b = signal(1)
+        const a = state(1)
+        const b = state(1)
         let runs = 0
         const dispose = effect(() => {
             runs++
@@ -400,7 +400,7 @@ describe('no-leak after dispose', () => {
     })
 
     test('a computed only read by a disposed effect is not kept live', async () => {
-        const source = signal(1)
+        const source = state(1)
         let computeRuns = 0
         const derived = computed(() => {
             computeRuns++

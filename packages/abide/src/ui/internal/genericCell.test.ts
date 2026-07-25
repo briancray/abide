@@ -12,20 +12,20 @@ function emit(script: string, body: string): string {
     return `${server}\n${client}`
 }
 
-test('a generic `state<T>(...)` var is a cell — reads rewrite to `.read()`', () => {
+test('a generic `state<T>(...)` var is a cell — reads rewrite to `()`', () => {
     const out = emit(
         `import { state } from "abide/shared/state"\n  let n = state<number>(0)`,
         '<p>{n}</p>',
     )
-    expect(out).toContain('n.read()')
+    expect(out).toContain('n()')
 })
 
-test('a generic `state<T>(...)` var write rewrites to `.write()`', () => {
+test('a generic `state<T>(...)` var write rewrites to `.set()`', () => {
     const out = emit(
         `import { state } from "abide/shared/state"\n  let n = state<number>(0)\n  function bump() { n = 5 }`,
         '<p>{n}</p>',
     )
-    expect(out).toContain('n.write(')
+    expect(out).toContain('n.set(')
 })
 
 test('nested-generic `state<Array<number>>(...)` (no top-level comma) is still a cell', () => {
@@ -36,7 +36,7 @@ test('nested-generic `state<Array<number>>(...)` (no top-level comma) is still a
         `import { state } from "abide/shared/state"\n  let m = state<Array<number>>([])`,
         '<p>{m.length}</p>',
     )
-    expect(out).toContain('m.read()')
+    expect(out).toContain('m()')
 })
 
 test('generic `state.computed<T>(...)` is recognised as a computed cell', () => {
@@ -44,7 +44,7 @@ test('generic `state.computed<T>(...)` is recognised as a computed cell', () => 
         `import { state } from "abide/shared/state"\n  let d = state.computed<number>(() => 1)`,
         '<p>{d}</p>',
     )
-    expect(out).toContain('d.read()')
+    expect(out).toContain('d()')
 })
 
 test('generic `props<T>()` is recognised (destructured prop reads as a local, not `$scope.title`)', () => {
@@ -64,6 +64,6 @@ test('a `state < 5` comparison is NOT misread as a cell', () => {
         `import { state } from "abide/shared/state"\n  let flag = state < 5`,
         '<p>{flag}</p>',
     )
-    // `flag` is a plain boolean binding, not a cell — no `.read()` rewrite on it.
-    expect(out).not.toContain('flag.read()')
+    // `flag` is a plain boolean binding, not a cell — no `()` rewrite on it.
+    expect(out).not.toContain('flag()')
 })

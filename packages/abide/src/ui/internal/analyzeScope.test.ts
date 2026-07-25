@@ -17,19 +17,19 @@ const CELLS = (...names: string[]): Set<string> => new Set(names)
 
 describe('rewriteCellRefs reads', () => {
     test('simple read', () => {
-        expect(rewriteCellRefs('n', CELLS('n'))).toBe('n.read()')
+        expect(rewriteCellRefs('n', CELLS('n'))).toBe('n()')
     })
 
     test('read inside an expression', () => {
-        expect(rewriteCellRefs('n + 1', CELLS('n'))).toBe('n.read() + 1')
+        expect(rewriteCellRefs('n + 1', CELLS('n'))).toBe('n() + 1')
     })
 
     test('multiple cells', () => {
-        expect(rewriteCellRefs('a + b', CELLS('a', 'b'))).toBe('a.read() + b.read()')
+        expect(rewriteCellRefs('a + b', CELLS('a', 'b'))).toBe('a() + b()')
     })
 
     test('non-cell identifier left alone', () => {
-        expect(rewriteCellRefs('n + other', CELLS('n'))).toBe('n.read() + other')
+        expect(rewriteCellRefs('n + other', CELLS('n'))).toBe('n() + other')
     })
 
     test('empty cell set is a no-op', () => {
@@ -37,7 +37,7 @@ describe('rewriteCellRefs reads', () => {
     })
 
     test('read in a ternary', () => {
-        expect(rewriteCellRefs('cond ? n : m', CELLS('n', 'm'))).toBe('cond ? n.read() : m.read()')
+        expect(rewriteCellRefs('cond ? n : m', CELLS('n', 'm'))).toBe('cond ? n() : m()')
     })
 })
 
@@ -47,31 +47,31 @@ describe('rewriteCellRefs reads', () => {
 
 describe('rewriteCellRefs assignment', () => {
     test('simple assignment', () => {
-        expect(rewriteCellRefs('n = 5', CELLS('n'))).toBe('n.write( 5)')
+        expect(rewriteCellRefs('n = 5', CELLS('n'))).toBe('n.set( 5)')
     })
 
     test('assignment with expression RHS', () => {
-        expect(rewriteCellRefs('n = a + 1', CELLS('n'))).toBe('n.write( a + 1)')
+        expect(rewriteCellRefs('n = a + 1', CELLS('n'))).toBe('n.set( a + 1)')
     })
 
     test('assignment RHS cells are also rewritten', () => {
-        expect(rewriteCellRefs('n = a + 1', CELLS('n', 'a'))).toBe('n.write( a.read() + 1)')
+        expect(rewriteCellRefs('n = a + 1', CELLS('n', 'a'))).toBe('n.set( a() + 1)')
     })
 
     test('chained assignment nests writes', () => {
-        expect(rewriteCellRefs('n = m = 5', CELLS('n', 'm'))).toBe('n.write( m.write( 5))')
+        expect(rewriteCellRefs('n = m = 5', CELLS('n', 'm'))).toBe('n.set( m.set( 5))')
     })
 
     test('assignment inside a call closes before the paren', () => {
-        expect(rewriteCellRefs('foo(n = 1)', CELLS('n'))).toBe('foo(n.write( 1))')
+        expect(rewriteCellRefs('foo(n = 1)', CELLS('n'))).toBe('foo(n.set( 1))')
     })
 
     test('assignment RHS stops at a comma', () => {
-        expect(rewriteCellRefs('f(n = 1, 2)', CELLS('n'))).toBe('f(n.write( 1), 2)')
+        expect(rewriteCellRefs('f(n = 1, 2)', CELLS('n'))).toBe('f(n.set( 1), 2)')
     })
 
     test('assignment RHS spanning a ternary', () => {
-        expect(rewriteCellRefs('n = a ? b : c', CELLS('n'))).toBe('n.write( a ? b : c)')
+        expect(rewriteCellRefs('n = a ? b : c', CELLS('n'))).toBe('n.set( a ? b : c)')
     })
 })
 
@@ -81,21 +81,21 @@ describe('rewriteCellRefs assignment', () => {
 
 describe('rewriteCellRefs compound assignment', () => {
     const cases: [string, string][] = [
-        ['n += x', 'n.write(n.read() + ( x))'],
-        ['n -= x', 'n.write(n.read() - ( x))'],
-        ['n *= x', 'n.write(n.read() * ( x))'],
-        ['n /= x', 'n.write(n.read() / ( x))'],
-        ['n %= x', 'n.write(n.read() % ( x))'],
-        ['n **= x', 'n.write(n.read() ** ( x))'],
-        ['n &= x', 'n.write(n.read() & ( x))'],
-        ['n |= x', 'n.write(n.read() | ( x))'],
-        ['n ^= x', 'n.write(n.read() ^ ( x))'],
-        ['n <<= x', 'n.write(n.read() << ( x))'],
-        ['n >>= x', 'n.write(n.read() >> ( x))'],
-        ['n >>>= x', 'n.write(n.read() >>> ( x))'],
-        ['n &&= x', 'n.write(n.read() && ( x))'],
-        ['n ||= x', 'n.write(n.read() || ( x))'],
-        ['n ??= x', 'n.write(n.read() ?? ( x))'],
+        ['n += x', 'n.set(n() + ( x))'],
+        ['n -= x', 'n.set(n() - ( x))'],
+        ['n *= x', 'n.set(n() * ( x))'],
+        ['n /= x', 'n.set(n() / ( x))'],
+        ['n %= x', 'n.set(n() % ( x))'],
+        ['n **= x', 'n.set(n() ** ( x))'],
+        ['n &= x', 'n.set(n() & ( x))'],
+        ['n |= x', 'n.set(n() | ( x))'],
+        ['n ^= x', 'n.set(n() ^ ( x))'],
+        ['n <<= x', 'n.set(n() << ( x))'],
+        ['n >>= x', 'n.set(n() >> ( x))'],
+        ['n >>>= x', 'n.set(n() >>> ( x))'],
+        ['n &&= x', 'n.set(n() && ( x))'],
+        ['n ||= x', 'n.set(n() || ( x))'],
+        ['n ??= x', 'n.set(n() ?? ( x))'],
     ]
     for (const [input, expected] of cases) {
         test(input, () => {
@@ -104,7 +104,7 @@ describe('rewriteCellRefs compound assignment', () => {
     }
 
     test('compound RHS is parenthesized to preserve precedence', () => {
-        expect(rewriteCellRefs('n += a + b', CELLS('n'))).toBe('n.write(n.read() + ( a + b))')
+        expect(rewriteCellRefs('n += a + b', CELLS('n'))).toBe('n.set(n() + ( a + b))')
     })
 })
 
@@ -114,22 +114,22 @@ describe('rewriteCellRefs compound assignment', () => {
 
 describe('rewriteCellRefs increment/decrement', () => {
     test('postfix ++', () => {
-        expect(rewriteCellRefs('n++', CELLS('n'))).toBe('n.write(n.read() + 1)')
+        expect(rewriteCellRefs('n++', CELLS('n'))).toBe('n.set(n() + 1)')
     })
     test('postfix --', () => {
-        expect(rewriteCellRefs('n--', CELLS('n'))).toBe('n.write(n.read() - 1)')
+        expect(rewriteCellRefs('n--', CELLS('n'))).toBe('n.set(n() - 1)')
     })
     test('prefix ++', () => {
-        expect(rewriteCellRefs('++n', CELLS('n'))).toBe('n.write(n.read() + 1)')
+        expect(rewriteCellRefs('++n', CELLS('n'))).toBe('n.set(n() + 1)')
     })
     test('prefix --', () => {
-        expect(rewriteCellRefs('--n', CELLS('n'))).toBe('n.write(n.read() - 1)')
+        expect(rewriteCellRefs('--n', CELLS('n'))).toBe('n.set(n() - 1)')
     })
     test('prefix increment mid-expression', () => {
-        expect(rewriteCellRefs('a + ++n', CELLS('n'))).toBe('a + n.write(n.read() + 1)')
+        expect(rewriteCellRefs('a + ++n', CELLS('n'))).toBe('a + n.set(n() + 1)')
     })
     test('postfix increment mid-expression', () => {
-        expect(rewriteCellRefs('n++ + a', CELLS('n'))).toBe('n.write(n.read() + 1) + a')
+        expect(rewriteCellRefs('n++ + a', CELLS('n'))).toBe('n.set(n() + 1) + a')
     })
     test('non-cell postfix left alone', () => {
         expect(rewriteCellRefs('x++', CELLS('n'))).toBe('x++')
@@ -142,18 +142,18 @@ describe('rewriteCellRefs increment/decrement', () => {
 
 describe('rewriteCellRefs operator disambiguation', () => {
     test('== is not an assignment', () => {
-        expect(rewriteCellRefs('n == 5', CELLS('n'))).toBe('n.read() == 5')
+        expect(rewriteCellRefs('n == 5', CELLS('n'))).toBe('n() == 5')
     })
     test('=== is not an assignment', () => {
-        expect(rewriteCellRefs('n === 5', CELLS('n'))).toBe('n.read() === 5')
+        expect(rewriteCellRefs('n === 5', CELLS('n'))).toBe('n() === 5')
     })
     test('!= / !== are not assignments', () => {
-        expect(rewriteCellRefs('n != 5', CELLS('n'))).toBe('n.read() != 5')
-        expect(rewriteCellRefs('n !== 5', CELLS('n'))).toBe('n.read() !== 5')
+        expect(rewriteCellRefs('n != 5', CELLS('n'))).toBe('n() != 5')
+        expect(rewriteCellRefs('n !== 5', CELLS('n'))).toBe('n() !== 5')
     })
     test('<= and >= are not assignments', () => {
-        expect(rewriteCellRefs('n <= 5', CELLS('n'))).toBe('n.read() <= 5')
-        expect(rewriteCellRefs('n >= 5', CELLS('n'))).toBe('n.read() >= 5')
+        expect(rewriteCellRefs('n <= 5', CELLS('n'))).toBe('n() <= 5')
+        expect(rewriteCellRefs('n >= 5', CELLS('n'))).toBe('n() >= 5')
     })
     test('=> single-param arrow is not an assignment (param shadows)', () => {
         expect(rewriteCellRefs('n => n + 1', CELLS('n'))).toBe('n => n + 1')
@@ -172,21 +172,21 @@ describe('rewriteCellRefs member and object handling', () => {
         expect(rewriteCellRefs('obj?.n', CELLS('n'))).toBe('obj?.n')
     })
     test('cell before a member access still reads', () => {
-        expect(rewriteCellRefs('n.foo', CELLS('n'))).toBe('n.read().foo')
+        expect(rewriteCellRefs('n.foo', CELLS('n'))).toBe('n().foo')
     })
     test('object key is not rewritten', () => {
         expect(rewriteCellRefs('({ n: 1 })', CELLS('n'))).toBe('({ n: 1 })')
     })
     test('object shorthand becomes a read', () => {
-        expect(rewriteCellRefs('({ n })', CELLS('n'))).toBe('({ n: n.read() })')
+        expect(rewriteCellRefs('({ n })', CELLS('n'))).toBe('({ n: n() })')
     })
     test('mixed keys and shorthand', () => {
         expect(rewriteCellRefs('({ a, n: 1, b })', CELLS('a', 'b'))).toBe(
-            '({ a: a.read(), n: 1, b: b.read() })',
+            '({ a: a(), n: 1, b: b() })',
         )
     })
     test('object value position is a read', () => {
-        expect(rewriteCellRefs('({ k: n })', CELLS('n'))).toBe('({ k: n.read() })')
+        expect(rewriteCellRefs('({ k: n })', CELLS('n'))).toBe('({ k: n() })')
     })
     test('object method name is not rewritten', () => {
         expect(rewriteCellRefs('({ n() { return 1 } })', CELLS('n'))).toBe('({ n() { return 1 } })')
@@ -209,19 +209,19 @@ describe('rewriteCellRefs literals are protected', () => {
     })
     test('template substitution IS rewritten, surrounding text is not', () => {
         // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional literal template-syntax data
-        expect(rewriteCellRefs('`x${n}y`', CELLS('n'))).toBe('`x${n.read()}y`')
+        expect(rewriteCellRefs('`x${n}y`', CELLS('n'))).toBe('`x${n()}y`')
     })
     test('multiple template substitutions', () => {
         // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional literal template-syntax data
-        expect(rewriteCellRefs('`${n}-${m}`', CELLS('n', 'm'))).toBe('`${n.read()}-${m.read()}`')
+        expect(rewriteCellRefs('`${n}-${m}`', CELLS('n', 'm'))).toBe('`${n()}-${m()}`')
     })
     test('template tail text matching a cell name is not rewritten', () => {
         // After `${a}` the literal `n` is template tail text, not code.
         // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional literal template-syntax data
-        expect(rewriteCellRefs('`${a}n`', CELLS('a', 'n'))).toBe('`${a.read()}n`')
+        expect(rewriteCellRefs('`${a}n`', CELLS('a', 'n'))).toBe('`${a()}n`')
     })
     test('cell in a line comment is not rewritten', () => {
-        expect(rewriteCellRefs('a // n\n+ a', CELLS('a', 'n'))).toBe('a.read() // n\n+ a.read()')
+        expect(rewriteCellRefs('a // n\n+ a', CELLS('a', 'n'))).toBe('a() // n\n+ a()')
     })
 })
 
@@ -232,37 +232,37 @@ describe('rewriteCellRefs literals are protected', () => {
 describe('rewriteCellRefs declarations and shadowing', () => {
     test('top-level declaration keeps the lexical name; later refs rewrite', () => {
         expect(rewriteCellRefs('let n = state(0); n = 5; n + 1', CELLS('n'))).toBe(
-            'let n = state(0); n.write( 5); n.read() + 1',
+            'let n = state(0); n.set( 5); n() + 1',
         )
     })
 
     test('function parameter shadows the cell in the body', () => {
         expect(rewriteCellRefs('function f(n){ return n } n', CELLS('n'))).toBe(
-            'function f(n){ return n } n.read()',
+            'function f(n){ return n } n()',
         )
     })
 
     test('multi-param arrow parameter shadows in the body', () => {
         expect(rewriteCellRefs('(a, n) => n + count', CELLS('n', 'count'))).toBe(
-            '(a, n) => n + count.read()',
+            '(a, n) => n + count()',
         )
     })
 
     test('nested let shadows the cell in that block', () => {
         expect(rewriteCellRefs('function g(){ let n = 5; return n } n', CELLS('n'))).toBe(
-            'function g(){ let n = 5; return n } n.read()',
+            'function g(){ let n = 5; return n } n()',
         )
     })
 
     test('cell referenced inside a non-shadowing function still rewrites', () => {
         expect(rewriteCellRefs('function h(){ return n + 1 }', CELLS('n'))).toBe(
-            'function h(){ return n.read() + 1 }',
+            'function h(){ return n() + 1 }',
         )
     })
 
     test('references before a nested shadow still rewrite', () => {
         expect(rewriteCellRefs('n; function f(n){ return n }', CELLS('n'))).toBe(
-            'n.read(); function f(n){ return n }',
+            'n(); function f(n){ return n }',
         )
     })
 })
@@ -397,7 +397,7 @@ describe('analyzeScope cell recognition', () => {
         expect([...analysis.cellNames].sort()).toEqual(['d', 'n'])
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
-        expect(instance.setupCode).toBe(' let n = s(0); let d = s.linked(()=>n.read())')
+        expect(instance.setupCode).toBe(' let n = s(0); let d = s.linked(()=>n())')
     })
 
     test('props() destructuring marks bindings as prop', () => {
@@ -438,7 +438,7 @@ describe('analyzeScope cell recognition', () => {
         // instance setup rewrites the cell reference inside the function body; imports stripped.
         const instanceScript = analysis.instance
         if (instanceScript === null) throw new Error('expected an instance script')
-        expect(instanceScript.setupCode).toContain('function inc(){ n.write(n.read() + 1) }')
+        expect(instanceScript.setupCode).toContain('function inc(){ n.set(n() + 1) }')
         expect(instanceScript.setupCode).not.toContain('import')
         const instanceImports = instanceScript.imports.map((i) => i.specifier).sort()
         expect(instanceImports).toEqual(['../rpc/greet', 'abide/ui/props'])
@@ -536,18 +536,20 @@ describe('rewriteCellRefs fuzz/property', () => {
             for (const tok of tokens) expect(tok.kind).not.toBe(SyntaxKind.Unknown)
 
             // 2. No bare cell read survives: every cell-named identifier is immediately followed by
-            //    `.read(` / `.write(` (these fragments contain no declarations, members, or object keys).
+            //    the call parens of a read (`n(`) or the `.set(` of a write (these fragments contain
+            //    no declarations, members, or object keys).
             for (const [i, tok] of tokens.entries()) {
                 if (tok.kind !== SyntaxKind.Identifier) continue
                 if (!cellSet.has(tok.text)) continue
                 const next = tokens[i + 1]
                 const after = tokens[i + 2]
-                const followedByAccessor =
+                const isRead = next !== undefined && next.kind === SyntaxKind.OpenParenToken
+                const isWrite =
                     next !== undefined &&
                     next.kind === SyntaxKind.DotToken &&
                     after !== undefined &&
-                    (after.text === 'read' || after.text === 'write')
-                expect(followedByAccessor).toBe(true)
+                    after.text === 'set'
+                expect(isRead || isWrite).toBe(true)
             }
         }
     })

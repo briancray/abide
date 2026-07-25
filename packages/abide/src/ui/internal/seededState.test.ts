@@ -48,7 +48,7 @@ test("re-applies the page's transform to the RAW seed value (matches the server 
 test('transform still applies to later writes on a seeded cell', () => {
     const s = makeSeededState(seed([[5]]))
     const cell = s(0, (v: number) => v + 1)
-    cell.write(10)
+    cell.set(10)
     expect(cell.peek()).toBe(11)
 })
 

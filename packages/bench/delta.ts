@@ -3,13 +3,17 @@
 // Runs BOTH corpora against the WORKING TREE and against a base git ref (default HEAD), then reports the
 // per-metric change. The point is to answer "did my uncommitted abide changes speed up or slow down…":
 //   • the UI triad — render / mount / update (`run.ts`)
-//   • the server + reactive/stream/channel primitives (`server.ts`) — route, cache-key, memo, signal,
+//   • the server + reactive/stream/channel primitives (`server.ts`) — route, cache-key, memo, state,
 //     probe, stream, watch, fanout, codec. Loopback `dispatch/*` rows are included but are the noisiest
 //     (they carry a TCP floor); read those relative to `dispatch/health`.
 //
 //   bun run bench:delta            # working tree vs HEAD
 //   bun run bench:delta -- <ref>   # working tree vs <ref> (branch, tag, or SHA)
 //   bun run bench:delta -- --no-fail   # report only; do not exit non-zero on a regression
+//
+// Both corpora also carry their vanilla baselines. Those rows run the SAME hand-written code on both
+// sides, so they are printed as a NOISE CONTROL — their worst swing is this run's noise floor, and a
+// "regression" smaller than it means nothing. They are excluded from the verdict.
 //
 // Exits NON-ZERO when any metric regresses past the threshold, so it can gate a change deliberately.
 // (`bun run verify` uses the cheaper hardware-neutral `bench:gate` instead — this one needs a worktree
@@ -135,10 +139,14 @@ interface Row {
     base: number
     current: number
     deltaPct: number
+    // A vanilla-baseline row: the SAME hand-written code ran on both sides, so any delta here is pure
+    // machine noise, not a change you made. Printed as a control (how much drift this run is worth
+    // ignoring) and excluded from the regression verdict.
+    control: boolean
 }
 
-function row(label: string, base: number, current: number): Row {
-    return { label, base, current, deltaPct: ((current - base) / base) * 100 }
+function row(label: string, base: number, current: number, control: boolean): Row {
+    return { label, base, current, deltaPct: ((current - base) / base) * 100, control }
 }
 
 function collect(base: Corpora, current: Corpora): Row[] {
@@ -147,6 +155,11 @@ function collect(base: Corpora, current: Corpora): Row[] {
     // UI triad
     const baseByName = new Map(base.frontend.scenarios.map((s) => [s.name, s]))
     const metrics: (keyof Omit<ScenarioResult, 'name'>)[] = ['render', 'mount', 'update']
+    const vanillaMetrics: (keyof Omit<ScenarioResult, 'name'>)[] = [
+        'vanillaRender',
+        'vanillaMount',
+        'vanillaUpdate',
+    ]
     for (const cur of current.frontend.scenarios) {
         const b = baseByName.get(cur.name)
         if (!b) continue
@@ -154,7 +167,13 @@ function collect(base: Corpora, current: Corpora): Row[] {
             const cm = cur[metric] as MetricResult | null
             const bm = b[metric] as MetricResult | null
             if (!cm || !bm) continue
-            rows.push(row(`${cur.name} · ${metric}`, bm.nsPerOp, cm.nsPerOp))
+            rows.push(row(`${cur.name} · ${metric}`, bm.nsPerOp, cm.nsPerOp, false))
+        }
+        for (const metric of vanillaMetrics) {
+            const cm = cur[metric] as MetricResult | null
+            const bm = b[metric] as MetricResult | null
+            if (!cm || !bm) continue
+            rows.push(row(`${cur.name} · ${metric}`, bm.nsPerOp, cm.nsPerOp, true))
         }
     }
 
@@ -164,7 +183,9 @@ function collect(base: Corpora, current: Corpora): Row[] {
         const label = `${cur.group}/${cur.name}`
         const b = baseByLabel.get(label)
         if (!b) continue
-        rows.push(row(label, b.metric.nsPerOp, cur.metric.nsPerOp))
+        rows.push(row(label, b.metric.nsPerOp, cur.metric.nsPerOp, false))
+        if (cur.vanilla && b.vanilla)
+            rows.push(row(`${label} · vanilla`, b.vanilla.nsPerOp, cur.vanilla.nsPerOp, true))
     }
 
     return rows
@@ -176,9 +197,10 @@ function fmtNs(ns: number): string {
     return `${ns.toFixed(0)} ns`
 }
 
-function flag(deltaPct: number): string {
-    if (deltaPct > THRESHOLD) return '⚠ slower'
-    if (deltaPct < -THRESHOLD) return '✓ faster'
+function flag(row: Row): string {
+    if (row.control) return '· noise control (same code both sides)'
+    if (row.deltaPct > THRESHOLD) return '⚠ slower'
+    if (row.deltaPct < -THRESHOLD) return '✓ faster'
     return ''
 }
 
@@ -191,14 +213,24 @@ function printDelta(rows: Row[]): void {
     for (const r of rows) {
         const sign = r.deltaPct >= 0 ? '+' : ''
         console.log(
-            `${r.label.padEnd(labelWidth)}  ${fmtNs(r.base).padStart(10)}  ${fmtNs(r.current).padStart(10)}  ${`${sign}${r.deltaPct.toFixed(1)}%`.padStart(9)}  ${flag(r.deltaPct)}`,
+            `${r.label.padEnd(labelWidth)}  ${fmtNs(r.base).padStart(10)}  ${fmtNs(r.current).padStart(10)}  ${`${sign}${r.deltaPct.toFixed(1)}%`.padStart(9)}  ${flag(r)}`,
         )
     }
-    const regressions = rows.filter((r) => r.deltaPct > THRESHOLD).length
-    const wins = rows.filter((r) => r.deltaPct < -THRESHOLD).length
+    const judged = rows.filter((r) => !r.control)
+    const regressions = judged.filter((r) => r.deltaPct > THRESHOLD).length
+    const wins = judged.filter((r) => r.deltaPct < -THRESHOLD).length
     console.log(
-        `\n${wins} faster · ${regressions} slower · ${rows.length - wins - regressions} within ±${THRESHOLD}%`,
+        `\n${wins} faster · ${regressions} slower · ${judged.length - wins - regressions} within ±${THRESHOLD}%`,
     )
+    // The controls ran identical code on both sides: their worst swing is this run's noise floor. A
+    // regression smaller than it is not a signal.
+    const controls = rows.filter((r) => r.control)
+    if (controls.length > 0) {
+        const worst = Math.max(...controls.map((r) => Math.abs(r.deltaPct)))
+        console.log(
+            `${controls.length} vanilla control(s) excluded from the verdict — worst swing ±${worst.toFixed(1)}%, this run's noise floor`,
+        )
+    }
 }
 
 console.log(`benchmarking base ref: ${baseRef} …`)
@@ -208,7 +240,7 @@ const current = await runBenchAt(BENCH_PKG_DIR)
 const rows = collect(base, current)
 printDelta(rows)
 
-const regressed = rows.filter((r) => r.deltaPct > THRESHOLD)
+const regressed = rows.filter((r) => !r.control && r.deltaPct > THRESHOLD)
 if (regressed.length > 0 && !noFail) {
     console.error(
         `\n\x1b[31m✗ ${regressed.length} metric(s) regressed past ${THRESHOLD}% vs ${baseRef}\x1b[0m`,

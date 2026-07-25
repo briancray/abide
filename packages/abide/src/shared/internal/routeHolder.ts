@@ -1,7 +1,7 @@
 // CLIENT ROUTE HOLDER (M5b / C6-nav) — the reactive source `route()` reads on the CLIENT.
 //
 // On the server `route()` reads the active request scope (per-request, ambient). The browser has no
-// request scope, so it reads this module-level reactive holder instead. A single M1 signal holds the
+// request scope, so it reads this module-level reactive holder instead. A single M1 state holds the
 // current RouteInfo; reading it inside a reactive binding (text/attr effect) SUBSCRIBES, so when a
 // soft-nav replaces the RouteInfo (new params/name/url) every `route()`-dependent binding re-runs.
 //
@@ -10,9 +10,9 @@
 // setClientRoute there).
 
 import type { RouteInfo } from '../../server/internal/scope.ts'
-import { signal } from './reactive.ts'
+import { state } from './reactive.ts'
 
-const clientRoute = signal<RouteInfo | undefined>(undefined)
+const clientRoute = state<RouteInfo | undefined>(undefined)
 
 // Reactive read of the current client route. Tracks when called inside an effect/computed.
 export function readClientRoute(): RouteInfo | undefined {

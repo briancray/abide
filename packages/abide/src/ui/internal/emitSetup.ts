@@ -3,7 +3,7 @@
 // Generates the lexical `<script>` setup preamble shared by the emitted client (`mount`) and server
 // (`render`) functions, plus the module-scope memoizer. Mirrors `assembleCore.makeScopeBuilder`
 // without `with`/`new Function`: script imports become `const greet = $scope.greet;`, cells become
-// real `let n = state(0)` (references already rewritten to `.read()/.write()` by analyzeScope), and
+// real `let n = state(0)` (references already rewritten to `()/.set()` by analyzeScope), and
 // `<script module>` is a lazily-memoized `$ensureModule($scope)`.
 
 import type { ImportBinding, ScopeAnalysis, ScriptInfo } from './analyzeScope.ts'

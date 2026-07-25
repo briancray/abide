@@ -2,15 +2,21 @@
 //
 // In a `.abide` `<script>` an author writes `let count = state(0)` and then reads/writes `count` as a
 // plain identifier. The AOT emitter's scope analysis (internal/analyzeScope.ts) recognises the cell
-// this declaration returns and rewrites every reference — `count` → `count.read()`, `count = x` →
-// `count.write(x)` — so the bare name reads and writes the underlying signal.
+// this declaration returns and rewrites every reference — `count` → `count()`, `count = x` →
+// `count.set(x)` — so the bare name reads and writes the underlying atom.
 //
-// A `State` is a small branded record over the M1 signal substrate. The brand is a global-registry
-// symbol so the analysis can detect a cell (syntactically, at the declaration) without importing
-// anything from here (keeps the one-export-per-file rule intact). Cells are NOT callable — the
-// `.read()/.write()` rewrite is what makes `count` behave like a plain value.
+// A `State` IS the reactive atom (`internal/reactive.ts`) plus a kind brand — not a second kind of
+// cell wrapping a first. The brand is a global-registry symbol so the analysis can detect a cell
+// (syntactically, at the declaration) without importing anything from here (keeps the one-export-per-
+// file rule intact). The cell is CALLABLE — `count()` reads and `count.set(x)` writes, exactly the
+// atom's own call/`set`/`peek`.
 
-import { computed, effect, type Signal, signal } from './internal/reactive.ts'
+import {
+    computed,
+    effect,
+    type State as ReactiveState,
+    state as reactiveState,
+} from './internal/reactive.ts'
 
 // Global-registry brand so `analyzeScope.ts` recognises a cell by identity without a shared import.
 const STATE_CELL = Symbol.for('abide.ui.stateCell')
@@ -23,13 +29,10 @@ type StateKind = 'state' | 'computed' | 'linked' | 'shared'
 // registry would leak one request's state into another's, so `.shared` must stay per-render there.
 const isClient = typeof document !== 'undefined'
 
-// A branded reactive cell. `read()` tracks; `write()` publishes; `peek()` reads untracked. `computed`
-// cells throw on `write`.
-export interface State<T> {
+// A callable branded reactive cell — the atom's shape (`()` tracks, `set()` publishes, `peek()` reads
+// untracked) plus the kind brand. `computed` cells throw on `set`.
+export interface State<T> extends ReactiveState<T> {
     [STATE_CELL]: StateKind
-    read(): T
-    write(value: T): void
-    peek(): T
 }
 
 // The public `state` surface: callable to make a writable cell, with `.computed` / `.linked` /
@@ -47,31 +50,29 @@ export interface StateFactory {
 }
 
 function makeState<T>(initial: T, transform?: (value: T) => T): State<T> {
-    const backing = signal<T>(transform ? transform(initial) : initial)
-    return {
-        [STATE_CELL]: 'state',
-        read: () => backing(),
-        write: (value: T) => backing.set(transform ? transform(value) : value),
-        peek: () => backing.peek(),
-    }
+    const backing = reactiveState<T>(transform ? transform(initial) : initial)
+    const cell = (() => backing()) as State<T>
+    cell.set = (value: T) => backing.set(transform ? transform(value) : value)
+    cell.peek = () => backing.peek()
+    cell[STATE_CELL] = 'state'
+    return cell
 }
 
 function makeComputed<T>(fn: () => T): State<T> {
     const derived = computed<T>(fn)
-    return {
-        [STATE_CELL]: 'computed',
-        read: () => derived(),
-        write: () => {
-            throw new TypeError('state.computed(...) is read-only and cannot be assigned')
-        },
-        peek: () => derived.peek(),
+    const cell = (() => derived()) as State<T>
+    cell.set = () => {
+        throw new TypeError('state.computed(...) is read-only and cannot be assigned')
     }
+    cell.peek = () => derived.peek()
+    cell[STATE_CELL] = 'computed'
+    return cell
 }
 
 // A writable cell whose value is reseeded whenever `source` changes. Local writes hold until the next
 // reseed. The reseed effect lives for the component's lifetime (owned by the instance scope).
 function makeLinked<S, T>(source: () => S, transform?: (value: S) => T): State<T> {
-    const backing = signal<T>(undefined as unknown as T)
+    const backing = reactiveState<T>(undefined as unknown as T)
     let seeded = false
     effect(() => {
         const next = source()
@@ -82,23 +83,22 @@ function makeLinked<S, T>(source: () => S, transform?: (value: S) => T): State<T
     // Guard: if an effect flush has not yet run (server single-pass), the effect above ran synchronously
     // on creation, so `seeded` is already true here.
     void seeded
-    return {
-        [STATE_CELL]: 'linked',
-        read: () => backing(),
-        write: (value: T) => backing.set(value),
-        peek: () => backing.peek(),
-    }
+    const cell = (() => backing()) as State<T>
+    cell.set = (value: T) => backing.set(value)
+    cell.peek = () => backing.peek()
+    cell[STATE_CELL] = 'linked'
+    return cell
 }
 
 // A writable cell shared by KEY across every component instance on the client — same key, same backing
-// signal — and synced across same-origin browser TABS over a Web-standard `BroadcastChannel`. A write
-// updates the local signal and posts `{ key, value }` (JSON-serializable values only) to the other
+// atom — and synced across same-origin browser TABS over a Web-standard `BroadcastChannel`. A write
+// updates the local atom and posts `{ key, value }` (JSON-serializable values only) to the other
 // tabs, whose matching cells apply it WITHOUT re-broadcasting. On the SERVER there is no cross-instance
 // sharing (a process-global store would leak one request's state to another), so it degrades to a plain
 // per-render cell seeded with `initial` — the same value the client's first instance starts from, so
 // hydration stays consistent.
 interface SharedSlot {
-    backing: Signal<unknown>
+    backing: ReactiveState<unknown>
 }
 const SHARED_SLOTS = new Map<string, SharedSlot>()
 let sharedChannel: BroadcastChannel | undefined
@@ -127,37 +127,35 @@ function ensureChannel(): BroadcastChannel | undefined {
 function makeShared<T>(key: string, initial: T): State<T> {
     if (!isClient) {
         // Server: isolated per-render cell (no cross-request registry).
-        const backing = signal<T>(initial)
-        return {
-            [STATE_CELL]: 'shared',
-            read: () => backing(),
-            write: (value: T) => backing.set(value),
-            peek: () => backing.peek(),
-        }
+        const backing = reactiveState<T>(initial)
+        const cell = (() => backing()) as State<T>
+        cell.set = (value: T) => backing.set(value)
+        cell.peek = () => backing.peek()
+        cell[STATE_CELL] = 'shared'
+        return cell
     }
     let slot = SHARED_SLOTS.get(key)
     if (slot === undefined) {
-        slot = { backing: signal<unknown>(initial) }
+        slot = { backing: reactiveState<unknown>(initial) }
         SHARED_SLOTS.set(key, slot)
     }
     ensureChannel()
     const backing = slot.backing
-    return {
-        [STATE_CELL]: 'shared',
-        read: () => backing() as T,
-        write: (value: T) => {
-            backing.set(value)
-            const channel = ensureChannel()
-            if (channel !== undefined) {
-                try {
-                    channel.postMessage({ key, value })
-                } catch {
-                    // Non-serializable value: keep it local rather than throwing on the write path.
-                }
+    const cell = (() => backing() as T) as State<T>
+    cell.set = (value: T) => {
+        backing.set(value)
+        const channel = ensureChannel()
+        if (channel !== undefined) {
+            try {
+                channel.postMessage({ key, value })
+            } catch {
+                // Non-serializable value: keep it local rather than throwing on the write path.
             }
-        },
-        peek: () => backing.peek() as T,
+        }
     }
+    cell.peek = () => backing.peek() as T
+    cell[STATE_CELL] = 'shared'
+    return cell
 }
 
 export const state: StateFactory = Object.assign(makeState as StateFactory, {

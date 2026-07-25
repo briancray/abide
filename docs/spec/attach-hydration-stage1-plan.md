@@ -28,7 +28,7 @@ below is an anchor in the current code.
 
 **Key consequence:** script-cell semantics can't be lexical without reference rewriting. `let n =
 state(0)` where `n++` hits a signal has no eval-free, `with`-free form unless every `n` read →
-`n.read()` and write → `n.write(...)`. This reference rewrite is the core new work of Stage 1
+`n()` and write → `n.set(...)`. This reference rewrite is the core new work of Stage 1
 (`transformScript.ts:28` explicitly avoids it today).
 
 ## 1. New module layout
@@ -69,8 +69,8 @@ Emitted functions take one merged `$scope` object (same shape `assembleCore.ts:1
 - Script imports → `const state = $scope.state, greet = $scope.greet;` at setup top (reuses
   `ImportBinding` + "must import everything" rule).
 - `state`/`computed`/`linked` cells → emitted as real `let n = state(0)`; every reference (script +
-  template) rewritten: read `n`→`n.read()`, `n = x`→`n.write(x)`, `n += x`→`n.write(n.read()+x)`,
-  `n++`→`n.write(n.read()+1)`. **The one new hard transform**, built on the same TS7 scanner
+  template) rewritten: read `n`→`n()`, `n = x`→`n.set(x)`, `n += x`→`n.set(n()+x)`,
+  `n++`→`n.set(n()+1)`. **The one new hard transform**, built on the same TS7 scanner
   `transformScript.ts:168` uses; cells recognized syntactically at declaration.
 - Plain `const`/`function` → verbatim (real lexical names now).
 - `const {who} = props()` → verbatim; `props` is `const props = $scope.props`.
@@ -91,7 +91,7 @@ Plan skeleton: `"<p><!----></p><button><!----></button>"`; slots = `[await @ [0,
 [1]], [interp n @ [1,0]]`.
 
 **Emitted client** — clone template, walk cursor, wire helpers; `n`/`greet`/`state` are real lexical
-identifiers; `n++` emitted as `n.write(n.read()+1)`; exports `mount($target,$scope)` returning a
+identifiers; `n++` emitted as `n.set(n()+1)`; exports `mount($target,$scope)` returning a
 disposer, plus a **Stage-1 stub `hydrate($container,$scope)` that clears + calls `mount`**. No
 `new Function`, no `with` → type-checkable (#11 target).
 

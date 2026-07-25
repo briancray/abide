@@ -1,10 +1,12 @@
 // Fine-grained reactivity substrate (rpc-core §7).
 // Push-notify + pull-recompute, microtask-batched, glitch-free (topological).
-// Signals family (Solid/reactively-style): reading in a tracking context subscribes;
-// writes stale-propagate; computeds are lazy + memoized; effects re-run on a batched
-// microtask flush and support a teardown return value.
+// Reading a `state` in a tracking context subscribes; writes stale-propagate; computeds are lazy +
+// memoized; effects re-run on a batched microtask flush and support a teardown return value.
+//
+// `state` is THE atom (ADR 0023) — `memo` and `channel` store their value in one. The name `signal` is
+// retired here so nothing in abide collides with the future TC39 `Signal`.
 
-// Node states. Ordered so higher = more stale; DISPOSED is terminal above DIRTY.
+// Node statuses. Ordered so higher = more stale; DISPOSED is terminal above DIRTY.
 const CLEAN = 0
 const CHECK = 1
 const DIRTY = 2
@@ -26,7 +28,7 @@ let batchDepth = 0
 class Reactive {
     value: unknown
     fn: (() => unknown) | null
-    state: number
+    status: number
     isEffect: boolean
     // Graph edges. `sources` = nodes we read; `observers` = nodes that read us.
     sources: Reactive[] | null
@@ -34,8 +36,8 @@ class Reactive {
     // Effect teardown returned from the last run.
     cleanup: (() => void) | null
 
-    // `derived` distinguishes computed/effect nodes (have `fn`) from signals (hold a
-    // value). It is passed explicitly so a signal may legitimately hold a function value.
+    // `derived` distinguishes computed/effect nodes (have `fn`) from state nodes (hold a
+    // value). It is passed explicitly so a state may legitimately hold a function value.
     constructor(payload: unknown, derived: boolean, isEffect: boolean) {
         this.isEffect = isEffect
         this.sources = null
@@ -45,12 +47,12 @@ class Reactive {
             // Derived node (computed/effect): starts DIRTY, recomputed lazily on read/flush.
             this.fn = payload as () => unknown
             this.value = undefined
-            this.state = DIRTY
+            this.status = DIRTY
         } else {
-            // Source node (signal): holds a value, always CLEAN.
+            // Source node (state): holds a value, always CLEAN.
             this.fn = null
             this.value = payload
-            this.state = CLEAN
+            this.status = CLEAN
         }
     }
 
@@ -92,13 +94,13 @@ class Reactive {
     // Mark this node (and, transitively, its observers) potentially out of date.
     // Direct dependents of a changed source go DIRTY; deeper dependents go CHECK and only
     // recompute if a source actually changes (glitch-free pull).
-    stale(nextState: number): void {
-        if (this.state >= nextState) return
-        if (this.state === CLEAN && this.isEffect) {
+    stale(nextStatus: number): void {
+        if (this.status >= nextStatus) return
+        if (this.status === CLEAN && this.isEffect) {
             effectQueue.push(this)
             scheduleFlush()
         }
-        this.state = nextState
+        this.status = nextStatus
         const observers = this.observers
         if (observers !== null) {
             for (const observer of observers) observer.stale(CHECK)
@@ -106,19 +108,19 @@ class Reactive {
     }
 
     updateIfNecessary(): void {
-        if (this.state === CLEAN || this.state === DISPOSED) return
-        if (this.state === CHECK) {
+        if (this.status === CLEAN || this.status === DISPOSED) return
+        if (this.status === CHECK) {
             // Resolve each source; a source that actually changes flips us to DIRTY.
             const sources = this.sources
             if (sources !== null) {
                 for (const source of sources) {
                     source.updateIfNecessary()
-                    if ((this.state as number) === DIRTY) break
+                    if ((this.status as number) === DIRTY) break
                 }
             }
         }
-        if (this.state === DIRTY) this.update()
-        this.state = CLEAN
+        if (this.status === DIRTY) this.update()
+        this.status = CLEAN
     }
 
     update(): void {
@@ -167,7 +169,7 @@ class Reactive {
         if (oldValue !== value) {
             const observers = this.observers
             if (observers !== null) {
-                for (const observer of observers) observer.state = DIRTY
+                for (const observer of observers) observer.status = DIRTY
             }
         }
         this.value = value
@@ -233,13 +235,13 @@ function flush(): void {
         const batchOfEffects = effectQueue
         effectQueue = []
         for (const node of batchOfEffects) {
-            if (node.state !== DISPOSED) node.updateIfNecessary()
+            if (node.status !== DISPOSED) node.updateIfNecessary()
         }
     }
 }
 
 function disposeNode(node: Reactive): void {
-    if (node.state === DISPOSED) return
+    if (node.status === DISPOSED) return
     if (node.cleanup !== null) {
         const teardown = node.cleanup
         node.cleanup = null
@@ -248,10 +250,13 @@ function disposeNode(node: Reactive): void {
     removeSourceObservers(node, 0)
     node.sources = null
     node.observers = null
-    node.state = DISPOSED
+    node.status = DISPOSED
 }
 
-export interface Signal<T> {
+// The ATOM. `state` is the one reactive source node (ADR 0023): calling it in a tracking context
+// subscribes, `set` publishes, `peek` reads untracked. The public `shared/state.ts` is this same shape
+// plus the `.abide` compiler brand and the `.shared` factory — it does not add a second kind of cell.
+export interface State<T> {
     (): T
     set(value: T): void
     peek(): T
@@ -262,9 +267,9 @@ export interface Computed<T> {
     peek(): T
 }
 
-export function signal<T>(initial: T): Signal<T> {
+export function state<T>(initial: T): State<T> {
     const node = new Reactive(initial, false, false)
-    const read = (() => node.get() as T) as Signal<T>
+    const read = (() => node.get() as T) as State<T>
     read.set = (value: T) => node.set(value)
     read.peek = () => node.value as T
     return read

@@ -10,7 +10,7 @@
 //   • `serverChunks` — an ordered static-text ⨉ dynamic-slot tree the server emitter concatenates.
 //   • `scopeAttr` / `scopedCss` — #13 root scoped styles.
 //
-// Every embedded expression is rewritten via `rewriteCellRefs` (cells → `.read()/.write()`) then
+// Every embedded expression is rewritten via `rewriteCellRefs` (cells → `()/.set()`) then
 // `rewriteFreeIdentifiers` (free/block-bound names → `$scope.x`), so both emitters consume ready-to-
 // embed source. This module uses the TS7 scanner (through analyzeScope) and NEVER ships to the browser.
 
@@ -383,19 +383,19 @@ function planAttribute(ctx: WalkContext, attr: AttributeNode): AttrPlan {
         case 'BindDirective': {
             const boundRaw = (attr.expression ?? attr.name).trim()
             // A bare state var — `bind:value={count}` over `let count = state(...)` — used to be a
-            // documented known-limit (TODO #14): `rewriteExpr` collapses `count` to a READ (`count.read()`),
+            // documented known-limit (TODO #14): `rewriteExpr` collapses `count` to a READ (`count()`),
             // so the two-way bind received the VALUE, not a writable accessor, and silently no-op'd. Wrap a
             // bare cell in the same `{ get, set }` accessor the manual workaround uses, so value/checked/group
             // binds sync both ways. `count` is a declared lexical cell in the emitted mount/render, so it needs
             // no `$scope`/cell-ref rewrite. `bind:element` over a bare cell (`let node = state(null)`) needs the
-            // SAME wrap (TODO #22): otherwise the cell collapses to `node.read()` and the node ref is never
+            // SAME wrap (TODO #22): otherwise the cell collapses to `node()` and the node ref is never
             // assigned — `bindElement` writes the element through the `set`. An attach FN (`bind:element={fn}`)
             // is not a cell name, so it falls through to `rewriteExpr` and stays a callable.
             if (ctx.cellNames.has(boundRaw)) {
                 return {
                     kind: 'bind',
                     name: attr.name,
-                    expr: `{ get: () => ${boundRaw}.read(), set: ($v) => ${boundRaw}.write($v) }`,
+                    expr: `{ get: () => ${boundRaw}(), set: ($v) => ${boundRaw}.set($v) }`,
                 }
             }
             return {

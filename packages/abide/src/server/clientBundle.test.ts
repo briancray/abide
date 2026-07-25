@@ -82,7 +82,7 @@ test("bootstrapPage HYDRATES the SSR'd page into #__abide-app (claims nodes, wor
     // PR7: bootstrapPage now CLAIMS the server DOM instead of clearing + fresh-mounting. Render the real
     // anchored SSR HTML into the container so hydration has DOM to attach to.
     const { render, hydrate } = await loadEmitted(source)
-    const html = await render({ state: (v: unknown) => ({ read: () => v, write() {} }) })
+    const html = await render({ state: (v: unknown) => Object.assign(() => v, { set() {} }) })
     document.body.innerHTML = `<div id="__abide-app">${html}</div>`
 
     const container = document.getElementById('__abide-app')

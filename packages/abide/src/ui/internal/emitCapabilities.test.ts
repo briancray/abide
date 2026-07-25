@@ -8,7 +8,7 @@
 // "must import" script guarantee, and server render reuse — all driven through the AOT-emitted module.
 
 import { describe, expect, test } from 'bun:test'
-import { effect, signal } from '../../shared/internal/reactive.ts'
+import { effect, state } from '../../shared/internal/reactive.ts'
 import { emitModuleSource, loadEmitted, loadEmittedServer } from './emit.ts'
 import type { Mountable } from './runtime.ts'
 
@@ -37,13 +37,11 @@ async function mount(
     return { host, dispose }
 }
 
-// A getter-backed scope entry so a bare template identifier reads a signal's CURRENT value.
-function reactiveScope(
-    entries: Record<string, ReturnType<typeof signal>>,
-): Record<string, unknown> {
+// A getter-backed scope entry so a bare template identifier reads a state's CURRENT value.
+function reactiveScope(entries: Record<string, ReturnType<typeof state>>): Record<string, unknown> {
     const scope: Record<string, unknown> = {}
-    for (const [name, sig] of Object.entries(entries)) {
-        Object.defineProperty(scope, name, { get: () => sig(), enumerable: true })
+    for (const [name, cell] of Object.entries(entries)) {
+        Object.defineProperty(scope, name, { get: () => cell(), enumerable: true })
     }
     return scope
 }
@@ -57,7 +55,7 @@ describe('static nodes', () => {
 
 describe('fine-grained reactivity', () => {
     test('only the affected text node updates (identity preserved)', async () => {
-        const a = signal('a')
+        const a = state('a')
         const scope = reactiveScope({ a })
         scope.b = 'static'
         const { host } = await mount('<span>{a}</span><span>{b}</span>', scope)
@@ -70,7 +68,7 @@ describe('fine-grained reactivity', () => {
     })
 
     test('falsy attribute value removes the attribute', async () => {
-        const on = signal(true)
+        const on = state(true)
         const { host } = await mount('<input disabled={on}>', reactiveScope({ on }))
         expect(present(host.querySelector('input'), 'input').hasAttribute('disabled')).toBe(true)
         on.set(false)
@@ -79,7 +77,7 @@ describe('fine-grained reactivity', () => {
     })
 
     test('class:name toggles reactively', async () => {
-        const active = signal(false)
+        const active = state(false)
         const { host } = await mount('<div class:on={active}></div>', reactiveScope({ active }))
         expect(present(host.querySelector('div'), 'div').classList.contains('on')).toBe(false)
         active.set(true)
@@ -88,7 +86,7 @@ describe('fine-grained reactivity', () => {
     })
 
     test('style:prop sets a property reactively', async () => {
-        const color = signal('red')
+        const color = state('red')
         const { host } = await mount('<div style:color={color}></div>', reactiveScope({ color }))
         expect(present(host.querySelector('div'), 'div').style.color).toBe('red')
         color.set('blue')
@@ -97,7 +95,7 @@ describe('fine-grained reactivity', () => {
     })
 
     test('{html()} updates reactively', async () => {
-        const markup = signal('<i>a</i>')
+        const markup = state('<i>a</i>')
         const { host } = await mount('{html(markup)}', reactiveScope({ markup }))
         expect(present(host.querySelector('i'), 'i').textContent).toBe('a')
         markup.set('<u>b</u>')
@@ -109,7 +107,7 @@ describe('fine-grained reactivity', () => {
 
 describe('two-way binding', () => {
     test('bind:value round-trips a text input', async () => {
-        const model = signal('hi')
+        const model = state('hi')
         const { host } = await mount('<input bind:value={model}>', { model })
         const input = present(host.querySelector('input'), 'input')
         expect(input.value).toBe('hi')
@@ -122,7 +120,7 @@ describe('two-way binding', () => {
     })
 
     test('bind:value coerces number inputs', async () => {
-        const model = signal(1)
+        const model = state(1)
         const { host } = await mount('<input type="number" bind:value={model}>', { model })
         const input = present(host.querySelector('input'), 'input')
         input.value = '42'
@@ -131,7 +129,7 @@ describe('two-way binding', () => {
     })
 
     test('bind:checked round-trips', async () => {
-        const on = signal(false)
+        const on = state(false)
         const { host } = await mount('<input type="checkbox" bind:checked={on}>', { on })
         const input = present(host.querySelector('input'), 'input')
         expect(input.checked).toBe(false)
@@ -147,13 +145,13 @@ describe('two-way binding', () => {
         const out = emitModuleSource(
             "<script>import { state } from 'abide/shared/state'; let bare = state('direct')</script><input bind:value={bare}>",
         )
-        const accessor = '{ get: () => bare.read(), set: ($v) => bare.write($v) }'
+        const accessor = '{ get: () => bare(), set: ($v) => bare.set($v) }'
         expect(out.client).toContain(accessor)
         expect(out.server).toContain(accessor)
     })
 
     test('bind:value with a derived {get,set}', async () => {
-        const raw = signal('x')
+        const raw = state('x')
         const derived = {
             get: () => raw().toUpperCase(),
             set: (v: unknown) => raw.set(String(v).toLowerCase()),
@@ -168,14 +166,14 @@ describe('two-way binding', () => {
 })
 
 describe('bind:element', () => {
-    test('assigns the node to a signal cell', async () => {
-        const el = signal<unknown>(undefined)
+    test('assigns the node to a state cell', async () => {
+        const el = state<unknown>(undefined)
         const { host } = await mount('<input bind:element={el}>', { el })
         expect(el()).toBe(host.querySelector('input'))
     })
 
     test('assigns the node to a bare state() cell (node ref)', async () => {
-        // TODO #22: a bare cell in `bind:element` used to collapse to `node.read()` (a value) and never
+        // TODO #22: a bare cell in `bind:element` used to collapse to `node()` (a value) and never
         // bind. It now wraps to a `{get,set}` accessor, so the element is written INTO the cell.
         const { state } = await import('../../shared/state.ts')
         const { host } = await mount(
@@ -204,7 +202,7 @@ describe('bind:element', () => {
 
 describe('{#for} keyed reconciliation', () => {
     test('keyed add and remove', async () => {
-        const items = signal([1, 2])
+        const items = state([1, 2])
         const { host } = await mount(
             '{#for n of items by n}<li>{n}</li>{/for}',
             reactiveScope({ items }),
@@ -221,7 +219,7 @@ describe('{#for} keyed reconciliation', () => {
     })
 
     test('keyed reuse preserves the survivor node on prepend', async () => {
-        const items = signal([{ id: 1 }])
+        const items = state([{ id: 1 }])
         const { host } = await mount(
             '{#for item of items by item.id}<li>{item.id}</li>{/for}',
             reactiveScope({ items }),
@@ -252,7 +250,7 @@ describe('components', () => {
     })
 
     test('a reactive prop updates the child', async () => {
-        const title = signal('one')
+        const title = state('one')
         const scope: Record<string, unknown> = { Reactive: reactiveChild }
         Object.defineProperty(scope, 'title', { get: () => title(), enumerable: true })
         const { host } = await mount('<Reactive title={title} />', scope)
@@ -272,7 +270,7 @@ describe('cleanup and reuse', () => {
     })
 
     test('dispose stops effects (no further DOM updates)', async () => {
-        const count = signal(1)
+        const count = state(1)
         const { host, dispose } = await mount('{count}', reactiveScope({ count }))
         expect(host.textContent).toBe('1')
         dispose()
@@ -335,7 +333,7 @@ describe('contextual-keyword template identifiers (#18)', () => {
 })
 
 describe('server-side bind serialization (regression: accessor not unwrapped)', () => {
-    // SSR must resolve a bound value THROUGH its `{get,set}` accessor / writable signal exactly as the
+    // SSR must resolve a bound value THROUGH its `{get,set}` accessor / writable state exactly as the
     // client bind does — not stringify the accessor object. Before the fix `bind:checked={acc}` rendered
     // `checked` for any truthy object, `bind:value={acc}` rendered `value="[object Object]"`, and
     // `bind:group` emitted a literal `group="[object Object]"` attribute.
@@ -357,10 +355,10 @@ describe('server-side bind serialization (regression: accessor not unwrapped)', 
         )
     })
 
-    test('bind:value resolves a writable signal (callable with .set)', async () => {
-        const emitted = await loadEmitted('<input bind:value={sig}>')
-        const sig = Object.assign(() => 'sig-value', { set: () => {} })
-        expect(await emitted.render({ sig })).toBe('<input value="sig-value">')
+    test('bind:value resolves a writable state (callable with .set)', async () => {
+        const emitted = await loadEmitted('<input bind:value={cell}>')
+        const cell = Object.assign(() => 'cell-value', { set: () => {} })
+        expect(await emitted.render({ cell })).toBe('<input value="cell-value">')
     })
 
     test('bind:group checks ONLY the radio whose value equals the group value, no `group` attr', async () => {
@@ -435,9 +433,9 @@ describe('<script module> bindings reach the template (regression: docs app SSR)
             "<script module>import { state } from 'abide/shared/state'; let modCell = state('MOD')</script>" +
             "<script>import { state } from 'abide/shared/state'; let instCell = state('INST')</script><p>{modCell}/{instCell}</p>"
         const emitted = await loadEmitted(dual)
-        expect(
-            stripAnchors(await emitted.render({ state: (v: unknown) => ({ read: () => v }) })),
-        ).toBe('<p>MOD/INST</p>')
+        expect(stripAnchors(await emitted.render({ state: (v: unknown) => () => v }))).toBe(
+            '<p>MOD/INST</p>',
+        )
     })
 })
 
@@ -521,7 +519,7 @@ describe('M3b pass-through framework imports', () => {
     test('server render executes the real import — online() is true on the server', async () => {
         const mod = await loadEmittedServer(PAGE)
         const html = await mod.render({
-            state: (v: unknown) => ({ read: () => v, write: () => {}, peek: () => v }),
+            state: (v: unknown) => Object.assign(() => v, { set: () => {}, peek: () => v }),
         })
         expect(stripAnchors(html)).toBe('<p>on/no/0</p>')
     })
@@ -561,7 +559,7 @@ describe('done() stream-completion probe', () => {
 })
 
 // state.shared(key, initial): a writable cell shared by key across every component instance (same
-// key → same backing signal). A write in one instance is observed by another sharing the key.
+// key → same backing state). A write in one instance is observed by another sharing the key.
 describe('state.shared cross-instance cell', () => {
     const SHARED_PAGE =
         "<script>import { state } from 'abide/shared/state'\n" +

@@ -120,7 +120,7 @@ the resolved fork at each branch is stated with its rationale.
 ## 3. Adjacent finding (tracked, NOT in #11 scope)
 
 The RUNTIME emitter rewrites TYPE-POSITION identifiers to `$scope.X` (`{(x as Foo).bar}` →
-`(x.read() as $scope.Foo).bar`; `(i: Item)` → `(i: $scope.Item)`; `v satisfies string` →
+`(x() as $scope.Foo).bar`; `(i: Item)` → `(i: $scope.Item)`; `v satisfies string` →
 `v satisfies $scope.string`). The intermediate `.ts` is not type-valid, but it is **harmless** — Bun
 strips types syntactically at build/SSR before resolution. #18 excluded the operators (`as`/
 `satisfies`) but not the type OPERAND after them. `emitCheck` is unaffected (verbatim copy, no

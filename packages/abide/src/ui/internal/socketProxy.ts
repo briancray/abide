@@ -4,13 +4,13 @@
 // module-swap, rpc-core §6): same `Socket<T>` surface — `for await` + `publish` + the reactive
 // memo-probe vocabulary — reached over the shared WS mux instead of an in-proc hub. Fan-out is local:
 // ONE mux subscription per socket name, many local `Subscriber` iterators (CS3). The probes are
-// backed by reactive `signal`s so `{chat.peek()}` / `{#if chat.pending()}` re-render on change.
+// backed by reactive `state`s so `{chat.peek()}` / `{#if chat.pending()}` re-render on change.
 //
 // ACTIVE probes (iterate / `peek` / `chunks`) open the subscription; STATUS probes (`pending` /
 // `refreshing` / `done` / `error`) only observe it (CS11). `publish` is fire-and-forget (CS3.4).
 
 import { canonicalKey } from '../../shared/internal/codec.ts'
-import { signal } from '../../shared/internal/reactive.ts'
+import { state } from '../../shared/internal/reactive.ts'
 import { Subscriber } from '../../shared/internal/subscriber.ts'
 import { muxPublish, muxSubscribe } from './mux.ts'
 
@@ -47,9 +47,9 @@ interface RoomProxy {
 
 function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: string): RoomProxy {
     const cap = spec.tail > 0 ? spec.tail : 1024
-    const status = signal<Status>('idle')
-    const latest = signal<LatestEntry | undefined>(undefined)
-    const chunks = signal<unknown[]>([])
+    const status = state<Status>('idle')
+    const latest = state<LatestEntry | undefined>(undefined)
+    const chunks = state<unknown[]>([])
     // Local iterator fan-out: one Subscriber per live `{#for await}` cursor (CS3.2). Late cursors get
     // live-only (no local tail replay).
     const localSubs = new Set<Subscriber<unknown>>()

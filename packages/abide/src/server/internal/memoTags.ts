@@ -18,7 +18,7 @@ import { publishMemoFrame, tagChannelName } from './memoChannels.ts'
 
 // One registered shared memo's tag-facing operations. `invalidate`/`refresh` drop/revalidate ALL of
 // the memo's current slots and broadcast per-slot on the memo's `@rpc:` channels; `pending`/
-// `refreshing` are LOCAL reactive aggregates over the memo's current slot signals (no broadcast).
+// `refreshing` are LOCAL reactive aggregates over the memo's current slot states (no broadcast).
 export interface TaggedMemo {
     tags: string[]
     invalidate(): void
@@ -78,7 +78,7 @@ export function refreshTags(tags: string[]): void {
 }
 
 // Global `pending({ tags })`: LOCAL reactive aggregate — true if ANY tagged slot is on its first
-// load. Reads every selected memo's slot signals (no short-circuit) so a tracking caller subscribes
+// load. Reads every selected memo's slot states (no short-circuit) so a tracking caller subscribes
 // to all of them. No broadcast.
 export function pendingTags(tags: string[]): boolean {
     let any = false

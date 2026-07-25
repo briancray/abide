@@ -5,11 +5,11 @@
 // happy-dom host, (2) captures references to the specific server nodes, (3) hydrates, (4) asserts the
 // CLAIMED node IS the SAME Node object (`claimed === captured` — the load-bearing no-recreate check),
 // (5) asserts NO write happened on hydration pass 1 (decision 9 — trust server output), (6) asserts a
-// subsequent signal update DOES mutate the SAME node in place. Includes the text-merge split case
+// subsequent state update DOES mutate the SAME node in place. Includes the text-merge split case
 // (`Hi {name}!`) and the empty-value lazy-create case. Blocks are PR4 — not exercised here.
 
 import { describe, expect, spyOn, test } from 'bun:test'
-import { signal } from '../../shared/internal/reactive.ts'
+import { state } from '../../shared/internal/reactive.ts'
 import { memo } from '../../shared/memo.ts'
 import { loadEmitted } from './emit.ts'
 
@@ -48,22 +48,22 @@ function captureHydrateWarnings(run: () => void): string[] {
 const TEXT = 3
 const COMMENT = 8
 
-// A scope whose signal-backed entries read their CURRENT value through a getter (so both the server
+// A scope whose state-backed entries read their CURRENT value through a getter (so both the server
 // render and the client hydrate read the same live memo), plus any plain values passed through.
 function makeScope(
-    signals: Record<string, ReturnType<typeof signal>>,
+    states: Record<string, ReturnType<typeof state>>,
     plain: Record<string, unknown> = {},
 ): Record<string, unknown> {
     const scope: Record<string, unknown> = { ...plain }
-    for (const [name, sig] of Object.entries(signals)) {
-        Object.defineProperty(scope, name, { get: () => sig(), enumerable: true })
+    for (const [name, st] of Object.entries(states)) {
+        Object.defineProperty(scope, name, { get: () => st(), enumerable: true })
     }
     return scope
 }
 
 describe('interpolation leaf — claim + suppress-write + in-place update', () => {
     test('claims the SAME server text node (no static prefix) and never recreates it', async () => {
-        const name = signal('Bob')
+        const name = state('Bob')
         const scope = makeScope({ name })
         const emitted = await loadEmitted('<span>{name}</span>')
 
@@ -91,7 +91,7 @@ describe('interpolation leaf — claim + suppress-write + in-place update', () =
     })
 
     test('text-merge: prefixLen splits the merged node so the static prefix is NOT the dynamic node', async () => {
-        const name = signal('Bob')
+        const name = state('Bob')
         const scope = makeScope({ name })
         const emitted = await loadEmitted('Hi {name}!')
 
@@ -120,7 +120,7 @@ describe('interpolation leaf — claim + suppress-write + in-place update', () =
     })
 
     test('empty value: server emitted no text node → lazy create on first write', async () => {
-        const name = signal('')
+        const name = state('')
         const scope = makeScope({ name })
         const emitted = await loadEmitted('<span>{name}</span>')
 
@@ -148,8 +148,8 @@ describe('interpolation leaf — claim + suppress-write + in-place update', () =
 
 describe('adjacent leaves — the PR3 gap the stateful cursor closes (PR4)', () => {
     test('{a}{b}: two DISTINCT same server text nodes are claimed (no positional desync)', async () => {
-        const a = signal('A')
-        const b = signal('B')
+        const a = state('A')
+        const b = state('B')
         const scope = makeScope({ a, b })
         const emitted = await loadEmitted('{a}{b}')
 
@@ -181,8 +181,8 @@ describe('adjacent leaves — the PR3 gap the stateful cursor closes (PR4)', () 
 
 describe('{#if} block — claim branch, suppress write, flip creates fresh (PR4)', () => {
     test("claims the rendered branch's SAME nodes; toggle off removes; toggle on re-creates", async () => {
-        const show = signal(true)
-        const msg = signal('hi')
+        const show = state(true)
+        const msg = state('hi')
         const scope = makeScope({ show, msg })
         const emitted = await loadEmitted('{#if show}<p>{msg}</p>{/if}')
 
@@ -222,7 +222,7 @@ describe('{#if} block — claim branch, suppress write, flip creates fresh (PR4)
 
 describe('{#switch} block — claim matched case, flip creates fresh (PR4)', () => {
     test('claims the SAME case nodes; flipping the discriminant swaps to fresh DOM', async () => {
-        const color = signal('red')
+        const color = state('red')
         const scope = makeScope({ color })
         const emitted = await loadEmitted(
             '{#switch color}{:case "red"}<p>R</p>{:case "blue"}<p>B</p>{/switch}',
@@ -248,7 +248,7 @@ describe('{#switch} block — claim matched case, flip creates fresh (PR4)', () 
 
 describe('{#try} block — claim the successful body (PR4)', () => {
     test('claims the SAME body nodes and wires reactivity', async () => {
-        const msg = signal('ok')
+        const msg = state('ok')
         const scope = makeScope({ msg })
         const emitted = await loadEmitted('{#try}<p>{msg}</p>{:catch e}<span>err</span>{/try}')
 
@@ -289,7 +289,7 @@ describe('component {children()} — claim the children region (PR4)', () => {
     }
 
     test('the children slot claims the SAME server text node under a component', async () => {
-        const x = signal('Y')
+        const x = state('Y')
         const scope = makeScope({ x }, { Wrap: passThrough() })
         const emitted = await loadEmitted('<Wrap>{x}</Wrap>')
 
@@ -316,7 +316,7 @@ describe('component {children()} — claim the children region (PR4)', () => {
 
 describe('{#for} keyed sync block — claim items, then reconcile (PR4)', () => {
     test('claims each SAME <li>, then add / remove / reorder work normally', async () => {
-        const items = signal([1, 2])
+        const items = state([1, 2])
         const scope = makeScope({ items })
         const emitted = await loadEmitted('{#for n of items by n}<li>{n}</li>{/for}')
 
@@ -363,9 +363,9 @@ describe('{#for} keyed sync block — claim items, then reconcile (PR4)', () => 
 
 describe('nested — element descent + block claim in the same level (PR4)', () => {
     test('<div><p>{a}</p>{#if show}<span>{b}</span>{/if}</div> claims across the DFS cursor', async () => {
-        const a = signal('A')
-        const b = signal('B')
-        const show = signal(true)
+        const a = state('A')
+        const b = state('B')
+        const show = state(true)
         const scope = makeScope({ a, b, show })
         const emitted = await loadEmitted('<div><p>{a}</p>{#if show}<span>{b}</span>{/if}</div>')
 
@@ -401,7 +401,7 @@ describe('nested — element descent + block claim in the same level (PR4)', () 
 
 describe('element — claim + listener attach', () => {
     test('claims the SAME element node, wires the listener, and does not clear content', async () => {
-        const bid = signal('b1')
+        const bid = state('b1')
         let clicks = 0
         const scope = makeScope({ bid }, { handler: () => clicks++ })
         const emitted = await loadEmitted('<button id={bid} onclick={handler}>Go</button>')
@@ -427,7 +427,7 @@ describe('element — claim + listener attach', () => {
 
 describe('attribute — suppress-write then in-place update', () => {
     test('does NOT re-apply the attribute on pass 1, then applies to the SAME node on update', async () => {
-        const value = signal('v1')
+        const value = state('v1')
         const scope = makeScope({ value })
         const emitted = await loadEmitted('<div id={value}></div>')
 
@@ -455,7 +455,7 @@ describe('attribute — suppress-write then in-place update', () => {
     })
 
     test('class:toggle is suppressed on pass 1, then toggles the SAME node', async () => {
-        const active = signal(true)
+        const active = state(true)
         const scope = makeScope({ active })
         const emitted = await loadEmitted('<div class:on={active}></div>')
 
@@ -506,7 +506,7 @@ describe('{#await} block — claim the settled branch (PR5)', () => {
     })
 
     test('synchronously-settled plain value: claims then-branch; a dep change rebuilds', async () => {
-        const user = signal('Bob')
+        const user = state('Bob')
         const scope = makeScope({ user })
         const emitted = await loadEmitted(
             '{#await user}<em>loading</em>{:then u}<p>{u}</p>{/await}',
@@ -557,8 +557,8 @@ describe('{#await} block — claim the settled branch (PR5)', () => {
     })
 
     test(':finally — claims then + finally in document order (SAME nodes)', async () => {
-        const user = signal('Bob')
-        const status = signal('done')
+        const user = state('Bob')
+        const status = state('done')
         const scope = makeScope({ user, status })
         const emitted = await loadEmitted(
             '{#await user}<em>loading</em>{:then u}<p>{u}</p>{:finally}<b>{status}</b>{/await}',
@@ -615,9 +615,9 @@ describe('{#await} block — claim the settled branch (PR5)', () => {
 
 describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)', () => {
     test('wrong tag inside a block: that subtree is recreated, the SIBLING keeps node identity, dev-warns', async () => {
-        const a = signal('A')
-        const b = signal('B')
-        const show = signal(true)
+        const a = state('A')
+        const b = state('B')
+        const show = state(true)
         let clicks = 0
         const scope = makeScope({ a, b, show }, { h: () => clicks++ })
         // <span> is a root-level sibling OUTSIDE the {#if}; the mismatched <button> lives INSIDE it.
@@ -672,7 +672,7 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
     })
 
     test('root-level unrecoverable mismatch: whole-page fresh mount, no throw, correct DOM', async () => {
-        const b = signal('B')
+        const b = state('B')
         let clicks = 0
         const scope = makeScope({ b }, { h: () => clicks++ })
         // A root-level dynamic element with no enclosing block — a tag mismatch escapes to the root.
@@ -714,7 +714,7 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
     })
 
     test('happy path: matching server DOM claims same-node with NO warning and no recreation', async () => {
-        const b = signal('B')
+        const b = state('B')
         let clicks = 0
         const scope = makeScope({ b }, { h: () => clicks++ })
         const emitted = await loadEmitted('<button onclick={h}>{b}</button>')
@@ -740,8 +740,8 @@ describe('localized mismatch recovery + dev-warnings + whole-page fallback (PR6)
     })
 
     test("missing block anchor: the block's own region can't be located → bubbles to whole-page fallback", async () => {
-        const show = signal(true)
-        const b = signal('B')
+        const show = state(true)
+        const b = state('B')
         const scope = makeScope({ show, b })
         const emitted = await loadEmitted('{#if show}<button>{b}</button>{/if}')
 
@@ -806,7 +806,7 @@ describe('{#await} claim swap tears down a FULLY-STATIC branch (regression: dupl
     // teardown was a no-op — the old finally leaked next to the freshly-mounted one.
     test('swapping the awaited promise removes the prior then + finally (no duplicates)', async () => {
         // Non-thenable initial value → the claim path (mirrors a seed-primed RPC read).
-        const job = signal<unknown>('ready')
+        const job = state<unknown>('ready')
         const scope: Record<string, unknown> = {}
         Object.defineProperty(scope, 'job', { get: () => job(), enumerable: true })
         const src =
@@ -862,7 +862,7 @@ describe('keyed {#for} of a nested block claims the whole item (regression: curs
     // scrambled the DOM — a later re-key then left the stale item behind. The mount fn now restores the
     // post-walk cursor after wiring, so the item's extent (and teardown) is exact.
     test('re-keying the list disposes the prior nested-block item (exactly one body)', async () => {
-        const run = signal<{ id: number }>({ id: 0 })
+        const run = state<{ id: number }>({ id: 0 })
         const scope: Record<string, unknown> = {}
         Object.defineProperty(scope, 'run', { get: () => run(), enumerable: true })
         const src =
@@ -893,7 +893,7 @@ describe('interpolation corrects a client-only divergence on the hydrate primed 
     // pass runs, so the server value ("none") diverges. The primed pass now corrects the claimed node
     // against the computed value when they differ.
     test('a bind:element node ref updates the dependent interpolation after hydrate', async () => {
-        const node = signal<unknown>(null)
+        const node = state<unknown>(null)
         const refNode = (el: unknown): (() => void) => {
             node.set(el)
             return () => node.set(null)
@@ -939,14 +939,14 @@ describe('mountable interpolation (component call / children) — adopt server s
     // teardown) instead of trusting-and-forgetting. Before the fix the primed pass returned without a
     // disposer, so the first reactive re-run MOUNTED A SECOND, LIVE COPY beside the stranded server one —
     // the ComponentDemo showed "Live count: 6" next to a frozen "Live count: 0". (Regression guard.)
-    function reactiveScope(sig: ReturnType<typeof signal>): Record<string, unknown> {
+    function reactiveScope(st: ReturnType<typeof state>): Record<string, unknown> {
         const scope: Record<string, unknown> = {}
-        Object.defineProperty(scope, 'count', { get: () => sig(), enumerable: true })
+        Object.defineProperty(scope, 'count', { get: () => st(), enumerable: true })
         return scope
     }
 
     test('a single component call re-mounts in place — exactly one badge, no stranded copy', async () => {
-        const count = signal(0)
+        const count = state(0)
         const scope = reactiveScope(count)
         const src =
             '{#component Badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/component}' +
@@ -969,7 +969,7 @@ describe('mountable interpolation (component call / children) — adopt server s
     })
 
     test('two component calls (the ComponentDemo shape) both stay singular after an update', async () => {
-        const count = signal(0)
+        const count = state(0)
         const scope = reactiveScope(count)
         const src =
             '{#component Badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/component}' +
@@ -989,7 +989,7 @@ describe('mountable interpolation (component call / children) — adopt server s
     })
 
     test('multi-node component body (trailing static) adopts its full extent', async () => {
-        const count = signal(0)
+        const count = state(0)
         const scope = reactiveScope(count)
         const src =
             '{#component Line(n)}Hi {n}!{/component}<div data-testid="wrap">{Line(count)}</div>'
@@ -1014,7 +1014,7 @@ describe('mountable interpolation (component call / children) — adopt server s
         // cursor landed mid-subtree and the sibling `<span>` claim hit a text node → HydrationMismatch that
         // bubbled to the PAGE ROOT and re-rendered everything (losing node identity). The server now brackets
         // the mountable subtree so the walk skips it as a unit; the sibling is claimed in place.
-        const count = signal(0)
+        const count = state(0)
         const scope = reactiveScope(count)
         const src =
             '{#component Line(n)}Hi {n}!{/component}' +

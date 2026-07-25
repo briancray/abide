@@ -1,22 +1,22 @@
 // Completion tracking for async iterables consumed by `{#for await}` — the substrate behind the
-// public `done()` probe. Each tracked iterable gets a reactive boolean signal that flips true when the
+// public `done()` probe. Each tracked iterable gets a reactive boolean state that flips true when the
 // runtime finishes draining it (normal end or a thrown error). Keyed in a WeakMap by the iterable's
 // identity, so the SAME object must be handed to both `{#for await …}` and `done(…)` — create the
 // stream once (a `<script>` const / `state`) and reuse it.
 
-import { type Signal, signal } from './reactive.ts'
+import { type State, state } from './reactive.ts'
 
-const DONE_SIGNALS = new WeakMap<object, Signal<boolean>>()
+const DONE_STATES = new WeakMap<object, State<boolean>>()
 
 function isTrackable(iterable: unknown): iterable is object {
     return iterable !== null && (typeof iterable === 'object' || typeof iterable === 'function')
 }
 
-function slotFor(iterable: object): Signal<boolean> {
-    let existing = DONE_SIGNALS.get(iterable)
+function slotFor(iterable: object): State<boolean> {
+    let existing = DONE_STATES.get(iterable)
     if (existing === undefined) {
-        existing = signal(false)
-        DONE_SIGNALS.set(iterable, existing)
+        existing = state(false)
+        DONE_STATES.set(iterable, existing)
     }
     return existing
 }
@@ -29,7 +29,7 @@ export function iterableDone(iterable: unknown): boolean {
     return slotFor(iterable)()
 }
 
-// Runtime hook: a `{#for await}` source was fully drained (or errored) — flip the signal.
+// Runtime hook: a `{#for await}` source was fully drained (or errored) — flip the state.
 export function markIterableDone(iterable: unknown): void {
     if (!isTrackable(iterable)) return
     slotFor(iterable).set(true)

@@ -100,7 +100,7 @@ test('bootstrapPage HYDRATES via the TS7-free path (claims server nodes, working
         "<script>import { state } from 'abide/shared/state'; let count = state(0)</script><button onclick={() => count++}>+</button><span>{count}</span>"
     // PR7: bootstrapPage claims the SSR DOM. Render the real anchored server HTML into the container.
     const { render, hydrate } = await loadEmitted(source)
-    const html = await render({ state: (v: unknown) => ({ read: () => v, write() {} }) })
+    const html = await render({ state: (v: unknown) => Object.assign(() => v, { set() {} }) })
     document.body.innerHTML = `<div id="__abide-app">${html}</div>`
 
     const container = document.getElementById('__abide-app')

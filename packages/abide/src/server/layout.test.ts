@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { GET } from '../server/GET.ts'
-import { signal } from '../shared/internal/reactive.ts'
+import { state } from '../shared/internal/reactive.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { compose } from '../ui/internal/compose.ts'
 import { loadEmitted } from '../ui/internal/emit.ts'
@@ -174,7 +174,7 @@ describe('client — compose hydrate claims layout + page DOM', () => {
         const layout = await loadEmitted('<div class="chrome"><nav>NAV</nav>{children()}</div>')
         const page = await loadEmitted('<p>Page {msg}</p>')
 
-        const msg = signal('hi')
+        const msg = state('hi')
         const scope: Record<string, unknown> = {}
         Object.defineProperty(scope, 'msg', { get: () => msg(), enumerable: true })
 

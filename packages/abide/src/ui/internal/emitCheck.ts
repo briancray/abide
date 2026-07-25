@@ -48,7 +48,7 @@ export interface CheckModule {
 // an expression to be type-checked without an unused-expression lint; `__entries` types `{#for item, i}`
 // as `[index, item]`; `children` is the intrinsic slot callable.
 const HEADER =
-    `interface __AbideState<__T> { read(): __T; write(value: __T): void; peek(): __T; }\n` +
+    `interface __AbideState<__T> { (): __T; set(value: __T): void; peek(): __T; }\n` +
     `type __AbideWiden<__T> = [__T] extends [never] ? any : __T extends readonly never[] ? any[] : [__T] extends [null | undefined] ? any : __T;\n` +
     `declare function __abideUnwrap<__T>(cell: __AbideState<__T>): __AbideWiden<__T>;\n` +
     `declare function __abideUnwrap<__T>(value: __T): __T;\n` +

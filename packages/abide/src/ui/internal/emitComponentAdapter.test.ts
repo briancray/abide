@@ -10,7 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 import { unlink } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
-import { signal } from '../../shared/internal/reactive.ts'
+import { state } from '../../shared/internal/reactive.ts'
 import { emitModuleSource } from './emit.ts'
 import type { Mountable } from './runtime.ts'
 
@@ -48,7 +48,7 @@ describe('component default adapter — client', () => {
     test('mounts with props, renders the children slot, and reacts to a reference-site prop change', async () => {
         const adapter = await loadClientDefault(SOURCE)
 
-        const title = signal('Hi')
+        const title = state('Hi')
         const propsObj: Record<string, unknown> = {}
         Object.defineProperty(propsObj, 'title', { get: () => title(), enumerable: true })
 

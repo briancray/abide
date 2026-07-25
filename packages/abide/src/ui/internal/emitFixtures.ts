@@ -3,7 +3,7 @@
 // One-liner source strings covering every template/script capability, plus fresh-scope / interaction
 // factories so the oracle can drive the emitted modules and snapshot their server HTML + client DOM.
 
-import { signal } from '../../shared/internal/reactive.ts'
+import { state } from '../../shared/internal/reactive.ts'
 import type { Mountable } from './runtime.ts'
 
 export interface Fixture {
@@ -535,13 +535,13 @@ export const FIXTURES: Fixture[] = [
         kind: 'template',
         server: false,
         scope: () => {
-            const count = signal(1)
+            const count = state(1)
             const s: Record<string, unknown> = { __count: count }
             Object.defineProperty(s, 'count', { get: () => count() })
             return s
         },
         interact: (_host, s) => {
-            ;(s.__count as ReturnType<typeof signal>).set(2)
+            ;(s.__count as ReturnType<typeof state>).set(2)
             return tick()
         },
     },
@@ -551,13 +551,13 @@ export const FIXTURES: Fixture[] = [
         kind: 'template',
         server: false,
         scope: () => {
-            const cls = signal('one')
+            const cls = state('one')
             const s: Record<string, unknown> = { __cls: cls }
             Object.defineProperty(s, 'cls', { get: () => cls() })
             return s
         },
         interact: (_host, s) => {
-            ;(s.__cls as ReturnType<typeof signal>).set('two')
+            ;(s.__cls as ReturnType<typeof state>).set('two')
             return tick()
         },
     },
@@ -567,13 +567,13 @@ export const FIXTURES: Fixture[] = [
         kind: 'template',
         server: false,
         scope: () => {
-            const show = signal(false)
+            const show = state(false)
             const s: Record<string, unknown> = { __show: show }
             Object.defineProperty(s, 'show', { get: () => show() })
             return s
         },
         interact: (_host, s) => {
-            ;(s.__show as ReturnType<typeof signal>).set(true)
+            ;(s.__show as ReturnType<typeof state>).set(true)
             return tick()
         },
     },
@@ -583,13 +583,13 @@ export const FIXTURES: Fixture[] = [
         kind: 'template',
         server: false,
         scope: () => {
-            const items = signal([{ id: 1 }, { id: 2 }, { id: 3 }])
+            const items = state([{ id: 1 }, { id: 2 }, { id: 3 }])
             const s: Record<string, unknown> = { __items: items }
             Object.defineProperty(s, 'items', { get: () => items() })
             return s
         },
         interact: (_host, s) => {
-            ;(s.__items as ReturnType<typeof signal>).set([{ id: 3 }, { id: 1 }, { id: 2 }])
+            ;(s.__items as ReturnType<typeof state>).set([{ id: 3 }, { id: 1 }, { id: 2 }])
             return tick()
         },
     },
@@ -599,23 +599,23 @@ export const FIXTURES: Fixture[] = [
         kind: 'template',
         server: false,
         scope: () => {
-            const v = signal(1)
+            const v = state(1)
             const s: Record<string, unknown> = { __v: v }
             Object.defineProperty(s, 'v', { get: () => v() })
             return s
         },
         interact: (_host, s) => {
-            ;(s.__v as ReturnType<typeof signal>).set(2)
+            ;(s.__v as ReturnType<typeof state>).set(2)
             return tick()
         },
     },
     {
-        name: 'event click updates via signal',
+        name: 'event click updates via state',
         src: '<button onclick={inc}>{count}</button>',
         kind: 'template',
         server: false,
         scope: () => {
-            const count = signal(0)
+            const count = state(0)
             const s: Record<string, unknown> = { inc: () => count.set(count() + 1) }
             Object.defineProperty(s, 'count', { get: () => count() })
             return s

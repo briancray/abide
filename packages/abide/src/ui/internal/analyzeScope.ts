@@ -1,9 +1,9 @@
 // `.abide` `<script>` SCOPE ANALYSIS + CELL-REFERENCE REWRITE (Stage 1, PR2) — BUILD/SERVER-SIDE ONLY.
 //
 // This module extends the role of `transformScript.ts`. Where the legacy transform relied on
-// `with ($s)` + get/set accessors so a bare `count` proxied a signal, the AOT emitter needs LEXICAL
+// `with ($s)` + get/set accessors so a bare `count` proxied an atom, the AOT emitter needs LEXICAL
 // identifiers: `let count = state(0)` stays a real binding and EVERY reference is rewritten — read
-// `count` → `count.read()`, write `count = x` → `count.write(x)`. That reference rewrite
+// `count` → `count()`, write `count = x` → `count.set(x)`. That reference rewrite
 // (`rewriteCellRefs`) is the core new work here, built on the SAME TS7 scanner the legacy transform
 // uses (`typescript/unstable/ast/scanner`). Like `transformScript.ts`, this runs at build time and
 // during SSR and MUST NOT ship to the browser (it pulls in the TypeScript scanner).
@@ -708,7 +708,7 @@ function isShadowed(shadows: ShadowScope[], name: string, idx: number): boolean 
 // Operators that cannot END (or, when leading a line, cannot START a fresh statement after) an
 // expression: a line break adjacent to one is a CONTINUATION, so JS ASI inserts no semicolon and the
 // RHS keeps going on the next line. Used to keep `rhsExtent` from truncating a multi-line RHS such as
-// `count = a +` ⏎ `  b` mid-expression (which emitted `count.write(a +)` with an orphaned `b`).
+// `count = a +` ⏎ `  b` mid-expression (which emitted `count.set(a +)` with an orphaned `b`).
 const CONTINUATION_OPERATORS: Set<SyntaxKind> = new Set([
     K.PlusToken,
     K.MinusToken,
@@ -793,7 +793,7 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
         return next === K.ColonToken || next === K.OpenParenToken
     }
 
-    // Object-literal shorthand (`{ n }`, `{ a, n }`) — a READ, rewritten to `n: n.read()`.
+    // Object-literal shorthand (`{ n }`, `{ a, n }`) — a READ, rewritten to `n: n()`.
     const isObjectShorthand = (i: number): boolean => {
         const encl = numberAt(enclBraceOpen, i)
         if (encl === -1 || !isObjectBrace.has(encl)) return false
@@ -864,7 +864,7 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
                 flush(t.start)
                 const name = next.text
                 const op = kind === K.PlusPlusToken ? '+' : '-'
-                out += `${name}.write(${name}.read() ${op} 1)`
+                out += `${name}.set(${name}() ${op} 1)`
                 cursor = next.end
                 i += 2
                 continue
@@ -885,16 +885,16 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
 
             if (isObjectShorthand(i)) {
                 flush(t.start)
-                out += `${name}: ${name}.read()`
+                out += `${name}: ${name}()`
                 cursor = t.end
                 i++
                 continue
             }
 
             if (next !== undefined && next.kind === K.EqualsToken) {
-                // `n = rhs` → `n.write(rhs)`
+                // `n = rhs` → `n.set(rhs)`
                 flush(t.start)
-                out += `${name}.write(`
+                out += `${name}.set(`
                 const end = rhsExtent(tokens, i + 2)
                 pending.push({ pos: tokenAt(tokens, end).end, text: ')', seq: seq++ })
                 cursor = next.end // skip `n` and `=`
@@ -903,11 +903,11 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
             }
 
             if (next !== undefined && COMPOUND_OP.has(next.kind)) {
-                // `n op= rhs` → `n.write(n.read() op (rhs))`
+                // `n op= rhs` → `n.set(n() op (rhs))`
                 flush(t.start)
                 const op = COMPOUND_OP.get(next.kind)
                 if (op === undefined) throw new Error('analyzeScope: missing compound operator')
-                out += `${name}.write(${name}.read() ${op} (`
+                out += `${name}.set(${name}() ${op} (`
                 const end = rhsExtent(tokens, i + 2)
                 pending.push({ pos: tokenAt(tokens, end).end, text: '))', seq: seq++ })
                 cursor = next.end
@@ -928,7 +928,7 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
                 ) {
                     flush(t.start)
                     const op = count === 2 ? '>>' : '>>>'
-                    out += `${name}.write(${name}.read() ${op} (`
+                    out += `${name}.set(${name}() ${op} (`
                     const end = rhsExtent(tokens, run + 1)
                     pending.push({ pos: tokenAt(tokens, end).end, text: '))', seq: seq++ })
                     cursor = tokenAt(tokens, run).end // skip `n`, the `>` run, and `=`
@@ -944,7 +944,7 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
                 // postfix `n++` / `n--`
                 flush(t.start)
                 const op = next.kind === K.PlusPlusToken ? '+' : '-'
-                out += `${name}.write(${name}.read() ${op} 1)`
+                out += `${name}.set(${name}() ${op} 1)`
                 cursor = next.end
                 i += 2
                 continue
@@ -952,7 +952,7 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
 
             // plain read
             flush(t.start)
-            out += `${name}.read()`
+            out += `${name}()`
             cursor = t.end
             i++
             continue

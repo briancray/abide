@@ -1,6 +1,6 @@
 // Client runtime for `.abide` templates — the DOM + reactivity mechanics that emitted client code
 // (and, today, the `renderClient.ts` interpreter) calls to build REAL DOM and wire fine-grained
-// reactivity over the M1 signal substrate. No virtual DOM, no diffing.
+// reactivity over the M1 state substrate. No virtual DOM, no diffing.
 //
 // This module is TS7-free (no `typescript` import, no `SyntaxKind`) and ships to the browser. It is
 // the "AST → thunks/BlockFns → DOM" boundary: helpers accept pre-bound thunks (`read: () => unknown`)
@@ -12,12 +12,12 @@
 // DOM during hydration.
 
 import { markIterableDone } from '../../shared/internal/iterableDone.ts'
-import { effect, signal, untrack } from '../../shared/internal/reactive.ts'
+import { effect, state, untrack } from '../../shared/internal/reactive.ts'
 import { peekSettled } from '../../shared/internal/settledRead.ts'
 import { log } from '../../shared/log.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
-export { effect, signal, untrack }
+export { effect, state, untrack }
 
 // Teardown callback: disposes an effect and/or removes created nodes. Guarded so double-calls and
 // already-detached nodes are safe.
@@ -719,12 +719,12 @@ export interface Accessor {
     write: (value: unknown) => void
 }
 
-// Resolve a bound value to a read/write accessor. Accepts a writable signal (callable with `.set`)
+// Resolve a bound value to a read/write accessor. Accepts a writable state (callable with `.set`)
 // or an explicit `{ get, set }` object.
 export function boundAccessor(bound: unknown): Accessor | null {
     if (typeof bound === 'function' && typeof (bound as { set?: unknown }).set === 'function') {
-        const signalLike = bound as (() => unknown) & { set: (value: unknown) => void }
-        return { read: () => signalLike(), write: (value) => signalLike.set(value) }
+        const stateLike = bound as (() => unknown) & { set: (value: unknown) => void }
+        return { read: () => stateLike(), write: (value) => stateLike.set(value) }
     }
     if (bound !== null && typeof bound === 'object') {
         const object = bound as { get?: () => unknown; set?: (value: unknown) => void }
@@ -808,15 +808,15 @@ export function bindGroup(input: HTMLInputElement, accessor: Accessor): Disposer
     }
 }
 
-// `bind:element` — assign the node to a writable signal cell (cleared on teardown) or invoke an
+// `bind:element` — assign the node to a writable state cell (cleared on teardown) or invoke an
 // attachment function (its return value is a teardown). Returns undefined when `bound` is neither.
 export function bindElement(element: Element, bound: unknown): Disposer | undefined {
-    // Attach fn: a plain function WITHOUT a signal `.set` — call it, its return value is the teardown.
+    // Attach fn: a plain function WITHOUT a state `.set` — call it, its return value is the teardown.
     if (typeof bound === 'function' && typeof (bound as { set?: unknown }).set !== 'function') {
         const teardown = (bound as (node: Element) => unknown)(element)
         return typeof teardown === 'function' ? (teardown as Disposer) : undefined
     }
-    // Node-ref cell: a writable signal (callable + `.set`) or a `{ get, set }` accessor — the latter is
+    // Node-ref cell: a writable state (callable + `.set`) or a `{ get, set }` accessor — the latter is
     // what a bare `state()` cell compiles to (TODO #22). Assign the node, clear it on teardown.
     const accessor = boundAccessor(bound)
     if (accessor !== null) {
@@ -1350,7 +1350,7 @@ export function forBlock(
             }
         }
         const stop = effect(() => {
-            // Reading the source subscribes this effect to the backing memo's STATE signal (invalidate/
+            // Reading the source subscribes this effect to the backing memo's STATE state (invalidate/
             // refresh) plus any reactive dep in the args — but NOT to per-chunk growth (the memo keeps
             // that on a separate `streamTick`), so live chunks arriving never restart the block.
             const source = options.read()

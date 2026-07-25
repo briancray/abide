@@ -3,7 +3,7 @@
   import { state } from "abide/shared/state"
 
   // Two instances of this component share ONE cell by key: `state.shared("reactivity-tally", 0)`.
-  // Bumping either instance updates both (same backing signal), and it also syncs across browser tabs.
+  // Bumping either instance updates both (same backing state), and it also syncs across browser tabs.
   const { name = "a" } = props()
   let n = state.shared("reactivity-tally", 0)
   function bump() { n = n + 1 }

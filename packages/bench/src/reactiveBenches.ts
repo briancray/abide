@@ -2,7 +2,7 @@
 //
 // `serverBenches.ts` covers route classification, cache-key building and the warm scalar memo read.
 // This file covers the six hot paths that ADR 0023 restructures and that had ZERO measurement before it:
-// the signal substrate, the probe/read surface (`peek`/`pending`/`chunks`/`done`), stream chunk push,
+// the state substrate, the probe/read surface (`peek`/`pending`/`chunks`/`done`), stream chunk push,
 // `memo.watch` fire cost, channel publish fanout, and the per-chunk frame codec.
 //
 // Why these exist: ADR 0023 step 4 puts a `ReactiveReadSurface` interface in front of every probe, step 1
@@ -13,7 +13,7 @@
 // Batch ops report ns for the WHOLE batch; divide by the batch size in `note` for per-item cost.
 
 import { decodeStreamResponse } from 'abide/shared/internal/decodeStreamResponse'
-import { computed, effect, signal } from 'abide/shared/internal/reactive'
+import { computed, effect, state } from 'abide/shared/internal/reactive'
 import { ReplayableStream } from 'abide/shared/internal/replayableStream'
 import { Subscriber } from 'abide/shared/internal/subscriber'
 import { memo } from 'abide/shared/memo'
@@ -45,7 +45,7 @@ function afterFlush(): Promise<void> {
     })
 }
 
-// Attach `count` effects to a signal and return a disposer, so fanout cost is the only variable.
+// Attach `count` effects to a state and return a disposer, so fanout cost is the only variable.
 function attachObservers(source: () => unknown, count: number): () => void {
     const disposers: Array<() => void> = []
     for (let i = 0; i < count; i++) {
@@ -61,18 +61,18 @@ function attachObservers(source: () => unknown, count: number): () => void {
 }
 
 export async function createReactiveBenches(): Promise<ServerBench[]> {
-    // ── signal substrate ────────────────────────────────────────────────────────────────────────────
-    const readSignal = signal(0)
-    const setSignal1 = signal(0)
-    const setSignal10 = signal(0)
-    const setSignal100 = signal(0)
-    attachObservers(setSignal1, 1)
-    attachObservers(setSignal10, 10)
-    attachObservers(setSignal100, 100)
+    // ── state substrate ────────────────────────────────────────────────────────────────────────────
+    const readState = state(0)
+    const setState1 = state(0)
+    const setState10 = state(0)
+    const setState100 = state(0)
+    attachObservers(setState1, 1)
+    attachObservers(setState10, 10)
+    attachObservers(setState100, 100)
 
     // 5-deep computed chain: `set` marks the head DIRTY and the tail CHECK; reading the tail walks the
     // chain through `updateIfNecessary`. This is the glitch-free pull cost.
-    const chainHead = signal(0)
+    const chainHead = state(0)
     let chainLink: () => number = chainHead
     for (let depth = 0; depth < 5; depth++) {
         const previous = chainLink
@@ -128,49 +128,149 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
     const frames = makeChunks(FRAMES)
     const jsonlBody = `${frames.map((f) => JSON.stringify(f)).join('\n')}\n`
 
+    // ── hand-written baselines ──────────────────────────────────────────────────────────────────────
+    // Plain-JS stand-ins for each primitive: an object field for a state, a callback array for the
+    // observer set, an eagerly recomputed function chain for a computed, an array for a transcript, a
+    // drop-oldest array for a subscriber queue. Every read lands in `plainSink` so the JIT cannot delete
+    // it outright — even so, the cheapest of these sit at the timer's resolution floor, so read those
+    // ratios as an order of magnitude rather than a figure.
+    let plainSink: unknown
+    const plainHolder = { value: 0 }
+    const makePlainObservers = (count: number): ((value: number) => void)[] => {
+        const observers: ((value: number) => void)[] = []
+        for (let i = 0; i < count; i++)
+            observers.push((value) => {
+                plainSink = value
+            })
+        return observers
+    }
+    const plainObservers1 = makePlainObservers(1)
+    const plainObservers10 = makePlainObservers(10)
+    const plainObservers100 = makePlainObservers(100)
+
+    // The same 5-deep chain with no memoisation and no glitch-freedom: five functions that recompute on
+    // every read, which is what you get by hand.
+    let plainHead = 0
+    let plainLink: () => number = () => plainHead
+    for (let depth = 0; depth < 5; depth++) {
+        const previous = plainLink
+        plainLink = () => previous() + 1
+    }
+    const plainTail = plainLink
+    let plainChainSeed = 0
+
+    // The fields a probe surface reads, with nothing reactive behind them.
+    const plainSlot = { value: 2, pending: false, error: undefined as unknown, done: true }
+    const plainTranscript = makeChunks(100)
+
+    // Plain queues pre-filled to the same 1024 cap the Subscriber settles at, so every push takes the
+    // drop-oldest branch exactly as the real one does.
+    const makePlainQueues = (count: number): Chunk[][] => {
+        const queues: Chunk[][] = []
+        for (let i = 0; i < count; i++) {
+            const queue: Chunk[] = []
+            for (let n = 0; n < 1024; n++) queue.push({ i: n, label: 'row' })
+            queues.push(queue)
+        }
+        return queues
+    }
+    const plainQueues1 = makePlainQueues(1)
+    const plainQueues10 = makePlainQueues(10)
+    const plainQueues100 = makePlainQueues(100)
+    const plainMessage: Chunk = { i: 0, label: 'row' }
+    const pushPlainQueues = (queues: Chunk[][]): void => {
+        for (const queue of queues) {
+            if (queue.length >= 1024) queue.shift()
+            queue.push(plainMessage)
+        }
+    }
+
+    // Replay a settled transcript to a consumer over the async-iteration protocol — the same shape the
+    // real cursor has, minus the stream.
+    async function* replayPlain(items: Chunk[]): AsyncGenerator<Chunk> {
+        for (const item of items) yield item
+    }
+
     return [
         {
-            group: 'signal',
+            group: 'state',
             name: 'get',
             note: 'untracked read (currentObserver null)',
             run: () => {
-                readSignal()
+                readState()
+            },
+            baseline: {
+                note: 'plain object field read',
+                run: () => {
+                    plainSink = plainHolder.value
+                },
             },
         },
         {
-            group: 'signal',
+            group: 'state',
             name: 'set-flush-1',
             note: 'set + flush, 1 observer',
             run: async () => {
-                setSignal1.set(setSignal1.peek() + 1)
+                setState1.set(setState1.peek() + 1)
                 await afterFlush()
+            },
+            baseline: {
+                note: 'assign a field, call 1 callback',
+                run: async () => {
+                    plainHolder.value++
+                    for (const observer of plainObservers1) observer(plainHolder.value)
+                    await afterFlush()
+                },
             },
         },
         {
-            group: 'signal',
+            group: 'state',
             name: 'set-flush-10',
             note: 'set + flush, 10 observers',
             run: async () => {
-                setSignal10.set(setSignal10.peek() + 1)
+                setState10.set(setState10.peek() + 1)
                 await afterFlush()
+            },
+            baseline: {
+                note: 'assign a field, call 10 callbacks',
+                run: async () => {
+                    plainHolder.value++
+                    for (const observer of plainObservers10) observer(plainHolder.value)
+                    await afterFlush()
+                },
             },
         },
         {
-            group: 'signal',
+            group: 'state',
             name: 'set-flush-100',
             note: 'set + flush, 100 observers',
             run: async () => {
-                setSignal100.set(setSignal100.peek() + 1)
+                setState100.set(setState100.peek() + 1)
                 await afterFlush()
+            },
+            baseline: {
+                note: 'assign a field, call 100 callbacks',
+                run: async () => {
+                    plainHolder.value++
+                    for (const observer of plainObservers100) observer(plainHolder.value)
+                    await afterFlush()
+                },
             },
         },
         {
-            group: 'signal',
+            group: 'state',
             name: 'computed-chain-5',
             note: 'set head → read tail through 5 computeds',
             run: () => {
                 chainHead.set(++chainSeed)
                 chainTail()
+            },
+            baseline: {
+                note: '5 chained functions, recomputed on read',
+                run: () => {
+                    plainHead = ++plainChainSeed
+                    plainSink = plainTail()
+                },
             },
         },
 
@@ -181,6 +281,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             run: () => {
                 scalar.peek({ id: 1 })
             },
+            baseline: {
+                note: 'plain object field read',
+                run: () => {
+                    plainSink = plainSlot.value
+                },
+            },
         },
         {
             group: 'probe',
@@ -188,6 +294,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             note: 'warm value slot',
             run: () => {
                 scalar.pending({ id: 1 })
+            },
+            baseline: {
+                note: 'plain object field read',
+                run: () => {
+                    plainSink = plainSlot.pending
+                },
             },
         },
         {
@@ -197,6 +309,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             run: () => {
                 scalar.error({ id: 1 })
             },
+            baseline: {
+                note: 'plain object field read',
+                run: () => {
+                    plainSink = plainSlot.error
+                },
+            },
         },
         {
             group: 'probe',
@@ -204,6 +322,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             note: 'latest chunk of a 100-chunk transcript',
             run: () => {
                 streamMemo.peek({ id: 1 })
+            },
+            baseline: {
+                note: 'last element of an array',
+                run: () => {
+                    plainSink = plainTranscript[plainTranscript.length - 1]
+                },
             },
         },
         {
@@ -213,6 +337,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             run: () => {
                 streamMemo.chunks({ id: 1 })
             },
+            baseline: {
+                note: 'array.slice() copy',
+                run: () => {
+                    plainSink = plainTranscript.slice()
+                },
+            },
         },
         {
             group: 'probe',
@@ -220,6 +350,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             note: '100-chunk settled transcript',
             run: () => {
                 streamMemo.done({ id: 1 })
+            },
+            baseline: {
+                note: 'plain object field read',
+                run: () => {
+                    plainSink = plainSlot.done
+                },
             },
         },
 
@@ -231,6 +367,14 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
                 const stream = new ReplayableStream<Chunk>()
                 for (let i = 0; i < CHUNKS; i++) stream.push({ i, label: 'row' })
                 stream.close()
+            },
+            baseline: {
+                note: `fresh array, ${CHUNKS} pushes/op`,
+                run: () => {
+                    const buffer: Chunk[] = []
+                    for (let i = 0; i < CHUNKS; i++) buffer.push({ i, label: 'row' })
+                    plainSink = buffer
+                },
             },
         },
         {
@@ -245,6 +389,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
                     // drain: exercises push → bumpStreamTick → accountStreamChunk → consume()
                 }
             },
+            baseline: {
+                note: `raw async-generator drain, ${CHUNKS} chunks/op (no memo)`,
+                run: async () => {
+                    for await (const chunk of chunkSource(CHUNKS)) plainSink = chunk
+                },
+            },
         },
         {
             group: 'stream',
@@ -257,6 +407,14 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
                 for await (const _ of stream.consume()) {
                     // replay-only drain
                 }
+            },
+            baseline: {
+                note: `array fill + async-generator replay of ${CHUNKS} items`,
+                run: async () => {
+                    const buffer: Chunk[] = []
+                    for (let i = 0; i < CHUNKS; i++) buffer.push({ i, label: 'row' })
+                    for await (const chunk of replayPlain(buffer)) plainSink = chunk
+                },
             },
         },
 
@@ -272,6 +430,14 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
                     throw new Error(
                         'watch/value-fire: handler never fired — bench measures nothing',
                     )
+            },
+            baseline: {
+                note: 'assign a field, call the handler directly',
+                run: async () => {
+                    plainHolder.value = ++plainChainSeed
+                    for (const observer of plainObservers1) observer(plainHolder.value)
+                    await afterFlush()
+                },
             },
         },
         {
@@ -289,6 +455,13 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
                     // drain under an attached watch
                 }
             },
+            baseline: {
+                note: `raw drain with a per-chunk callback, ${CHUNKS} chunks/op`,
+                run: async () => {
+                    const observer = plainObservers1[0]!
+                    for await (const chunk of chunkSource(CHUNKS)) observer(chunk.i)
+                },
+            },
         },
 
         {
@@ -298,6 +471,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             run: () => {
                 for (const s of fanout1.subscribers) s.push(fanout1.message)
             },
+            baseline: {
+                note: '1 array at cap: shift + push',
+                run: () => {
+                    pushPlainQueues(plainQueues1)
+                },
+            },
         },
         {
             group: 'fanout',
@@ -305,6 +484,12 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             note: '10 subscribers at cap',
             run: () => {
                 for (const s of fanout10.subscribers) s.push(fanout10.message)
+            },
+            baseline: {
+                note: '10 arrays at cap: shift + push',
+                run: () => {
+                    pushPlainQueues(plainQueues10)
+                },
             },
         },
         {
@@ -314,11 +499,19 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             run: () => {
                 for (const s of fanout100.subscribers) s.push(fanout100.message)
             },
+            baseline: {
+                note: '100 arrays at cap: shift + push',
+                run: () => {
+                    pushPlainQueues(plainQueues100)
+                },
+            },
         },
 
         {
             group: 'codec',
             name: 'jsonl-encode',
+            // No baseline: this recipe IS the hand-written version (a bare `JSON.stringify` loop), so it
+            // is its own baseline at 1.00× by construction.
             note: `${FRAMES} frames/op → newline-delimited JSON`,
             run: () => {
                 const parts: string[] = []
@@ -337,6 +530,19 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
                 for await (const _ of decodeStreamResponse(response)) {
                     // decode-only drain
                 }
+            },
+            baseline: {
+                note: `${FRAMES} frames/op ← response.text() → split + JSON.parse`,
+                run: async () => {
+                    const response = new Response(jsonlBody, {
+                        headers: { 'content-type': 'application/jsonl' },
+                    })
+                    const body = await response.text()
+                    for (const line of body.split('\n')) {
+                        if (line === '') continue
+                        plainSink = JSON.parse(line)
+                    }
+                },
             },
         },
     ]
