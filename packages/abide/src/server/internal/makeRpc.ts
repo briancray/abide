@@ -25,6 +25,7 @@
 // (it can't be safely keyed — see §1).
 
 import type { Payload } from '../../shared/internal/responseSource.ts'
+import { markSettled } from '../../shared/internal/settledRead.ts'
 import { type Memo, type MemoNotify, type MemoOptions, memo } from '../../shared/memo.ts'
 
 export type { Payload } from '../../shared/internal/responseSource.ts'
@@ -221,6 +222,22 @@ export type MutationSurface<Args, R> = [Payload<R>] extends [AsyncIterable<infer
     ? StreamMutation<Args, C>
     : Mutation<Args, Payload<R>>
 
+// The RPC read contract is `Promise<T>` on BOTH sides, whatever the backing memo does. A zero-arg
+// synchronous handler makes that memo auto-tracked (ADR 0024 §3), so its bare read is the value itself and
+// a throwing handler throws where a promise would reject — normalise both here. The resolved promise is
+// tagged settled so attach-hydration still claims the server-rendered `{#await fn()}` branch rather than
+// re-mounting it.
+function settleRead<T>(read: () => Promise<T> | T): Promise<T> {
+    let value: Promise<T> | T
+    try {
+        value = read()
+    } catch (caught) {
+        return Promise.reject(caught)
+    }
+    if (value !== null && typeof value === 'object' && 'then' in value) return value as Promise<T>
+    return markSettled(Promise.resolve(value as T), value as T)
+}
+
 function attachMeta<Args, T>(target: object, meta: RpcMeta<Args, T>): void {
     Object.defineProperty(target, '__rpc', { value: meta, enumerable: false })
 }
@@ -324,7 +341,7 @@ export function makeRead<Args, T>(
     }
     const backing = memo<Args, T>(fn, memoOptions)
 
-    const rpc = ((args: Args): Promise<T> => backing(args)) as Rpc<Args, T>
+    const rpc = ((args: Args): Promise<T> => settleRead(() => backing(args))) as Rpc<Args, T>
     attachSurface(rpc, backing, fn, method, options, true, (sink) => {
         broadcast = sink
     })
@@ -365,7 +382,7 @@ export function makeMutation<Args, R>(
         if (!memoed || (typeof FormData !== 'undefined' && args instanceof FormData)) {
             return Promise.resolve(handler(args as Args))
         }
-        return backing(args as Args)
+        return settleRead(() => backing(args as Args))
     }) as Rpc<Args, T>
     attachSurface(mutation, backing, handler, method, options, false, (sink) => {
         broadcast = sink

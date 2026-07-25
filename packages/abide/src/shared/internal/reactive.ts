@@ -265,6 +265,11 @@ export interface State<T> {
 export interface Computed<T> {
     (): T
     peek(): T
+    // Detach the node from its sources. `memo`'s auto-tracked fill (ADR 0024 §2) can only tell a
+    // synchronous derivation from a promise/stream source by RUNNING the body once inside a computed;
+    // when the run turns out to be deferred it drops the node, and without this the discarded node would
+    // stay in its sources' observer lists forever (one dead edge per request on the server).
+    dispose(): void
 }
 
 export function state<T>(initial: T): State<T> {
@@ -279,6 +284,7 @@ export function computed<T>(fn: () => T): Computed<T> {
     const node = new Reactive(fn, true, false)
     const read = (() => node.get() as T) as Computed<T>
     read.peek = () => node.peekValue() as T
+    read.dispose = () => disposeNode(node)
     return read
 }
 

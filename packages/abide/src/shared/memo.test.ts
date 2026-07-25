@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createContext, runInContext } from './internal/context.ts'
-import { effect } from './internal/reactive.ts'
+import { effect, state } from './internal/reactive.ts'
 import { memo } from './memo.ts'
 
 // Effect re-runs are microtask-batched; a macrotask tick guarantees they have flushed.
@@ -385,5 +385,259 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
         })
         expect(clientCalls).toBe(0)
         expect(calls).toBe(1)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ADR 0024 — a memo's dependencies are its declared inputs
+// ---------------------------------------------------------------------------
+
+describe('memo — auto-tracked (argless, synchronous)', () => {
+    test('bare call returns T, not a promise, and tracks the body reads', () => {
+        withContext(() => {
+            const count = state(1)
+            const doubled = memo(() => count() * 2)
+            expect(doubled()).toBe(2)
+            count.set(5)
+            // Pull-based: the fresh value is visible in the SAME tick as the write.
+            expect(doubled()).toBe(10)
+        })
+    })
+
+    test('the body runs once per dependency change, not once per read', () => {
+        withContext(() => {
+            const count = state(1)
+            let runs = 0
+            const doubled = memo(() => {
+                runs++
+                return count() * 2
+            })
+            expect(doubled()).toBe(2)
+            expect(doubled()).toBe(2)
+            expect(runs).toBe(1)
+            count.set(2)
+            expect(doubled()).toBe(4)
+            expect(runs).toBe(2)
+        })
+    })
+
+    test('nothing runs until something reads (lazy)', () => {
+        withContext(() => {
+            let runs = 0
+            const derived = memo(() => {
+                runs++
+                return 1
+            })
+            expect(runs).toBe(0)
+            derived()
+            expect(runs).toBe(1)
+        })
+    })
+
+    test('an ARGED fn keeps todays args-keyed behaviour — RPC is untouched', async () => {
+        await withContext(async () => {
+            const outer = state(1)
+            let runs = 0
+            const byId = memo((args: { id: number }) => {
+                runs++
+                return Promise.resolve(args.id + outer())
+            })
+            expect(await byId({ id: 10 })).toBe(11)
+            outer.set(100)
+            // args-keyed: a body read is NOT a declared input, so the slot stays cached
+            expect(await byId({ id: 10 })).toBe(11)
+            expect(runs).toBe(1)
+        })
+    })
+
+    test('an argless ASYNC body is not tracked (half-tracked is worse than untracked)', async () => {
+        await withContext(async () => {
+            const count = state(1)
+            let runs = 0
+            const loaded = memo(async () => {
+                runs++
+                return count() * 2
+            })
+            expect(await loaded()).toBe(2)
+            count.set(5)
+            await tick()
+            // Retained: an async body re-fills on refresh/invalidate only.
+            expect(await loaded()).toBe(2)
+            expect(runs).toBe(1)
+            loaded.invalidate()
+            expect(await loaded()).toBe(10)
+            expect(runs).toBe(2)
+        })
+    })
+
+    test('an argless body that returns a stream stays a replayable stream slot', async () => {
+        await withContext(async () => {
+            async function* source(): AsyncGenerator<number> {
+                yield 1
+                yield 2
+            }
+            let runs = 0
+            const streamed = memo(() => {
+                runs++
+                return source()
+            })
+            const first: number[] = []
+            for await (const chunk of (await streamed()) as AsyncIterable<number>) first.push(chunk)
+            const second: number[] = []
+            for await (const chunk of (await streamed()) as AsyncIterable<number>)
+                second.push(chunk)
+            expect(first).toEqual([1, 2])
+            expect(second).toEqual([1, 2]) // replayed, not re-run
+            expect(runs).toBe(1)
+        })
+    })
+
+    test('a naming ttl or shared opts back onto the classic pulled path', async () => {
+        await withContext(async () => {
+            let runs = 0
+            const ticker = memo(() => ++runs, { ttl: 0 })
+            expect(await ticker(undefined as never)).toBe(1)
+            expect(await ticker(undefined as never)).toBe(2)
+        })
+    })
+
+    test('refresh re-runs eagerly, invalidate re-runs on the next pull', () => {
+        withContext(() => {
+            let runs = 0
+            const derived = memo(() => ++runs)
+            expect(derived()).toBe(1)
+            derived.refresh()
+            expect(runs).toBe(2)
+            derived.invalidate()
+            expect(runs).toBe(2) // lazy
+            expect(derived()).toBe(3)
+        })
+    })
+
+    test('probes: never pending, never refreshing, no transcript', () => {
+        withContext(() => {
+            const derived = memo(() => 7)
+            expect(derived.peek()).toBe(7)
+            expect(derived.pending()).toBe(false)
+            expect(derived.refreshing()).toBe(false)
+            expect(derived.chunks()).toBeUndefined()
+            expect(derived.done()).toBe(false)
+        })
+    })
+
+    test('a throwing body retains the error and rethrows on read', () => {
+        withContext(() => {
+            const derived = memo(() => {
+                throw new Error('nope')
+            })
+            expect(() => derived()).toThrow('nope')
+            expect((derived.error() as Error).message).toBe('nope')
+            expect(derived.peek()).toBeUndefined()
+        })
+    })
+
+    test('watch fires on a dependency change', async () => {
+        await withContext(async () => {
+            const count = state(1)
+            const doubled = memo(() => count() * 2)
+            const seen: (number | undefined)[] = []
+            const stop = doubled.watch(undefined as never, (value) => seen.push(value))
+            count.set(3)
+            await tick()
+            expect(seen).toEqual([6])
+            stop()
+        })
+    })
+
+    test('memo(source, transform) tracks the source only; the transform runs untracked', () => {
+        withContext(() => {
+            const a = state(1)
+            const other = state(100)
+            let runs = 0
+            const derived = memo(
+                () => a(),
+                (value) => {
+                    runs++
+                    return value + other.peek()
+                },
+            )
+            expect(derived()).toBe(101)
+            other.set(200)
+            expect(derived()).toBe(101) // `other` was never a declared input
+            expect(runs).toBe(1)
+            a.set(2)
+            expect(derived()).toBe(202)
+        })
+    })
+})
+
+describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
+    test('set is publish: a local write holds until the next re-fill', () => {
+        withContext(() => {
+            const count = state(1)
+            const derived = memo(() => count() * 100)
+            const draft = derived.state()
+            expect(draft()).toBe(100)
+            draft.set(7)
+            expect(draft()).toBe(7)
+            expect(derived()).toBe(7) // the memo reads the override too
+            count.set(2)
+            expect(draft()).toBe(200) // provisional — the re-fill wins
+        })
+    })
+
+    test('invalidate drops a pending override', () => {
+        withContext(() => {
+            const derived = memo(() => 1)
+            const draft = derived.state()
+            draft.set(42)
+            expect(draft()).toBe(42)
+            derived.invalidate()
+            expect(draft()).toBe(1)
+        })
+    })
+
+    test('peek() on the projection is an untracked read', () => {
+        withContext(() => {
+            const derived = memo(() => 5)
+            const draft = derived.state()
+            let runs = 0
+            const stop = effect(() => {
+                runs++
+                draft.peek()
+            })
+            expect(runs).toBe(1)
+            draft.set(6)
+            expect(runs).toBe(1) // no subscription through peek
+            stop()
+        })
+    })
+
+    test('an ARGED memos projection addresses one slot', async () => {
+        await withContext(async () => {
+            const byId = memo(async (args: { id: number }) => args.id * 10)
+            expect(await byId({ id: 2 })).toBe(20)
+            const cell = byId.state({ id: 2 })
+            expect(cell()).toBe(20)
+            cell.set(99)
+            expect(byId.peek({ id: 2 })).toBe(99)
+        })
+    })
+})
+
+describe('memo — loud on fn.length false zeros (ADR 0024 §Consequences)', () => {
+    test('a defaulted args parameter throws at construction', () => {
+        expect(() => memo((args = { n: 1 }) => args.n)).toThrow(/reports fn.length 0/)
+    })
+
+    test('a rest parameter throws at construction', () => {
+        expect(() => memo((...args: number[]) => args.length)).toThrow(/reports fn.length 0/)
+    })
+
+    test('the destructuring-default form type derivation relies on is unaffected', () => {
+        withContext(() => {
+            const c = memo(({ n = 0 }: { n?: number }) => n + 1)
+            expect(c.peek({ n: 1 })).toBeUndefined() // args-keyed: a cold peek kicks a load
+        })
     })
 })

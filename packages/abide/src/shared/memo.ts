@@ -1,9 +1,15 @@
-// The abide CELL primitive — a generic isomorphic async memoizer (rpc-core §1-3, §7.2, §8).
+// The abide MEMO primitive — a generic isomorphic memoizer (rpc-core §1-3, §7.2, §8; ADR 0024).
 //
-// `memo(fn)` wraps any async function into a smart-read callable: per-context caching,
+// `memo(fn)` wraps any function into a smart-read callable: per-context caching,
 // in-flight coalescing, and a reactive read surface (peek/pending/error/refreshing/watch/
 // refresh/invalidate/publish). RPC/socket helpers bake this behavior in; users reach for
 // `memo()` to wrap their OWN third-party async functions and get identical ergonomics.
+//
+// A memo's DEPENDENCIES ARE ITS DECLARED INPUTS (ADR 0024 §1). Declare an arg and they are the cache key
+// — today's memo/RPC, untouched. Declare NONE and they are inferred from the body: an argless memo whose
+// first run produces a plain value synchronously becomes AUTO-TRACKED (computed-backed, §2-3) and is the
+// whole of the retired `state.computed`; `.state(args)` makes it writable and is the whole of the retired
+// `state.linked` (§4). Two factories became zero.
 //
 // Each cache slot `(memoId, canonicalKey(args))` IS a state (§7.2): reading it in a
 // tracking context subscribes; resolve/invalidate/publish re-run subscribers. The slot is a
@@ -26,7 +32,7 @@ import { canonicalKey } from './internal/codec.ts'
 import { getContext, serverDefaultContext } from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
-import { effect, type State, state, untrack } from './internal/reactive.ts'
+import { type Computed, computed, effect, type State, state, untrack } from './internal/reactive.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
@@ -75,6 +81,34 @@ interface Slot<Args, T> {
     // push and on the terminal, so `latest`/`chunks`/`done` re-run as the transcript grows — kept SEPARATE
     // from `state` so per-chunk updates never re-run the bare read (which would restart a `{#for await}`).
     streamTick?: State<number>
+    // AUTO-TRACKED backing (ADR 0024 §1-3), installed only once the first run of an argless `fn` has
+    // proved it produces a plain value synchronously. While it is set, this slot's whole state machine
+    // lives in the computed graph below and `state`/`inflight`/`loadedAt` go unused.
+    auto?: AutoBacking<T>
+    // True once the fill mode has been decided for this slot, so `fn` is classified exactly once.
+    modeResolved?: boolean
+}
+
+// One run of an AUTO-TRACKED fill. `run` counts fills of this slot. `deferred` carries the produced value
+// when the run turned out to be async/streaming after all — only the produced value can tell (ADR 0024
+// §2), so the classifier hands it straight to the classic coalesced path rather than re-invoking `fn`.
+type AutoFill<T> = { run: number; state: SlotState<T> } | { run: number; deferred: unknown }
+
+// The AUTO-TRACKED backing of one slot (ADR 0024 §1-3). `fn`'s synchronous reads ARE this memo's declared
+// inputs, so it runs inside a `computed` whose dependency set is re-collected on every run. Pull-based, so
+// a read that follows a dependency write in the same tick already sees the fresh value — no microtask lag.
+//
+// A `publish` stamps the `run` it overrode, and `merged` honours an override only while that stamp is
+// still current. A dependency change re-runs `fn`, advancing `run`, which drops the override. That single
+// rule is the whole of the retired `state.linked`: provisional until re-fill (ADR 0024 §Context).
+interface AutoBacking<T> {
+    // Bumped by invalidate/refresh to force a re-run even when no dependency changed.
+    version: State<number>
+    fill: Computed<AutoFill<T>>
+    override: State<{ run: number; state: SlotState<T> } | null>
+    merged: Computed<SlotState<T>>
+    // Whether a fill has run, so `snapshot()` reports a filled slot without forcing a cold one to run.
+    filled: () => boolean
 }
 
 // SERVER-ONLY broadcast sink (rpc-core §8, PR2). A shared memo calls this when a verb changes a
@@ -106,6 +140,12 @@ export interface MemoOptions {
     tags?: string[]
 }
 
+// Options an AUTO-TRACKED memo may carry (ADR 0024 §1-3). `ttl` and `shared` are retention policies for a
+// PULLED value; a synchronous derivation has nothing to retain and no cross-request identity, so naming
+// either one is what opts a memo back onto the classic promise path — the type and the runtime classifier
+// agree on that (see the overloads on `memo`).
+export type SyncMemoOptions = Omit<MemoOptions, 'ttl' | 'shared'>
+
 // A `memo` is the SCOPED / LOSSLESS / PULL implementation of the shared `ReactiveReadSurface` (the
 // probe/verb vocabulary — peek/pending/refreshing/error/chunks/done/refresh/invalidate/publish/watch,
 // inherited below), plus the memo-specific extras: the awaitable bare read, hydration seed/snapshot, and
@@ -119,6 +159,11 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     // may be mutated from its current value. A channel/socket only appends, so this overload is
     // memo-specific. The value form is inherited from ReactiveReadSurface.
     publish(args: Args, next: T | ((current: T | undefined) => T)): void
+    // The WRITABLE PROJECTION of one slot (ADR 0024 §4) — and only that; reading a memo is the bare call,
+    // `{…}`, `.peek()` and `await`, which already have defined blocking behaviour. The returned cell reads
+    // the slot reactively (`.peek()` semantics) and its `set` IS `publish`, so a local write is provisional
+    // until the next re-fill. That is the whole of the retired `state.linked`.
+    state(args: Args): State<T>
     // @deprecated Use the bare call — `memo(args)` IS the load now. Retained as a non-subscribing alias
     // during migration (identical to the bare call minus the reactive subscription).
     load(args: Args): Promise<T>
@@ -144,6 +189,18 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
         source: readonly unknown[] | AsyncIterable<unknown>,
         encoding?: 'jsonl' | 'sse',
     ): void
+}
+
+// An AUTO-TRACKED memo: `fn` declares no inputs and produces a plain value synchronously, so its
+// dependencies are inferred from the body (ADR 0024 §1-2) and THE BARE CALL RETURNS `T`, NOT `Promise<T>`
+// (§3 — a promise-returning read would blank the server-rendered text and refill it a microtask later,
+// because `interpolate` clears the node before awaiting a thenable). This is the retired `state.computed`;
+// `.state()` makes it writable and is the retired `state.linked`.
+//
+// The slot is keyed by no args, so every probe/verb inherited from `Memo<void, T>` is callable bare
+// (`peek()`, `refresh()`, `invalidate()`, `state()`) — a `void` parameter may be omitted.
+export interface SyncMemo<T> extends Omit<Memo<void, T>, 'load'> {
+    (): T
 }
 
 let memoCounter = 0
@@ -181,6 +238,13 @@ function isStreamSource(value: unknown): value is AsyncIterable<unknown> {
     return (
         typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
     )
+}
+
+// Any thenable, not just a native Promise — the auto-tracked classifier must treat a hand-rolled or
+// third-party promise exactly as it treats `await`, which follows `.then`.
+function isThenable(value: unknown): value is Promise<unknown> {
+    if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return false
+    return typeof (value as { then?: unknown }).then === 'function'
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -222,10 +286,63 @@ function matchesSelector(slotArgs: unknown, compiled: CompiledSelector): boolean
     return canonicalKey(slotArgs) === compiled.canonical
 }
 
-export function memo<Args, T>(
-    fn: (args: Args) => Promise<T> | T,
+// `fn.length` reports 0 for `(args = {}) => …` and `(...args) => …` too, which would silently reclassify
+// an args-keyed memo as auto-tracked (ADR 0024 §Consequences). Only a genuinely EMPTY parameter list may
+// take the auto path, so read the list out of the source text and refuse the false zeros loudly. The form
+// type derivation relies on — `({ n = 0 }) => …` — reports 1 and never reaches here.
+function declaresParameters(fn: (...args: never[]) => unknown): boolean {
+    const source = fn.toString()
+    const open = source.indexOf('(')
+    if (open === -1) return false // `x => …` reports length 1, so this can only be an exotic callable
+    let depth = 0
+    for (let i = open; i < source.length; i++) {
+        const char = source[i]
+        if (char === '(' || char === '[' || char === '{') depth++
+        else if (char === ')' || char === ']' || char === '}') {
+            depth--
+            if (depth === 0) return source.slice(open + 1, i).trim() !== ''
+        }
+    }
+    return false
+}
+
+// THE READ, argless + synchronous (ADR 0024 §2-3): auto-tracked, returns `T`.
+export function memo<T>(fn: () => Promise<T>, opts?: MemoOptions): Memo<void, T>
+export function memo<C>(
+    fn: () => AsyncIterable<C>,
     opts?: MemoOptions,
-): Memo<Args, T> {
+): Memo<void, AsyncIterable<C>>
+export function memo<T>(fn: () => T, opts?: SyncMemoOptions): SyncMemo<T>
+// The TWO-ARGUMENT form (ADR 0024 §1): the source thunk is the declared input, so only it is tracked and
+// the transform runs untracked — the same rule and the same mechanism as `watch(source, handler)`.
+export function memo<S, T>(
+    source: () => S,
+    transform: (value: S) => T,
+    opts?: SyncMemoOptions,
+): SyncMemo<T>
+export function memo<Args, T>(fn: (args: Args) => Promise<T> | T, opts?: MemoOptions): Memo<Args, T>
+// One runtime object serves every overload — the auto-tracked path is a second FILL PATH for the same
+// slot, not a second surface (ADR 0024 §3), so the implementation signature just spans both faces.
+export function memo<Args, T>(
+    body: (args: Args) => Promise<T> | T,
+    transformOrOpts?: ((value: never) => unknown) | MemoOptions,
+    trailingOpts?: MemoOptions,
+): Memo<Args, T> | SyncMemo<T> {
+    const transform =
+        typeof transformOrOpts === 'function'
+            ? (transformOrOpts as unknown as (value: unknown) => T)
+            : undefined
+    const opts: MemoOptions | undefined =
+        transform === undefined ? (transformOrOpts as MemoOptions | undefined) : trailingOpts
+    // Collapse the two-argument form into ONE argless body so everything below sees a single `fn`: the
+    // source read stays tracked (it IS the declared input), the transform is wrapped in `untrack`.
+    const fn: (args: Args) => Promise<T> | T =
+        transform === undefined
+            ? body
+            : () => {
+                  const value = (body as unknown as () => unknown)()
+                  return untrack(() => transform(value))
+              }
     const ttl = opts?.ttl ?? Infinity
     const id = opts?.key ?? `memo#${++memoCounter}`
     // `shared` is server-only; on the client it is inert (falls through to the client context cache).
@@ -233,6 +350,21 @@ export function memo<Args, T>(
     const notify = opts?.notify
     // Tags are honored only on a shared (server) memo — the tag registry is a server concept.
     const tags = shared ? (opts?.tags ?? []) : []
+
+    // Could this memo take the AUTO-TRACKED path (ADR 0024 §1-2)? Only an argless `fn` declares no inputs,
+    // and only a memo with no retention policy has nothing to retain: an explicit `ttl` (including the
+    // `ttl: 0` a `memo: false` read compiles to) or `shared: true` keeps the classic pulled-value machinery,
+    // which is also what the `SyncMemoOptions` overload encodes so types and runtime cannot disagree.
+    // Whether it ACTUALLY takes it is decided by the first run — see `resolveMode`.
+    const autoEligible = fn.length === 0 && ttl === Infinity && !shared
+    if (fn.length === 0 && declaresParameters(fn)) {
+        throw new TypeError(
+            'memo: a rest or defaulted parameter (`(...args) => …` / `(args = {}) => …`) reports ' +
+                'fn.length 0, which would silently reclassify this args-keyed memo as auto-tracked. ' +
+                'Name the parameter without a default, or destructure with per-field defaults ' +
+                '(`({ n = 0 }) => …`).',
+        )
+    }
 
     // Fire the broadcast sink for a slot-changing verb — ONLY on a shared memo (broadcast is a
     // shared-slot concept). Transport-free: the memo just calls the injected function.
@@ -329,8 +461,14 @@ export function memo<Args, T>(
     }
 
     // Begin (or coalesce onto) a load for this slot. `keepStale` retains the current value and
-    // flips `refreshing` on instead of dropping to a bare pending state.
-    function startLoad(slot: Slot<Args, T>, keepStale: boolean): Promise<T> {
+    // flips `refreshing` on instead of dropping to a bare pending state. `preProduced`, when set, is a
+    // value `fn` ALREADY produced (the auto-tracked classifier's single probe run turned out to be
+    // async/streaming), so the load settles it instead of invoking `fn` a second time.
+    function startLoad(
+        slot: Slot<Args, T>,
+        keepStale: boolean,
+        preProduced?: { produced: unknown },
+    ): Promise<T> {
         if (slot.inflight !== null) return slot.inflight
 
         const current = slot.state.peek()
@@ -354,7 +492,9 @@ export function memo<Args, T>(
         const runLoad = (): Promise<T> =>
             (async () => {
                 try {
-                    const produced = await fn(slot.args)
+                    const produced = (
+                        preProduced === undefined ? await fn(slot.args) : await preProduced.produced
+                    ) as T
                     if (slot.generation !== generation) return produced as T // superseded — discard silently
                     // See through a json()/jsonl()/sse() wrapper to its pre-encoding payload, so a wrapped result
                     // caches/streams exactly like the raw form (replayable-streams.md §4).
@@ -405,6 +545,94 @@ export function memo<Args, T>(
         if (store === undefined) return
         sharedCacheRecordSize(store, slot.key, measureBytes(value))
         sharedCacheEvictIfNeeded(store)
+    }
+
+    // ---- AUTO-TRACKED fill (ADR 0024 §1-3) -------------------------------------------------------
+    // The second fill path for the same slot. `fn` runs inside a `computed`, so every state it reads
+    // synchronously becomes a declared input of this memo and a change to one is an ordinary re-fill.
+    // Pull-based and lazy: nothing runs until something reads, and a read that follows a dependency write
+    // in the same tick already sees the fresh value.
+
+    function createAutoBacking(slot: Slot<Args, T>): AutoBacking<T> {
+        const version = state(0)
+        let runs = 0
+        let ranOnce = false
+        const fill = computed<AutoFill<T>>(() => {
+            version() // subscribe: invalidate/refresh force a re-run with no dependency change
+            runs++
+            ranOnce = true
+            let produced: Promise<T> | T
+            try {
+                produced = fn(slot.args)
+            } catch (caught) {
+                return {
+                    run: runs,
+                    state: {
+                        status: 'error',
+                        value: undefined,
+                        error: caught,
+                        refreshing: false,
+                    },
+                }
+            }
+            // A promise or a decoded-chunk source is NOT a synchronous derivation — hand it back for the
+            // classic path (§2: half-tracked is worse than untracked, so an async body is not tracked at all).
+            const tagged = responseSourceOf(produced)
+            if (tagged?.kind === 'stream') return { run: runs, deferred: produced }
+            if (isThenable(produced) || isStreamSource(produced)) {
+                return { run: runs, deferred: produced }
+            }
+            const value = (tagged?.kind === 'value' ? tagged.value : produced) as T
+            return {
+                run: runs,
+                state: { status: 'value', value, error: undefined, refreshing: false },
+            }
+        })
+        const override = state<{ run: number; state: SlotState<T> } | null>(null)
+        // An override survives only until the next fill. Reading `fill()` FIRST means a stale dependency is
+        // recomputed (advancing `run`) before the stamps are compared, so a dependency change drops the
+        // override in the same pull — "provisional until re-fill" (ADR 0024 §Context).
+        const merged = computed<SlotState<T>>(() => {
+            const base = fill()
+            if ('deferred' in base) return idleState<T>()
+            const current = override()
+            return current !== null && current.run === base.run ? current.state : base.state
+        })
+        return { version, fill, override, merged, filled: () => ranOnce }
+    }
+
+    // Decide this slot's fill path, exactly once. Only the value the FIRST run produces distinguishes a
+    // synchronous derivation from a promise/stream source (ADR 0024 §2), so the probe runs `fn` inside the
+    // computed that would BE the auto backing — and when the run turns out deferred, the node is dropped
+    // (leaving no dead observer edge) and its already-produced value goes straight to the classic load.
+    function resolveMode(slot: Slot<Args, T>): void {
+        if (!autoEligible || slot.modeResolved === true) return
+        slot.modeResolved = true
+        const backing = createAutoBacking(slot)
+        // `peek` (not a tracked read): the probe establishes ITS OWN dependencies either way, and a caller
+        // must not end up subscribed to a node we may be about to drop.
+        const first = backing.fill.peek()
+        if ('deferred' in first) {
+            backing.fill.dispose()
+            void startLoad(slot, false, { produced: first.deferred }).catch(() => {
+                // The rejection is retained on the slot and re-thrown to whoever awaits the read.
+            })
+            return
+        }
+        slot.auto = backing
+    }
+
+    // The auto slot's live state — reactive (subscribes the caller to the memo's declared inputs).
+    function autoState(auto: AutoBacking<T>): SlotState<T> {
+        return auto.merged()
+    }
+
+    // Force the next pull to re-run `fn` even though no dependency changed (the auto analog of dropping a
+    // slot to idle). `eager` additionally pulls right away, which is what makes `refresh` eager.
+    function autoRefill(auto: AutoBacking<T>, eager: boolean): void {
+        auto.override.set(null)
+        auto.version.set(auto.version.peek() + 1)
+        if (eager) auto.merged.peek()
     }
 
     // Remove a slot from the backing map entirely — distinct from dropSlot (which resets to idle but
@@ -585,10 +813,19 @@ export function memo<Args, T>(
     // calling reactive context to the slot (the tracked `slot.state()` read). So a reactive `{await
     // memo()}` / `{#await memo()}` re-runs and re-awaits when the slot invalidates — the crux the model
     // needed. The load itself runs untracked (it reads `state.peek()`), so only the subscription tracks.
+    // An AUTO-TRACKED slot's bare read is the VALUE, not a promise (ADR 0024 §3), and an error state throws
+    // where the classic path rejects — the synchronous analog.
     const c = ((args: Args) => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        resolveMode(slot)
         touchOnRead(slot)
+        const auto = slot.auto
+        if (auto !== undefined) {
+            const state = autoState(auto)
+            if (state.status === 'error') throw state.error
+            return state.value as T
+        }
         slot.state()
         return untrack(() => coalescedLoad(slot))
     }) as Memo<Args, T>
@@ -597,7 +834,15 @@ export function memo<Args, T>(
     c.load = (args: Args): Promise<T> => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        resolveMode(slot)
         touchOnRead(slot)
+        const auto = slot.auto
+        if (auto !== undefined) {
+            const state = untrack(() => autoState(auto))
+            if (state.status === 'error') return Promise.reject(state.error)
+            const value = state.value as T
+            return markSettled(Promise.resolve(value), value)
+        }
         return coalescedLoad(slot)
     }
 
@@ -608,7 +853,10 @@ export function memo<Args, T>(
     c.peek = (args: Args): T | undefined => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        resolveMode(slot)
         touchOnRead(slot)
+        const auto = slot.auto
+        if (auto !== undefined) return autoState(auto).value
         if (slot.state.peek().status === 'stream') {
             return readStreamReactive(slot, (chunks) =>
                 chunks.length > 0 ? chunks[chunks.length - 1] : undefined,
@@ -617,10 +865,18 @@ export function memo<Args, T>(
         return readReactive(slot)
     }
 
-    c.pending = (args: Args): boolean => ensureSlot(args).state().status === 'pending'
+    // An auto-tracked fill is synchronous, so it is never pending and never revalidating over a stale value.
+    c.pending = (args: Args): boolean => {
+        const slot = ensureSlot(args)
+        if (slot.auto !== undefined) return false
+        return slot.state().status === 'pending'
+    }
 
     c.error = (args: Args): unknown => {
         const slot = ensureSlot(args)
+        resolveMode(slot)
+        const auto = slot.auto
+        if (auto !== undefined) return autoState(auto).error
         const state = slot.state()
         // A stream's error lives on the ReplayableStream, not the slot state; surface it reactively.
         if (state.status === 'stream' && state.stream !== undefined) {
@@ -635,12 +891,14 @@ export function memo<Args, T>(
     c.chunks = (args: Args): unknown[] | undefined => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        if (slot.auto !== undefined) return undefined // a synchronous derivation has no transcript
         touchOnRead(slot)
         return readStreamReactive(slot, (chunks) => chunks.slice())
     }
     c.done = (args: Args): boolean => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        if (slot.auto !== undefined) return false
         touchOnRead(slot)
         return readStreamReactive(slot, (_chunks, stream) => stream.done) ?? false
     }
@@ -651,6 +909,7 @@ export function memo<Args, T>(
     ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean } => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        if (slot.auto !== undefined) return { cursor: undefined, fresh: true }
         const state = slot.state.peek()
         // A retained, non-overflowed transcript is resumable — replay from `from` then continue live.
         if (
@@ -670,12 +929,20 @@ export function memo<Args, T>(
         return { cursor: undefined, fresh: true } // slot gone/evicted → caller runs fresh from 0
     }
 
-    c.refreshing = (args: Args): boolean => ensureSlot(args).state().refreshing
+    c.refreshing = (args: Args): boolean => {
+        const slot = ensureSlot(args)
+        if (slot.auto !== undefined) return false
+        return slot.state().refreshing
+    }
 
     c.refresh = (args?: Partial<Args> | Args): void => {
         const slots = selectSlots(args)
         log.channel('abide:memo').trace(`refresh ${id} (${slots.length} slots)`)
-        for (const slot of slots) startLoad(slot, true)
+        for (const slot of slots) {
+            const auto = slot.auto
+            if (auto !== undefined) autoRefill(auto, true)
+            else startLoad(slot, true)
+        }
         broadcast('refresh', args)
     }
 
@@ -683,6 +950,11 @@ export function memo<Args, T>(
     // clear coalescing, and notify subscribers by resetting the (retained) state to idle -> lazy
     // reload on next read. The slot stays in the map so existing subscriptions stay live.
     function dropSlot(slot: Slot<Args, T>): void {
+        const auto = slot.auto
+        if (auto !== undefined) {
+            autoRefill(auto, false) // lazy: re-runs `fn` on the next pull
+            return
+        }
         const state = slot.state.peek()
         // Invalidating an OPEN stream aborts its source and gracefully ends live consumers (§4) — a value
         // slot has nothing to tear down.
@@ -704,6 +976,26 @@ export function memo<Args, T>(
 
     c.publish = (args: Args, next: T | ((current: T | undefined) => T)): void => {
         const slot = ensureSlot(args)
+        resolveMode(slot)
+        const auto = slot.auto
+        if (auto !== undefined) {
+            // The auto-tracked write (ADR 0024 §4): stamp the run being overridden, so the next re-fill of
+            // any declared input drops it. `fill.peek()` pulls a stale fill first, so the updater form and
+            // the stamp both see the CURRENT run.
+            const base = auto.fill.peek()
+            const current = untrack(() => autoState(auto))
+            const value =
+                typeof next === 'function'
+                    ? untrack(() => (next as (current: T | undefined) => T)(current.value))
+                    : next
+            auto.override.set({
+                run: base.run,
+                state: { status: 'value', value, error: undefined, refreshing: false },
+            })
+            log.channel('abide:memo').trace(`publish ${id}`)
+            broadcast('publish', args, value)
+            return
+        }
         const current = slot.state.peek()
         let value: T
         if (typeof next === 'function') {
@@ -731,6 +1023,16 @@ export function memo<Args, T>(
         untrack(() => {
             const result: Array<{ args: Args; value: T }> = []
             for (const slot of selectSlots(undefined)) {
+                const auto = slot.auto
+                if (auto !== undefined) {
+                    // Report an auto slot only once something has actually pulled it — reading it here would
+                    // otherwise RUN `fn` for every cold derivation just to collect the seed.
+                    if (!auto.filled()) continue
+                    const state = auto.merged.peek()
+                    if (state.status === 'value')
+                        result.push({ args: slot.args, value: state.value as T })
+                    continue
+                }
                 const state = slot.state.peek()
                 if (state.status === 'value')
                     result.push({ args: slot.args, value: state.value as T })
@@ -740,8 +1042,24 @@ export function memo<Args, T>(
 
     c.seed = (args: Args, value: T): void => {
         const slot = ensureSlot(args)
+        // A seeded auto slot takes the value as a provisional override (identical to `publish`) — the
+        // derivation still owns it and re-fills on the next dependency change.
+        if (slot.auto !== undefined) {
+            c.publish(args, value)
+            return
+        }
         slot.loadedAt = Date.now()
         setState(slot, { status: 'value', value, error: undefined, refreshing: false })
+    }
+
+    // The WRITABLE PROJECTION (ADR 0024 §4). `set` IS `publish`, so a local write holds until the next
+    // re-fill — the whole of the retired `state.linked`. Reading is `peek` semantics (reactive,
+    // non-blocking); the blocking reads stay on the memo itself.
+    c.state = (args: Args): State<T> => {
+        const cell = (() => c.peek(args) as T) as State<T>
+        cell.set = (value: T) => c.publish(args, value)
+        cell.peek = () => untrack(() => c.peek(args)) as T
+        return cell
     }
 
     c.seedStream = (
@@ -760,8 +1078,25 @@ export function memo<Args, T>(
 
     c.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) => {
         const slot = ensureSlot(args)
+        resolveMode(slot)
         let first = true
         let last: T | undefined
+        const auto = slot.auto
+        if (auto !== undefined) {
+            // Auto-tracked: the effect subscribes to the memo's declared inputs through `merged`, so a
+            // dependency change delivers exactly like an invalidate-driven re-fill does on a classic slot.
+            return effect(() => {
+                const value = autoState(auto).value
+                if (first) {
+                    first = false
+                    last = value
+                    return
+                }
+                if (value === last) return
+                last = value
+                untrack(() => handler(value))
+            })
+        }
         // Chunk count for a STREAM slot. An append advances it; the terminal ALSO bumps the tick
         // (see startStream's finally) but does not advance the count — so settling never re-delivers a
         // chunk the handler already saw.
