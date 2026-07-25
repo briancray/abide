@@ -353,3 +353,110 @@ test('layout state survives cross-route and param navigation within the subtree'
     await expect(page).toHaveURL(/\/pages\/layouts$/)
     await expect(page.getByTestId('layout-count')).toHaveText('3')
 })
+
+// Soft-nav scroll reset is tied to the SHELL landing, not to the frame stream closing. A destination
+// whose top-level `{#for await}` runs for seconds (the live bench) keeps the nav response body open long
+// after its DOM is in place — resetting scroll at end-of-stream left the reader scrolled through the new
+// page and then yanked them to the top when the stream finally closed, seconds later.
+test('soft-nav to a streaming page scrolls to top on shell, not when the stream ends', async ({
+    page,
+}) => {
+    await page.goto('/platform/bench/server')
+    // Let the SOURCE page's own stream finish first, so the only later row mutations are the destination's.
+    await expect(page.getByTestId('bench-row')).toHaveCount(5, { timeout: 30_000 })
+
+    await page.evaluate(() =>
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' }),
+    )
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+
+    // Stamp WHEN scroll hits the top vs when the destination's LAST streamed row lands. The bug is the
+    // ordering: a fixed reset happens while rows are still arriving, the broken one strictly after.
+    await page.evaluate(() => {
+        const probe: { scrollAt: number | null; lastRowAt: number | null } = {
+            scrollAt: null,
+            lastRowAt: null,
+        }
+        ;(window as unknown as { __navScroll: typeof probe }).__navScroll = probe
+        addEventListener(
+            'scroll',
+            () => {
+                if (probe.scrollAt === null && window.scrollY === 0)
+                    probe.scrollAt = performance.now()
+            },
+            { passive: true },
+        )
+        let rows = document.querySelectorAll('[data-testid="bench-row"]').length
+        new MutationObserver(() => {
+            const next = document.querySelectorAll('[data-testid="bench-row"]').length
+            if (next > rows) probe.lastRowAt = performance.now() // the nav swap resets the count
+            rows = next
+        }).observe(document.body, { childList: true, subtree: true })
+    })
+
+    await page.locator('a[href="/platform/bench"]').first().click()
+    await expect(page.locator('h1')).toHaveText('Frontend render bench (live)')
+    // The frontend corpus is fixed at 11 render-benched scenarios (bench.spec.ts owns the list).
+    await expect(page.getByTestId('bench-row')).toHaveCount(11, { timeout: 60_000 })
+
+    const probe = await page.evaluate(
+        () =>
+            (
+                window as unknown as {
+                    __navScroll: { scrollAt: number | null; lastRowAt: number | null }
+                }
+            ).__navScroll,
+    )
+    expect(probe.scrollAt).not.toBeNull()
+    expect(probe.lastRowAt).not.toBeNull()
+    expect(probe.scrollAt as number).toBeLessThan(probe.lastRowAt as number)
+    // And it stays put — nothing re-scrolls once the stream closes.
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+})
+
+// Back/forward scroll stays the BROWSER's (`history.scrollRestoration` is left `'auto'`) — abide only
+// corrects the case it structurally can't get right: the browser restores synchronously at traversal
+// time, against the OUTGOING page's layout, so a remembered offset deeper than that page's max scroll
+// gets CLAMPED and never revisited once our content streams in. Tall → short → Back is that case.
+test('Back to a tall page restores the deep offset the browser clamps against the short page', async ({
+    page,
+}) => {
+    await page.goto('/pages/routing')
+    const tall = await page.evaluate(() => document.documentElement.scrollHeight)
+    await page.evaluate(() => window.scrollTo({ top: 3000, behavior: 'instant' }))
+    expect(await page.evaluate(() => window.scrollY)).toBe(3000)
+
+    // The destination is short enough that 3000 is past ITS max scroll — the clamp trigger.
+    await page.locator('a[href="/templating/errors"]').first().click()
+    await expect(page.locator('h1')).toHaveText('Error boundary — {#try}')
+    const short = await page.evaluate(() => document.documentElement.scrollHeight)
+    const viewport = await page.evaluate(() => window.innerHeight)
+    expect(short).toBeLessThan(tall)
+    expect(short - viewport).toBeLessThan(3000) // its max scroll really is short of 3000
+
+    await page.goBack()
+    await expect(page.locator('h1')).toHaveText('File-based routing & navigation')
+    // Left alone the browser lands at the short page's max scroll (`short - viewport`, ~815); the
+    // correction puts it back near 3000. Asserted as a BAND, not an exact pixel: once we restore, the
+    // browser's own scroll anchoring can nudge a few px as late CSS/images settle above the viewport.
+    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(2900)
+    expect(await page.evaluate(() => Math.round(window.scrollY))).toBeLessThan(3100)
+
+    // `scrollRestoration` is untouched, so the browser still owns reload / bfcache / anchors.
+    expect(await page.evaluate(() => history.scrollRestoration)).toBe('auto')
+})
+
+// The correction is additive: a forward nav still lands at the top, and never inherits a stamped offset.
+test('a forward nav after a Back still resets to the top', async ({ page }) => {
+    await page.goto('/pages/routing')
+    await page.evaluate(() => window.scrollTo({ top: 1200, behavior: 'instant' }))
+    await page.locator('a[href="/templating/errors"]').first().click()
+    await expect(page.locator('h1')).toHaveText('Error boundary — {#try}')
+    await page.goBack()
+    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(1100)
+
+    // Forward again by CLICK (a push, not a traversal): top, not the 1200 we just restored.
+    await page.locator('a[href="/templating/errors"]').first().click()
+    await expect(page.locator('h1')).toHaveText('Error boundary — {#try}')
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+})

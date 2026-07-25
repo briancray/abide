@@ -17,8 +17,10 @@ import type { AttrPlan, ServerChunk, TemplatePlan } from './templatePlan.ts'
 // RPC route imports follow the `src/server/rpc/<name>.ts` file convention, so their specifier carries a
 // `server/rpc/` segment. A `{#for await}` head that resolves to one is ATTACHABLE (replayable-streams.md
 // §5) — its transcript can be handed off to the client instead of re-run. Any other head (a local async
-// generator, a `fetch().body`, a state binding) is not.
-const RPC_SPECIFIER = /(^|\/)server\/rpc\//
+// generator, a `fetch().body`, a state binding) is not. The segment may open the specifier, follow a
+// path separator, or follow the `$` of the `$server/rpc/<name>` tsconfig alias — the alias is the
+// scaffolded form, so missing it silently made every aliased stream re-run on hydrate.
+const RPC_SPECIFIER = /(^|\/)\$?server\/rpc\//
 
 // The local names bound by RPC route imports across the module + instance scripts (default and named).
 // By framework convention the import LOCAL equals the route/wire name (`$scope[local]` on both sides),

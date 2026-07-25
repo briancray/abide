@@ -185,6 +185,22 @@ Mechanism:
   network/parse failure to a hard `location.href` load. Accepted cost: each nav ships the server
   response + (if new) the route chunk — more bytes/CPU than data-only SPA nav, the price of the
   server-middleware guarantee.
+- **Scroll.** A forward nav resets to the top the moment the **shell frame** lands — not when the
+  frame stream closes, or a streaming page (a `{#for await}` running for seconds) would leave the
+  reader scrolled through the new page and then jump them to the top when it finally ends. The
+  reset is `behavior: 'instant'`: it is a document-load reset, not an in-page jump, so an app's
+  `html { scroll-behavior: smooth }` must not animate it (an animated one gets starved by the
+  render/hydrate work that follows, and lands late as the same surprise jump). `keepScroll` opts out.
+  **Back/forward stays the browser's** — `history.scrollRestoration` is left `'auto'`, so it keeps
+  owning reload, bfcache, `#anchor` targets, and the ordinary traversal. abide only **corrects** the
+  case the browser structurally cannot reach: it restores synchronously at traversal time against
+  the OUTGOING page's layout, while the destination is still a fetch + stream away, so an offset
+  deeper than that page's max scroll is CLAMPED with no later hook to revisit it. So a push
+  **stamps** the leaving entry's offset into its own `history.state`, and a traversal re-applies it
+  once the shell lands and again once the stream closes (the page grows after the shell). No
+  stamp → the browser's answer stands; the correction is strictly additive. An entry left via a
+  traversal rather than a push carries no stamp (capturing it would mean racing the browser's own
+  restore) — that case keeps plain browser behavior.
 - **The middleware chain = `src/app.ts` `export const middleware = [...]`** (FD1), running on
   **every server-touching request except static assets** (RPC and nav alike, §13.4 uniform
   auth). Each entry is onion middleware `(next) => Response` (`async (next) => { … return await
@@ -327,5 +343,6 @@ bespoke checker.
 - Cross-refs now specced elsewhere: `env(schema)` → `config-observability.md`; observability →
   same; desktop `bundle` → `bundle.md`; `compile`/`cli` → `machine-surfaces.md`/`build-pipeline.md`;
   OpenAPI/MCP → `machine-surfaces.md`.
-- **Scroll restoration / `keepScroll` semantics** on nav — named in the API, mechanics not
-  yet specced.
+- **Element-level scroll** across a nav (an `overflow` strip's own offset) — unspecced. The soft-nav
+  DOM swap destroys and recreates those nodes, so nothing restores them; only `abide dev`'s
+  live-reload does, via its own sessionStorage snapshot (`build-pipeline.md`).

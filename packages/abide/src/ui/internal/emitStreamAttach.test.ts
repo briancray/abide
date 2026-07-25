@@ -383,3 +383,42 @@ describe('resumeStreamSource — mode-B prefix + ?from resume (fresh / failure b
         }
     })
 })
+
+// SPECIFIER FORMS — which import shapes mark a `{#for await}` source ATTACHABLE.
+//
+// The attach tag is decided TEXTUALLY from the import specifier's `server/rpc/` segment, so the form the
+// scaffolder writes has to be covered. `$server/rpc/<name>` is that form (the tsconfig path alias); it
+// once fell through the `(^|/)` anchor, which silently made every aliased stream non-attachable — the
+// seed carried no handle, so hydrate re-invoked the RPC and the whole stream ran a SECOND time.
+describe('attach recognises every RPC import specifier form', () => {
+    const FORMS = [
+        ['$server/rpc/complete', 'tsconfig alias (scaffolded form)'],
+        ['../../server/rpc/complete', 'relative'],
+        ['/src/server/rpc/complete', 'absolute'],
+    ] as const
+
+    for (const [specifier, label] of FORMS) {
+        test(`${label}: ${specifier} → attachable handoff`, async () => {
+            const src =
+                `<script>import complete from '${specifier}'</script>` +
+                `<ul>{#for await tok of complete({ n: 2 })}<li>{tok}</li>{/for}</ul>`
+            const { html, seed } = await ssrStream(src, { complete: makeServerComplete() })
+
+            expect(html).toContain('data-ab-count="2"')
+            expect(seed.streams?.length).toBe(1)
+            expect(seed.streams?.[0]?.name).toBe('complete')
+            expect(seed.streams?.[0]?.done).toBe(true)
+            expect(seed.streams?.[0]?.values).toEqual(['t0', 't1'])
+        })
+    }
+
+    test('a non-RPC specifier stays NON-attachable (client re-iterates)', async () => {
+        const src =
+            `<script>import complete from '$shared/streams/complete'</script>` +
+            `<ul>{#for await tok of complete({ n: 2 })}<li>{tok}</li>{/for}</ul>`
+        const { html, seed } = await ssrStream(src, { complete: makeServerComplete() })
+
+        expect(html).not.toContain('data-ab-count')
+        expect(seed.streams).toBeUndefined()
+    })
+})

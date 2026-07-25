@@ -14,8 +14,9 @@
 //
 // CODE-SPLITTING (TODO #6): `mountPathname` is now async — it `loadPageEntry`s the destination's
 // content-hashed chunk (deferring the chunk BODY, not the pattern match) before claiming. `softLoad`
-// primes that chunk up front so its import overlaps the fetch/stream. Deferred: scroll restoration
-// (top-scroll unless `keepScroll`).
+// primes that chunk up front so its import overlaps the fetch/stream. SCROLL: a forward nav resets to
+// the top on the SHELL frame unless `keepScroll`; back/forward stays the browser's (`scrollRestoration`
+// is left `'auto'`) and abide only corrects the clamp it can't see — see `settleScroll`/`stampScroll`.
 
 import { matchRoute } from '../server/internal/matchRoute.ts'
 import type { HydrationSeed } from '../server/internal/pages.ts'
@@ -51,6 +52,56 @@ let currentPrefixes: string[] | null = null
 // Monotonic nav token — newest-wins. A background param-nav confirmation / a streamed cross-route graft
 // checks it before acting on a stale response (a redirect or claim from a superseded nav must not fire).
 let navGen = 0
+
+// Scroll to the top the moment the destination's SHELL lands — not after the frame stream drains. A
+// streaming page (a `{#for await}` whose source runs for seconds) keeps the response body open long
+// after its DOM is in place; scrolling at end-of-stream would leave the reader scrolled through the
+// new page and then yank them to the top when the stream finally closes.
+//
+// `behavior: 'instant'` overrides an app's `html { scroll-behavior: smooth }` — a nav scroll reset is a
+// document-load reset, not an in-page jump, and an ANIMATED one gets starved by the very render/hydrate
+// work that follows, landing seconds later as the same surprise jump this scheduling fix removes.
+//
+// A `keepScroll` nav (back/forward) instead CORRECTS the browser's own restore — see `stampScroll`.
+function settleScroll(opts?: NavigateOptions): void {
+    if (typeof scrollTo !== 'function') return
+    if (opts?.keepScroll === true) restoreStampedScroll()
+    else scrollTo({ top: 0, left: 0, behavior: 'instant' })
+}
+
+// The scroll offset we stamp onto a history entry as we push away from it. Namespaced because it rides
+// in the entry's `history.state`, which an app may one day carry its own keys in.
+const SCROLL_STATE_KEY = '__abideScroll'
+
+// Back/forward scroll is the BROWSER's job — `history.scrollRestoration` stays `'auto'`, so it keeps
+// owning reload, bfcache, `#anchor` targets, and the ordinary traversal. We only CORRECT the one case it
+// structurally cannot get right: it restores synchronously at traversal time, against the OUTGOING page's
+// layout, while our destination content is still a fetch + frame stream away. When the remembered offset
+// exceeds that outgoing page's max scroll the browser CLAMPS it (a tall page → a short page → Back lands
+// short), and no later hook exists to revisit it once our content lands.
+//
+// So: stamp the leaving entry's offset into its own history state on the way out, and re-apply it on the
+// way back once the shell lands (and again once the stream closes — a streaming page grows AFTER the
+// shell, so a single pass clamps for the very same reason). Absent a stamp we do nothing and the
+// browser's answer stands, so this is strictly additive.
+//
+// Limitation: only a PUSH stamps, so an entry left via a traversal (Back, then Forward to it) carries no
+// stamp — that case keeps today's plain browser behavior. Capturing it would mean tracking scroll
+// continuously and racing the restore's own scroll event, which is not worth the fragility.
+function stampScroll(): void {
+    if (typeof scrollY !== 'number') return
+    const state = (history.state ?? {}) as Record<string, unknown>
+    history.replaceState({ ...state, [SCROLL_STATE_KEY]: scrollY }, '')
+}
+
+// Re-apply the traversed-to entry's stamped offset when the browser landed somewhere else (it clamped, or
+// our own content swap changed the page height under it). A no-op when there's no stamp or it already matches.
+function restoreStampedScroll(): void {
+    const stamped = (history.state as Record<string, unknown> | null)?.[SCROLL_STATE_KEY]
+    if (typeof stamped !== 'number') return
+    if (Math.round(scrollY) === Math.round(stamped)) return
+    scrollTo({ top: stamped, behavior: 'instant' })
+}
 
 // The number of leading layout levels the current route and a destination SHARE (longest common prefix
 // of their applicable-layout-prefix lists) — the client mirror of the server's `sharedLayoutDepth`.
@@ -219,6 +270,7 @@ async function partialCrossNav(
     prefixes: string[],
     boundary: LevelRecord,
     dest: { pattern: string; params: Record<string, string> },
+    opts?: NavigateOptions,
 ): Promise<void> {
     let response: Response
     try {
@@ -263,6 +315,7 @@ async function partialCrossNav(
                     boundary.graftSuffix?.(typeof frame.html === 'string' ? frame.html : '') ?? null
                 setClientRoute(routeInfoFor(dest.pattern, target, dest.params))
                 grafted = true
+                settleScroll(opts)
             } else if (frame.kind === 'seed') {
                 seed = frame.seed as HydrationSeed
             } else {
@@ -289,6 +342,9 @@ async function partialCrossNav(
     // Commit the new chain identity: the kept prefix + the freshly-claimed suffix are now the live chain.
     currentPattern = dest.pattern
     currentPrefixes = prefixes
+    // Second pass: the grafted suffix streamed in AFTER the shell, so the page is only now at its final
+    // height. A forward nav is already at the top and must not re-scroll (that was the bug).
+    if (opts?.keepScroll === true) restoreStampedScroll()
 }
 
 // Fetch the destination page, apply its streamed frames into the container, and HYDRATE (claim the
@@ -343,11 +399,18 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
                 boundary?.graftSuffix !== undefined &&
                 boundary.claimSuffix !== undefined
             ) {
-                await partialCrossNav(path, from, target, gen, keep, levels, prefixes, boundary, {
-                    pattern: destMatch.pattern,
-                    params: destMatch.params,
-                })
-                if (opts?.keepScroll !== true && typeof scrollTo === 'function') scrollTo(0, 0)
+                await partialCrossNav(
+                    path,
+                    from,
+                    target,
+                    gen,
+                    keep,
+                    levels,
+                    prefixes,
+                    boundary,
+                    { pattern: destMatch.pattern, params: destMatch.params },
+                    opts,
+                )
                 return
             }
         }
@@ -409,6 +472,7 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
             if (frame.kind === 'shell') {
                 if (typeof frame.html === 'string') container.innerHTML = frame.html
                 if (typeof frame.url === 'string') navUrl = frame.url
+                settleScroll(opts)
             } else if (frame.kind === 'seed') {
                 seed = frame.seed as HydrationSeed
             } else {
@@ -427,10 +491,9 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
         location.href = path
         return
     }
-
-    if (opts?.keepScroll !== true && typeof scrollTo === 'function') {
-        scrollTo(0, 0)
-    }
+    // Second pass: patches + hydration landed after the shell, so the page is only now at its final
+    // height. A forward nav is already at the top and must not re-scroll (that was the bug).
+    if (opts?.keepScroll === true) restoreStampedScroll()
 }
 
 // Client-side SPA navigation to an already-resolved `target`. Pass a plain path (`navigate('/foo')`)
@@ -442,8 +505,14 @@ export async function navigate(target: string | URL, options?: NavigateOptions):
     if (typeof document === 'undefined') return
     const path = typeof target === 'string' ? target : target.pathname + target.search + target.hash
     const from = location.pathname
+    // Stamp where we are onto the entry we're leaving, BEFORE pushing — that's the offset a later Back
+    // wants, and the only moment we can read it uncontested by the browser's own restore. A `replace`
+    // discards the current entry, so there is nothing to come back to and nothing to stamp.
     if (options?.replace === true) history.replaceState(null, '', path)
-    else history.pushState(null, '', path)
+    else {
+        stampScroll()
+        history.pushState(null, '', path)
+    }
     await softLoad(path, from, options)
 }
 
@@ -454,7 +523,8 @@ export function isKnownPage(pathname: string): boolean {
 }
 
 // Back/forward: re-load the page at the current location WITHOUT touching history (the browser already
-// moved the entry). Registered by bootstrap. keepScroll — the browser restores scroll for popstate.
+// moved the entry). Registered by bootstrap. `keepScroll` — never reset to the top on a traversal: the
+// browser already restored the offset, and `settleScroll` only corrects it where the browser clamped.
 // If the current entry isn't an in-app page (e.g. the user is arriving back from a non-page URL), let
 // the browser own it rather than soft-loading a non-envelope response.
 export function handlePopState(): void {
