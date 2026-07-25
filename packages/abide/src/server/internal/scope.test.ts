@@ -17,7 +17,7 @@ function makeScope(overrides?: Partial<RequestScope>): RequestScope {
         identity: anonymousPrincipal(),
         bag: {},
         route: { kind: 'rpc', name: 'test', params: {}, url, navigating: false },
-        cache: new Map<string, unknown>(),
+        slots: new Map<string, unknown>(),
         ...overrides,
     }
 }
@@ -73,16 +73,16 @@ describe('scope isolation', () => {
         await runInScope(a, () => {
             expect(context()).toBe(a.bag)
             expect(identity()).toBe(a.identity)
-            expect(getContext().cache).toBe(a.cache)
+            expect(getContext().slots).toBe(a.slots)
         })
         await runInScope(b, () => {
             expect(context()).toBe(b.bag)
             expect(identity()).toBe(b.identity)
-            expect(getContext().cache).toBe(b.cache)
+            expect(getContext().slots).toBe(b.slots)
         })
 
         expect(a.identity.id).not.toBe(b.identity.id)
-        expect(a.cache).not.toBe(b.cache)
+        expect(a.slots).not.toBe(b.slots)
         expect(a.bag).not.toBe(b.bag)
     })
 
@@ -107,26 +107,26 @@ describe('scope isolation', () => {
 })
 
 describe('M1 cache integration', () => {
-    test('getContext().cache is the same Map as scope.cache', async () => {
+    test('getContext().slots is the same Map as scope.slots', async () => {
         const scope = makeScope()
         await runInScope(scope, () => {
-            expect(getContext().cache).toBe(scope.cache)
+            expect(getContext().slots).toBe(scope.slots)
         })
     })
 
-    test('a memo load inside the scope stores into scope.cache', async () => {
+    test('a memo load inside the scope stores into scope.slots', async () => {
         const scope = makeScope()
         const double = memo(async (n: number) => n * 2)
 
         await runInScope(scope, async () => {
-            expect(scope.cache.size).toBe(0)
+            expect(scope.slots.size).toBe(0)
             const value = await double.load(5)
             expect(value).toBe(10)
-            expect(scope.cache.size).toBeGreaterThan(0)
+            expect(scope.slots.size).toBeGreaterThan(0)
         })
 
         // The write landed in this request's cache and nowhere global.
-        expect(scope.cache.size).toBeGreaterThan(0)
+        expect(scope.slots.size).toBeGreaterThan(0)
     })
 
     test('memo caches are isolated per scope', async () => {
@@ -139,9 +139,9 @@ describe('M1 cache integration', () => {
         })
         await runInScope(b, () => {
             // b never loaded, so its cache is untouched by a's load.
-            expect(b.cache.size).toBe(0)
+            expect(b.slots.size).toBe(0)
         })
-        expect(a.cache.size).toBeGreaterThan(0)
+        expect(a.slots.size).toBeGreaterThan(0)
     })
 })
 

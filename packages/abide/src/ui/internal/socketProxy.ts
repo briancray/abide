@@ -12,7 +12,7 @@
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import { signal } from '../../shared/internal/reactive.ts'
 import { Subscriber } from '../../shared/internal/subscriber.ts'
-import { muxPublish, muxSubscribe } from './cacheMux.ts'
+import { muxPublish, muxSubscribe } from './mux.ts'
 
 // The per-socket spec shipped in the client bundle (client-sockets.md CS7). `tail` sizes the
 // `chunks()` cap; `ttl` windows `peek()`; `clientPublish` gates `.publish()`.

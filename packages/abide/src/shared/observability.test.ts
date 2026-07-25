@@ -94,11 +94,11 @@ describe('log — channel gating by DEBUG', () => {
             delete Bun.env.DEBUG
             ;(globalThis as { localStorage?: { getItem(k: string): string | null } }).localStorage =
                 { getItem: (key) => (key === 'debug' ? 'abide:*' : null) }
-            log.channel('abide:cache')('via localStorage')
+            log.channel('abide:memo')('via localStorage')
         })
         expect(writes.length).toBe(1)
         expect(writes[0]).toContain('via localStorage')
-        expect(writes[0]).toContain('[abide:cache]')
+        expect(writes[0]).toContain('[abide:memo]')
     })
 })
 

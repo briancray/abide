@@ -1,23 +1,23 @@
 // PR5 — CLIENT auto-subscribe + apply for the server SHARED cache broadcast (shared-cache-plan
 // §2.5). Three layers of coverage:
-//   1. applyCacheFrame — the focused "given an inbound CacheFrame, drive the right local memo verb
+//   1. applyMemoFrame — the focused "given an inbound MemoFrame, drive the right local memo verb
 //      with the right args" unit (this IS the handler the client proxy registers on the mux).
 //   2. clientProxy auto-subscribe — a `shared` read joins its `@rpc:` channel with the RAW args,
 //      dedups per args, and a NON-shared read never subscribes (fake WS, no real network/server).
 //   3. End-to-end delivery — the real router broadcasts a `shared` publish to an AUTHORIZED WS
-//      subscriber (the same frame protocol the mux speaks); the frame drives applyCacheFrame into a
+//      subscriber (the same frame protocol the mux speaks); the frame drives applyMemoFrame into a
 //      real client memo, mirroring the server value locally.
 
 import { afterEach, expect, test } from 'bun:test'
 import { GET } from '../../server/GET.ts'
-import type { CacheFrame } from '../../server/internal/cacheChannels.ts'
 import type { Rpc } from '../../server/internal/makeRpc.ts'
-import { cacheChannelName } from '../../shared/internal/cacheChannelName.ts'
+import type { MemoFrame } from '../../server/internal/memoChannels.ts'
+import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import { memo } from '../../shared/memo.ts'
 import { createTestApp, type TestApp } from '../../test/createTestApp.ts'
-import { applyCacheFrame } from './applyCacheFrame.ts'
-import { subscribeCacheChannel } from './cacheMux.ts'
+import { applyMemoFrame } from './applyMemoFrame.ts'
 import { clientProxy } from './clientProxy.ts'
+import { subscribeMemoChannel } from './mux.ts'
 
 let running: TestApp | undefined
 afterEach(async () => {
@@ -30,39 +30,39 @@ function delay(ms: number): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// 1. applyCacheFrame — frame → local verb mapping
+// 1. applyMemoFrame — frame → local verb mapping
 // ---------------------------------------------------------------------------
 
-test('applyCacheFrame drives the matching local memo verb with the subscribed args', () => {
+test('applyMemoFrame drives the matching local memo verb with the subscribed args', () => {
     let calls = 0
     const c = memo<{ id: string }, string>(async ({ id }) => `load-${id}#${++calls}`)
 
     // publish value-form → the local value reflects the broadcast value for THOSE args.
     c.seed({ id: 'A' }, 'seed-A')
-    applyCacheFrame(c, { id: 'A' }, { verb: 'publish', value: 'broadcast-A' })
+    applyMemoFrame(c, { id: 'A' }, { verb: 'publish', value: 'broadcast-A' })
     expect(c.peek({ id: 'A' })).toBe('broadcast-A')
 
     // invalidate → the slot drops to idle (lazy reload on next read), value cleared.
-    applyCacheFrame(c, { id: 'A' }, { verb: 'invalidate' })
+    applyMemoFrame(c, { id: 'A' }, { verb: 'invalidate' })
     expect(c.peek({ id: 'A' })).toBeUndefined()
 
     // refresh → eager revalidation on the retained slot (re-runs the loader).
     c.seed({ id: 'B' }, 'seed-B')
-    applyCacheFrame(c, { id: 'B' }, { verb: 'refresh' })
+    applyMemoFrame(c, { id: 'B' }, { verb: 'refresh' })
     expect(c.refreshing({ id: 'B' })).toBe(true)
 })
 
 // ---------------------------------------------------------------------------
-// 2. subscribeCacheChannel is a hard no-op under SSR (no window / WebSocket)
+// 2. subscribeMemoChannel is a hard no-op under SSR (no window / WebSocket)
 // ---------------------------------------------------------------------------
 
-test('subscribeCacheChannel is a no-op under SSR (no window)', () => {
+test('subscribeMemoChannel is a no-op under SSR (no window)', () => {
     // The bun test process has `window` deleted (happy-dom preload), i.e. the SSR condition. The mux
     // must not throw and must not construct a socket.
     expect(typeof window).toBe('undefined')
     let applied = false
     expect(() =>
-        subscribeCacheChannel('@rpc:x:key', { id: 'A' }, () => (applied = true)),
+        subscribeMemoChannel('@rpc:x:key', { id: 'A' }, () => (applied = true)),
     ).not.toThrow()
     expect(applied).toBe(false)
 })
@@ -125,12 +125,12 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
         expect(frames.length).toBe(2)
         expect(frames[0]).toEqual({
             t: 'sub',
-            name: cacheChannelName('prof', { id: 'A' }),
+            name: memoChannelName('prof', { id: 'A' }),
             args: { id: 'A' },
         })
         expect(frames[1]).toEqual({
             t: 'sub',
-            name: cacheChannelName('prof', { id: 'B' }),
+            name: memoChannelName('prof', { id: 'B' }),
             args: { id: 'B' },
         })
         // Never an @rpc:plain channel — a non-shared read does not subscribe.
@@ -146,7 +146,7 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
 })
 
 // ---------------------------------------------------------------------------
-// 4. End-to-end: real server broadcast → authorized WS subscriber → applyCacheFrame mirrors locally.
+// 4. End-to-end: real server broadcast → authorized WS subscriber → applyMemoFrame mirrors locally.
 // ---------------------------------------------------------------------------
 
 test('server shared-publish broadcast reaches an authorized subscriber and applies to a local memo', async () => {
@@ -157,7 +157,7 @@ test('server shared-publish broadcast reaches an authorized subscriber and appli
 
     const args = { id: 'A' }
     const socket = running.socket()
-    const stream = socket.subscribe<CacheFrame>(cacheChannelName('prof', args), args)
+    const stream = socket.subscribe<MemoFrame>(memoChannelName('prof', args), args)
     await socket.ready()
     await delay(80) // let the async authorize+join complete before publishing
 
@@ -175,7 +175,7 @@ test('server shared-publish broadcast reaches an authorized subscriber and appli
         secret: 'stale',
     }))
     clientMemo.seed(args, { id: 'A', secret: 'stale' })
-    applyCacheFrame(clientMemo, args, frame as CacheFrame)
+    applyMemoFrame(clientMemo, args, frame as MemoFrame)
     expect(clientMemo.peek(args)).toEqual(value)
 
     socket.close()

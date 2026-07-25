@@ -20,10 +20,10 @@
 // `invalidate/refresh({ tags })` selectors can drop/revalidate + broadcast its slots. TODO (later
 // PRs): the client-side channel join/apply.
 
-import { registerTaggedMemo } from '../server/internal/cacheTags.ts'
+import { registerTaggedMemo } from '../server/internal/memoTags.ts'
 import { currentScope, runOutsideScope } from '../server/internal/scope.ts'
 import { canonicalKey } from './internal/codec.ts'
-import { getContext, serverDefaultCache } from './internal/context.ts'
+import { getContext, serverDefaultContext } from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
 import { effect, type Signal, signal, untrack } from './internal/reactive.ts'
@@ -81,7 +81,7 @@ interface Slot<Args, T> {
 // slot: `invalidate`/`refresh` pass `(verb, args)`; value-form `publish` passes `(verb, args, value)`.
 // The sink is transport-free from the memo's view — `createApp` binds it to a channel publish. `args`
 // is the selector as given to the verb (partial or full), typed loosely since it may be a subset.
-export type CacheNotify = (
+export type MemoNotify = (
     verb: 'invalidate' | 'refresh' | 'publish',
     args: unknown,
     value?: unknown,
@@ -99,7 +99,7 @@ export interface MemoOptions {
     shared?: boolean
     // SERVER-ONLY broadcast sink (rpc-core §8, PR2). Only invoked on a `shared` memo — a non-shared
     // memo never broadcasts even if a sink is present. Injected transport-free; `createApp` binds it.
-    notify?: CacheNotify
+    notify?: MemoNotify
     // Cache tags (rpc-core §8, PR4). Server-only and honored ONLY on a `shared` memo: the memo
     // registers under each tag so the global `invalidate/refresh({ tags })` selectors can drop/
     // revalidate + broadcast its slots. Inert on the client and on a non-shared memo.
@@ -249,8 +249,8 @@ export function memo<Args, T>(
 
     // The cache Map backing this memo's slots: the process-global shared store for a `shared` memo,
     // otherwise the ambient per-context cache (per-request on the server, singleton on the client).
-    function slotCache(): Map<string, unknown> {
-        return shared ? sharedStore() : getContext().cache
+    function slots(): Map<string, unknown> {
+        return shared ? sharedStore() : getContext().slots
     }
 
     // The LRU-bounded store backing `cache`, if any. Only the shared store and the persistent server
@@ -258,7 +258,7 @@ export function memo<Args, T>(
     // request and the client cache dies with the tab, so neither is bounded.
     function boundedStore(cache: Map<string, unknown>): Map<string, unknown> | undefined {
         if (isBrowser) return undefined
-        if (cache === sharedStore() || cache === serverDefaultCache()) return cache
+        if (cache === sharedStore() || cache === serverDefaultContext()?.slots) return cache
         return undefined
     }
 
@@ -274,36 +274,36 @@ export function memo<Args, T>(
     // Move a bounded slot to MRU on read so LRU eviction drops least-recently-read first.
     function touchOnRead(slot: Slot<Args, T>): void {
         if (!shared && isBrowser) return
-        const store = boundedStore(slotCache())
+        const store = boundedStore(slots())
         if (store !== undefined) sharedCacheTouch(store, slot.key)
     }
 
     function ensureSlot(args: Args): Slot<Args, T> {
-        const cache = slotCache()
-        const cacheKey = prefix + canonicalKey(args)
-        let slot = cache.get(cacheKey) as Slot<Args, T> | undefined
+        const cache = slots()
+        const slotKey = prefix + canonicalKey(args)
+        let slot = cache.get(slotKey) as Slot<Args, T> | undefined
         if (slot === undefined) {
             slot = {
                 args,
-                key: cacheKey,
+                key: slotKey,
                 signal: signal(idleState<T>()),
                 inflight: null,
                 loadedAt: 0,
                 generation: 0,
             }
-            cache.set(cacheKey, slot)
+            cache.set(slotKey, slot)
         }
         return slot
     }
 
     // Every slot belonging to this memo in the active context (optionally filtered by selector).
     function selectSlots(selector: Partial<Args> | Args | undefined): Slot<Args, T>[] {
-        const cache = slotCache()
+        const cache = slots()
         const result: Slot<Args, T>[] = []
         // Compile the selector's canonical keys once, not per slot scanned.
         const compiled = selector === undefined ? undefined : compileSelector(selector)
-        for (const [cacheKey, entry] of cache) {
-            if (typeof cacheKey !== 'string' || !cacheKey.startsWith(prefix)) continue
+        for (const [slotKey, entry] of cache) {
+            if (typeof slotKey !== 'string' || !slotKey.startsWith(prefix)) continue
             const slot = entry as Slot<Args, T>
             if (compiled === undefined || matchesSelector(slot.args, compiled)) result.push(slot)
         }
@@ -401,7 +401,7 @@ export function memo<Args, T>(
     // On settle, record the value's JSON byte size and evict LRU entries over the ceiling — but only
     // for the two bounded server stores (shared + default context). No-op when unbounded.
     function recordAndEvict(slot: Slot<Args, T>, value: T): void {
-        const store = boundedStore(slotCache())
+        const store = boundedStore(slots())
         if (store === undefined) return
         sharedCacheRecordSize(store, slot.key, measureBytes(value))
         sharedCacheEvictIfNeeded(store)
@@ -413,7 +413,7 @@ export function memo<Args, T>(
     function disposeSlot(slot: Slot<Args, T>): void {
         slot.generation++
         slot.inflight = null
-        const cache = slotCache()
+        const cache = slots()
         const store = boundedStore(cache)
         if (store !== undefined) sharedCacheUnpin(store, slot.key) // never leave a disposed key pinned
         cache.delete(slot.key)
@@ -448,7 +448,7 @@ export function memo<Args, T>(
     // runaway can't grow unbounded. Only the two bounded server stores account; per-request/client don't.
     function accountStreamChunk(slot: Slot<Args, T>, stream: ReplayableStream<unknown>): void {
         if (slot.signal.peek().stream !== stream) return // stale (slot re-ran)
-        const store = boundedStore(slotCache())
+        const store = boundedStore(slots())
         if (store === undefined) return
         if (stream.bytes > streamBufferCap()) {
             stream.markOverflowed() // abort + drop replay eligibility; buffer stops growing
@@ -476,7 +476,7 @@ export function memo<Args, T>(
         })
         stream.encoding = encoding // carried so the router re-serves the handler's chosen wire format
         // Pin an open stream against LRU eviction while it fills (bounded store only).
-        const store = boundedStore(slotCache())
+        const store = boundedStore(slots())
         if (store !== undefined) sharedCachePin(store, slot.key)
         setState(slot, {
             status: 'stream',
@@ -674,7 +674,7 @@ export function memo<Args, T>(
 
     c.refresh = (args?: Partial<Args> | Args): void => {
         const slots = selectSlots(args)
-        log.channel('abide:cache').trace(`refresh ${id} (${slots.length} slots)`)
+        log.channel('abide:memo').trace(`refresh ${id} (${slots.length} slots)`)
         for (const slot of slots) startLoad(slot, true)
         broadcast('refresh', args)
     }
@@ -697,7 +697,7 @@ export function memo<Args, T>(
 
     c.invalidate = (args?: Partial<Args> | Args): void => {
         const slots = selectSlots(args)
-        log.channel('abide:cache').trace(`invalidate ${id} (${slots.length} slots)`)
+        log.channel('abide:memo').trace(`invalidate ${id} (${slots.length} slots)`)
         for (const slot of slots) dropSlot(slot)
         broadcast('invalidate', args)
     }
@@ -722,7 +722,7 @@ export function memo<Args, T>(
             value = next
         }
         setState(slot, { status: 'value', value, error: undefined, refreshing: current.refreshing })
-        log.channel('abide:cache').trace(`publish ${id}`)
+        log.channel('abide:memo').trace(`publish ${id}`)
         // Both forms broadcast the resolved VALUE (value-form frame) on a shared slot.
         broadcast('publish', args, value)
     }

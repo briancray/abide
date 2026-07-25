@@ -14,7 +14,7 @@
 // with request/slot churn — it is bounded by the count of distinct tagged memos. Slot memory is
 // managed independently by the shared store's LRU.
 
-import { publishCacheFrame, tagChannelName } from './cacheChannels.ts'
+import { publishMemoFrame, tagChannelName } from './memoChannels.ts'
 
 // One registered shared memo's tag-facing operations. `invalidate`/`refresh` drop/revalidate ALL of
 // the memo's current slots and broadcast per-slot on the memo's `@rpc:` channels; `pending`/
@@ -67,14 +67,14 @@ function selectMemos(tags: string[]): Set<TaggedMemo> {
 // broadcast an `invalidate` frame on each affected `@rpc:` channel, plus one on each `@tag:` channel.
 export function invalidateTags(tags: string[]): void {
     for (const memo of selectMemos(tags)) memo.invalidate()
-    for (const tag of tags) publishCacheFrame(tagChannelName(tag), { verb: 'invalidate' })
+    for (const tag of tags) publishMemoFrame(tagChannelName(tag), { verb: 'invalidate' })
 }
 
 // Global `refresh({ tags })`: eagerly revalidate every tagged memo's slots (stale value retained
 // while refreshing) and broadcast a `refresh` frame per `@rpc:` channel, plus one per `@tag:` channel.
 export function refreshTags(tags: string[]): void {
     for (const memo of selectMemos(tags)) memo.refresh()
-    for (const tag of tags) publishCacheFrame(tagChannelName(tag), { verb: 'refresh' })
+    for (const tag of tags) publishMemoFrame(tagChannelName(tag), { verb: 'refresh' })
 }
 
 // Global `pending({ tags })`: LOCAL reactive aggregate — true if ANY tagged slot is on its first

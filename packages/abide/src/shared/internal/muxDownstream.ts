@@ -1,7 +1,7 @@
 // The DOWNSTREAM WS-mux frames (server → client): a DATA frame carries `msg`, a CONTROL frame carries
 // `ok` (subscribe ack) or `error`. All carry the channel/socket `name`; they're distinguished by which
 // field is present. This is the single contract shared by the producer (`server/internal/router.ts`) and
-// the consumer (`ui/internal/cacheMux.ts`) — the mirror of `MUX_UPSTREAM` for the reverse direction.
+// the consumer (`ui/internal/mux.ts`) — the mirror of `MUX_UPSTREAM` for the reverse direction.
 //
 // The producer stamps each send `satisfies MuxDownstream`, so a field rename (e.g. `msg`→`data`) is a
 // COMPILE error at the server rather than a frame the client silently drops. The consumer parses UNTRUSTED

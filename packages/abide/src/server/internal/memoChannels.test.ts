@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import {
-    type CacheFrame,
-    cacheChannelHub,
-    cacheChannelName,
-    publishCacheFrame,
-} from './cacheChannels.ts'
 import { makeRead, type Rpc } from './makeRpc.ts'
+import {
+    type MemoFrame,
+    memoChannelHub,
+    memoChannelName,
+    publishMemoFrame,
+} from './memoChannels.ts'
 import { createApp } from './router.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './scope.ts'
 
@@ -19,7 +19,7 @@ function makeScope(name: string): RequestScope {
         identity: anonymousPrincipal(),
         bag: {},
         route: { kind: 'rpc', name, params: {}, url: new URL(request.url), navigating: false },
-        cache: new Map<string, unknown>(),
+        slots: new Map<string, unknown>(),
     }
 }
 
@@ -27,23 +27,23 @@ function makeScope(name: string): RequestScope {
 // standing up a server. Kept identical to router.createApp so the two stay in lock-step.
 function bindLikeCreateApp<Args, T>(route: Rpc<Args, T>, name: string): void {
     route.bindBroadcast((verb, args, value): void => {
-        const frame: CacheFrame = verb === 'publish' ? { verb, value } : { verb }
-        publishCacheFrame(cacheChannelName(name, args), frame)
+        const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
+        publishMemoFrame(memoChannelName(name, args), frame)
     })
 }
 
 // Resolve the next frame, or a timeout sentinel if none arrives — for asserting NON-broadcast.
 const TIMEOUT = Symbol('timeout')
 async function nextOrTimeout(
-    iterator: AsyncIterator<CacheFrame>,
+    iterator: AsyncIterator<MemoFrame>,
     ms: number,
-): Promise<CacheFrame | typeof TIMEOUT> {
+): Promise<MemoFrame | typeof TIMEOUT> {
     const timeout = new Promise<typeof TIMEOUT>((resolve) => setTimeout(() => resolve(TIMEOUT), ms))
-    const next = iterator.next().then((result) => result.value as CacheFrame)
+    const next = iterator.next().then((result) => result.value as MemoFrame)
     return Promise.race([next, timeout])
 }
 
-describe('cacheChannels — broadcast substrate', () => {
+describe('memoChannels — broadcast substrate', () => {
     test('shared read invalidate/refresh broadcast their verb onto the (rpc,args) channel', async () => {
         const profile = makeRead(
             'GET',
@@ -52,12 +52,12 @@ describe('cacheChannels — broadcast substrate', () => {
         )
         bindLikeCreateApp(profile, 'profileA')
 
-        const invIter = cacheChannelHub(cacheChannelName('profileA', { id: 1 })).subscribe()
+        const invIter = memoChannelHub(memoChannelName('profileA', { id: 1 })).subscribe()
         profile.invalidate({ id: 1 })
         expect((await invIter.next()).value).toEqual({ verb: 'invalidate' })
         await invIter.return?.()
 
-        const refIter = cacheChannelHub(cacheChannelName('profileA', { id: 1 })).subscribe()
+        const refIter = memoChannelHub(memoChannelName('profileA', { id: 1 })).subscribe()
         profile.refresh({ id: 1 })
         expect((await refIter.next()).value).toEqual({ verb: 'refresh' })
         await refIter.return?.()
@@ -69,7 +69,7 @@ describe('cacheChannels — broadcast substrate', () => {
         })
         bindLikeCreateApp(profile, 'profileB')
 
-        const iter = cacheChannelHub(cacheChannelName('profileB', { id: 1 })).subscribe()
+        const iter = memoChannelHub(memoChannelName('profileB', { id: 1 })).subscribe()
         const value = { id: 1, count: 7 }
         profile.publish({ id: 1 }, value)
         expect((await iter.next()).value).toEqual({ verb: 'publish', value })
@@ -87,7 +87,7 @@ describe('cacheChannels — broadcast substrate', () => {
             await profile.load({ id: 1 })
         })
 
-        const iter = cacheChannelHub(cacheChannelName('profileC', { id: 1 })).subscribe()
+        const iter = memoChannelHub(memoChannelName('profileC', { id: 1 })).subscribe()
         profile.publish({ id: 1 }, (current) => ({ id: 1, count: (current?.count ?? 0) + 41 }))
         // Durable value was { id:1, count:1 } → updater result { id:1, count:42 } broadcast value-form.
         expect((await iter.next()).value).toEqual({ verb: 'publish', value: { id: 1, count: 42 } })
@@ -98,7 +98,7 @@ describe('cacheChannels — broadcast substrate', () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id }))
         bindLikeCreateApp(profile, 'profileD')
 
-        const iter = cacheChannelHub(cacheChannelName('profileD', { id: 1 })).subscribe()
+        const iter = memoChannelHub(memoChannelName('profileD', { id: 1 })).subscribe()
         profile.invalidate({ id: 1 })
         profile.publish({ id: 1 }, { id: 99 })
         expect(await nextOrTimeout(iter, 25)).toBe(TIMEOUT)
@@ -111,7 +111,7 @@ describe('cacheChannels — broadcast substrate', () => {
         })
         const app = createApp({ routes: { profileE: profile } })
         try {
-            const iter = cacheChannelHub(cacheChannelName('profileE', { id: 5 })).subscribe()
+            const iter = memoChannelHub(memoChannelName('profileE', { id: 5 })).subscribe()
             profile.invalidate({ id: 5 })
             expect((await iter.next()).value).toEqual({ verb: 'invalidate' })
             await iter.return?.()
@@ -121,20 +121,18 @@ describe('cacheChannels — broadcast substrate', () => {
     })
 
     test('channel names are deterministic, args/rpc-sensitive, and cannot collide with bare socket names', () => {
-        expect(cacheChannelName('profile', { id: 1 })).toBe(cacheChannelName('profile', { id: 1 }))
-        expect(cacheChannelName('profile', { id: 1 })).not.toBe(
-            cacheChannelName('profile', { id: 2 }),
+        expect(memoChannelName('profile', { id: 1 })).toBe(memoChannelName('profile', { id: 1 }))
+        expect(memoChannelName('profile', { id: 1 })).not.toBe(
+            memoChannelName('profile', { id: 2 }),
         )
-        expect(cacheChannelName('profile', { id: 1 })).not.toBe(
-            cacheChannelName('other', { id: 1 }),
-        )
+        expect(memoChannelName('profile', { id: 1 })).not.toBe(memoChannelName('other', { id: 1 }))
         // Order-independent args → same key (canonicalKey sorts object keys).
-        expect(cacheChannelName('profile', { a: 1, b: 2 })).toBe(
-            cacheChannelName('profile', { b: 2, a: 1 }),
+        expect(memoChannelName('profile', { a: 1, b: 2 })).toBe(
+            memoChannelName('profile', { b: 2, a: 1 }),
         )
         // Reserved namespace: a channel name starts with `@rpc:` and carries a `:`, so a bare user
         // socket name (config.sockets key, no `@`/`:`) can never equal it.
-        const name = cacheChannelName('profile', { id: 1 })
+        const name = memoChannelName('profile', { id: 1 })
         expect(name.startsWith('@rpc:')).toBe(true)
         expect(name).not.toBe('profile')
     })

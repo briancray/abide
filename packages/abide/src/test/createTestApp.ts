@@ -24,8 +24,8 @@ import { type App, createApp, type Route } from '../server/internal/router.ts'
 import type { Principal } from '../server/internal/scope.ts'
 import { seal } from '../server/internal/seal.ts'
 import type { ErasedSocket } from '../server/socket.ts'
-import { RPC_CHANNEL_PREFIX } from '../shared/internal/cacheChannelName.ts'
 import { canonicalKey } from '../shared/internal/codec.ts'
+import { RPC_CHANNEL_PREFIX } from '../shared/internal/memoChannelName.ts'
 import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
 
 // A thin test client over the multiplexed socket WS (`/__abide/sockets`). `subscribe(name)`

@@ -8,15 +8,15 @@ import { invalidate } from '../../shared/invalidate.ts'
 import { pending } from '../../shared/pending.ts'
 import { refresh } from '../../shared/refresh.ts'
 import { refreshing } from '../../shared/refreshing.ts'
-import {
-    type CacheFrame,
-    cacheChannelHub,
-    cacheChannelName,
-    publishCacheFrame,
-    tagChannelName,
-} from './cacheChannels.ts'
-import { clearTagRegistry } from './cacheTags.ts'
 import { makeRead, type Rpc } from './makeRpc.ts'
+import {
+    type MemoFrame,
+    memoChannelHub,
+    memoChannelName,
+    publishMemoFrame,
+    tagChannelName,
+} from './memoChannels.ts'
+import { clearTagRegistry } from './memoTags.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './scope.ts'
 
 function makeScope(name: string): RequestScope {
@@ -27,26 +27,26 @@ function makeScope(name: string): RequestScope {
         identity: anonymousPrincipal(),
         bag: {},
         route: { kind: 'rpc', name, params: {}, url: new URL(request.url), navigating: false },
-        cache: new Map<string, unknown>(),
+        slots: new Map<string, unknown>(),
     }
 }
 
 // The channel publish closure createApp binds — replicated so tests bind a bare route (identical to
-// router.createApp / cacheChannels.test.ts).
+// router.createApp / memoChannels.test.ts).
 function bindLikeCreateApp<Args, T>(route: Rpc<Args, T>, name: string): void {
     route.bindBroadcast((verb, args, value): void => {
-        const frame: CacheFrame = verb === 'publish' ? { verb, value } : { verb }
-        publishCacheFrame(cacheChannelName(name, args), frame)
+        const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
+        publishMemoFrame(memoChannelName(name, args), frame)
     })
 }
 
 const TIMEOUT = Symbol('timeout')
 async function nextOrTimeout(
-    iterator: AsyncIterator<CacheFrame>,
+    iterator: AsyncIterator<MemoFrame>,
     ms: number,
-): Promise<CacheFrame | typeof TIMEOUT> {
+): Promise<MemoFrame | typeof TIMEOUT> {
     const timeout = new Promise<typeof TIMEOUT>((resolve) => setTimeout(() => resolve(TIMEOUT), ms))
-    const next = iterator.next().then((result) => result.value as CacheFrame)
+    const next = iterator.next().then((result) => result.value as MemoFrame)
     return Promise.race([next, timeout])
 }
 
@@ -84,8 +84,8 @@ describe('cache tags — global invalidate({ tags })', () => {
         expect(callsX).toBe(1)
         expect(callsY).toBe(1)
 
-        const iterX = cacheChannelHub(cacheChannelName('readX', { id: 1 })).subscribe()
-        const iterY = cacheChannelHub(cacheChannelName('readY', { id: 1 })).subscribe()
+        const iterX = memoChannelHub(memoChannelName('readX', { id: 1 })).subscribe()
+        const iterY = memoChannelHub(memoChannelName('readY', { id: 1 })).subscribe()
 
         invalidate({ tags: ['user'] })
 
@@ -116,7 +116,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         await runInScope(makeScope('readA'), () => read.load({ id: 1 }))
         expect(calls).toBe(1)
 
-        const iter = cacheChannelHub(cacheChannelName('readA', { id: 1 })).subscribe()
+        const iter = memoChannelHub(memoChannelName('readA', { id: 1 })).subscribe()
         invalidate({ tags: ['b'] })
         expect(await nextOrTimeout(iter, 25)).toBe(TIMEOUT) // no broadcast
         await iter.return?.()
@@ -141,7 +141,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         await runInScope(makeScope('readMulti'), () => read.load({ id: 1 }))
         expect(calls).toBe(1)
 
-        const iter = cacheChannelHub(cacheChannelName('readMulti', { id: 1 })).subscribe()
+        const iter = memoChannelHub(memoChannelName('readMulti', { id: 1 })).subscribe()
         invalidate({ tags: ['org'] }) // only one of the two tags
         expect((await iter.next()).value).toEqual({ verb: 'invalidate' })
         await iter.return?.()
@@ -157,7 +157,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         bindLikeCreateApp(read, 'readDedup')
         await runInScope(makeScope('readDedup'), () => read.load({ id: 1 }))
 
-        const iter = cacheChannelHub(cacheChannelName('readDedup', { id: 1 })).subscribe()
+        const iter = memoChannelHub(memoChannelName('readDedup', { id: 1 })).subscribe()
         invalidate({ tags: ['a', 'b'] })
         expect((await iter.next()).value).toEqual({ verb: 'invalidate' })
         // Exactly ONE frame — the memo is not touched once per matching tag.
@@ -182,7 +182,7 @@ describe('cache tags — global refresh({ tags })', () => {
         await runInScope(makeScope('readR'), () => read.load({ id: 1 }))
         expect(calls).toBe(1)
 
-        const iter = cacheChannelHub(cacheChannelName('readR', { id: 1 })).subscribe()
+        const iter = memoChannelHub(memoChannelName('readR', { id: 1 })).subscribe()
         // refresh runs the handler outside the request scope (shared purity), so no active scope needed.
         refresh({ tags: ['user'] })
         expect((await iter.next()).value).toEqual({ verb: 'refresh' })
@@ -202,14 +202,14 @@ describe('cache tags — @tag channel', () => {
         bindLikeCreateApp(read, 'readTagChan')
         await runInScope(makeScope('readTagChan'), () => read.load({ id: 1 }))
 
-        const tagIter = cacheChannelHub(tagChannelName('user')).subscribe()
+        const tagIter = memoChannelHub(tagChannelName('user')).subscribe()
         invalidate({ tags: ['user'] })
         expect((await tagIter.next()).value).toEqual({ verb: 'invalidate' })
         await tagIter.return?.()
     })
 
     test('refresh({ tags }) emits a refresh frame on the @tag channel even with no registered memos', async () => {
-        const tagIter = cacheChannelHub(tagChannelName('ghost')).subscribe()
+        const tagIter = memoChannelHub(tagChannelName('ghost')).subscribe()
         refresh({ tags: ['ghost'] })
         expect((await tagIter.next()).value).toEqual({ verb: 'refresh' })
         await tagIter.return?.()

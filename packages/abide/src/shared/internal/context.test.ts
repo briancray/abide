@@ -4,36 +4,36 @@ import { createContext, getContext, runInContext } from './context.ts'
 describe('createContext', () => {
     test('returns a fresh context with an empty cache', () => {
         const ctx = createContext()
-        expect(ctx.cache).toBeInstanceOf(Map)
-        expect(ctx.cache.size).toBe(0)
+        expect(ctx.slots).toBeInstanceOf(Map)
+        expect(ctx.slots.size).toBe(0)
     })
 
     test('each call is a distinct context with a distinct cache', () => {
         const a = createContext()
         const b = createContext()
         expect(a).not.toBe(b)
-        expect(a.cache).not.toBe(b.cache)
-        a.cache.set('x', 1)
-        expect(b.cache.has('x')).toBe(false)
+        expect(a.slots).not.toBe(b.slots)
+        a.slots.set('x', 1)
+        expect(b.slots.has('x')).toBe(false)
     })
 })
 
 describe('getContext (no active context)', () => {
     test('returns a default context rather than throwing (bare script / cron)', () => {
         const ctx = getContext()
-        expect(ctx.cache).toBeInstanceOf(Map)
+        expect(ctx.slots).toBeInstanceOf(Map)
     })
 
     test('the default context is stable across calls (same instance)', () => {
         const first = getContext()
         const second = getContext()
         expect(first).toBe(second)
-        expect(first.cache).toBe(second.cache)
+        expect(first.slots).toBe(second.slots)
     })
 
     test('the default context retains writes across calls', () => {
-        getContext().cache.set('persisted', 42)
-        expect(getContext().cache.get('persisted')).toBe(42)
+        getContext().slots.set('persisted', 42)
+        expect(getContext().slots.get('persisted')).toBe(42)
     })
 })
 
@@ -42,7 +42,7 @@ describe('runInContext isolation', () => {
         const ctx = createContext()
         const seen = runInContext(ctx, () => getContext())
         expect(seen).toBe(ctx)
-        expect(seen.cache).toBe(ctx.cache)
+        expect(seen.slots).toBe(ctx.slots)
     })
 
     test('two runInContext calls get separate caches', () => {
@@ -60,14 +60,14 @@ describe('runInContext isolation', () => {
         const requestTwo = createContext()
 
         runInContext(requestOne, () => {
-            getContext().cache.set('secret', 'user-1-data')
+            getContext().slots.set('secret', 'user-1-data')
         })
 
-        const leaked = runInContext(requestTwo, () => getContext().cache.get('secret'))
+        const leaked = runInContext(requestTwo, () => getContext().slots.get('secret'))
         expect(leaked).toBeUndefined()
 
         // And request one still has its own value.
-        const own = runInContext(requestOne, () => getContext().cache.get('secret'))
+        const own = runInContext(requestOne, () => getContext().slots.get('secret'))
         expect(own).toBe('user-1-data')
     })
 
@@ -125,12 +125,12 @@ describe('runInContext nesting', () => {
 describe('runInContext across async boundaries', () => {
     test('the active context follows async continuations', async () => {
         const ctx = createContext()
-        ctx.cache.set('token', 'abc')
+        ctx.slots.set('token', 'abc')
 
         const value = await runInContext(ctx, async () => {
             await Promise.resolve()
             await new Promise((resolve) => setTimeout(resolve, 1))
-            return getContext().cache.get('token')
+            return getContext().slots.get('token')
         })
 
         expect(value).toBe('abc')
@@ -139,17 +139,17 @@ describe('runInContext across async boundaries', () => {
     test('concurrent runInContext scopes do not bleed into each other', async () => {
         const one = createContext()
         const two = createContext()
-        one.cache.set('id', 1)
-        two.cache.set('id', 2)
+        one.slots.set('id', 1)
+        two.slots.set('id', 2)
 
         const [a, b] = await Promise.all([
             runInContext(one, async () => {
                 await new Promise((resolve) => setTimeout(resolve, 5))
-                return getContext().cache.get('id')
+                return getContext().slots.get('id')
             }),
             runInContext(two, async () => {
                 await new Promise((resolve) => setTimeout(resolve, 1))
-                return getContext().cache.get('id')
+                return getContext().slots.get('id')
             }),
         ])
 

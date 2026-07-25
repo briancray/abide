@@ -11,13 +11,13 @@
 // THE ARGS-SPOOF HOLE (the single most important adversarial case): `canonicalKey(args)` is
 // opaque/lossy — the channel name CANNOT be reversed back into `args`, so the middleware run has
 // no args to authorize against unless the client sends them. The subscribe frame therefore
-// carries the RAW `args`, and we VERIFY `cacheChannelName(rpcName, presentedArgs) === channelName`
+// carries the RAW `args`, and we VERIFY `memoChannelName(rpcName, presentedArgs) === channelName`
 // before trusting them. Without this a client could name channel-for-A (whose data it wants) while
 // presenting args-for-B (which its identity is allowed to read) and slip past the gate.
 
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import type { Socket } from '../socket.ts'
-import { cacheChannelName, RPC_CHANNEL_PREFIX } from './cacheChannels.ts'
+import { memoChannelName, RPC_CHANNEL_PREFIX } from './memoChannels.ts'
 import { compose, type Middleware } from './middleware.ts'
 import type { AppConfig } from './router.ts'
 import { type Principal, type RequestScope, type RouteKind, runInScope } from './scope.ts'
@@ -39,7 +39,7 @@ const AUTHORIZED_SENTINEL = new Response(null, { status: 200 })
 // True for a reserved cache-broadcast channel name (`@rpc:<rpc>:<key>`). Bare user-socket names
 // (config.sockets keys) never carry the `@` namespace, so they take the unchanged connect-authed
 // path in the router.
-export function isCacheChannel(name: string): boolean {
+export function isMemoChannel(name: string): boolean {
     return name.startsWith(RPC_CHANNEL_PREFIX)
 }
 
@@ -73,7 +73,7 @@ export async function authorizeChannelJoin(
     if (route === undefined || route.__rpc.read !== true) return false
 
     // ARGS-SPOOF DEFENSE: the presented args must be exactly the ones that name this channel.
-    if (cacheChannelName(rpcName, presentedArgs) !== channelName) return false
+    if (memoChannelName(rpcName, presentedArgs) !== channelName) return false
 
     const globalMiddleware = config.middleware ?? []
     const rpcMiddleware = route.__rpc.options.middleware ?? []
@@ -148,7 +148,7 @@ async function reauthorize(
             url,
             navigating: false,
         },
-        cache: new Map<string, unknown>(),
+        slots: new Map<string, unknown>(),
     }
     const chain = compose(middleware, () => AUTHORIZED_SENTINEL)
     const result = await runInScope(scope, chain)

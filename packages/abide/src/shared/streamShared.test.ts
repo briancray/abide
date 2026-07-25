@@ -18,7 +18,7 @@ function makeScope(): RequestScope {
         identity: anonymousPrincipal(),
         bag: {},
         route: { kind: 'rpc', name: 'test', params: {}, url, navigating: false },
-        cache: new Map<string, unknown>(),
+        slots: new Map<string, unknown>(),
     }
 }
 

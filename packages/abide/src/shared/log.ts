@@ -68,7 +68,7 @@ function debugSpec(): string | undefined {
 }
 
 // The debug-npm gate: a channel emits when DEBUG names it (exact), when DEBUG is `*`, or when a
-// listed pattern ends in `*` and prefixes the channel name (e.g. `abide:*` lights `abide:cache`).
+// listed pattern ends in `*` and prefixes the channel name (e.g. `abide:*` lights `abide:memo`).
 function channelEnabled(channel: string): boolean {
     const debug = debugSpec()
     if (debug === undefined || debug.length === 0) return false

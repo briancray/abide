@@ -6,16 +6,12 @@
 // server, and the per-request read cache Map.
 //
 // runInScope activates BOTH the scope (via its own AsyncLocalStorage, so accessors can find
-// it) AND the M1 cache context — sharing the SAME Map — so that getContext().cache (which the
-// memo primitive reads) is identical to scope.cache. Entering them together keeps a memo load
+// it) AND the M1 cache context — sharing the SAME Map — so that getContext().slots (which the
+// memo primitive reads) is identical to scope.slots. Entering them together keeps a memo load
 // inside a request writing into that request's cache and nowhere else.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
-import {
-    type CacheContext,
-    runInContext,
-    runOutsideContext,
-} from '../../shared/internal/context.ts'
+import { type MemoContext, runInContext, runOutsideContext } from '../../shared/internal/context.ts'
 import { isBrowser } from '../../shared/internal/isBrowser.ts'
 
 export type RouteKind =
@@ -54,7 +50,7 @@ export interface RequestScope {
     bag: Record<string, unknown>
     route: RouteInfo
     server?: Bun.Server<undefined>
-    cache: Map<string, unknown>
+    slots: Map<string, unknown>
     // W3C Trace Context (CO2.3). Set by the router from the incoming `traceparent` header when
     // present; otherwise lazily generated + cached on the first `trace()` call within the scope so
     // it stays stable for the request's lifetime.
@@ -81,8 +77,8 @@ function storage(): AsyncLocalStorage<RequestScope> | undefined {
 }
 
 export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T | Promise<T> {
-    // Share the exact same Map with the M1 cache context so getContext().cache === scope.cache.
-    const context: CacheContext = { cache: scope.cache, states: [] }
+    // Share the exact same Map with the M1 cache context so getContext().slots === scope.slots.
+    const context: MemoContext = { slots: scope.slots, states: [] }
     const store = storage()
     if (store === undefined) return runInContext(context, fn) // client fallback (no async isolation)
     return store.run(scope, () => runInContext(context, fn))

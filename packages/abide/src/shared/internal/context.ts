@@ -71,8 +71,8 @@ export interface DeferredStreamer {
 
 export type StreamFrame = { op: 'append'; html: string } | { op: 'complete' }
 
-export interface CacheContext {
-    cache: Map<string, unknown>
+export interface MemoContext {
+    slots: Map<string, unknown>
     // Per-request ordered recorder of `state(initial)` initial values, pushed in call order during
     // SSR (§5 state-initializer record/replay). `collectSeed` drains it into the hydration seed so the
     // client replays each cell's server-computed initial by ordinal instead of re-evaluating it. Grouped
@@ -88,24 +88,24 @@ export interface CacheContext {
     rendering?: boolean | undefined
 }
 
-export function createContext(): CacheContext {
-    return { cache: new Map<string, unknown>(), states: [] }
+export function createContext(): MemoContext {
+    return { slots: new Map<string, unknown>(), states: [] }
 }
 
 // Client-side single module-level cache (one per tab/session). Lazily created.
-let clientContext: CacheContext | undefined
+let clientContext: MemoContext | undefined
 
 // Server-side per-request storage. The stored value is the active context for the
 // current async execution scope.
-const requestStorage: AsyncLocalStorage<CacheContext> | undefined = isBrowser
+const requestStorage: AsyncLocalStorage<MemoContext> | undefined = isBrowser
     ? undefined
-    : new AsyncLocalStorage<CacheContext>()
+    : new AsyncLocalStorage<MemoContext>()
 
 // Server-side default fallback for calls made with no active request context (bare
 // scripts, cron, background tasks). Lazily created and reused so it stays stable.
-let serverDefaultContext: CacheContext | undefined
+let defaultContext: MemoContext | undefined
 
-export function getContext(): CacheContext {
+export function getContext(): MemoContext {
     if (isBrowser) {
         if (clientContext === undefined) {
             clientContext = createContext()
@@ -121,16 +121,16 @@ export function getContext(): CacheContext {
         return active
     }
 
-    if (serverDefaultContext === undefined) {
-        serverDefaultContext = createContext()
+    if (defaultContext === undefined) {
+        defaultContext = createContext()
     }
-    return serverDefaultContext
+    return defaultContext
 }
 
-// The persistent server default-context cache Map, or undefined on the client / before it is
-// created. Used by the memo primitive to recognise (and LRU-bound) the ambient default cache.
-export function serverDefaultCache(): Map<string, unknown> | undefined {
-    return serverDefaultContext?.cache
+// The persistent server default context, or undefined on the client / before it is created. Used by
+// the memo primitive to recognise (and LRU-bound) the ambient default context's slot store.
+export function serverDefaultContext(): MemoContext | undefined {
+    return defaultContext
 }
 
 // Run fn with NO active cache context so getContext() falls back to the server default context.
@@ -142,7 +142,7 @@ export function runOutsideContext<T>(fn: () => T): T {
     return requestStorage.exit(fn)
 }
 
-export function runInContext<T>(ctx: CacheContext, fn: () => T): T {
+export function runInContext<T>(ctx: MemoContext, fn: () => T): T {
     if (isBrowser || requestStorage === undefined) {
         // No async-scoped isolation on the client. Swap the singleton for the duration of
         // the call and restore on exit so nested calls behave like the server.

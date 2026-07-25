@@ -25,7 +25,7 @@
 // (it can't be safely keyed — see §1).
 
 import type { Payload } from '../../shared/internal/responseSource.ts'
-import { type CacheNotify, type Memo, type MemoOptions, memo } from '../../shared/memo.ts'
+import { type Memo, type MemoNotify, type MemoOptions, memo } from '../../shared/memo.ts'
 
 export type { Payload } from '../../shared/internal/responseSource.ts'
 
@@ -161,7 +161,7 @@ export interface Rpc<Args, T> {
     // SERVER-ONLY broadcast seam (rpc-core §8, PR2). `createApp` calls this on a `shared` read to bind
     // the memo's transport-free `notify` sink to a channel publish. Transport stays out of makeRpc —
     // the sink is supplied by createApp (which alone knows the route NAME). A no-op until bound.
-    bindBroadcast(sink: CacheNotify): void
+    bindBroadcast(sink: MemoNotify): void
     readonly __rpc: RpcMeta<Args, T>
 }
 
@@ -246,7 +246,7 @@ function attachSurface<Args, T>(
     method: string,
     options: RpcOptions,
     read: boolean,
-    setBroadcast: (sink: CacheNotify) => void,
+    setBroadcast: (sink: MemoNotify) => void,
 ): void {
     callable.peek = (args: Args): T | undefined => backing.peek(args)
     callable.load = (args: Args): Promise<T> => backing.load(args)
@@ -276,7 +276,7 @@ function attachSurface<Args, T>(
         source: readonly unknown[] | AsyncIterable<unknown>,
         encoding?: 'jsonl' | 'sse',
     ): void => backing.seedStream(args, source, encoding)
-    callable.bindBroadcast = (sink: CacheNotify): void => setBroadcast(sink)
+    callable.bindBroadcast = (sink: MemoNotify): void => setBroadcast(sink)
     // Stream probes live on the runtime object for ALL routes (they return undefined/false for a value
     // slot); only the StreamRead/StreamMutation type surfaces them. `peek` is already stream-aware.
     const streamable = callable as Rpc<Args, T> & {
@@ -318,7 +318,7 @@ export function makeRead<Args, T>(
     }
     // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets
     // the actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
-    let broadcast: CacheNotify | undefined
+    let broadcast: MemoNotify | undefined
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }
@@ -352,7 +352,7 @@ export function makeMutation<Args, R>(
     const memoOptions: MemoOptions = { ttl: memoConfig?.ttl ?? 0 }
     if (memoConfig?.shared === true) memoOptions.shared = true
     if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
-    let broadcast: CacheNotify | undefined
+    let broadcast: MemoNotify | undefined
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }

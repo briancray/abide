@@ -11,8 +11,8 @@ import { createTestApp, type SocketClient, type TestApp } from '../../test/creat
 import { error } from '../error.ts'
 import { identity } from '../identity.ts'
 import { request } from '../request.ts'
-import { cacheChannelName } from './cacheChannels.ts'
 import { makeRead, type Rpc } from './makeRpc.ts'
+import { memoChannelName } from './memoChannels.ts'
 import type { Middleware } from './middleware.ts'
 
 const TEST_TIMEOUT = 5000
@@ -124,7 +124,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             const app = track(await createTestApp({ routes: { profile2: profile } }))
 
             const a = client(app.as({ id: 'A' }))
-            const channelB = cacheChannelName('profile2', { id: 'B' })
+            const channelB = memoChannelName('profile2', { id: 'B' })
             const stream = a.subscribe(channelB, { id: 'B' }) // A presents B's (matching) args → gate denies
             await a.ready()
             await delay(80) // let the (denied) subscribe attempt fully process server-side
@@ -145,7 +145,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             const app = track(await createTestApp({ routes: { profile3: profile } }))
 
             const a = client(app.as({ id: 'A' }))
-            const channelA = cacheChannelName('profile3', { id: 'A' })
+            const channelA = memoChannelName('profile3', { id: 'A' })
             const stream = a.subscribe(channelA, { id: 'A' })
             await a.ready()
             await delay(80)
@@ -158,7 +158,7 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
     )
 
     // 4. ARGS-SPOOF: name a channel A while presenting args for B (mismatch) → rejected on the
-    //    `cacheChannelName(rpc, presentedArgs) === channelName` check, BEFORE any middleware runs.
+    //    `memoChannelName(rpc, presentedArgs) === channelName` check, BEFORE any middleware runs.
     //    Even though A would be allowed to read {id:A}, the presented args do not NAME channel A, so
     //    no join happens and channel-A traffic never reaches this spoofing subscription.
     test(
@@ -168,8 +168,8 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             const app = track(await createTestApp({ routes: { profile4: profile } }))
 
             const a = client(app.as({ id: 'A' }))
-            const channelA = cacheChannelName('profile4', { id: 'A' })
-            // Subscribe frame: name = channel-A, but args = {id:"B"} → cacheChannelName(profile,{id:B})
+            const channelA = memoChannelName('profile4', { id: 'A' })
+            // Subscribe frame: name = channel-A, but args = {id:"B"} → memoChannelName(profile,{id:B})
             // = channel-B !== channel-A → deny (no join), regardless of A's own read rights.
             const stream = a.subscribe(channelA, { id: 'B' })
             await a.ready()
@@ -191,8 +191,8 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             const app = track(await createTestApp({ routes: { profile5: profile } }))
 
             const a = client(app.as({ id: 'A' }))
-            const channelA = cacheChannelName('profile5', { id: 'A' })
-            const channelB = cacheChannelName('profile5', { id: 'B' })
+            const channelA = memoChannelName('profile5', { id: 'A' })
+            const channelB = memoChannelName('profile5', { id: 'B' })
             const allowedStream = a.subscribe(channelA, { id: 'A' }) // passes
             const deniedStream = a.subscribe(channelB, { id: 'B' }) // re-checked → denied
             await a.ready()
@@ -221,8 +221,8 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
             const app = track(await createTestApp({ routes: { profile6: profile, open6: open } }))
 
             const anon = client(app) // base app → no identity → anonymous at upgrade
-            const guardedChannel = cacheChannelName('profile6', { id: 'A' })
-            const publicChannel = cacheChannelName('open6', { id: 'A' })
+            const guardedChannel = memoChannelName('profile6', { id: 'A' })
+            const publicChannel = memoChannelName('open6', { id: 'A' })
             const guardedStream = anon.subscribe(guardedChannel, { id: 'A' }) // anon.id !== "A" → denied
             const publicStream = anon.subscribe(publicChannel, { id: 'A' }) // no middleware → allowed
             await anon.ready()
@@ -252,8 +252,8 @@ describe('channelAuth — @rpc: cache-channel join authorization', () => {
 
             const a = client(app.as({ id: 'A' }))
             const b = client(app.as({ id: 'B' }))
-            const streamA = a.subscribe(cacheChannelName('profile7', { id: 'A' }), { id: 'A' })
-            const streamB = b.subscribe(cacheChannelName('profile7', { id: 'B' }), { id: 'B' })
+            const streamA = a.subscribe(memoChannelName('profile7', { id: 'A' }), { id: 'A' })
+            const streamB = b.subscribe(memoChannelName('profile7', { id: 'B' }), { id: 'B' })
             await a.ready()
             await b.ready()
             await delay(80)

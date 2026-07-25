@@ -14,7 +14,7 @@
 // replays them from cache instead of re-fetching on hydration. An empty seed serialises to `{}`.
 
 import { encode } from '../../shared/internal/codec.ts'
-import type { CacheContext } from '../../shared/internal/context.ts'
+import type { MemoContext } from '../../shared/internal/context.ts'
 import { getContext, runInContext } from '../../shared/internal/context.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
@@ -423,7 +423,7 @@ export function renderDocument(inner: string, opts?: RenderDocumentOptions): str
 // reads) has already returned before this stream is constructed.
 export function streamPageDocument(
     shell: string,
-    ctx: CacheContext,
+    ctx: MemoContext,
     config: AppConfig,
     opts?: RenderDocumentOptions,
 ): ReadableStream<Uint8Array> {
@@ -466,7 +466,7 @@ export function streamPageDocument(
 // `collectSeed` in the captured request context so they read the same request cache.
 export function streamSoftNav(
     shell: string,
-    ctx: CacheContext,
+    ctx: MemoContext,
     config: AppConfig,
     urlPath: string,
     sharedLevels = 0,

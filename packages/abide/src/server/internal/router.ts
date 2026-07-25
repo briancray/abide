@@ -45,15 +45,9 @@ import {
     unrecognizedNodeEnv,
 } from './auth.ts'
 import {
-    type CacheFrame,
-    cacheChannelHub,
-    cacheChannelName,
-    publishCacheFrame,
-} from './cacheChannels.ts'
-import {
     authorizeChannelJoin,
     authorizeSocketJoin,
-    isCacheChannel,
+    isMemoChannel,
     type SocketConnectionData,
 } from './channelAuth.ts'
 import { type ClientBuild, clientBuildFor } from './clientBundle.ts'
@@ -69,6 +63,12 @@ import { sharedLayoutDepth } from './layouts.ts'
 import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
 import { matchRoute } from './matchRoute.ts'
 import { handleMcp } from './mcp.ts'
+import {
+    type MemoFrame,
+    memoChannelHub,
+    memoChannelName,
+    publishMemoFrame,
+} from './memoChannels.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { buildOpenApi } from './openapi.ts'
 import { renderPage, streamPageDocument, streamSoftNav } from './pages.ts'
@@ -330,9 +330,9 @@ function wsSubscribe(
     // `@rpc:` cache-invalidation channel — the S4.4 exception: per-subscribe authorization against
     // the connection's identity, re-running the target rpc's read gate for the presented args. Cache
     // channels keep SILENT-DENY (their TTL self-heals a missed frame); user sockets do not (below).
-    if (isCacheChannel(name)) {
+    if (isMemoChannel(name)) {
         if (connection.subscriptions.has(name)) return
-        void subscribeCacheChannel(ws, connection, name, args, config)
+        void subscribeMemoChannel(ws, connection, name, args, config)
         return
     }
     void subscribeUserSocket(ws, connection, name, args, replay, sockets, config)
@@ -394,7 +394,7 @@ async function subscribeUserSocket(
 // ignore-unknown-name contract; a client learns nothing about whether the channel exists or why
 // it was refused). Re-runs `authorizeChannelJoin` on EVERY subscribe (never cached on the
 // connection) so per-args row-level middleware authz is enforced for each join.
-async function subscribeCacheChannel(
+async function subscribeMemoChannel(
     ws: Bun.ServerWebSocket<SocketConnectionData>,
     connection: SocketConnection,
     name: string,
@@ -410,7 +410,7 @@ async function subscribeCacheChannel(
     // must not leave a dangling join.
     if (connection.subscriptions.has(name)) return
     if (ws.readyState !== 1) return
-    const iterator = cacheChannelHub(name).subscribe()
+    const iterator = memoChannelHub(name).subscribe()
     connection.subscriptions.set(name, iterator)
     log.channel('abide:socket').trace(`cache-channel join: ${name}`)
     void pumpSocketToWs(ws, connection, name, name, undefined, iterator)
@@ -418,7 +418,7 @@ async function subscribeCacheChannel(
 
 function wsUnsubscribe(connection: SocketConnection, name: unknown, args: unknown): void {
     if (typeof name !== 'string') return
-    const key = isCacheChannel(name) ? name : subscriptionKey(name, args)
+    const key = isMemoChannel(name) ? name : subscriptionKey(name, args)
     const iterator = connection.subscriptions.get(key)
     if (iterator === undefined) return
     connection.subscriptions.delete(key)
@@ -874,8 +874,8 @@ export function createApp(config: AppConfig = {}): App {
         if (meta.read && meta.options.memo !== false && meta.options.memo?.shared === true) {
             // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
             ;(route as Rpc<any, any>).bindBroadcast((verb, args, value): void => {
-                const frame: CacheFrame = verb === 'publish' ? { verb, value } : { verb }
-                publishCacheFrame(cacheChannelName(name, args), frame)
+                const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
+                publishMemoFrame(memoChannelName(name, args), frame)
             })
         }
     }
@@ -951,7 +951,7 @@ export function createApp(config: AppConfig = {}): App {
                 // The WS-data generic (SocketConnectionData) is a socket-transport concern only; the
                 // public server()/scope.server surface stays `Bun.Server<undefined>` (unchanged API).
                 server: srv as unknown as Bun.Server<undefined>,
-                cache: new Map<string, unknown>(),
+                slots: new Map<string, unknown>(),
                 ...(propagatedTrace !== undefined ? { traceparent: propagatedTrace } : {}),
             }
 

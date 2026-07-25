@@ -9,10 +9,10 @@
 // CLIENT-ONLY: imports only a `type` from the server cache-channel module (erased at build) and is a
 // total no-op under SSR (no `window`/`WebSocket`), like the rest of the client-only surface.
 
-import type { CacheFrame } from '../../server/internal/cacheChannels.ts'
-import { RPC_CHANNEL_PREFIX } from '../../shared/internal/cacheChannelName.ts'
+import type { MemoFrame } from '../../server/internal/memoChannels.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
+import { RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannelName.ts'
 
 // Reconnect backoff bounds (CS2.4). Doubles from MIN to MAX, reset on a clean open.
 const RECONNECT_MIN_MS = 500
@@ -216,14 +216,14 @@ export function muxPublish(name: string, msg: unknown, mountBase?: string, args?
     }
 }
 
-// Join the `(rpc,args)` cache channel `channelName`, applying each inbound `CacheFrame` via `apply`.
+// Join the `(rpc,args)` cache channel `channelName`, applying each inbound `MemoFrame` via `apply`.
 // The cache-channel adapter over the shared mux: silent-deny (no ack/error handlers), replay default.
 // No-op under SSR and idempotent per channel (dedup) — the clientProxy computes the SAME name for
 // canonically-equal args, so a re-read never re-subscribes.
-export function subscribeCacheChannel(
+export function subscribeMemoChannel(
     channelName: string,
     args: unknown,
-    apply: (frame: CacheFrame) => void,
+    apply: (frame: MemoFrame) => void,
     mountBase?: string,
 ): void {
     muxSubscribe(
@@ -232,7 +232,7 @@ export function subscribeCacheChannel(
             name: channelName,
             args,
             replay: true,
-            onMessage: (payload) => apply(payload as CacheFrame),
+            onMessage: (payload) => apply(payload as MemoFrame),
             onAck: undefined,
             onError: undefined,
             onReconnecting: undefined,

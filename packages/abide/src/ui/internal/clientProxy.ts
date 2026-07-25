@@ -12,16 +12,16 @@
 // with `Content-Type: application/json` (satisfies the CSRF gate), never cached.
 
 import type { Mutation, Rpc } from '../../server/internal/makeRpc.ts'
-import { cacheChannelName } from '../../shared/internal/cacheChannelName.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import {
     decodeStreamResponse,
     isStreamContentType,
 } from '../../shared/internal/decodeStreamResponse.ts'
+import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { memo } from '../../shared/memo.ts'
-import { applyCacheFrame } from './applyCacheFrame.ts'
-import { subscribeCacheChannel } from './cacheMux.ts'
+import { applyMemoFrame } from './applyMemoFrame.ts'
+import { subscribeMemoChannel } from './mux.ts'
 
 // An HttpError-like carrier for a non-2xx RPC response. Mirrors the `abide/shared/HttpError`
 // shape (status/statusText/kind?/data?) so client code can narrow on it without importing the
@@ -144,10 +144,10 @@ export function clientProxy<Args = unknown, T = unknown>(
         const key = canonicalKey(args)
         if (subscribed.has(key)) return
         subscribed.add(key)
-        subscribeCacheChannel(
-            cacheChannelName(name, args),
+        subscribeMemoChannel(
+            memoChannelName(name, args),
             args,
-            (frame) => applyCacheFrame(backing, args, frame),
+            (frame) => applyMemoFrame(backing, args, frame),
             base,
         )
     }
