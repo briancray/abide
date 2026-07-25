@@ -5,7 +5,8 @@ import { expect, test } from '@playwright/test'
 // so the page's top-level `{#for await}` fills the table live. Because the bench runs INSIDE the page
 // render, each measured render is isolated from the page's ambient streaming scope (benchFrontend.ts);
 // a regression there floods the page with stray patches and pegs the render. This drives the real
-// browser to prove the table fills, streams as an `<abide-list>`, hydrates, and re-runs on demand.
+// browser to prove the table fills, streams against a `<template>` list sentinel, hydrates, and re-runs
+// on demand.
 
 // The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus, in corpus order (the
 // four `server: false` interaction-only scenarios are not render-benched). Kept in sync with that corpus.
@@ -24,12 +25,12 @@ const SCENARIOS = [
 ]
 
 test('bench table fills live from the streamed corpus and stays bounded', async ({ page }) => {
-    // The RAW first-load HTML actually STREAMED the rows as an `<abide-list>` with append patches (the
-    // bench's first scenario blows past the 4ms deadline), NOT one buffered blob — and it carries none of
-    // the stray `<abide-slot>` fill-patches a scope leak from the measured `await-block` template would
-    // emit into the page stream.
+    // The RAW first-load HTML actually STREAMED the rows against a `<template id="ab-l:N">` sentinel with
+    // append patches (the bench's first scenario blows past the 4ms deadline), NOT one buffered blob — and
+    // it carries none of the stray slot fill-patches a scope leak from the measured `await-block` template
+    // would emit into the page stream.
     const raw = await (await page.request.get('/platform/bench')).text()
-    expect(raw).toContain('<abide-list')
+    expect(raw).toContain('<template id="ab-l:0"')
     expect(raw).toContain('data-ab-append')
     expect(raw).not.toContain('ab-patch')
 

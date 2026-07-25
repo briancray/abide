@@ -268,25 +268,47 @@ test('isKnownPage: only real page patterns are soft-nav targets (not /openapi.js
 // — never `patch` — so the client's frame consumers must apply those exact kinds). `applyPatchFrame`
 // mirrors the first-load move-scripts (`documentPatch`) from JS. Before the fix the consumers branched
 // on a dead `patch` kind, so `append`/`complete` had NO client implementation at all.
-test('applyPatchFrame: `fill` replaces a deferred {#await} slot (#ab-p:<id>) contents', () => {
-    document.body.innerHTML = '<abide-slot id="ab-p:7"><span>loading</span></abide-slot>'
+test('applyPatchFrame: `fill` replaces the fallback between the {#await} slot sentinels', () => {
+    document.body.innerHTML =
+        '<div id="host"><!--ab-p:7--><span>loading</span><template id="ab-p:7"></template></div>'
     const applied = applyPatchFrame({ kind: 'fill', id: 7, html: '<b data-v>runs: 3</b>' })
     expect(applied).toBe(true)
-    const slot = document.getElementById('ab-p:7')
-    expect(slot?.querySelector('b[data-v]')?.textContent).toBe('runs: 3')
-    expect(slot?.querySelector('span')).toBeNull() // the pending fallback was replaced
+    const host = document.getElementById('host')
+    expect(host?.querySelector('b[data-v]')?.textContent).toBe('runs: 3')
+    expect(host?.querySelector('span')).toBeNull() // the pending fallback was replaced
+    // The patch landed BETWEEN the sentinels, both of which survive for hydration to drop.
+    expect(document.getElementById('ab-p:7')?.previousSibling?.nodeName).toBe('B')
 })
 
-test('applyPatchFrame: `append` adds an item into the list anchor (#ab-l:<id>)', () => {
-    document.body.innerHTML = '<abide-list id="ab-l:2"><li>a</li></abide-list>'
+test('applyPatchFrame: `append` inserts items before the list sentinel (#ab-l:<id>)', () => {
+    document.body.innerHTML = '<ul id="host"><li>a</li><template id="ab-l:2"></template></ul>'
     expect(applyPatchFrame({ kind: 'append', id: 2, html: '<li>b</li>' })).toBe(true)
     expect(applyPatchFrame({ kind: 'append', id: 2, html: '<li>c</li>' })).toBe(true)
-    const list = document.getElementById('ab-l:2')
-    expect(list?.innerHTML).toBe('<li>a</li><li>b</li><li>c</li>')
+    expect(document.getElementById('host')?.innerHTML).toBe(
+        '<li>a</li><li>b</li><li>c</li><template id="ab-l:2"></template>',
+    )
 })
 
-test('applyPatchFrame: `complete` stamps data-ab-done on the list anchor (the done() probe)', () => {
-    document.body.innerHTML = '<abide-list id="ab-l:5"><li>x</li></abide-list>'
+// The sentinel is a `<template>`, not a wrapper element, precisely so a streamed `<tr>` is not
+// FOSTER-PARENTED out of the table by the HTML parser (a wrapper stranded every patch ABOVE the
+// `<table>`, rendering half-formatted rows that hydration then never cleaned up). Built with DOM calls,
+// not `innerHTML`: happy-dom foster-parents `<template>` out of a `<tbody>`, which the HTML standard
+// forbids (`in table` defers `style`/`script`/`template` to the `in head` rules, inserting in place), so
+// only a real browser can attest the PARSE — the Playwright `streaming` e2e covers that end. This
+// asserts the DOM op: given the sentinel in a `<tbody>`, the row lands as a real `<tbody>` child.
+test('applyPatchFrame: `append` puts a streamed <tr> inside the real <tbody>', () => {
+    document.body.innerHTML = '<table><tbody id="host"></tbody></table>'
+    const host = document.getElementById('host')
+    const sentinel = document.createElement('template')
+    sentinel.id = 'ab-l:9'
+    host?.appendChild(sentinel)
+    expect(applyPatchFrame({ kind: 'append', id: 9, html: '<tr><td>row</td></tr>' })).toBe(true)
+    expect(host?.querySelector('tr > td')?.textContent).toBe('row')
+    expect(host?.querySelector('tr')?.parentElement?.tagName).toBe('TBODY')
+})
+
+test('applyPatchFrame: `complete` stamps data-ab-done on the list sentinel (the done() probe)', () => {
+    document.body.innerHTML = '<ul><li>x</li><template id="ab-l:5"></template></ul>'
     expect(applyPatchFrame({ kind: 'complete', id: 5 })).toBe(true)
     expect(document.getElementById('ab-l:5')?.hasAttribute('data-ab-done')).toBe(true)
 })

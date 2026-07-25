@@ -77,8 +77,9 @@ The FULL `{#await}{:then}` block is the streaming form (an `inline` flag threade
 distinguishes it from the blocking inline shorthand `{#await p then v}`, which desugars to the same
 shape). `emitServer` lowers it to `$rt.awaitStream({read, resolved, pending, caught, finalize})`
 (`ui/internal/streamScope.ts`): the read is raced against ONE per-render deadline; settle-in-time →
-render the resolved branch **inline** (byte-identical to the blocking path); still pending → emit an
-`<abide-slot id="ab-p:N">`+pending-fallback now and register a deferred subtree. `streamPageDocument`
+render the resolved branch **inline** (byte-identical to the blocking path); still pending → emit a
+sentinel-bracketed pending-fallback now (`<!--ab-p:N-->` … `<template id="ab-p:N">`, see *Sentinel
+placeholders* below) and register a deferred subtree. `streamPageDocument`
 flushes `head → shell → out-of-order patches → seed+tail`: each deferred (`drainPatches`, promise-join)
 streams a `<template data-ab-patch="N">`+move-script patch as it resolves; the seed is collected AFTER
 the drain (so streamed reads are included — one tail seed for now). No stream scope (direct `render()`
@@ -97,19 +98,20 @@ migration needs the patch/claim protocol): the `{target?, html, reads}` envelope
 
 ### PR3 — First-load progressive hydration (client CLAIMS streamed subtrees) ✅ LANDED
 Decision (a) **unwrap**: `runtime.awaitBlock`'s hydrate path calls `unwrapStreamSlot(parent, open)`
-first — if the node after the block's `open` anchor is a streamed `<abide-slot>` (its patch filled it;
-module-deferred hydration runs after every patch + the tail seed, so on first load it always has), it
-lifts the resolved branch out to sit DIRECTLY between the anchors and drops the wrapper. The existing
+first — if the node after the block's `open` anchor is a streamed slot's `<!--ab-p:N-->` sentinel (its
+patch replaced the fallback between the sentinels; module-deferred hydration runs after every patch + the
+tail seed, so on first load it always has), it drops BOTH sentinels so the resolved branch sits DIRECTLY
+between the anchors. The existing
 `claimAwait` then runs byte-for-byte as for a non-streamed block: the tail seed primed the read, so it
 peeks settled and CLAIMS the streamed branch (no re-create, no refetch). After hydration a streamed
 block is indistinguishable from an inline one → every reactive-swap/teardown path stays
 single-codepath. **Key simplifier confirmed:** the client bundle is a deferred module script, so at
-hydrate time every slot is filled + the seed complete — no hydration-vs-patch race. The `<abide-slot>`
-carries an inline `style="display:contents"` (no global stylesheet / head-byte change) so it is
-layout-transparent during the streaming window. **Deferred to PR4** (needs the client stream-consumer):
+hydrate time every slot is filled + the seed complete — no hydration-vs-patch race. The sentinels are a
+comment + an empty `<template>` (both layout-inert, no global stylesheet / head-byte change), which is
+also what makes the placeholder parse-legal inside a table section — see *Sentinel placeholders* below. **Deferred to PR4** (needs the client stream-consumer):
 the shared `{target?,html,reads}` envelope + `applyEnvelope` extraction. **Verified:** a real-browser
 hydration e2e (`/streaming` sample + `streamSlow` 40ms RPC) — asserts the raw HTML streamed (placeholder
-+ out-of-order patch), the value is present after load, the `<abide-slot>` is UNWRAPPED (0 in the live
++ out-of-order patch), the value is present after load, both sentinels are GONE (0 in the live
 DOM), the claimed block stays reactive (refresh advances the run counter), and NO hydration-mismatch
 warning fired — plus 907 unit + tsc + lint + `abide check` + docs e2e (93, every existing await page
 still hydrates). Refs: `ui/internal/runtime.ts` (`unwrapStreamSlot`), `ui/internal/streamScope.ts`
@@ -127,17 +129,17 @@ whole app root. `sharedLevels: 0` (no shared layout / first-diverging is the roo
 into `#__abide-app` as before. `navigate.ts softLoad` reads the frames
 PROGRESSIVELY (`readFrames` — decode + split on `\n`, parse each line as it completes): swaps the shell
 into the kept outlet (or `#__abide-app` when `sharedLevels: 0`) immediately (a slow read shows its
-`<abide-slot>` fallback), fills each placeholder
-as its patch frame arrives (`fillSlot` — a `<template>`.innerHTML parse + `replaceChildren`, i.e. the
-same DOM op the first-load move-script does but in JS, since a `fetch`ed body's inline scripts don't
-auto-run), then once the stream ends hydrates the assembled DOM (the SAME `mountPathname` path — PR3
-unwraps the slots). Disposes the previous mount BEFORE the shell swap (dispose-first invariant). A
+sentinel-bracketed fallback), fills each placeholder
+as its patch frame arrives (`applyPatchFrame` — a `<template>`.innerHTML parse, then clear the fallback
+run between the sentinels and insert before the id'd one, i.e. the same DOM op the first-load
+move-script does but in JS, since a `fetch`ed body's inline scripts don't auto-run), then once the
+stream ends hydrates the assembled DOM (the SAME `mountPathname` path — PR3 drops the sentinels). Disposes the previous mount BEFORE the shell swap (dispose-first invariant). A
 middleware short-circuit still arrives as a JSON `{redirect}` envelope (checked before the stream —
 `jsonl` is matched BEFORE `json` since the former contains the latter as a substring). JSONL is the
 framing (robustly newline-delimited + JSON-escaped so HTML can't break it + carries url/id/seed). One
 tail seed for now (per-patch seed pieces = a later refinement; hydration is single-pass at stream end,
 so it needs only the complete seed). **Verified:** a progressive soft-nav e2e (nav to `/streaming`
-shows `pending` then the streamed value, marker survives = no full reload, `<abide-slot>` unwrapped,
+shows `pending` then the streamed value, marker survives = no full reload, sentinels dropped,
 reactive after nav) + the server-side soft-nav tests migrated to a `parseSoftNav` JSONL helper + 907
 unit (4 deterministic runs) + tsc + lint + `abide check` + docs e2e (94, every existing soft-nav page
 green). **Contamination fix en route:** the migrated soft-nav tests were throwing on `response.json()`
@@ -172,11 +174,13 @@ slots unwrapped) + 910 unit (2 deterministic runs) + tsc + lint + `abide check` 
 The emitter lowers a `{#for await}` to `$rt.forAwaitStream({source, renderItem, caught})`
 (`streamScope.ts`): it drains the source up to the deadline INLINE (a synchronous/fast stream stays
 byte-identical to the buffered full-drain — proven by the oracle's `for await` fixtures via the
-no-stream-scope path), then returns an `<abide-list id="ab-l:N" style="display:contents">` with the
-items seen so far and registers a **streamer** (a multi-yield deferred, `DeferredStreamer`). The
+no-stream-scope path), then returns the items seen so far followed by a trailing
+`<template id="ab-l:N">` sentinel (the insertion point every `append` inserts BEFORE) and registers a
+**streamer** (a multi-yield deferred, `DeferredStreamer`). The
 scheduler generalized: `drainPatches` now interleaves single-resolve subtrees (`fill`) with streamers
 that yield many `append`s then a `complete` (out-of-order, keyed `s`/`l`). Each item streams as an
-`append` patch (`<template data-ab-append>` + `$abideAppend` into the list) as the source yields it;
+`append` patch (`<template data-ab-append>` + `$abideAppend` inserting before the sentinel) as the
+source yields it;
 when the source **ends within the budget** (`ABIDE_SSR_STREAM_BUDGET`, default 30s) a `complete` patch
 flags the list `data-ab-done` (the client will CLAIM it — PR7); if it **exceeds** the budget it is cut
 off WITHOUT the flag (client re-iterates) — so an SSR `{#for await}` NEVER hangs the body. `{:catch}`
@@ -197,6 +201,35 @@ replay-then-live fan-out, keyed `(fn,args)`): the client ATTACHES to the slot (r
 reactive item mount) instead of re-running, cross-request refreshers share one run, and the SSR seed
 carries a slot handle, not a re-runnable source. See `docs/spec/replayable-streams.md` (design of
 record; not yet built). PR1–6 (per-request SSR streaming) are the shipped substrate underneath.
+
+### Sentinel placeholders (why neither placeholder is an element) ✅ LANDED
+Both streaming placeholders were originally wrapper ELEMENTS — `<abide-slot id="ab-p:N">` around a
+pending fallback and `<abide-list id="ab-l:N">` around streamed items, each `style="display:contents"`.
+That is unsound in a table: the HTML parser's *in table* / *in table body* / *in row* insertion modes
+FOSTER-PARENT any other element — relocating it out of the table section to immediately BEFORE the
+`<table>`. A `{#for await}` streaming `<tr>`s into a `<tbody>` therefore emitted its container above the
+table (the following `<tr>` token clears the stack back to table-body context, so the inline-painted rows
+landed correctly and the container was left EMPTY), and every `append` patch then inserted into that
+orphan — rendering the streamed rows as an anonymous table box above the real table, half-formatted, with
+no cleanup on hydrate (which only clears BETWEEN the block anchors, which the relocated nodes had
+escaped). Measured on `/platform/bench/server`: 3 of 4 streamed rows stranded mid-stream.
+
+The fix keeps the O(1) `getElementById` addressing and drops the container:
+- **`{#for await}`** — items are emitted BARE, followed by a trailing `<template id="ab-l:N">`. Each
+  `append` inserts before the sentinel (document order = item order, O(1) per patch); `complete` stamps
+  `data-ab-done` on it. Hydration clears the whole region (items + sentinel) with the block region.
+- **`{#await}`** — `<!--ab-p:N-->` … pending fallback … `<template id="ab-p:N">`. `fill` walks back from
+  the id'd sentinel to the comment (bounded by the fallback's node count, not the document), removes that
+  run, and inserts before the sentinel. Hydration drops both sentinels (`unwrapStreamSlot`).
+
+A comment and a `<template>` are the ONLY two node kinds every insertion mode inserts IN PLACE (*in
+table* defers `style`/`script`/`template` to the *in head* rules), so this shape is correct in any parent
+— `<table>`/`<thead>`/`<tbody>`/`<tfoot>`/`<tr>` included — and drops the `display:contents` hack, making
+a streamed `<tr>` a real `<tbody>` child. Note `happy-dom` gets this parse WRONG (it foster-parents
+`<template>` out of a `<tbody>`), so the placement guarantee is attested by a real-browser e2e, not the
+unit suite. **Verified:** `applyPatchFrame` unit tests (fill/append/complete + the `<tr>`-into-`<tbody>`
+op), the full abide suite (1186), and docs e2e — `bench-server.spec.ts` locks the raw sentinel inside
+`<tbody>`, all rows as `tbody > tr` children, and no surviving sentinel; measured after: 0 stranded.
 
 ## Follow-ups (enabled, not scoped here)
 - **HMR onto `applyEnvelope`** (decision 3): dev reload hot-swaps a changed subtree for markup/data

@@ -2,9 +2,9 @@
 // response (streaming-ssr-plan.md PR4 — soft-nav returns `{kind:"shell"}`, then patch frames whose kind
 // is the op — `fill`/`append`/`complete` — then `{kind:"seed"}`, instead of one buffered JSON envelope).
 // `html` is the shell with each streamed patch applied — mirroring the browser's `applyPatchFrame`:
-// `fill` replaces a deferred `<abide-slot id="ab-p:<id>">` placeholder's contents, `append` adds an item
-// inside the `<abide-list id="ab-l:<id>">` anchor, `complete` stamps `data-ab-done` on it — so
-// assertions see the fully-assembled inner HTML.
+// `fill` replaces the pending fallback bracketed by `<!--ab-p:<id>-->` … `<template id="ab-p:<id>">`,
+// `append` inserts an item before the `<template id="ab-l:<id>">` list sentinel, `complete` stamps
+// `data-ab-done` on that sentinel — so assertions see the fully-assembled inner HTML.
 
 export interface SoftNavEnvelope {
     html: string
@@ -43,20 +43,18 @@ export async function parseSoftNav(response: Response): Promise<SoftNavEnvelope>
     }
     for (const patch of patches) {
         if (patch.kind === 'fill') {
+            // Replace everything between the opening comment sentinel and the id'd `<template>`.
             html = html.replace(
-                new RegExp(`(<abide-slot id="ab-p:${patch.id}"[^>]*>)[\\s\\S]*?(</abide-slot>)`),
+                new RegExp(`(<!--ab-p:${patch.id}-->)[\\s\\S]*?(<template id="ab-p:${patch.id}">)`),
                 `$1${patch.html}$2`,
             )
         } else if (patch.kind === 'append') {
-            // Insert before the list anchor's closing tag (append into `<abide-list id="ab-l:<id>">`).
-            html = html.replace(
-                new RegExp(`(<abide-list id="ab-l:${patch.id}"[^>]*>[\\s\\S]*?)(</abide-list>)`),
-                `$1${patch.html}$2`,
-            )
+            // Insert before the list's trailing `<template id="ab-l:<id>">` sentinel.
+            html = html.replace(new RegExp(`(<template id="ab-l:${patch.id}")`), `${patch.html}$1`)
         } else {
-            // `complete`: stamp the finished marker on the list anchor if not already present.
+            // `complete`: stamp the finished marker on the list sentinel if not already present.
             html = html.replace(
-                new RegExp(`(<abide-list id="ab-l:${patch.id}")((?![^>]*data-ab-done)[^>]*>)`),
+                new RegExp(`(<template id="ab-l:${patch.id}")((?![^>]*data-ab-done)[^>]*>)`),
                 `$1 data-ab-done$2`,
             )
         }

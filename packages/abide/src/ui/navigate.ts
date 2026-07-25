@@ -145,31 +145,52 @@ async function* readFrames(
 // Apply one streamed soft-nav patch frame in JS — the same DOM ops the first-load move-scripts run
 // (`documentPatch` in streamScope.ts), but from JS since a `fetch`ed body's inline scripts don't
 // auto-run. The server emits the op AS the frame `kind`: `fill` replaces a deferred `{#await}` slot's
-// contents (`#ab-p:<id>`), `append` adds one streamed `{#for await}` item to the list anchor
-// (`#ab-l:<id>`), `complete` marks a streamed list finished (`data-ab-done`, read by the `done()`
-// probe). Hydration later unwraps the slots. Returns true when the frame was a patch (so the consumer
+// pending fallback (bracketed by `<!--ab-p:<id>-->` … `<template id="ab-p:<id>">`), `append` adds one
+// streamed `{#for await}` item before the list's `<template id="ab-l:<id>">` sentinel, `complete` marks a
+// streamed list finished (`data-ab-done`, read by the `done()` probe). Hydration later drops the
+// sentinels. Returns true when the frame was a patch (so the consumer
 // loops can treat every non-shell/non-seed frame uniformly). A missing anchor is a no-op. Exported for
 // unit testing — the browser end-state is otherwise seed-masked (hydrate re-renders from the seed).
 export function applyPatchFrame(frame: Record<string, unknown>): boolean {
     const id = frame.id
     if (frame.kind === 'fill') {
         if (typeof id === 'number' && typeof frame.html === 'string') {
-            const slot = document.getElementById(`ab-p:${id}`)
-            if (slot !== null) {
+            const sentinel = document.getElementById(`ab-p:${id}`)
+            const parent = sentinel?.parentNode
+            if (sentinel != null && parent != null) {
+                // Clear the pending fallback — the run of nodes back to the opening `<!--ab-p:N-->`
+                // sentinel — then insert the patch in its place. A missing opening sentinel (impossible
+                // from the emitter) removes nothing rather than walking off into unrelated siblings.
+                const stale: ChildNode[] = []
+                let found = false
+                for (
+                    let node = sentinel.previousSibling;
+                    node !== null;
+                    node = node.previousSibling
+                ) {
+                    if (node.nodeType === 8 && (node as Comment).data === `ab-p:${id}`) {
+                        found = true
+                        break
+                    }
+                    stale.push(node as ChildNode)
+                }
+                if (found) for (const node of stale) parent.removeChild(node)
                 const template = document.createElement('template')
                 template.innerHTML = frame.html
-                slot.replaceChildren(template.content)
+                parent.insertBefore(template.content, sentinel)
             }
         }
         return true
     }
     if (frame.kind === 'append') {
         if (typeof id === 'number' && typeof frame.html === 'string') {
-            const list = document.getElementById(`ab-l:${id}`)
-            if (list !== null) {
+            // Insert BEFORE the list's trailing `<template>` sentinel — document order is item order.
+            const sentinel = document.getElementById(`ab-l:${id}`)
+            const parent = sentinel?.parentNode
+            if (sentinel != null && parent != null) {
                 const template = document.createElement('template')
                 template.innerHTML = frame.html
-                list.appendChild(template.content)
+                parent.insertBefore(template.content, sentinel)
             }
         }
         return true

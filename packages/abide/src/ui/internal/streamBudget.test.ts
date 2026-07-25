@@ -115,7 +115,7 @@ async function startStreamer(
 test('an abide RPC source ignores the budget — firing it does not cut the stream off', async () => {
     const src = manualSource()
     const { scope, fireBudget, shell, frames } = await startStreamer(true, src.source)
-    expect(shell).toContain('<abide-list')
+    expect(shell).toContain('<template id="ab-l:0"')
     expect(shell).toContain('data-ab-count="0"') // attachable → count attr present
 
     // Fire the budget IMMEDIATELY: an abide source never consults it, so the stream must still run.
@@ -145,7 +145,7 @@ test('an abide RPC source ignores the budget — firing it does not cut the stre
 test('a non-abide source is cut off when the budget fires (client re-iterates)', async () => {
     const src = manualSource()
     const { scope, fireBudget, shell, frames } = await startStreamer(false, src.source)
-    expect(shell).toContain('<abide-list')
+    expect(shell).toContain('<template id="ab-l:0"')
     expect(shell).not.toContain('data-ab-count') // non-attachable → no handoff markers
     expect(scope.streamHandles.length).toBe(0)
 

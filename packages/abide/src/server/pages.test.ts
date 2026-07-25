@@ -84,7 +84,7 @@ test('a fast {#await} block renders inline — no placeholder/patch (PR2 deadlin
     const body = await (await app.fetch('/')).text()
     // A read that settles within the macrotask deadline renders inline — byte-identical shape to before.
     expect(stripAnchors(body)).toContain('<b>INLINE</b>')
-    expect(body).not.toContain('abide-slot')
+    expect(body).not.toContain('ab-p:0')
     expect(body).not.toContain('data-ab-patch')
     expect(body).not.toContain('loading')
 
@@ -105,15 +105,16 @@ test('a slow {#await} block streams as an out-of-order patch (PR2)', async () =>
     })
 
     const body = await (await app.fetch('/')).text()
-    // The shell flushes the placeholder slot with the pending fallback...
-    expect(body).toContain('<abide-slot id="ab-p:0"')
+    // The shell flushes the sentinel-bracketed placeholder with the pending fallback...
+    expect(body).toContain('<!--ab-p:0-->')
+    expect(body).toContain('<template id="ab-p:0"></template>')
     expect(body).toContain('loading')
     // ...and the resolved value arrives LATER as an out-of-order <template> patch + move-script.
     expect(body).toContain('<template data-ab-patch="0">')
     expect(stripAnchors(body)).toContain('<b>PATCHED</b>')
     expect(body).toContain('$abidePatch(0)')
     // Ordering: the slot precedes its patch, and the value streamed (only inside the patch, not the shell).
-    expect(body.indexOf('<abide-slot id="ab-p:0"')).toBeLessThan(
+    expect(body.indexOf('<template id="ab-p:0"></template>')).toBeLessThan(
         body.indexOf('<template data-ab-patch="0">'),
     )
     expect(body.indexOf('PATCHED')).toBeGreaterThan(body.indexOf('<template data-ab-patch="0">'))
@@ -157,7 +158,7 @@ test('a slow {#await} error WITH {:catch} streams the catch branch as a patch (P
     const response = await app.fetch('/')
     expect(response.status).toBe(200) // shell already flushed — the error rides in as a patch, not a 500
     const body = await response.text()
-    expect(body).toContain('<abide-slot id="ab-p:0"') // placeholder in the shell
+    expect(body).toContain('<template id="ab-p:0"></template>') // placeholder in the shell
     expect(body).toContain('<template data-ab-patch="0">') // the {:catch} branch streamed as a patch
     expect(stripAnchors(body)).toContain('slow-kaboom')
 
@@ -199,8 +200,8 @@ test('a slow {#for await} streams items as append-patches then marks complete (P
     })
 
     const body = await (await app.fetch('/')).text()
-    // The shell flushes the empty list container, then each item streams as an append-patch...
-    expect(body).toContain('<abide-list id="ab-l:0"')
+    // The shell flushes the bare list sentinel, then each item streams as an append-patch...
+    expect(body).toContain('<template id="ab-l:0"></template>')
     expect(body).toContain('<template data-ab-append="0">')
     expect(body).toContain('$abideAppend(0)')
     expect(stripAnchors(body)).toContain('<span>a</span>')

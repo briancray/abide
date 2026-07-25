@@ -315,7 +315,7 @@ test('a cross-route nav keeps the shared layout nodes alive (not rebuilt)', asyn
     // The shared layouts are the SAME live nodes (pins survive) and it was a soft-nav (marker survives).
     await expect(page.locator('[data-testid="section-layout"]')).toHaveAttribute('data-pin', 'SEC')
     await expect(page.locator('aside.sidebar')).toHaveAttribute('data-pin', 'ROOT')
-    await expect(page.locator('abide-slot')).toHaveCount(0)
+    await expect(page.locator('template[id^="ab-p:"]')).toHaveCount(0)
     const kept = await page.evaluate(
         () => (window as unknown as { __kept?: boolean }).__kept === true,
     )

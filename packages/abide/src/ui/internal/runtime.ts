@@ -1003,15 +1003,20 @@ export interface AwaitBranches {
     finally: BlockFn | null
 }
 
-// Streaming SSR (PR3): if the first node after the block's `open` anchor is a streamed `<abide-slot>`
-// (its resolved-branch patch has landed and filled it — module-deferred hydration runs after every
-// patch, so on first load it always has), lift its children to sit directly between the anchors and
-// remove the wrapper. Leaves a non-streamed region untouched (no `<abide-slot>` → no-op).
+// Streaming SSR (PR3): if the first node after the block's `open` anchor is a streamed slot's opening
+// `<!--ab-p:N-->` sentinel (its resolved-branch patch has landed and replaced the fallback between the
+// sentinels — module-deferred hydration runs after every patch, so on first load it always has), drop
+// BOTH sentinels so the patched branch sits directly between the block anchors. The sentinels are a
+// comment + a `<template>` rather than a wrapper element because a wrapper inside a table section is
+// foster-parented out of it by the parser. Leaves a non-streamed region untouched (no sentinel → no-op).
 function unwrapStreamSlot(parent: Node, open: Node): void {
-    const slot = open.nextSibling
-    if (slot === null || slot.nodeType !== 1 || (slot as Element).tagName !== 'ABIDE-SLOT') return
-    while (slot.firstChild !== null) parent.insertBefore(slot.firstChild, slot)
-    parent.removeChild(slot)
+    const marker = open.nextSibling
+    if (marker === null || marker.nodeType !== 8) return
+    const id = (marker as Comment).data
+    if (!id.startsWith('ab-p:')) return
+    const sentinel = document.getElementById(id)
+    parent.removeChild(marker)
+    if (sentinel !== null) sentinel.remove()
 }
 
 export function awaitBlock(

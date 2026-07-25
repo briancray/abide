@@ -64,9 +64,9 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
     test('the RPC source is never invoked on the client; items render + an item onclick fires', async () => {
         const { html, seed } = await ssrStream(SRC, { complete: makeServerComplete() })
 
-        // The SSR painted an <abide-list> with a data-ab-count and the completed marker, and the seed
+        // The SSR painted the list sentinel with a data-ab-count and the completed marker, and the seed
         // carries the decoded transcript inline (mode A).
-        expect(html).toContain('<abide-list')
+        expect(html).toContain('<template id="ab-l:0"')
         expect(html).toContain('data-ab-count="3"')
         expect(html).toContain('data-ab-done')
         expect(seed.streams).toBeDefined()
@@ -286,8 +286,8 @@ describe("gating — a non-RPC {#for await} source keeps today's re-run behavior
                 })(),
         })
 
-        // Non-attachable: no <abide-list> when it drains inline, and no streams seed.
-        expect(html).not.toContain('<abide-list')
+        // Non-attachable: no list sentinel when it drains inline, and no streams seed.
+        expect(html).not.toContain('ab-l:')
         expect(seed.streams).toBeUndefined()
 
         let clientCalls = 0

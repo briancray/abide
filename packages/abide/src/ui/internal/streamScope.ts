@@ -3,7 +3,7 @@
 // The emitted server `render` calls `awaitStream(...)` for every STREAMING-form `{#await}` block. Each
 // read is raced against ONE per-render deadline (`createStreamScope`): a read that settles first
 // renders inline (byte-identical to the blocking path — warm/fast pages are unchanged); a read still
-// pending when the deadline passes is DEFERRED — the render emits a placeholder `<abide-slot>` now and
+// pending when the deadline passes is DEFERRED — the render emits a sentinel-bracketed placeholder now and
 // registers a subtree renderer, which the document stream (`drainPatches`) flushes later as an
 // out-of-order `<template>` + move-script patch. Blocking forms (`{await fn()}`, `{#await p then v}`)
 // never call this — they await inline as before.
@@ -99,7 +99,7 @@ async function settle(read: Promise<unknown>, config: AwaitStreamConfig): Promis
 }
 
 // The one entry the emitted streaming `{#await}` calls. Returns the HTML to splice at the block's
-// position — the resolved branch (fast) or an `<abide-slot>` fallback (deferred).
+// position — the resolved branch (fast) or a sentinel-bracketed fallback (deferred).
 export async function awaitStream(config: AwaitStreamConfig): Promise<string> {
     const read = Promise.resolve(config.read())
     const scope = getContext().stream
@@ -141,10 +141,15 @@ export async function awaitStream(config: AwaitStreamConfig): Promise<string> {
             }
         },
     })
-    // `display:contents` (inline, so no global stylesheet / head-byte change) makes the wrapper
-    // layout-transparent during the streaming window — its fallback/patched children render as if the
-    // wrapper were not there. Hydration unwraps it entirely (PR3, `runtime.unwrapStreamSlot`).
-    return `<abide-slot id="ab-p:${id}" style="display:contents">${await config.pending()}</abide-slot>`
+    // SENTINEL-BRACKETED, never wrapped in an element. A wrapper element emitted inside a table section
+    // (`<table>`/`<thead>`/`<tbody>`/`<tfoot>`/`<tr>`) is FOSTER-PARENTED by the HTML parser — relocated
+    // to just BEFORE the `<table>` — which stranded the placeholder outside the table and left every
+    // patch appending into an orphan. A comment and a `<template>` are the only two node kinds EVERY
+    // insertion mode inserts in place (`in table` defers `style`/`script`/`template` to the `in head`
+    // rules), so this pair brackets correctly in any parent. The `<template>` carries the id (the patch
+    // script's O(1) `getElementById` handle); the comment marks where the fallback region starts.
+    // Hydration removes both sentinels (PR3, `runtime.unwrapStreamSlot`).
+    return `<!--ab-p:${id}-->${await config.pending()}<template id="ab-p:${id}"></template>`
 }
 
 // Resolve a `{#for await}` source expression to an async iterator (awaiting a promise-of-iterable, and
@@ -208,7 +213,7 @@ function dropHandle(scope: StreamScope, handle: StreamHandleRecord): void {
 
 // The one entry the emitted streaming `{#for await}` calls. Drains the source up to the deadline INLINE
 // (a synchronous/fast stream stays byte-identical to the buffered path); if it is still yielding past
-// the deadline it returns an `<abide-list>` container with the items seen so far and registers a
+// the deadline it returns the items seen so far + a trailing `<template>` sentinel and registers a
 // STREAMER that appends each subsequent item as a patch, then marks the list COMPLETE iff the source
 // ends. The SSR budget is SOURCE-DERIVED (§6): an abide RPC source (`attachable`) is bounded by its own
 // bilateral RPC timeout — which already self-terminates the stream — so it gets NO global SSR cap; only
@@ -217,7 +222,7 @@ function dropHandle(scope: StreamScope, handle: StreamHandleRecord): void {
 // ATTACHABLE (known-RPC) source it ALSO captures the decoded item values
 // and registers a `StreamHandleRecord` (§5) so the client ADOPTS the transcript (mode A, completed) or
 // RESUMES it (mode B, open) on hydrate instead of re-invoking the RPC — the SSR paint is placeholder
-// only. A non-attachable source keeps today's markup byte-for-byte (no `<abide-list>` when it drains
+// only. A non-attachable source keeps today's markup byte-for-byte (no sentinel when it drains
 // inline; no `data-ab-count`; no handle) and the client re-iterates it.
 export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<string> {
     const { source, next } = await toIterator(config.source())
@@ -266,7 +271,7 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
         if (raced.step.done === true) {
             markIterableDone(source) // fully drained before the deadline.
             if (!attachable) return html // non-attachable → no container, byte-identical to today.
-            // Completed inline (mode A): wrap the paint in an `<abide-list>` the client can match, and seed
+            // Completed inline (mode A): tag the paint with the id'd sentinel the client can match, and seed
             // the whole decoded transcript so hydration re-mounts from `values` with zero network.
             const id = scope.nextId++
             const listId = `ab-l:${id}`
@@ -278,7 +283,7 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
                 count: values.length,
                 values,
             })
-            return `<abide-list id="${listId}" style="display:contents" data-ab-count="${values.length}" data-ab-done>${html}</abide-list>`
+            return `${html}<template id="${listId}" data-ab-count="${values.length}" data-ab-done></template>`
         }
         values.push(raced.step.value)
         html += await config.renderItem(raced.step.value, index++)
@@ -342,8 +347,12 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
             }
         },
     })
+    // The items are emitted BARE and the id'd `<template>` TRAILS them as the insertion point: each
+    // `append` patch inserts before the sentinel, so document order is item order at O(1) per patch (no
+    // container, so nothing can be foster-parented out of a table and a streamed `<tr>` lands as a real
+    // `<tbody>` child). Hydration clears the whole region — items and sentinel — between the block anchors.
     const countAttr = attachable ? ` data-ab-count="${startIndex}"` : ''
-    return `<abide-list id="${listId}" style="display:contents"${countAttr}>${html}</abide-list>`
+    return `${html}<template id="${listId}"${countAttr}></template>`
 }
 
 // One out-of-order patch: `fill` a `{#await}` slot, `append` a `{#for await}` item, or mark a streamed
@@ -356,14 +365,23 @@ export type Patch =
     | { op: 'complete'; id: number }
 
 // The idempotent move-scripts (defined once, re-run per id): fill a slot, append into a list, or flag a
-// list complete (so hydration CLAIMS its items instead of re-iterating).
+// list complete (so hydration CLAIMS its items instead of re-iterating). Both patches address a
+// `<template>` SENTINEL by id and insert BEFORE it — the sentinel is parse-legal in every parent (a
+// wrapper element would be foster-parented out of a table section), so the patched nodes always land at
+// the block's real position. `fill` additionally clears the pending fallback: the run of nodes between
+// the sentinel and its opening `<!--ab-p:N-->` comment. If that comment is missing (impossible from this
+// emitter — belt-and-braces so a bad walk can never delete a parent's unrelated children) it removes
+// NOTHING and still inserts, degrading to duplicate content rather than data loss.
 export function documentPatch(patch: Patch): string {
     if (patch.op === 'fill') {
         return (
             `<template data-ab-patch="${patch.id}">${patch.html}</template>` +
             `<script>window.$abidePatch=window.$abidePatch||function(n){` +
             `var t=document.querySelector('template[data-ab-patch="'+n+'"]'),s=document.getElementById('ab-p:'+n);` +
-            `if(t&&s){s.replaceChildren(t.content);t.remove();}` +
+            `if(!t||!s)return;var p=s.parentNode,d=[],x=s.previousSibling,f=0;` +
+            `while(x){if(x.nodeType===8&&x.data==='ab-p:'+n){f=1;break;}d.push(x);x=x.previousSibling;}` +
+            `if(f)for(var i=0;i<d.length;i++)p.removeChild(d[i]);` +
+            `p.insertBefore(t.content,s);t.remove();` +
             `};$abidePatch(${patch.id})</script>`
         )
     }
@@ -372,7 +390,7 @@ export function documentPatch(patch: Patch): string {
             `<template data-ab-append="${patch.id}">${patch.html}</template>` +
             `<script>window.$abideAppend=window.$abideAppend||function(n){` +
             `var t=document.querySelector('template[data-ab-append="'+n+'"]'),l=document.getElementById('ab-l:'+n);` +
-            `if(t&&l){l.appendChild(t.content);t.remove();}` +
+            `if(t&&l&&l.parentNode){l.parentNode.insertBefore(t.content,l);t.remove();}` +
             `};$abideAppend(${patch.id})</script>`
         )
     }

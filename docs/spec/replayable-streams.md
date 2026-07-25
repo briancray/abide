@@ -21,7 +21,7 @@ collapsing unrelated POSTs. Each is resolved below.
 Three concerns converge on one missing primitive:
 1. **Client re-run of a model stream.** A `{#for await tok of complete(prompt)}` runs the model on SSR,
    and today the client hydrate **re-runs the source** — `forBlock`'s await path calls `clearBetween`
-   to discard the entire streamed `<abide-list>` region, then `for await`s a *fresh* iterator from the
+   to discard the entire streamed list region, then `for await`s a *fresh* iterator from the
    start (`runtime.ts:1159,1168-1185`; the in-code comment states it explicitly). For an RPC/model
    stream that is a second model call (double-billed, re-generated). The client should **reuse** the
    streamed tokens, not re-run the source.
@@ -76,7 +76,9 @@ An implementer must know the starting point; the spec is honest about the gap.
   `streamScope.ts:134-149,162-236`), renders each item as an **HTML string**. It once applied one flat
   global budget `ABIDE_SSR_STREAM_BUDGET` to every source regardless of type; **step 5 made this
   source-derived** (§6) — an abide RPC source gets no cap, only a non-abide source is bounded by the
-  now-last-resort default (300 000 ms, `streamScope.ts:50-53`). It emits `<abide-list id="ab-l:N">` and sets `data-ab-done` on close — but
+  now-last-resort default (300 000 ms, `streamScope.ts:50-53`). It emits a trailing `<template id="ab-l:N">`
+  sentinel (an ELEMENT container is unrepresentable inside a table section — the parser foster-parents it
+  out; see `streaming-ssr-plan.md` *Sentinel placeholders*) and sets `data-ab-done` on close — but
   `data-ab-done` is **dead output**: no client file reads it, and the client always re-iterates.
 - **The `{#await}` claim path works** and is the precedent to mirror: `unwrapStreamSlot` + `claimAwait`
   adopt the server-resolved branch in place because the tail seed primed the read (`runtime.ts:857-903`).
@@ -443,8 +445,8 @@ StreamHandle = { listId: string; name: string; args: unknown; done: boolean; cou
 ```
 
 The streamer registration (`streamScope`) records `listId`, the flushed item `count`, `done`, and the
-source's `(name, args)` at drain time, and emits `data-ab-count="<count>"` on `<abide-list>` alongside
-`data-ab-done`. On hydrate the client iterates `streams`, finds `document.getElementById(listId)`, and
+source's `(name, args)` at drain time, and emits `data-ab-count="<count>"` on the `<template id="ab-l:N">`
+sentinel alongside `data-ab-done`. On hydrate the client iterates `streams`, finds `document.getElementById(listId)`, and
 chooses adopt-from-`values` (mode A) vs resume-replay-`?__abide_from=<count>` (mode B). The client keys the replay
 request off the recorded `(name, args)` — **never** by re-evaluating the source expression (which may
 reference server-only bindings).
@@ -468,7 +470,7 @@ timeout?: number }` (it already knows whether the head resolves to an RPC import
   with no network. An open stream's `resumeStreamSource` attempts the `?__abide_from=count` resume; if the fetch
   fails (offline, `4xx`, no body) the flushed **prefix stands** and the seeded slot closes — no
   `online()`-flip auto-retry. A later (now reactive) `fn.refresh()` re-runs the source from scratch.
-- **No hydrate reorder.** There is no `<abide-list>` interception. `bootstrap.replayStreams` warm-seeds
+- **No hydrate reorder.** There is no list-sentinel interception. `bootstrap.replayStreams` warm-seeds
   the RPC memo via `memo.seedStream` **before** hydrate (mode-A `values` transcript / mode-B
   `resumeStreamSource`); the `{#for await}` mount then discards the server-painted placeholder region and
   re-reads the warm memo — no separate DOM handoff, no source re-invoke.

@@ -15,12 +15,15 @@ const BENCHES = [
 ]
 
 test('server bench table fills live from the streamed primitives', async ({ page }) => {
-    // The RAW first-load HTML STREAMED the rows as an `<abide-list>` with append patches — not one buffered
-    // blob — and carries none of the stray fill-patches a scope leak would emit into the page stream.
+    // The RAW first-load HTML STREAMED the rows against a `<template>` list sentinel with append patches —
+    // not one buffered blob — and carries none of the stray fill-patches a scope leak would emit into the
+    // page stream. The sentinel sits INSIDE the `<tbody>`: it must be a `<template>` (or a comment) because
+    // the HTML parser FOSTER-PARENTS any other element out of a table section, relocating it above the
+    // `<table>` — which is what stranded every append patch outside the table (half-formatted rows above it).
     const raw = await (await page.request.get('/platform/bench/server')).text()
-    expect(raw).toContain('<abide-list')
     expect(raw).toContain('data-ab-append')
     expect(raw).not.toContain('ab-patch')
+    expect(raw).toMatch(/<tbody>[\s\S]*<template id="ab-l:0"[^>]*><\/template>[\s\S]*<\/tbody>/)
 
     await page.goto('/platform/bench/server')
 
@@ -36,6 +39,16 @@ test('server bench table fills live from the streamed primitives', async ({ page
     const timing = /\d+(\.\d+)?\s*(ns|µs|ms)/
     const matchRow = rows.filter({ hasText: 'matchRoute' })
     await expect(matchRow).toContainText(timing)
+
+    // REGRESSION LOCK: every streamed row is a real `<tbody>` child, and no row was foster-parented out
+    // of the table. A relocated container used to leave the browser-parsed rows as an anonymous table box
+    // ABOVE the `<table>` — visibly half-formatted, and never cleaned up because hydration only clears
+    // between the block's anchors (which the relocated nodes had escaped).
+    await expect(
+        page.locator('table[data-testid="bench-table"] > tbody > tr[data-testid="bench-row"]'),
+    ).toHaveCount(BENCHES.length)
+    // No list sentinel survives hydration either (it is cleared with the rest of the server region).
+    await expect(page.locator('template[id^="ab-l:"]')).toHaveCount(0)
 })
 
 test('re-running streams a fresh set of rows', async ({ page }) => {
