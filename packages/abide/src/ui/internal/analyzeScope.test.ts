@@ -581,14 +581,12 @@ describe('rewriteCellRefs memo auto-call', () => {
         expect(rewriteCellRefs('d + 1', MEMOS('d'))).toBe('d() + 1')
     })
 
-    test('the memo SURFACE is left alone', () => {
-        expect(rewriteCellRefs('d.peek()', MEMOS('d'))).toBe('d.peek()')
-        expect(rewriteCellRefs('d.refresh()', MEMOS('d'))).toBe('d.refresh()')
-        expect(rewriteCellRefs('d?.peek()', MEMOS('d'))).toBe('d?.peek()')
-    })
-
-    test('an explicit call is left alone, so `{d().field}` reads the value', () => {
-        expect(rewriteCellRefs('d().field', MEMOS('d'))).toBe('d().field')
+    // A memo reads exactly like a cell, INCLUDING before a member access — `{d.length}` is the VALUE's
+    // length, not the memo object's arity. (Getting this wrong silently rendered `1` for every
+    // `{transcript.length}` in the docs app.) The memo's own surface is not reachable through the binding.
+    test('a member access reads the VALUE, as it does for a cell', () => {
+        expect(rewriteCellRefs('d.length', MEMOS('d'))).toBe('d().length')
+        expect(rewriteCellRefs('d?.length', MEMOS('d'))).toBe('d()?.length')
     })
 
     test('a memo is read-only: a write form is left verbatim (a const assignment throws)', () => {

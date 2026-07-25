@@ -51,12 +51,13 @@ const HEADER =
     `interface __AbideState<__T> { (): __T; set(value: __T): void; peek(): __T; }\n` +
     `type __AbideWiden<__T> = [__T] extends [never] ? any : __T extends readonly never[] ? any[] : [__T] extends [null | undefined] ? any : __T;\n` +
     `declare function __abideUnwrap<__T>(cell: __AbideState<__T>): __AbideWiden<__T>;\n` +
-    // An auto-called MEMO binding (ADR 0024 §5) is BOTH its value and its own surface, because that is
-    // exactly what the rewrite makes true: a bare `d` becomes `d()`, while `d.peek()` / `d.refresh()` /
-    // `d()` are left verbatim. Modelling it as the intersection lets `{d * 2}` and `{d.refresh()}` both
-    // check. `state()` is the writable projection, so it hands back a plain cell.
-    `interface __AbideMemo<__T> { (): __T; peek(): __T | undefined; pending(): boolean; refreshing(): boolean; error(): unknown; refresh(): void; invalidate(): void; publish(args: void, next: __T): void; state(): __AbideState<__T>; watch(args: void, handler: (value: __T | undefined) => void): () => void; }\n` +
-    `declare function __abideUnwrap<__T>(memo: __AbideMemo<__T>): __AbideWiden<__T> & __AbideMemo<__T>;\n` +
+    // An auto-called MEMO binding (ADR 0024 §5) reads as its VALUE, exactly as a cell does — the rewrite
+    // turns `d` into `d()` everywhere, including before a member access, so `d.length` is the value's
+    // length. Unwrapping it here is what makes the check agree with the emit; a probe reached through the
+    // binding (`d.peek()`) is not reachable at runtime either, so it fails loudly on both sides. The extra
+    // members below only need to be enough to tell a memo from a `State` (which has `set`, not `invalidate`).
+    `interface __AbideMemo<__T> { (): __T; peek(): __T | undefined; invalidate(): void; }\n` +
+    `declare function __abideUnwrap<__T>(memo: __AbideMemo<__T>): __AbideWiden<__T>;\n` +
     `declare function __abideUnwrap<__T>(value: __T): __T;\n` +
     `declare function __ref(value: unknown): void;\n` +
     `declare function __entries<__T>(list: Iterable<__T> | ArrayLike<__T>): IterableIterator<[number, __T]>;\n` +

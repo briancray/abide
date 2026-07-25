@@ -938,15 +938,17 @@ export function rewriteCellRefs(code: string, scope: CellScope): string {
                 continue
             }
 
-            // A MEMO is read-only and carries its own surface, so only the bare reference auto-calls:
-            // `m.peek()` / `m.refresh()` / `m.state()` and an explicit `m(...)` are left verbatim, as is any
-            // write form (`const m = memo(…)` makes an assignment a loud TypeError on its own).
+            // A MEMO reads exactly like a cell — `{d}` is the value, `{d.length}` is the VALUE's property
+            // (`d().length`). The memo's own surface is therefore not reachable through the binding; that is
+            // the price of auto-call and the same price a cell already pays, and it costs nothing in
+            // practice because probes belong to RPC/socket callables, which are IMPORTS, not memo-bound
+            // locals. Only writes differ: a memo is read-only, so a write form is left verbatim and the
+            // `const` binding makes the assignment a loud TypeError on its own.
             if (memoNames.has(name)) {
                 if (
-                    nextKind === K.DotToken ||
-                    nextKind === K.QuestionDotToken ||
-                    nextKind === K.OpenParenToken ||
                     nextKind === K.EqualsToken ||
+                    nextKind === K.PlusPlusToken ||
+                    nextKind === K.MinusMinusToken ||
                     (nextKind !== undefined && COMPOUND_OP.has(nextKind))
                 ) {
                     i++
