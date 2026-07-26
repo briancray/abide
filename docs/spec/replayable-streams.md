@@ -78,11 +78,12 @@ An implementer must know the starting point; the spec is honest about the gap.
   source-derived** (§6) — an abide RPC source gets no cap, only a non-abide source is bounded by the
   now-last-resort default (300 000 ms, `streamScope.ts:50-53`). It emits a trailing `<template id="ab-l:N">`
   sentinel (an ELEMENT container is unrepresentable inside a table section — the parser foster-parents it
-  out; see `streaming-ssr-plan.md` *Sentinel placeholders*) and sets `data-ab-done` on close — but
-  `data-ab-done` is **dead output**: no client file reads it, and the client always re-iterates.
-- **The `{#await}` claim path works** and is the precedent to mirror: `unwrapStreamSlot` + `claimAwait`
-  adopt the server-resolved branch in place because the tail seed primed the read (`runtime.ts:857-903`).
-  `{#for await}` has no equivalent and actively destroys its server region first.
+  out; see `streaming-ssr-plan.md` *Sentinel placeholders*) and sets `data-ab-done` on close. The sentinel
+  is now READ on hydrate: `runtime.claimStreamedRegion` stops the claim at it and removes it (see the
+  same-node claim note below).
+- **The `{#await}` claim path works** and was the precedent to mirror: `unwrapStreamSlot` + `claimAwait`
+  adopt the server-resolved branch in place because the tail seed primed the read. `{#for await}` now
+  mirrors it for **mode A** (see the same-node claim note below); mode B and a cold source still clear.
 - **The hydration seed is value-only.** `SeedRead = { name, args, value }` (`pages.ts:170-174`);
   `collectSeed` walks resolved read-RPC slots via `rpc.snapshot()` (`pages.ts:203-220`). A `{#for await}`
   produces **no seed entry** — no slot handle, no chunk transcript.
@@ -472,8 +473,27 @@ timeout?: number }` (it already knows whether the head resolves to an RPC import
   `online()`-flip auto-retry. A later (now reactive) `fn.refresh()` re-runs the source from scratch.
 - **No hydrate reorder.** There is no list-sentinel interception. `bootstrap.replayStreams` warm-seeds
   the RPC memo via `memo.seedStream` **before** hydrate (mode-A `values` transcript / mode-B
-  `resumeStreamSource`); the `{#for await}` mount then discards the server-painted placeholder region and
-  re-reads the warm memo — no separate DOM handoff, no source re-invoke.
+  `resumeStreamSource`); the `{#for await}` mount then re-reads the warm memo — no separate DOM handoff,
+  no source re-invoke.
+- **SAME-NODE CLAIM (mode A).** The mount no longer discards the server-painted region: it CLAIMS the
+  painted items in place, so their nodes survive hydration and the largest region on a streaming page is
+  not re-painted. Binding item *i* needs its value SYNCHRONOUSLY, which the Promise-read model does not
+  give — closed by three pieces: a warm stream read carries a settled hint (`markSettled`, as the settled-
+  value path does), the cursor is tagged with its transcript (`shared/internal/streamTranscript.ts`, as
+  `tagStreamEncoding` does), and — the actual bug — **`startStream` now pushes a fully-known ARRAY source
+  synchronously** instead of draining it at one chunk per microtask, which had left the transcript empty
+  for the entire claim tick. `claimStreamedRegion` brackets each item with the same `<!--for-->` markers
+  the sync `{#for}` claim uses, stops at (and removes) the sentinel so a mid-stream cut claims its prefix,
+  and the first drain skips the claimed count — exact, since transcript indices are append-only-stable.
+  **Mode B claims too — and it is the case that matters**, since `forAwaitStream` races a 4 ms deadline, so
+  mode A only ever covers a stream that finished inside it. `seedStream` takes a `StreamSeed`
+  `{ prefix, rest }`: the flushed prefix is pushed synchronously and `resumeStreamSource` yields only the
+  tail. An evicted transcript (`x-abide-stream-resume: fresh`) can no longer be yielded on top of a prefix
+  that is already installed (and possibly already claimed onto the DOM), so it calls `onFresh` →
+  `invalidate` → a clean clear-and-restream. The claim is
+  FIRST-RUN only — a later `refresh()` is a genuine clear-and-restream — and it runs inside the effect's
+  first run off the source that run already read, since reading separately re-invokes a cold non-memo
+  source.
 
 ### 6. The SSR stream budget is source-derived, not a global constant — ✅ BUILT (step 5)
 The bound past which SSR stops waiting on a stream is the **source's own deadline**. Using the emit-time

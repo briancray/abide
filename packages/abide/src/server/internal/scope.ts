@@ -53,6 +53,13 @@ export interface RequestScope {
     // the per-request scope object — which every ambient accessor reads — keeps one hidden class.
     identityCleared?: boolean
     identityStateless?: boolean
+    // `identityDirty` marks a login (`identity.set()`), which must ALWAYS write the cookie regardless
+    // of how much of the incoming one's lifetime is left. `identityExpiresAt` is the incoming cookie's
+    // `exp` (undefined when there was no readable cookie); together they let the router skip the
+    // AES-GCM re-seal on the overwhelming majority of responses, where a live cookie already says the
+    // same thing. Always present on a router-built scope so the shape stays stable.
+    identityDirty?: boolean
+    identityExpiresAt?: number | undefined
     bag: Record<string, unknown>
     route: RouteInfo
     server?: Bun.Server<undefined>
@@ -87,7 +94,7 @@ function storage(): AsyncLocalStorage<RequestScope> | undefined {
 
 export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T | Promise<T> {
     // Share the exact same Map with the M1 cache context so getContext().slots === scope.slots.
-    const context: MemoContext = { slots: scope.slots, states: [] }
+    const context: MemoContext = { slots: scope.slots, states: {} }
     const store = storage()
     const run = (): T | Promise<T> =>
         store === undefined

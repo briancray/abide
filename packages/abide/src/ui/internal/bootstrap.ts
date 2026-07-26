@@ -76,17 +76,24 @@ function replayReads(seed: HydrationSeed, imports: Record<string, unknown>): voi
     }
 }
 
-// Build the mode-B (OPEN handoff) source for `seedStream`: replay the flushed prefix, then RESUME the tail
-// over `GET …?__abide_from=<count>` (re-encoded in the handler's original encoding, decoded by content-type). If
-// the server transcript was evicted the endpoint answers `x-abide-stream-resume: fresh` — a full run from 0
-// that REPLACES the prefix. A failed/absent resume (offline, 4xx, no body) leaves the prefix standing and
-// the slot closes; a later `refresh()` (now reactive) re-runs from scratch.
+// Build the mode-B (OPEN handoff) TAIL for `seedStream`: RESUME over `GET …?__abide_from=<count>`
+// (re-encoded in the handler's original encoding, decoded by content-type). The flushed prefix is NOT
+// yielded here — it is handed to `seedStream` as `StreamSeed.prefix` and pushed synchronously, which is
+// what lets attach-hydration claim the server's painted items in the same tick.
+//
+// If the server transcript was evicted the endpoint answers `x-abide-stream-resume: fresh` — a full run
+// from 0 that REPLACES the prefix. The prefix is already in the transcript by then (and, worse, may
+// already have been CLAIMED onto the server's DOM), so this cannot simply yield the fresh run on top:
+// it calls `onFresh` and stops. That drops the slot, which re-runs the block's effect — a clean
+// clear-and-restream, i.e. exactly today's behaviour, in the rare eviction case only.
+// A failed/absent resume (offline, 4xx, no body) leaves the prefix standing and the slot closes; a later
+// `refresh()` (now reactive) re-runs from scratch.
 export async function* resumeStreamSource(
     base: string,
     name: string,
     args: unknown,
     count: number,
-    prefix: readonly unknown[],
+    onFresh: () => void,
 ): AsyncGenerator<unknown> {
     const argsQuery =
         args !== undefined
@@ -98,15 +105,15 @@ export async function* resumeStreamSource(
             `${base}/__abide/rpc/${name}?${RPC_QUERY_PARAMS.from}=${count}${argsQuery}`,
         )
     } catch {
-        yield* prefix
+        return // prefix stands, slot closes
+    }
+    if (!response.ok || response.body === null) return
+    // `fresh` = the retained transcript was gone, so this response is a full run from 0. The prefix it
+    // replaces is already installed, so hand the whole slot back for a re-run rather than appending.
+    if (response.headers.get('x-abide-stream-resume') === 'fresh') {
+        onFresh()
         return
     }
-    if (!response.ok || response.body === null) {
-        yield* prefix
-        return
-    }
-    // `fresh` = the retained transcript was gone, so this response is a full run from 0 → drop the prefix.
-    if (response.headers.get('x-abide-stream-resume') !== 'fresh') yield* prefix
     yield* decodeStreamResponse(response)
 }
 
@@ -122,16 +129,25 @@ function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, ba
         if (handle === null || typeof handle !== 'object') continue
         if (handle.name === null || !Array.isArray(handle.values)) continue
         const proxy = imports[handle.name] as
-            | { seedStream?: (args: unknown, source: unknown) => void }
+            | {
+                  seedStream?: (args: unknown, source: unknown) => void
+                  invalidate?: (args: unknown) => void
+              }
             | undefined
         if (proxy === undefined || typeof proxy.seedStream !== 'function') continue
         if (handle.done === true) {
             proxy.seedStream(handle.args, handle.values)
         } else {
-            proxy.seedStream(
-                handle.args,
-                resumeStreamSource(base, handle.name, handle.args, handle.count, handle.values),
-            )
+            // Mode B: the flushed prefix is pushed SYNCHRONOUSLY (so the region can be claimed) and the
+            // resume supplies only the tail. An evicted transcript (`fresh`) invalidates the slot instead,
+            // dropping the claimed region for a clean re-stream — the prefix it would replace is already in.
+            const args = handle.args
+            proxy.seedStream(args, {
+                prefix: handle.values,
+                rest: resumeStreamSource(base, handle.name, args, handle.count, () => {
+                    proxy.invalidate?.(args)
+                }),
+            })
         }
     }
 }

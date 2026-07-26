@@ -17,6 +17,7 @@
 import type { ScopeAnalysis } from './analyzeScope.ts'
 import { type CellScope, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeScope.ts'
 import type { AttributeNode, Root, TemplateNode } from './ast.ts'
+import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -86,6 +87,8 @@ export interface SlotMeta {
     iterable?: string // for iterable (rewritten)
     key?: string | null // for key (rewritten)
     params?: string // component params
+    siteId?: number // component: its stable per-module site id (see `WalkContext.nextSiteId`)
+    hasComponent?: boolean // for: does the body invoke a component? (needs a per-item state factory)
 }
 
 export interface BranchPlan {
@@ -128,6 +131,7 @@ export type ServerChunk =
           attrs: AttrPlan[]
           children: ServerChunk[]
           hasChildren: boolean
+          siteId: number
       }
     | { kind: 'if'; branches: { expr: string | null; children: ServerChunk[] }[] }
     | {
@@ -138,6 +142,7 @@ export type ServerChunk =
           iterable: string
           children: ServerChunk[]
           catch: { param: string | null; children: ServerChunk[] } | null
+          hasComponent: boolean
       }
     | {
           kind: 'awaitBlock'
@@ -240,6 +245,14 @@ interface WalkContext {
     cellScope: CellScope
     declared: Set<string>
     scopeAttr: string | null
+    // Every component name reachable in this template — inline `{#component}` defs at any depth plus the
+    // locals of imported `.abide` components. Used to reject the call form `{Name(…)}` (see `rejectComponentCall`).
+    componentNames: Set<string>
+    // Monotonic per-MODULE counter handing each `<Component/>` invocation a STABLE site id. Mutated
+    // through the shared ctx object so the whole recursive walk draws from one sequence. Both emitters
+    // read the id off the same plan, so server and client name a component instance identically —
+    // which is the point: seed buckets keyed by site are immune to mount-ORDER divergence.
+    nextSiteId: number
 }
 
 interface LevelResult {
@@ -247,11 +260,75 @@ interface LevelResult {
     slots: DynamicSlot[]
     server: ServerChunk[]
     elementTags: ElementTag[]
+    // Does this level (at ANY depth) invoke a component? A `{#for}` body that does needs its per-item
+    // scope to carry an item-scoped state factory, so components inside the loop get distinct seed
+    // buckets per iteration. Loops that don't are the common case and skip the per-item allocation.
+    hasComponent: boolean
 }
 
 function rewriteExpr(ctx: WalkContext, expr: string): string {
     const cellRewritten = rewriteCellRefs(expr, ctx.cellScope)
     return rewriteFreeIdentifiers(cellRewritten, ctx.declared, '$scope')
+}
+
+// Collect every component name declared or imported in this template, at any nesting depth. A nested
+// `{#component}` inside `<Foo>…</Foo>` is a render-prop for Foo but is still defined at the caller's level,
+// so a flat set over the whole tree is the right granularity.
+function collectComponentNames(nodes: TemplateNode[], into: Set<string>): void {
+    for (const node of nodes) {
+        switch (node.type) {
+            case 'ComponentBlock':
+                into.add(node.name)
+                collectComponentNames(node.children, into)
+                break
+            case 'Element':
+            case 'Component':
+                collectComponentNames(node.children, into)
+                break
+            case 'IfBlock':
+                for (const branch of node.branches) collectComponentNames(branch.children, into)
+                break
+            case 'ForBlock':
+                collectComponentNames(node.children, into)
+                if (node.catch !== null) collectComponentNames(node.catch.children, into)
+                break
+            case 'AwaitBlock':
+                collectComponentNames(node.pending, into)
+                if (node.then !== null) collectComponentNames(node.then.children, into)
+                if (node.catch !== null) collectComponentNames(node.catch.children, into)
+                if (node.finally !== null) collectComponentNames(node.finally.children, into)
+                break
+            case 'SwitchBlock':
+                collectComponentNames(node.leading, into)
+                for (const arm of node.cases) collectComponentNames(arm.children, into)
+                break
+            case 'TryBlock':
+                collectComponentNames(node.children, into)
+                if (node.catch !== null) collectComponentNames(node.catch.children, into)
+                if (node.finally !== null) collectComponentNames(node.finally.children, into)
+                break
+        }
+    }
+}
+
+// A component is invoked as a TAG (`<Name/>`) — a component slot with its own paired `<!--[-->…<!--]-->`
+// anchors on both emitters. The call form `{Name(…)}` used to render the same subtree at a scalar LEAF
+// position, which forced the server to pick its anchor shape at render time and the hydrate walk to peek
+// for it. That form is gone; reject it here, where the component name is known, so the author gets the
+// fix rather than a stray `[object Object]` (the runtime guards in `serverRuntime.renderLeaf` /
+// `runtime.interpolate` catch only the case this cannot see — a component arriving through props).
+function rejectComponentCall(ctx: WalkContext, expression: string): void {
+    for (const name of ctx.componentNames) {
+        if (!expression.includes(name)) continue
+        // Not preceded by `.`/word char, so `obj.Name(` and `MyName(` don't false-positive. A component
+        // name inside a STRING literal in the expression still would — accepted: it is vanishingly rare
+        // next to the desync the call form causes, and the message names the fix either way.
+        if (!new RegExp(`(^|[^.\\w$])${name}\\s*\\(`).test(expression)) continue
+        throw new Error(
+            `{${name}(…)} is not a valid interpolation — an interpolation renders text. ` +
+                `Invoke the component as a tag instead: <${name} …/>.`,
+        )
+    }
 }
 
 // One piece of a quoted attribute value: a literal run or a `{expr}` interpolation.
@@ -431,6 +508,15 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
     const server: ServerChunk[] = []
     const elementTags: ElementTag[] = []
     let childIndex = 0
+    // Set when this level, or any level nested inside it, invokes a component (see `LevelResult`).
+    let hasComponent = false
+    // Every nested walk goes through here so `hasComponent` propagates UP from any depth — a component
+    // inside an `{#if}` inside a `{#for}` body still marks the loop.
+    const subLevel = (children: TemplateNode[]): LevelResult => {
+        const result = walkLevel(ctx, children)
+        if (result.hasComponent) hasComponent = true
+        return result
+    }
     // Whether the position at `childIndex - 1` is a still-"open" static Text node that a subsequent
     // Text emission would MERGE into. The HTML parser coalesces adjacent character data, so two static
     // text runs separated only by a zero-DOM node (a `{#component}` definition, a `<script>`, or an empty
@@ -448,12 +534,23 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
         childIndex++
     }
 
+    // `{html(...)}` injects arbitrary markup, so the claim cannot re-derive its extent — it reads it from
+    // the anchors the server brackets the region with (`serverRuntime.renderHtml`). Two child positions,
+    // open + close, exactly like a block: the skeleton and the server DOM must stay structurally identical
+    // or the cursor walk's index accounting drifts from the real parse. No `prefixLen` — raw markup has no
+    // single text-split point (`runtime.htmlBlock` never had one).
+    const pushHtmlSlot = (expr: string): void => {
+        skeleton += `<!--${HTML_ANCHOR.open}--><!--${HTML_ANCHOR.close}-->`
+        slots.push({ kind: 'html', path: [childIndex + 1], expr, meta: {} })
+        childIndex += 2
+    }
+
     // The component's single default-children slot — emitted by both `{children()}` and `<slot>`. A
     // zero-prop, no-body COMPONENT invocation of a `children` component (resolved off `$scope.children`),
     // reusing the component emit + `$rt.component` runtime path (paired anchors + claimBlock hydration).
     const pushChildrenSlot = (): void => {
         skeleton += '<!--[--><!--]-->'
-        const emptyBody = walkLevel(ctx, [])
+        const emptyBody = subLevel([])
         slots.push({
             kind: 'component',
             path: [childIndex + 1],
@@ -471,6 +568,9 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             attrs: [],
             children: [],
             hasChildren: false,
+            // No site id: `children` is the layout-composition outlet, not a `.abide` adapter — every
+            // composed level records into the ROOT bucket (see compose.childComponent / pages.renderLevel).
+            siteId: -1,
         })
         childIndex += 2
     }
@@ -510,6 +610,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                     pushChildrenSlot()
                     break
                 }
+                rejectComponentCall(ctx, node.expression)
                 const expr = rewriteExpr(ctx, node.expression)
                 pushLeaf('interpolation', expr)
                 server.push({ kind: 'interp', expr })
@@ -517,7 +618,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             }
             case 'Html': {
                 const expr = rewriteExpr(ctx, node.expression)
-                pushLeaf('html', expr)
+                pushHtmlSlot(expr)
                 server.push({ kind: 'html', expr })
                 break
             }
@@ -560,7 +661,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                 // Dynamic iff it has a non-static attr/directive of its own or any dynamic descendant slot.
                 let isDynamic = attrPlans.some((ap) => ap.kind !== 'static')
                 if (!node.void) {
-                    const sub = walkLevel(ctx, node.children)
+                    const sub = subLevel(node.children)
                     skeleton += sub.skeleton
                     for (const s of sub.slots) slots.push({ ...s, path: [childIndex, ...s.path] })
                     for (const et of sub.elementTags)
@@ -593,7 +694,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                 const nestedDefs = node.children.filter((n) => n.type === 'ComponentBlock')
                 const bodyChildren = node.children.filter((n) => n.type !== 'ComponentBlock')
                 for (const def of nestedDefs) {
-                    const defSub = walkLevel(ctx, def.children)
+                    const defSub = subLevel(def.children)
                     slots.push({
                         kind: 'componentDef',
                         path: [],
@@ -612,8 +713,10 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                         expr: rewriteExpr(ctx, def.name),
                     })
                 }
-                const sub = walkLevel(ctx, bodyChildren)
+                const sub = subLevel(bodyChildren)
                 const hasChildren = bodyChildren.some((n) => n.type !== 'Script')
+                const siteId = ctx.nextSiteId++
+                hasComponent = true
                 slots.push({
                     kind: 'component',
                     path: [childIndex + 1],
@@ -623,6 +726,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                         attrs: attrPlans,
                         body: toClientPlan(sub),
                         hasChildren,
+                        siteId,
                     },
                 })
                 server.push({
@@ -631,6 +735,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                     attrs: attrPlans,
                     children: sub.server,
                     hasChildren,
+                    siteId,
                 })
                 childIndex += 2
                 break
@@ -638,7 +743,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             case 'IfBlock': {
                 skeleton += '<!--[--><!--]-->'
                 const branches = node.branches.map((b) => {
-                    const sub = walkLevel(ctx, b.children)
+                    const sub = subLevel(b.children)
                     return {
                         expr: b.condition === null ? null : rewriteExpr(ctx, b.condition),
                         sub,
@@ -664,9 +769,9 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             }
             case 'ForBlock': {
                 skeleton += '<!--[--><!--]-->'
-                const bodySub = walkLevel(ctx, node.children)
+                const bodySub = subLevel(node.children)
                 const catchNode = node.catch
-                const catchSub = catchNode ? walkLevel(ctx, catchNode.children) : null
+                const catchSub = catchNode ? subLevel(catchNode.children) : null
                 const iterable = rewriteExpr(ctx, node.iterable)
                 const key = node.key === null ? null : rewriteExpr(ctx, node.key)
                 slots.push({
@@ -684,6 +789,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                             catchNode && catchSub
                                 ? { param: catchNode.param, plan: toClientPlan(catchSub) }
                                 : null,
+                        hasComponent: bodySub.hasComponent,
                     },
                 })
                 server.push({
@@ -697,6 +803,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
                         catchNode && catchSub
                             ? { param: catchNode.param, children: catchSub.server }
                             : null,
+                    hasComponent: bodySub.hasComponent,
                 })
                 childIndex += 2
                 break
@@ -704,12 +811,12 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             case 'AwaitBlock': {
                 skeleton += '<!--[--><!--]-->'
                 const expr = rewriteExpr(ctx, node.expression)
-                const pendingSub = walkLevel(ctx, node.pending)
+                const pendingSub = subLevel(node.pending)
                 const thenNode = node.then
-                const thenSub = thenNode ? walkLevel(ctx, thenNode.children) : null
+                const thenSub = thenNode ? subLevel(thenNode.children) : null
                 const catchNode = node.catch
-                const catchSub = catchNode ? walkLevel(ctx, catchNode.children) : null
-                const finallySub = node.finally ? walkLevel(ctx, node.finally.children) : null
+                const catchSub = catchNode ? subLevel(catchNode.children) : null
+                const finallySub = node.finally ? subLevel(node.finally.children) : null
                 slots.push({
                     kind: 'awaitBlock',
                     path: [childIndex + 1],
@@ -750,9 +857,9 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             case 'SwitchBlock': {
                 skeleton += '<!--[--><!--]-->'
                 const discriminant = rewriteExpr(ctx, node.discriminant)
-                const leadingSub = walkLevel(ctx, node.leading)
+                const leadingSub = subLevel(node.leading)
                 const cases = node.cases.map((c) => {
-                    const sub = walkLevel(ctx, c.children)
+                    const sub = subLevel(c.children)
                     return { expr: c.test === null ? null : rewriteExpr(ctx, c.test), sub }
                 })
                 slots.push({
@@ -775,10 +882,10 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             }
             case 'TryBlock': {
                 skeleton += '<!--[--><!--]-->'
-                const bodySub = walkLevel(ctx, node.children)
+                const bodySub = subLevel(node.children)
                 const catchNode = node.catch
-                const catchSub = catchNode ? walkLevel(ctx, catchNode.children) : null
-                const finallySub = node.finally ? walkLevel(ctx, node.finally.children) : null
+                const catchSub = catchNode ? subLevel(catchNode.children) : null
+                const finallySub = node.finally ? subLevel(node.finally.children) : null
                 slots.push({
                     kind: 'try',
                     path: [childIndex + 1],
@@ -806,7 +913,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
             }
             case 'ComponentBlock': {
                 // Component definitions emit no DOM at their site; they register a builder callable on the scope.
-                const sub = walkLevel(ctx, node.children)
+                const sub = subLevel(node.children)
                 slots.push({
                     kind: 'componentDef',
                     path: [],
@@ -839,7 +946,7 @@ function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
         }
     }
 
-    return { skeleton, slots, server, elementTags }
+    return { skeleton, slots, server, elementTags, hasComponent }
 }
 
 function attrKindToSlot(kind: 'expr' | 'class' | 'style' | 'bind'): SlotKind {
@@ -855,10 +962,15 @@ export function buildPlan(root: Root, analysis: ScopeAnalysis): TemplatePlan {
     const styleNode = root.style
     const scopeAttr = styleNode ? `data-ab-${hashSource(styleNode.content)}` : null
     const scopedCss = styleNode && scopeAttr ? scopeStyles(styleNode.content, scopeAttr) : null
+    const componentNames = new Set<string>()
+    for (const entry of analysis.componentImports) componentNames.add(entry.local)
+    collectComponentNames(root.children, componentNames)
     const ctx: WalkContext = {
         cellScope: analysis.cellScope,
         declared: analysis.declared,
         scopeAttr,
+        componentNames,
+        nextSiteId: 0,
     }
     const level = walkLevel(ctx, root.children)
     return {

@@ -181,6 +181,7 @@ function genComponent(
     attrs: AttrPlan[],
     children: ServerChunk[],
     hasChildren: boolean,
+    siteId: number,
 ): string {
     let out = '  {\n    const $props = {};\n'
     for (const attr of attrs) {
@@ -211,7 +212,9 @@ function genComponent(
     if (hasChildren)
         out += `    const $children = async () => new $rt.Raw(await ${bodyExpr(analysis, children)}($scope));\n`
     else out += `    const $children = async () => new $rt.Raw("");\n`
-    out += `    const $r = await $c($props, $children, $scope);\n`
+    // 4th arg = the STABLE site id (templatePlan): the adapter opens its seed bucket by SITE, not by
+    // mount order, so a component's bucket can't shift when an earlier sibling mounts asynchronously.
+    out += `    const $r = await $c($props, $children, $scope, ${siteId});\n`
     out += `    $out += $r instanceof $rt.Raw ? $r.value : String($r ?? "");\n`
     out += '  }\n'
     return out
@@ -240,12 +243,12 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
         case 'static':
             return `  $out += ${JSON.stringify(chunk.text)};\n`
         case 'interp':
-            // A scalar value gets the trailing `<!---->` leaf anchor (mirrors templatePlan.pushLeaf); a Raw
-            // (component call / `{children()}`) is bracketed with `<!--[-->…<!--]-->` so the hydrate walk skips
-            // the whole mountable subtree as a unit. `renderLeaf` picks the form at render time.
+            // One shape: the scalar plus its trailing `<!---->` leaf anchor (mirrors templatePlan.pushLeaf).
+            // `renderLeaf` throws on a component — those arrive through a component slot (`<Name/>`), which
+            // carries its own paired anchors — so this position is never anything but a single text leaf.
             return `  $out += $rt.renderLeaf(await (${chunk.expr}));\n`
         case 'html':
-            return `  $out += $rt.rawValue(await (${chunk.expr})) + "<!---->";\n`
+            return `  $out += $rt.renderHtml(await (${chunk.expr}));\n`
         case 'await':
             return `  $out += $rt.renderValue(await (${chunk.expr})) + "<!---->";\n`
         case 'style':
@@ -266,6 +269,7 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
                 chunk.attrs,
                 chunk.children,
                 chunk.hasChildren,
+                chunk.siteId,
             )
         case 'if': {
             let out = '  {\n    let $r = "";\n'
@@ -283,6 +287,12 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
         }
         case 'for': {
             let body = `    const $c = Object.create($scope);\n`
+            // A component inside the loop must get a DISTINCT seed bucket per iteration, so the item scope
+            // carries an item-scoped factory (same bucket for the body's own `state()` calls — those stay
+            // ordinal within the enclosing component — but a deeper path for any `<Component/>` below).
+            // Only emitted when the body actually has one: this allocates per item per render.
+            if (chunk.hasComponent)
+                body += `    if ($scope.state && $scope.state.forItem) $c.state = $scope.state.forItem($i);\n`
             body += `    ${bindPattern('$c', chunk.item, '$value')}\n`
             if (chunk.index !== null) body += `    $c[${JSON.stringify(chunk.index)}] = $i;\n`
             body += `    $out += await ${bodyExpr(analysis, chunk.children)}($c);\n    $i++;\n`
@@ -291,8 +301,14 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
                 // to the deadline INLINE (a fast/synchronous stream stays byte-identical to the buffered drain),
                 // then appends each subsequent item into an `<abide-list>` as a patch, marking it complete iff
                 // the source ends within the budget. No stream scope (direct `render()`) → it drains fully inline.
+                // Same per-item state factory as the sync path above — and load-bearing HERE especially:
+                // this is the block whose client counterpart re-creates asynchronously, so its components
+                // must be named by site+item rather than by mount order.
+                const itemState = chunk.hasComponent
+                    ? `      if ($scope.state && $scope.state.forItem) $c.state = $scope.state.forItem($i);\n`
+                    : ''
                 const itemBind =
-                    `const $c = Object.create($scope);\n      ${bindPattern('$c', chunk.item, '$value')}\n` +
+                    `const $c = Object.create($scope);\n${itemState}      ${bindPattern('$c', chunk.item, '$value')}\n` +
                     (chunk.index !== null ? `      $c[${JSON.stringify(chunk.index)}] = $i;\n` : '')
                 const renderItem = `async ($value, $i) => {\n      ${itemBind}      return await ${bodyExpr(analysis, chunk.children)}($c);\n    }`
                 const caught = chunk.catch
@@ -455,11 +471,11 @@ export function emitServerModule(plan: TemplatePlan, analysis: ScopeAnalysis): s
         // consumer `<Card>` invokes this: build a child scope inheriting the caller's `$parent` scope,
         // install the caller's props as `props()` and children as `children`, then reuse this module's own
         // `render`; the result is wrapped in `$rt.Raw` so the caller splices it verbatim.
-        `\nexport default async (props, childrenFn, $parent) => {\n` +
+        `\nexport default async (props, childrenFn, $parent, $site) => {\n` +
         `  const $s = Object.create($parent ?? null);\n` +
         // Per-component-localized seed (mirror of the client adapter): open this component instance's own
         // recording bucket so its `state()` initials group separately from the page/siblings.
-        `  if ($parent && $parent.state && $parent.state.forComponent) $s.state = $parent.state.forComponent();\n` +
+        `  if ($parent && $parent.state && $parent.state.forSite) $s.state = $parent.state.forSite($site);\n` +
         `  $s.props = () => props;\n` +
         `  $s.children = childrenFn;\n` +
         `  return new $rt.Raw(await render($s));\n` +

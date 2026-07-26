@@ -40,8 +40,10 @@ import { applyResponseHeaders } from './applyResponseHeaders.ts'
 import {
     clearIdentityCookieHeader,
     identityCookieHeader,
+    identityCookieIsDue,
     isProd,
     resolveIdentity,
+    resolveIdentityDetailed,
     unrecognizedNodeEnv,
 } from './auth.ts'
 import {
@@ -187,12 +189,36 @@ const NO_CORS: NormalizedCors = {
 
 // After dispatch, refresh (or clear) the rolling abide-identity cookie for browser identities.
 // Machine-bearer callers are stateless and get no cookie, even if identity.set() ran (AU6.3).
+// A response a SHARED cache may store must not carry a per-user `set-cookie` — the next client through
+// that cache would be handed someone else's identity. The content-addressed `/__abide/chunk/` assets are
+// the case in the box today (they declare `public, max-age=31536000, immutable`), and stamping a cookie
+// on them also defeated the caching they asked for.
+function isPubliclyCacheable(response: Response): boolean {
+    const cacheControl = response.headers.get('cache-control')
+    if (cacheControl === null) return false
+    return /(^|,)\s*public\s*(,|$)/.test(cacheControl.toLowerCase())
+}
+
 async function applyIdentityCookie(scope: RequestScope, response: Response): Promise<void> {
     if (scope.identityStateless) return
-    const header = scope.identityCleared
-        ? clearIdentityCookieHeader()
-        : await identityCookieHeader(scope.identity)
-    response.headers.append('set-cookie', header)
+    if (isPubliclyCacheable(response)) {
+        // Fail safe: never leak an identity into a shared cache. A login landing on a response the app
+        // marked publicly cacheable is an app bug, so say so rather than dropping it silently.
+        if (scope.identityDirty === true || scope.identityCleared === true) {
+            log.channel('abide:identity').warn(
+                'identity.set()/clear() ran on a publicly cacheable response — the abide-identity cookie was NOT written, because a shared cache would serve it to another client. Remove `Cache-Control: public` from this route.',
+            )
+        }
+        return
+    }
+    if (scope.identityCleared) {
+        response.headers.append('set-cookie', clearIdentityCookieHeader())
+        return
+    }
+    // The rolling cookie only needs rewriting when it changed or is far enough through its life —
+    // re-sealing every response cost an AES-GCM encrypt per reply to restate what the client already holds.
+    if (scope.identityDirty !== true && !identityCookieIsDue(scope.identityExpiresAt)) return
+    response.headers.append('set-cookie', await identityCookieHeader(scope.identity))
 }
 
 // Last-resort handler for an error that escaped the middleware/dispatch chain (a genuine bug — typed
@@ -958,11 +984,16 @@ export function createApp(config: AppConfig = {}): App {
             // to an anonymous principal so the request still gets a scope, and defer the error into the
             // in-scope try below so onError sees it (rather than escaping as a bare 500 before scope).
             let identity: Principal
+            // The incoming cookie's expiry, so the response can skip re-sealing a cookie that is
+            // already live and nowhere near rolling. Undefined = no readable cookie → one must be written.
+            let identityExpiresAt: number | undefined
             let scopeError: unknown
             // Parsed once and shared with `resolveIdentity`, which reads `abide-identity` off it.
             const cookies = new Bun.CookieMap(request.headers.get('cookie') ?? '')
             try {
-                identity = await resolveIdentity(request, cookies)
+                const resolved = await resolveIdentityDetailed(request, cookies)
+                identity = resolved.principal
+                identityExpiresAt = resolved.cookieExpiresAt
             } catch (caught) {
                 identity = anonymousPrincipal()
                 scopeError = caught
@@ -973,6 +1004,8 @@ export function createApp(config: AppConfig = {}): App {
                 identity,
                 identityStateless: isMachineBearer(request),
                 identityCleared: false,
+                identityDirty: false,
+                identityExpiresAt,
                 bag: {},
                 route,
                 // The WS-data generic (SocketConnectionData) is a socket-transport concern only; the

@@ -33,15 +33,35 @@ soft-nav envelope, replayed into client memos before mount). See `rpc-core.md` �
    data-attributes (useless for text/empty regions), pure-positional (desyncs on merged text /
    empty regions).
 
-   > **Refinement (mountable interpolations).** An interpolation whose value is a *mountable* — a
-   > `{#component}` call (inline component) or the `{children()}` slot — renders a whole subtree, not a scalar. The single
-   > trailing `<!---->` is ambiguous there (the subtree can span many top-level nodes and carry its own
-   > `<!---->` leaf anchors), so the walk would mis-read it as one text node and desync every following
-   > sibling. The server therefore brackets a mountable value with the SAME paired `<!--[-->…<!--]-->`
-   > anchors used for blocks (`serverRuntime.renderLeaf`), chosen at render time by `Raw`-ness; a scalar
-   > keeps its single `<!---->`. The client walk (`hydrateInterpLeaf`) peeks for the leading `<!--[-->`
-   > and, when present, skips/adopts the whole region via `findBlockClose`. The create-path skeleton is
-   > unchanged (`<!---->`); only server-rendered HTML brackets, and hydrate reconciles both.
+   > **Refinement (mountable interpolations) — SUPERSEDED; the case no longer exists.** An interpolation
+   > whose value was a *mountable* (the `{Name(…)}` component-call form) rendered a whole subtree, not a
+   > scalar. The single trailing `<!---->` is ambiguous there, so the server bracketed such a value with
+   > the block anchors — a shape chosen at RENDER time by `Raw`-ness — and the client walk
+   > (`hydrateInterpLeaf`) peeked for the leading `<!--[-->` to skip/adopt the region.
+   >
+   > **That made one leaf position two shapes, decided outside the plan.** The call form is now REMOVED: a
+   > component is invoked as a TAG (`<Name/>`), which is a component slot with statically-emitted paired
+   > anchors on both emitters. (`{children()}` was never really this case — `templatePlan` lowers it, and
+   > `<slot/>`, to a component slot.) So an interpolation leaf is ALWAYS one scalar position, `renderLeaf`
+   > emits one shape, `hydrateInterpLeaf` is gone, and `hydrateValueLeaf` claims every non-`html` leaf.
+   > `templatePlan.rejectComponentCall` rejects the statically visible form at compile time; `renderLeaf`
+   > and `runtime.interpolate` throw on the one it cannot see (a component arriving through props).
+
+   > **Refinement (`{html(...)}` regions).** Raw markup is the one slot whose extent the plan genuinely
+   > cannot describe — its shape is a runtime value. The claim used to RE-DERIVE that extent: scan forward
+   > for the first empty-data comment to find the end, then re-parse the markup in a probe `<div>` and walk
+   > back that many nodes. Unsound three ways — markup containing `<!---->` (abide's own SSR output does)
+   > truncated the region; a context-sensitive parent mis-counted (`<td>` in a `<tr>` is dropped by the
+   > probe); and markup whose leading text merged with the preceding static sibling claimed one node too
+   > many, so the first update **deleted the static prefix**.
+   >
+   > The region is therefore BRACKETED like a block, but with its own **collision-checked** delimiter:
+   > `serverRuntime.renderHtml` escalates a numeric suffix (`<!--[h-->`, `<!--[h0-->`, …) until the close
+   > marker is provably absent from the markup, so content can never terminate its own region. The claim
+   > READS the extent (`claimRoots(nextSibling(open), close)`) — no probe, no count. `findHtmlClose` takes
+   > the committed token off the open anchor, so no depth counting is needed. The token is chosen at
+   > RENDER time, and that is fine: the criterion is not staticness but **unambiguity** — unlike the
+   > superseded `Raw` peek above, here the server proves the marker is unique before committing to it.
 
 5. **Mismatch policy: localized recovery.** Cheap verification as the cursor walks (tag name at
    element boundaries, comment-anchor presence at dynamic boundaries — NOT attribute equality, since
@@ -110,6 +130,23 @@ soft-nav envelope, replayed into client memos before mount). See `rpc-core.md` �
     record/replay machinery as the RPC-read seed, extended to per-instance state cells via a
     render-lifecycle hook in the emitted server render. Rejected: RPC-reads-only first ship (ships a
     silent-desync footgun).
+
+    > **Refinement (bucket identity).** Initials are grouped per component instance, and the first
+    > implementation identified an instance by a shared MOUNT-ORDER counter, assumed to advance
+    > identically on both sides. It does not. `{#for await}` clears its region on hydrate and re-drains it
+    > in a microtask, so the client counts none of those components during the synchronous claim pass while
+    > the server counted every streamed item in document order — and every component AFTER the block reads
+    > a different bucket on each side. That is precisely the silent jump this decision exists to prevent,
+    > arriving through a door it did not cover, and it is invisible to localized recovery (the structure is
+    > right; only the value is wrong).
+    >
+    > An instance is therefore identified by WHERE IT IS, not WHEN IT MOUNTED: a **site path** built from a
+    > stable per-module `siteId` (assigned in `templatePlan`, read by both emitters, passed as the
+    > adapter's 4th argument) plus, inside a loop, the item index — `/<siteId>` per component, `#<index>`
+    > per item, `""` for the page + its layouts. Computed from the template, so it cannot shift with mount
+    > timing; and when the two sides genuinely differ (a streamed item whose value changes on re-drain) the
+    > key misses and the cell falls back to its literal initial — safe degradation, not corruption.
+    > This does NOT make streamed-item state survive hydration; only a same-node `{#for await}` claim does.
 
 ## Ship staging
 

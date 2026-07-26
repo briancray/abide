@@ -289,7 +289,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `{#await p}` | `{:then}`, `{:catch}`, `{:finally}`; inline shorthand `{#await p then v}` / `{#await p catch e}` (body = that branch, no pending — the compact blocking form) |
 | `{#switch}` | `{:case}`, `{:default}` |
 | `{#try}` | `{:catch}`, `{:finally}` (JS-semantics error boundary) |
-| `{#component Name(props, children)}` | **inline component** — a reusable builder; name must be **TitleCase** (a lowercase name is a parse error — lowercase is reserved for element tags); invoked as a tag `<Name/>`, passable as a first-class value/prop. A nested `{#component X()}` inside `<Foo>…</Foo>` becomes Foo's `X` prop. |
+| `{#component Name(props, children)}` | **inline component** — a reusable builder; name must be **TitleCase** (a lowercase name is a parse error — lowercase is reserved for element tags); invoked as a tag `<Name/>` **only** — the call form `{Name(…)}` is a compile error (an interpolation renders text; a component is a tag). Passable as a first-class value/prop — a component-valued prop is likewise rendered `<Render/>`, never `{Render()}`. A nested `{#component X()}` inside `<Foo>…</Foo>` becomes Foo's `X` prop. |
 
 ### Async reads
 | Form | Meaning |

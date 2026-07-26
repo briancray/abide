@@ -18,9 +18,9 @@ exports[`emit regression — server output expression interpolation 1`] = `"5<!-
 
 exports[`emit regression — server output globals under scope 1`] = `"42<!---->"`;
 
-exports[`emit regression — server output html() raw 1`] = `"<b>hi</b><!---->"`;
+exports[`emit regression — server output html() raw 1`] = `"<!--[h--><b>hi</b><!--]h-->"`;
 
-exports[`emit regression — server output html() undefined 1`] = `"<!---->"`;
+exports[`emit regression — server output html() undefined 1`] = `"<!--[h--><!--]h-->"`;
 
 exports[`emit regression — server output await interp escapes 1`] = `"&lt;z&gt;<!---->"`;
 
@@ -130,7 +130,7 @@ exports[`emit regression — server output component props + children (server) 1
 
 exports[`emit regression — server output component spread (server) 1`] = `"<!--[--><b>1-2</b><!--]-->"`;
 
-exports[`emit regression — server output component defined and called 1`] = `"<ul><!--[--><li>a<!----></li><!--]--><!--[--><li>b<!----></li><!--]--></ul>"`;
+exports[`emit regression — server output component defined and used 1`] = `"<ul><!--[--><li>a<!----></li><!--]--><!--[--><li>b<!----></li><!--]--></ul>"`;
 
 exports[`emit regression — server output component hoisted 1`] = `"<ul><!--[--><li>a<!----></li><!--]--></ul>"`;
 
@@ -147,6 +147,8 @@ exports[`emit regression — server output state drives text 1`] = `"<h1>Hello w
 exports[`emit regression — server output numeric state 1`] = `"<span>42<!----></span>"`;
 
 exports[`emit regression — server output props destructuring 1`] = `"x<!---->"`;
+
+exports[`emit regression — server output memo derives from state 1`] = `"<span>4<!----></span>"`;
 
 exports[`emit regression — server output const + function 1`] = `"<span>15<!----></span>"`;
 
@@ -174,9 +176,9 @@ exports[`emit regression — client DOM expression interpolation 1`] = `"5<!----
 
 exports[`emit regression — client DOM globals under scope 1`] = `"42<!---->"`;
 
-exports[`emit regression — client DOM html() raw 1`] = `"<b>hi</b><!---->"`;
+exports[`emit regression — client DOM html() raw 1`] = `"<!--[h--><b>hi</b><!--]h-->"`;
 
-exports[`emit regression — client DOM html() undefined 1`] = `"<!---->"`;
+exports[`emit regression — client DOM html() undefined 1`] = `"<!--[h--><!--]h-->"`;
 
 exports[`emit regression — client DOM await interp escapes 1`] = `"<!---->"`;
 
@@ -268,13 +270,13 @@ exports[`emit regression — client DOM component props (client) 1`] = `"<!--[--
 
 exports[`emit regression — client DOM component children slot (client) 1`] = `"<!--[--><div class="card"><h1>Hi</h1><!--slot-->slotted Bob<!----></div><!--Card--><!--]-->"`;
 
-exports[`emit regression — client DOM component defined and called 1`] = `"<ul><li>a<!----></li><!----><li>b<!----></li><!----></ul>"`;
+exports[`emit regression — client DOM component defined and used 1`] = `"<ul><!--[--><li>a<!----></li><!--Item--><!--]--><!--[--><li>b<!----></li><!--Item--><!--]--></ul>"`;
 
-exports[`emit regression — client DOM component hoisted 1`] = `"<ul><li>a<!----></li><!----></ul>"`;
+exports[`emit regression — client DOM component hoisted 1`] = `"<ul><!--[--><li>a<!----></li><!--Item--><!--]--></ul>"`;
 
-exports[`emit regression — client DOM component not escaped 1`] = `"<b>hi<!----></b><!---->"`;
+exports[`emit regression — client DOM component not escaped 1`] = `"<!--[--><b>hi<!----></b><!--Raw--><!--]-->"`;
 
-exports[`emit regression — client DOM component client fragment 1`] = `"Hi Bob<!---->!<!---->"`;
+exports[`emit regression — client DOM component client fragment 1`] = `"<!--[-->Hi Bob<!---->!<!--Greeting--><!--]-->"`;
 
 exports[`emit regression — client DOM script emits nothing 1`] = `"<p>5<!----></p>"`;
 
@@ -302,6 +304,10 @@ exports[`emit regression — client DOM reactive switch 1`] = `"<!--[-->one<!--s
 
 exports[`emit regression — client DOM reactive switch 2`] = `"<!--[-->two<!--switch--><!--]-->"`;
 
+exports[`emit regression — client DOM event click updates via state 1`] = `"<button>0<!----></button>"`;
+
+exports[`emit regression — client DOM event click updates via state 2`] = `"<button>1<!----></button>"`;
+
 exports[`emit regression — client DOM await inline resolves 1`] = `"<!---->"`;
 
 exports[`emit regression — client DOM await inline resolves 2`] = `"ok<!---->"`;
@@ -315,6 +321,8 @@ exports[`emit regression — client DOM state drives text 1`] = `"<h1>Hello worl
 exports[`emit regression — client DOM numeric state 1`] = `"<span>42<!----></span>"`;
 
 exports[`emit regression — client DOM props destructuring 1`] = `"x<!---->"`;
+
+exports[`emit regression — client DOM memo derives from state 1`] = `"<span>4<!----></span>"`;
 
 exports[`emit regression — client DOM const + function 1`] = `"<span>15<!----></span>"`;
 
@@ -336,21 +344,13 @@ exports[`emit regression — client DOM function handler mutates state 1`] = `"<
 
 exports[`emit regression — client DOM function handler mutates state 2`] = `"<button>+</button><span>1<!----></span>"`;
 
-exports[`emit regression — client DOM state drives if 1`] = `"<button>go</button><!--[--><!--if--><!--]-->"`;
-
-exports[`emit regression — client DOM state drives if 2`] = `"<button>go</button><!--[--><p>yes</p><!--if--><!--]-->"`;
-
-exports[`emit regression — client DOM event click updates via state 1`] = `"<button>0<!----></button>"`;
-
-exports[`emit regression — client DOM event click updates via state 2`] = `"<button>1<!----></button>"`;
-
-exports[`emit regression — server output memo derives from state 1`] = `"<span>4<!----></span>"`;
-
-exports[`emit regression — client DOM memo derives from state 1`] = `"<span>4<!----></span>"`;
-
 exports[`emit regression — client DOM memo re-fills on state change 1`] = `"<button>+</button><span>4<!----></span>"`;
 
 exports[`emit regression — client DOM memo re-fills on state change 2`] = `"<button>+</button><span>6<!----></span>"`;
+
+exports[`emit regression — client DOM state drives if 1`] = `"<button>go</button><!--[--><!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM state drives if 2`] = `"<button>go</button><!--[--><p>yes</p><!--if--><!--]-->"`;
 
 exports[`emit regression — client DOM memo writable projection reseeds 1`] = `"<button>+</button><span>10<!----></span>"`;
 

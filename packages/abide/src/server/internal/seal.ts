@@ -17,7 +17,7 @@ const TTL_DEFAULT_MS = 30 * 24 * 60 * 60 * 1000 // 30 days (AU5.4 / AU9.3)
 const MAX_SEALED_BYTES = 4096 // ~4KB cookie ceiling (AU3.5 / AU5.2)
 const IV_BYTES = 12 // AES-GCM standard nonce length
 
-interface SealedPayload {
+export interface SealedPayload {
     p: Principal
     exp: number
 }
@@ -95,6 +95,13 @@ export async function seal(principal: Principal): Promise<string> {
 }
 
 export async function unseal(token: string): Promise<Principal | undefined> {
+    return (await unsealPayload(token))?.p
+}
+
+// `unseal` plus the payload's `exp`. The router needs the expiry to decide whether the rolling cookie
+// is due for a rewrite — re-sealing on every response costs an AES-GCM encrypt per reply for a value
+// that only has to change occasionally.
+export async function unsealPayload(token: string): Promise<SealedPayload | undefined> {
     try {
         const combined = Uint8Array.fromBase64(token, { alphabet: 'base64url' })
         if (combined.length <= IV_BYTES) return undefined
@@ -109,7 +116,7 @@ export async function unseal(token: string): Promise<Principal | undefined> {
             return undefined
         }
         if (payload.p === null || typeof payload.p !== 'object') return undefined
-        return payload.p
+        return payload
     } catch {
         // Tampered ciphertext (GCM tag mismatch), malformed base64, or non-JSON plaintext all land
         // here — a sealed blob we cannot trust resolves to "no identity". Log the outcome only, never

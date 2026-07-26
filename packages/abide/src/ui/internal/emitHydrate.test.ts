@@ -933,106 +933,129 @@ describe('scoped <style> scope attribute survives SSR → hydrate (#13/#20)', ()
     })
 })
 
-describe('mountable interpolation (component call / children) — adopt server subtree, no strand', () => {
-    // A `{#component}` call is an ORDINARY interpolation whose value is a Mountable. On the server it renders
-    // the builder's subtree inline; the hydrate pass must ADOPT that subtree (claim it + register its
-    // teardown) instead of trusting-and-forgetting. Before the fix the primed pass returned without a
-    // disposer, so the first reactive re-run MOUNTED A SECOND, LIVE COPY beside the stranded server one —
-    // the ComponentDemo showed "Live count: 6" next to a frozen "Live count: 0". (Regression guard.)
-    function reactiveScope(st: ReturnType<typeof state>): Record<string, unknown> {
-        const scope: Record<string, unknown> = {}
-        Object.defineProperty(scope, 'count', { get: () => st(), enumerable: true })
-        return scope
-    }
-
-    test('a single component call re-mounts in place — exactly one badge, no stranded copy', async () => {
-        const count = state(0)
-        const scope = reactiveScope(count)
+describe('a component in an interpolation is REJECTED — components are invoked as tags', () => {
+    // `{Name(…)}` used to be a second, legal way to render a component: an ordinary interpolation whose
+    // value was a Mountable, which the server bracketed with `<!--[-->…<!--]-->` at RENDER time (by
+    // Raw-ness) and the hydrate walk rediscovered by peeking. That made a leaf position two shapes instead
+    // of one. The form is gone — `<Name/>` is the only invocation — so a leaf is always a single scalar.
+    test('calling an inline component def in an interpolation is a compile error naming the tag fix', async () => {
         const src =
-            '{#component Badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/component}' +
-            '<div>{Badge("Live count", count)}</div>'
-        const emitted = await loadEmitted(src)
-        const host = document.createElement('div')
-        host.innerHTML = await emitted.render(scope)
-        const serverSpan = must(host.querySelector('.badge'))
-
-        emitted.hydrate(host, scope)
-        // Pass 1 adopts the server span in place (decision 9): SAME node, unchanged text.
-        expect(host.querySelector('.badge')).toBe(serverSpan)
-        expect(serverSpan.textContent).toBe('Live count: 0')
-
-        count.set(6)
-        await tick()
-        // One badge, showing the live value — the server copy was replaced, not left beside a new one.
-        expect(host.querySelectorAll('.badge').length).toBe(1)
-        expect(must(host.querySelector('.badge')).textContent).toBe('Live count: 6')
+            '{#component Badge({ label })}<span class="badge">{label}</span>{/component}' +
+            '<div>{Badge({ label: "Live" })}</div>'
+        expect(loadEmitted(src)).rejects.toThrow('<Badge …/>')
     })
 
-    test('two component calls (the ComponentDemo shape) both stay singular after an update', async () => {
-        const count = state(0)
-        const scope = reactiveScope(count)
-        const src =
-            '{#component Badge(label, value)}<span class="badge">{label}: <b>{value}</b></span>{/component}' +
-            '<div>{Badge("Live count", count)}{Badge("Doubled", count * 2)}</div>'
-        const emitted = await loadEmitted(src)
-        const host = document.createElement('div')
-        host.innerHTML = await emitted.render(scope)
-        expect(host.querySelectorAll('.badge').length).toBe(2)
-
-        emitted.hydrate(host, scope)
-        expect(host.querySelectorAll('.badge').length).toBe(2)
-
-        count.set(6)
-        await tick()
-        const texts = Array.from(host.querySelectorAll('.badge')).map((b) => b.textContent)
-        expect(texts).toEqual(['Live count: 6', 'Doubled: 12'])
+    test('a nested (render-prop) component def is rejected in the caller too', async () => {
+        const src = '<Framed>{#component Header()}<h4>hi</h4>{/component}{Header()}</Framed>'
+        expect(loadEmitted(src)).rejects.toThrow('<Header …/>')
     })
 
-    test('multi-node component body (trailing static) adopts its full extent', async () => {
-        const count = state(0)
-        const scope = reactiveScope(count)
+    test('a same-prefixed identifier and a member call are NOT false positives', async () => {
+        // `Badges(…)` shares Badge's prefix and `fmt.Badge(…)` is a member call — neither is the component.
         const src =
-            '{#component Line(n)}Hi {n}!{/component}<div data-testid="wrap">{Line(count)}</div>'
+            '{#component Badge({ label })}<span>{label}</span>{/component}' +
+            '<div>{Badges()}{fmt.Badge()}</div>'
         const emitted = await loadEmitted(src)
-        const host = document.createElement('div')
-        host.innerHTML = await emitted.render(scope)
-        const wrap = must(host.querySelector('[data-testid=wrap]'))
-        expect(wrap.textContent).toBe('Hi 0!')
-
-        emitted.hydrate(host, scope)
-        expect(wrap.textContent).toBe('Hi 0!')
-
-        count.set(6)
-        await tick()
-        // The `<!--[-->…<!--]-->` bracket bounds the whole subtree (trailing static "!" included), so the
-        // adopted extent is replaced wholesale — no "Hi 6!!" left behind.
-        expect(wrap.textContent).toBe('Hi 6!')
+        const scope = { Badges: () => 'a', fmt: { Badge: () => 'b' } }
+        expect(await emitted.render(scope)).toBe('<div>a<!---->b<!----></div>')
     })
 
-    test('a multi-root component body does NOT desync a following sibling (no whole-page recover)', async () => {
-        // Regression: a multi-node snippet output used to be walked as a single-node text leaf, so the
-        // cursor landed mid-subtree and the sibling `<span>` claim hit a text node → HydrationMismatch that
-        // bubbled to the PAGE ROOT and re-rendered everything (losing node identity). The server now brackets
-        // the mountable subtree so the walk skips it as a unit; the sibling is claimed in place.
-        const count = state(0)
-        const scope = reactiveScope(count)
+    test('a component arriving through PROPS and called is a loud runtime error on the server', async () => {
+        // The static guard cannot see this one: inside `Framed`, `Render` is a destructured prop, not a
+        // known component name. `serverRuntime.renderLeaf` catches it rather than splicing an unanchored
+        // subtree that would desync every following sibling on hydrate.
         const src =
-            '{#component Line(n)}Hi {n}!{/component}' +
-            '<div data-testid="wrap">{Line(count)}<span data-testid="sib">S{count}</span></div>'
+            '{#component Loud({ text })}<b>{text}</b>{/component}' +
+            '{#component Framed({ Render })}<div>{Render({ text: "x" })}</div>{/component}' +
+            '<Framed Render={Loud}/>'
         const emitted = await loadEmitted(src)
+        expect(emitted.render({})).rejects.toThrow(/invoke a component as a tag/)
+    })
+
+    test('the same props-borne component call is loud on a client mount too', async () => {
+        const src =
+            '{#component Loud({ text })}<b>{text}</b>{/component}' +
+            '{#component Framed({ Render })}<div>{Render({ text: "x" })}</div>{/component}' +
+            '<Framed Render={Loud}/>'
+        const emitted = await loadEmitted(src)
+        const host = document.createElement('div')
+        expect(() => emitted.mount(host, {})).toThrow(/invoke a component as a tag/)
+    })
+})
+
+describe('{html(...)} region — extent READ from the server anchors, never re-derived', () => {
+    // The claim used to (a) scan forward for the first empty comment to find its end anchor and (b) re-parse
+    // the markup in a probe `<div>` to count how many nodes to walk back. Both are unsound for arbitrary raw
+    // markup. The server now BRACKETS the region with a collision-checked `<!--[h-->…<!--]h-->` pair
+    // (`serverRuntime.renderHtml`) and the claim reads the extent off those anchors.
+
+    test('markup containing an empty comment does not truncate the region (the old scan stopped there)', async () => {
+        const markup = state('<b>a</b><!----><i>b</i>')
+        const scope = makeScope({ markup })
+        const emitted = await loadEmitted(
+            '<div>{html(markup)}<span data-testid="sib">S</span></div>',
+        )
         const host = document.createElement('div')
         host.innerHTML = await emitted.render(scope)
         const serverSib = must(host.querySelector('[data-testid=sib]'))
 
         const captured = captureHydrateWarnings(() => emitted.hydrate(host, scope))
-        // SAME sibling node claimed — no mismatch, no whole-page recovery.
-        expect(host.querySelector('[data-testid=sib]')).toBe(serverSib)
         expect(captured.length).toBe(0)
+        // The sibling AFTER the region is the same node — the cursor did not land mid-region.
+        expect(host.querySelector('[data-testid=sib]')).toBe(serverSib)
 
-        count.set(6)
+        markup.set('<em>c</em>')
         await tick()
-        expect(serverSib.textContent).toBe('S6')
-        expect(must(host.querySelector('[data-testid=wrap]')).textContent).toBe('Hi 6!S6')
-        expect(host.querySelectorAll('[data-testid=sib]').length).toBe(1)
+        const div = must(host.querySelector('div'))
+        // The whole old region was replaced — no stranded `<b>a</b>` / `<i>b</i>`.
+        expect(div.querySelector('b')).toBe(null)
+        expect(div.querySelector('i')).toBe(null)
+        expect(must(div.querySelector('em')).textContent).toBe('c')
+        expect(host.querySelector('[data-testid=sib]')).toBe(serverSib)
+    })
+
+    test('markup containing the close marker escalates the token, and the region still claims', async () => {
+        const markup = state('<b>x</b><!--]h--><i>y</i>')
+        const scope = makeScope({ markup })
+        const emitted = await loadEmitted(
+            '<div>{html(markup)}<span data-testid="sib">S</span></div>',
+        )
+        const host = document.createElement('div')
+        const rendered = await emitted.render(scope)
+        // The default `]h` occurs in the content, so the server committed to `[h0`/`]h0` instead.
+        expect(rendered).toContain('<!--[h0-->')
+        expect(rendered).toContain('<!--]h0-->')
+
+        host.innerHTML = rendered
+        const serverSib = must(host.querySelector('[data-testid=sib]'))
+        const captured = captureHydrateWarnings(() => emitted.hydrate(host, scope))
+        expect(captured.length).toBe(0)
+        expect(host.querySelector('[data-testid=sib]')).toBe(serverSib)
+
+        markup.set('<em>z</em>')
+        await tick()
+        const div = must(host.querySelector('div'))
+        expect(div.querySelector('b')).toBe(null)
+        expect(must(div.querySelector('em')).textContent).toBe('z')
+        expect(host.querySelector('[data-testid=sib]')).toBe(serverSib)
+    })
+
+    test('a static prefix is not swallowed when the markup is text (the parser merged them)', async () => {
+        // Old shape: `A` + `tail` + `<!---->` parsed as ONE text node "Atail"; the probe counted 1 node for
+        // "tail", so the backward walk claimed the merged node — and the first update removed the "A" with it.
+        const tail = state('tail')
+        const scope = makeScope({ tail })
+        const emitted = await loadEmitted('<div>A{html(tail)}</div>')
+        const host = document.createElement('div')
+        host.innerHTML = await emitted.render(scope)
+        const div = must(host.querySelector('div'))
+        expect(div.textContent).toBe('Atail')
+
+        emitted.hydrate(host, scope)
+        expect(div.textContent).toBe('Atail')
+
+        tail.set('other')
+        await tick()
+        expect(div.textContent).toBe('Aother')
     })
 })

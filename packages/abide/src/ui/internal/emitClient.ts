@@ -22,9 +22,12 @@ import { splitParams } from './splitParams.ts'
 import type { AttrPlan, ClientPlan, DynamicSlot, TemplatePlan } from './templatePlan.ts'
 
 // Slot kinds that occupy a single `<!---->` leaf position in a level (a value node + its anchor).
-const LEAF_KINDS = new Set<string>(['interpolation', 'html', 'await'])
+const LEAF_KINDS = new Set<string>(['interpolation', 'await'])
 // Slot kinds wrapped in paired `<!--[-->…<!--]-->` block anchors (2 child positions: open, close).
 const BLOCK_KINDS = new Set<string>(['if', 'for', 'switch', 'try', 'awaitBlock', 'component'])
+// `html` is bracketed like a block (2 positions) but by its OWN `<!--[h-->…<!--]h-->` anchors, so its
+// close is located by `findHtmlClose` (which reads the server's token off the open) rather than by the
+// depth-counting `findBlockClose`. See `serverRuntime.renderHtml`.
 
 // ---------------------------------------------------------------------------
 // Emitter (collects sub-plans → clone ids → mount functions)
@@ -139,11 +142,13 @@ class ClientEmitter {
             // seed ordinals stay aligned), install the caller's props as `props()` and children as
             // `children`, then reuse this module's own `mount`. Marker-bounded claim happens inside `mount`
             // (`$mount0` branches on `$rt.hydrating`), so hydration works with no new code.
-            `\nexport default (props, childrenFn, $parent) => ({ mount: ($p, $a) => {\n` +
+            `\nexport default (props, childrenFn, $parent, $site) => ({ mount: ($p, $a) => {\n` +
             `  const $s = Object.create($parent ?? null);\n` +
-            // Per-component-localized seed: open THIS component instance's own seed bucket (mount-order id),
-            // so its `state()` calls replay from a bucket isolated from siblings' (no cascade on divergence).
-            `  if ($parent && $parent.state && $parent.state.forComponent) $s.state = $parent.state.forComponent();\n` +
+            // Per-component-localized seed: open THIS instance's own bucket, keyed by its STABLE SITE (the
+            // 4th arg, from the shared plan) rather than by mount order — so its `state()` calls replay from
+            // a bucket isolated from siblings', and the key can't shift when an earlier sibling mounts
+            // asynchronously (a `{#for await}` item) on one side but not the other.
+            `  if ($parent && $parent.state && $parent.state.forSite) $s.state = $parent.state.forSite($site);\n` +
             `  $s.props = () => props;\n` +
             `  $s.children = childrenFn;\n` +
             `  return mount($p, $s, $a);\n` +
@@ -277,16 +282,30 @@ class ClientEmitter {
             start: number
             index: number
             kind: 'leaf' | 'element' | 'block'
-            leafKind?: string
+            // Bracketed entries only: which finder locates the close anchor from the open one.
+            closeFinder?: string
         }
         const entries: Entry[] = []
         for (const [index, bucket] of groups) {
             const here = bucket.filter((s) => s.path.length === depth + 1)
             const blockSlot = here.find((s) => BLOCK_KINDS.has(s.kind))
+            const htmlSlot = here.find((s) => s.kind === 'html')
             const leafSlot = here.find((s) => LEAF_KINDS.has(s.kind))
-            if (blockSlot !== undefined) entries.push({ start: index - 1, index, kind: 'block' })
-            else if (leafSlot !== undefined)
-                entries.push({ start: index, index, kind: 'leaf', leafKind: leafSlot.kind })
+            if (blockSlot !== undefined)
+                entries.push({
+                    start: index - 1,
+                    index,
+                    kind: 'block',
+                    closeFinder: 'findBlockClose',
+                })
+            else if (htmlSlot !== undefined)
+                entries.push({
+                    start: index - 1,
+                    index,
+                    kind: 'block',
+                    closeFinder: 'findHtmlClose',
+                })
+            else if (leafSlot !== undefined) entries.push({ start: index, index, kind: 'leaf' })
             else entries.push({ start: index, index, kind: 'element' })
         }
         entries.sort((a, b) => a.start - b.start)
@@ -298,16 +317,10 @@ class ClientEmitter {
             if (skip > 0) code += `$rt.hydrateSkip(${skip});\n`
             if (entry.kind === 'leaf') {
                 const varName = `$n${[...prefix, entry.index].join('_')}`
-                // `interpolation` may resolve to a mountable (component call / `{children()}`) whose server
-                // output is bracketed — `hydrateInterpLeaf` skips the whole region; `html` scans to its
-                // anchor; a scalar `await`/interp value is a plain text leaf.
-                const claim =
-                    entry.leafKind === 'html'
-                        ? 'hydrateHtmlAnchor'
-                        : entry.leafKind === 'interpolation'
-                          ? 'hydrateInterpLeaf'
-                          : 'hydrateValueLeaf'
-                code += `${varName} = $rt.${claim}();\n`
+                // Every leaf (`interpolation`/`await`) is a single scalar text position. A component never
+                // lands here — it is invoked as a tag, which is a block-anchored component slot — and
+                // `{html(...)}` is bracketed by its own anchors, so both are handled below.
+                code += `${varName} = $rt.hydrateValueLeaf();\n`
                 expected = entry.index + 1
             } else if (entry.kind === 'element') {
                 const path = [...prefix, entry.index]
@@ -326,7 +339,7 @@ class ClientEmitter {
                 const openVar = `$n${[...prefix, entry.index - 1].join('_')}`
                 const closeVar = `$n${[...prefix, entry.index].join('_')}`
                 code += `${openVar} = $rt.hydrateNode();\n`
-                code += `${closeVar} = $rt.findBlockClose(${openVar});\n`
+                code += `${closeVar} = $rt.${entry.closeFinder}(${openVar});\n`
                 code += `$rt.hydrateSeek(${closeVar} !== null ? $rt.nextSibling(${closeVar}) : null);\n`
                 expected = entry.index + 1
             }
@@ -386,7 +399,7 @@ class ClientEmitter {
             case 'interpolation':
                 return `  $sink.push($rt.interpolate(${parentOf(slot.path)}, ${nav(slot.path)}, () => (${expr}), ${slot.prefixLen ?? 0}));\n`
             case 'html':
-                return `  $sink.push($rt.htmlBlock(${parentOf(slot.path)}, ${nav(slot.path)}, () => (${expr}), ${slot.prefixLen ?? 0}));\n`
+                return `  $sink.push($rt.htmlBlock(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, () => (${expr})));\n`
             case 'await':
                 return `  $sink.push($rt.awaitText(${parentOf(slot.path)}, ${nav(slot.path)}, () => (${expr}), ${slot.prefixLen ?? 0}));\n`
             case 'attr':
@@ -496,6 +509,11 @@ class ClientEmitter {
         createItem += '    const $itemState = $rt.state($value);\n'
         createItem += '    const $indexState = $rt.state($index);\n'
         createItem += '    const $child = Object.create($scope);\n'
+        // A component inside the loop gets a DISTINCT seed bucket per iteration (see emitServer's `for`).
+        // Only emitted when the body has one — this allocates per item.
+        if (slot.meta.hasComponent === true)
+            createItem +=
+                '    if ($scope.state && $scope.state.forItem) $child.state = $scope.state.forItem($index);\n'
         if (simple) {
             createItem += `    Object.defineProperty($child, ${JSON.stringify(item.trim())}, { get: () => $itemState(), configurable: true });\n`
         } else {
@@ -622,9 +640,9 @@ class ClientEmitter {
         // read it in an effect and re-mount on identity change. Otherwise resolve the component once.
         if (this.analysis.cellScope.cells.has(name) || this.analysis.cellScope.memos.has(name)) {
             const read = rewriteCellRefs(name, this.analysis.cellScope)
-            props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${read}), $props, ${childrenFn}, $scope));\n`
+            props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${read}), $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
         } else {
-            props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${componentRef(this.analysis, name)}, $props, ${childrenFn}, $scope));\n`
+            props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${componentRef(this.analysis, name)}, $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
         }
         props += '  }\n'
         return props

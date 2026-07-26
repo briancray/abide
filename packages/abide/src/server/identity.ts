@@ -35,6 +35,9 @@ export const identity: {
         requireSecretForAuthedSet(authenticated)
         Object.assign(scope.identity, p, { authenticated })
         scope.identityCleared = false
+        // A login must be persisted on THIS response — it is the one case the router's
+        // roll-only-when-due check must not skip.
+        scope.identityDirty = true
     },
     clear(): void {
         const scope = activeScope()

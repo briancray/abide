@@ -206,13 +206,23 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?__abide_from=<count>
         }) as typeof globalThis.fetch
 
         try {
-            // Seed exactly as `replayStreams` does for an open handle: prefix + `resumeStreamSource`.
+            // Seed exactly as `replayStreams` does for an open handle: the flushed prefix (pushed
+            // synchronously, so the region can be CLAIMED) plus the resumed tail.
             complete.seedStream(
                 { n: 5 },
-                resumeStreamSource('', 'complete', { n: 5 }, handle.count, handle.values ?? []),
+                {
+                    prefix: handle.values ?? [],
+                    rest: resumeStreamSource('', 'complete', { n: 5 }, handle.count, () => {
+                        complete.invalidate({ n: 5 })
+                    }),
+                },
             )
             const host = document.createElement('div')
             host.innerHTML = html
+            // The server's painted nodes. This fixture SSRs the completed shape (5 items) and then
+            // synthesizes a cut-off handle over it, so only the 2 items the prefix covers are claimable;
+            // a real mode-B paint stops at `count`. Capture them before hydrating — identity is the point.
+            const serverItems = Array.from(host.querySelectorAll('li'))
             const emitted = await loadEmitted(SRC)
             const dispose = emitted.hydrate(host, { complete })
 
@@ -233,6 +243,10 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?__abide_from=<count>
                 't3',
                 't4',
             ])
+            // THE MODE-B CLAIM: the items the flushed prefix covers are the SAME nodes, not re-created —
+            // the case that matters, since any stream slower than the 4ms SSR deadline lands here.
+            expect(lis[0]).toBe(serverItems[0])
+            expect(lis[1]).toBe(serverItems[1])
 
             dispose()
         } finally {
@@ -337,47 +351,53 @@ describe('resumeStreamSource — mode-B prefix + ?from resume (fresh / failure b
         })
     }
 
-    test('a live resume yields the flushed prefix THEN the resumed tail', async () => {
+    // The resume now yields ONLY THE TAIL: the flushed prefix is handed to `seedStream` as
+    // `StreamSeed.prefix` and pushed synchronously, so the hydrating block can claim the server's painted
+    // items in the same tick instead of waiting a microtask for a generator's first yield.
+    test('a live resume yields the resumed TAIL only (the prefix is seeded separately)', async () => {
         const original = globalThis.fetch
         globalThis.fetch = (async (_input: RequestInfo | URL): Promise<Response> =>
             jsonlResponse(['t2', 't3'], 'live')) as typeof globalThis.fetch
         try {
-            expect(await collect(resumeStreamSource('', 'r', { n: 5 }, 2, ['t0', 't1']))).toEqual([
-                't0',
-                't1',
-                't2',
-                't3',
-            ])
+            const fresh: number[] = []
+            expect(
+                await collect(resumeStreamSource('', 'r', { n: 5 }, 2, () => fresh.push(1))),
+            ).toEqual(['t2', 't3'])
+            expect(fresh.length).toBe(0)
         } finally {
             globalThis.fetch = original
         }
     })
 
-    test('a `fresh` resume (transcript evicted) DROPS the prefix and yields the full run from 0', async () => {
+    test('a `fresh` resume (transcript evicted) SIGNALS instead of yielding — the prefix is already in', async () => {
         const original = globalThis.fetch
         globalThis.fetch = (async (_input: RequestInfo | URL): Promise<Response> =>
             jsonlResponse(['f0', 'f1', 'f2'], 'fresh')) as typeof globalThis.fetch
         try {
-            expect(await collect(resumeStreamSource('', 'r', { n: 5 }, 2, ['t0', 't1']))).toEqual([
-                'f0',
-                'f1',
-                'f2',
-            ])
+            let freshCalls = 0
+            // Yielding the fresh run here would append it AFTER the already-installed prefix (and after a
+            // claim may have bound that prefix to the server's DOM). The caller drops the slot instead, so
+            // the block clear-and-restreams — today's behaviour, in the rare eviction case only.
+            expect(
+                await collect(resumeStreamSource('', 'r', { n: 5 }, 2, () => (freshCalls += 1))),
+            ).toEqual([])
+            expect(freshCalls).toBe(1)
         } finally {
             globalThis.fetch = original
         }
     })
 
-    test('a failed resume leaves the flushed prefix standing (stream then closes)', async () => {
+    test('a failed resume yields nothing — the seeded prefix stands and the stream closes', async () => {
         const original = globalThis.fetch
         globalThis.fetch = (async (_input: RequestInfo | URL): Promise<Response> => {
             throw new Error('offline')
         }) as typeof globalThis.fetch
         try {
-            expect(await collect(resumeStreamSource('', 'r', { n: 5 }, 2, ['t0', 't1']))).toEqual([
-                't0',
-                't1',
-            ])
+            let freshCalls = 0
+            expect(
+                await collect(resumeStreamSource('', 'r', { n: 5 }, 2, () => (freshCalls += 1))),
+            ).toEqual([])
+            expect(freshCalls).toBe(0)
         } finally {
             globalThis.fetch = original
         }
@@ -420,5 +440,89 @@ describe('attach recognises every RPC import specifier form', () => {
 
         expect(html).not.toContain('data-ab-count')
         expect(seed.streams).toBeUndefined()
+    })
+})
+
+// SAME-NODE CLAIM (attach-hydration of a streamed region). Until the transcript became reachable
+// synchronously (`shared/internal/streamTranscript.ts` + the settled hint on a warm stream read), a
+// `{#for await}` hydrate CLEARED the server's painted items and re-created them from the drain — correct,
+// but a visible re-paint of the largest region on a streaming page, and node identity was lost. The region
+// is now claimed in place: the SAME `<li>` objects survive hydration and are wired.
+describe('mode A — the streamed region is CLAIMED in place (same nodes, no re-paint)', () => {
+    const SRC =
+        `<script>import complete from '../../server/rpc/complete'</script>` +
+        `<ul>{#for await tok of complete({ n: 3 })}<li onclick={() => bump(tok)}>{tok}</li>{/for}</ul>`
+
+    test('the server-rendered <li> nodes are the SAME objects after hydrate, and stay interactive', async () => {
+        const { html } = await ssrStream(SRC, { complete: makeServerComplete() })
+
+        const complete = memo((_args: { n: number }): AsyncIterable<string> => {
+            throw new Error('the client must not invoke a warm-seeded source')
+        })
+        complete.seedStream({ n: 3 }, ['t0', 't1', 't2'])
+        const bumped: string[] = []
+        const clientScope = {
+            complete,
+            bump: (t: string): void => {
+                bumped.push(t)
+            },
+        }
+
+        const host = document.createElement('div')
+        host.innerHTML = html
+        // Capture the SERVER's nodes before hydrating — identity is the load-bearing assertion.
+        const serverItems = Array.from(host.querySelectorAll('li'))
+        expect(serverItems.length).toBe(3)
+        expect(serverItems.map((li) => li.textContent)).toEqual(['t0', 't1', 't2'])
+
+        const emitted = await loadEmitted(SRC)
+        const dispose = emitted.hydrate(host, clientScope)
+        await flush()
+
+        const afterItems = Array.from(host.querySelectorAll('li'))
+        expect(afterItems.length).toBe(3)
+        // NOT re-created: every node is the very object the server's HTML parsed into.
+        expect(afterItems[0]).toBe(serverItems[0])
+        expect(afterItems[1]).toBe(serverItems[1])
+        expect(afterItems[2]).toBe(serverItems[2])
+        // Claimed AND wired — the click handler runs against the claimed node.
+        ;(afterItems[1] as HTMLElement).dispatchEvent(new Event('click'))
+        expect(bumped).toEqual(['t1'])
+        // The streaming sentinel is not left behind as stray DOM.
+        expect(host.querySelector('template[id^="ab-l:"]')).toBe(null)
+
+        dispose()
+    })
+
+    test('a refresh after a claimed hydrate still clears and re-streams (claim is first-run only)', async () => {
+        const { html } = await ssrStream(SRC, { complete: makeServerComplete() })
+
+        let runs = 0
+        const complete = memo((_args: { n: number }): AsyncIterable<string> => {
+            runs++
+            return (async function* () {
+                yield 'r0'
+                yield 'r1'
+            })()
+        })
+        complete.seedStream({ n: 3 }, ['t0', 't1', 't2'])
+        const host = document.createElement('div')
+        host.innerHTML = html
+        const serverFirst = host.querySelector('li')
+        const emitted = await loadEmitted(SRC)
+        const dispose = emitted.hydrate(host, { complete, bump: (): void => {} })
+        await flush()
+        expect(runs).toBe(0)
+        expect(host.querySelector('li')).toBe(serverFirst) // claimed
+
+        complete.refresh({ n: 3 })
+        await flush()
+        // The refresh is a genuine clear-and-restream: the source runs, the claimed nodes are gone.
+        expect(runs).toBe(1)
+        expect(Array.from(host.querySelectorAll('li')).map((li) => li.textContent)).toEqual([
+            'r0',
+            'r1',
+        ])
+        dispose()
     })
 })

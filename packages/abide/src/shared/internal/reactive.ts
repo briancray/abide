@@ -185,8 +185,10 @@ function reconcileSources(node: Reactive): void {
         removeSourceObservers(node, currentSourcesIndex)
         if (node.sources !== null && currentSourcesIndex > 0) {
             node.sources.length = currentSourcesIndex + currentSources.length
-            for (const [i, source] of currentSources.entries()) {
-                node.sources[currentSourcesIndex + i] = source
+            // Indexed, not `.entries()`: this is the per-re-run resubscription path, and the iterator
+            // allocated a `[i, source]` tuple for every source read during the run.
+            for (let i = 0; i < currentSources.length; i++) {
+                node.sources[currentSourcesIndex + i] = currentSources[i] as Reactive
             }
         } else {
             node.sources = currentSources

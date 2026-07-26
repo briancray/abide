@@ -19,11 +19,18 @@ function readSeedFromDocument(html: string): { reads?: unknown[]; states?: strin
     return JSON.parse(json)
 }
 
-// `seed.states` rides the wire as the rich-codec encoding of the per-component buckets — decode it back
+// `seed.states` rides the wire as the rich-codec encoding of the SITE-KEYED bucket map — decode it back
 // to the `unknown[][]` the assertions read (pages.ts / seededState.ts).
-function decodeStates(states: string | undefined): unknown[][] {
+function decodeStates(states: string | undefined): Record<string, unknown[]> {
     if (states === undefined) throw new Error('seed.states missing')
-    return decode(states) as unknown[][]
+    return decode(states) as Record<string, unknown[]>
+}
+
+// These pages have no `<Component/>`, so everything lands in the ROOT bucket (site path `""`).
+function rootBucket(states: string | undefined): unknown[] {
+    const bucket = decodeStates(states)['']
+    if (bucket === undefined) throw new Error('root bucket missing from seed.states')
+    return bucket
 }
 
 // The reactive text leaf renders as `<p>VALUE<!----></p>` (the `<!---->` is the client-skeleton anchor).
@@ -49,8 +56,8 @@ test('SSR records a non-deterministic state initial into #__abide-seed, matching
     expect(typeof seed.states).toBe('string')
     const states = decodeStates(seed.states)
     // Per-component buckets: one page bucket (0) holding the one recorded initial.
-    expect(states.length).toBe(1)
-    const bucket = states[0]
+    expect(Object.keys(states).length).toBe(1)
+    const bucket = states['']
     expect(typeof bucket?.[0]).toBe('number')
     // The recorded value is EXACTLY what the server rendered with (no desync): the seed value equals the
     // value the `{t}` leaf produced in the HTML.
@@ -68,7 +75,7 @@ test('the soft-nav envelope carries the recorded state initials', async () => {
 
     const response = await app.fetch('/', { headers: { 'Abide-Nav': '/other' } })
     const envelope = (await parseSoftNav(response)) as { seed: { states?: string } }
-    expect(decodeStates(envelope.seed.states)).toEqual([[1, 'two']])
+    expect(rootBucket(envelope.seed.states)).toEqual([1, 'two'])
 
     await app.stop()
 })
@@ -93,7 +100,7 @@ test('state initials are recorded RAW (pre-transform) so the client re-applies t
     const seed = readSeedFromDocument(html)
     // Raw initial (5) is recorded, NOT the post-transform cell value (6) the server rendered — the client
     // calls `state(5, transform)` and re-applies the transform to reach 6.
-    expect(decodeStates(seed.states)).toEqual([[5]])
+    expect(rootBucket(seed.states)).toEqual([5])
     expect(readRenderedValue(html)).toBe('6')
 
     await app.stop()
@@ -111,7 +118,7 @@ test('a rich (non-JSON) state initial round-trips through the value codec', asyn
     const response = await app.fetch('/')
     expect(response.status).toBe(200)
     const seed = readSeedFromDocument(await response.text())
-    expect(decodeStates(seed.states)).toEqual([[1n, 7]])
+    expect(rootBucket(seed.states)).toEqual([1n, 7])
 
     await app.stop()
 })
@@ -128,7 +135,7 @@ test('a codec-unsupported state initial (class instance) drops to null rather th
     const response = await app.fetch('/')
     expect(response.status).toBe(200)
     const seed = readSeedFromDocument(await response.text())
-    expect(decodeStates(seed.states)).toEqual([[null, 7]])
+    expect(rootBucket(seed.states)).toEqual([null, 7])
 
     await app.stop()
 })

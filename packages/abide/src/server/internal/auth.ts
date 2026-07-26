@@ -12,7 +12,7 @@
 // SameSite=Lax (AU8 CSRF) + Path=/ + rolling Max-Age, Secure in prod.
 
 import { anonymousPrincipal, type Principal } from './scope.ts'
-import { seal, ttlMs, unseal } from './seal.ts'
+import { seal, ttlMs, unseal, unsealPayload } from './seal.ts'
 
 const APP_OWNER: Principal = { id: 'app-owner', authenticated: true, appOwner: true }
 
@@ -63,6 +63,23 @@ export async function resolveIdentity(
     request: Request,
     parsedCookies?: Bun.CookieMap,
 ): Promise<Principal> {
+    return (await resolveIdentityDetailed(request, parsedCookies)).principal
+}
+
+export interface ResolvedIdentity {
+    principal: Principal
+    // The `exp` (ms epoch) of the abide-identity COOKIE this principal came from, when it came from
+    // one. Undefined for every other rung — a bearer, an absent/tampered/expired cookie, or the
+    // anonymous fallback — all of which mean "no live cookie to roll", so the router must write one.
+    cookieExpiresAt: number | undefined
+}
+
+// `resolveIdentity` plus the cookie expiry the router needs to decide whether the rolling cookie is
+// due for a rewrite. Same ladder, same order; only the extra return field differs.
+export async function resolveIdentityDetailed(
+    request: Request,
+    parsedCookies?: Bun.CookieMap,
+): Promise<ResolvedIdentity> {
     const authorization = request.headers.get('authorization')
     if (authorization !== null) {
         const match = /^Bearer\s+(.+)$/i.exec(authorization.trim())
@@ -75,10 +92,11 @@ export async function resolveIdentity(
                 appToken.length > 0 &&
                 constantTimeEqual(bearer, appToken)
             ) {
-                return appOwner()
+                return { principal: appOwner(), cookieExpiresAt: undefined }
             }
+            // A bearer is stateless (AU6.3) and never persists a cookie, so its `exp` is irrelevant.
             const unsealed = await unseal(bearer)
-            if (unsealed !== undefined) return unsealed
+            if (unsealed !== undefined) return { principal: unsealed, cookieExpiresAt: undefined }
         }
     }
 
@@ -86,11 +104,26 @@ export async function resolveIdentity(
         parsedCookies ?? new Bun.CookieMap(request.headers.get('cookie') ?? '')
     ).get('abide-identity')
     if (cookieToken !== null && cookieToken.length > 0) {
-        const unsealed = await unseal(cookieToken)
-        if (unsealed !== undefined) return unsealed
+        const payload = await unsealPayload(cookieToken)
+        if (payload !== undefined) return { principal: payload.p, cookieExpiresAt: payload.exp }
     }
 
-    return anonymousPrincipal()
+    return { principal: anonymousPrincipal(), cookieExpiresAt: undefined }
+}
+
+// How much of a cookie's lifetime may burn down before the rolling rewrite is worth an AES-GCM seal.
+// At the 30-day default that is a rewrite at most once every three days per client — the session still
+// rolls forward indefinitely for an active caller, which is the whole point of "rolling", while a busy
+// client stops paying the seal on every single response.
+const ROLL_AFTER_FRACTION = 0.1
+
+// Should this response carry a freshly-sealed abide-identity cookie? `expiresAt` is the live cookie's
+// expiry (undefined = there is no readable cookie, so one must be written).
+export function identityCookieIsDue(expiresAt: number | undefined, now = Date.now()): boolean {
+    if (expiresAt === undefined) return true
+    const remaining = expiresAt - now
+    if (remaining <= 0) return true
+    return remaining < ttlMs() * (1 - ROLL_AFTER_FRACTION)
 }
 
 // Guard the identity accessor calls before persisting an authenticated principal: in prod,

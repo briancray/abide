@@ -77,25 +77,44 @@ function pageImports(
 // client replays it as `state(seed, transform)`, so the transform is re-applied there; recording the
 // post-transform value would double-apply it. `.shared` is passed through untouched (it carries no
 // serializable initial and never consumes a seed slot on the client), so a bucket's local ordinal count
-// stays identical on both sides. `context.states` is `unknown[][]` — one bucket per component
-// instance in mount order; `forComponent()` opens the next bucket and returns a recorder bound to it. The
-// page + its layouts share the root bucket (bucket 0); each `<Component/>` adapter opens its own, so a
-// component's `state()`-sequence divergence stays inside its bucket. See §5 / decision 10.
+// stays identical on both sides.
+//
+// `context.states` is keyed by SITE PATH, not by mount order. A bucket's key is built from the component's
+// STABLE per-module site id (assigned in `templatePlan`, read by BOTH emitters) plus, inside a loop, the
+// item index — so a component instance is named by WHERE IT IS, not by WHEN IT MOUNTED. That distinction is
+// the whole point: a `{#for await}` region is re-created asynchronously on the client, so a mount-order
+// counter assigned every component after such a block a different id on each side and it silently replayed
+// the WRONG bucket. Two path segments:
+//   • `/<siteId>` — a `<Component/>` invocation (opens a NEW bucket; its `state()` calls are ordinal within).
+//   • `#<index>`  — one `{#for}` iteration (keeps the ENCLOSING bucket, so a loop body's own `state()` calls
+//                   stay ordinal in the component that contains them; only nested components branch).
+// The page + its layouts share the ROOT bucket (`""`) — `renderLevel` hands every level the same recorder
+// and `compose.childComponent` is not an adapter, so composition never opens one. See §5 / decision 10.
 function makeRecordingState(): StateFactory {
-    const buckets = getContext().states as unknown as unknown[][]
-    function forComponent(): StateFactory {
-        const bucket: unknown[] = []
-        buckets.push(bucket)
+    const buckets = getContext().states
+    function at(sitePath: string, bucketPath: string): StateFactory {
+        let bucket = buckets[bucketPath]
+        if (bucket === undefined) {
+            bucket = []
+            buckets[bucketPath] = bucket
+        }
+        const owned = bucket
         const rec = function recordState<T>(initial: T, transform?: (value: T) => T): State<T> {
-            bucket.push(initial)
+            owned.push(initial)
             return state(initial, transform)
         } as StateFactory
         return Object.assign(rec, {
             shared: state.shared,
-            forComponent,
+            forSite(siteId: number): StateFactory {
+                const next = `${sitePath}/${siteId}`
+                return at(next, next)
+            },
+            forItem(index: number): StateFactory {
+                return at(`${sitePath}#${index}`, bucketPath)
+            },
         }) as StateFactory
     }
-    return forComponent() // the page/root = component bucket 0
+    return at('', '') // the page/root bucket
 }
 
 // Render one composed level (a layout or the page) to its inner SSR HTML. When a deeper level exists,
@@ -286,14 +305,20 @@ export function collectSeed(config: AppConfig): HydrationSeed {
         }
     }
     // State initials recorded during this SSR render (same request scope as `renderPage`), grouped into
-    // per-component buckets in mount order. Keep empty buckets — bucket ids are positional, so a hole
-    // would shift every later component. Skip the whole field only when NO component recorded any state.
-    const recorded = getContext().states as unknown as unknown[][]
+    // per-component buckets KEYED BY SITE PATH (`makeRecordingState`). Empty buckets are dropped: a key is
+    // computed from the template, not from position, so an absent one costs nothing and simply replays as
+    // "no seed for that site". Skip the whole field when nothing recorded any state.
+    const recorded = getContext().states
     const seed: HydrationSeed = {}
     if (reads.length > 0) seed.reads = reads
-    // Encode the whole bucket structure once (lossy: an unsupported initial → `null` node, never a throw)
-    // so the rich codec carries non-RPC state initials the JSON seed used to flatten to `null`.
-    if (recorded.some((bucket) => bucket.length > 0)) seed.states = encode(recorded, true)
+    // Encode the whole bucket map once (lossy: an unsupported initial → `null` node, never a throw) so the
+    // rich codec carries non-RPC state initials the JSON seed used to flatten to `null`.
+    const filled: Record<string, unknown[]> = {}
+    for (const path of Object.keys(recorded)) {
+        const bucket = recorded[path]
+        if (bucket !== undefined && bucket.length > 0) filled[path] = bucket
+    }
+    if (Object.keys(filled).length > 0) seed.states = encode(filled, true)
     // Attachable `{#for await}` handoffs recorded during this render (§5). Values/args are JSON-safed
     // like state initials — a non-serializable entry drops to `null` rather than crashing the seed. The
     // decoded values leak nothing the SSR HTML did not already paint.

@@ -115,8 +115,9 @@ export interface Comment extends Span {
     value: string
 }
 
-// `{expr}` — escaped reactive interpolation. Also covers `{children()}` slot and `{name(args)}`
-// component calls, which are syntactically ordinary interpolations.
+// `{expr}` — escaped reactive interpolation. Renders TEXT. Also covers the `{children()}` slot, which is
+// syntactically an ordinary interpolation but lowers to a component slot. A component is invoked as a TAG
+// (`<Name/>`); the call form `{Name(…)}` is rejected by `templatePlan.rejectComponentCall`.
 export interface Interpolation extends Span {
     type: 'Interpolation'
     expression: string

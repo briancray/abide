@@ -33,22 +33,43 @@ export function canonicalKey(value: unknown): string {
     // a scalar can never form a cycle, so allocating one per read was dead work on the hottest path.
     if (value === null) return 'N'
     const kind = typeof value
-    if (kind === 'string') return `s${JSON.stringify(value)}`
+    if (kind === 'string') return `s${quoteString(value as string)}`
     if (kind === 'number') return `n${numberToToken(value as number)}`
     if (kind === 'boolean') return value ? 'b1' : 'b0'
     if (kind === 'undefined') return 'U'
     if (kind === 'bigint') return `g${(value as bigint).toString()}`
     if (kind === 'symbol') throw new TypeError('canonicalKey: symbols are not supported')
     if (kind === 'function') throw new TypeError('canonicalKey: functions are not supported')
-    // Reference type — allocate the cycle guard only now, then walk the structure.
-    return writeKey(value, new Map<object, number>())
+    // Reference type. The cycle guard is allocated LAZILY (see `writeKey`), not here: a `@n` back-
+    // reference can only ever be EMITTED once a second reference value is reached, so a flat
+    // `{ id, tab }` — the shape almost every memo/RPC read is keyed by — never needs the Map at all.
+    return writeKey(value, null)
 }
 
-function writeKey(value: unknown, seen: Map<object, number>): string {
+// JSON string quoting, minus the `JSON.stringify` call for the common case. `JSON.stringify` escapes
+// exactly three classes: control chars (< 0x20), `"`, and `\` — plus lone surrogates, which it emits
+// as `\udXXX`. A string containing none of those quotes to itself wrapped in `"`, so scanning for them
+// and concatenating beats a stringify call (which dominated the object path — one per KEY NAME, and
+// object keys are near-always plain identifiers). Falls back to `JSON.stringify` on any hit, so output
+// stays byte-identical either way.
+function quoteString(value: string): string {
+    for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i)
+        if (code < 0x20 || code === 0x22 || code === 0x5c || (code >= 0xd800 && code <= 0xdfff)) {
+            return JSON.stringify(value)
+        }
+    }
+    return `"${value}"`
+}
+
+// `seen` is null until a reference value is reached that could actually produce a back-reference; the
+// callers below arm it (indexing THIS node as 0 first) at exactly the point the original eager version
+// would have, so the `@n` indices are identical — they are assigned in the same depth-first pre-order.
+function writeKey(value: unknown, seen: Map<object, number> | null): string {
     if (value === null) return 'N'
     const kind = typeof value
     if (kind === 'undefined') return 'U'
-    if (kind === 'string') return `s${JSON.stringify(value)}`
+    if (kind === 'string') return `s${quoteString(value as string)}`
     if (kind === 'number') return `n${numberToToken(value as number)}`
     if (kind === 'boolean') return value ? 'b1' : 'b0'
     if (kind === 'bigint') return `g${(value as bigint).toString()}`
@@ -56,9 +77,17 @@ function writeKey(value: unknown, seen: Map<object, number>): string {
     if (kind === 'function') throw new TypeError('canonicalKey: functions are not supported')
 
     const object = value as object
-    const existing = seen.get(object)
-    if (existing !== undefined) return `@${existing}`
-    seen.set(object, seen.size)
+    if (seen !== null) {
+        const existing = seen.get(object)
+        if (existing !== undefined) return `@${existing}`
+        seen.set(object, seen.size)
+    }
+
+    // A plain object is what a memo/RPC arg almost always IS, so it is decided FIRST, by one prototype
+    // read — ahead of the five `instanceof` checks + `ArrayBuffer.isView` the exotic types need. None of
+    // those can be reached through this branch (each has its own prototype), so hoisting is free.
+    const prototype = Object.getPrototypeOf(object)
+    if (prototype === Object.prototype || prototype === null) return writeRecord(object, seen)
 
     if (object instanceof Date)
         return `D${Number.isNaN(object.getTime()) ? 'NaN' : object.getTime()}`
@@ -73,46 +102,73 @@ function writeKey(value: unknown, seen: Map<object, number>): string {
     }
 
     if (Array.isArray(object)) {
+        let guard = seen
         let out = 'A['
         for (let i = 0; i < object.length; i++) {
             if (i > 0) out += ','
-            out += writeKey(object[i], seen)
+            const element = object[i]
+            if (guard === null && isReference(element)) guard = armGuard(object)
+            out += writeKey(element, guard)
         }
         return `${out}]`
     }
 
+    // Map/Set arm the guard eagerly rather than per-entry: their entries are near-always references,
+    // and a Map/Set cache key is rare enough that the extra allocation is not worth the branch.
     if (object instanceof Map) {
+        const guard = seen ?? armGuard(object)
         const entries: string[] = []
         for (const [entryKey, entryValue] of object) {
-            entries.push(`${writeKey(entryKey, seen)}=>${writeKey(entryValue, seen)}`)
+            entries.push(`${writeKey(entryKey, guard)}=>${writeKey(entryValue, guard)}`)
         }
         entries.sort()
         return `M{${entries.join(',')}}`
     }
 
     if (object instanceof Set) {
+        const guard = seen ?? armGuard(object)
         const elements: string[] = []
-        for (const element of object) elements.push(writeKey(element, seen))
+        for (const element of object) elements.push(writeKey(element, guard))
         elements.sort()
         return `S{${elements.join(',')}}`
     }
 
-    const prototype = Object.getPrototypeOf(object)
-    if (prototype !== Object.prototype && prototype !== null) {
-        throw new TypeError(
-            `canonicalKey: unsupported value of type ${object.constructor?.name ?? 'unknown'} (class instances are not supported)`,
-        )
-    }
+    // Not a plain object (handled above), not an array, and not one of the supported exotics.
+    throw new TypeError(
+        `canonicalKey: unsupported value of type ${object.constructor?.name ?? 'unknown'} (class instances are not supported)`,
+    )
+}
 
+// The plain-object (or null-prototype) walk: keys sorted so the key is order-independent.
+function writeRecord(object: object, seen: Map<object, number> | null): string {
     const record = object as Record<string, unknown>
-    const keys = Object.keys(record).sort()
+    const keys = Object.keys(record)
+    if (keys.length > 1) keys.sort()
+    let guard = seen
     let out = 'O{'
     for (let i = 0; i < keys.length; i++) {
         if (i > 0) out += ','
         const objectKey = keys[i] as string
-        out += `${JSON.stringify(objectKey)}:${writeKey(record[objectKey], seen)}`
+        const child = record[objectKey]
+        if (guard === null && isReference(child)) guard = armGuard(object)
+        out += `${quoteString(objectKey)}:${writeKey(child, guard)}`
     }
     return `${out}}`
+}
+
+// Could this value take an index in the cycle guard (i.e. is it a reference the walk recurses into)?
+// A `function` is excluded on purpose — `writeKey` throws on one, so arming for it would be dead work.
+function isReference(value: unknown): boolean {
+    return value !== null && typeof value === 'object'
+}
+
+// Arm the lazily-created cycle guard. Reaching the reference section with a null guard can only happen
+// at the ROOT (a container arms before recursing into any reference child), so `node` always takes
+// index 0 — the same index the previously-eager version assigned it.
+function armGuard(node: object): Map<object, number> {
+    const seen = new Map<object, number>()
+    seen.set(node, 0)
+    return seen
 }
 
 function numberToToken(value: number): string {

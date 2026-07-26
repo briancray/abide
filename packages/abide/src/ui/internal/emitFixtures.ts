@@ -477,26 +477,26 @@ export const FIXTURES: Fixture[] = [
 
     // --- components (inline builders) ------------------------------------------
     {
-        name: 'component defined and called',
-        src: "{#component Item(x)}<li>{x}</li>{/component}<ul>{Item('a')}{Item('b')}</ul>",
+        name: 'component defined and used',
+        src: '{#component Item({ x })}<li>{x}</li>{/component}<ul><Item x="a"/><Item x="b"/></ul>',
         kind: 'template',
         scope: () => ({}),
     },
     {
         name: 'component hoisted',
-        src: "<ul>{Item('a')}</ul>{#component Item(x)}<li>{x}</li>{/component}",
+        src: '<ul><Item x="a"/></ul>{#component Item({ x })}<li>{x}</li>{/component}',
         kind: 'template',
         scope: () => ({}),
     },
     {
         name: 'component not escaped',
-        src: "{#component Raw(v)}<b>{v}</b>{/component}{Raw('hi')}",
+        src: '{#component Raw({ v })}<b>{v}</b>{/component}<Raw v="hi"/>',
         kind: 'template',
         scope: () => ({}),
     },
     {
         name: 'component client fragment',
-        src: '{#component Greeting(n)}Hi {n}!{/component}{Greeting(name)}',
+        src: '{#component Greeting({ n })}Hi {n}!{/component}<Greeting n={name}/>',
         kind: 'template',
         server: false,
         scope: () => ({ name: 'Bob' }),

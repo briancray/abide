@@ -549,9 +549,19 @@ the known shortcuts and gaps. Ordered by impact.
       instance ordinals). Ref: `server/internal/pages.ts`, `ui/internal/seededState.ts`.
     - **Cheap-check blind spots** (decision 5, by design): same-tag wrong-content and wrong-tag on a
       purely-static container aren't detected → silent until first update.
-    - `{#for await}` hydration is create-fallback (re-iterates a fresh async iterator), not same-node
-      claim. `{#switch}` `leading` region and purely-static block bodies are created, not claimed.
-      Component `{children()}` claimed only for emitted/pass-through components.
+    - `{#for await}` hydration is same-node claim for **both mode A and mode B** (#31); only a COLD source
+      (no handoff recorded — a socket, a local generator, a pre-deadline error) still create-fallbacks.
+      `{#switch}` `leading` region and purely-static block bodies are created, not claimed.
+      Component `{children()}` claimed only for emitted/pass-through components. **The create-fallback's
+      seed hazard is fixed (#30 — buckets are site-keyed now, so it can no longer corrupt a later
+      component). The remaining cost is a visible RE-PAINT of the streamed region — the same-node claim is
+      what fixes that. NB it does NOT re-run an attachable source: a `seedStream`-warmed slot hands back a
+      cursor over the existing transcript (`memo.ts:886-889`), and soft-nav records handoffs too
+      (`router.ts:675`), so the handler runs once. A genuine double RUN only happens where no handoff was
+      recorded — a source `parseAttachSource` can't pattern-match (socket, local generator, any wrapped
+      call) or one that errors before the deadline. Closing that is BROADENING ATTACHABILITY (tag the
+      handoff at runtime, where the memo knows it produced the stream), which is a separate change from the
+      claim.**
 18. ~~**Emitter: contextual-keyword template identifiers not rewritten**~~ **FIXED (#18).** A bare
     template identifier whose name is a TS *contextual keyword* tokenizes as a keyword, so the
     free-identifier passes skipped it → `$scope.<name>` never emitted → `ReferenceError` at mount.
@@ -773,6 +783,109 @@ the known shortcuts and gaps. Ordered by impact.
     `scope.ts` comment documented a re-seal branch that did not exist). Fix is behavioural, so it was
     left out of the cleanup: skip the cookie for the immutable-asset branch, and re-seal only when the
     identity actually changed or the rolling window is due.
+
+28. ~~**A component had two invocation forms, and one of them made an interpolation leaf two shapes.**~~
+    **DONE (2026-07-26).** `{Name(…)}` — calling an inline `{#component}` (or a component-valued binding)
+    in an interpolation — rendered a whole subtree at a scalar LEAF position. The server had to pick the
+    anchor shape at RENDER time by `Raw`-ness (`serverRuntime.renderLeaf` bracketing with
+    `<!--[-->…<!--]-->`) and the hydrate walk had to rediscover it by peeking (`runtime.hydrateInterpLeaf`)
+    — layout decided outside the plan, and the one place where SSR and the claim walk agreed by
+    convention rather than by construction. **A component is now invoked as a TAG only** (`<Name/>`), which
+    is a component slot whose paired anchors both emitters emit statically; a component-valued prop is
+    rendered `<Render/>` too. So an interpolation leaf is always ONE scalar position. Removed:
+    `hydrateInterpLeaf`, `interpolate`'s `adoptServerMount` + both `isMountable` branches, and
+    `renderLeaf`'s `Raw` bracketing. Added: `templatePlan.rejectComponentCall` (compile error naming the
+    `<Name …/>` fix, over inline defs at any depth + imported `.abide` locals) plus runtime throws in
+    `renderLeaf`/`interpolate` for the statically invisible case (a component arriving through props).
+    Visible in the oracle snapshots: the client DOM for a component now carries the same
+    `<!--[-->…<!--]-->` brackets the server always emitted — the two used to disagree at that slot.
+    Refs: `ui/internal/{templatePlan,emitClient,emitServer,runtime,serverRuntime,ast,emitFixtures}.ts`,
+    `emitHydrate.test.ts`; design: `docs/spec/attach-hydration-design.md` decision 4 refinement
+    (marked SUPERSEDED). NB `{children()}` was never this case — it lowers to a component slot like `<slot/>`.
+
+29. ~~**`{html(...)}`'s claimed extent was re-derived, not read — three ways to get it wrong.**~~
+    **DONE (2026-07-26).** The hydrate claim (a) located its end anchor by scanning forward for the first
+    empty-data comment and (b) re-parsed the markup in a probe `<div>` to count how many nodes to walk
+    back from it. Both are unsound for arbitrary raw markup: **(1)** markup containing `<!---->` — which
+    abide's own SSR output is full of — truncated the region; **(2)** a context-sensitive parent mis-counted
+    (a `<td>` inside a `<tr>` is dropped by the bare probe `<div>`, count 0 vs 1); **(3)** markup whose
+    leading text merged with the preceding static sibling claimed one node too many — `A{html(t)}` rendered
+    `Aother` on the server and became **`other`** after the first update, silently deleting the static
+    prefix. (3) was verified against the pre-fix code, not just reasoned about.
+    **Fix:** the server BRACKETS the region — `serverRuntime.renderHtml` writes `<!--[h-->…<!--]h-->` with a
+    **collision-checked** delimiter: it escalates a numeric suffix (`[h0`, `[h1`, …) until the close marker
+    is provably absent from the markup, so a region can never be terminated by its own content. One
+    `String.includes` on the common path, zero extra bytes unless it actually collides, and deterministic
+    (a counter, not a nonce) so SSR bytes and snapshots stay stable. The claim then READS the extent:
+    `claimRoots(nextSibling(open), close)` — no probe, no count, no parse. `runtime.findHtmlClose` reads the
+    committed token off the open anchor, so no depth counting is needed (the token is unique to the region).
+    The plan emits html as a 2-position bracketed slot so skeleton and server DOM stay structurally
+    identical for the cursor walk. Refs: `HTML_ANCHOR.ts` (new, shared by all three so they cannot drift),
+    `ui/internal/{serverRuntime,emitServer,templatePlan,emitClient,runtime}.ts`; 3 regression tests in
+    `emitHydrate.test.ts`, each confirmed failing against the old implementation.
+
+30. ~~**The hydration seed keyed component buckets by MOUNT ORDER, so a `{#for await}` silently
+    corrupted every component after it.**~~ **DONE (2026-07-26).** `state()` initials are recorded per
+    component instance; the bucket a component read was chosen by a shared mount-order counter
+    (`forComponent()`), bumped on both sides and assumed to line up. It doesn't. `runtime.forBlock` CLEARS
+    a `{#for await}` region on hydrate and re-drains it in a **microtask**, so the client counted zero
+    components there during the synchronous hydrate pass while the server had counted every streamed item
+    in document order. Every component AFTER such a block therefore read a **different bucket on each
+    side** — replaying another component's state as its own. Silent: the DOM structure is fine, so no
+    hydration mismatch fires; the value is simply wrong, and pass 1 (decision 9) writes it OVER the
+    correct server paint. Proven with a probe — page `{#for await x of src}<A/>{/for}<B/>`, server
+    recorded `[[], [A], [A], [B]]`, client rendered `<i class="b">A-initial</i>`.
+    Reachability was **timing-dependent**, which is why nothing caught it: items past the SSR deadline
+    stream as patches AFTER the rest of the page, accidentally matching the client's sync-first order, so
+    only a stream faster than the deadline (or a non-streaming render — `createTestApp`, direct
+    `render()`) desyncs. `packages/docs/.../hydration/page.abide` has the exact trigger shape
+    (`<HydrationProbe/>` inside a `{#for await}`, `<RichSeedProbe/>` after it) and passes only because its
+    RPC stream outlives the 4 ms deadline.
+    **Fix — buckets are keyed by SITE PATH, not mount order.** `templatePlan` assigns each `<Component/>`
+    invocation a stable per-module `siteId` that BOTH emitters read off the shared plan and pass as the
+    adapter's 4th argument; the adapter opens its bucket with `forSite(siteId)`. A `{#for}` item scope adds
+    `forItem(index)` — same bucket (a loop body's own `state()` calls stay ordinal in the component that
+    contains them), deeper path — so components nested in a loop get one bucket per iteration. Path
+    segments: `/<siteId>` per component, `#<index>` per item; `""` is the page+layouts root.
+    `context.states` is now `Record<string, unknown[]>`. Within a bucket it stays positional, with the
+    ordinal cursor living on the BUCKET so an item scope continues its parent's sequence.
+    A site path is computed from the template, so it cannot shift with mount timing — and when the two
+    sides genuinely differ (a streamed item whose value changes on re-drain) the key simply misses and the
+    cell falls back to its literal initial, i.e. **safe degradation instead of silent corruption**. Note
+    this does NOT make streamed-item state survive hydration; only claiming the items (the `{#for await}`
+    same-node claim, still open) does that. Refs: `ui/internal/{templatePlan,emitServer,emitClient,runtime,
+    seededState}.ts`, `server/internal/{pages,scope}.ts`, `shared/internal/context.ts`; contract test in
+    `seededState.test.ts` asserts the emitted key set (`["", "#0/0", "#1/0", "/1"]`).
+
+31. ~~**`{#for await}` hydration cleared and re-painted the server's streamed region.**~~ **DONE (mode A;
+    2026-07-26).** The claim now adopts the painted items in place — the server's `<li>` nodes are the SAME
+    objects after hydrate, wired, with no re-paint of what is usually the largest region on a streaming page.
+    The blocker was that binding item *i* needs its VALUE synchronously while the source read is a `Promise`.
+    Three pieces closed it: (a) a warm stream read carries a **settled hint** (`markSettled`, mirroring the
+    settled-value path one line below it in `coalescedLoad`); (b) the cursor is tagged with the transcript
+    behind it (`shared/internal/streamTranscript.ts`, mirroring `tagStreamEncoding`); (c) **`startStream`
+    pushes a fully-known ARRAY source synchronously** — it drained even the mode-A handoff through an async
+    loop at one chunk per microtask, so the transcript was EMPTY for the whole claim tick. (c) was the actual
+    bug; (a)+(b) are the access path. `runtime.claimStreamedRegion` then brackets each item with the same
+    `<!--for-->`/`<!--/for-->` markers the sync `{#for}` claim uses and stops at the `<template id="ab-l:N">`
+    sentinel (removing it), so a region cut off mid-stream claims its prefix; the first drain SKIPS the
+    claimed count (transcript indices are stable — the buffer is append-only) and appends the tail.
+    **Mode B landed too, and it is the case that MATTERS:** `forAwaitStream` races `ABIDE_SSR_DEADLINE`
+    (**4 ms**), so mode A means the whole stream finished in 4 ms — i.e. only cheap streams. Anything worth
+    worrying about (an LLM token stream, a long job) always lands in mode B, so the mode-A-only claim helped
+    least where it counted. `seedStream` now takes a `StreamSeed` `{ prefix, rest }`: the flushed prefix is
+    pushed synchronously (same reason as the array fast-path) and `resumeStreamSource` yields ONLY the tail.
+    **The `fresh` hazard:** an evicted server transcript answers `x-abide-stream-resume: fresh` — a full run
+    from 0 that REPLACES the prefix. That prefix is already installed and may already be claimed onto the
+    DOM, so the resume can no longer just yield the fresh run on top; it calls `onFresh`, which invalidates
+    the slot and lets the block clear-and-restream — today's behaviour, in the rare eviction case only.
+    A cold source (no handoff) is unchanged.
+    **Not a double-run fix** — an attachable source already ran once (see #19). Two gotchas worth keeping:
+    the claim must run inside the effect's FIRST run off the source that run already read (reading
+    separately re-invokes a cold non-memo source — caught by an existing gating test), and it is first-run
+    only, so a later `refresh()` is still a genuine clear-and-restream. Refs: `shared/memo.ts`,
+    `shared/internal/streamTranscript.ts`, `ui/internal/runtime.ts`; 2 tests in `emitStreamAttach.test.ts`
+    (same-node identity + claim-is-first-run-only).
 
 ## Design-level parked (see each spec's `## Deferred / parked`)
 `docs/spec/*.md` carry the design-level parked items, e.g.: socket **backplane** (horizontal

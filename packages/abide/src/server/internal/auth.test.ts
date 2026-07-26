@@ -2,9 +2,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import {
     clearIdentityCookieHeader,
     identityCookieHeader,
+    identityCookieIsDue,
     isProd,
     requireSecretForAuthedSet,
     resolveIdentity,
+    resolveIdentityDetailed,
     unrecognizedNodeEnv,
 } from './auth.ts'
 import type { Principal } from './scope.ts'
@@ -220,5 +222,58 @@ describe('isProd / requireSecretForAuthedSet', () => {
         else Bun.env.ABIDE_IDENTITY_SECRET = secret
         if (originalNodeEnv === undefined) delete Bun.env.NODE_ENV
         else Bun.env.NODE_ENV = originalNodeEnv
+    })
+})
+
+describe('rolling cookie — only re-seal when it is actually due', () => {
+    const DEFAULT_TTL = 30 * 24 * 60 * 60 * 1000
+
+    test('no readable cookie means one must be written', () => {
+        expect(identityCookieIsDue(undefined)).toBe(true)
+    })
+
+    test('an already-expired cookie is due', () => {
+        expect(identityCookieIsDue(Date.now() - 1000)).toBe(true)
+    })
+
+    test('a freshly-issued cookie is NOT due — this is the per-response seal we are skipping', () => {
+        expect(identityCookieIsDue(Date.now() + DEFAULT_TTL)).toBe(false)
+    })
+
+    test('a cookie still inside the roll window is not due', () => {
+        // 2 days elapsed of 30 — under the 10% (3-day) roll threshold
+        expect(identityCookieIsDue(Date.now() + DEFAULT_TTL - 2 * 24 * 60 * 60 * 1000)).toBe(false)
+    })
+
+    test('a cookie past the roll window IS due, so an active session still rolls forward', () => {
+        // 5 days elapsed of 30 — past the threshold
+        expect(identityCookieIsDue(Date.now() + DEFAULT_TTL - 5 * 24 * 60 * 60 * 1000)).toBe(true)
+    })
+
+    test('resolveIdentityDetailed reports the cookie exp so the router can make that call', async () => {
+        const before = Date.now()
+        const token = await seal({ id: 'roller', authenticated: true })
+        const resolved = await resolveIdentityDetailed(
+            requestWith({ cookie: `abide-identity=${token}` }),
+        )
+        expect(resolved.principal.id).toBe('roller')
+        expect(resolved.cookieExpiresAt).toBeGreaterThanOrEqual(before + DEFAULT_TTL - 5000)
+        expect(identityCookieIsDue(resolved.cookieExpiresAt)).toBe(false)
+    })
+
+    test('a bearer rung reports no cookie expiry — a bearer never persists one', async () => {
+        const token = await seal({ id: 'machine', authenticated: true })
+        const resolved = await resolveIdentityDetailed(
+            requestWith({ authorization: `Bearer ${token}` }),
+        )
+        expect(resolved.principal.id).toBe('machine')
+        expect(resolved.cookieExpiresAt).toBeUndefined()
+    })
+
+    test('an anonymous fallback reports no expiry, so the first response writes a cookie', async () => {
+        const resolved = await resolveIdentityDetailed(requestWith({}))
+        expect(resolved.principal.authenticated).toBe(false)
+        expect(resolved.cookieExpiresAt).toBeUndefined()
+        expect(identityCookieIsDue(resolved.cookieExpiresAt)).toBe(true)
     })
 })

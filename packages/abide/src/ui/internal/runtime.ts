@@ -21,7 +21,9 @@ import {
     untrack,
 } from '../../shared/internal/reactive.ts'
 import { peekSettled } from '../../shared/internal/settledRead.ts'
+import { streamTranscriptOf } from '../../shared/internal/streamTranscript.ts'
 import { log } from '../../shared/log.ts'
+import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
 export { closeEffectScope, disposeEffectScope, effect, openEffectScope, state, untrack }
@@ -46,6 +48,9 @@ export type ClientComponent = (
     props: Record<string, unknown>,
     children: (() => Mountable) | null,
     parentScope?: unknown,
+    // The invocation's STABLE site id (from the shared template plan). A `.abide` adapter opens its seed
+    // bucket by this rather than by mount order — see `seededState.makeSeededState`.
+    siteId?: number,
 ) => unknown
 
 // ---------------------------------------------------------------------------
@@ -172,9 +177,9 @@ const COMMENT_NODE = 8
 //
 // Comment-anchor conventions (emitted identically by `templatePlan`/`emitServer`):
 //   • `<!---->`    (empty data)  — a leaf slot anchor (scalar interp / await / html).
-//   • `<!--[-->`   (data "[")    — a block/component OPEN anchor, AND the OPEN of a mountable interpolation
-//                                  (a `{#component}` call / `{children()}`), whose subtree the server brackets
-//                                  so the walk can skip/adopt it as a unit (serverRuntime.renderLeaf).
+//   • `<!--[-->`   (data "[")    — a block/component OPEN anchor. A component subtree ALWAYS arrives through
+//                                  a component slot (`<Name/>`, `<slot/>`, `{children()}`), never an
+//                                  interpolation — so a leaf position is always a scalar.
 //   • `<!--]-->`   (data "]")    — the matching CLOSE anchor.
 const BLOCK_OPEN = '['
 const BLOCK_CLOSE = ']'
@@ -217,39 +222,22 @@ export function hydrateValueLeaf(): Node | null {
     return node
 }
 
-// Consume an INTERPOLATION leaf, which the server renders in one of two shapes (see serverRuntime.renderLeaf):
-//   • a scalar value → `<text><!---->` (or a bare `<!---->` when empty) — identical to `hydrateValueLeaf`.
-//   • a mountable (a `{#component}` call / `{children()}`) → the whole subtree bracketed by `<!--[-->…<!--]-->`.
-// A leading `<!--[-->` means the mountable form: skip the ENTIRE bracketed region (depth-honoring, so nested
-// component calls are handled) and hand the OPEN anchor back — `interpolate` derives the close + subtree from
-// it to adopt the region. Skipping the region as a unit is what keeps following siblings in sync (the
-// desync `hydrateValueLeaf` caused by advancing a single node past a multi-node subtree).
-export function hydrateInterpLeaf(): Node | null {
-    const node = hydrateCursor
-    if (node !== null && node.nodeType === COMMENT_NODE && node.nodeValue === BLOCK_OPEN) {
-        const close = findBlockClose(node)
-        hydrateCursor = close !== null ? close.nextSibling : null
-        return node
-    }
-    if (node === null) return null
-    if (node.nodeType === TEXT_NODE) {
-        hydrateCursor = node.nextSibling !== null ? node.nextSibling.nextSibling : null
-    } else {
-        hydrateCursor = node.nextSibling
-    }
-    return node
-}
-
-// Consume an `{html(...)}` leaf: its server value is arbitrary raw nodes followed by the `<!---->`
-// anchor. Scan forward to the anchor (empty-data comment), advance past it, and return it as the
-// `end` `htmlBlock` claims backward from. Best-effort (raw markup containing a literal empty comment
-// would fool the scan — accepted; see PR3 note).
-export function hydrateHtmlAnchor(): Node | null {
-    let node = hydrateCursor
-    while (node !== null && !(node.nodeType === COMMENT_NODE && node.nodeValue === ''))
+// Find the CLOSE anchor of an `{html(...)}` region. The OPEN anchor carries the exact token the server
+// committed to (`[h`, `[h0`, … — escalated when the markup itself contained the close marker, see
+// `serverRuntime.renderHtml`), so this scans for ONE unambiguous value. No depth counting is needed or
+// wanted: the token is unique to this region by construction, which is what makes the extent sound even
+// when the injected markup is abide's own SSR output.
+export function findHtmlClose(open: Node | null): Node | null {
+    if (open === null || open.nodeType !== COMMENT_NODE) return null
+    const value = open.nodeValue
+    if (value === null || !value.startsWith(HTML_ANCHOR.open)) return null
+    const closeValue = HTML_ANCHOR.close + value.slice(HTML_ANCHOR.open.length)
+    let node = open.nextSibling
+    while (node !== null) {
+        if (node.nodeType === COMMENT_NODE && node.nodeValue === closeValue) return node
         node = node.nextSibling
-    hydrateCursor = node !== null ? node.nextSibling : null
-    return node
+    }
+    return null
 }
 
 // Find the CLOSE `<!--]-->` matching the OPEN `<!--[-->` at `open`, honoring nested block depth.
@@ -435,7 +423,9 @@ function requireOpen(open: Node | null, where: string): void {
 // Reactive slots
 // ---------------------------------------------------------------------------
 
-// `{expr}` — reactive text before `end`. Renders text, thenables (resolve → text), and Mountables.
+// `{expr}` — reactive TEXT before `end`. Renders text and thenables (resolve → text). A component is not
+// renderable here: it is invoked as a tag (`<Name/>`), which is a component slot with its own paired
+// anchors, so this leaf is always a single scalar position on both the server and the hydrate walk.
 export function interpolate(
     parent: Node,
     end: Node,
@@ -443,10 +433,6 @@ export function interpolate(
     prefixLen: number = 0,
 ): Disposer {
     let textNode: Text | null = null
-    // Stable insertion point for created/re-mounted content. Starts at `end`; when a server-rendered
-    // mountable is ADOPTED during hydration (see below), `end` is a CONTENT node, so `anchor` is re-parked
-    // on the trailing `<!---->` the adoption lands on — the stable point future re-mounts insert before.
-    let anchor = end
     let thenGeneration = 0
     let primed = false
 
@@ -456,29 +442,14 @@ export function interpolate(
         primed = true
     }
 
-    // Adopt a server-rendered mountable subtree (a `{#component}` call or `{children()}`) on the hydrate
-    // pass. The server brackets such a value with `<!--[-->…<!--]-->` (serverRuntime.renderLeaf), and the
-    // walk (`hydrateInterpLeaf`) hands `end` back as that OPEN anchor. Re-seek the claim cursor onto the
-    // subtree's first node (`open.nextSibling`), mount the builder in CLAIM mode bounded by the CLOSE anchor
-    // — so it reuses + wires the exact server nodes (whole extent, trailing statics included) instead of
-    // leaving them stranded — and park the stable insertion `anchor` on the close. The disposer is returned
-    // as the effect cleanup so a later reactive re-run REPLACES this subtree instead of appending a second,
-    // live copy beside the stranded one.
-    const adoptServerMount = (value: Mountable): Disposer => {
-        if (!(end.nodeType === COMMENT_NODE && end.nodeValue === BLOCK_OPEN)) {
-            // Defensive: no bracket (shouldn't happen for a mountable) → mount fresh at `end`.
-            return value.mount(parent, end)
-        }
-        const close = findBlockClose(end)
-        anchor = close ?? end
-        const saved = hydrateNode()
-        hydrateSeek(nextSibling(end))
-        // Mount against `anchor` (= close ?? end), not raw `close`: a malformed/foreign-mutated DOM can
-        // leave `close` null, and most Mountables treat a null anchor as "append to end of parent",
-        // which would place the adopted subtree after later siblings. `anchor` keeps the fallback intact.
-        const disposer = value.mount(parent, anchor)
-        hydrateSeek(saved)
-        return disposer
+    // Mirror of `serverRuntime.renderLeaf`'s guard, for a client-only mount (no SSR pass to throw first).
+    // Statically visible component calls are rejected by `templatePlan` at compile time; this catches the
+    // invisible one — a component arriving through props and called instead of tagged.
+    const rejectComponent = (value: unknown): void => {
+        if (isMountable(value))
+            throw new Error(
+                'a component reached an interpolation — invoke a component as a tag (`<Name …/>`), not a call (`{name(…)}`)',
+            )
     }
 
     // Correct the CLAIMED server text to `shown` on the hydrate pass: write only on divergence, and
@@ -489,7 +460,7 @@ export function interpolate(
             if (textNode.data !== shown) textNode.data = shown
         } else if (shown !== '') {
             textNode = document.createTextNode(shown)
-            insert(parent, textNode, anchor)
+            insert(parent, textNode, end)
         }
     }
 
@@ -499,10 +470,9 @@ export function interpolate(
             // First pass under hydration: `read()` above subscribed us, so trust the server's output — no
             // DOM write (decision 9). EXCEPTION: a client-only value (e.g. a `bind:element` node ref set
             // during mount, before this effect first ran) can already diverge from what the server printed
-            // — detect that mismatch against the claimed node and correct it in place. A mountable is
-            // adopted from the server DOM.
+            // — detect that mismatch against the claimed node and correct it in place.
             primed = false
-            if (isMountable(value)) return adoptServerMount(value)
+            rejectComponent(value)
             if (isThenable(value)) {
                 // A settled hint means we know the value synchronously, so a thenable is no longer opaque
                 // here: treat it exactly like a scalar and correct a diverged claim. With NO hint the read
@@ -523,16 +493,10 @@ export function interpolate(
             showPrimed(text(value))
             return
         }
-        if (isMountable(value)) {
-            if (textNode !== null) {
-                remove(textNode)
-                textNode = null
-            }
-            return value.mount(parent, anchor)
-        }
+        rejectComponent(value)
         if (textNode === null) {
             textNode = document.createTextNode('')
-            insert(parent, textNode, anchor)
+            insert(parent, textNode, end)
         }
         if (isThenable(value)) {
             // A warm / seed-primed coalesced load resolves synchronously and tags its promise with the
@@ -620,40 +584,35 @@ export function awaitText(
     }
 }
 
-// `{html(expr)}` — raw markup before `end`, re-rendered on change.
+// `{html(expr)}` — raw markup between the region's `open`/`close` anchors, re-rendered on change.
 export function htmlBlock(
     parent: Node,
-    end: Node | null,
+    open: Node | null,
+    close: Node | null,
     read: () => unknown,
-    prefixLen: number = 0,
 ): Disposer {
-    void prefixLen // raw markup has no single-text split point; kept for a uniform leaf signature.
     let primed = hydrating
     return effect(() => {
         const value = read()
-        const markup = value === null || value === undefined ? '' : String(value)
         if (primed) {
-            // Claim the server-rendered raw nodes: re-derive the node count from the same markup and grab
-            // that many nodes immediately before `end` (their identities are the server's — no recreate).
+            // Claim the server-rendered raw nodes by READING the extent off the anchors the server wrote
+            // (`serverRuntime.renderHtml`) — their identities are the server's, no recreate. Deliberately
+            // NOT re-derived from the markup: a probe re-parse mis-counts in a context-sensitive parent
+            // (a `<td>` is dropped inside a bare `<div>`) and whenever the markup's leading text merged
+            // with the preceding sibling, both of which claimed the wrong nodes.
             primed = false
-            if (end === null) throw new HydrationMismatch('{html(...)} anchor not found for claim')
-            const probe = document.createElement('div')
-            probe.innerHTML = markup
-            const count = probe.childNodes.length
-            const claimed: Node[] = []
-            let cursor = (end as ChildNode).previousSibling
-            for (let i = 0; i < count && cursor !== null; i++) {
-                claimed.unshift(cursor)
-                cursor = cursor.previousSibling
-            }
+            if (open === null || close === null)
+                throw new HydrationMismatch('{html(...)} anchors not found for claim')
+            const claimed = claimRoots(nextSibling(open), close)
             return () => {
                 for (const child of claimed) remove(child)
             }
         }
+        const markup = value === null || value === undefined ? '' : String(value)
         const container = document.createElement('div')
         container.innerHTML = markup
         const nodes = Array.from(container.childNodes)
-        for (const child of nodes) insert(parent, child, end)
+        for (const child of nodes) insert(parent, child, close)
         return () => {
             for (const child of nodes) remove(child)
         }
@@ -888,6 +847,7 @@ export function component(
     props: Record<string, unknown>,
     childrenFn: (() => Mountable) | null,
     parentScope?: unknown,
+    siteId?: number,
 ): Disposer {
     if (typeof componentFn !== 'function') {
         throw new Error(`<${name}> is not a component in scope (expected a mount function)`)
@@ -900,7 +860,9 @@ export function component(
     if (hydrating) hydrateSeek(open !== null ? open.nextSibling : null)
     // `parentScope` (3rd arg) lets a `.abide` file-component's default adapter build its child scope
     // via `Object.create(parentScope)`; inline component factories use rest params and ignore it.
-    const result = untrack(() => (componentFn as ClientComponent)(props, childrenFn, parentScope))
+    const result = untrack(() =>
+        (componentFn as ClientComponent)(props, childrenFn, parentScope, siteId),
+    )
     // The children mount claims the server region; a mismatch inside it recovers locally (decision 5).
     const inner = isMountable(result)
         ? claimBlock(open, marker, `component <${name}>`, () => result.mount(parent, marker))
@@ -924,6 +886,7 @@ export function dynamicComponent(
     props: Record<string, unknown>,
     childrenFn: (() => Mountable) | null,
     parentScope?: unknown,
+    siteId?: number,
 ): Disposer {
     let dispose: Disposer | null = null
     const stop = effect(() => {
@@ -933,7 +896,17 @@ export function dynamicComponent(
                 dispose()
                 dispose = null
             }
-            dispose = component(parent, open, anchor, name, fn, props, childrenFn, parentScope)
+            dispose = component(
+                parent,
+                open,
+                anchor,
+                name,
+                fn,
+                props,
+                childrenFn,
+                parentScope,
+                siteId,
+            )
         })
     })
     return () => {
@@ -965,8 +938,12 @@ export function ifBlock(
     // reactive re-run `hydrating` is false, so a branch FLIP creates fresh DOM (expected).
     if (hydrating) hydrateSeek(open !== null ? open.nextSibling : null)
     const dispose = effect(() => {
+        // Indexed loop, not `branches.entries()`: this runs inside a reactive effect, and the iterator
+        // allocated a `[i, branch]` tuple per branch tested on every re-evaluation.
         let index = -1
-        for (const [i, branch] of branches.entries()) {
+        for (let i = 0; i < branches.length; i++) {
+            const branch = branches[i]
+            if (branch === undefined) continue
             if (branch.condition === null || branch.condition()) {
                 index = i
                 break
@@ -1003,7 +980,9 @@ export function switchBlock(
         const subject = read()
         let match = -1
         let fallback = -1
-        for (const [i, entry] of cases.entries()) {
+        for (let i = 0; i < cases.length; i++) {
+            const entry = cases[i]
+            if (entry === undefined) continue
             if (entry.test === null) {
                 fallback = i
                 continue
@@ -1327,17 +1306,30 @@ interface ListItem {
     startMarker: Comment
     endMarker: Comment
     handle: ForItemHandle
+    // Scratch flag owned by `reconcile`: set on the items carried into the next run, so the removal
+    // pass can spot the dropped ones without building a Set of the survivors. Meaningless between runs.
+    reused: boolean
 }
 
-function collectRange(startMarker: Node, endMarker: Node): Node[] {
-    const nodes: Node[] = []
+// The `{#for}` source as an array. An ARRAY passes through uncopied — the list is consumed
+// synchronously by the walk that receives it and never retained, so the defensive copy `Array.from`
+// made was pure per-update allocation (a 200-row list re-runs this on every reactive change).
+// Any other iterable is materialized as before.
+function toItemArray(raw: unknown): unknown[] {
+    if (raw === null || raw === undefined) return []
+    if (Array.isArray(raw)) return raw as unknown[]
+    return Array.from(raw as Iterable<unknown>)
+}
+
+// Move `[startMarker .. endMarker]` (inclusive) to sit before `reference`, preserving order. Each
+// node's successor is read BEFORE the move, since `insertBefore` detaches it from the old position.
+function moveRange(parent: Node, startMarker: Node, endMarker: Node, reference: Node): void {
     let node: Node | null = startMarker
     while (node !== null) {
-        nodes.push(node)
-        if (node === endMarker) break
-        node = node.nextSibling
+        const next: Node | null = node === endMarker ? null : node.nextSibling
+        parent.insertBefore(node, reference)
+        node = next
     }
-    return nodes
 }
 
 function createListItem(
@@ -1353,7 +1345,7 @@ function createListItem(
     insert(parent, startMarker, blockEnd)
     insert(parent, endMarker, blockEnd)
     const handle = factory(parent, startMarker, endMarker, value, index)
-    return { key, startMarker, endMarker, handle }
+    return { key, startMarker, endMarker, handle, reused: false }
 }
 
 function removeListItem(item: ListItem): void {
@@ -1362,21 +1354,92 @@ function removeListItem(item: ListItem): void {
     remove(item.endMarker)
 }
 
+// The trailing `<template id="ab-l:N">` a STREAMED `{#for await}` region ends with: items are emitted bare
+// and the sentinel trails them as the append insertion point (`streamScope.forAwaitStream`). A
+// non-streaming render paints the items with no sentinel at all, so its absence is normal, not a mismatch.
+function streamSentinelBefore(end: Node | null): Node | null {
+    const previous = end === null ? null : end.previousSibling
+    if (previous === null || previous.nodeType !== ELEMENT_NODE) return null
+    const element = previous as Element
+    if (element.tagName !== 'TEMPLATE' || !element.id.startsWith('ab-l:')) return null
+    return element
+}
+
+// CLAIM a server-painted `{#for await}` region in place rather than clearing it and re-painting. Returns
+// how many items were claimed, or -1 when the region can't be claimed at all.
+//
+// The blocker used to be that binding item i needs its VALUE synchronously, and the source read is a
+// Promise. A `seedStream`-warmed slot now tags its cursor with the transcript behind it
+// (`shared/internal/streamTranscript.ts`), and the read carries a settled hint — so the values ARE
+// available synchronously here. A cold source (no handoff recorded: a non-RPC iterable, a pre-deadline
+// error) has neither, and correctly falls back to clear-and-create.
+//
+// Items carry no per-item boundary in the server HTML, so this uses the same trick as the sync `{#for}`
+// claim: bracket each with the `<!--for-->`/`<!--/for-->` markers the create path uses and let the item
+// body's own claim consume exactly its nodes (bounded by the `hydrateForItem` flag). It stops at the
+// sentinel/blockEnd rather than at a count, so a region cut off mid-stream claims its prefix and leaves
+// the rest to the drain.
+function claimStreamedRegion(
+    parent: Node,
+    open: Node,
+    blockEnd: Node,
+    source: unknown,
+    options: ForOptions,
+    items: ListItem[],
+): number {
+    const settled = peekSettled(source)
+    if (settled === undefined) return -1
+    const chunks = streamTranscriptOf(settled.value)
+    if (chunks === undefined) return -1
+    const regionEnd = streamSentinelBefore(blockEnd) ?? blockEnd
+    let claimed = 0
+    try {
+        hydrateSeek(open.nextSibling)
+        while (claimed < chunks.length) {
+            const at = hydrateNode()
+            if (at === null || at === regionEnd) break
+            const value = chunks[claimed]
+            const key = options.keyFor(value, claimed)
+            const startMarker = document.createComment('for')
+            insert(parent, startMarker, hydrateNode())
+            const endMarker = document.createComment('/for')
+            beginForItem()
+            const handle = options.createItem(parent, startMarker, endMarker, value, claimed)
+            insert(parent, endMarker, hydrateNode())
+            items.push({ key, startMarker, endMarker, handle, reused: false })
+            claimed++
+        }
+    } catch (error) {
+        if (!(error instanceof HydrationMismatch)) throw error
+        warnHydrationMismatch('{#for await}', error)
+        return -1
+    }
+    // Whatever the loop did not consume — the sentinel, plus any painted tail the transcript no longer
+    // covers — belongs to no claimed item. Drop it so the drain appends onto a clean region.
+    clearBetween(hydrateNode(), blockEnd)
+    return claimed
+}
+
 export function forBlock(
     parent: Node,
     open: Node | null,
     anchor: Node | null,
     options: ForOptions,
 ): Disposer {
-    // Async `{#for await}` hydrate (replayable-streams.md §5). The server streamed the source into an
-    // `<abide-list>` placeholder; on hydrate the client discards it and re-reads the source. For a
-    // known-RPC source `replayStreams` (bootstrap) has already WARM-SEEDED the memo from the handoff (a
-    // completed mode-A transcript, or a mode-B prefix+resume source), so the read replays with NO client
-    // re-invoke. A non-RPC source simply re-iterates. Clear the server region before the effect re-mounts.
-    if (hydrating && options.isAwait && open !== null) clearBetween(open.nextSibling, anchor)
     const blockEnd = document.createComment('for-end')
     insert(parent, blockEnd, anchor)
     let items: ListItem[] = []
+
+    // Async `{#for await}` hydrate (replayable-streams.md §5). `replayStreams` (bootstrap) has already
+    // WARM-SEEDED the memo from the handoff (a completed mode-A transcript, or a mode-B prefix+resume
+    // source), so the read replays with no client re-invoke. What it could NOT do until now is claim the
+    // painted nodes — binding item i needs its value synchronously — so the region was cleared and
+    // re-painted. It is now claimed in place when the transcript is reachable (see `claimStreamedRegion`).
+    //
+    // The claim happens on the effect's FIRST run, off the source that run already read: reading here
+    // instead would INVOKE a cold non-memo source a second time (a memo coalesces; a bare `gen()` does not).
+    const claimServerRegion = hydrating && options.isAwait && open !== null
+    let firstRun = true
 
     if (options.isAwait) {
         // Reactive drain — a warm-seeded SSR-adopted stream (mode A or B), a fresh client mount, or a
@@ -1403,8 +1466,25 @@ export function forBlock(
             const source = options.read()
             const runGen = ++generation
             const stale = (): boolean => generation !== runGen
+            // Only the FIRST run claims: its items are mounted over the server's own nodes. Every later run
+            // (a refresh/invalidate) is a genuine clear-and-restream, and every run after a failed claim
+            // starts from an already-cleared region. `skip` is how many transcript values the claim covered.
+            let skip = 0
+            if (firstRun) {
+                firstRun = false
+                if (claimServerRegion && open !== null) {
+                    skip = claimStreamedRegion(parent, open, blockEnd, source, options, items)
+                    if (skip < 0) {
+                        // Cold source, or a mismatch inside a claimed item: clear and re-paint as before.
+                        for (const item of items) removeListItem(item)
+                        items = []
+                        clearBetween(open.nextSibling, blockEnd)
+                        skip = 0
+                    }
+                }
+            }
             untrack(() => {
-                clearRun()
+                if (skip === 0) clearRun()
                 let index = 0
                 // A STREAMING RPC read is `Promise<AsyncIterable<C>>` (the memo read is async), and `for
                 // await` cannot iterate a Promise; awaiting a non-thenable `gen()` is identity, so a plain
@@ -1421,18 +1501,22 @@ export function forBlock(
                     try {
                         for await (const value of iterable) {
                             if (stale()) return
-                            const key = options.keyFor(value, index)
+                            const at = index++
+                            // Transcript indices are stable (the buffer is append-only), so skipping the
+                            // claimed prefix by COUNT is exact — this cursor replays the same chunks the
+                            // claim bound, in the same order.
+                            if (at < skip) continue
+                            const key = options.keyFor(value, at)
                             items.push(
                                 createListItem(
                                     parent,
                                     blockEnd,
                                     value,
-                                    index,
+                                    at,
                                     key,
                                     options.createItem,
                                 ),
                             )
-                            index++
                         }
                         // Stream drained — flip the `done(iterable)` probe (unless superseded first).
                         if (!stale()) markIterableDone(iterable)
@@ -1470,8 +1554,7 @@ export function forBlock(
             // the cursor past exactly its nodes — bounded via the `hydrateForItem` flag), then close it off.
             hydrateSeek(open !== null ? open.nextSibling : null)
             const raw = untrack(() => options.read())
-            const list =
-                raw === null || raw === undefined ? [] : Array.from(raw as Iterable<unknown>)
+            const list = toItemArray(raw)
             for (let index = 0; index < list.length; index++) {
                 const value = list[index]
                 const key = options.keyFor(value, index)
@@ -1481,7 +1564,7 @@ export function forBlock(
                 beginForItem()
                 const handle = options.createItem(parent, startMarker, endMarker, value, index)
                 insert(parent, endMarker, hydrateNode())
-                items.push({ key, startMarker, endMarker, handle })
+                items.push({ key, startMarker, endMarker, handle, reused: false })
             }
         } catch (error) {
             if (!(error instanceof HydrationMismatch)) throw error
@@ -1495,7 +1578,7 @@ export function forBlock(
 
     const dispose = effect(() => {
         const raw = options.read()
-        const list = raw === null || raw === undefined ? [] : Array.from(raw as Iterable<unknown>)
+        const list = toItemArray(raw)
         if (recovered) {
             // Rebuild the cleared list from scratch (hydration OFF so items CLONE rather than mis-claim).
             recovered = false
@@ -1512,17 +1595,23 @@ export function forBlock(
     }
 
     function reconcile(list: unknown[]): void {
+        // One index of the reusable old items, and one scratch flag per item — no `used` Set and no
+        // `kept` Set. Claiming a key DELETES it from the index, which is what stops a non-unique `by`
+        // key from reusing the same item twice (the old `used` Set's job).
         const oldMap = new Map<unknown, ListItem>()
-        for (const item of items) if (!oldMap.has(item.key)) oldMap.set(item.key, item)
-        const used = new Set<unknown>()
+        for (const item of items) {
+            item.reused = false
+            if (!oldMap.has(item.key)) oldMap.set(item.key, item)
+        }
         const nextItems: ListItem[] = []
 
         for (let index = 0; index < list.length; index++) {
             const value = list[index]
             const key = options.keyFor(value, index)
             const existing = oldMap.get(key)
-            if (existing !== undefined && !used.has(key)) {
-                used.add(key)
+            if (existing !== undefined) {
+                oldMap.delete(key) // claimed — a repeat of this key must build a fresh item
+                existing.reused = true
                 existing.handle.update(value, index)
                 nextItems.push(existing)
             } else {
@@ -1533,11 +1622,11 @@ export function forBlock(
         }
 
         // Remove by ITEM IDENTITY, not by key: with a non-unique `by` key, two old items can share a
-        // key while only one was reused into `nextItems`. A key-based check (`!used.has(item.key)`)
-        // would spare BOTH, stranding the un-reused duplicate in the DOM (never updated, never disposed).
-        const kept = new Set(nextItems)
+        // key while only one was reused into `nextItems`. A key-based check would spare BOTH, stranding
+        // the un-reused duplicate in the DOM (never updated, never disposed). The per-item flag carries
+        // that identity directly — a fresh item is never in `items`, so it is never a removal candidate.
         for (const item of items) {
-            if (!kept.has(item)) removeListItem(item)
+            if (!item.reused) removeListItem(item)
         }
 
         // Reorder DOM to match nextItems (walk back-to-front, moving out-of-place ranges).
@@ -1546,8 +1635,7 @@ export function forBlock(
             const item = nextItems[index]
             if (item === undefined) continue
             if (item.endMarker.nextSibling !== reference) {
-                const range = collectRange(item.startMarker, item.endMarker)
-                for (const rangeNode of range) parent.insertBefore(rangeNode, reference)
+                moveRange(parent, item.startMarker, item.endMarker, reference)
             }
             reference = item.startMarker
         }

@@ -46,6 +46,7 @@ import {
     sharedCacheUnpin,
     sharedStore,
 } from './internal/sharedCache.ts'
+import { tagStreamTranscript } from './internal/streamTranscript.ts'
 import { log } from './log.ts'
 
 // `shared` is a SERVER concept (cross-request store + scope isolation). On the client a shared-flagged
@@ -183,13 +184,32 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     seed(args: Args, value: T): void
     // The STREAMING analog of `seed` (§5): install a warm stream slot from an SSR handoff so a hydrate read
     // replays it with NO client re-invoke, and `peek`/`chunks`/`done`/`refresh` reflect it. A finite array
-    // is a completed (mode-A) transcript; an AsyncIterable is the mode-B "prefix then resumed tail" source
-    // (it closes the slot when the resume ends).
+    // is a completed (mode-A) transcript; a `StreamSeed` is the mode-B flushed-prefix + resumed-tail pair;
+    // a bare AsyncIterable is any other warm source (it closes the slot when it ends).
     seedStream(
         args: Args,
-        source: readonly unknown[] | AsyncIterable<unknown>,
+        source: readonly unknown[] | AsyncIterable<unknown> | StreamSeed,
         encoding?: 'jsonl' | 'sse',
     ): void
+}
+
+// A mode-B (OPEN) SSR handoff: the flushed `prefix` is already known, `rest` resumes the tail over the
+// wire. Kept as its own shape rather than one pre-concatenated generator so `startStream` can push the
+// prefix SYNCHRONOUSLY — attach-hydration reads the transcript in the SAME TICK to bind each painted
+// item's value and claim the server's nodes, and a generator's first yield is already a microtask late.
+export interface StreamSeed {
+    prefix: readonly unknown[]
+    rest: AsyncIterable<unknown>
+}
+
+// A `StreamSeed` vs a bare iterable source. Keyed on the `prefix` array rather than on the ABSENCE of
+// `Symbol.asyncIterator`, so a source that happens to carry both is still read as the explicit seed.
+function isStreamSeed(source: unknown): source is StreamSeed {
+    return (
+        typeof source === 'object' &&
+        source !== null &&
+        Array.isArray((source as StreamSeed).prefix)
+    )
 }
 
 // An AUTO-TRACKED memo: `fn` declares no inputs and produces a plain value synchronously, so its
@@ -457,6 +477,20 @@ export function memo<Args, T>(
         if (store !== undefined) sharedCacheTouch(store, slot.key)
     }
 
+    // THIS memo's own slots within one backing store, so a verb never has to scan the whole store.
+    // Keyed by the store Map itself (as `sharedCache`'s sidecars are), which makes the index per-request
+    // on the server and per-tab on the client, and lets it die with the store it indexes.
+    const ownSlots = new WeakMap<Map<string, unknown>, Map<string, Slot<Args, T>>>()
+
+    function ownSlotsIn(cache: Map<string, unknown>): Map<string, Slot<Args, T>> {
+        let own = ownSlots.get(cache)
+        if (own === undefined) {
+            own = new Map<string, Slot<Args, T>>()
+            ownSlots.set(cache, own)
+        }
+        return own
+    }
+
     function ensureSlot(args: Args): Slot<Args, T> {
         const cache = slots()
         const slotKey = prefix + canonicalKey(args)
@@ -471,19 +505,34 @@ export function memo<Args, T>(
                 generation: 0,
             }
             cache.set(slotKey, slot)
+            ownSlotsIn(cache).set(slotKey, slot)
         }
         return slot
     }
 
     // Every slot belonging to this memo in the active context (optionally filtered by selector).
+    //
+    // Reads the memo's OWN index rather than scanning the backing store: the store holds every memo's
+    // slots for the whole request, so scanning it made each verb O(all slots in the context) — and
+    // `snapshot()` is called once per read route by the SSR seed collector, which turned that into
+    // O(routes x slots) per page render.
+    //
+    // The index is a cache, not the truth: `sharedCacheEvictIfNeeded` deletes from the store directly
+    // (LRU), so an indexed slot can already be gone. Each entry is confirmed against the store by
+    // identity and a stale one is dropped here — one Map lookup per OWN slot, still nothing per foreign
+    // slot. Confirming by identity (not just presence) also drops a slot some later `ensureSlot`
+    // replaced under the same key.
     function selectSlots(selector: Partial<Args> | Args | undefined): Slot<Args, T>[] {
         const cache = slots()
+        const own = ownSlotsIn(cache)
         const result: Slot<Args, T>[] = []
         // Compile the selector's canonical keys once, not per slot scanned.
         const compiled = selector === undefined ? undefined : compileSelector(selector)
-        for (const [slotKey, entry] of cache) {
-            if (typeof slotKey !== 'string' || !slotKey.startsWith(prefix)) continue
-            const slot = entry as Slot<Args, T>
+        for (const [slotKey, slot] of own) {
+            if (cache.get(slotKey) !== slot) {
+                own.delete(slotKey) // evicted (or superseded) behind our back — self-heal
+                continue
+            }
             if (compiled === undefined || matchesSelector(slot.args, compiled)) result.push(slot)
         }
         return result
@@ -701,6 +750,9 @@ export function memo<Args, T>(
         const store = boundedStore(cache)
         if (store !== undefined) sharedCacheUnpin(store, slot.key) // never leave a disposed key pinned
         cache.delete(slot.key)
+        // Drop it from the own-slot index too. `selectSlots` would self-heal this, but a long-lived
+        // shared store churning stream slots should not accumulate dead index entries between verbs.
+        ownSlotsIn(cache).delete(slot.key)
     }
 
     // Last consumer of a stream slot detached (ref-count hit 0). Dispose a settled ttl:0 slot; for a
@@ -769,9 +821,36 @@ export function memo<Args, T>(
             refreshing: false,
             stream,
         })
+        // Chunks that are ALREADY KNOWN are pushed SYNCHRONOUSLY: a whole array (the mode-A handoff) or a
+        // `StreamSeed`'s flushed prefix (mode B). Draining them through the loop below would append one per
+        // microtask, leaving the transcript EMPTY for the rest of this tick — and attach-hydration reads it
+        // synchronously to bind each painted item's value and claim the server's nodes, so an async fill
+        // means it sees nothing and falls back to clearing the region. Nothing is awaited here.
+        let tail: AsyncIterable<unknown> | Iterable<unknown> | undefined
+        if (Array.isArray(source)) {
+            for (const chunk of source) stream.push(chunk)
+        } else if (isStreamSeed(source)) {
+            for (const chunk of source.prefix) stream.push(chunk)
+            tail = source.rest
+        } else {
+            tail = source
+        }
+        // A fully-known transcript settles NOW — there is no tail to await.
+        if (tail === undefined) {
+            stream.close()
+            slot.loadedAt = Date.now()
+            if (store !== undefined) {
+                sharedCacheUnpin(store, slot.key)
+                sharedCacheRecordSize(store, slot.key, stream.bytes)
+                sharedCacheEvictIfNeeded(store)
+            }
+            bumpStreamTick(slot)
+            return stream
+        }
+        const rest = tail
         void (async () => {
             try {
-                for await (const chunk of source) {
+                for await (const chunk of rest) {
                     if (controller.signal.aborted) break
                     stream.push(chunk)
                 }
@@ -831,6 +910,9 @@ export function memo<Args, T>(
     function streamCursor(stream: ReplayableStream<unknown>): T {
         const cursor = stream.consume()
         if (stream.encoding !== undefined) tagStreamEncoding(cursor, stream.encoding)
+        // Point the cursor at the transcript behind it, so attach-hydration can bind each streamed item's
+        // value SYNCHRONOUSLY and claim the server's nodes instead of clearing and re-painting them.
+        tagStreamTranscript(cursor, stream.chunks)
         return cursor as unknown as T
     }
 
@@ -903,7 +985,11 @@ export function memo<Args, T>(
             !state.stream.overflowed &&
             !isExpired(slot)
         ) {
-            return Promise.resolve(streamCursor(state.stream))
+            // Tag the promise with its synchronous value, exactly as the settled-VALUE path below does:
+            // nothing is pending here (the buffer already exists), so a hydrating `{#for await}` can reach
+            // the cursor — and through it the transcript — without awaiting a microtask it cannot await.
+            const cursor = streamCursor(state.stream)
+            return markSettled(Promise.resolve(cursor), cursor)
         }
         if (slot.inflight !== null) return slot.inflight.then(mapRead)
         if (!isExpired(slot)) {

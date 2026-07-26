@@ -12,6 +12,7 @@ import {
 } from '../../shared/internal/context.ts'
 import type { EffectScope } from '../../shared/internal/reactive.ts'
 import { disposeEffectScope, openEffectScope } from '../../shared/internal/reactive.ts'
+import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // Re-exported so the emitted server `{#for await}` can flip the `done(source)` probe when it fully
 // drains a stream within the SSR pass (see emitServer.ts).
@@ -39,7 +40,7 @@ export function openRenderScope(): EffectScope {
     return scope
 }
 
-// Marks already-safe HTML that must NOT be escaped (component calls / `{children()}` slot).
+// Marks already-safe HTML that must NOT be escaped (a rendered component / the `<slot/>` children).
 export class Raw {
     constructor(readonly value: string) {}
     toString(): string {
@@ -66,18 +67,41 @@ export function renderValue(value: unknown): string {
     return escapeHtml(String(value))
 }
 
-// An interpolation LEAF's server HTML. A `Raw` value is a mounted subtree (a `{#component}` call or the
-// `{children()}` slot) that can span MANY top-level nodes, so it is wrapped in the paired `<!--[-->…<!--]-->`
-// block anchors (identical to real blocks) instead of the single trailing `<!---->` a scalar leaf carries.
-// The bracket lets the hydrate walk skip the whole mountable region as ONE unit (via `findBlockClose`) —
-// without it the walk mis-reads multi-node output as a single text leaf and desyncs every following sibling.
+// An interpolation LEAF's server HTML: the scalar value plus its trailing `<!---->` anchor. An
+// interpolation renders TEXT — a component is invoked as a tag (`<Name/>`), which is its own paired-anchor
+// slot. So a `Raw` (a rendered component subtree) arriving here is an authoring error, and a loud one:
+// `renderValue` would splice the subtree unanchored, and the hydrate walk — which reads this position as a
+// single text leaf — would then desync every following sibling. `templatePlan` rejects the statically
+// visible form at compile time; this catches the one it cannot see, a component arriving through props.
 export function renderLeaf(value: unknown): string {
-    if (value instanceof Raw) return `<!--[-->${value.value}<!--]-->`
+    if (value instanceof Raw)
+        throw new Error(
+            'a component reached an interpolation — invoke a component as a tag (`<Name …/>`), not a call (`{name(…)}`)',
+        )
     return `${renderValue(value)}<!---->`
 }
 
-// `{html(expr)}` value → raw markup (null/undefined → "", Raw → its value, else String).
-export function rawValue(value: unknown): string {
+// An `{html(...)}` region's server HTML: the raw markup BRACKETED by a collision-checked pair of comment
+// anchors. The extent has to be marked rather than re-derived — a client-side re-parse of the markup
+// mis-counts nodes in a context-sensitive parent (a `<td>` is dropped inside a bare probe `<div>`) and
+// whenever the markup's leading text merges with the preceding sibling.
+//
+// The close marker must not occur INSIDE the markup, or the claim walk stops early and desyncs every
+// following sibling. `html()` is raw by contract — its value can be abide's own SSR output fed back
+// through it — so escalate a numeric suffix until the marker is provably absent. One `String.includes`
+// on the common path, and no extra bytes unless it actually collides. Deterministic (a counter, not a
+// nonce), so SSR bytes and snapshots stay stable across runs.
+export function renderHtml(value: unknown): string {
+    const markup = rawValue(value)
+    let suffix = ''
+    while (markup.includes(`<!--${HTML_ANCHOR.close}${suffix}-->`))
+        suffix = suffix === '' ? '0' : `${Number(suffix) + 1}`
+    return `<!--${HTML_ANCHOR.open}${suffix}-->${markup}<!--${HTML_ANCHOR.close}${suffix}-->`
+}
+
+// `{html(expr)}` value → raw markup (null/undefined → "", Raw → its value, else String). Local: the
+// emitter goes through `renderHtml`, which is the only thing that may write an html region's bytes.
+function rawValue(value: unknown): string {
     if (value === null || value === undefined) return ''
     if (value instanceof Raw) return value.value
     return String(value)
@@ -87,14 +111,18 @@ export function rawValue(value: unknown): string {
 // Attribute builder (mirrors renderServer.AttributeBuilder + applyAttributeValue)
 // ---------------------------------------------------------------------------
 
+// One builder is allocated per DYNAMIC-attribute element per render, so a 1000-row list with two such
+// elements per row builds 2000 of them. `values`/`classes`/`styles` are therefore created ON DEMAND —
+// most elements use one of the three — and `class`/`style` membership in `order` is answered by those
+// nullity checks instead of the linear `order.includes` the old version ran on every add.
 export class AttributeBuilder {
     private order: string[] = []
-    private values = new Map<string, string | true>()
-    private classes: string[] = []
-    private styles: string[] = []
+    private values: Map<string, string | true> | null = null
+    private classes: string[] | null = null
+    private styles: string[] | null = null
 
     getValue(name: string): string | true | undefined {
-        return this.values.get(name)
+        return this.values === null ? undefined : this.values.get(name)
     }
 
     setAttribute(name: string, value: string | true): void {
@@ -106,31 +134,50 @@ export class AttributeBuilder {
             this.addStyle(typeof value === 'string' ? value : name)
             return
         }
-        if (!this.values.has(name)) this.order.push(name)
-        this.values.set(name, value)
+        let values = this.values
+        if (values === null) {
+            values = new Map<string, string | true>()
+            this.values = values
+        }
+        if (!values.has(name)) this.order.push(name)
+        values.set(name, value)
     }
 
     addClass(token: string): void {
-        if (!this.order.includes('class')) this.order.push('class')
-        if (token.trim() !== '') this.classes.push(token.trim())
+        let classes = this.classes
+        if (classes === null) {
+            classes = []
+            this.classes = classes
+            this.order.push('class') // first add reserves the slot, empty token or not
+        }
+        const trimmed = token.trim()
+        if (trimmed !== '') classes.push(trimmed)
     }
 
     addStyle(declaration: string): void {
-        if (!this.order.includes('style')) this.order.push('style')
-        if (declaration.trim() !== '') this.styles.push(declaration.trim().replace(/;\s*$/, ''))
+        let styles = this.styles
+        if (styles === null) {
+            styles = []
+            this.styles = styles
+            this.order.push('style')
+        }
+        const trimmed = declaration.trim()
+        if (trimmed !== '') styles.push(trimmed.replace(/;\s*$/, ''))
     }
 
     serialize(): string {
         let out = ''
         for (const name of this.order) {
+            // A name is only in `order` because the corresponding store was created, so each branch's
+            // store is non-null here.
             if (name === 'class') {
-                const merged = this.classes.join(' ').trim()
+                const merged = (this.classes as string[]).join(' ').trim()
                 if (merged !== '') out += ` class="${escapeHtml(merged)}"`
             } else if (name === 'style') {
-                const merged = this.styles.join('; ').trim()
+                const merged = (this.styles as string[]).join('; ').trim()
                 if (merged !== '') out += ` style="${escapeHtml(merged)}"`
             } else {
-                const value = this.values.get(name)
+                const value = (this.values as Map<string, string | true>).get(name)
                 if (value === true) out += ` ${name}`
                 else out += ` ${name}="${escapeHtml(value as string)}"`
             }

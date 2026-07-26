@@ -56,9 +56,10 @@ claimText(anchor, prefixLen): Text|null
 **PR1 — Server anchors matching the skeleton.** Highest churn, lowest logic risk; first. ✅
 - `emitServer.genChunk` (`emitServer.ts:108-218`): emit `<!---->` after interp/html/await; wrap
   if/for/awaitBlock/switch/try/component in `<!--[-->`…`<!--]-->`, driven off the SAME plan (anchors
-  match client by construction, decision 3). (Later refinement: the `interp` chunk now goes through
-  `$rt.renderLeaf`, which brackets a *mountable* value — inline-component call / `{children()}` — with
-  `<!--[-->…<!--]-->` and keeps the single `<!---->` for scalars; see decision 4 refinement.)
+  match client by construction, decision 3). (The `interp` chunk goes through `$rt.renderLeaf`, which
+  emits the scalar + its single `<!---->`. It briefly also bracketed a *mountable* value — the
+  `{Name(…)}` component-call form — with `<!--[-->…<!--]-->`; that form has since been REMOVED, so
+  `renderLeaf` throws on a mountable instead. See decision 4 refinement.)
 - Update `emit.oracle.test.ts.snap` (every dynamic fixture's server string changes),
   `emitCapabilities.test.ts` (has `stripAnchors :20-22`; audit), and interp-wrapping `toContain`s:
   `emitSsr.test.ts:27,40,53`, `pages.test.ts:26,40` (prefer `stripAnchors` helper).
