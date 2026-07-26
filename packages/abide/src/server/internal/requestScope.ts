@@ -1,6 +1,11 @@
 // SERVER REQUEST SCOPE — rpc-core §M2. The per-request ambient bundle that server-side
 // accessors (request/cookies/server/context/identity/route) read from.
 //
+// Named `requestScope.ts` to pair with `shared/internal/reactiveScope.ts` (ADR 0026): two scopes with
+// the SAME lifetime and different content — this one holds what the web asked (a `Request`, cookies,
+// identity, the Bun server), that one holds what the framework computed (memo slots, effects). A bare
+// `scope.ts` gave no hint which of the two you were importing.
+//
 // A scope carries everything a handler needs about the current request: the raw Request,
 // its cookies, the resolved identity, a free-form per-request bag, the route info, the Bun
 // server, and the per-request read cache Map.

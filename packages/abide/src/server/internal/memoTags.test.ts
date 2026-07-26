@@ -17,7 +17,7 @@ import { pending } from '../../shared/pending.ts'
 import { refresh } from '../../shared/refresh.ts'
 import { refreshing } from '../../shared/refreshing.ts'
 import { makeRead, type Rpc } from './makeRpc.ts'
-import { anonymousPrincipal, type RequestScope, runInScope } from './scope.ts'
+import { anonymousPrincipal, type RequestScope, runInScope } from './requestScope.ts'
 
 function makeScope(name: string): RequestScope {
     const request = new Request(`http://localhost/rpc/${name}`)

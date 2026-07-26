@@ -1,7 +1,12 @@
 // STREAMING SSR — per-render deferred-subtree scheduler (streaming-ssr-plan.md, PR2). BUILD/SSR-SIDE.
 //
+// This is the LOGIC over a `RenderStream`; the state itself lives on the render state
+// (`renderState.ts`). The file was `streamScope.ts`, named for a `StreamScope` type that no longer
+// exists — it was never an extent you enter and leave, and ADR 0026 renamed it `RenderStream` and moved
+// it next to the rest of the per-render state. A scheduler is what this file actually is.
+//
 // The emitted server `render` calls `awaitStream(...)` for every STREAMING-form `{#await}` block. Each
-// read is raced against ONE per-render deadline (`createStreamScope`): a read that settles first
+// read is raced against ONE per-render deadline (`createRenderStream`): a read that settles first
 // renders inline (byte-identical to the blocking path — warm/fast pages are unchanged); a read still
 // pending when the deadline passes is DEFERRED — the render emits a sentinel-bracketed placeholder now and
 // registers a subtree renderer, which the document stream (`drainPatches`) flushes later as an
@@ -54,7 +59,7 @@ function timerPromise(ms: number, sentinel: symbol): Promise<symbol> {
 // which a still-running streamed list is cut off (client re-iterates) so an SSR `{#for await}` never
 // hangs. It applies ONLY to NON-abide sources (raw generators / `fetch().body`); an abide RPC source is
 // bounded by its OWN bilateral timeout and gets no global cap at all (replayable-streams.md §6).
-export function createStreamScope(): RenderStream {
+export function createRenderStream(): RenderStream {
     let budgetPromise: Promise<symbol> | undefined
     return {
         deadlinePassed: timerPromise(envMs('ABIDE_SSR_DEADLINE', 4), DEADLINE_PASSED),

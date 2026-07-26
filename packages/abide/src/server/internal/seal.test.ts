@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { Principal } from './scope.ts'
+import type { Principal } from './requestScope.ts'
 import { seal, unseal } from './seal.ts'
 
 const originalSecret = Bun.env.ABIDE_IDENTITY_SECRET

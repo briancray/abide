@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { anonymousPrincipal, type RequestScope, runInScope } from '../server/internal/scope.ts'
+import {
+    anonymousPrincipal,
+    type RequestScope,
+    runInScope,
+} from '../server/internal/requestScope.ts'
 import { effect, state } from './internal/reactive.ts'
 import {
     createReactiveScope,
@@ -14,13 +18,13 @@ const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 // Every test runs inside a fresh cache context so slots never leak between tests.
-function withContext<T>(fn: () => T): T {
+function withScope<T>(fn: () => T): T {
     return enterScope(createReactiveScope(), fn)
 }
 
 describe('memo — read + load', () => {
     test('first read triggers load and resolves via .load', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => n + 1)
             // peek does not trigger a load
             expect(c.peek(1)).toBeUndefined()
@@ -30,7 +34,7 @@ describe('memo — read + load', () => {
     })
 
     test('peek is undefined while pending then holds the value', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => {
                 await delay(15)
                 return n * 3
@@ -45,7 +49,7 @@ describe('memo — read + load', () => {
     })
 
     test('concurrent .load for the same args share ONE fn call', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const c = memo(async (n: number) => {
                 calls++
@@ -60,7 +64,7 @@ describe('memo — read + load', () => {
     })
 
     test('distinct args produce distinct slots', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const c = memo(async (n: number) => {
                 calls++
@@ -75,7 +79,7 @@ describe('memo — read + load', () => {
     })
 
     test('cached value is returned without re-calling fn', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const c = memo(async (n: number) => {
                 calls++
@@ -89,7 +93,7 @@ describe('memo — read + load', () => {
     })
 
     test('reactive c.peek() in an effect eventually shows the resolved value', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => {
                 await delay(10)
                 return n * 2
@@ -111,7 +115,7 @@ describe('memo — read + load', () => {
 
 describe('memo — refresh / invalidate', () => {
     test('refresh re-calls fn and keeps the stale value visible meanwhile', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const c = memo(async (n: number) => {
                 calls++
@@ -133,7 +137,7 @@ describe('memo — refresh / invalidate', () => {
     })
 
     test('invalidate drops the slot; next read re-calls fn', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const c = memo(async (n: number) => {
                 calls++
@@ -151,7 +155,7 @@ describe('memo — refresh / invalidate', () => {
     })
 
     test('partial-object invalidate matches superset slots only', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (args: { id: number; page: number }) => `${args.id}-${args.page}`)
             await c({ id: 1, page: 1 })
             await c({ id: 1, page: 2 })
@@ -166,7 +170,7 @@ describe('memo — refresh / invalidate', () => {
     })
 
     test('whole-memo invalidate drops every slot', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => n * 2)
             await c(1)
             await c(2)
@@ -179,7 +183,7 @@ describe('memo — refresh / invalidate', () => {
 
 describe('memo — publish', () => {
     test('value-form and updater-form update peek', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => `v${n}`)
             await c(1)
             expect(c.peek(1)).toBe('v1')
@@ -193,7 +197,7 @@ describe('memo — publish', () => {
     })
 
     test('an argless memo publishes bare — no `undefined` key placeholder', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async () => 'loaded')
             await c()
             expect(c.peek()).toBe('loaded')
@@ -208,7 +212,7 @@ describe('memo — publish', () => {
 
     // `watch` carries the same vanishing key positional — the handler alone on an argless memo.
     test('an argless memo watches with the handler alone (no key placeholder)', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async () => 'loaded')
             await c()
             const seen: (string | undefined)[] = []
@@ -221,7 +225,7 @@ describe('memo — publish', () => {
     })
 
     test('watch fires the handler on slot change', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => n * 2)
             await c(1)
             const seen: (number | undefined)[] = []
@@ -237,7 +241,7 @@ describe('memo — publish', () => {
     // retained value and then settles it. That flag-flip is NOT a value change, so a refresh landing one
     // new value must fire the handler exactly once — never twice.
     test('watch fires exactly once for a refresh that lands one new value', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let next = 1
             const c = memo(async (_n: number) => next++)
             await c(1)
@@ -254,7 +258,7 @@ describe('memo — publish', () => {
     // `watch` used to be DEAD on a stream slot: its effect read `state.value`, which is permanently
     // undefined for a stream, so the handler never fired at all.
     test('watch fires per chunk on a stream slot, handing over the latest chunk', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async function* (_n: number) {
                 for (const value of ['a', 'b', 'c']) {
                     yield value
@@ -279,7 +283,7 @@ describe('memo — publish', () => {
 
 describe('memo — reactive probes', () => {
     test('pending is reactive via an effect', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => {
                 await delay(15)
                 return n * 2
@@ -299,7 +303,7 @@ describe('memo — reactive probes', () => {
     })
 
     test('error is reactive; fn rejection sets error and .load rejects', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (n: number) => {
                 await delay(10)
                 if (n < 0) throw new Error('negative')
@@ -324,7 +328,7 @@ describe('memo — reactive probes', () => {
 
 describe('memo — ttl', () => {
     test('value re-loads after ttl expiry', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const c = memo(
                 async (n: number) => {
@@ -364,7 +368,7 @@ describe('memo — context isolation', () => {
 
 describe('memo — snapshot + seed (§5 hydration)', () => {
     test('snapshot reports only resolved (value) slots with their args', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const c = memo(async (args: { name: string }) => `hi ${args.name}`)
             await c({ name: 'ada' })
             await c({ name: 'bo' })
@@ -379,7 +383,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
     })
 
     test('seed replays a value so a matching load resolves from cache without calling fn', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const c = memo(async (args: { name: string }) => {
                 calls++
@@ -428,7 +432,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
 
 describe('memo — auto-tracked (argless, synchronous)', () => {
     test('bare call returns T, not a promise, and tracks the body reads', () => {
-        withContext(() => {
+        withScope(() => {
             const count = state(1)
             const doubled = memo(() => count() * 2)
             expect(doubled()).toBe(2)
@@ -439,7 +443,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('the body runs once per dependency change, not once per read', () => {
-        withContext(() => {
+        withScope(() => {
             const count = state(1)
             let runs = 0
             const doubled = memo(() => {
@@ -456,7 +460,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('nothing runs until something reads (lazy)', () => {
-        withContext(() => {
+        withScope(() => {
             let runs = 0
             const derived = memo(() => {
                 runs++
@@ -469,7 +473,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('an ARGED fn keeps todays args-keyed behaviour — RPC is untouched', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const outer = state(1)
             let runs = 0
             const byId = memo((args: { id: number }) => {
@@ -485,7 +489,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('an argless ASYNC body is not tracked (half-tracked is worse than untracked)', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const count = state(1)
             let runs = 0
             const loaded = memo(async () => {
@@ -505,7 +509,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('an argless body that returns a stream stays a replayable stream slot', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             async function* source(): AsyncGenerator<number> {
                 yield 1
                 yield 2
@@ -527,7 +531,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('a naming ttl or shared opts back onto the classic pulled path', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let runs = 0
             const ticker = memo(() => ++runs, { ttl: 0 })
             expect(await ticker(undefined as never)).toBe(1)
@@ -536,7 +540,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('refresh re-runs eagerly, invalidate re-runs on the next pull', () => {
-        withContext(() => {
+        withScope(() => {
             let runs = 0
             const derived = memo(() => ++runs)
             expect(derived()).toBe(1)
@@ -549,7 +553,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('probes: never pending, never refreshing, no transcript', () => {
-        withContext(() => {
+        withScope(() => {
             const derived = memo(() => 7)
             expect(derived.peek()).toBe(7)
             expect(derived.pending()).toBe(false)
@@ -560,7 +564,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('a throwing body retains the error and rethrows on read', () => {
-        withContext(() => {
+        withScope(() => {
             const derived = memo(() => {
                 throw new Error('nope')
             })
@@ -571,7 +575,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('watch fires on a dependency change', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const count = state(1)
             const doubled = memo(() => count() * 2)
             const seen: (number | undefined)[] = []
@@ -584,7 +588,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('memo(source, transform) tracks the source only; the transform runs untracked', () => {
-        withContext(() => {
+        withScope(() => {
             const a = state(1)
             const other = state(100)
             let runs = 0
@@ -606,7 +610,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
 
     // Several inputs need no API of their own (ADR 0025): they are just what the source thunk returns.
     test('a thunk returning several values tracks EVERY read inside it', () => {
-        withContext(() => {
+        withScope(() => {
             const a = state(1)
             const b = state(10)
             let runs = 0
@@ -629,7 +633,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('the transform is called with ONE argument — whatever the thunk returned', () => {
-        withContext(() => {
+        withScope(() => {
             const a = state(1)
             const b = state(2)
             let received: unknown[] = []
@@ -644,7 +648,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('only the THUNK is tracked — a read in the transform is not a dependency', () => {
-        withContext(() => {
+        withScope(() => {
             const a = state(1)
             const other = state(100)
             let runs = 0
@@ -667,7 +671,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     // A KEYED body can be synchronous too, and then the read IS the value — no promise to await, so the
     // SSR text is never blanked. Args stay the whole dependency set: the body runs UNTRACKED.
     test('a keyed SYNC body returns its value directly, not a promise', () => {
-        withContext(() => {
+        withScope(() => {
             const v = memo(({ a, b }: { a: number; b: number }) => a + b)
             const read = v({ a: 1, b: 2 }) as unknown
             expect(read).toBe(3)
@@ -676,7 +680,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('a keyed sync memo still keys per args and reuses each slot', () => {
-        withContext(() => {
+        withScope(() => {
             let runs = 0
             const v = memo(({ n }: { n: number }) => {
                 runs++
@@ -694,7 +698,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('a keyed sync body is UNTRACKED — a cell it reads is not a dependency', () => {
-        withContext(() => {
+        withScope(() => {
             const factor = state(10)
             let runs = 0
             const v = memo(({ n }: { n: number }) => {
@@ -709,7 +713,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('an ASYNC keyed body is unaffected — the read is still a promise', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const v = memo(async ({ n }: { n: number }) => n * 2)
             const read = v({ n: 2 })
             expect(read).toBeInstanceOf(Promise)
@@ -720,7 +724,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     // A slot can be settled without the body ever running (hydration seed / publish). Short-circuiting
     // there before the body is classified would hand a raw value back from an async memo.
     test('a seeded async memo still reads as a promise', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             let calls = 0
             const v = memo(async ({ id }: { id: string }) => {
                 calls++
@@ -738,7 +742,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     // An args-taking body paired with a transform is neither, and would silently call the handler with
     // no arguments, so it fails at construction.
     test('an args-taking body paired with a transform is a loud construction-time error', () => {
-        withContext(() => {
+        withScope(() => {
             expect(() =>
                 memo(({ id }: { id: number }) => id, ((v: unknown) => v) as never),
             ).toThrow(/ARGLESS thunk/)
@@ -746,14 +750,14 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     })
 
     test('the KEYED form is untouched — an args-taking body still pairs with options', () => {
-        withContext(() => {
+        withScope(() => {
             const keyed = memo(({ id }: { id: number }) => id * 2, { ttl: 50 })
             expect(keyed.peek({ id: 2 })).toBeUndefined() // a slot per key, not a source thunk
         })
     })
 
     test('a memo is readable inside the thunk, so declared inputs compose', () => {
-        withContext(() => {
+        withScope(() => {
             const a = state(1)
             const doubled = memo(() => a() * 2)
             const combined = memo(
@@ -769,7 +773,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
 
 describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
     test('set is publish: a local write holds until the next re-fill', () => {
-        withContext(() => {
+        withScope(() => {
             const count = state(1)
             const derived = memo(() => count() * 100)
             const draft = derived.state()
@@ -783,7 +787,7 @@ describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
     })
 
     test('invalidate drops a pending override', () => {
-        withContext(() => {
+        withScope(() => {
             const derived = memo(() => 1)
             const draft = derived.state()
             draft.set(42)
@@ -794,7 +798,7 @@ describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
     })
 
     test('peek() on the projection is an untracked read', () => {
-        withContext(() => {
+        withScope(() => {
             const derived = memo(() => 5)
             const draft = derived.state()
             let runs = 0
@@ -810,7 +814,7 @@ describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
     })
 
     test('an ARGED memos projection addresses one slot', async () => {
-        await withContext(async () => {
+        await withScope(async () => {
             const byId = memo(async (args: { id: number }) => args.id * 10)
             expect(await byId({ id: 2 })).toBe(20)
             const cell = byId.state({ id: 2 })
@@ -831,7 +835,7 @@ describe('memo — loud on fn.length false zeros (ADR 0024 §Consequences)', () 
     })
 
     test('the destructuring-default form type derivation relies on is unaffected', () => {
-        withContext(() => {
+        withScope(() => {
             const c = memo(({ n = 0 }: { n?: number }) => n + 1)
             expect(c.peek({ n: 1 })).toBeUndefined() // args-keyed: a cold peek kicks a load
         })

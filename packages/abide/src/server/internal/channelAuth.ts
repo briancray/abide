@@ -19,8 +19,8 @@ import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoC
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import type { Socket } from '../socket.ts'
 import { compose, type Middleware } from './middleware.ts'
+import { type Principal, type RequestScope, type RouteKind, runInScope } from './requestScope.ts'
 import type { AppConfig } from './router.ts'
-import { type Principal, type RequestScope, type RouteKind, runInScope } from './scope.ts'
 
 // Identity + request resolved ONCE at the WS upgrade (cookie/bearer via the same ladder as HTTP)
 // and carried on the connection for the life of the socket. Every `@rpc:` join re-authorizes

@@ -87,7 +87,7 @@ export interface SlotMeta {
     iterable?: string // for iterable (rewritten)
     key?: string | null // for key (rewritten)
     params?: string // component params
-    siteId?: number // component: its stable per-module site id (see `WalkContext.nextSiteId`)
+    siteId?: number // component: its stable per-module site id (see `WalkState.nextSiteId`)
     hasComponent?: boolean // for: does the body invoke a component? (needs a per-item state factory)
 }
 
@@ -241,7 +241,7 @@ export function scopeStyles(css: string, scopeAttr: string): string {
 // The shared walk
 // ---------------------------------------------------------------------------
 
-interface WalkContext {
+interface WalkState {
     cellBindings: CellBindings
     declared: Set<string>
     scopeAttr: string | null
@@ -266,7 +266,7 @@ interface LevelResult {
     hasComponent: boolean
 }
 
-function rewriteExpr(ctx: WalkContext, expr: string): string {
+function rewriteExpr(ctx: WalkState, expr: string): string {
     const cellRewritten = rewriteCellRefs(expr, ctx.cellBindings)
     return rewriteFreeIdentifiers(cellRewritten, ctx.declared, '$scope')
 }
@@ -317,7 +317,7 @@ function collectComponentNames(nodes: TemplateNode[], into: Set<string>): void {
 // for it. That form is gone; reject it here, where the component name is known, so the author gets the
 // fix rather than a stray `[object Object]` (the runtime guards in `serverRuntime.renderLeaf` /
 // `runtime.interpolate` catch only the case this cannot see — a component arriving through props).
-function rejectComponentCall(ctx: WalkContext, expression: string): void {
+function rejectComponentCall(ctx: WalkState, expression: string): void {
     for (const name of ctx.componentNames) {
         if (!expression.includes(name)) continue
         // Not preceded by `.`/word char, so `obj.Name(` and `MyName(` don't false-positive. A component
@@ -415,7 +415,7 @@ function splitAttrValue(value: string): AttrPart[] | null {
     return parts
 }
 
-function planAttribute(ctx: WalkContext, attr: AttributeNode): AttrPlan {
+function planAttribute(ctx: WalkState, attr: AttributeNode): AttrPlan {
     switch (attr.type) {
         case 'StaticAttribute': {
             // A quoted attribute value may carry `{expr}` interpolations (`title="Count: {n}"`), including
@@ -502,7 +502,7 @@ function toClientPlan(result: LevelResult): ClientPlan {
     return { skeleton: result.skeleton, slots: result.slots, elementTags: result.elementTags }
 }
 
-function walkLevel(ctx: WalkContext, nodes: TemplateNode[]): LevelResult {
+function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
     let skeleton = ''
     const slots: DynamicSlot[] = []
     const server: ServerChunk[] = []
@@ -965,7 +965,7 @@ export function buildPlan(root: Root, analysis: BindingAnalysis): TemplatePlan {
     const componentNames = new Set<string>()
     for (const entry of analysis.componentImports) componentNames.add(entry.local)
     collectComponentNames(root.children, componentNames)
-    const ctx: WalkContext = {
+    const ctx: WalkState = {
         cellBindings: analysis.cellBindings,
         declared: analysis.declared,
         scopeAttr,

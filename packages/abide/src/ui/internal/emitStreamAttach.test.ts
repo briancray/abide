@@ -14,7 +14,7 @@ import { memo } from '../../shared/memo.ts'
 import { resumeStreamSource } from './bootstrap.ts'
 import { loadEmitted } from './emit.ts'
 import { openRenderState } from './renderState.ts'
-import { createStreamScope, drainPatches } from './streamScope.ts'
+import { createRenderStream, drainPatches } from './streamScheduler.ts'
 
 function tick(): Promise<void> {
     return Promise.resolve()
@@ -35,16 +35,16 @@ async function ssrStream(
 ): Promise<{ html: string; seed: HydrationSeed }> {
     const emitted = await loadEmitted(source)
     const ctx = createReactiveScope()
-    const streamScope = createStreamScope()
+    const streamScheduler = createRenderStream()
     enterScope(ctx, () => {
-        openRenderState().stream = streamScope
+        openRenderState().stream = streamScheduler
     })
     let html = ''
     await enterScope(ctx, async () => {
         html = await emitted.render(serverScope)
         // Drain any streamer (mode-B / cut-off lists) so the handle's count/done/values are final before
         // `collectSeed`. A fully-inline mode-A list registers no streamer — this is a no-op for it.
-        for await (const _patch of drainPatches(streamScope)) void _patch
+        for await (const _patch of drainPatches(streamScheduler)) void _patch
     })
     const seed = enterScope(ctx, () => collectSeed({}))
     return { html, seed }

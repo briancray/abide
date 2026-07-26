@@ -6,7 +6,11 @@
 // per-stream cap ABIDE_MAX_STREAM_BUFFER_SIZE (exceed → OVERFLOW: aborted, no replay, late joiner re-runs).
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { anonymousPrincipal, type RequestScope, runInScope } from '../server/internal/scope.ts'
+import {
+    anonymousPrincipal,
+    type RequestScope,
+    runInScope,
+} from '../server/internal/requestScope.ts'
 import { sharedStore } from './internal/sharedCache.ts'
 import { memo } from './memo.ts'
 

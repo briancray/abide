@@ -36,7 +36,7 @@ import type { RouteInfo } from './routeInfo.ts'
 export interface ReactiveScope {
     slots: Map<string, unknown>
     // ADR 0026. The three per-request facts `shared/` needs, which used to be reached by importing UP
-    // into `server/internal/scope.ts`. All three have EXACTLY this scope’s lifetime, which is the
+    // into `server/internal/requestScope.ts`. All three have EXACTLY this scope’s lifetime, which is the
     // admission rule for living here; `RequestScope`'s five Bun/HTTP fields (request, cookies,
     // identity, bag, server) have the same lifetime but no shared reader, so they stay in `server/`.
     //

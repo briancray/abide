@@ -9,7 +9,7 @@ import {
     resolveIdentityDetailed,
     unrecognizedNodeEnv,
 } from './auth.ts'
-import type { Principal } from './scope.ts'
+import type { Principal } from './requestScope.ts'
 import { seal } from './seal.ts'
 
 const originalSecret = Bun.env.ABIDE_IDENTITY_SECRET

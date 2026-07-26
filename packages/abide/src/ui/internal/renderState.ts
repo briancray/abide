@@ -13,7 +13,7 @@
 // exit, and no per-request ALS cost.
 //
 // Layering: `ui -> shared` (35 existing imports) and `server -> ui` (9, incl. `pages.ts` importing
-// `streamScope.ts`) are both established directions, so nothing here inverts the graph.
+// `streamScheduler.ts`) are both established directions, so nothing here inverts the graph.
 
 import {
     peekReactiveScope,
@@ -24,7 +24,7 @@ import {
 // The streaming-SSR scratchpad (streaming-ssr-plan.md, PR2). Present only while a render is STREAMING;
 // a streaming-form read (`{#await}` block) that hasn't settled by the deadline registers a deferred
 // subtree here, which the document stream drains into out-of-order patches. The scheduler LOGIC lives
-// in `streamScope.ts`; this is the carrier.
+// in `streamScheduler.ts`; this is the carrier.
 export interface RenderStream {
     // Resolves (to a sentinel) after the SSR deadline (default 4ms). A `{#await}` read (or the initial
     // `{#for await}` items) that settles before it renders inline (warm/fast pages stay byte-identical);

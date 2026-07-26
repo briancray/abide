@@ -1,6 +1,6 @@
 // Accessor for the current request's cookies. Throws outside a request scope.
 
-import { currentScope } from './internal/scope.ts'
+import { currentScope } from './internal/requestScope.ts'
 
 export function cookies(): Bun.CookieMap {
     const scope = currentScope()

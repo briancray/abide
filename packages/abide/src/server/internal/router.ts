@@ -83,7 +83,7 @@ import {
     type RouteInfo,
     type RouteKind,
     runInScope,
-} from './scope.ts'
+} from './requestScope.ts'
 import { validateFiles } from './validateFiles.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])

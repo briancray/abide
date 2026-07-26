@@ -1355,7 +1355,7 @@ function removeListItem(item: ListItem): void {
 }
 
 // The trailing `<template id="ab-l:N">` a STREAMED `{#for await}` region ends with: items are emitted bare
-// and the sentinel trails them as the append insertion point (`streamScope.forAwaitStream`). A
+// and the sentinel trails them as the append insertion point (`streamScheduler.forAwaitStream`). A
 // non-streaming render paints the items with no sentinel at all, so its absence is normal, not a mismatch.
 function streamSentinelBefore(end: Node | null): Node | null {
     const previous = end === null ? null : end.previousSibling

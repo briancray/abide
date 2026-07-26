@@ -7,7 +7,7 @@ import { cookies } from '../cookies.ts'
 import { identity } from '../identity.ts'
 import { request } from '../request.ts'
 import { server } from '../server.ts'
-import { anonymousPrincipal, currentScope, type RequestScope, runInScope } from './scope.ts'
+import { anonymousPrincipal, currentScope, type RequestScope, runInScope } from './requestScope.ts'
 
 function makeScope(overrides?: Partial<RequestScope>): RequestScope {
     const url = new URL('http://localhost/test')

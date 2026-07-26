@@ -6,8 +6,8 @@ import {
     publishMemoFrame,
 } from '../../shared/internal/memoChannels.ts'
 import { makeRead, type Rpc } from './makeRpc.ts'
+import { anonymousPrincipal, type RequestScope, runInScope } from './requestScope.ts'
 import { createApp } from './router.ts'
-import { anonymousPrincipal, type RequestScope, runInScope } from './scope.ts'
 
 // A minimal request scope so a shared read's fail-closed `guardSharedRead` (requires an active
 // scope) is satisfied while loading the durable value.

@@ -7,7 +7,11 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { context } from '../../server/context.ts'
 import { cookies } from '../../server/cookies.ts'
 import { identity } from '../../server/identity.ts'
-import { anonymousPrincipal, type RequestScope, runInScope } from '../../server/internal/scope.ts'
+import {
+    anonymousPrincipal,
+    type RequestScope,
+    runInScope,
+} from '../../server/internal/requestScope.ts'
 import { request } from '../../server/request.ts'
 import { memo } from '../memo.ts'
 import { sharedStore } from './sharedCache.ts'

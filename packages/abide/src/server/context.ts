@@ -2,7 +2,7 @@
 // from the M1 cache context (that one backs memo caching; this one is user scratch space).
 // Throws outside a request scope.
 
-import { currentScope } from './internal/scope.ts'
+import { currentScope } from './internal/requestScope.ts'
 
 export function context(): Record<string, unknown> {
     const scope = currentScope()

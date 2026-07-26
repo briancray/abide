@@ -11,7 +11,7 @@
 // channel (off unless `DEBUG=abide:identity`).
 
 import { log } from '../../shared/log.ts'
-import type { Principal } from './scope.ts'
+import type { Principal } from './requestScope.ts'
 
 const TTL_DEFAULT_MS = 30 * 24 * 60 * 60 * 1000 // 30 days (AU5.4 / AU9.3)
 const MAX_SEALED_BYTES = 4096 // ~4KB cookie ceiling (AU3.5 / AU5.2)

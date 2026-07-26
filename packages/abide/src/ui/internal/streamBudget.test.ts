@@ -10,7 +10,7 @@
 import { expect, test } from 'bun:test'
 import { createReactiveScope, enterScope } from '../../shared/internal/reactiveScope.ts'
 import { openRenderState, type RenderStream, type StreamFrame } from './renderState.ts'
-import { type ForAwaitStreamConfig, forAwaitStream } from './streamScope.ts'
+import { type ForAwaitStreamConfig, forAwaitStream } from './streamScheduler.ts'
 
 // A RenderStream whose deadline has already passed (so `forAwaitStream` takes the streaming path
 // immediately) and whose budget is a promise the test resolves on demand.

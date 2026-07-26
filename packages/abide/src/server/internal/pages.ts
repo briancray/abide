@@ -31,7 +31,11 @@ import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
 import { closeRenderState, openRenderState, renderState } from '../../ui/internal/renderState.ts'
 import { escapeHtml, Raw } from '../../ui/internal/serverRuntime.ts'
-import { createStreamScope, documentPatch, drainPatches } from '../../ui/internal/streamScope.ts'
+import {
+    createRenderStream,
+    documentPatch,
+    drainPatches,
+} from '../../ui/internal/streamScheduler.ts'
 import { cookies } from '../cookies.ts'
 import { identity } from '../identity.ts'
 import { request } from '../request.ts'
@@ -187,7 +191,7 @@ export async function renderPage(
     // that would hang the render (client-sockets.md CS5). Never cleared — the context dies with the request.
     reactiveScope().rendering = true
     const render = openRenderState()
-    if (streaming) render.stream = createStreamScope()
+    if (streaming) render.stream = createRenderStream()
     const imports = pageImports(config.routes ?? {}, config.sockets ?? {})
     // The shared ROOT state recorder (bucket 0) for this render — page + layouts record into it; each
     // `<Component/>` adapter opens its own bucket via `.forComponent()` (per-component-localized seed).

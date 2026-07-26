@@ -11,7 +11,7 @@
 // Cookie helpers here mint the auto-managed, encrypted `abide-identity` cookie (AU5): HttpOnly +
 // SameSite=Lax (AU8 CSRF) + Path=/ + rolling Max-Age, Secure in prod.
 
-import { anonymousPrincipal, type Principal } from './scope.ts'
+import { anonymousPrincipal, type Principal } from './requestScope.ts'
 import { seal, ttlMs, unseal, unsealPayload } from './seal.ts'
 
 const APP_OWNER: Principal = { id: 'app-owner', authenticated: true, appOwner: true }

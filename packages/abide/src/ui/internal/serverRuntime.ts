@@ -22,8 +22,8 @@ export { closeEffectScope } from '../../shared/internal/reactive.ts'
 // Streaming SSR: the emitted streaming `{#await}` block calls `$rt.awaitStream(...)` (PR2 — deadline
 // race, render inline if fast, defer + placeholder if slow); the streaming `{#for await}` block calls
 // `$rt.forAwaitStream(...)` (PR6 — drain to the deadline inline, then append items into an `<abide-list>`
-// as they stream). See `streamScope.ts`.
-export { awaitStream, forAwaitStream } from './streamScope.ts'
+// as they stream). See `streamScheduler.ts`.
+export { awaitStream, forAwaitStream } from './streamScheduler.ts'
 
 // A server render's setup effects belong to the REQUEST. `render` opens a scope around its `<script>`
 // preamble; this registers that scope's teardown on the ambient context, which `disposeScope` sweeps

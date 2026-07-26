@@ -12,7 +12,7 @@ import {
     currentScope,
     type Principal,
     type RequestScope,
-} from './internal/scope.ts'
+} from './internal/requestScope.ts'
 
 function activeScope(): RequestScope {
     const scope = currentScope()

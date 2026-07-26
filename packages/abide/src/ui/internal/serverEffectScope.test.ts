@@ -55,11 +55,11 @@ interface Probe {
 }
 const probe = globalThis as unknown as Probe
 
-// One render inside its own context, disposed the way `runInScope` disposes a finished request.
+// One render inside its own scope, disposed the way `runInScope` disposes a finished request.
 async function renderRequest(module: { render(scope?: Record<string, unknown>): Promise<string> }) {
-    const context = createReactiveScope()
-    await enterScope(context, () => module.render({ state, watch }))
-    disposeScope(context)
+    const scope = createReactiveScope()
+    await enterScope(scope, () => module.render({ state, watch }))
+    disposeScope(scope)
 }
 
 describe('server render effect ownership', () => {
@@ -88,7 +88,7 @@ describe('server render effect ownership', () => {
         // Both requests park INSIDE their setup preamble, so both scopes are open at once; then A
         // resumes and finishes first. On a process-global stack, A's close would truncate B off it, and
         // B's watch — created when it finally resumes — would be created with no owner at all: leaked,
-        // teardown never run. Per context, B still has its own scope open.
+        // teardown never run. Per scope, B still has its own scope open.
         let releaseA = (): void => {}
         let releaseB = (): void => {}
         const gateA = new Promise<void>((resolve) => {
@@ -97,14 +97,10 @@ describe('server render effect ownership', () => {
         const gateB = new Promise<void>((resolve) => {
             releaseB = () => resolve()
         })
-        const contextA = createReactiveScope()
-        const contextB = createReactiveScope()
-        const renderA = enterScope(contextA, () =>
-            module.render({ state, watch, gate: () => gateA }),
-        )
-        const renderB = enterScope(contextB, () =>
-            module.render({ state, watch, gate: () => gateB }),
-        )
+        const scopeA = createReactiveScope()
+        const scopeB = createReactiveScope()
+        const renderA = enterScope(scopeA, () => module.render({ state, watch, gate: () => gateA }))
+        const renderB = enterScope(scopeB, () => module.render({ state, watch, gate: () => gateB }))
         expect(probe.$runs).toBe(0) // both parked mid-setup, both scopes open
 
         releaseA()
@@ -116,9 +112,9 @@ describe('server render effect ownership', () => {
         expect(probe.$runs).toBe(2)
         expect(probe.$cleanups).toBe(0) // neither request is finished yet
 
-        disposeScope(contextA)
+        disposeScope(scopeA)
         expect(probe.$cleanups).toBe(1) // exactly A's effect
-        disposeScope(contextB)
+        disposeScope(scopeB)
         expect(probe.$cleanups).toBe(2) // B's own effect, not stranded by A's close
 
         probe.$bump()

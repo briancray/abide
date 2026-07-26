@@ -20,8 +20,8 @@
 
 import { loadApp } from '../server/internal/loadApp.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
+import type { Principal } from '../server/internal/requestScope.ts'
 import { type App, createApp, type Route } from '../server/internal/router.ts'
-import type { Principal } from '../server/internal/scope.ts'
 import { seal } from '../server/internal/seal.ts'
 import type { ErasedSocket } from '../server/socket.ts'
 import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'

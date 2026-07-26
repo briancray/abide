@@ -20,7 +20,7 @@
 
 import { matchRoute } from '../server/internal/matchRoute.ts'
 import type { HydrationSeed } from '../server/internal/pages.ts'
-import type { RouteInfo } from '../server/internal/scope.ts'
+import type { RouteInfo } from '../server/internal/requestScope.ts'
 import { decodeJsonlStream } from '../shared/internal/decodeStreamResponse.ts'
 import { setClientRoute } from '../shared/internal/routeHolder.ts'
 import { bootstrapPage, buildPageScope } from './internal/bootstrap.ts'
@@ -171,7 +171,7 @@ export function disposeActive(): void {
 }
 
 // Apply one streamed soft-nav patch frame in JS — the same DOM ops the first-load move-scripts run
-// (`documentPatch` in streamScope.ts), but from JS since a `fetch`ed body's inline scripts don't
+// (`documentPatch` in streamScheduler.ts), but from JS since a `fetch`ed body's inline scripts don't
 // auto-run. The server emits the op AS the frame `kind`: `fill` replaces a deferred `{#await}` slot's
 // pending fallback (bracketed by `<!--ab-p:<id>-->` … `<template id="ab-p:<id>">`), `append` adds one
 // streamed `{#for await}` item before the list's `<template id="ab-l:<id>">` sentinel, `complete` marks a

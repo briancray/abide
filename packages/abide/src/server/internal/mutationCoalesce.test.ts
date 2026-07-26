@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { sharedStore } from '../../shared/internal/sharedCache.ts'
 import { POST } from '../POST.ts'
-import { anonymousPrincipal, type RequestScope, runInScope } from './scope.ts'
+import { anonymousPrincipal, type RequestScope, runInScope } from './requestScope.ts'
 
 function makeScope(): RequestScope {
     const url = new URL('http://localhost/test')
