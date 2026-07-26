@@ -26,11 +26,11 @@
 // `invalidate/refresh({ tags })` selectors can drop/revalidate + broadcast its slots. TODO (later
 // PRs): the client-side channel join/apply.
 
-import { registerTaggedMemo } from '../server/internal/memoTags.ts'
 import { currentScope, runOutsideScope } from '../server/internal/scope.ts'
 import { canonicalKey } from './internal/codec.ts'
 import { getContext, onContextDispose, serverDefaultContext } from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
+import { registerTaggedMemo } from './internal/memoTags.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
 import { type Computed, computed, effect, type State, state, untrack } from './internal/reactive.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'

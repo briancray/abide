@@ -23,6 +23,12 @@ import { health } from '../../shared/health.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
+import {
+    type MemoFrame,
+    memoChannelHub,
+    memoChannelName,
+    publishMemoFrame,
+} from '../../shared/internal/memoChannels.ts'
 import type { MuxDownstream } from '../../shared/internal/muxDownstream.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
@@ -65,12 +71,6 @@ import { sharedLayoutDepth } from './layouts.ts'
 import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
 import { matchRoute } from './matchRoute.ts'
 import { handleMcp } from './mcp.ts'
-import {
-    type MemoFrame,
-    memoChannelHub,
-    memoChannelName,
-    publishMemoFrame,
-} from './memoChannels.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { buildOpenApi } from './openapi.ts'
 import { renderPage, streamPageDocument, streamSoftNav } from './pages.ts'

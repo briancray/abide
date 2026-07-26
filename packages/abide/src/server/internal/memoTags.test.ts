@@ -3,20 +3,20 @@
 // `window`) so the memo's shared/tag branch is active.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { sharedStore } from '../../shared/internal/sharedCache.ts'
-import { invalidate } from '../../shared/invalidate.ts'
-import { pending } from '../../shared/pending.ts'
-import { refresh } from '../../shared/refresh.ts'
-import { refreshing } from '../../shared/refreshing.ts'
-import { makeRead, type Rpc } from './makeRpc.ts'
 import {
     type MemoFrame,
     memoChannelHub,
     memoChannelName,
     publishMemoFrame,
     tagChannelName,
-} from './memoChannels.ts'
-import { clearTagRegistry } from './memoTags.ts'
+} from '../../shared/internal/memoChannels.ts'
+import { clearTagRegistry } from '../../shared/internal/memoTags.ts'
+import { sharedStore } from '../../shared/internal/sharedCache.ts'
+import { invalidate } from '../../shared/invalidate.ts'
+import { pending } from '../../shared/pending.ts'
+import { refresh } from '../../shared/refresh.ts'
+import { refreshing } from '../../shared/refreshing.ts'
+import { makeRead, type Rpc } from './makeRpc.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './scope.ts'
 
 function makeScope(name: string): RequestScope {

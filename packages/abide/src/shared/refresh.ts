@@ -4,7 +4,7 @@
 //
 // Server concept: inert on the client (the tag registry is populated only by server shared memos).
 
-import { refreshTags } from '../server/internal/memoTags.ts'
+import { refreshTags } from './internal/memoTags.ts'
 
 export function refresh(selector: { tags: string[] }): void {
     refreshTags(selector.tags)

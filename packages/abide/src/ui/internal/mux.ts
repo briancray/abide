@@ -9,8 +9,8 @@
 // CLIENT-ONLY: imports only a `type` from the server cache-channel module (erased at build) and is a
 // total no-op under SSR (no `window`/`WebSocket`), like the rest of the client-only surface.
 
-import type { MemoFrame } from '../../server/internal/memoChannels.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
+import type { MemoFrame } from '../../shared/internal/memoChannels.ts'
 import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
 
 // Reconnect backoff bounds (CS2.4). Doubles from MIN to MAX, reset on a clean open.

@@ -1,5 +1,10 @@
 // Cache-broadcast channel registry — rpc-core §8 broadcast substrate (server→server, PR2).
 //
+// Lives in `shared/internal/` (ADR 0026) because it depends on nothing above it: a `ChannelHub` and a
+// channel name, both `shared/`. Its CALLERS are server-side — a shared memo is server-only
+// (`memo.ts`: `shared === true && !isBrowser`) — but placement follows dependencies, not callers, so
+// `shared/memoTags.ts` can reach it without importing up out of the bottom layer.
+//
 // When a SHARED memo slot is invalidated/refreshed/published, the verb is published onto a
 // per-`(rpc,args)` channel so subscribers elsewhere can mirror it. The transport is REUSED
 // verbatim: each channel is a `ChannelHub<MemoFrame>` — the same bounded fanout that backs named
@@ -10,8 +15,8 @@
 // collide with a user socket name. The WS-facing join path (with auth) is PR3 — this slice only
 // wires server→hub publishing plus a hub registry that a test can subscribe to directly.
 
-import { ChannelHub } from '../../shared/internal/channelHub.ts'
-import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannelName.ts'
+import { ChannelHub } from './channelHub.ts'
+import { memoChannelName, RPC_CHANNEL_PREFIX } from './memoChannelName.ts'
 
 // Re-exported from the client-safe module so existing server importers keep importing it from here.
 // The name must be IDENTICAL on server and client (the browser mux computes it too), so it lives in

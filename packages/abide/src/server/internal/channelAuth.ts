@@ -15,9 +15,9 @@
 // before trusting them. Without this a client could name channel-for-A (whose data it wants) while
 // presenting args-for-B (which its identity is allowed to read) and slip past the gate.
 
+import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannels.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import type { Socket } from '../socket.ts'
-import { memoChannelName, RPC_CHANNEL_PREFIX } from './memoChannels.ts'
 import { compose, type Middleware } from './middleware.ts'
 import type { AppConfig } from './router.ts'
 import { type Principal, type RequestScope, type RouteKind, runInScope } from './scope.ts'

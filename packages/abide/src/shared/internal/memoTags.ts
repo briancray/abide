@@ -1,7 +1,9 @@
 // Cache TAG registry + global tag selectors — rpc-core §8, shared-cache-plan §2.4 (PR4).
 //
-// A SHARED memo declaring `memo: { tags: [...] }` registers itself here (server-only) under each
-// tag. The global verbs `invalidate({ tags })` / `refresh({ tags })` — the ONLY global cache-verb
+// A SHARED memo declaring `memo: { tags: [...] }` registers itself here under each tag. Registration
+// is server-only in EFFECT — a shared memo is server-only (`memo.ts`: `shared === true && !isBrowser`),
+// so a client memo never registers — but the registry itself depends on nothing above `shared/`, so it
+// lives here (ADR 0026) and the four global verbs reach it without importing up. The global verbs `invalidate({ tags })` / `refresh({ tags })` — the ONLY global cache-verb
 // form (per-callable `fn.invalidate/refresh/publish` stay canonical) — select every registered memo
 // carrying ANY listed tag and run its local drop/revalidate, which (through the memo's already-bound
 // transport-free `notify` sink) broadcasts a per-slot frame on each `@rpc:` channel. A per-tag frame

@@ -1,6 +1,6 @@
 // Client-safe cache-channel naming (shared-cache-plan §2.2 / §2.5). The deterministic name for a
 // `(rpc,args)` invalidation channel is pure over `(rpcName, canonicalKey(args))`, so it is factored
-// here — importable from BOTH the server broadcast registry (`server/internal/memoChannels.ts`) and
+// here — importable from BOTH the broadcast registry (`memoChannels.ts`, alongside this file) and
 // the browser mux (`ui/internal/mux.ts`) WITHOUT dragging any server-only transport
 // into the client bundle. The server and the client MUST compute the identical name so an auto-
 // subscribing browser memo joins exactly the channel the server publishes on.

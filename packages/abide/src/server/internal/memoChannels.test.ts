@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { makeRead, type Rpc } from './makeRpc.ts'
 import {
     type MemoFrame,
     memoChannelHub,
     memoChannelName,
     publishMemoFrame,
-} from './memoChannels.ts'
+} from '../../shared/internal/memoChannels.ts'
+import { makeRead, type Rpc } from './makeRpc.ts'
 import { createApp } from './router.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './scope.ts'
 

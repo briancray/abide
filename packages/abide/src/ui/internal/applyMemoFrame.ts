@@ -8,7 +8,7 @@
 // Factored out of the mux/proxy wiring so the mapping is unit-testable against a real client memo
 // without a live WebSocket.
 
-import type { MemoFrame } from '../../server/internal/memoChannels.ts'
+import type { MemoFrame } from '../../shared/internal/memoChannels.ts'
 import type { Memo } from '../../shared/memo.ts'
 
 export function applyMemoFrame<Args, T>(memo: Memo<Args, T>, args: Args, frame: MemoFrame): void {
