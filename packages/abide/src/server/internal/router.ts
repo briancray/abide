@@ -1049,9 +1049,10 @@ export function createApp(config: AppConfig = {}): App {
                 }
                 await applyIdentityCookie(scope, response)
                 if (cors !== undefined) applyCors(cors, request, response)
-                if (scope.traceparent !== undefined) {
-                    response.headers.set('traceparent', scope.traceparent)
-                    response.headers.set('traceresponse', scope.traceparent)
+                const traced = getContext().traceparent
+                if (traced !== undefined) {
+                    response.headers.set('traceparent', traced)
+                    response.headers.set('traceresponse', traced)
                 }
                 return response
             }

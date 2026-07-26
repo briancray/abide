@@ -4,6 +4,8 @@
 // preload deletes global `window`) so the memo's shared branch is active.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { context } from '../../server/context.ts'
+import { cookies } from '../../server/cookies.ts'
 import { identity } from '../../server/identity.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from '../../server/internal/scope.ts'
 import { request } from '../../server/request.ts'
@@ -108,6 +110,46 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
         const value = await runInScope(makeScope(), () => c(7))
         expect(value).toBe(107)
         expect(hasCachedValue()).toBe(true)
+    })
+})
+
+// ADR 0026 gate. The fail-closed guarantee is about to stop being maintained by entering and exiting
+// the scope ALS and the reactive scope in lockstep, and start resting on their SLOT-MAP IDENTITY. These
+// cases pin the guarantee itself so the mechanism swap underneath cannot quietly weaken it: every
+// request-scope accessor must throw from a shared handler, and a nested non-shared memo must never
+// write into the request's Map.
+describe('fail-closed checkpoint (a) — the full accessor matrix', () => {
+    test('a shared handler calling cookies() rejects and does not cache', async () => {
+        const c = memo(async (_n: number) => cookies().toJSON(), { shared: true })
+        await expect(runInScope(makeScope(), () => c(11))).rejects.toThrow(
+            /no active request scope/,
+        )
+        expect(hasCachedValue()).toBe(false)
+    })
+
+    test('a shared handler calling context() rejects and does not cache', async () => {
+        const c = memo(async (_n: number) => Object.keys(context()), { shared: true })
+        await expect(runInScope(makeScope(), () => c(12))).rejects.toThrow(
+            /no active request scope/,
+        )
+        expect(hasCachedValue()).toBe(false)
+    })
+
+    test('a nested NON-shared memo inside a shared handler never writes the request Map', async () => {
+        let innerCalls = 0
+        const inner = memo(async (n: number) => {
+            innerCalls++
+            return n * 2
+        })
+        const outer = memo(async (n: number) => (await inner(n)) + 1, { shared: true })
+
+        const scope = makeScope()
+        expect(await runInScope(scope, () => outer(21))).toBe(43)
+
+        // The shared slot lives in the process-global store and the nested read was routed to the
+        // neutral default context, so the REQUEST's own Map saw neither of them.
+        expect(scope.slots.size).toBe(0)
+        expect(innerCalls).toBe(1)
     })
 })
 

@@ -9,8 +9,8 @@
 // code, keeping the server↔client split clean. It is inert on the server (nothing ever calls
 // setClientRoute there).
 
-import type { RouteInfo } from '../../server/internal/scope.ts'
 import { state } from './reactive.ts'
+import type { RouteInfo } from './routeInfo.ts'
 
 const clientRoute = state<RouteInfo | undefined>(undefined)
 

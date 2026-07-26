@@ -15,6 +15,7 @@ import { isBrowser } from './isBrowser.ts'
 // Type-only (erased): the effect-owner scope reactive.ts pushes onto this context. Runtime direction
 // stays one-way — reactive.ts imports `getContext` from here, never the reverse.
 import type { EffectScope } from './reactive.ts'
+import type { RouteInfo } from './routeInfo.ts'
 
 // The per-render streaming-SSR scratchpad (streaming-ssr-plan.md, PR2). Present only while an SSR page
 // render is streaming; a streaming-form read (`{#await}` block) that hasn't settled by the deadline
@@ -76,6 +77,20 @@ export type StreamFrame = { op: 'append'; html: string } | { op: 'complete' }
 
 export interface MemoContext {
     slots: Map<string, unknown>
+    // ADR 0026. The three per-request facts `shared/` needs, which used to be reached by importing UP
+    // into `server/internal/scope.ts`. All three have EXACTLY this context's lifetime, which is the
+    // admission rule for living here; `RequestScope`'s five Bun/HTTP fields (request, cookies,
+    // identity, bag, server) have the same lifetime but no shared reader, so they stay in `server/`.
+    //
+    // `requestScoped` is set ONLY by `runInScope`, so it is structurally false on the client and in the
+    // server default context — which is why the memo's shared-slot branches no longer need an
+    // `isBrowser` guard alongside it.
+    requestScoped?: boolean | undefined
+    route?: RouteInfo | undefined
+    // W3C Trace Context (CO2.3). Seeded by the router from an incoming `traceparent` header, else
+    // generated lazily by the first `trace()` call and cached here for the request's lifetime. The
+    // router's `finalize` reads it back from here to stamp `traceparent`/`traceresponse`.
+    traceparent?: string | undefined
     // Per-request ordered recorder of `state(initial)` initial values, pushed in call order during
     // SSR (§5 state-initializer record/replay). `collectSeed` drains it into the hydration seed so the
     // client replays each cell's server-computed initial by ordinal instead of re-evaluating it. Grouped
@@ -157,6 +172,15 @@ export function getContext(): MemoContext {
         defaultContext = createContext()
     }
     return defaultContext
+}
+
+// The active context WITHOUT the lazy default-context creation `getContext()` performs (ADR 0026).
+// `route()`/`trace()` ask "is there a request context?" on paths that may run with none at all (a bare
+// script, a cron tick), and answering a read-only question should not install a process-global default
+// context as a side effect. Returns the client singleton only if something already created it.
+export function peekContext(): MemoContext | undefined {
+    if (isBrowser) return clientContext
+    return requestStorage?.getStore()
 }
 
 // The persistent server default context, or undefined on the client / before it is created. Used by

@@ -95,19 +95,29 @@ entry confinement is the wrong trade. Keeping two ALSs is a cost in concept coun
 
 ### 5. `requestScoped` collapses four predicates
 
-"Am I in a request-scoped context?" is currently spelled three ways across four sites. All become
-`reactiveScope().requestScoped`, set only by `runInScope`:
+Memo's three sites become `reactiveScope().requestScoped`, set only by `runInScope`:
 
 | Site | Today |
 | --- | --- |
 | `memo.ts:468` | `shared && currentScope() === undefined` |
-| `memo.ts:651` | `!isBrowser && currentScope() !== undefined` |
-| `memo.ts:1109` | `!shared && !isBrowser && currentScope() !== undefined` |
-| `serverRuntime.ts:38` | `getContext() !== serverDefaultContext()` |
+| `memo.ts:700` | `!isBrowser && currentScope() !== undefined` |
+| `memo.ts:1195` | `!shared && !isBrowser && currentScope() !== undefined` |
 
 Because the flag is only ever set server-side, the two `!isBrowser` guards become redundant and are
 deleted, and three `AsyncLocalStorage.getStore()` calls in memo's hot path become property reads on an
-object memo already holds. `route` and `traceparent` move onto the scope for the same reason —
+object memo already holds.
+
+**`serverRuntime.ts:39` is NOT the fourth spelling of this predicate** — an earlier draft of this ADR
+said it was, and the change failed against `serverEffectScope.test.ts`. `getContext() !==
+serverDefaultContext()` asks *"is this context disposable?"*, which is true of any non-default context
+including one a caller builds and hands to `runInContext` directly. `requestScoped` asks the narrower
+*"did `runInScope` build this?"*. They coincide in production and diverge for a hand-built context, and
+the broader question is the correct one at that site. It stays as it is.
+
+The converse holds for memo, which is why it cannot use `serverDefaultContext()` either: on the client
+that returns `undefined` while `getContext()` returns the tab singleton, so the comparison would be
+`true` and memo would register per-request disposers in the browser — exactly what the deleted
+`!isBrowser` guards were preventing. `route` and `traceparent` move onto the scope for the same reason —
 `route.ts` and `trace.ts` are the only shared consumers and they read nothing else.
 
 Nothing in `shared/` reads `request`, `cookies`, `identity`, `bag`, or `server`. `RequestScope` keeps

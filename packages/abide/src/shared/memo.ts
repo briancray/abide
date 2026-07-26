@@ -26,9 +26,13 @@
 // `invalidate/refresh({ tags })` selectors can drop/revalidate + broadcast its slots. TODO (later
 // PRs): the client-side channel join/apply.
 
-import { currentScope, runOutsideScope } from '../server/internal/scope.ts'
 import { canonicalKey } from './internal/codec.ts'
-import { getContext, onContextDispose, serverDefaultContext } from './internal/context.ts'
+import {
+    getContext,
+    onContextDispose,
+    runOutsideContext,
+    serverDefaultContext,
+} from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { registerTaggedMemo } from './internal/memoTags.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
@@ -465,7 +469,7 @@ export function memo<Args, T>(
     // (an authorized caller). A bare script/cron read has no gate and no client to serve, so it
     // throws rather than silently touching the cross-request store. Server-only; inert on the client.
     function guardSharedRead(): void {
-        if (shared && currentScope() === undefined) {
+        if (shared && getContext().requestScoped !== true) {
             throw new Error('shared memo read requires an active request scope')
         }
     }
@@ -628,7 +632,7 @@ export function memo<Args, T>(
         // identity()/cookies()/request()/context() throw if it touches request scope → the read rejects
         // (error slot) and the value is never cached, in dev AND prod. A nested non-shared memo lands in
         // the neutral default context. Non-shared memos keep running in the ambient scope.
-        const promise = shared ? runOutsideScope(runLoad) : runLoad()
+        const promise = shared ? runOutsideContext(runLoad) : runLoad()
 
         slot.inflight = promise
         return promise
@@ -697,7 +701,7 @@ export function memo<Args, T>(
         // A PER-REQUEST slot's backing must not outlive the request: its `fill` subscribes to whatever the
         // body read, which is often a MODULE-level `state` that lives for the whole process. The slots of a
         // long-lived context (client singleton / server default) are long-lived too, so they register nothing.
-        if (!isBrowser && currentScope() !== undefined) {
+        if (getContext().requestScoped === true) {
             onContextDispose(() => {
                 merged.dispose()
                 fill.dispose()
@@ -1192,7 +1196,7 @@ export function memo<Args, T>(
             // frame. A SERVER per-request (non-shared) slot inside a request scope has nothing durable to
             // broadcast an updater against → error. On the client (or a bare/default-context server call
             // with no request scope), an updater-form publish stays a local mutation.
-            if (!shared && !isBrowser && currentScope() !== undefined) {
+            if (!shared && getContext().requestScoped === true) {
                 throw new Error(
                     'publish updater-form is not supported on a per-request memo; pass a value instead',
                 )

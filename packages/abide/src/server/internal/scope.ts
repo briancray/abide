@@ -13,27 +13,16 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import {
     disposeContext,
+    getContext,
     type MemoContext,
     runInContext,
-    runOutsideContext,
 } from '../../shared/internal/context.ts'
-import { isBrowser } from '../../shared/internal/isBrowser.ts'
+import type { RouteInfo, RouteKind } from '../../shared/internal/routeInfo.ts'
 
-export type RouteKind =
-    | 'nav'
-    | 'rpc'
-    | 'socket-connect'
-    | 'socket-subscribe'
-    | 'socket-publish'
-    | 'stream'
-
-export interface RouteInfo {
-    kind: RouteKind
-    name: string
-    params: Record<string, unknown>
-    url: URL
-    navigating: boolean
-}
+// `RouteInfo`/`RouteKind` moved to `shared/internal/` (ADR 0026) so `shared/route.ts` can name the type
+// it returns without importing up. Re-exported here because every server + ui importer already reaches
+// them through this module.
+export type { RouteInfo, RouteKind }
 
 export interface Principal {
     id: string
@@ -64,9 +53,10 @@ export interface RequestScope {
     route: RouteInfo
     server?: Bun.Server<undefined>
     slots: Map<string, unknown>
-    // W3C Trace Context (CO2.3). Set by the router from the incoming `traceparent` header when
-    // present; otherwise lazily generated + cached on the first `trace()` call within the scope so
-    // it stays stable for the request's lifetime.
+    // W3C Trace Context (CO2.3). The router's SEED from an incoming `traceparent` header, copied onto
+    // the reactive context by `runInScope`. Since ADR 0026 the context is the mutable home — `trace()`
+    // generates and caches there, and the router's `finalize` reads it back from there — so this field
+    // is write-once at construction and never updated afterwards.
     // Explicitly `| undefined` (not just optional): the router always SETS this key, to `undefined` when
     // there is no incoming header, so the scope object is built in one shape. Under
     // `exactOptionalPropertyTypes` a bare `?:` would reject that assignment.
@@ -81,26 +71,39 @@ export function anonymousPrincipal(): Principal {
 // Per-request scope storage. Separate from M1's cache context so accessors can retrieve the
 // full scope while the memo primitive still sees only its cache context.
 //
-// AsyncLocalStorage is server-only (node:async_hooks). This module is reachable from the client
-// bundle via the isomorphic route() (shared/route.ts imports currentScope), so the ALS must be
-// LAZILY constructed and never instantiated in the browser — otherwise the client bundle throws
-// `new AsyncLocalStorage` (undefined is not a constructor).
-let scopeStorage: AsyncLocalStorage<RequestScope> | undefined
-function storage(): AsyncLocalStorage<RequestScope> | undefined {
-    if (isBrowser) return undefined
-    if (scopeStorage === undefined) scopeStorage = new AsyncLocalStorage<RequestScope>()
-    return scopeStorage
-}
+// EAGER since ADR 0026. It used to be lazily constructed behind an `isBrowser` guard because
+// `shared/route.ts` imported `currentScope`, dragging this server-only module (and
+// `node:async_hooks`) into the client bundle. Nothing in `shared/` imports it any more, so the
+// guard — and the client-fallback branches it forced through `runInScope`/`runOutsideScope` — are gone.
+const scopeStorage = new AsyncLocalStorage<RequestScope>()
 
 export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T | Promise<T> {
-    // Share the exact same Map with the M1 cache context so getContext().slots === scope.slots.
-    const context: MemoContext = { slots: scope.slots, states: {} }
-    const store = storage()
-    const run = (): T | Promise<T> =>
-        store === undefined
-            ? runInContext(context, fn) // client fallback (no async isolation)
-            : store.run(scope, () => runInContext(context, fn))
-    const result = run()
+    // Share the exact same Map with the M1 cache context so getContext().slots === scope.slots. That
+    // identity is no longer a convenience: `currentScope()` USES it to decide whether the ambient scope
+    // still belongs to the active context, which is what makes the shared-memo fail-closed guarantee
+    // structural (see below). The three isomorphic facts ride the context so `shared/` can read them
+    // without importing this module (ADR 0026).
+    const context: MemoContext = {
+        slots: scope.slots,
+        states: {},
+        requestScoped: true,
+        route: scope.route,
+        traceparent: scope.traceparent,
+    }
+    const result = scopeStorage.run(scope, () =>
+        runInContext(context, () => {
+            // The fail-closed guarantee now RESTS on this identity (see `currentScope`), where it used
+            // to rest on a comment. If a future edit builds the context with its own Map, every
+            // request-scope accessor silently starts throwing inside a live request — a failure that
+            // would surface as an unexplained 500 far from here. Assert it once, at entry, in dev.
+            if (Bun.env.NODE_ENV !== 'production' && scope.slots !== getContext().slots) {
+                throw new Error(
+                    'runInScope: the request scope and its reactive context must share one slots Map',
+                )
+            }
+            return fn()
+        }),
+    )
     // Tear the request's context-scoped reactive nodes down once its work is finished. A STREAMING page
     // reply is not finished here — its drain runs off the response body — so that one disposes itself at
     // the end of the drain (`renderDocumentStream`), which is also where the stream scope is cleared.
@@ -113,17 +116,20 @@ export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T 
     return result
 }
 
+// The active request scope — but ONLY while the active reactive context is still the one it was
+// entered with (ADR 0026).
+//
+// This is the fail-closed lever for `shared` memos (rpc-core §2), and it is now STRUCTURAL rather than
+// maintained by entering and exiting two things in lockstep. A shared handler runs under
+// `runOutsideContext`, which swaps the active context for the neutral default; its `slots` Map is a
+// different Map, so the identity below fails and every request-scope accessor —
+// identity()/cookies()/request()/context() — throws. The read rejects and the value is never cached,
+// in dev AND prod. There is no longer a `runOutsideScope` to forget to call.
+//
+// The `undefined` short-circuit matters: it answers "no scope" without calling `getContext()`, which
+// would install the process-global default context as a side effect of a read-only question.
 export function currentScope(): RequestScope | undefined {
-    return storage()?.getStore()
-}
-
-// Run fn with NEITHER the request scope NOR the cache context active. The fail-closed lever for
-// `shared` memos (rpc-core §2): a shared handler runs here so identity()/cookies()/request()/
-// context() THROW if it touches request scope — the read rejects and the value is never cached, in
-// dev AND prod. Exiting the cache context too routes any nested non-shared memo to the neutral
-// default context instead of the request's Map. On the client this is a plain call.
-export function runOutsideScope<T>(fn: () => T): T {
-    const store = storage()
-    if (store === undefined) return runOutsideContext(fn)
-    return store.exit(() => runOutsideContext(fn))
+    const scope = scopeStorage.getStore()
+    if (scope === undefined) return undefined
+    return scope.slots === getContext().slots ? scope : undefined
 }
