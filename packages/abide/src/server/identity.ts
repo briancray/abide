@@ -34,13 +34,11 @@ export const identity: {
         // Fail fast (AU5.3) before persisting an authenticated identity without a stable secret.
         requireSecretForAuthedSet(authenticated)
         Object.assign(scope.identity, p, { authenticated })
-        scope.identityDirty = true
         scope.identityCleared = false
     },
     clear(): void {
         const scope = activeScope()
         scope.identity = anonymousPrincipal()
-        scope.identityDirty = true
         scope.identityCleared = true
     },
 })

@@ -10,9 +10,8 @@
 // total no-op under SSR (no `window`/`WebSocket`), like the rest of the client-only surface.
 
 import type { MemoFrame } from '../../server/internal/memoChannels.ts'
-import { canonicalKey } from '../../shared/internal/codec.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
-import { RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannelName.ts'
+import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
 
 // Reconnect backoff bounds (CS2.4). Doubles from MIN to MAX, reset on a clean open.
 const RECONNECT_MIN_MS = 500
@@ -25,7 +24,7 @@ function isTerminalClose(code: number): boolean {
     return code === 1008 || (code >= 4000 && code <= 4999)
 }
 
-// One active subscription on the mux, keyed by `subKey(name, args)`. `name` is the WIRE name (socket /
+// One active subscription on the mux, keyed by `subscriptionKey(name, args)`. `name` is the WIRE name (socket /
 // channel); `args` is the ROOM (undefined for a void socket / cache channel). `onMessage` receives each
 // data frame's payload; `onAck`/`onError` (sockets only) receive the control frames. `replay` is sent on
 // the NEXT subscribe frame and then forced true — the first join may be a `replay:false` hydration
@@ -40,16 +39,6 @@ interface Subscription {
     // Called on a transient disconnect (before a reconnect attempt) so a socket sub can surface
     // `refreshing()`. Undefined for cache channels (no visible transport lifecycle).
     onReconnecting: (() => void) | undefined
-}
-
-// The local subscription key. A roomed USER socket folds the room into the key so distinct rooms of one
-// socket coexist on the tab's single mux (mirrors the server's `subscriptionKey`). A void socket / an
-// `@rpc:` cache channel (whose args are already baked into its NAME, and whose downstream frames carry
-// no `args`) keys by bare name — matching what the server echoes back.
-function subKey(name: string, args: unknown): string {
-    return args === undefined || name.startsWith(RPC_CHANNEL_PREFIX)
-        ? name
-        : `${name} ${canonicalKey(args)}`
 }
 
 const subscriptions = new Map<string, Subscription>()
@@ -106,7 +95,7 @@ function onMessage(event: MessageEvent): void {
     if (typeof framed.name !== 'string') return
     // Route by the same room-aware key the sub registered under (the server echoes `args` on roomed
     // frames; omits it for void sockets / cache channels).
-    const sub = subscriptions.get(subKey(framed.name, framed.args))
+    const sub = subscriptions.get(subscriptionKey(framed.name, framed.args))
     if (sub === undefined) return
     if (framed.error !== undefined) {
         sub.onError?.(framed.error)
@@ -174,7 +163,7 @@ function ensureSocket(): void {
 // subscription per room. No-op under SSR.
 export function muxSubscribe(name: string, sub: Subscription, mountBase?: string): void {
     if (!isBrowser()) return
-    const key = subKey(name, sub.args)
+    const key = subscriptionKey(name, sub.args)
     if (subscriptions.has(key)) return
     if (mountBase !== undefined) base = mountBase
     subscriptions.set(key, sub)
@@ -189,7 +178,7 @@ export function muxSubscribe(name: string, sub: Subscription, mountBase?: string
 // Leave the mux channel `name` (room `args`). Sends `{t:"unsub"}` when open; always drops the local sub.
 export function muxUnsubscribe(name: string, args?: unknown): void {
     if (!isBrowser()) return
-    subscriptions.delete(subKey(name, args))
+    subscriptions.delete(subscriptionKey(name, args))
     if (isOpen && socket !== undefined && socket.readyState === 1) {
         const frame =
             args === undefined

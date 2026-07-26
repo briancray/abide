@@ -10,7 +10,7 @@
 import { unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { analyzeScope } from './analyzeScope.ts'
+import { analyzeScope, type ScopeAnalysis } from './analyzeScope.ts'
 import { emitClientModule } from './emitClient.ts'
 import { emitServerModule } from './emitServer.ts'
 import { parse } from './parse.ts'
@@ -20,6 +20,10 @@ import { buildPlan } from './templatePlan.ts'
 export interface EmittedSource {
     client: string
     server: string
+    // The scope analysis the two emits were built from. Carried on the result so a caller that needs
+    // the source's component/css/module imports (the temp-module tree walk, the client bundler) reads
+    // them off the cache instead of re-running `parse` + `analyzeScope` over the same string.
+    analysis: ScopeAnalysis
 }
 
 export interface EmittedModule {
@@ -83,6 +87,7 @@ export function emitModuleSource(source: string): EmittedSource {
     const result: EmittedSource = {
         client: emitClientModule(plan, analysis),
         server: emitServerModule(plan, analysis),
+        analysis,
     }
     SOURCE_CACHE.set(source, result)
     return result
@@ -158,8 +163,7 @@ async function emitTree(
     const basename = `.emit-${id}.${side}.ts`
     written.set(key, basename) // register before recursion (cycle guard)
 
-    const analysis = analyzeScope(parse(source))
-    for (const componentImport of analysis.componentImports) {
+    for (const componentImport of emitted.analysis.componentImports) {
         if (resolve === undefined) {
             throw new Error(
                 `loadEmitted: <${componentImport.local}> imports "${componentImport.specifier}" but no component resolver was provided`,

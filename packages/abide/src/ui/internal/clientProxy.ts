@@ -167,10 +167,6 @@ export function clientProxy<Args = unknown, T = unknown>(
         ensureSubscribed(args)
         return backing.peek(args)
     }
-    rpc.load = (args: Args): Promise<T> => {
-        ensureSubscribed(args)
-        return backing.load(args)
-    }
     rpc.pending = (args: Args): boolean => backing.pending(args)
     rpc.refreshing = (args: Args): boolean => backing.refreshing(args)
     rpc.error = (args: Args): unknown => backing.error(args)

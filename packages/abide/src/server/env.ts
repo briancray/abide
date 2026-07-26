@@ -29,9 +29,11 @@
 
 import {
     asStandardSchema,
+    COERCE_FAILED,
     type JSONSchema,
     type JSONSchemaType,
     singleType,
+    tryCoerceStringToType,
 } from '../shared/internal/jsonSchema.ts'
 import type { StandardSchemaV1 } from '../shared/StandardSchema.ts'
 
@@ -218,38 +220,19 @@ function fieldsFromSpecMap(spec: Record<string, EnvFieldSpec>): Field[] {
 
 type Coerced = { ok: true; value: unknown } | { ok: false; message: string }
 
+// Boot config coercion is the LOUD face of the shared string→typed step: where the wire decoders leave
+// an uncoercible value as a raw string for schema validation to reject, `env` has no later validation
+// pass, so it reports the failure here.
 function coerce(raw: string, field: Field): Coerced {
-    let value: unknown = raw
-    switch (field.type) {
-        case 'number':
-        case 'integer': {
-            const parsed = Number(raw)
-            if (!Number.isFinite(parsed) || raw.trim() === '')
-                return { ok: false, message: `expected a ${field.type}, got "${raw}"` }
-            if (field.type === 'integer' && !Number.isInteger(parsed))
-                return { ok: false, message: `expected an integer, got "${raw}"` }
-            value = parsed
-            break
-        }
-        case 'boolean': {
-            const lowered = raw.trim().toLowerCase()
-            if (lowered === 'true' || lowered === '1') value = true
-            else if (lowered === 'false' || lowered === '0') value = false
-            else return { ok: false, message: `expected a boolean, got "${raw}"` }
-            break
-        }
-        case 'object':
-        case 'array':
-        case 'null': {
-            try {
-                value = JSON.parse(raw)
-            } catch {
-                return { ok: false, message: `expected JSON ${field.type}, got "${raw}"` }
-            }
-            break
-        }
-        default:
-            value = raw // string or untyped — leave as-is.
+    const value = tryCoerceStringToType(raw, field.type, true)
+    if (value === COERCE_FAILED) {
+        const expected =
+            field.type === 'object' || field.type === 'array' || field.type === 'null'
+                ? `JSON ${field.type}`
+                : field.type === 'integer'
+                  ? 'an integer'
+                  : `a ${field.type}`
+        return { ok: false, message: `expected ${expected}, got "${raw}"` }
     }
 
     if (field.enumValues !== undefined && !field.enumValues.includes(value)) {

@@ -84,7 +84,7 @@ describe('memoChannels — broadcast substrate', () => {
 
         // Seed the durable value inside a request scope (shared reads require an active scope).
         await runInScope(makeScope('profileC'), async () => {
-            await profile.load({ id: 1 })
+            await profile({ id: 1 })
         })
 
         const iter = memoChannelHub(memoChannelName('profileC', { id: 1 })).subscribe()

@@ -79,8 +79,8 @@ describe('cache tags — global invalidate({ tags })', () => {
         bindLikeCreateApp(readY, 'readY')
 
         // Seed one slot in each (shared reads require an active request scope).
-        await runInScope(makeScope('readX'), () => readX.load({ id: 1 }))
-        await runInScope(makeScope('readY'), () => readY.load({ id: 1 }))
+        await runInScope(makeScope('readX'), () => readX({ id: 1 }))
+        await runInScope(makeScope('readY'), () => readY({ id: 1 }))
         expect(callsX).toBe(1)
         expect(callsY).toBe(1)
 
@@ -95,8 +95,8 @@ describe('cache tags — global invalidate({ tags })', () => {
         await iterY.return?.()
 
         // Slots were dropped → next read re-runs the handler.
-        await runInScope(makeScope('readX'), () => readX.load({ id: 1 }))
-        await runInScope(makeScope('readY'), () => readY.load({ id: 1 }))
+        await runInScope(makeScope('readX'), () => readX({ id: 1 }))
+        await runInScope(makeScope('readY'), () => readY({ id: 1 }))
         expect(callsX).toBe(2)
         expect(callsY).toBe(2)
     })
@@ -113,7 +113,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         )
         bindLikeCreateApp(read, 'readA')
 
-        await runInScope(makeScope('readA'), () => read.load({ id: 1 }))
+        await runInScope(makeScope('readA'), () => read({ id: 1 }))
         expect(calls).toBe(1)
 
         const iter = memoChannelHub(memoChannelName('readA', { id: 1 })).subscribe()
@@ -122,7 +122,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         await iter.return?.()
 
         // Slot survived → served from cache, handler not re-run.
-        await runInScope(makeScope('readA'), () => read.load({ id: 1 }))
+        await runInScope(makeScope('readA'), () => read({ id: 1 }))
         expect(calls).toBe(1)
     })
 
@@ -138,7 +138,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         )
         bindLikeCreateApp(read, 'readMulti')
 
-        await runInScope(makeScope('readMulti'), () => read.load({ id: 1 }))
+        await runInScope(makeScope('readMulti'), () => read({ id: 1 }))
         expect(calls).toBe(1)
 
         const iter = memoChannelHub(memoChannelName('readMulti', { id: 1 })).subscribe()
@@ -146,7 +146,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         expect((await iter.next()).value).toEqual({ verb: 'invalidate' })
         await iter.return?.()
 
-        await runInScope(makeScope('readMulti'), () => read.load({ id: 1 }))
+        await runInScope(makeScope('readMulti'), () => read({ id: 1 }))
         expect(calls).toBe(2)
     })
 
@@ -155,7 +155,7 @@ describe('cache tags — global invalidate({ tags })', () => {
             memo: { shared: true, tags: ['a', 'b'] },
         })
         bindLikeCreateApp(read, 'readDedup')
-        await runInScope(makeScope('readDedup'), () => read.load({ id: 1 }))
+        await runInScope(makeScope('readDedup'), () => read({ id: 1 }))
 
         const iter = memoChannelHub(memoChannelName('readDedup', { id: 1 })).subscribe()
         invalidate({ tags: ['a', 'b'] })
@@ -179,7 +179,7 @@ describe('cache tags — global refresh({ tags })', () => {
         )
         bindLikeCreateApp(read, 'readR')
 
-        await runInScope(makeScope('readR'), () => read.load({ id: 1 }))
+        await runInScope(makeScope('readR'), () => read({ id: 1 }))
         expect(calls).toBe(1)
 
         const iter = memoChannelHub(memoChannelName('readR', { id: 1 })).subscribe()
@@ -200,7 +200,7 @@ describe('cache tags — @tag channel', () => {
             memo: { shared: true, tags: ['user'] },
         })
         bindLikeCreateApp(read, 'readTagChan')
-        await runInScope(makeScope('readTagChan'), () => read.load({ id: 1 }))
+        await runInScope(makeScope('readTagChan'), () => read({ id: 1 }))
 
         const tagIter = memoChannelHub(tagChannelName('user')).subscribe()
         invalidate({ tags: ['user'] })
@@ -233,7 +233,7 @@ describe('cache tags — local reactive probes', () => {
         expect(refreshing({ tags: ['user'] })).toBe(false)
 
         // Kick a load (do not await): the slot is on its first load → pending true.
-        const load = runInScope(makeScope('readProbe'), () => read.load({ id: 1 }))
+        const load = runInScope(makeScope('readProbe'), () => read({ id: 1 }))
         expect(pending({ tags: ['user'] })).toBe(true)
         expect(refreshing({ tags: ['user'] })).toBe(false)
 

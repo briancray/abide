@@ -795,15 +795,12 @@ export function boundAccessor(bound: unknown): Accessor | null {
 
 export function bindChecked(element: Element, accessor: Accessor): Disposer {
     const input = element as HTMLInputElement
-    let primed = hydrating
-    const dispose = effect(() => {
-        const value = Boolean(accessor.read())
-        if (primed) {
-            primed = false
-            return
-        }
-        input.checked = value
-    })
+    const dispose = hydratableEffect(
+        () => Boolean(accessor.read()),
+        (value) => {
+            input.checked = value as boolean
+        },
+    )
     const handler = (): void => accessor.write(input.checked)
     input.addEventListener('change', handler)
     return () => {
@@ -814,15 +811,12 @@ export function bindChecked(element: Element, accessor: Accessor): Disposer {
 
 export function bindValue(element: Element, accessor: Accessor): Disposer {
     const input = element as HTMLInputElement
-    let primed = hydrating
-    const dispose = effect(() => {
-        const value = accessor.read()
-        if (primed) {
-            primed = false
-            return
-        }
-        input.value = value === null || value === undefined ? '' : String(value)
-    })
+    const dispose = hydratableEffect(
+        () => accessor.read(),
+        (value) => {
+            input.value = value === null || value === undefined ? '' : String(value)
+        },
+    )
     const isNumber = input.type === 'number' || input.type === 'range'
     const eventName = element.tagName === 'SELECT' ? 'change' : 'input'
     const handler = (): void => accessor.write(isNumber ? Number(input.value) : input.value)
@@ -835,16 +829,13 @@ export function bindValue(element: Element, accessor: Accessor): Disposer {
 
 export function bindGroup(input: HTMLInputElement, accessor: Accessor): Disposer {
     const isCheckbox = input.type === 'checkbox'
-    let primed = hydrating
-    const dispose = effect(() => {
-        const current = accessor.read()
-        if (primed) {
-            primed = false
-            return
-        }
-        if (isCheckbox) input.checked = Array.isArray(current) && current.includes(input.value)
-        else input.checked = current === input.value
-    })
+    const dispose = hydratableEffect(
+        () => accessor.read(),
+        (current) => {
+            if (isCheckbox) input.checked = Array.isArray(current) && current.includes(input.value)
+            else input.checked = current === input.value
+        },
+    )
     const handler = (): void => {
         if (isCheckbox) {
             const current = accessor.read()

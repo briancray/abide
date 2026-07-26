@@ -28,9 +28,8 @@ import { mkdir, rm, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type { BunPlugin } from 'bun'
-import { analyzeScope, type ScopeAnalysis } from '../../ui/internal/analyzeScope.ts'
+import type { ScopeAnalysis } from '../../ui/internal/analyzeScope.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
-import { parse } from '../../ui/internal/parse.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import { buildRegistry } from './registry.ts'
@@ -226,16 +225,14 @@ async function emitOne(
     const existing = visited.get(key)
     if (existing !== undefined) return existing
 
-    const analysis = analyzeScope(parse(source))
+    const emitted = emitModuleSource(source)
+    const analysis = emitted.analysis
     const file = join(tmpdir(), `abide-mod-${Bun.randomUUIDv7()}.ts`)
     const index = modules.length
     modules.push({ file, locals: importedLocals(analysis) })
     visited.set(key, index) // register before recursion (cycle guard)
 
-    let client = emitModuleSource(source).client.replace(
-        '"abide/ui/internal/runtime"',
-        JSON.stringify(RUNTIME_PATH),
-    )
+    let client = emitted.client.replace('"abide/ui/internal/runtime"', JSON.stringify(RUNTIME_PATH))
     client = resolveCssImports(client, analysis.cssImports, sourceDir)
     client = resolveModuleImports(client, analysis.moduleImports)
 

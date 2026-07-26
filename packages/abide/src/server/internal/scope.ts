@@ -45,11 +45,12 @@ export interface RequestScope {
     request: Request
     cookies: Bun.CookieMap
     identity: Principal
-    // identity.set()/clear() set `identityDirty` so the router re-seals (or clears) the rolling
-    // abide-identity cookie after dispatch; `identityCleared` distinguishes logout (clear cookie)
-    // from login/refresh (write cookie). `identityStateless` marks a machine-bearer request whose
-    // identity is request-scoped and must never persist a cookie (AU6.3).
-    identityDirty?: boolean
+    // The router re-seals the rolling abide-identity cookie after every dispatch; `identityCleared`
+    // distinguishes logout (clear the cookie) from login/refresh (write it). `identityStateless` marks
+    // a machine-bearer request whose identity is request-scoped and must never persist a cookie (AU6.3).
+    //
+    // Both are always PRESENT on a router-built scope (`false` when unset) rather than added later, so
+    // the per-request scope object — which every ambient accessor reads — keeps one hidden class.
     identityCleared?: boolean
     identityStateless?: boolean
     bag: Record<string, unknown>
@@ -59,7 +60,10 @@ export interface RequestScope {
     // W3C Trace Context (CO2.3). Set by the router from the incoming `traceparent` header when
     // present; otherwise lazily generated + cached on the first `trace()` call within the scope so
     // it stays stable for the request's lifetime.
-    traceparent?: string
+    // Explicitly `| undefined` (not just optional): the router always SETS this key, to `undefined` when
+    // there is no incoming header, so the scope object is built in one shape. Under
+    // `exactOptionalPropertyTypes` a bare `?:` would reject that assignment.
+    traceparent?: string | undefined
 }
 
 // The anonymous-default identity stub (M2). Real cookie-sealed identity resolution is M7.

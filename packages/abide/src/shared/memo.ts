@@ -168,9 +168,6 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     // the slot reactively (`.peek()` semantics) and its `set` IS `publish`, so a local write is provisional
     // until the next re-fill. That is the whole of the retired `state.linked`.
     state(args: Args): State<T>
-    // @deprecated Use the bare call — `memo(args)` IS the load now. Retained as a non-subscribing alias
-    // during migration (identical to the bare call minus the reactive subscription).
-    load(args: Args): Promise<T>
     // Resume a RETAINED stream transcript from chunk index `from` (replay `chunks[from..]` then live) —
     // the server side of the SSR→client attach (replayable-streams.md §5). `fresh: true` (with no cursor)
     // means no retained transcript exists, so the caller must run fresh from 0 and REPLACE, not append.
@@ -203,7 +200,7 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
 //
 // The slot is keyed by no args, so every probe/verb inherited from `Memo<void, T>` is callable bare
 // (`peek()`, `refresh()`, `invalidate()`, `state()`) — a `void` parameter may be omitted.
-export interface SyncMemo<T> extends Omit<Memo<void, T>, 'load'> {
+export interface SyncMemo<T> extends Memo<void, T> {
     (): T
 }
 
@@ -211,7 +208,7 @@ export interface SyncMemo<T> extends Omit<Memo<void, T>, 'load'> {
 // untracked, one slot per key), but there is nothing to await, so the bare call returns `T` — same
 // reasoning as `SyncMemo`: a promise here would blank the server-rendered text and refill it a microtask
 // later. Every probe/verb is inherited unchanged; only the read differs.
-export interface SyncKeyedMemo<Args, T> extends Omit<Memo<Args, T>, 'load'> {
+export interface SyncKeyedMemo<Args, T> extends Memo<Args, T> {
     (args: Args): T
 }
 
@@ -943,22 +940,6 @@ export function memo<Args, T>(
         slot.state()
         return untrack(() => coalescedLoad(slot))
     }) as Memo<Args, T>
-
-    // @deprecated alias for the bare call, minus the reactive subscription (back-compat during migration).
-    c.load = (args: Args): Promise<T> => {
-        guardSharedRead()
-        const slot = ensureSlot(args)
-        resolveMode(slot)
-        touchOnRead(slot)
-        const auto = slot.auto
-        if (auto !== undefined) {
-            const state = untrack(() => autoState(auto))
-            if (state.status === 'error') return Promise.reject(state.error)
-            const value = state.value as T
-            return markSettled(Promise.resolve(value), value)
-        }
-        return coalescedLoad(slot)
-    }
 
     // Reactive PEEK: the non-blocking snapshot — subscribes and kicks a coalesced load when cold. For a
     // VALUE slot: the current value (or undefined while pending). For a STREAM slot: the current value is

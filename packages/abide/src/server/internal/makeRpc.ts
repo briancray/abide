@@ -4,7 +4,7 @@
 // router mounts (via `__rpc` metadata) and that server/client code invokes directly.
 //
 // READS (GET/HEAD) wrap the handler in a `memo` so in-process calls cache, coalesce, and are
-// reactive — `(args)` reactively peeks, `load/peek/pending/error/refresh/invalidate` mirror
+// reactive — `(args)` reactively peeks, `peek/pending/error/refresh/invalidate` mirror
 // the memo surface. memo.ttl flows into the memo; the remaining options (schemas/clients/
 // crossOrigin/maxBodySize/timeout/middleware) are carried untouched for the router to enforce.
 // `memo: false` on a read means "don't retain" → the memo runs at ttl:0 (coalesce concurrent, never
@@ -128,8 +128,6 @@ export interface Rpc<Args, T> {
     (...args: RpcCallArgs<Args>): Promise<T>
     // Reactive peek: subscribes, kicks a coalesced load when cold, returns value or undefined.
     peek(...args: RpcCallArgs<Args>): T | undefined
-    // @deprecated Use the bare call — `fn(args)` IS the load now. Retained as a migration alias.
-    load(...args: RpcCallArgs<Args>): Promise<T>
     pending(...args: RpcCallArgs<Args>): boolean
     // Revalidating over a retained value (distinct from first-load `pending`). Reactive.
     refreshing(...args: RpcCallArgs<Args>): boolean
@@ -266,7 +264,6 @@ function attachSurface<Args, T>(
     setBroadcast: (sink: MemoNotify) => void,
 ): void {
     callable.peek = (args: Args): T | undefined => backing.peek(args)
-    callable.load = (args: Args): Promise<T> => backing.load(args)
     callable.pending = (args: Args): boolean => backing.pending(args)
     callable.refreshing = (args: Args): boolean => backing.refreshing(args)
     callable.error = (args: Args): unknown => backing.error(args)

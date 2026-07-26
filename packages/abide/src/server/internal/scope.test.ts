@@ -120,7 +120,7 @@ describe('M1 cache integration', () => {
 
         await runInScope(scope, async () => {
             expect(scope.slots.size).toBe(0)
-            const value = await double.load(5)
+            const value = await double(5)
             expect(value).toBe(10)
             expect(scope.slots.size).toBeGreaterThan(0)
         })
@@ -135,7 +135,7 @@ describe('M1 cache integration', () => {
         const b = makeScope()
 
         await runInScope(a, async () => {
-            await double.load(3)
+            await double(3)
         })
         await runInScope(b, () => {
             // b never loaded, so its cache is untouched by a's load.

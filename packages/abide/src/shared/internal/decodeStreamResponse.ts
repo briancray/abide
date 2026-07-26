@@ -55,13 +55,14 @@ function* drainSse(buffer: string): Generator<unknown, string> {
     return rest
 }
 
-export async function* decodeStreamResponse(response: Response): AsyncGenerator<unknown> {
-    const encoding = streamEncodingFor(response.headers.get('content-type') ?? '')
-    if (encoding === undefined) {
-        throw new Error('decodeStreamResponse: response is not a jsonl/sse stream')
-    }
-    if (response.body === null) return
-    const reader = response.body.getReader()
+// Drain a byte stream in one framing, yielding each record as its frame completes. Shared by the
+// content-type-dispatched `decodeStreamResponse` and by the soft-nav patch reader, which knows its
+// body is jsonl without consulting a header.
+async function* readStream(
+    body: ReadableStream<Uint8Array>,
+    encoding: 'jsonl' | 'sse',
+): AsyncGenerator<unknown> {
+    const reader = body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
     try {
@@ -79,4 +80,21 @@ export async function* decodeStreamResponse(response: Response): AsyncGenerator<
     } finally {
         await reader.cancel().catch(() => {})
     }
+}
+
+// A `\n`-delimited jsonl byte stream as parsed records — the soft-nav streamed-patch reader, which
+// applies the shell then each patch progressively as they arrive.
+export async function* decodeJsonlStream(
+    body: ReadableStream<Uint8Array>,
+): AsyncGenerator<Record<string, unknown>> {
+    yield* readStream(body, 'jsonl') as AsyncGenerator<Record<string, unknown>>
+}
+
+export async function* decodeStreamResponse(response: Response): AsyncGenerator<unknown> {
+    const encoding = streamEncodingFor(response.headers.get('content-type') ?? '')
+    if (encoding === undefined) {
+        throw new Error('decodeStreamResponse: response is not a jsonl/sse stream')
+    }
+    if (response.body === null) return
+    yield* readStream(response.body, encoding)
 }

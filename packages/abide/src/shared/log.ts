@@ -153,8 +153,18 @@ function makeChannelLogger(channel: string | undefined): ChannelLogger {
     return logger
 }
 
+// Channel loggers are memoized: the channel set is fixed and small (the `abide:*` framework channels
+// plus whatever an app names), while `log.channel('abide:rpc')` sits on per-request and per-render
+// paths — building five fresh closures per call is pure garbage.
+const CHANNEL_LOGGERS = new Map<string, ChannelLogger>()
+
 export const log: Logger = Object.assign(makeChannelLogger(undefined), {
     channel(name: string): ChannelLogger {
-        return makeChannelLogger(name)
+        let logger = CHANNEL_LOGGERS.get(name)
+        if (logger === undefined) {
+            logger = makeChannelLogger(name)
+            CHANNEL_LOGGERS.set(name, logger)
+        }
+        return logger
     },
 })

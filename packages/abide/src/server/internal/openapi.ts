@@ -15,11 +15,6 @@ import { singleType } from '../../shared/internal/jsonSchema.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import type { Registry, RpcEntry } from './registry.ts'
 
-export interface OpenApiOptions {
-    title?: string
-    version?: string
-}
-
 // A permissive schema — "any value" — used wherever the registry has no concrete JSON Schema.
 function anySchema(): Record<string, unknown> {
     return {}
@@ -111,7 +106,7 @@ function operationForRpc(entry: RpcEntry): Record<string, unknown> {
     return operation
 }
 
-export function buildOpenApi(registry: Registry, opts?: OpenApiOptions): Record<string, unknown> {
+export function buildOpenApi(registry: Registry): Record<string, unknown> {
     const paths: Record<string, Record<string, unknown>> = {}
 
     for (const entry of registry.rpcs) {
@@ -127,8 +122,8 @@ export function buildOpenApi(registry: Registry, opts?: OpenApiOptions): Record<
     return {
         openapi: '3.1.0',
         info: {
-            title: opts?.title ?? 'abide app',
-            version: opts?.version ?? '0.0.0',
+            title: 'abide app',
+            version: '0.0.0',
         },
         paths,
         components: {

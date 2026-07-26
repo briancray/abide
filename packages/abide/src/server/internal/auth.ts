@@ -56,7 +56,13 @@ function appOwner(): Principal {
     return { ...APP_OWNER }
 }
 
-export async function resolveIdentity(request: Request): Promise<Principal> {
+// `parsedCookies` lets a caller that has ALREADY parsed the request's cookie header hand it over — the
+// router builds one `CookieMap` for the request scope, so without this the header is parsed twice per
+// request. Omitted (tests, the socket-upgrade path) → parsed on demand, and only on the cookie rung.
+export async function resolveIdentity(
+    request: Request,
+    parsedCookies?: Bun.CookieMap,
+): Promise<Principal> {
     const authorization = request.headers.get('authorization')
     if (authorization !== null) {
         const match = /^Bearer\s+(.+)$/i.exec(authorization.trim())
@@ -76,8 +82,9 @@ export async function resolveIdentity(request: Request): Promise<Principal> {
         }
     }
 
-    const cookies = new Bun.CookieMap(request.headers.get('cookie') ?? '')
-    const cookieToken = cookies.get('abide-identity')
+    const cookieToken = (
+        parsedCookies ?? new Bun.CookieMap(request.headers.get('cookie') ?? '')
+    ).get('abide-identity')
     if (cookieToken !== null && cookieToken.length > 0) {
         const unsealed = await unseal(cookieToken)
         if (unsealed !== undefined) return unsealed

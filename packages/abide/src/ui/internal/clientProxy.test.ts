@@ -24,7 +24,7 @@ test('read proxy fetches and returns the handler value', async () => {
         base: app.origin,
     }) as Rpc<{ name: string }, string>
 
-    expect(await greet.load({ name: 'x' })).toBe('hello x')
+    expect(await greet({ name: 'x' })).toBe('hello x')
 })
 
 test('read proxy coalesces/caches repeated loads (handler runs once)', async () => {
@@ -39,11 +39,11 @@ test('read proxy coalesces/caches repeated loads (handler runs once)', async () 
         base: app.origin,
     }) as Rpc<{ name: string }, string>
 
-    const [a, b] = await Promise.all([greet.load({ name: 'y' }), greet.load({ name: 'y' })])
+    const [a, b] = await Promise.all([greet({ name: 'y' }), greet({ name: 'y' })])
     expect(a).toBe('hi y')
     expect(b).toBe('hi y')
     // A third settled read hits the cache, not the network.
-    expect(await greet.load({ name: 'y' })).toBe('hi y')
+    expect(await greet({ name: 'y' })).toBe('hi y')
     expect(calls).toBe(1)
 })
 
@@ -76,10 +76,10 @@ test('invalidate forces a re-fetch', async () => {
         base: app.origin,
     }) as Rpc<{ name: string }, string>
 
-    expect(await greet.load({ name: 'z' })).toBe('hi z#1')
-    expect(await greet.load({ name: 'z' })).toBe('hi z#1') // cached
+    expect(await greet({ name: 'z' })).toBe('hi z#1')
+    expect(await greet({ name: 'z' })).toBe('hi z#1') // cached
     greet.invalidate({ name: 'z' })
-    expect(await greet.load({ name: 'z' })).toBe('hi z#2') // re-fetched
+    expect(await greet({ name: 'z' })).toBe('hi z#2') // re-fetched
     expect(calls).toBe(2)
 })
 
@@ -100,7 +100,7 @@ test('read proxy throws HttpError-like on non-2xx (404 unknown rpc)', async () =
         base: app.origin,
     }) as Rpc<Record<string, never>, string>
 
-    await expect(missing.load({})).rejects.toMatchObject({ name: 'HttpError', status: 404 })
+    await expect(missing({})).rejects.toMatchObject({ name: 'HttpError', status: 404 })
 })
 
 test('read proxy throws on 422 validation failure', async () => {
@@ -119,7 +119,7 @@ test('read proxy throws on 422 validation failure', async () => {
         base: app.origin,
     }) as Rpc<{ name?: string }, string>
 
-    await expect(greet.load({})).rejects.toMatchObject({ name: 'HttpError', status: 422 })
+    await expect(greet({})).rejects.toMatchObject({ name: 'HttpError', status: 422 })
 })
 
 test('makeClientImports builds a name -> proxy map', () => {
@@ -131,8 +131,6 @@ test('makeClientImports builds a name -> proxy map', () => {
     expect(typeof imports.greet).toBe('function')
     expect(typeof imports.bump).toBe('function')
     // Both proxies carry the identical reactive surface — full read/mutation symmetry.
-    expect(typeof (imports.greet as Rpc<unknown, unknown>).load).toBe('function')
-    expect(typeof (imports.bump as Rpc<unknown, unknown>).load).toBe('function')
     expect(typeof (imports.bump as Rpc<unknown, unknown>).refresh).toBe('function')
     expect(typeof (imports.bump as Rpc<unknown, unknown>).peek).toBe('function')
 })

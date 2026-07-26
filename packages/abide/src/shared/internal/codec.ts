@@ -365,20 +365,15 @@ function decodeNumber(payload: unknown): number {
 }
 
 // ---------------------------------------------------------------------------
-// base64 helpers (isomorphic: `atob`/`btoa` are web-standard globals present in Bun AND the browser —
-// `decode` now runs client-side during hydration, where Bun's `Buffer` does not exist)
+// base64 helpers (isomorphic: `Uint8Array.prototype.toBase64`/`Uint8Array.fromBase64` are web-standard
+// and present in Bun AND the browser — `decode` runs client-side during hydration, where Bun's `Buffer`
+// does not exist. `seal.ts` uses the same pair.)
 // ---------------------------------------------------------------------------
 
 function bytesToBase64(bytes: Uint8Array): string {
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i] as number)
-    return btoa(binary)
+    return bytes.toBase64()
 }
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binary = atob(base64)
-    const buffer = new ArrayBuffer(binary.length)
-    const view = new Uint8Array(buffer)
-    for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i)
-    return buffer
+    return Uint8Array.fromBase64(base64).buffer as ArrayBuffer
 }

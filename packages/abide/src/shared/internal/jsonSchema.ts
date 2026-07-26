@@ -51,24 +51,35 @@ export function singleType(
     return type
 }
 
-// Coerce one raw string to its declared JSON-Schema scalar type — the shared string→typed step behind
-// the flat query-arg decoder and multipart form-text projection (both feed string wire values into a
-// JSON-shaped args object). Best-effort: an uncoercible value is left as the raw string so the schema
-// validation — not this coercer — produces the loud 422. A `string`/undeclared type passes through.
-export function coerceStringToType(raw: string, type: JSONSchemaType | undefined): unknown {
+// Returned by `tryCoerceStringToType` when `raw` cannot be read as the declared type. A sentinel rather
+// than `undefined`, which is a legitimate coercion of the `null` type.
+export const COERCE_FAILED = Symbol('abide.coerceFailed')
+
+// Coerce one raw string to its declared JSON-Schema scalar type, reporting an uncoercible value as
+// `COERCE_FAILED` — the shared string→typed step behind the flat query-arg decoder, the multipart
+// form-text projection, and `env`. A `string`/undeclared type passes through.
+//
+// `numericBooleans` additionally admits the `1`/`0` spellings: an env var conventionally carries them
+// (`DEBUG=1`), while the HTTP wire coercers accept only the JSON spellings and let schema validation
+// reject the rest.
+export function tryCoerceStringToType(
+    raw: string,
+    type: JSONSchemaType | undefined,
+    numericBooleans = false,
+): unknown {
     switch (type) {
         case 'number':
         case 'integer': {
             const parsed = Number(raw)
-            if (raw.trim() === '' || !Number.isFinite(parsed)) return raw
-            if (type === 'integer' && !Number.isInteger(parsed)) return raw
+            if (raw.trim() === '' || !Number.isFinite(parsed)) return COERCE_FAILED
+            if (type === 'integer' && !Number.isInteger(parsed)) return COERCE_FAILED
             return parsed
         }
         case 'boolean': {
             const lowered = raw.trim().toLowerCase()
-            if (lowered === 'true') return true
-            if (lowered === 'false') return false
-            return raw
+            if (lowered === 'true' || (numericBooleans && lowered === '1')) return true
+            if (lowered === 'false' || (numericBooleans && lowered === '0')) return false
+            return COERCE_FAILED
         }
         case 'object':
         case 'array':
@@ -76,12 +87,37 @@ export function coerceStringToType(raw: string, type: JSONSchemaType | undefined
             try {
                 return JSON.parse(raw)
             } catch {
-                return raw
+                return COERCE_FAILED
             }
         }
         default:
             return raw // string or undeclared — leave as-is.
     }
+}
+
+// The best-effort face of `tryCoerceStringToType`, for the wire decoders: an uncoercible value is left
+// as the raw string so the schema validation — not this coercer — produces the loud 422.
+export function coerceStringToType(raw: string, type: JSONSchemaType | undefined): unknown {
+    const coerced = tryCoerceStringToType(raw, type)
+    return coerced === COERCE_FAILED ? raw : coerced
+}
+
+// Compiled `pattern` regexes, keyed by source. Input validation runs per request against a schema
+// that never changes, so without this every validated string field recompiles its pattern on every
+// call. `undefined` caches the unparsable case too (best-effort: an unparsable pattern is SKIPPED
+// rather than treated as a failure), so a bad pattern is compiled once, not once per request.
+const COMPILED_PATTERNS = new Map<string, RegExp | undefined>()
+
+function compiledPattern(pattern: string): RegExp | undefined {
+    if (COMPILED_PATTERNS.has(pattern)) return COMPILED_PATTERNS.get(pattern)
+    let regex: RegExp | undefined
+    try {
+        regex = new RegExp(pattern)
+    } catch {
+        regex = undefined
+    }
+    COMPILED_PATTERNS.set(pattern, regex)
+    return regex
 }
 
 type Issue = { message: string; path: Array<string | number> }
@@ -255,13 +291,7 @@ function validateString(
         issues.push({ message: `Expected length <= ${schema.maxLength}`, path })
     }
     if (schema.pattern !== undefined) {
-        // Best-effort: an unparsable pattern is skipped rather than treated as a failure.
-        let regex: RegExp | undefined
-        try {
-            regex = new RegExp(schema.pattern)
-        } catch {
-            regex = undefined
-        }
+        const regex = compiledPattern(schema.pattern)
         if (regex !== undefined && !regex.test(value)) {
             issues.push({ message: `Expected string matching /${schema.pattern}/`, path })
         }
@@ -334,9 +364,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 // Accept the common ISO 8601 date-time shapes JSON Schema `date-time` describes: a date, a `T` (or
 // space) separator, a time, and an optional zone offset. Requires Date to parse it too.
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/
+
 function isIsoDateTime(value: string): boolean {
-    const shape = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/
-    if (!shape.test(value)) return false
+    if (!ISO_DATE_TIME.test(value)) return false
     return !Number.isNaN(Date.parse(value))
 }
 

@@ -24,7 +24,7 @@ import { state } from '../../shared/state.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
-import { Raw } from '../../ui/internal/serverRuntime.ts'
+import { escapeHtml, Raw } from '../../ui/internal/serverRuntime.ts'
 import { createStreamScope, documentPatch, drainPatches } from '../../ui/internal/streamScope.ts'
 import { cookies } from '../cookies.ts'
 import { identity } from '../identity.ts'
@@ -34,43 +34,22 @@ import { applicableLayoutPrefixes } from './layouts.ts'
 import type { Rpc } from './makeRpc.ts'
 import type { AppConfig, Route } from './router.ts'
 
-// Wrap one route as the value a page sees under its name. Under the Promise-read model the read's
-// bare call IS the coalesced load (`await greet(args)` → the value); SSR awaits it into the HTML.
-// `.peek()` is the sync `T | undefined` snapshot. Probe/verb methods are carried through for parity.
-// Mutations are already promise-returning callables, passed through untouched.
-function pageCallable(entry: Route): unknown {
-    if (entry.__rpc.read !== true) return entry
-    const rpc = entry as Rpc<unknown, unknown>
-    const callable = (args: unknown): Promise<unknown> => rpc(args)
-    return Object.assign(callable, {
-        peek: rpc.peek,
-        load: rpc.load,
-        pending: rpc.pending,
-        refreshing: rpc.refreshing,
-        error: rpc.error,
-        watch: rpc.watch,
-        raw: rpc.raw,
-        isError: rpc.isError,
-        refresh: rpc.refresh,
-        invalidate: rpc.invalidate,
-        publish: rpc.publish,
-        snapshot: rpc.snapshot,
-        seed: rpc.seed,
-        __rpc: rpc.__rpc,
-    })
-}
-
 // Build the imports map: RPC callables by route name, socket instances by socket name, then the
 // ambient accessors (added last so a standard accessor name always resolves to the accessor). A
 // `.abide` that imports a socket from `server/sockets/<name>.ts` reads the REAL isomorphic `Socket`
 // off `$scope` during SSR — its `[Symbol.asyncIterator]` is snapshot-then-complete under render (CS5).
+//
+// A route is passed through AS ITSELF: under the Promise-read model a read's bare call already IS the
+// coalesced load (`await greet(args)` → the value, which SSR awaits into the HTML), and `attachSurface`
+// has already hung every probe/verb on the callable as an own property. Re-wrapping it would only be a
+// lossy copy that has to be extended each time the `Rpc` surface grows.
 function pageImports(
     routes: Record<string, Route>,
     sockets: Record<string, Socket<unknown>>,
 ): Record<string, unknown> {
     const imports: Record<string, unknown> = {}
     for (const [name, routeDef] of Object.entries(routes)) {
-        imports[name] = pageCallable(routeDef)
+        imports[name] = routeDef
     }
     for (const [name, sock] of Object.entries(sockets)) {
         imports[name] = sock
@@ -350,16 +329,6 @@ export interface RenderDocumentOptions {
     preloadHref?: string | undefined
 }
 
-const DOCUMENT_TITLE_ESCAPE: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' }
-
-function escapeTitle(value: string): string {
-    return value.replace(/[&<>]/g, (char) => {
-        const escaped = DOCUMENT_TITLE_ESCAPE[char]
-        if (escaped === undefined) throw new Error(`escapeTitle: no escape for ${char}`)
-        return escaped
-    })
-}
-
 // Serialise the seed for embedding in a `<script type="application/json">`. `<` is escaped to its
 // `<` JSON escape so a value containing `</script>` cannot break out of the script element while
 // the payload stays valid JSON the client parses back verbatim.
@@ -373,7 +342,7 @@ function serialiseSeed(seed: HydrationSeed | undefined): string {
 // shell + streamed patches). `renderDocument` (`head + inner + tail`) stays byte-identical to the
 // pre-streaming output for the buffered callers/tests.
 export function documentHead(opts?: RenderDocumentOptions): string {
-    const title = escapeTitle(opts?.title ?? 'abide')
+    const title = escapeHtml(opts?.title ?? 'abide')
     const stylesheet =
         opts?.cssHref !== undefined ? `<link rel="stylesheet" href="${opts.cssHref}">` : ''
     const preload =

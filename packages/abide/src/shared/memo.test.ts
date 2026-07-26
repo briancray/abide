@@ -19,7 +19,7 @@ describe('memo — read + load', () => {
             const c = memo(async (n: number) => n + 1)
             // peek does not trigger a load
             expect(c.peek(1)).toBeUndefined()
-            expect(await c.load(1)).toBe(2)
+            expect(await c(1)).toBe(2)
             expect(c.peek(1)).toBe(2)
         })
     })
@@ -30,7 +30,7 @@ describe('memo — read + load', () => {
                 await delay(15)
                 return n * 3
             })
-            const loading = c.load(5)
+            const loading = c(5)
             expect(c.peek(5)).toBeUndefined()
             expect(c.pending(5)).toBe(true)
             expect(await loading).toBe(15)
@@ -47,7 +47,7 @@ describe('memo — read + load', () => {
                 await delay(15)
                 return n
             })
-            const [a, b] = await Promise.all([c.load(7), c.load(7)])
+            const [a, b] = await Promise.all([c(7), c(7)])
             expect(a).toBe(7)
             expect(b).toBe(7)
             expect(calls).toBe(1)
@@ -61,8 +61,8 @@ describe('memo — read + load', () => {
                 calls++
                 return n * 10
             })
-            expect(await c.load(1)).toBe(10)
-            expect(await c.load(2)).toBe(20)
+            expect(await c(1)).toBe(10)
+            expect(await c(2)).toBe(20)
             expect(calls).toBe(2)
             expect(c.peek(1)).toBe(10)
             expect(c.peek(2)).toBe(20)
@@ -76,9 +76,9 @@ describe('memo — read + load', () => {
                 calls++
                 return n * 2
             })
-            expect(await c.load(3)).toBe(6)
-            expect(await c.load(3)).toBe(6)
-            expect(await c.load(3)).toBe(6)
+            expect(await c(3)).toBe(6)
+            expect(await c(3)).toBe(6)
+            expect(await c(3)).toBe(6)
             expect(calls).toBe(1)
         })
     })
@@ -113,7 +113,7 @@ describe('memo — refresh / invalidate', () => {
                 await delay(30)
                 return `${n}:${calls}`
             })
-            expect(await c.load(1)).toBe('1:1')
+            expect(await c(1)).toBe('1:1')
 
             c.refresh(1)
             // stale value stays visible, refreshing flag is set
@@ -134,13 +134,13 @@ describe('memo — refresh / invalidate', () => {
                 calls++
                 return n * 2
             })
-            expect(await c.load(1)).toBe(2)
+            expect(await c(1)).toBe(2)
             expect(calls).toBe(1)
 
             c.invalidate(1)
             expect(c.peek(1)).toBeUndefined() // dropped back to idle
 
-            expect(await c.load(1)).toBe(2)
+            expect(await c(1)).toBe(2)
             expect(calls).toBe(2)
         })
     })
@@ -148,9 +148,9 @@ describe('memo — refresh / invalidate', () => {
     test('partial-object invalidate matches superset slots only', async () => {
         await withContext(async () => {
             const c = memo(async (args: { id: number; page: number }) => `${args.id}-${args.page}`)
-            await c.load({ id: 1, page: 1 })
-            await c.load({ id: 1, page: 2 })
-            await c.load({ id: 2, page: 1 })
+            await c({ id: 1, page: 1 })
+            await c({ id: 1, page: 2 })
+            await c({ id: 2, page: 1 })
 
             c.invalidate({ id: 1 })
 
@@ -163,8 +163,8 @@ describe('memo — refresh / invalidate', () => {
     test('whole-memo invalidate drops every slot', async () => {
         await withContext(async () => {
             const c = memo(async (n: number) => n * 2)
-            await c.load(1)
-            await c.load(2)
+            await c(1)
+            await c(2)
             c.invalidate()
             expect(c.peek(1)).toBeUndefined()
             expect(c.peek(2)).toBeUndefined()
@@ -176,7 +176,7 @@ describe('memo — publish', () => {
     test('value-form and updater-form update peek', async () => {
         await withContext(async () => {
             const c = memo(async (n: number) => `v${n}`)
-            await c.load(1)
+            await c(1)
             expect(c.peek(1)).toBe('v1')
 
             c.publish(1, 'X')
@@ -218,7 +218,7 @@ describe('memo — publish', () => {
     test('watch fires the handler on slot change', async () => {
         await withContext(async () => {
             const c = memo(async (n: number) => n * 2)
-            await c.load(1)
+            await c(1)
             const seen: (number | undefined)[] = []
             const dispose = c.watch(1, (value) => seen.push(value))
             c.publish(1, 99)
@@ -235,7 +235,7 @@ describe('memo — publish', () => {
         await withContext(async () => {
             let next = 1
             const c = memo(async (_n: number) => next++)
-            await c.load(1)
+            await c(1)
             const seen: (number | undefined)[] = []
             const dispose = c.watch(1, (value) => seen.push(value))
             c.refresh(1)
@@ -258,7 +258,7 @@ describe('memo — publish', () => {
             })
             const seen: unknown[] = []
             const dispose = c.watch(1, (value) => seen.push(value))
-            for await (const _ of (await c.load(1)) as AsyncIterable<string>) {
+            for await (const _ of (await c(1)) as AsyncIterable<string>) {
                 // drain so the transcript fills chunk by chunk
             }
             await tick()
@@ -283,7 +283,7 @@ describe('memo — reactive probes', () => {
             const dispose = effect(() => {
                 pendings.push(c.pending(5))
             })
-            c.load(5)
+            c(5)
             await delay(40)
             await tick()
             dispose()
@@ -305,7 +305,7 @@ describe('memo — reactive probes', () => {
                 errors.push(c.error(-1))
             })
 
-            await expect(c.load(-1)).rejects.toThrow('negative')
+            await expect(c(-1)).rejects.toThrow('negative')
             await tick()
             dispose()
 
@@ -328,12 +328,12 @@ describe('memo — ttl', () => {
                 },
                 { ttl: 30 },
             )
-            expect(await c.load(1)).toBe(2)
-            expect(await c.load(1)).toBe(2) // within ttl -> cached
+            expect(await c(1)).toBe(2)
+            expect(await c(1)).toBe(2) // within ttl -> cached
             expect(calls).toBe(1)
 
             await delay(50)
-            expect(await c.load(1)).toBe(2) // expired -> re-loads
+            expect(await c(1)).toBe(2) // expired -> re-loads
             expect(calls).toBe(2)
         })
     })
@@ -347,11 +347,11 @@ describe('memo — context isolation', () => {
             return n * 2
         })
         await runInContext(createContext(), async () => {
-            expect(await c.load(1)).toBe(2)
+            expect(await c(1)).toBe(2)
         })
         await runInContext(createContext(), async () => {
             expect(c.peek(1)).toBeUndefined() // different cache
-            expect(await c.load(1)).toBe(2)
+            expect(await c(1)).toBe(2)
         })
         expect(calls).toBe(2)
     })
@@ -361,8 +361,8 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
     test('snapshot reports only resolved (value) slots with their args', async () => {
         await withContext(async () => {
             const c = memo(async (args: { name: string }) => `hi ${args.name}`)
-            await c.load({ name: 'ada' })
-            await c.load({ name: 'bo' })
+            await c({ name: 'ada' })
+            await c({ name: 'bo' })
             c.peek({ name: 'pending-never-loaded' }) // stays idle → excluded
 
             const snapshot = c.snapshot().sort((a, b) => (a.value < b.value ? -1 : 1))
@@ -383,11 +383,11 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
 
             c.seed({ name: 'ada' }, 'seeded ada')
             expect(c.peek({ name: 'ada' })).toBe('seeded ada')
-            expect(await c.load({ name: 'ada' })).toBe('seeded ada')
+            expect(await c({ name: 'ada' })).toBe('seeded ada')
             expect(calls).toBe(0) // seeded slot short-circuits the fetch
 
             // an un-seeded arg still loads through fn
-            expect(await c.load({ name: 'bo' })).toBe('fetched bo')
+            expect(await c({ name: 'bo' })).toBe('fetched bo')
             expect(calls).toBe(1)
         })
     })
@@ -399,7 +399,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
             return { id: args.id, label: `row-${args.id}` }
         })
         const recorded = await runInContext(createContext(), async () => {
-            await server.load({ id: 7 })
+            await server({ id: 7 })
             return server.snapshot()
         })
 
@@ -410,7 +410,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
         })
         await runInContext(createContext(), async () => {
             for (const record of recorded) client.seed(record.args, record.value)
-            expect(await client.load({ id: 7 })).toEqual({ id: 7, label: 'row-7' })
+            expect(await client({ id: 7 })).toEqual({ id: 7, label: 'row-7' })
         })
         expect(clientCalls).toBe(0)
         expect(calls).toBe(1)

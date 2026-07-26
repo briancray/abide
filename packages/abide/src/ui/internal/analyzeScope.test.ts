@@ -4,7 +4,6 @@ import { createScanner } from 'typescript/unstable/ast/scanner'
 import {
     analyzeScope,
     type CellScope,
-    collectFreeIdentifiers,
     rewriteCellRefs,
     rewriteFreeIdentifiers,
 } from './analyzeScope.ts'
@@ -15,7 +14,7 @@ const CELLS = (...names: string[]): CellScope => ({
     memos: new Set(),
 })
 
-// `collectFreeIdentifiers` / `rewriteFreeIdentifiers` take a plain set of DECLARED script bindings.
+// `rewriteFreeIdentifiers` takes a plain set of DECLARED script bindings.
 const DECLARED = (...names: string[]): Set<string> => new Set(names)
 
 // An auto-called memo scope (ADR 0024 §5).
@@ -277,42 +276,6 @@ describe('rewriteCellRefs declarations and shadowing', () => {
         expect(rewriteCellRefs('n; function f(n){ return n }', CELLS('n'))).toBe(
             'n(); function f(n){ return n }',
         )
-    })
-})
-
-// ---------------------------------------------------------------------------
-// collectFreeIdentifiers
-// ---------------------------------------------------------------------------
-
-describe('collectFreeIdentifiers', () => {
-    test('returns undeclared, non-global identifiers', () => {
-        const free = collectFreeIdentifiers('a + b + c', DECLARED('a'))
-        expect([...free].sort()).toEqual(['b', 'c'])
-    })
-
-    test('skips property accesses and object keys', () => {
-        const free = collectFreeIdentifiers('obj.prop + { key: value }', DECLARED())
-        expect([...free].sort()).toEqual(['obj', 'value'])
-    })
-
-    test('object shorthand counts as a free read', () => {
-        const free = collectFreeIdentifiers('({ x })', DECLARED())
-        expect([...free]).toEqual(['x'])
-    })
-
-    test('skips JS globals', () => {
-        const free = collectFreeIdentifiers('Math.max(a, undefined)', DECLARED())
-        expect([...free]).toEqual(['a'])
-    })
-
-    test('skips arrow parameters (locals)', () => {
-        const free = collectFreeIdentifiers('items.map(x => x + y)', DECLARED())
-        expect([...free].sort()).toEqual(['items', 'y'])
-    })
-
-    test('skips declared names', () => {
-        const free = collectFreeIdentifiers('greet + state', DECLARED('greet', 'state'))
-        expect([...free]).toEqual([])
     })
 })
 

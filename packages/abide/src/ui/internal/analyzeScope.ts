@@ -31,6 +31,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { Root } from './ast.ts'
+import { splitParams } from './splitParams.ts'
 
 const K = SyntaxKind
 
@@ -332,7 +333,7 @@ const COMPOUND_OP: Map<SyntaxKind, string> = new Map([
     [K.QuestionQuestionEqualsToken, '??'],
 ])
 
-// A small allowlist of JS globals that `collectFreeIdentifiers` must NOT report as free (template)
+// A small allowlist of JS globals that `rewriteFreeIdentifiers` must NOT rewrite as scope references
 // identifiers. Keywords (`true`, `null`, `this`, …) scan as their own token kinds, not `Identifier`,
 // so they never reach the allowlist check.
 const GLOBALS: Set<string> = new Set([
@@ -1317,7 +1318,7 @@ function markTypeSkips(tokens: Tok[], matchClose: Map<number, number>): Set<numb
 // getter-backed reactivity). Skips: declared script bindings, JS globals, member/property accesses,
 // object-literal keys, and identifiers bound locally within the expression (arrow/function params,
 // nested lets). Object-literal shorthand (`{ x }`) referencing a free identifier expands to
-// `{ x: <scopeVar>.x }`. Built on the same scanner passes as `rewriteCellRefs` / `collectFreeIdentifiers`.
+// `{ x: <scopeVar>.x }`. Built on the same scanner passes as `rewriteCellRefs`.
 export function rewriteFreeIdentifiers(
     code: string,
     declared: Set<string>,
@@ -1368,68 +1369,8 @@ export function rewriteFreeIdentifiers(
 }
 
 // ---------------------------------------------------------------------------
-// collectFreeIdentifiers
-// ---------------------------------------------------------------------------
-
-export function collectFreeIdentifiers(expr: string, declared: Set<string>): Set<string> {
-    const result = new Set<string>()
-    const tokens = tokenize(expr)
-    if (tokens.length === 0) return result
-    const braces = analyzeBraces(tokens)
-    const { enclBraceOpen, isObjectBrace } = braces
-    // Track ALL local bindings (params, nested lets) so locals are not reported as free.
-    const { declNameIdx, shadows } = buildScopes(tokens, braces, () => true)
-    const typeSkips = markTypeSkips(tokens, braces.matchClose)
-
-    for (let i = 0; i < tokens.length; i++) {
-        const t = tokenAt(tokens, i)
-        if (!isIdentifierLike(t.kind)) continue
-        if (typeSkips.has(i)) continue // type operand of `as`/`satisfies` — not a value reference
-        const prev = i > 0 ? tokenAt(tokens, i - 1).kind : undefined
-        if (prev === K.DotToken || prev === K.QuestionDotToken) continue // property access
-        // object key (`{ n: … }` / `{ n() {} }`) — not a value reference
-        const encl = numberAt(enclBraceOpen, i)
-        if (
-            encl !== -1 &&
-            isObjectBrace.has(encl) &&
-            (prev === K.OpenBraceToken || prev === K.CommaToken)
-        ) {
-            const next = tokens[i + 1]?.kind
-            if (next === K.ColonToken || next === K.OpenParenToken) continue
-        }
-        if (declNameIdx.has(i)) continue // local binding name
-        if (isShadowed(shadows, t.text, i)) continue // shadowed by a local binding
-        if (declared.has(t.text)) continue
-        if (GLOBALS.has(t.text)) continue
-        result.add(t.text)
-    }
-    return result
-}
-
-// ---------------------------------------------------------------------------
 // analyzeScope — top-level `<script>` walk (imports, cells, bindings, setup code)
 // ---------------------------------------------------------------------------
-
-// The following small string helpers mirror `transformScript.ts`. They are duplicated here rather than
-// imported because PR2 only ADDS files (it must not modify `transformScript.ts`); the behaviour is
-// identical.
-
-function splitTopLevelCommas(text: string): string[] {
-    const parts: string[] = []
-    let depth = 0
-    let start = 0
-    for (let index = 0; index < text.length; index++) {
-        const char = text[index]
-        if (char === '{' || char === '[' || char === '(') depth++
-        else if (char === '}' || char === ']' || char === ')') depth--
-        else if (char === ',' && depth === 0) {
-            parts.push(text.slice(start, index))
-            start = index + 1
-        }
-    }
-    parts.push(text.slice(start))
-    return parts
-}
 
 function topLevelIndexOf(text: string, target: string): number {
     let depth = 0
@@ -1452,7 +1393,7 @@ export function extractBindingNames(pattern: string): string[] {
     }
     const inner = trimmed.slice(1, -1)
     const names: string[] = []
-    for (let part of splitTopLevelCommas(inner)) {
+    for (let part of splitParams(inner)) {
         part = part.trim()
         if (part === '') continue
         if (part.startsWith('...')) part = part.slice(3).trim()
@@ -1470,7 +1411,7 @@ export function extractBindingNames(pattern: string): string[] {
     return names
 }
 
-function isSimpleIdentifier(pattern: string): boolean {
+export function isSimpleIdentifier(pattern: string): boolean {
     return /^[A-Za-z_$][\w$]*$/.test(pattern.trim())
 }
 
@@ -1541,32 +1482,10 @@ function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// After a callee name, does an (optional) generic argument list lead into a call `(`? Skips a balanced
-// `<...>` (nested generics allowed — `state<Map<K, V>>(…)`; `=>` inside a function-type arg is not a
-// close) so the generic call form `state<Foo[]>(…)` / `props<Bar>()` is recognised, not just the bare
-// `state(…)`. `rest` is the substring immediately after the callee. Returns false on an unbalanced `<`
-// (e.g. a `state < 5` comparison), so a non-call is never misread as a cell.
+// After a callee name, does an (optional) generic argument list lead into a call `(`? See
+// `callOpenIndex` — this is its boolean face.
 function callFollows(rest: string): boolean {
-    let index = 0
-    while (index < rest.length && /\s/.test(rest.charAt(index))) index++
-    if (rest.charAt(index) === '<') {
-        let depth = 0
-        for (; index < rest.length; index++) {
-            const char = rest.charAt(index)
-            if (char === '<') depth++
-            else if (char === '>') {
-                if (rest.charAt(index - 1) === '=') continue // `=>` arrow in a function-type arg
-                depth--
-                if (depth === 0) {
-                    index++
-                    break
-                }
-            }
-        }
-        if (depth !== 0) return false
-        while (index < rest.length && /\s/.test(rest.charAt(index))) index++
-    }
-    return rest.charAt(index) === '('
+    return callOpenIndex(rest) !== -1
 }
 
 // Recognise a cell initializer (`state(...)`, `state.shared(...)`) — including the generic call form
@@ -1583,8 +1502,12 @@ function cellKind(init: string, stateLocal: string): 'state' | null {
     return null
 }
 
-// Index of the call `(` that follows a callee at the start of `rest` (skipping an explicit generic
-// argument list), or -1 when no call follows. The index form of `callFollows`.
+// Index of the call `(` that follows a callee at the start of `rest`, or -1 when no call follows.
+// Skips a balanced `<...>` (nested generics allowed — `state<Map<K, V>>(…)`; `=>` inside a
+// function-type arg is not a close) so the generic call form `state<Foo[]>(…)` / `props<Bar>()` is
+// recognised, not just the bare `state(…)`. `rest` is the substring immediately after the callee.
+// Returns -1 on an unbalanced `<` (e.g. a `state < 5` comparison), so a non-call is never misread as
+// a cell.
 function callOpenIndex(rest: string): number {
     let index = 0
     while (index < rest.length && /\s/.test(rest.charAt(index))) index++
@@ -1652,7 +1575,7 @@ function memoKind(init: string, memoLocal: string): 'memo' | 'cell' | null {
     const projection = after.match(/^\.\s*state\b/)
     if (projection !== null && callFollows(after.slice(projection[0].length))) return 'cell'
 
-    const args = splitTopLevelCommas(rest.slice(open + 1, close)).map((part) => part.trim())
+    const args = splitParams(rest.slice(open + 1, close)).map((part) => part.trim())
     const source = args[0] ?? ''
     const transform = args[1]
     if (transform !== undefined && /^async\b/.test(transform)) return null
@@ -1893,7 +1816,7 @@ function analyzeScript(content: string): RawScript {
         }
 
         // var / let / const
-        for (const declarator of splitTopLevelCommas(record.rawDeclarators)) {
+        for (const declarator of splitParams(record.rawDeclarators)) {
             const equalsIndex = topLevelIndexOf(declarator, '=')
             const pattern = (
                 equalsIndex === -1 ? declarator : declarator.slice(0, equalsIndex)

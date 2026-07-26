@@ -21,6 +21,7 @@
 import { matchRoute } from '../server/internal/matchRoute.ts'
 import type { HydrationSeed } from '../server/internal/pages.ts'
 import type { RouteInfo } from '../server/internal/scope.ts'
+import { decodeJsonlStream } from '../shared/internal/decodeStreamResponse.ts'
 import { setClientRoute } from '../shared/internal/routeHolder.ts'
 import { bootstrapPage, buildPageScope } from './internal/bootstrap.ts'
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
@@ -169,30 +170,6 @@ export function disposeActive(): void {
     }
 }
 
-// Read a JSONL byte stream as parsed frame objects, yielding each as its `\n`-terminated line
-// completes — so the caller applies the shell, then each patch, progressively as they arrive.
-async function* readFrames(
-    body: ReadableStream<Uint8Array>,
-): AsyncGenerator<Record<string, unknown>> {
-    const reader = body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    for (;;) {
-        const { done, value } = await reader.read()
-        if (value !== undefined) buffer += decoder.decode(value, { stream: true })
-        let newline = buffer.indexOf('\n')
-        while (newline !== -1) {
-            const line = buffer.slice(0, newline)
-            buffer = buffer.slice(newline + 1)
-            if (line.length > 0) yield JSON.parse(line) as Record<string, unknown>
-            newline = buffer.indexOf('\n')
-        }
-        if (done) break
-    }
-    const rest = buffer.trim()
-    if (rest.length > 0) yield JSON.parse(rest) as Record<string, unknown>
-}
-
 // Apply one streamed soft-nav patch frame in JS — the same DOM ops the first-load move-scripts run
 // (`documentPatch` in streamScope.ts), but from JS since a `fetch`ed body's inline scripts don't
 // auto-run. The server emits the op AS the frame `kind`: `fill` replaces a deferred `{#await}` slot's
@@ -301,7 +278,7 @@ async function partialCrossNav(
     let firstNode: Node | null = null
     let grafted = false
     try {
-        for await (const frame of readFrames(response.body)) {
+        for await (const frame of decodeJsonlStream(response.body)) {
             if (frame.kind === 'shell') {
                 // The server computed the same shared prefix from `Abide-Nav`; if it disagrees, the shell is
                 // not the suffix we're set up to graft → hard load to stay correct.
@@ -468,7 +445,7 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     let seed: HydrationSeed | undefined
     let navUrl = target.pathname + target.search
     try {
-        for await (const frame of readFrames(response.body)) {
+        for await (const frame of decodeJsonlStream(response.body)) {
             if (frame.kind === 'shell') {
                 if (typeof frame.html === 'string') container.innerHTML = frame.html
                 if (typeof frame.url === 'string') navUrl = frame.url

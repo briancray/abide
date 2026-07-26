@@ -20,7 +20,6 @@
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
 import { health } from '../../shared/health.ts'
-import { canonicalKey } from '../../shared/internal/codec.ts'
 import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
@@ -28,6 +27,7 @@ import type { MuxDownstream } from '../../shared/internal/muxDownstream.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
+import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
 import { log } from '../../shared/log.ts'
 import { validateStandard } from '../../shared/StandardSchema.ts'
 import { validationError } from '../../shared/ValidationErrorData.ts'
@@ -85,6 +85,21 @@ import {
 import { validateFiles } from './validateFiles.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+// One config's page-pattern list, derived once. `matchRoute` needs the full pattern array on every
+// nav — twice on a soft-nav, which also matches the `Abide-Nav` origin path — and an app's pages are
+// fixed for its lifetime, so rebuilding it with `Object.keys` per request is pure allocation. Weakly
+// keyed on the config so a dev-server config swap simply re-derives.
+const PAGE_PATTERNS = new WeakMap<AppConfig, string[]>()
+
+function pagePatternsOf(config: AppConfig, pages: Record<string, string>): string[] {
+    let patterns = PAGE_PATTERNS.get(config)
+    if (patterns === undefined) {
+        patterns = Object.keys(pages)
+        PAGE_PATTERNS.set(config, patterns)
+    }
+    return patterns
+}
 
 // A streaming read result is an AsyncIterable of decoded chunks (a ReplayableStream `consume()` cursor);
 // the router transport-encodes it (jsonl/sse). A plain value/object is not async-iterable.
@@ -262,13 +277,6 @@ interface SocketConnection {
     subscriptions: Map<string, AsyncIterator<unknown>>
 }
 
-// The connection-local key for a subscription. A void socket / `@rpc:` cache channel (no room) keys by
-// bare `name`, identical to before; a roomed user socket folds in `canonicalKey(args)` so distinct rooms
-// of the same socket are distinct subscriptions on one connection.
-function subscriptionKey(name: string, args: unknown): string {
-    return args === undefined ? name : `${name} ${canonicalKey(args)}`
-}
-
 // The multiplexed socket transport (sockets.md S3). One WS per client at `/__abide/sockets`
 // carries all named sockets, framed `{ name, msg }`. The per-socket HTTP face at
 // `/__abide/sockets/<name>` is the WS-less path (GET → SSE subscribe, POST → publish).
@@ -418,7 +426,7 @@ async function subscribeMemoChannel(
 
 function wsUnsubscribe(connection: SocketConnection, name: unknown, args: unknown): void {
     if (typeof name !== 'string') return
-    const key = isMemoChannel(name) ? name : subscriptionKey(name, args)
+    const key = subscriptionKey(name, args)
     const iterator = connection.subscriptions.get(key)
     if (iterator === undefined) return
     connection.subscriptions.delete(key)
@@ -601,7 +609,8 @@ async function dispatch(
         // middleware blocks the page like any other request.
         const pages = config.pages ?? {}
         const method = scope.request.method.toUpperCase()
-        const match = matchRoute(Object.keys(pages), url.pathname)
+        const patterns = pagePatternsOf(config, pages)
+        const match = matchRoute(patterns, url.pathname)
         if (match !== null && (method === 'GET' || method === 'HEAD')) {
             log.channel('abide:router').trace(
                 `page ${match.pattern}${scope.route.navigating ? ' (soft-nav)' : ''}`,
@@ -611,7 +620,7 @@ async function dispatch(
             scope.route.params = match.params
             const source = pages[match.pattern]
             if (source === undefined) {
-                // Unreachable: match.pattern came from Object.keys(pages), so it is always a live key.
+                // Unreachable: match.pattern came from the pages key list, so it is always a live key.
                 throw new Error(`Matched page pattern has no source: ${match.pattern}`)
             }
             // TODO #7: an uncaught render error (a page/layout that throws with no `{#try}` boundary around
@@ -628,8 +637,7 @@ async function dispatch(
                     // `Abide-Nav`). Render only the diverging suffix; the client grafts + claims it into the
                     // innermost kept layout's outlet. 0 (no shared layout / unknown origin) renders full.
                     const fromPath = scope.request.headers.get('abide-nav')
-                    const fromMatch =
-                        fromPath !== null ? matchRoute(Object.keys(pages), fromPath) : null
+                    const fromMatch = fromPath !== null ? matchRoute(patterns, fromPath) : null
                     const sharedLevels =
                         fromMatch !== null
                             ? sharedLayoutDepth(
@@ -796,7 +804,7 @@ async function dispatch(
 
     const result = meta.read
         ? // biome-ignore lint/suspicious/noExplicitAny: existential rpc — concrete Args/T erased at dispatch; `unknown` breaks assignability through RpcMeta's invariant Args.
-          await (route as Rpc<any, any>).load(args)
+          await (route as Rpc<any, any>)(args)
         : // biome-ignore lint/suspicious/noExplicitAny: existential mutation — concrete Args/T erased at dispatch; `unknown` breaks assignability through RpcMeta's invariant Args.
           await (route as Mutation<any, any>)(args)
 
@@ -841,6 +849,22 @@ export function createApp(config: AppConfig = {}): App {
     const routes = config.routes ?? {}
     const globalMiddleware = config.middleware ?? []
     const sockets = config.sockets ?? {}
+
+    // Per-route static policy, derived ONCE at boot rather than per request. `crossOrigin` and
+    // `middleware` live on an immutable options object, so normalizing the CORS config and merging the
+    // global + per-rpc middleware lists on every request re-derived a constant — and the merge also
+    // allocated a fresh spread array each time. Only the final `compose` stays per-request: its inner
+    // `next` closes over that request's scope.
+    const routePolicy = new Map<
+        Route,
+        { cors: NormalizedCors | undefined; middleware: Middleware[] }
+    >()
+    for (const routeDef of Object.values(routes)) {
+        routePolicy.set(routeDef, {
+            cors: normalizeCrossOrigin(routeDef.__rpc.options.crossOrigin),
+            middleware: [...globalMiddleware, ...(routeDef.__rpc.options.middleware ?? [])],
+        })
+    }
 
     // AU8.3 / CX8.1: the Origin/Referer CSRF check and the CSWSH WebSocket-upgrade gate both key off
     // `APP_URL`. An unset `APP_URL` is legitimate in dev (and for hand-built/test apps), so those gates
@@ -935,31 +959,35 @@ export function createApp(config: AppConfig = {}): App {
             // in-scope try below so onError sees it (rather than escaping as a bare 500 before scope).
             let identity: Principal
             let scopeError: unknown
+            // Parsed once and shared with `resolveIdentity`, which reads `abide-identity` off it.
+            const cookies = new Bun.CookieMap(request.headers.get('cookie') ?? '')
             try {
-                identity = await resolveIdentity(request)
+                identity = await resolveIdentity(request, cookies)
             } catch (caught) {
                 identity = anonymousPrincipal()
                 scopeError = caught
             }
             const scope: RequestScope = {
                 request,
-                cookies: new Bun.CookieMap(request.headers.get('cookie') ?? ''),
+                cookies,
                 identity,
                 identityStateless: isMachineBearer(request),
+                identityCleared: false,
                 bag: {},
                 route,
                 // The WS-data generic (SocketConnectionData) is a socket-transport concern only; the
                 // public server()/scope.server surface stays `Bun.Server<undefined>` (unchanged API).
                 server: srv as unknown as Bun.Server<undefined>,
                 slots: new Map<string, unknown>(),
-                ...(propagatedTrace !== undefined ? { traceparent: propagatedTrace } : {}),
+                // Always present (undefined when there is no incoming traceparent) rather than spread in
+                // conditionally: this object is read by every ambient accessor on every request, so it is
+                // built once in its final shape instead of transitioning hidden classes.
+                traceparent: propagatedTrace,
             }
 
             const matched = info.kind === 'rpc' ? routes[info.name] : undefined
-            const cors =
-                matched !== undefined
-                    ? normalizeCrossOrigin(matched.__rpc.options.crossOrigin)
-                    : undefined
+            const policy = matched !== undefined ? routePolicy.get(matched) : undefined
+            const cors = policy?.cors
             // CORS preflight: answer an OPTIONS to an RPC before the middleware onion. A crossOrigin-less
             // RPC has no CORS policy, so preflight is simply an unsupported method (405 + Allow).
             if (request.method.toUpperCase() === 'OPTIONS' && info.kind === 'rpc') {
@@ -971,8 +999,7 @@ export function createApp(config: AppConfig = {}): App {
                           }),
                 )
             }
-            const rpcMiddleware = matched?.__rpc.options.middleware ?? []
-            const chain = compose([...globalMiddleware, ...rpcMiddleware], () =>
+            const chain = compose(policy?.middleware ?? globalMiddleware, () =>
                 dispatch(scope, config, startedAt),
             )
 

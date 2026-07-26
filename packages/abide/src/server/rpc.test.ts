@@ -31,8 +31,8 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
         })
 
         await runInScope(makeScope(), async () => {
-            expect(await get.load(5)).toBe(10)
-            expect(await get.load(5)).toBe(10)
+            expect(await get(5)).toBe(10)
+            expect(await get(5)).toBe(10)
             expect(calls).toBe(1)
         })
     })
@@ -45,9 +45,9 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
         })
 
         await runInScope(makeScope(), async () => {
-            expect(await get.load(1)).toBe(2)
-            expect(await get.load(2)).toBe(3)
-            expect(await get.load(1)).toBe(2)
+            expect(await get(1)).toBe(2)
+            expect(await get(2)).toBe(3)
+            expect(await get(1)).toBe(2)
             expect(calls).toBe(2)
         })
     })
@@ -60,10 +60,10 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
         })
 
         await runInScope(makeScope(), async () => {
-            expect(await get.load(3)).toBe(30)
+            expect(await get(3)).toBe(30)
             expect(calls).toBe(1)
             get.invalidate(3)
-            expect(await get.load(3)).toBe(30)
+            expect(await get(3)).toBe(30)
             expect(calls).toBe(2)
         })
     })
@@ -76,7 +76,7 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
             expect(typeof get.error).toBe('function')
             expect(typeof get.refresh).toBe('function')
 
-            const loading = get.load(7)
+            const loading = get(7)
             expect(get.pending(7)).toBe(true)
             expect(get.peek(7)).toBeUndefined()
             await loading
@@ -104,7 +104,7 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
             expect(get.refreshing({ n: 1 })).toBe(false)
             const seen: unknown[] = []
             const dispose = get.watch({ n: 5 }, (v) => seen.push(v))
-            await get.load({ n: 5 })
+            await get({ n: 5 })
             // watch fires on each VALUE change; the settled value is the last (and only) one seen.
             expect(seen.at(-1)).toEqual({ doubled: 10 })
             dispose()
@@ -118,8 +118,8 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
             return n
         })
         await runInScope(makeScope(), async () => {
-            await head.load(1)
-            await head.load(1)
+            await head(1)
+            await head(1)
             expect(calls).toBe(1)
         })
     })
@@ -149,7 +149,6 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
             'pending',
             'refreshing',
             'error',
-            'load',
             'watch',
             'refresh',
             'invalidate',

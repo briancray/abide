@@ -52,11 +52,11 @@ describe('shared store — cross-request memoization', () => {
 
         const first = await runInScope(
             makeScope({ identity: { id: 'user-A', authenticated: true } }),
-            () => c.load(5),
+            () => c(5),
         )
         const second = await runInScope(
             makeScope({ identity: { id: 'user-B', authenticated: true } }),
-            () => c.load(5),
+            () => c(5),
         )
 
         expect(first).toBe(10)
@@ -83,7 +83,7 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
 
                 const promise = runInScope(
                     makeScope({ identity: { id: 'user-A', authenticated: true } }),
-                    () => c.load(1),
+                    () => c(1),
                 )
                 await expect(promise).rejects.toThrow(/no active request scope/)
 
@@ -98,14 +98,14 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
 
     test('a shared handler calling request() also rejects and does not cache', async () => {
         const c = memo(async (_n: number) => request().url, { shared: true })
-        const promise = runInScope(makeScope(), () => c.load(2))
+        const promise = runInScope(makeScope(), () => c(2))
         await expect(promise).rejects.toThrow(/no active request scope/)
         expect(hasCachedValue()).toBe(false)
     })
 
     test('a shared handler that is pure over its args caches and serves from the shared store', async () => {
         const c = memo(async (n: number) => n + 100, { shared: true })
-        const value = await runInScope(makeScope(), () => c.load(7))
+        const value = await runInScope(makeScope(), () => c(7))
         expect(value).toBe(107)
         expect(hasCachedValue()).toBe(true)
     })
@@ -116,7 +116,7 @@ describe('fail-closed checkpoint (b) — ambient-entry guard', () => {
         const c = memo(async (n: number) => n, { shared: true })
         // The guard runs at the read entry (synchronously) on both the reactive peek and load paths.
         expect(() => c(1)).toThrow('shared memo read requires an active request scope')
-        expect(() => c.load(1)).toThrow('shared memo read requires an active request scope')
+        expect(() => c(1)).toThrow('shared memo read requires an active request scope')
     })
 })
 
@@ -128,8 +128,8 @@ describe('non-shared memos are unaffected (per-context isolation preserved)', ()
             return n * 3
         }) // no `shared`
 
-        await runInScope(makeScope(), () => c.load(4))
-        await runInScope(makeScope(), () => c.load(4))
+        await runInScope(makeScope(), () => c(4))
+        await runInScope(makeScope(), () => c(4))
 
         // Two separate per-request caches → the handler ran once per request.
         expect(calls).toBe(2)
@@ -139,7 +139,7 @@ describe('non-shared memos are unaffected (per-context isolation preserved)', ()
 
     test('an ordinary memo works with no scope (bare script) — no ambient guard', async () => {
         const c = memo(async (n: number) => n + 1)
-        expect(await c.load(9)).toBe(10)
+        expect(await c(9)).toBe(10)
     })
 })
 
@@ -150,11 +150,11 @@ describe('LRU eviction by ABIDE_MAX_SHARED_CACHE_SIZE', () => {
         Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE = '30'
         const c = memo(async (_n: number) => `${'v'.repeat(10)}`, { shared: true, key: 'lru-memo' })
 
-        await runInScope(makeScope(), () => c.load(1))
-        await runInScope(makeScope(), () => c.load(2))
+        await runInScope(makeScope(), () => c(1))
+        await runInScope(makeScope(), () => c(2))
         // Touch slot 1 so it is most-recently-read; slot 2 becomes the eviction candidate.
-        await runInScope(makeScope(), () => c.load(1))
-        await runInScope(makeScope(), () => c.load(3))
+        await runInScope(makeScope(), () => c(1))
+        await runInScope(makeScope(), () => c(3))
 
         const keys = [...sharedStore().keys()]
         const present = (n: number) => keys.some((k) => k.endsWith(`n${n}`)) // canonicalKey(n) === "n"+n

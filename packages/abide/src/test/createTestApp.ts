@@ -24,9 +24,8 @@ import { type App, createApp, type Route } from '../server/internal/router.ts'
 import type { Principal } from '../server/internal/scope.ts'
 import { seal } from '../server/internal/seal.ts'
 import type { ErasedSocket } from '../server/socket.ts'
-import { canonicalKey } from '../shared/internal/codec.ts'
-import { RPC_CHANNEL_PREFIX } from '../shared/internal/memoChannelName.ts'
 import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
+import { subscriptionKey } from '../shared/internal/subscriptionKey.ts'
 
 // A thin test client over the multiplexed socket WS (`/__abide/sockets`). `subscribe(name)`
 // yields the framed messages for that socket; `publish(name, msg)` sends a client publish. Close
@@ -124,19 +123,12 @@ class MessageQueue<T> implements AsyncIterable<T> {
 }
 
 function socketClient(origin: string, identity: Partial<Principal> | undefined): SocketClient {
-    // Keyed by `routeKey(name, args)` so distinct rooms of one socket are distinct subscriptions.
+    // Keyed by `subscriptionKey(name, args)` so distinct rooms of one socket are distinct subscriptions.
     const queues = new Map<string, MessageQueue<unknown>[]>()
     // Subscribe verdicts, keyed the same way. `waiters` holds a pending `ack()` resolver; `settled`
     // buffers a verdict that arrived before `ack()` was called (so the ack is never missed on a race).
     const waiters = new Map<string, (verdict: 'ok' | 'error') => void>()
     const settled = new Map<string, 'ok' | 'error'>()
-    // Only a roomed USER socket folds the room into the key: the server echoes `args` on those frames.
-    // An `@rpc:` cache channel already embeds its args in the NAME and its downstream frames carry no
-    // `args`, so it (and a void socket) keys by bare name — matching what the server sends back.
-    const routeKey = (name: string, args: unknown): string =>
-        args === undefined || name.startsWith(RPC_CHANNEL_PREFIX)
-            ? name
-            : `${name} ${canonicalKey(args)}`
     let ws: WebSocket | undefined
 
     // Seal the impersonated identity into a Bearer header BEFORE opening the WS so the upgrade
@@ -166,7 +158,7 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
                 return
             }
             if (typeof frame.name !== 'string') return
-            const key = routeKey(frame.name, frame.args)
+            const key = subscriptionKey(frame.name, frame.args)
             // User-socket control frames (sub-ack `{name,ok}` / sub-error `{name,error}`, CS2): resolve
             // the pending ack, don't deliver as data.
             if (frame.ok !== undefined || frame.error !== undefined) {
@@ -194,7 +186,7 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
     return {
         ready: (): Promise<void> => opened,
         subscribe<T = unknown>(name: string, args?: unknown): AsyncIterable<T> {
-            const key = routeKey(name, args)
+            const key = subscriptionKey(name, args)
             const queue = new MessageQueue<T>()
             let list = queues.get(key) as MessageQueue<T>[] | undefined
             if (list === undefined) {
@@ -220,7 +212,7 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
             })
         },
         ack(name: string, args?: unknown): Promise<'ok' | 'error'> {
-            const key = routeKey(name, args)
+            const key = subscriptionKey(name, args)
             const already = settled.get(key)
             if (already !== undefined) {
                 settled.delete(key)

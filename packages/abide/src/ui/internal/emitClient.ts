@@ -13,7 +13,7 @@
 // `()/.set()`, and free/block-bound template identifiers read off `$scope`.
 
 import type { ScopeAnalysis } from './analyzeScope.ts'
-import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
+import { isSimpleIdentifier, reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
@@ -25,10 +25,6 @@ import type { AttrPlan, ClientPlan, DynamicSlot, TemplatePlan } from './template
 const LEAF_KINDS = new Set<string>(['interpolation', 'html', 'await'])
 // Slot kinds wrapped in paired `<!--[-->…<!--]-->` block anchors (2 child positions: open, close).
 const BLOCK_KINDS = new Set<string>(['if', 'for', 'switch', 'try', 'awaitBlock', 'component'])
-
-function isSimpleIdentifier(pattern: string): boolean {
-    return /^[A-Za-z_$][\w$]*$/.test(pattern.trim())
-}
 
 // ---------------------------------------------------------------------------
 // Emitter (collects sub-plans → clone ids → mount functions)

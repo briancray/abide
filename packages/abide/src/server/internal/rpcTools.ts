@@ -26,7 +26,7 @@ function toTool(name: string, route: Route): AgentTool {
         // Reads go through the memo (load resolves the cached/coalesced value); mutations call directly.
         run: (args: unknown): Promise<unknown> =>
             meta.read
-                ? (route as Rpc<unknown, unknown>).load(args)
+                ? (route as Rpc<unknown, unknown>)(args)
                 : (route as Mutation<unknown, unknown>)(args),
     }
     if (typeof meta.options.doc === 'string' && meta.options.doc.length > 0)
