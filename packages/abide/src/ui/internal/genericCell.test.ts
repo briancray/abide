@@ -1,5 +1,5 @@
 // GENERIC cell/props call forms (`state<T>(...)`, `memo<T>(...)`, `props<T>()`) must be
-// recognised by analyzeScope so the read/write reference rewrite still fires — otherwise a
+// recognised by analyzeBindings so the read/write reference rewrite still fires — otherwise a
 // `let n = state<number>(0)` is treated as a plain binding, `{n}` reads the cell object, and a spread
 // (`[...n]`) throws "{} is not iterable" at runtime. Bare forms are unchanged; a `state < 5` comparison
 // must NOT be misread as a cell.

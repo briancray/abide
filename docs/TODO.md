@@ -774,10 +774,10 @@ the known shortcuts and gaps. Ordered by impact.
       expression's text isn't findable (e.g. a `by` key that also appears in the item pattern).
       **Fix:** carry `{ text, start, end }` spans on every captured expression; `locate`/`advance`/
       `put` collapse to `emitAt(span.start, span.length)`.
-    - **`emitCheck` reimplements `analyzeScope`'s tokenizer, and says so.** `scanTemplateAware` is a
+    - **`emitCheck` reimplements `analyzeBindings`'s tokenizer, and says so.** `scanTemplateAware` is a
       line-for-line copy of `analyzeScope.tokenize()` (the comment states it), and the duplication
       continues through the `OPEN`/`CLOSE` sets, `CONTINUATION_OPERATORS`, and the statement-boundary
-      loop. `analyzeScope.analyzeScript` already walks the same declarators and already knows each
+      loop. `analyzeBindings.analyzeScript` already walks the same declarators and already knows each
       one's pattern/init/kind — the facts `emitDeclarators` re-derives from raw text. **Consequence:**
       the known `${}`-in-initializer lexing bug class has to be fixed twice, in two files, by whoever
       notices both. **Fix:** one shared script-statement scanner exporting declarator spans + kinds;
@@ -787,7 +787,7 @@ the known shortcuts and gaps. Ordered by impact.
       generated inline-JS string — plus `navigate.ts` and `runtime.ts`) with no shared constant, though
       the repo already has that pattern in `RPC_QUERY_PARAMS.ts`/`MUX_UPSTREAM.ts`; `emitServer.ts`
       re-lexes an already-rewritten expression string to recover `{ rpcName, args }` for stream attach,
-      when `analyzeScope` and `templatePlan` both already had those facts (its own comment records a
+      when `analyzeBindings` and `templatePlan` both already had those facts (its own comment records a
       prior patch where a missing regex alternative "silently made every aliased stream re-run on
       hydrate"); the `bind:` name→behavior table is duplicated across `emitClient.ts` and
       `serverRuntime.ts` and has **already drifted** (`selected` gets boolean-attribute treatment
@@ -959,19 +959,47 @@ From the adversarial review — recorded so they're deliberate:
   LSP diagnostics. Found 2026-07-24 during the cell→memo rename; deliberately left untouched (out of scope,
   and `scripts/verify.ts` does not run `abide-lsp`).
 
-32. **The compile-time `*Scope` family still overloads the word (ADR 0026 Tier 3).** ADR 0026 fixed the
-    RUNTIME family and wrote the rule down — **Scope** = a region of execution you enter and leave,
-    whose registrations die with it; **Context** = ambient facts with no lifecycle; **Bindings** = a
-    compile-time name→meaning map. By that rule the compiler side is misnamed: `CellScope` and
-    `ShadowScope` (`ui/internal/analyzeScope.ts`) are lexical maps, not extents, so they want
-    `*Bindings`. Deliberately NOT folded in: zero overlap with the layering work, and it lives in the
-    files guarded by the emit byte-parity oracle, where a rename sweep makes the diff unreviewable
-    behind a slow gate. The emitted `$scope` is correct JS usage and stays. Cost of leaving it:
-    `analyzeScope` (compile-time) and `currentScope` (runtime) still read as siblings and are unrelated.
-33. **`abide/shared/*` exports every `internal/` module.** The export map is a wildcard
-    (`"./shared/*": "./src/shared/*.ts"`), so `internal/` is a naming convention, not a boundary. That
-    is how `packages/docs`'s `benchFrontend.ts` came to import `getContext` and hand-mutate the
-    internal `context.stream` field (found during ADR 0026 and migrated to the framework's
-    `withoutRenderStream`). Tightening it is a public-API change with its own blast radius, so it was
-    filed rather than folded in — but the evidence it matters is concrete: an app reached a framework
-    internal, and a framework refactor then broke it.
+32. ~~**The compile-time `*Scope` family still overloads the word (ADR 0026 Tier 3).**~~ **DONE
+    (2026-07-26).** ADR 0026 fixed the RUNTIME family and wrote the rule down — **Scope** = a region of
+    execution you enter and leave, whose registrations die with it; **Context** = ambient facts with no
+    lifecycle; **Bindings** = a compile-time name→meaning map. The compiler side now follows it:
+
+    | Was | Is |
+    | --- | --- |
+    | `CellScope` / `cellScope` | `CellBindings` / `cellBindings` |
+    | `ShadowScope` | `ShadowedBinding` |
+    | `buildScopes` | `buildShadowedBindings` |
+    | `ScopeAnalysis` | `BindingAnalysis` |
+    | `analyzeScope()` | `analyzeBindings()` |
+    | `ui/internal/analyzeScope.ts` | `ui/internal/analyzeBindings.ts` |
+
+    (Historical entries above still say `analyzeScope.ts` — they record what it was called when that
+    work shipped, and are left as the record.)
+
+    The file's own atoms were ALREADY `Binding`/`BindingKind`/`ImportBinding`/`extractBindingNames`;
+    only the collection was called a scope. `CellBindings` is `{ cells: Set<string>, memos: Set<string> }`
+    — a classification of names, holding no values and having no extent — which is precisely why it was
+    the wrong word while `$scope` is the right one.
+
+    **NOT renamed, deliberately:** the emitted `$scope` and everything that builds or names it
+    (`buildPageScope`, `makeScopeBuilder`, `scopeVar`, and `compose.ts`'s `rootScope`/`childScope`/
+    `newScope`). That IS a JS scope object — a real runtime thing holding real values that emitted code
+    reads bindings off. Also untouched: the CSS-scoping family (`scopeAttr`/`scopeStyles`/`scopedCss`),
+    a third and unrelated domain meaning of the word.
+
+    **The gate that mattered:** the emit byte-parity oracle snapshot hash was recorded before the rename
+    and is UNCHANGED after it (`d1d9e001…`), proving no renamed identifier leaked into emitted output —
+    the failure mode where typecheck and `bun test` both stay green while the emitter's product drifts.
+    Plus 1291 unit + tsc + lint + `abide check packages/docs` + docs e2e 172/172 serial.
+33. **Every `abide/*/internal/` module is publicly exported.** The export map is wildcards all the way
+    down (`"./shared/*": "./src/shared/*.ts"`, and the same for `./ui/*` and `./server/*`), so
+    `internal/` is a naming convention, not a boundary. Two concrete consequences found while doing
+    ADR 0026 and TODO #32, both in `packages/docs`:
+    - `benchFrontend.ts` imported `getContext` and hand-mutated the internal `context.stream` field
+      (migrated to the framework's `withoutRenderStream` in D1).
+    - `benchFrontendClient.ts` imports `analyzeScope` + `parse` + `emitModuleSource` straight out of
+      `abide/ui/internal/` (renamed with the rest in #32).
+    So this is not hypothetical: an app reached into framework internals, and two consecutive framework
+    refactors then broke it. Tightening the map is a public-API change with its own blast radius —
+    the bench genuinely needs SOME of this surface, so the real question is which pieces graduate to a
+    supported export and which get an `internal/` that actually means it. Filed, not folded in.

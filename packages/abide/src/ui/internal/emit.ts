@@ -1,16 +1,16 @@
 // `.abide` EMIT FAÇADE (Stage 1, PR3/PR4) — BUILD/SSR-SIDE ENTRY.
 //
-// Ties parse → analyzeScope → buildPlan → emit{Client,Server}Module together. `emitModuleSource`
+// Ties parse → analyzeBindings → buildPlan → emit{Client,Server}Module together. `emitModuleSource`
 // returns the two ES-module strings (consumed later by clientBundle / pages at cutover);
 // `loadEmitted` instantiates them (cached, via a temp-file dynamic import with the runtime specifiers
 // resolved to absolute paths) so tests can drive the emitted `render`/`mount`/`hydrate` directly.
 //
-// This module uses the TS7 scanner (through analyzeScope) and NEVER ships to the browser.
+// This module uses the TS7 scanner (through analyzeBindings) and NEVER ships to the browser.
 
 import { unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { analyzeScope, type ScopeAnalysis } from './analyzeScope.ts'
+import { analyzeBindings, type BindingAnalysis } from './analyzeBindings.ts'
 import { emitClientModule } from './emitClient.ts'
 import { emitServerModule } from './emitServer.ts'
 import { parse } from './parse.ts'
@@ -22,8 +22,8 @@ export interface EmittedSource {
     server: string
     // The scope analysis the two emits were built from. Carried on the result so a caller that needs
     // the source's component/css/module imports (the temp-module tree walk, the client bundler) reads
-    // them off the cache instead of re-running `parse` + `analyzeScope` over the same string.
-    analysis: ScopeAnalysis
+    // them off the cache instead of re-running `parse` + `analyzeBindings` over the same string.
+    analysis: BindingAnalysis
 }
 
 export interface EmittedModule {
@@ -82,7 +82,7 @@ export function emitModuleSource(source: string): EmittedSource {
     const cached = SOURCE_CACHE.get(source)
     if (cached !== undefined) return cached
     const root = parse(source)
-    const analysis = analyzeScope(root)
+    const analysis = analyzeBindings(root)
     const plan = buildPlan(root, analysis)
     const result: EmittedSource = {
         client: emitClientModule(plan, analysis),

@@ -618,7 +618,7 @@ function emitScript(
     // reads as a Template{Middle,Tail} (not a CloseBrace) and the trailing backtick text is not mis-lexed
     // as code. Without this, a template literal in a `const`/`let` initializer corrupts the brace-depth
     // count and the statement boundary, running away to EOF and swallowing the following statement. Mirrors
-    // `analyzeScope.tokenize()`. `frames` is the caller's brace/template frame stack.
+    // `analyzeBindings.tokenize()`. `frames` is the caller's brace/template frame stack.
     const scanTemplateAware = (frames: ('template' | 'brace')[]): SyntaxKind => {
         let kind = scanner.scan()
         if (kind === SyntaxKind.CloseBraceToken && frames[frames.length - 1] === 'template') {

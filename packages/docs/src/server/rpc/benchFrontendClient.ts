@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SCENARIOS as CORPUS } from '@abide/bench/scenarios'
 import { GET } from 'abide/server/GET'
-import { analyzeScope } from 'abide/ui/internal/analyzeScope'
+import { analyzeBindings } from 'abide/ui/internal/analyzeBindings'
 import { emitModuleSource, loadEmittedServer } from 'abide/ui/internal/emit'
 import { parse } from 'abide/ui/internal/parse'
 
@@ -61,7 +61,7 @@ const RUNTIME_PATH = Bun.resolveSync('abide/ui/internal/runtime', import.meta.di
 function resolveModuleImports(client: string, src: string): string {
     let out = client
     const seen = new Set<string>()
-    for (const { specifier } of analyzeScope(parse(src)).moduleImports) {
+    for (const { specifier } of analyzeBindings(parse(src)).moduleImports) {
         if (seen.has(specifier)) continue
         seen.add(specifier)
         const absolute = Bun.resolveSync(specifier, import.meta.dir)

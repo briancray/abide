@@ -12,10 +12,10 @@
 //
 // Every embedded expression is rewritten via `rewriteCellRefs` (cells → `()/.set()`) then
 // `rewriteFreeIdentifiers` (free/block-bound names → `$scope.x`), so both emitters consume ready-to-
-// embed source. This module uses the TS7 scanner (through analyzeScope) and NEVER ships to the browser.
+// embed source. This module uses the TS7 scanner (through analyzeBindings) and NEVER ships to the browser.
 
-import type { ScopeAnalysis } from './analyzeScope.ts'
-import { type CellScope, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeScope.ts'
+import type { BindingAnalysis } from './analyzeBindings.ts'
+import { type CellBindings, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeBindings.ts'
 import type { AttributeNode, Root, TemplateNode } from './ast.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
@@ -242,7 +242,7 @@ export function scopeStyles(css: string, scopeAttr: string): string {
 // ---------------------------------------------------------------------------
 
 interface WalkContext {
-    cellScope: CellScope
+    cellBindings: CellBindings
     declared: Set<string>
     scopeAttr: string | null
     // Every component name reachable in this template — inline `{#component}` defs at any depth plus the
@@ -267,7 +267,7 @@ interface LevelResult {
 }
 
 function rewriteExpr(ctx: WalkContext, expr: string): string {
-    const cellRewritten = rewriteCellRefs(expr, ctx.cellScope)
+    const cellRewritten = rewriteCellRefs(expr, ctx.cellBindings)
     return rewriteFreeIdentifiers(cellRewritten, ctx.declared, '$scope')
 }
 
@@ -468,7 +468,7 @@ function planAttribute(ctx: WalkContext, attr: AttributeNode): AttrPlan {
             // SAME wrap (TODO #22): otherwise the cell collapses to `node()` and the node ref is never
             // assigned — `bindElement` writes the element through the `set`. An attach FN (`bind:element={fn}`)
             // is not a cell name, so it falls through to `rewriteExpr` and stays a callable.
-            if (ctx.cellScope.cells.has(boundRaw)) {
+            if (ctx.cellBindings.cells.has(boundRaw)) {
                 return {
                     kind: 'bind',
                     name: attr.name,
@@ -958,7 +958,7 @@ function attrKindToSlot(kind: 'expr' | 'class' | 'style' | 'bind'): SlotKind {
 // Public entry
 // ---------------------------------------------------------------------------
 
-export function buildPlan(root: Root, analysis: ScopeAnalysis): TemplatePlan {
+export function buildPlan(root: Root, analysis: BindingAnalysis): TemplatePlan {
     const styleNode = root.style
     const scopeAttr = styleNode ? `data-ab-${hashSource(styleNode.content)}` : null
     const scopedCss = styleNode && scopeAttr ? scopeStyles(styleNode.content, scopeAttr) : null
@@ -966,7 +966,7 @@ export function buildPlan(root: Root, analysis: ScopeAnalysis): TemplatePlan {
     for (const entry of analysis.componentImports) componentNames.add(entry.local)
     collectComponentNames(root.children, componentNames)
     const ctx: WalkContext = {
-        cellScope: analysis.cellScope,
+        cellBindings: analysis.cellBindings,
         declared: analysis.declared,
         scopeAttr,
         componentNames,

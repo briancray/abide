@@ -1,4 +1,14 @@
-// `.abide` `<script>` SCOPE ANALYSIS + CELL-REFERENCE REWRITE (Stage 1, PR2) — BUILD/SERVER-SIDE ONLY.
+// `.abide` `<script>` BINDING ANALYSIS + CELL-REFERENCE REWRITE (Stage 1, PR2) — BUILD/SERVER-SIDE ONLY.
+//
+// NAMED FOR BINDINGS, NOT SCOPES (ADR 0026, TODO #32). What this module produces is a COMPILE-TIME
+// name→meaning map — which identifiers are cells, which are memos, which are shadowed over which token
+// range. It is not a region of execution you enter and leave, and it holds no values, so calling it a
+// "scope" made it read as a sibling of the runtime `ReactiveScope`/`EffectScope`/`currentScope` family
+// it has nothing to do with. The file's own atoms were already `Binding`/`BindingKind`/`ImportBinding`;
+// the collection now matches them.
+//
+// The emitted `$scope` is a DIFFERENT thing and keeps its name: it is a real runtime object holding
+// real values that emitted code reads bindings off, which is the ordinary JS meaning.
 //
 // This module extends the role of `transformScript.ts`. Where the legacy transform relied on
 // `with ($s)` + get/set accessors so a bare `count` proxied an atom, the AOT emitter needs LEXICAL
@@ -40,7 +50,7 @@ const K = SyntaxKind
 // ---------------------------------------------------------------------------
 
 // One import declaration's parsed shape (default, namespace, and named locals). Produced here by the
-// scope analysis and consumed by the emitters (`emitSetup`/`emitServer`/`emitClient`).
+// binding analysis and consumed by the emitters (`emitSetup`/`emitServer`/`emitClient`).
 export interface ImportBinding {
     specifier: string
     defaultLocal: string | null
@@ -63,7 +73,7 @@ export interface Binding {
 // the VALUE with `{m}` or `{m().field}`.
 // There is no dependency-position exception (ADR 0025): a `memo`/`watch` source is ALWAYS a thunk, so
 // every identifier inside it is an ordinary read and needs no special casing here.
-export interface CellScope {
+export interface CellBindings {
     cells: Set<string>
     memos: Set<string>
 }
@@ -89,14 +99,14 @@ export interface ComponentImport {
     specifier: string
 }
 
-export interface ScopeAnalysis {
+export interface BindingAnalysis {
     module: ScriptInfo | null
     instance: ScriptInfo | null
     cellNames: Set<string>
     // Everything a template-expression rewrite needs: cells, auto-called memos, dependency-position
-    // callees. `cellNames` above is `cellScope.cells` — kept as its own field because WRITABILITY (not
+    // callees. `cellNames` above is `cellBindings.cells` — kept as its own field because WRITABILITY (not
     // auto-call) is what `bind:` and the seeded-state plumbing key on.
-    cellScope: CellScope
+    cellBindings: CellBindings
     declared: Set<string>
     // All side-effect CSS import specifiers across module + instance scripts, in source order.
     cssImports: string[]
@@ -215,7 +225,7 @@ function isClose(kind: SyntaxKind): boolean {
 // crash-on-out-of-range semantics the previous `tokenAt(tokens, i)` assertions carried.
 function tokenAt(tokens: Tok[], index: number): Tok {
     const token = tokens[index]
-    if (token === undefined) throw new Error(`analyzeScope: token index out of range: ${index}`)
+    if (token === undefined) throw new Error(`analyzeBindings: token index out of range: ${index}`)
     return token
 }
 
@@ -223,7 +233,7 @@ function tokenAt(tokens: Tok[], index: number): Tok {
 // length matches the token stream so an in-range token index is always in range here too.
 function numberAt(values: number[], index: number): number {
     const value = values[index]
-    if (value === undefined) throw new Error(`analyzeScope: array index out of range: ${index}`)
+    if (value === undefined) throw new Error(`analyzeBindings: array index out of range: ${index}`)
     return value
 }
 
@@ -491,7 +501,7 @@ function analyzeBraces(tokens: Tok[]): BraceInfo {
 // Binding + shadow analysis (pure array pass)
 // ---------------------------------------------------------------------------
 
-interface ShadowScope {
+interface ShadowedBinding {
     name: string
     start: number // inclusive token index
     end: number // inclusive token index
@@ -499,7 +509,7 @@ interface ShadowScope {
 
 interface Scopes {
     declNameIdx: Set<number> // token indices that are binding/declaration NAMES (never rewritten)
-    shadows: ShadowScope[]
+    shadows: ShadowedBinding[]
 }
 
 // Collect the simple identifiers bound by parameters within a `(` … `)` group (open/close token
@@ -674,10 +684,14 @@ function arrowExprEnd(tokens: Tok[], start: number): number {
     return last
 }
 
-function buildScopes(tokens: Tok[], braces: BraceInfo, filter: (name: string) => boolean): Scopes {
+function buildShadowedBindings(
+    tokens: Tok[],
+    braces: BraceInfo,
+    filter: (name: string) => boolean,
+): Scopes {
     const { matchClose, matchOpen, enclBraceOpen, bracketDepth } = braces
     const declNameIdx = new Set<number>()
-    const shadows: ShadowScope[] = []
+    const shadows: ShadowedBinding[] = []
     const n = tokens.length
 
     const enclClose = (i: number): number => {
@@ -782,10 +796,10 @@ function buildScopes(tokens: Tok[], braces: BraceInfo, filter: (name: string) =>
     return { declNameIdx, shadows }
 }
 
-// Is token `idx` (an identifier `name`) inside a scope that shadows the same-named outer binding?
-function isShadowed(shadows: ShadowScope[], name: string, idx: number): boolean {
-    for (const scope of shadows) {
-        if (scope.name === name && idx >= scope.start && idx <= scope.end) return true
+// Is token `idx` (an identifier `name`) inside a region that shadows the same-named outer binding?
+function isShadowed(shadows: ShadowedBinding[], name: string, idx: number): boolean {
+    for (const shadow of shadows) {
+        if (shadow.name === name && idx >= shadow.start && idx <= shadow.end) return true
     }
     return false
 }
@@ -855,15 +869,15 @@ function rhsExtent(tokens: Tok[], start: number): number {
     return last
 }
 
-export function rewriteCellRefs(code: string, scope: CellScope): string {
-    const { cells: cellNames, memos: memoNames } = scope
+export function rewriteCellRefs(code: string, bindings: CellBindings): string {
+    const { cells: cellNames, memos: memoNames } = bindings
     if (cellNames.size === 0 && memoNames.size === 0) return code
     const tokens = tokenize(code)
     if (tokens.length === 0) return code
     const braces = analyzeBraces(tokens)
     const { enclBraceOpen, isObjectBrace } = braces
     const named = (name: string): boolean => cellNames.has(name) || memoNames.has(name)
-    const { declNameIdx, shadows } = buildScopes(tokens, braces, named)
+    const { declNameIdx, shadows } = buildShadowedBindings(tokens, braces, named)
 
     // Is `tokens[i]` (a cell-named Identifier) a genuine reference we should rewrite?
     const isCellRef = (i: number): boolean => {
@@ -1027,7 +1041,7 @@ export function rewriteCellRefs(code: string, scope: CellScope): string {
                 // `n op= rhs` → `n.set(n() op (rhs))`
                 flush(t.start)
                 const op = COMPOUND_OP.get(next.kind)
-                if (op === undefined) throw new Error('analyzeScope: missing compound operator')
+                if (op === undefined) throw new Error('analyzeBindings: missing compound operator')
                 out += `${name}.set(${name}() ${op} (`
                 const end = rhsExtent(tokens, i + 2)
                 pending.push({ pos: tokenAt(tokens, end).end, text: '))', seq: seq++ })
@@ -1328,7 +1342,7 @@ export function rewriteFreeIdentifiers(
     if (tokens.length === 0) return code
     const braces = analyzeBraces(tokens)
     const { enclBraceOpen, isObjectBrace } = braces
-    const { declNameIdx, shadows } = buildScopes(tokens, braces, () => true)
+    const { declNameIdx, shadows } = buildShadowedBindings(tokens, braces, () => true)
     const typeSkips = markTypeSkips(tokens, braces.matchClose)
 
     let out = ''
@@ -1369,7 +1383,7 @@ export function rewriteFreeIdentifiers(
 }
 
 // ---------------------------------------------------------------------------
-// analyzeScope — top-level `<script>` walk (imports, cells, bindings, setup code)
+// analyzeBindings — top-level `<script>` walk (imports, cells, bindings, setup code)
 // ---------------------------------------------------------------------------
 
 function topLevelIndexOf(text: string, target: string): number {
@@ -1871,7 +1885,7 @@ function analyzeScript(content: string): RawScript {
     }
 }
 
-export function analyzeScope(root: Root): ScopeAnalysis {
+export function analyzeBindings(root: Root): BindingAnalysis {
     const moduleRaw = root.moduleScript ? analyzeScript(root.moduleScript.content) : null
     const instanceRaw = root.instanceScript ? analyzeScript(root.instanceScript.content) : null
 
@@ -1884,7 +1898,7 @@ export function analyzeScope(root: Root): ScopeAnalysis {
         for (const name of raw.memos) memoNames.add(name)
         for (const name of raw.declared) declared.add(name)
     }
-    const cellScope: CellScope = { cells: cellNames, memos: memoNames }
+    const cellBindings: CellBindings = { cells: cellNames, memos: memoNames }
 
     // Module setup can only reference module cells; instance setup can reference both (module bindings
     // are in scope for the instance).
@@ -1901,7 +1915,7 @@ export function analyzeScope(root: Root): ScopeAnalysis {
         : null
     const instance: ScriptInfo | null = instanceRaw
         ? {
-              setupCode: rewriteCellRefs(instanceRaw.strippedCode, cellScope),
+              setupCode: rewriteCellRefs(instanceRaw.strippedCode, cellBindings),
               imports: instanceRaw.imports,
               bindings: instanceRaw.bindings,
               cssImports: instanceRaw.cssImports,
@@ -1924,7 +1938,7 @@ export function analyzeScope(root: Root): ScopeAnalysis {
         module,
         instance,
         cellNames,
-        cellScope,
+        cellBindings,
         declared,
         cssImports,
         componentImports,

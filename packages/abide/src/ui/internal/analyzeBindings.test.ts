@@ -2,14 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import {
-    analyzeScope,
-    type CellScope,
+    analyzeBindings,
+    type CellBindings,
     rewriteCellRefs,
     rewriteFreeIdentifiers,
-} from './analyzeScope.ts'
+} from './analyzeBindings.ts'
 import { parse } from './parse.ts'
 
-const CELLS = (...names: string[]): CellScope => ({
+const CELLS = (...names: string[]): CellBindings => ({
     cells: new Set(names),
     memos: new Set(),
 })
@@ -18,7 +18,7 @@ const CELLS = (...names: string[]): CellScope => ({
 const DECLARED = (...names: string[]): Set<string> => new Set(names)
 
 // An auto-called memo scope (ADR 0024 §5).
-const MEMOS = (...names: string[]): CellScope => ({
+const MEMOS = (...names: string[]): CellBindings => ({
     cells: new Set(),
     memos: new Set(names),
 })
@@ -347,18 +347,18 @@ describe('rewriteFreeIdentifiers type-position operands', () => {
 })
 
 // ---------------------------------------------------------------------------
-// analyzeScope — cell recognition + real dual-script root
+// analyzeBindings — cell recognition + real dual-script root
 // ---------------------------------------------------------------------------
 
-describe('analyzeScope cell recognition', () => {
+describe('analyzeBindings cell recognition', () => {
     test('state / memo / memo(...).state() recognized (ADR 0024)', () => {
         const root = parse(
             "<script>import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let n = state(0); const d = memo(()=>n*2); let e = memo(()=>n).state()</script>{n}",
         )
-        const analysis = analyzeScope(root)
+        const analysis = analyzeBindings(root)
         // `cellNames` is WRITABILITY: the owned cell and the memo's writable projection, not the memo.
         expect([...analysis.cellNames].sort()).toEqual(['e', 'n'])
-        expect([...analysis.cellScope.memos].sort()).toEqual(['d'])
+        expect([...analysis.cellBindings.memos].sort()).toEqual(['d'])
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
         const kinds = Object.fromEntries(instance.bindings.map((b) => [b.name, b.kind]))
@@ -371,7 +371,7 @@ describe('analyzeScope cell recognition', () => {
         const root = parse(
             "<script>import { state as s } from 'abide/shared/state'; let n = s(0); let d = s.shared('k', 0)</script>{n}",
         )
-        const analysis = analyzeScope(root)
+        const analysis = analyzeBindings(root)
         expect([...analysis.cellNames].sort()).toEqual(['d', 'n'])
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
@@ -382,7 +382,7 @@ describe('analyzeScope cell recognition', () => {
         const root = parse(
             "<script>import { props } from 'abide/ui/props'; const {who, age} = props()</script>{who}",
         )
-        const analysis = analyzeScope(root)
+        const analysis = analyzeBindings(root)
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
         const kinds = Object.fromEntries(instance.bindings.map((b) => [b.name, b.kind]))
@@ -397,7 +397,7 @@ describe('analyzeScope cell recognition', () => {
                 "<script>import { props } from 'abide/ui/props'; import greet from '../rpc/greet'; let n = state(0); function inc(){ n++ }</script>" +
                 '<p>{n}</p>',
         )
-        const analysis = analyzeScope(root)
+        const analysis = analyzeBindings(root)
 
         expect([...analysis.cellNames].sort()).toEqual(['g', 'n'])
         expect(analysis.declared.has('state')).toBe(true)
@@ -424,7 +424,7 @@ describe('analyzeScope cell recognition', () => {
 
     test('null scripts when absent', () => {
         const root = parse('<p>hello</p>')
-        const analysis = analyzeScope(root)
+        const analysis = analyzeBindings(root)
         expect(analysis.module).toBeNull()
         expect(analysis.instance).toBeNull()
         expect(analysis.cellNames.size).toBe(0)
@@ -435,7 +435,7 @@ describe('analyzeScope cell recognition', () => {
             "<script module>import { state } from 'abide/shared/state'; let g = state(1)</script>" +
                 "<script>import { state } from 'abide/shared/state'; let n = state(0)</script>{n}",
         )
-        const analysis = analyzeScope(root)
+        const analysis = analyzeBindings(root)
         // instance can reference module cell g:
         expect([...analysis.cellNames].sort()).toEqual(['g', 'n'])
     })
@@ -445,7 +445,7 @@ describe('analyzeScope cell recognition', () => {
 // Fuzz / property test
 // ---------------------------------------------------------------------------
 
-// Tokenize helper mirroring analyzeScope's scanner usage (build-time only).
+// Tokenize helper mirroring analyzeBindings's scanner usage (build-time only).
 function scanKinds(source: string): { kind: SyntaxKind; text: string }[] {
     const scanner = createScanner(true, 0, source)
     const out: { kind: SyntaxKind; text: string }[] = []
@@ -649,27 +649,27 @@ describe('rewriteCellRefs source position (ADR 0025 — thunk only)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// analyzeScope — memo binding classification (ADR 0024 §5)
+// analyzeBindings — memo binding classification (ADR 0024 §5)
 // ---------------------------------------------------------------------------
 
-describe('analyzeScope memo bindings', () => {
+describe('analyzeBindings memo bindings', () => {
     const scopeOf = (script: string) =>
-        analyzeScope(parse(`<script>${script}</script><span>{d}</span>`))
+        analyzeBindings(parse(`<script>${script}</script><span>{d}</span>`))
 
     test('an argless fn literal is auto-called', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; const d = memo(() => 1)",
         )
-        expect([...analysis.cellScope.memos]).toEqual(['d'])
-        expect([...analysis.cellScope.cells]).toEqual([])
+        expect([...analysis.cellBindings.memos]).toEqual(['d'])
+        expect([...analysis.cellBindings.cells]).toEqual([])
     })
 
     test('memo(…).state() is a writable CELL, not an auto-called memo', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; let d = memo(() => 1).state()",
         )
-        expect([...analysis.cellScope.cells]).toEqual(['d'])
-        expect([...analysis.cellScope.memos]).toEqual([])
+        expect([...analysis.cellBindings.cells]).toEqual(['d'])
+        expect([...analysis.cellBindings.memos]).toEqual([])
     })
 
     // The multi-dependency form is a sync memo like every other declared-source form — without this it
@@ -678,37 +678,37 @@ describe('analyzeScope memo bindings', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; const d = memo(() => ({ a, b }), ({ a, b }) => a + b)",
         )
-        expect([...analysis.cellScope.memos]).toEqual(['d'])
-        expect([...analysis.cellScope.cells]).toEqual([])
+        expect([...analysis.cellBindings.memos]).toEqual(['d'])
+        expect([...analysis.cellBindings.cells]).toEqual([])
     })
 
     test('a source thunk with a .state() projection is still a writable CELL', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; let d = memo(() => a, (v) => v).state()",
         )
-        expect([...analysis.cellScope.cells]).toEqual(['d'])
-        expect([...analysis.cellScope.memos]).toEqual([])
+        expect([...analysis.cellBindings.cells]).toEqual(['d'])
+        expect([...analysis.cellBindings.memos]).toEqual([])
     })
 
     test('an opaque fn reference is NOT auto-called (guessing would emit undefined args)', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; const d = memo(loadThing)",
         )
-        expect([...analysis.cellScope.memos]).toEqual([])
+        expect([...analysis.cellBindings.memos]).toEqual([])
     })
 
     test('an ASYNC argless body is NOT auto-called (a promise read would blank the SSR text)', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; const d = memo(async () => 1)",
         )
-        expect([...analysis.cellScope.memos]).toEqual([])
+        expect([...analysis.cellBindings.memos]).toEqual([])
     })
 
     test('an ARGED handler is NOT auto-called', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; const d = memo((args) => args.id)",
         )
-        expect([...analysis.cellScope.memos]).toEqual([])
+        expect([...analysis.cellBindings.memos]).toEqual([])
     })
 
     // A BARE node source no longer classifies — the source must be a thunk (ADR 0025), and guessing
@@ -717,17 +717,17 @@ describe('analyzeScope memo bindings', () => {
         const analysis = scopeOf(
             "import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let a = state(1); const d = memo(a, (v) => v + 1)",
         )
-        expect([...analysis.cellScope.memos]).toEqual([])
+        expect([...analysis.cellBindings.memos]).toEqual([])
     })
 
     test('a memo declared in the MODULE script is visible to the instance script', () => {
-        const analysis = analyzeScope(
+        const analysis = analyzeBindings(
             parse(
                 "<script module>import { memo } from 'abide/shared/memo'; const base = memo(() => 1)</script>" +
                     "<script>import { memo } from 'abide/shared/memo'; const d = memo(() => base, (v) => v + 1)</script>" +
                     '<span>{d}</span>',
             ),
         )
-        expect([...analysis.cellScope.memos].sort()).toEqual(['base', 'd'])
+        expect([...analysis.cellBindings.memos].sort()).toEqual(['base', 'd'])
     })
 })

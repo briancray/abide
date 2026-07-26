@@ -1,4 +1,4 @@
-import { extractBindingNames } from './analyzeScope.ts'
+import { extractBindingNames } from './analyzeBindings.ts'
 
 // Emit statement(s) binding `pattern` from `valueExpr` onto the scope object `target`. A bare
 // identifier is a direct `target["x"] = value` assignment; a destructuring pattern runs an IIFE that

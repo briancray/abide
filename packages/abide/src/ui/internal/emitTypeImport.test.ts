@@ -1,4 +1,4 @@
-// TYPE-ONLY IMPORTS in a `.abide` <script> are ERASED from the runtime emit (analyzeScope.parseImport).
+// TYPE-ONLY IMPORTS in a `.abide` <script> are ERASED from the runtime emit (analyzeBindings.parseImport).
 // A value import becomes `const x = $scope["x"]`; a `{ type X }` modifier or a whole-clause `import type`
 // must NOT — otherwise the runtime emits `const type X = $scope["type X"]` (a syntax error) or aliases a
 // type name that is `undefined` at runtime. The type stays resolvable for `abide check` (emitCheck copies

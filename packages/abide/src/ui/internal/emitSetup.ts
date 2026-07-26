@@ -3,10 +3,10 @@
 // Generates the lexical `<script>` setup preamble shared by the emitted client (`mount`) and server
 // (`render`) functions, plus the module-scope memoizer. Mirrors `assembleCore.makeScopeBuilder`
 // without `with`/`new Function`: script imports become `const greet = $scope.greet;`, cells become
-// real `let n = state(0)` (references already rewritten to `()/.set()` by analyzeScope), and
+// real `let n = state(0)` (references already rewritten to `()/.set()` by analyzeBindings), and
 // `<script module>` is a lazily-memoized `$ensureModule($scope)`.
 
-import type { ImportBinding, ScopeAnalysis, ScriptInfo } from './analyzeScope.ts'
+import type { BindingAnalysis, ImportBinding, ScriptInfo } from './analyzeBindings.ts'
 
 // Names bound by an import (default, namespace, named locals). `skip` excludes component-import locals
 // (`.abide` default imports): those are REAL ES imports at module top, not `$scope` reads, so they must
@@ -34,7 +34,7 @@ function importAliasLines(script: ScriptInfo | null, skip: Set<string>): string 
 
 // Locals that are REAL ES imports at module top (`.abide` components + pass-through `abide/*` module
 // imports), excluded from every `$scope` alias/destructure — they resolve lexically, not off `$scope`.
-function componentLocalSet(analysis: ScopeAnalysis): Set<string> {
+function componentLocalSet(analysis: BindingAnalysis): Set<string> {
     const set = new Set<string>()
     for (const entry of analysis.componentImports) set.add(entry.local)
     for (const binding of analysis.moduleImports) {
@@ -73,7 +73,7 @@ function moduleBindingNames(script: ScriptInfo, componentLocals: Set<string>): s
 // resolved from the first call's `$scope` and memoized alongside the module's one-time setup — module
 // scope is by definition computed once; server RPC callables forward to the live request scope, and
 // ambient accessors are stable references, so caching them is correct.
-export function emitModuleEnsure(analysis: ScopeAnalysis): string {
+export function emitModuleEnsure(analysis: BindingAnalysis): string {
     const moduleScript = analysis.module
     if (moduleScript === null) return ''
     const componentLocals = componentLocalSet(analysis)
@@ -106,7 +106,7 @@ function instanceDeclaredNames(
 }
 
 // The per-instance setup preamble, emitted at the top of `render`/`mount` (indented two spaces).
-export function emitInstanceSetup(analysis: ScopeAnalysis): string {
+export function emitInstanceSetup(analysis: BindingAnalysis): string {
     let out = ''
     const componentLocals = componentLocalSet(analysis)
     if (analysis.module !== null) {

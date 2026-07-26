@@ -1,12 +1,12 @@
 // `.abide` SERVER MODULE EMITTER (Stage 1, PR3) — BUILD/SSR-SIDE ONLY.
 //
-// Turns a `TemplatePlan` + `ScopeAnalysis` into an ES-module string exporting `async function
+// Turns a `TemplatePlan` + `BindingAnalysis` into an ES-module string exporting `async function
 // render($scope)` that builds the SSR HTML string. Reads from the SAME plan the client emitter uses,
 // so comment anchors match. Uses `serverRuntime` ($rt) for escaping / attribute serialization and
 // lexical `<script>` bindings from `emitSetup`. Event attributes are omitted (as `renderServer` does).
 
-import type { ScopeAnalysis, ScriptInfo } from './analyzeScope.ts'
-import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
+import type { BindingAnalysis, ScriptInfo } from './analyzeBindings.ts'
+import { reconstructImport, rewriteCellRefs } from './analyzeBindings.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
@@ -28,8 +28,8 @@ const RPC_SPECIFIER = /(^|\/)\$?server\/rpc\//
 // so the local doubles as the `rpcName` recorded on the handoff.
 // The RPC-import local names for an analysis. Memoized per-analysis: `genChunkRaw` recurses over the
 // template and asks for this on every `{#for await}` block, but the set is fixed for the whole module.
-const RPC_LOCALS_CACHE = new WeakMap<ScopeAnalysis, Set<string>>()
-function rpcImportLocals(analysis: ScopeAnalysis): Set<string> {
+const RPC_LOCALS_CACHE = new WeakMap<BindingAnalysis, Set<string>>()
+function rpcImportLocals(analysis: BindingAnalysis): Set<string> {
     const cached = RPC_LOCALS_CACHE.get(analysis)
     if (cached !== undefined) return cached
     const locals = new Set<string>()
@@ -95,7 +95,7 @@ function childScopeCode(target: string, param: string | null, valueExpr: string)
 }
 
 // An async arrow that renders a chunk list against a `$scope` param and returns a string.
-function bodyExpr(analysis: ScopeAnalysis, chunks: ServerChunk[]): string {
+function bodyExpr(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
     return `(async ($scope) => {\n  let $out = "";\n${genChunks(analysis, chunks)}  return $out;\n})`
 }
 
@@ -122,7 +122,7 @@ function staticAttrLiteral(attrs: AttrPlan[], scopeAttr: string | null): string 
 }
 
 function genElement(
-    analysis: ScopeAnalysis,
+    analysis: BindingAnalysis,
     name: string,
     isVoid: boolean,
     attrs: AttrPlan[],
@@ -176,7 +176,7 @@ function genElement(
 }
 
 function genComponent(
-    analysis: ScopeAnalysis,
+    analysis: BindingAnalysis,
     name: string,
     attrs: AttrPlan[],
     children: ServerChunk[],
@@ -204,8 +204,8 @@ function genComponent(
     }
     // A cell- OR memo-named tag is a reactive component; SSR is a snapshot, so read its value once.
     const componentExpr =
-        analysis.cellScope.cells.has(name) || analysis.cellScope.memos.has(name)
-            ? rewriteCellRefs(name, analysis.cellScope)
+        analysis.cellBindings.cells.has(name) || analysis.cellBindings.memos.has(name)
+            ? rewriteCellRefs(name, analysis.cellBindings)
             : componentRef(analysis, name)
     out += `    const $c = ${componentExpr};\n`
     out += `    if (typeof $c !== "function") throw new Error(${JSON.stringify(`<${name}> is not a component in scope (expected a render function)`)});\n`
@@ -223,7 +223,7 @@ function genComponent(
 // Block/component kinds are wrapped in the paired `<!--[-->…<!--]-->` anchors emitted by the client
 // skeleton (templatePlan: `<!--[--><!--]-->` per block/component). Leaves carry a trailing `<!---->`
 // inside their own case. Anchors match the client by construction — both sides read the SAME plan.
-function genChunk(analysis: ScopeAnalysis, chunk: ServerChunk): string {
+function genChunk(analysis: BindingAnalysis, chunk: ServerChunk): string {
     const code = genChunkRaw(analysis, chunk)
     switch (chunk.kind) {
         case 'component':
@@ -238,7 +238,7 @@ function genChunk(analysis: ScopeAnalysis, chunk: ServerChunk): string {
     }
 }
 
-function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
+function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
     switch (chunk.kind) {
         case 'static':
             return `  $out += ${JSON.stringify(chunk.text)};\n`
@@ -413,7 +413,7 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
 }
 
 // Register component builders (hoisted) then emit the non-component chunks in order.
-function genChunks(analysis: ScopeAnalysis, chunks: ServerChunk[]): string {
+function genChunks(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
     let out = ''
     for (const chunk of chunks) {
         if (chunk.kind !== 'componentDef') continue
@@ -433,7 +433,7 @@ function genChunks(analysis: ScopeAnalysis, chunks: ServerChunk[]): string {
     return out
 }
 
-export function emitServerModule(plan: TemplatePlan, analysis: ScopeAnalysis): string {
+export function emitServerModule(plan: TemplatePlan, analysis: BindingAnalysis): string {
     // `.abide` component imports stay REAL ES imports (specifier rewritten by the loader to the compiled
     // component server module). The local is lexical (`declared`) so `<Card>` resolves to this binding.
     let componentImports = ''

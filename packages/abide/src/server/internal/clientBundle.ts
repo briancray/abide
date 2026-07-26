@@ -10,7 +10,7 @@
 // time to an ES module via `emitModuleSource(source).client` (`import * as $rt from
 // "abide/ui/internal/runtime"` + a lexical `mount($target, $scope)`), written to a temp file, and
 // imported by the entry so `Bun.build` resolves the runtime + tree-shakes. Only `runtime.ts` and the
-// emitted module strings reach the browser; the build/SSR TS7 modules (`parse.ts`/`analyzeScope.ts`/
+// emitted module strings reach the browser; the build/SSR TS7 modules (`parse.ts`/`analyzeBindings.ts`/
 // `emit*.ts`) never do — the whole no-eval/CSP win. This is still the module-swap point (rpc-core §6): the page imported real server `Rpc`s during
 // SSR; the emitted mount instead reads client fetch proxies over the SAME memo surface off `$scope`
 // (built by `bootstrapPage` via `makeClientImports`).
@@ -28,7 +28,7 @@ import { mkdir, rm, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type { BunPlugin } from 'bun'
-import type { ScopeAnalysis } from '../../ui/internal/analyzeScope.ts'
+import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
@@ -124,7 +124,7 @@ function socketSpecs(
 
 // The local names a page's `<script>`s import (default/namespace/named), taken from the emit scope
 // analysis. Matched against route names to decide which RPC proxies the bundle needs.
-function importedLocals(analysis: ScopeAnalysis): Set<string> {
+function importedLocals(analysis: BindingAnalysis): Set<string> {
     const names = new Set<string>()
     for (const script of [analysis.module, analysis.instance]) {
         if (script === null) continue

@@ -1,7 +1,7 @@
 // Public reactive state primitive for `.abide` components (M3a).
 //
 // In a `.abide` `<script>` an author writes `let count = state(0)` and then reads/writes `count` as a
-// plain identifier. The AOT emitter's scope analysis (internal/analyzeScope.ts) recognises the cell
+// plain identifier. The AOT emitter's scope analysis (internal/analyzeBindings.ts) recognises the cell
 // this declaration returns and rewrites every reference — `count` → `count()`, `count = x` →
 // `count.set(x)` — so the bare name reads and writes the underlying atom.
 //
@@ -13,7 +13,7 @@
 
 import { type State as ReactiveState, state as reactiveState } from './internal/reactive.ts'
 
-// Global-registry brand so `analyzeScope.ts` recognises a cell by identity without a shared import.
+// Global-registry brand so `analyzeBindings.ts` recognises a cell by identity without a shared import.
 const STATE_CELL = Symbol.for('abide.ui.stateCell')
 
 // The reactive kinds a cell can be. Both are OWNED and writable — derivation is `memo`'s job (ADR 0024).

@@ -1,6 +1,6 @@
 // `.abide` CLIENT MODULE EMITTER (Stage 1, PR3) — produces a browser-shippable ES-module string.
 //
-// Turns a `TemplatePlan` + `ScopeAnalysis` into `import * as $rt from "abide/ui/internal/runtime"`,
+// Turns a `TemplatePlan` + `BindingAnalysis` into `import * as $rt from "abide/ui/internal/runtime"`,
 // module-level `$rt.template(...)` skeletons, and `export function mount($target, $scope)` that clones
 // each template, walks a cursor (firstChild/nextSibling steps from the plan's `path`) to every dynamic
 // node, and wires the `$rt.*` helpers with real-identifier thunks. Block/component/component bodies are
@@ -12,8 +12,8 @@
 // No `new Function`, no `with`; script cells are lexical `let n = state(0)` with references rewritten to
 // `()/.set()`, and free/block-bound template identifiers read off `$scope`.
 
-import type { ScopeAnalysis } from './analyzeScope.ts'
-import { isSimpleIdentifier, reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
+import type { BindingAnalysis } from './analyzeBindings.ts'
+import { isSimpleIdentifier, reconstructImport, rewriteCellRefs } from './analyzeBindings.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
@@ -34,11 +34,11 @@ const BLOCK_KINDS = new Set<string>(['if', 'for', 'switch', 'try', 'awaitBlock',
 // ---------------------------------------------------------------------------
 
 class ClientEmitter {
-    private analysis: ScopeAnalysis
+    private analysis: BindingAnalysis
     private planIds = new Map<ClientPlan, number>()
     private plans: { id: number; plan: ClientPlan }[] = []
 
-    constructor(analysis: ScopeAnalysis) {
+    constructor(analysis: BindingAnalysis) {
         this.analysis = analysis
     }
 
@@ -638,8 +638,11 @@ class ClientEmitter {
         }
         // A cell- or memo-named tag (`<C/>` where `const C = memo(() => …)`) is a REACTIVE component:
         // read it in an effect and re-mount on identity change. Otherwise resolve the component once.
-        if (this.analysis.cellScope.cells.has(name) || this.analysis.cellScope.memos.has(name)) {
-            const read = rewriteCellRefs(name, this.analysis.cellScope)
+        if (
+            this.analysis.cellBindings.cells.has(name) ||
+            this.analysis.cellBindings.memos.has(name)
+        ) {
+            const read = rewriteCellRefs(name, this.analysis.cellBindings)
             props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${read}), $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
         } else {
             props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${componentRef(this.analysis, name)}, $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
@@ -649,6 +652,6 @@ class ClientEmitter {
     }
 }
 
-export function emitClientModule(plan: TemplatePlan, analysis: ScopeAnalysis): string {
+export function emitClientModule(plan: TemplatePlan, analysis: BindingAnalysis): string {
     return new ClientEmitter(analysis).emit(plan)
 }
