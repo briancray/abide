@@ -679,6 +679,101 @@ the known shortcuts and gaps. Ordered by impact.
       quote may appear inside `{…}`). Unit tests (`emitCapabilities.test.ts`) + e2e (`rpc.spec.ts` header
       assertion). Docs headers now render `{await fn()}` via the natural `{'{'}` escape.
 
+23. **Declared-but-unimplemented public options (from the 2026-07-25 `/simplify` sweep).** Three
+    documented public API fields are declared, typed, and advertised in the docs — and never read by
+    any code path. Each is a spec/impl gap, not dead code, so the cleanup pass deliberately left them
+    in place rather than deleting the surface. Deciding *implement vs. retract* is a public-API call:
+    - **`RpcOptions.timeout`** (`server/internal/makeRpc.ts:70`) — the biggest one. CLAUDE.md and
+      `docs/spec/rpc-core.md` document it as **bilateral** ("client abort + server deadline", default
+      `ABIDE_RPC_TIMEOUT`), and `makeRpc.ts:9` says it is "carried untouched for the router to
+      enforce". The router never enforces it: no `options.timeout` read exists anywhere. Contrast
+      `maxBodySize` on the adjacent line, which *is* read (`router.ts`). So a handler that sets
+      `timeout` today gets silence, and `ABIDE_RPC_TIMEOUT` is inert. Either wire it (an
+      `AbortSignal.timeout` on the server deadline + the client proxy's fetch) or retract it from all
+      four truth surfaces.
+    - **`error.typed(name, status, schema?)`'s third parameter** (`server/error.ts:54`) — already
+      inert in the body (`_schema`, unreferenced) and never supplied by any caller in the repo. It is
+      advertised in `error.ts:2`, `CLAUDE.md`, `docs/spec/rpc-core.md:265`, and
+      `packages/docs/CAPABILITIES.md:161`. Retracting it means editing all four.
+    - **`AgentOptions.temperature`** (`server/internal/agentTypes.ts:80`) — declared, never read;
+      neither `claudeEngine.ts` nor `claudeCodeEngine.ts` touches it, though every sibling
+      (`model`/`system`/`maxTokens`/`signal`/`tools`/`approval`) is read. Mentioned in
+      `docs/spec/agent.md:58`. Passing it through to the Messages API is a two-line fix.
+24. **`rpcTools.ts` is orphaned because the agent tool-default was never wired.** `rpcTools()`
+    (`server/internal/rpcTools.ts`, 45 lines incl. `asJsonSchema`/`toTool`) has no importer outside
+    `server/agent.test.ts`. Its own header says it is "the mapping the app-config default surface is
+    built from (all `clients.mcp` RPCs)" — and CLAUDE.md documents `agent`'s `tools` default as
+    exactly that — but `agent.ts:47` reads `options.tools ?? []`, so the default surface is empty and
+    nothing ever calls the mapper. Left in place on purpose: deleting it would cement the gap. Fix is
+    to default `tools` to `rpcTools(config)` (keeping `[]` as the explicit opt-out CLAUDE.md already
+    describes), then the module is live.
+25. **Unwired socket teardown seam.** `muxUnsubscribe` (`ui/internal/mux.ts`) is the obvious
+    counterpart to `muxSubscribe` and is called by nobody; `socketProxy.ts` has no teardown path at
+    all (no refcount/dispose), so `MUX_UPSTREAM.unsub` is never sent by any in-repo client and the
+    server's `wsUnsubscribe` is unreachable from this codebase. Keep the server side (legitimate
+    protocol surface for third-party clients); the gap is that a client socket subscription is never
+    released on unmount. Related: the `.abide` `<script>` teardown work already landed, so the
+    lifecycle hook to hang this on now exists.
+26. **Architectural deepening opportunities (from the 2026-07-25 `/simplify` sweep).** Each was
+    verified against current code and judged too large to fold into a cleanup pass. Ordered by payoff:
+    - **`shared/` imports from `server/internal/`, breaking the stated layering.** Eight modules do
+      it: `shared/memo.ts` (`registerTaggedMemo`, `currentScope`), `shared/route.ts`, `shared/trace.ts`
+      (`currentScope`), and `shared/{invalidate,refresh,pending,refreshing}.ts` (`memoTags`). The scar
+      tissue is already in the tree: `server/internal/scope.ts` lazily constructs its
+      `AsyncLocalStorage` behind an `isBrowser` guard *because* "this module is reachable from the
+      client bundle via the isomorphic `route()`". Worse, `memo.ts` → `memoTags.ts` → `memoChannels.ts`
+      (a `ChannelHub` broadcast registry), so the client-bundle graph of the core memo primitive
+      transitively includes server broadcast transport — contradicting `memo.ts:24` ("the memo never
+      imports transport"). **Fix:** move `currentScope`/`RequestScope` and the tag registry into
+      `shared/internal/` (they are ambient-context concepts, not HTTP ones) and let `server/` import
+      *up*. That deletes the lazy-ALS browser guard and makes every framework import one-way.
+    - **`MemoContext` declares the entire SSR-streaming protocol.** `shared/internal/context.ts:24-101`
+      — the ambient slot store the memo/state core is built on — carries `StreamScope`,
+      `StreamHandleRecord`, `DeferredSubtree`, `DeferredStreamer`, `StreamFrame`, `rendering`, and
+      `states`, so a primitive that should know only "here is a Map of slots" knows about
+      `<abide-list>` handoff ids, RPC route names, hydration-seed buckets, and patch ops. The comment
+      admits why: kept there so `getContext()` reaches it "without new plumbing". **Fix:** one opaque
+      extension slot on `MemoContext` that `ui/internal/streamScope.ts` and `server/internal/pages.ts`
+      key into with their own types; the five interfaces move to the layer that owns them.
+    - **The AST discards expression offsets that `emitCheck` then re-finds by `indexOf`.**
+      `parse.ts` `parseForHeader` knows `ofIndex`/`commaIndex`/`byIndex` exactly and returns only
+      trimmed strings; `ForBlock` carries bare `string`s with one whole-node span. `emitCheck` — whose
+      stated invariant is a verbatim source map — reconstructs those spans by fuzzy substring search
+      with an advancing cursor, and on a miss silently emits unmapped synthetic text. **Consequence:**
+      hover, go-to-definition, and diagnostics lose their mapping with no error whenever an
+      expression's text isn't findable (e.g. a `by` key that also appears in the item pattern).
+      **Fix:** carry `{ text, start, end }` spans on every captured expression; `locate`/`advance`/
+      `put` collapse to `emitAt(span.start, span.length)`.
+    - **`emitCheck` reimplements `analyzeScope`'s tokenizer, and says so.** `scanTemplateAware` is a
+      line-for-line copy of `analyzeScope.tokenize()` (the comment states it), and the duplication
+      continues through the `OPEN`/`CLOSE` sets, `CONTINUATION_OPERATORS`, and the statement-boundary
+      loop. `analyzeScope.analyzeScript` already walks the same declarators and already knows each
+      one's pattern/init/kind — the facts `emitDeclarators` re-derives from raw text. **Consequence:**
+      the known `${}`-in-initializer lexing bug class has to be fixed twice, in two files, by whoever
+      notices both. **Fix:** one shared script-statement scanner exporting declarator spans + kinds;
+      `emitCheck` consumes `ScriptInfo.bindings` instead of re-lexing the script body.
+    - **Smaller, same family** (verified, below the bar for the above): the `ab-p:` streaming-sentinel
+      wire format is spelled as a bare literal in four places (`streamScope.ts` twice — once inside a
+      generated inline-JS string — plus `navigate.ts` and `runtime.ts`) with no shared constant, though
+      the repo already has that pattern in `RPC_QUERY_PARAMS.ts`/`MUX_UPSTREAM.ts`; `emitServer.ts`
+      re-lexes an already-rewritten expression string to recover `{ rpcName, args }` for stream attach,
+      when `analyzeScope` and `templatePlan` both already had those facts (its own comment records a
+      prior patch where a missing regex alternative "silently made every aliased stream re-run on
+      hydrate"); the `bind:` name→behavior table is duplicated across `emitClient.ts` and
+      `serverRuntime.ts` and has **already drifted** (`selected` gets boolean-attribute treatment
+      server-side but falls to `bindValue` client-side); and `parse.ts` string-matches the `html(`
+      helper by literal name + magic offsets 4/5, so `import { html as h }` compiles to an escaped-text
+      interpolation with no diagnostic.
+27. **Identity cookie is re-sealed on every response, including immutable assets.** `finalize` →
+    `applyIdentityCookie` runs an AES-GCM encrypt + `getRandomValues` + base64 per response
+    unconditionally — including the content-addressed `/__abide/chunk/` assets, which then carry a
+    `Set-Cookie` on a `public, max-age=31536000, immutable` response (bad for CDN caching as well as
+    wasteful). The natural gate for this, `scope.identityDirty`, was **write-only and has been
+    removed** in the 2026-07-25 sweep (`identity.set()`/`clear()` set it; nothing read it — the
+    `scope.ts` comment documented a re-seal branch that did not exist). Fix is behavioural, so it was
+    left out of the cleanup: skip the cookie for the immutable-asset branch, and re-seal only when the
+    identity actually changed or the rolling window is due.
+
 ## Design-level parked (see each spec's `## Deferred / parked`)
 `docs/spec/*.md` carry the design-level parked items, e.g.: socket **backplane** (horizontal
 scaling, sockets.md S3.3), **lazy-mount islands** (abide-compiler C2), **`canSubscribe`** predicate
