@@ -774,15 +774,23 @@ the known shortcuts and gaps. Ordered by impact.
       server-side but falls to `bindValue` client-side); and `parse.ts` string-matches the `html(`
       helper by literal name + magic offsets 4/5, so `import { html as h }` compiles to an escaped-text
       interpolation with no diagnostic.
-27. **Identity cookie is re-sealed on every response, including immutable assets.** `finalize` →
-    `applyIdentityCookie` runs an AES-GCM encrypt + `getRandomValues` + base64 per response
-    unconditionally — including the content-addressed `/__abide/chunk/` assets, which then carry a
-    `Set-Cookie` on a `public, max-age=31536000, immutable` response (bad for CDN caching as well as
-    wasteful). The natural gate for this, `scope.identityDirty`, was **write-only and has been
-    removed** in the 2026-07-25 sweep (`identity.set()`/`clear()` set it; nothing read it — the
-    `scope.ts` comment documented a re-seal branch that did not exist). Fix is behavioural, so it was
-    left out of the cleanup: skip the cookie for the immutable-asset branch, and re-seal only when the
-    identity actually changed or the rolling window is due.
+27. ~~**Identity cookie is re-sealed on every response, including immutable assets.**~~ **DONE
+    (2026-07-26).** `finalize` → `applyIdentityCookie` ran an AES-GCM encrypt + `getRandomValues` +
+    base64 per response unconditionally — including the content-addressed `/__abide/chunk/` assets,
+    which then carried a `Set-Cookie` on a `public, max-age=31536000, immutable` response. That is not
+    just wasteful: a per-user `set-cookie` on a response a SHARED cache may store hands the next client
+    through that cache someone else's identity, and it defeats the long-cache the asset asked for.
+    **Fix, three parts.** (a) `applyIdentityCookie` skips any publicly-cacheable response
+    (`isPubliclyCacheable` — a `public` token in `cache-control`, which is exactly what the immutable
+    asset branch declares). (b) The roll is now conditional: `unsealPayload` returns the sealed `exp`
+    alongside the principal, `resolveIdentityDetailed` carries it onto the scope, and
+    `identityCookieIsDue` re-seals only when there is no readable cookie, it has expired, or the
+    rolling window is due — `ROLL_AFTER_FRACTION` 0.1, i.e. at the 30-day default a rewrite at most
+    once every three days per client, so an active session still rolls forward indefinitely. (c)
+    `scope.identityDirty` is READ again rather than write-only (it was removed in the 2026-07-25 sweep
+    for that reason): `identity.set()` marks it, because a login must persist on THIS response and is
+    the one case the due-check must not skip. Refs: `server/internal/{auth,seal,router}.ts`,
+    `server/identity.ts`; 8 tests in `auth.test.ts` covering the due-ladder and each resolve rung.
 
 28. ~~**A component had two invocation forms, and one of them made an interpolation leaf two shapes.**~~
     **DONE (2026-07-26).** `{Name(…)}` — calling an inline `{#component}` (or a component-valued binding)
