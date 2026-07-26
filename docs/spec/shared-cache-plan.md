@@ -7,7 +7,7 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
 
 ## 0. Orienting facts
 - The memo is the only cache primitive, isomorphic (`shared/memo.ts`); every slot lives in
-  `getContext().cache` (`memo.ts:114`) = per-request Map on server (`scope.ts:75`). No cross-request
+  `reactiveScope().slots` (`memo.ts:114`) = per-request Map on server (`scope.ts:75`). No cross-request
   store today; `cache.shared`/`cache.tags` parsed but IGNORED (`makeRpc.ts:83`).
 - Verbs exist locally: `refresh`/`invalidate` over `selectSlots` (`memo.ts:219-236`, superset match
   `matchesSelector` `:96-105`), `publish` value/updater (`:238-246`) — none broadcast.
@@ -54,7 +54,7 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
 ## 2. Design highlights
 ### 2.1 Storage + fail-closed
 Store keyed exactly as today (`prefix + canonicalKey(args)`, nothing ambient). `slotCache() = shared ?
-sharedStore() : getContext().cache`. Fail-closed = TWO complementary checkpoints:
+sharedStore() : reactiveScope().slots`. Fail-closed = TWO complementary checkpoints:
 1. **Handler isolation** — a shared slot's `startLoad` runs `fn(args)` OUTSIDE any request scope (new
    `runOutsideScope` via `scopeStorage.exit`) so `identity()`/`cookies()`/`request()` THROW → a shared
    handler touching request scope rejects, value NEVER cached, in dev AND prod (accessors throw

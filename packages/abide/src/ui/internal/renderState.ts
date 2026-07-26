@@ -1,13 +1,13 @@
 // PER-RENDER STATE — everything an SSR page render accumulates that is NOT the memo primitive's
 // business (ADR 0026).
 //
-// These five interfaces used to live on `MemoContext`, so the primitive that should know only "here is
+// These five interfaces used to live on `ReactiveScope`, so the primitive that should know only "here is
 // a Map of slots" also declared `<abide-list>` handoff ids, RPC route names, hydration-seed buckets and
 // out-of-order patch ops. The reason was structural rather than lazy: `emitServer` generates
 // `async render()` with NO ambient parameter, so a per-render fact must be reachable from a global
 // accessor, and the memo context was the only ambient that existed.
 //
-// It is no longer the only one. This module keys its own state off the reactive context by identity, so
+// It is no longer the only one. This module keys its own state off the reactive scope by identity, so
 // `ui/` owns the types outright and the lookup still needs no plumbing through emitted code. A WeakMap
 // rather than a second AsyncLocalStorage: the entry dies with the context, there is nothing to enter or
 // exit, and no per-request ALS cost.
@@ -15,7 +15,11 @@
 // Layering: `ui -> shared` (35 existing imports) and `server -> ui` (9, incl. `pages.ts` importing
 // `streamScope.ts`) are both established directions, so nothing here inverts the graph.
 
-import { getContext, type MemoContext, peekContext } from '../../shared/internal/context.ts'
+import {
+    peekReactiveScope,
+    type ReactiveScope,
+    reactiveScope,
+} from '../../shared/internal/reactiveScope.ts'
 
 // The streaming-SSR scratchpad (streaming-ssr-plan.md, PR2). Present only while a render is STREAMING;
 // a streaming-form read (`{#await}` block) that hasn't settled by the deadline registers a deferred
@@ -87,25 +91,25 @@ export interface RenderState {
     stream?: RenderStream | undefined
 }
 
-const RENDER = new WeakMap<MemoContext, RenderState>()
+const RENDER = new WeakMap<ReactiveScope, RenderState>()
 
 // Open a render's state on the active context, replacing any previous one. Called once per page render.
 export function openRenderState(): RenderState {
     const state: RenderState = { states: {} }
-    RENDER.set(getContext(), state)
+    RENDER.set(reactiveScope(), state)
     return state
 }
 
-// The active render's state, or undefined outside a render. `peekContext` so asking the question never
-// installs the process-global default context.
+// The active render's state, or undefined outside a render. `peekReactiveScope` so asking the question never
+// installs the process-global default scope.
 export function renderState(): RenderState | undefined {
-    const context = peekContext()
+    const context = peekReactiveScope()
     return context === undefined ? undefined : RENDER.get(context)
 }
 
 // Drop the render's state. A per-render scratchpad must never leak deferreds onto a reused context.
 export function closeRenderState(): void {
-    const context = peekContext()
+    const context = peekReactiveScope()
     if (context !== undefined) RENDER.delete(context)
 }
 

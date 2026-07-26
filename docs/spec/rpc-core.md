@@ -205,7 +205,7 @@ One imported callable means two things:
    server, where a render is the whole life a component gets. That is why the template grammar needs no
    `onMount`/`onDestroy` (compiler §C4.5), and why an isomorphic effect can take a real resource (a
    timer, a subscription) with no is-this-the-browser branch. Server-side the sweep is the request's
-   existing one — the scope registers via `onContextDispose`, so it runs after the response for a
+   existing one — the scope registers via `onScopeDispose`, so it runs after the response for a
    buffered reply and after the drain for a streaming one, the same points that dispose a per-request
    `memo` computed. **The owner scope is per context, never per process**: a `<script>` may `await`, and
    a process-global owner would hand one request's effects to another that opened a scope while it was

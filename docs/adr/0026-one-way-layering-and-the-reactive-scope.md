@@ -171,6 +171,27 @@ it is not a context at all: it is entered, exited, nested, and disposed. That is
 `MemoContext` → `ReactiveScope`, `getContext()` → `reactiveScope()`. Renamed in D, not A: A leaves the
 object still holding `stream`, so a name chosen then would describe something about to change.
 
+**As shipped, the whole family renamed** (~250 sites), because leaving half the API calling it a
+"context" would have preserved exactly the confusion the rename exists to remove. The verbs took the
+`*Scope` form, and `runInContext`/`runOutsideContext` became `enterScope`/`exitScope` — matching the
+definition above (a scope is entered and left) and avoiding a collision with `server/`'s `runInScope`,
+which enters a `RequestScope`:
+
+| Was | Is |
+| --- | --- |
+| `MemoContext` | `ReactiveScope` |
+| `getContext()` / `peekContext()` | `reactiveScope()` / `peekReactiveScope()` |
+| `createContext()` | `createReactiveScope()` |
+| `runInContext()` / `runOutsideContext()` | `enterScope()` / `exitScope()` |
+| `disposeContext()` / `onContextDispose()` | `disposeScope()` / `onScopeDispose()` |
+| `retainContext()` / `releaseContext()` | `retainScope()` / `releaseScope()` |
+| `serverDefaultContext()` | `serverDefaultScope()` |
+| `shared/internal/context.ts` | `shared/internal/reactiveScope.ts` |
+
+`server/context.ts` — the PUBLIC `context()` bag accessor — is deliberately untouched. It is data with
+no lifecycle, so "context" is the right word for it; the collision it used to have with `MemoContext`
+is what the rename resolves.
+
 `CLAUDE.md` needs no edit — its three "ambient" mentions (`:80`, `:152`, `:322`) all refer to *request*
 scope, and `MemoContext` is never named there. `ReactiveScope` was preferred over `Ambient` partly for
 that reason.

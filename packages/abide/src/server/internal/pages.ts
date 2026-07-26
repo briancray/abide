@@ -14,13 +14,13 @@
 // replays them from cache instead of re-fetching on hydration. An empty seed serialises to `{}`.
 
 import { encode } from '../../shared/internal/codec.ts'
-import type { MemoContext } from '../../shared/internal/context.ts'
+import type { ReactiveScope } from '../../shared/internal/reactiveScope.ts'
 import {
-    getContext,
-    releaseContext,
-    retainContext,
-    runInContext,
-} from '../../shared/internal/context.ts'
+    enterScope,
+    reactiveScope,
+    releaseScope,
+    retainScope,
+} from '../../shared/internal/reactiveScope.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
@@ -170,7 +170,7 @@ async function renderLevel(
 // When `streaming` is true (first-load full document), install the per-render stream scope so a
 // streaming-form `{#await}` read that blocks past the deadline defers instead of holding the render —
 // the returned string is the SHELL (placeholders for deferred subtrees), whose deferreds live on the
-// request context for `streamPageDocument` to drain. When false (soft-nav / tests), no stream scope is
+// request scope for `streamPageDocument` to drain. When false (soft-nav / tests), no stream scope is
 // installed → `awaitStream` awaits fully inline, so the returned string is the COMPLETE inner HTML.
 export async function renderPage(
     source: string,
@@ -185,7 +185,7 @@ export async function renderPage(
     // Mark this request as a page render for the whole render lifetime (inline + streamed drain), so a
     // socket iterated in a `{#for await}` resolves to snapshot-then-complete instead of a live topic
     // that would hang the render (client-sockets.md CS5). Never cleared — the context dies with the request.
-    getContext().rendering = true
+    reactiveScope().rendering = true
     const render = openRenderState()
     if (streaming) render.stream = createStreamScope()
     const imports = pageImports(config.routes ?? {}, config.sockets ?? {})
@@ -425,19 +425,19 @@ export function renderDocument(inner: string, opts?: RenderDocumentOptions): str
 // for any read that blocked past the deadline) flushes immediately; each deferred subtree streams as a
 // `<template>` + move-script patch when it resolves; the seed is collected AFTER the patches drain
 // (so streamed reads are included — PR2 keeps one tail seed; PR3 splits it per-patch) and the tail
-// flushes last. The drain + `collectSeed` run inside the captured request context so they read the
+// flushes last. The drain + `collectSeed` run inside the captured request scope so they read the
 // same request cache. The render-error → 500 guarantee holds: `renderPage` (which awaits blocking
 // reads) has already returned before this stream is constructed.
 export function streamPageDocument(
     shell: string,
-    ctx: MemoContext,
+    ctx: ReactiveScope,
     config: AppConfig,
     opts?: RenderDocumentOptions,
 ): ReadableStream<Uint8Array> {
-    const stream = runInContext(ctx, () => renderState()?.stream)
+    const stream = enterScope(ctx, () => renderState()?.stream)
     // This reply is still producing bytes after `runInScope` returns, so hold the context open past it
     // (ADR 0026). Released in the `finally` below, whichever way the drain ends.
-    retainContext(ctx)
+    retainScope(ctx)
     const encoder = new TextEncoder()
     const head = documentHead(opts)
     return new ReadableStream<Uint8Array>({
@@ -450,18 +450,18 @@ export function streamPageDocument(
                     stream !== undefined &&
                     (stream.deferred.length > 0 || stream.streamers.length > 0)
                 ) {
-                    await runInContext(ctx, async () => {
+                    await enterScope(ctx, async () => {
                         for await (const patch of drainPatches(stream)) enc(documentPatch(patch))
                     })
                 }
             } catch (caught) {
                 log.channel('abide:stream').error('streaming SSR drain failed:', caught)
             }
-            const seed = runInContext(ctx, () => collectSeed(config))
+            const seed = enterScope(ctx, () => collectSeed(config))
             enc(documentTail(seed, opts))
             controller.close()
-            runInContext(ctx, closeRenderState)
-            releaseContext(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
+            enterScope(ctx, closeRenderState)
+            releaseScope(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
         },
     })
 }
@@ -474,16 +474,16 @@ export function streamPageDocument(
 // applies patches in JS via the same DOM op the first-load move-script does), then `{kind:"seed", seed}`
 // last (collected AFTER the drain so streamed reads are included). The client replays the seed and
 // hydrates/claims the fully-assembled DOM once the stream ends (`ui/navigate.ts`). Runs the drain +
-// `collectSeed` in the captured request context so they read the same request cache.
+// `collectSeed` in the captured request scope so they read the same request cache.
 export function streamSoftNav(
     shell: string,
-    ctx: MemoContext,
+    ctx: ReactiveScope,
     config: AppConfig,
     urlPath: string,
     sharedLevels = 0,
 ): ReadableStream<Uint8Array> {
-    const stream = runInContext(ctx, () => renderState()?.stream)
-    retainContext(ctx) // see streamPageDocument — the drain outlives runInScope (ADR 0026)
+    const stream = enterScope(ctx, () => renderState()?.stream)
+    retainScope(ctx) // see streamPageDocument — the drain outlives runInScope (ADR 0026)
     const encoder = new TextEncoder()
     return new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -511,7 +511,7 @@ export function streamSoftNav(
                     stream !== undefined &&
                     (stream.deferred.length > 0 || stream.streamers.length > 0)
                 ) {
-                    await runInContext(ctx, async () => {
+                    await enterScope(ctx, async () => {
                         for await (const patch of drainPatches(stream)) {
                             if (disconnected) break // client gone — stop draining
                             if (patch.op === 'complete') frame({ kind: 'complete', id: patch.id })
@@ -524,7 +524,7 @@ export function streamSoftNav(
                 log.channel('abide:stream').error('streaming soft-nav drain failed:', caught)
             }
             if (!disconnected) {
-                const seed = runInContext(ctx, () => collectSeed(config))
+                const seed = enterScope(ctx, () => collectSeed(config))
                 frame({ kind: 'seed', seed })
                 try {
                     controller.close()
@@ -532,8 +532,8 @@ export function streamSoftNav(
                     // Raced with a client disconnect between the guard and here — nothing to do.
                 }
             }
-            runInContext(ctx, closeRenderState)
-            releaseContext(ctx)
+            enterScope(ctx, closeRenderState)
+            releaseScope(ctx)
         },
     })
 }

@@ -29,7 +29,7 @@ const BUDGET = { minTimeMs: 120, minIters: 20, warmupIters: 5 }
 // This bench runs INSIDE a page render: the docs `/platform/bench` page consumes it with a top-level
 // `{#for await}`, so `benchFrontend()` executes in that request's ambient context. A scenario template's
 // own `{#await}` / `{#for await}` blocks (e.g. the `await-block` scenario) call `awaitStream`, which
-// reads `getContext().stream` — and by the time the bench reaches them the page's 4ms streaming deadline
+// reads `reactiveScope().stream` — and by the time the bench reaches them the page's 4ms streaming deadline
 // has long passed, so each measured render would DEFER its subtree into the PAGE's stream (flooding it
 // with hundreds of stray patches and pegging the render). Isolate each timed render by clearing the
 // ambient stream scope for its duration: the emitted render then takes its no-scope path and builds the

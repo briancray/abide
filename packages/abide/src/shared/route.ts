@@ -5,15 +5,15 @@
 // available (called outside a request and before client bootstrap).
 //
 // Reads the CONTEXT, not the request scope (ADR 0026), so `shared/` names nothing in `server/`.
-// `peekContext` rather than `getContext` because the no-context case is a legitimate answer here and
-// must not install the process-global default context on the way to throwing.
+// `peekReactiveScope` rather than `reactiveScope` because the no-context case is a legitimate answer here and
+// must not install the process-global default scope on the way to throwing.
 
-import { peekContext } from './internal/context.ts'
+import { peekReactiveScope } from './internal/reactiveScope.ts'
 import { readClientRoute } from './internal/routeHolder.ts'
 import type { RouteInfo } from './internal/routeInfo.ts'
 
 export function route(): RouteInfo {
-    const active = peekContext()?.route
+    const active = peekReactiveScope()?.route
     if (active !== undefined) return active
     const client = readClientRoute()
     if (client !== undefined) return client

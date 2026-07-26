@@ -8,7 +8,11 @@
 // that interleave across that await would otherwise hand their effects to each other.
 
 import { describe, expect, test } from 'bun:test'
-import { createContext, disposeContext, runInContext } from '../../shared/internal/context.ts'
+import {
+    createReactiveScope,
+    disposeScope,
+    enterScope,
+} from '../../shared/internal/reactiveScope.ts'
 import { state } from '../../shared/state.ts'
 import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from './emit.ts'
@@ -53,9 +57,9 @@ const probe = globalThis as unknown as Probe
 
 // One render inside its own context, disposed the way `runInScope` disposes a finished request.
 async function renderRequest(module: { render(scope?: Record<string, unknown>): Promise<string> }) {
-    const context = createContext()
-    await runInContext(context, () => module.render({ state, watch }))
-    disposeContext(context)
+    const context = createReactiveScope()
+    await enterScope(context, () => module.render({ state, watch }))
+    disposeScope(context)
 }
 
 describe('server render effect ownership', () => {
@@ -93,12 +97,12 @@ describe('server render effect ownership', () => {
         const gateB = new Promise<void>((resolve) => {
             releaseB = () => resolve()
         })
-        const contextA = createContext()
-        const contextB = createContext()
-        const renderA = runInContext(contextA, () =>
+        const contextA = createReactiveScope()
+        const contextB = createReactiveScope()
+        const renderA = enterScope(contextA, () =>
             module.render({ state, watch, gate: () => gateA }),
         )
-        const renderB = runInContext(contextB, () =>
+        const renderB = enterScope(contextB, () =>
             module.render({ state, watch, gate: () => gateB }),
         )
         expect(probe.$runs).toBe(0) // both parked mid-setup, both scopes open
@@ -112,9 +116,9 @@ describe('server render effect ownership', () => {
         expect(probe.$runs).toBe(2)
         expect(probe.$cleanups).toBe(0) // neither request is finished yet
 
-        disposeContext(contextA)
+        disposeScope(contextA)
         expect(probe.$cleanups).toBe(1) // exactly A's effect
-        disposeContext(contextB)
+        disposeScope(contextB)
         expect(probe.$cleanups).toBe(2) // B's own effect, not stranded by A's close
 
         probe.$bump()

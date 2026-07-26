@@ -19,8 +19,8 @@
 
 import { ChannelHub, type ChannelHubOptions } from './internal/channelHub.ts'
 import { canonicalKey } from './internal/codec.ts'
-import { getContext } from './internal/context.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
+import { reactiveScope } from './internal/reactiveScope.ts'
 import type { Room } from './internal/room.ts'
 
 export interface ChannelOptions {
@@ -42,7 +42,7 @@ export interface Channel<T, Args = void> extends ReactiveReadSurface<Args, T>, A
 // True while an SSR page render is in flight — a live subscription would never close and would hang the
 // render, so a channel iterated in a render yields the tail snapshot and completes (CS5).
 function inRender(): boolean {
-    return getContext().rendering === true
+    return reactiveScope().rendering === true
 }
 
 export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T, Args> {

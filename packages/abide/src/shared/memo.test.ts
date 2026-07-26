@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { anonymousPrincipal, type RequestScope, runInScope } from '../server/internal/scope.ts'
-import { createContext, getContext, type MemoContext, runInContext } from './internal/context.ts'
 import { effect, state } from './internal/reactive.ts'
+import {
+    createReactiveScope,
+    enterScope,
+    type ReactiveScope,
+    reactiveScope,
+} from './internal/reactiveScope.ts'
 import { memo } from './memo.ts'
 
 // Effect re-runs are microtask-batched; a macrotask tick guarantees they have flushed.
@@ -10,7 +15,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 // Every test runs inside a fresh cache context so slots never leak between tests.
 function withContext<T>(fn: () => T): T {
-    return runInContext(createContext(), fn)
+    return enterScope(createReactiveScope(), fn)
 }
 
 describe('memo — read + load', () => {
@@ -346,10 +351,10 @@ describe('memo — context isolation', () => {
             calls++
             return n * 2
         })
-        await runInContext(createContext(), async () => {
+        await enterScope(createReactiveScope(), async () => {
             expect(await c(1)).toBe(2)
         })
-        await runInContext(createContext(), async () => {
+        await enterScope(createReactiveScope(), async () => {
             expect(c.peek(1)).toBeUndefined() // different cache
             expect(await c(1)).toBe(2)
         })
@@ -398,7 +403,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
             calls++
             return { id: args.id, label: `row-${args.id}` }
         })
-        const recorded = await runInContext(createContext(), async () => {
+        const recorded = await enterScope(createReactiveScope(), async () => {
             await server({ id: 7 })
             return server.snapshot()
         })
@@ -408,7 +413,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
             clientCalls++
             return { id: args.id, label: 'refetched' }
         })
-        await runInContext(createContext(), async () => {
+        await enterScope(createReactiveScope(), async () => {
             for (const record of recorded) client.seed(record.args, record.value)
             expect(await client({ id: 7 })).toEqual({ id: 7, label: 'row-7' })
         })
@@ -855,15 +860,15 @@ describe('memo — a per-request auto slot does not outlive its request', () => 
         const derived = memo(() => moduleState() * 2)
         runInScope(makeScope(), () => {
             expect(derived()).toBe(2)
-            expect(getContext().disposers?.length).toBe(1)
+            expect(reactiveScope().disposers?.length).toBe(1)
         })
     })
 
     test('a LONG-LIVED context registers nothing — its slots are long-lived too', () => {
         const moduleState = state(1)
         const derived = memo(() => moduleState() * 2)
-        const context = createContext()
-        runInContext(context, () => {
+        const context = createReactiveScope()
+        enterScope(context, () => {
             expect(derived()).toBe(2)
         })
         expect(context.disposers).toBeUndefined()
@@ -872,10 +877,10 @@ describe('memo — a per-request auto slot does not outlive its request', () => 
     test('runInScope has already run the disposers by the time it returns', () => {
         const moduleState = state(1)
         const derived = memo(() => moduleState() * 2)
-        let seen: MemoContext | undefined
+        let seen: ReactiveScope | undefined
         runInScope(makeScope(), () => {
             derived()
-            seen = getContext()
+            seen = reactiveScope()
         })
         expect(seen?.disposers).toBeUndefined()
     })

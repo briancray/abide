@@ -5,15 +5,15 @@
 // incoming `traceparent` header when present, so a browser→server(→server) chain shares one trace
 // id. When no header was propagated, the first `trace()` call generates one and caches it on the
 // context so every subsequent read within the same request returns the same value. Returns undefined
-// when there is no active request context (bare scripts, and the browser, which never has one).
+// when there is no active request scope (bare scripts, and the browser, which never has one).
 
-import { peekContext } from './internal/context.ts'
+import { peekReactiveScope } from './internal/reactiveScope.ts'
 
 export function trace(): string | undefined {
     // Gated on `requestScoped` (ADR 0026), not merely on a context existing: the browser always has a
     // context (the tab singleton) but never a request, and `trace()` has always returned undefined
     // there. Without the gate a client call would generate and cache a traceparent that means nothing.
-    const context = peekContext()
+    const context = peekReactiveScope()
     if (context?.requestScoped !== true) return undefined
     if (context.traceparent === undefined) {
         context.traceparent = generateTraceparent()

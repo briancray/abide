@@ -726,25 +726,45 @@ the known shortcuts and gaps. Ordered by impact.
     lifecycle hook to hang this on now exists.
 26. **Architectural deepening opportunities (from the 2026-07-25 `/simplify` sweep).** Each was
     verified against current code and judged too large to fold into a cleanup pass. Ordered by payoff:
-    - **`shared/` imports from `server/internal/`, breaking the stated layering.** Eight modules do
-      it: `shared/memo.ts` (`registerTaggedMemo`, `currentScope`), `shared/route.ts`, `shared/trace.ts`
-      (`currentScope`), and `shared/{invalidate,refresh,pending,refreshing}.ts` (`memoTags`). The scar
-      tissue is already in the tree: `server/internal/scope.ts` lazily constructs its
-      `AsyncLocalStorage` behind an `isBrowser` guard *because* "this module is reachable from the
-      client bundle via the isomorphic `route()`". Worse, `memo.ts` → `memoTags.ts` → `memoChannels.ts`
-      (a `ChannelHub` broadcast registry), so the client-bundle graph of the core memo primitive
-      transitively includes server broadcast transport — contradicting `memo.ts:24` ("the memo never
-      imports transport"). **Fix:** move `currentScope`/`RequestScope` and the tag registry into
-      `shared/internal/` (they are ambient-context concepts, not HTTP ones) and let `server/` import
-      *up*. That deletes the lazy-ALS browser guard and makes every framework import one-way.
-    - **`MemoContext` declares the entire SSR-streaming protocol.** `shared/internal/context.ts:24-101`
-      — the ambient slot store the memo/state core is built on — carries `StreamScope`,
-      `StreamHandleRecord`, `DeferredSubtree`, `DeferredStreamer`, `StreamFrame`, `rendering`, and
-      `states`, so a primitive that should know only "here is a Map of slots" knows about
-      `<abide-list>` handoff ids, RPC route names, hydration-seed buckets, and patch ops. The comment
-      admits why: kept there so `getContext()` reaches it "without new plumbing". **Fix:** one opaque
-      extension slot on `MemoContext` that `ui/internal/streamScope.ts` and `server/internal/pages.ts`
-      key into with their own types; the five interfaces move to the layer that owns them.
+    - ~~**`shared/` imports from `server/internal/`, breaking the stated layering.**~~ **DONE
+      (2026-07-26, ADR 0026 A1-A3).** All eight production imports are gone, and the rule is now
+      ENFORCED: a biome `noRestrictedImports` override forbids `packages/abide/src/shared/**` from
+      importing `**/server/**` (tests exempt — the rule protects the production graph and the client
+      bundle, and a test is in neither; four shared tests legitimately build a request scope to
+      exercise server-side behaviour of an isomorphic primitive). `memoChannels.ts` + `memoTags.ts`
+      moved to `shared/internal/` WHOLE — the former imports only `channelHub` + `memoChannelName`, so
+      it had zero server dependencies and was there by placement, which made the planned
+      registry/broadcast split unnecessary. `RouteInfo`/`RouteKind` → `shared/internal/routeInfo.ts`;
+      `route`/`traceparent`/`requestScoped` ride the reactive scope. The lazy-ALS browser guard and
+      both client-fallback branches in `scope.ts` are deleted. **The real prize, beyond hygiene:** the
+      `shared`-memo fail-closed guarantee is STRUCTURAL now — `currentScope()` compares slot-map
+      identity, so `exitScope` alone makes every request-scope accessor throw, and `runOutsideScope` is
+      deleted rather than left as something a future caller can forget to pair.
+      **Correction to this item's own premise:** it implied a client-bundle win via
+      `memo -> memoTags -> memoChannels -> ChannelHub`. There is none. A fresh `abide build` of
+      `packages/docs` shows `memoChannels` was ALREADY tree-shaken out (`@tag:` absent from all 60
+      chunks), and `ChannelHub` ships regardless via the public isomorphic `channel()`. TODO #6's
+      client floor is untouched; the win is a predictability one (an app calling `invalidate({tags})`
+      client-side can no longer silently pull broadcast code in).
+    - ~~**`MemoContext` declares the entire SSR-streaming protocol.**~~ **DONE (2026-07-26, ADR 0026
+      D1-D2).** The five interfaces moved to `ui/internal/renderState.ts`, keyed off the reactive scope
+      by `WeakMap<ReactiveScope, RenderState>` — no second `AsyncLocalStorage`, and emitted code still
+      reaches it with no plumbing. `states` moved too (its only writer/reader were both `pages.ts`).
+      The object is now `slots` + three request facts + `rendering` + reactive-lifetime bookkeeping,
+      and it is called **`ReactiveScope`**: it is entered, exited, nested and disposed, which is a
+      scope, not a context — and "context" collided with the public `context()` bag accessor. The whole
+      family renamed (~250 sites): `getContext()`→`reactiveScope()`, `runInContext`/`runOutsideContext`
+      →`enterScope`/`exitScope`, `disposeContext`→`disposeScope`, etc.
+      **The behavioural half:** `runInScope` no longer branches on `context.stream` to decide disposal.
+      `retainScope`/`releaseScope` is a refcount — the streaming transports retain before returning
+      their `ReadableStream` and release when the drain ends — so the primitive knows only that someone
+      still needs the scope, which generalises to the next thing that outlives a request.
+      **Correction to this item's own premise:** it read the "kept here without new plumbing" comment
+      as laziness. It was structural — `emitServer` emits `async render()` with NO ambient parameter,
+      so a per-render fact MUST be reachable from a global accessor.
+      **Accepted residue:** `rendering` stays on the reactive scope (written by `pages.ts:175`, read by
+      `shared/channel.ts:45`). Moving it to `ui/` would create a fresh wrong-direction import; the
+      alternative is unscoped work on the socket SSR path.
     - **The AST discards expression offsets that `emitCheck` then re-finds by `indexOf`.**
       `parse.ts` `parseForHeader` knows `ofIndex`/`commaIndex`/`byIndex` exactly and returns only
       trimmed strings; `ForBlock` carries bare `string`s with one whole-node span. `emitCheck` — whose
@@ -938,3 +958,20 @@ From the adversarial review — recorded so they're deliberate:
   page …`). So the dogfood needs both the path fix AND an investigation of why the machines page gets no
   LSP diagnostics. Found 2026-07-24 during the cell→memo rename; deliberately left untouched (out of scope,
   and `scripts/verify.ts` does not run `abide-lsp`).
+
+32. **The compile-time `*Scope` family still overloads the word (ADR 0026 Tier 3).** ADR 0026 fixed the
+    RUNTIME family and wrote the rule down — **Scope** = a region of execution you enter and leave,
+    whose registrations die with it; **Context** = ambient facts with no lifecycle; **Bindings** = a
+    compile-time name→meaning map. By that rule the compiler side is misnamed: `CellScope` and
+    `ShadowScope` (`ui/internal/analyzeScope.ts`) are lexical maps, not extents, so they want
+    `*Bindings`. Deliberately NOT folded in: zero overlap with the layering work, and it lives in the
+    files guarded by the emit byte-parity oracle, where a rename sweep makes the diff unreviewable
+    behind a slow gate. The emitted `$scope` is correct JS usage and stays. Cost of leaving it:
+    `analyzeScope` (compile-time) and `currentScope` (runtime) still read as siblings and are unrelated.
+33. **`abide/shared/*` exports every `internal/` module.** The export map is a wildcard
+    (`"./shared/*": "./src/shared/*.ts"`), so `internal/` is a naming convention, not a boundary. That
+    is how `packages/docs`'s `benchFrontend.ts` came to import `getContext` and hand-mutate the
+    internal `context.stream` field (found during ADR 0026 and migrated to the framework's
+    `withoutRenderStream`). Tightening it is a public-API change with its own blast radius, so it was
+    filed rather than folded in — but the evidence it matters is concrete: an app reached a framework
+    internal, and a framework refactor then broke it.

@@ -5,13 +5,13 @@
 // rules, class/style merge order, `Raw` handling) so emitted server output matches the interpreter
 // byte-for-byte (modulo comment anchors). This never ships to the browser.
 
-import {
-    getContext,
-    onContextDispose,
-    serverDefaultContext,
-} from '../../shared/internal/context.ts'
 import type { EffectScope } from '../../shared/internal/reactive.ts'
 import { disposeEffectScope, openEffectScope } from '../../shared/internal/reactive.ts'
+import {
+    onScopeDispose,
+    reactiveScope,
+    serverDefaultScope,
+} from '../../shared/internal/reactiveScope.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // Re-exported so the emitted server `{#for await}` can flip the `done(source)` probe when it fully
@@ -26,7 +26,7 @@ export { closeEffectScope } from '../../shared/internal/reactive.ts'
 export { awaitStream, forAwaitStream } from './streamScope.ts'
 
 // A server render's setup effects belong to the REQUEST. `render` opens a scope around its `<script>`
-// preamble; this registers that scope's teardown on the ambient context, which `disposeContext` sweeps
+// preamble; this registers that scope's teardown on the ambient context, which `disposeScope` sweeps
 // when the request's work is finished — after the response for a buffered reply, after the drain for a
 // streaming one. Without it every SSR render would leave its `watch`es subscribed to whatever they read
 // that outlives the request (a module-level `state`), so a single later write would re-run one dead
@@ -36,7 +36,7 @@ export { awaitStream, forAwaitStream } from './streamScope.ts'
 // Same rule `memo` applies to a per-request slot's backing.
 export function openRenderScope(): EffectScope {
     const scope = openEffectScope()
-    if (getContext() !== serverDefaultContext()) onContextDispose(() => disposeEffectScope(scope))
+    if (reactiveScope() !== serverDefaultScope()) onScopeDispose(() => disposeEffectScope(scope))
     return scope
 }
 

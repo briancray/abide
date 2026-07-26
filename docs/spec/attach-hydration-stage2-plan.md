@@ -97,7 +97,7 @@ claimText(anchor, prefixLen): Text|null
 
 **PR2 — State-initializer record/replay** (decision 10; prerequisite for suppress-write). ✅
 - `context.ts:15-21`: add `states: unknown[]`. `pages.ts:73`: wrap injected `state` to
-  `getContext().states.push(rawInitial)` in call order then delegate. `collectSeed` appends
+  `renderState().states` (ADR 0026; was `getContext().states`) in call order then delegate. `collectSeed` appends
   `states` when non-empty; extend `HydrationSeed` (`pages.ts:86`) with `states?`.
 - `bootstrap.ts:98`: wrap injected `state` with an ordinal counter consuming `seed.states[i]`
   (passing the page's `transform` through), fallback to literal initial when unseeded. No router
@@ -221,4 +221,4 @@ import, `emit.ts:76-90`).
 
 ## Critical files
 `emitClient.ts` · `runtime.ts` · `emitServer.ts` · `server/internal/pages.ts` · `bootstrap.ts` ·
-`templatePlan.ts` · `ui/navigate.ts` · `shared/internal/context.ts`.
+`templatePlan.ts` · `ui/navigate.ts` · `shared/internal/reactiveScope.ts`.

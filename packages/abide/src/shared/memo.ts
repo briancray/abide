@@ -27,17 +27,17 @@
 // PRs): the client-side channel join/apply.
 
 import { canonicalKey } from './internal/codec.ts'
-import {
-    getContext,
-    onContextDispose,
-    runOutsideContext,
-    serverDefaultContext,
-} from './internal/context.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { registerTaggedMemo } from './internal/memoTags.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
 import { type Computed, computed, effect, type State, state, untrack } from './internal/reactive.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
+import {
+    exitScope,
+    onScopeDispose,
+    reactiveScope,
+    serverDefaultScope,
+} from './internal/reactiveScope.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
 import type { Room } from './internal/room.ts'
@@ -453,15 +453,15 @@ export function memo<Args, T>(
     // The cache Map backing this memo's slots: the process-global shared store for a `shared` memo,
     // otherwise the ambient per-context cache (per-request on the server, singleton on the client).
     function slots(): Map<string, unknown> {
-        return shared ? sharedStore() : getContext().slots
+        return shared ? sharedStore() : reactiveScope().slots
     }
 
     // The LRU-bounded store backing `cache`, if any. Only the shared store and the persistent server
-    // default context are bounded by ABIDE_MAX_SHARED_CACHE_SIZE; per-request caches die with the
+    // default scope are bounded by ABIDE_MAX_SHARED_CACHE_SIZE; per-request caches die with the
     // request and the client cache dies with the tab, so neither is bounded.
     function boundedStore(cache: Map<string, unknown>): Map<string, unknown> | undefined {
         if (isBrowser) return undefined
-        if (cache === sharedStore() || cache === serverDefaultContext()?.slots) return cache
+        if (cache === sharedStore() || cache === serverDefaultScope()?.slots) return cache
         return undefined
     }
 
@@ -469,7 +469,7 @@ export function memo<Args, T>(
     // (an authorized caller). A bare script/cron read has no gate and no client to serve, so it
     // throws rather than silently touching the cross-request store. Server-only; inert on the client.
     function guardSharedRead(): void {
-        if (shared && getContext().requestScoped !== true) {
+        if (shared && reactiveScope().requestScoped !== true) {
             throw new Error('shared memo read requires an active request scope')
         }
     }
@@ -631,15 +631,15 @@ export function memo<Args, T>(
         // Fail-closed checkpoint (a), rpc-core §2: a shared handler runs OUTSIDE the request scope, so
         // identity()/cookies()/request()/context() throw if it touches request scope → the read rejects
         // (error slot) and the value is never cached, in dev AND prod. A nested non-shared memo lands in
-        // the neutral default context. Non-shared memos keep running in the ambient scope.
-        const promise = shared ? runOutsideContext(runLoad) : runLoad()
+        // the neutral default scope. Non-shared memos keep running in the ambient scope.
+        const promise = shared ? exitScope(runLoad) : runLoad()
 
         slot.inflight = promise
         return promise
     }
 
     // On settle, record the value's JSON byte size and evict LRU entries over the ceiling — but only
-    // for the two bounded server stores (shared + default context). No-op when unbounded.
+    // for the two bounded server stores (shared + default scope). No-op when unbounded.
     function recordAndEvict(slot: Slot<Args, T>, value: T): void {
         const store = boundedStore(slots())
         if (store === undefined) return
@@ -701,8 +701,8 @@ export function memo<Args, T>(
         // A PER-REQUEST slot's backing must not outlive the request: its `fill` subscribes to whatever the
         // body read, which is often a MODULE-level `state` that lives for the whole process. The slots of a
         // long-lived context (client singleton / server default) are long-lived too, so they register nothing.
-        if (getContext().requestScoped === true) {
-            onContextDispose(() => {
+        if (reactiveScope().requestScoped === true) {
+            onScopeDispose(() => {
                 merged.dispose()
                 fill.dispose()
             })
@@ -1196,7 +1196,7 @@ export function memo<Args, T>(
             // frame. A SERVER per-request (non-shared) slot inside a request scope has nothing durable to
             // broadcast an updater against → error. On the client (or a bare/default-context server call
             // with no request scope), an updater-form publish stays a local mutation.
-            if (!shared && getContext().requestScoped === true) {
+            if (!shared && reactiveScope().requestScoped === true) {
                 throw new Error(
                     'publish updater-form is not supported on a per-request memo; pass a value instead',
                 )

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getContext } from '../../shared/internal/context.ts'
+import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
 import { memo } from '../../shared/memo.ts'
 import { route } from '../../shared/route.ts'
 import { context } from '../context.ts'
@@ -73,12 +73,12 @@ describe('scope isolation', () => {
         await runInScope(a, () => {
             expect(context()).toBe(a.bag)
             expect(identity()).toBe(a.identity)
-            expect(getContext().slots).toBe(a.slots)
+            expect(reactiveScope().slots).toBe(a.slots)
         })
         await runInScope(b, () => {
             expect(context()).toBe(b.bag)
             expect(identity()).toBe(b.identity)
-            expect(getContext().slots).toBe(b.slots)
+            expect(reactiveScope().slots).toBe(b.slots)
         })
 
         expect(a.identity.id).not.toBe(b.identity.id)
@@ -107,10 +107,10 @@ describe('scope isolation', () => {
 })
 
 describe('M1 cache integration', () => {
-    test('getContext().slots is the same Map as scope.slots', async () => {
+    test('reactiveScope().slots is the same Map as scope.slots', async () => {
         const scope = makeScope()
         await runInScope(scope, () => {
-            expect(getContext().slots).toBe(scope.slots)
+            expect(reactiveScope().slots).toBe(scope.slots)
         })
     })
 

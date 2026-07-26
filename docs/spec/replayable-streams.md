@@ -97,13 +97,13 @@ distinction narrows to (a) the **wire** (method, args-in-URL vs args-in-body, CS
 
 - **Reads (`GET`/`HEAD`)** default `memo: { ttl: ∞ }` — coalesce concurrent identical calls within a
   scope, and cache the settled value (cross-request only under `shared: true`; a non-shared read's slot
-  lives in the per-request `getContext().cache` and dies with the request — `memo.ts:174`). Current
+  lives in the per-request `reactiveScope().slots` and dies with the request — `memo.ts:174`). Current
   behavior.
 - **Mutations (`POST`/`PUT`/`PATCH`/`DELETE`)** default **`memo: { ttl: 0 }`** — coalesce identical
   concurrent in-flight calls, retain nothing after settle (dispose once the live ref-count drains, §2).
 
 **What `ttl: 0` coalescing actually dedupes — scope matters, and it makes `ttl: 0` a safe default.** A
-non-shared mutation's slot lives in the **per-request** `getContext().cache` (`memo.ts:174`), so `ttl:
+non-shared mutation's slot lives in the **per-request** `reactiveScope().slots` (`memo.ts:174`), so `ttl:
 0` coalesces only identical concurrent calls **within one request scope** — which for a normal handler
 that calls its mutation once is inert, matching today's observable behavior. Two *separate* requests
 (two users, or one user's double-click — each is its own HTTP request and its own scope) do **not** share
@@ -657,7 +657,7 @@ none. Tests (`streamBudget.test.ts`, deterministic — manual source + budget, n
 - an abide source with the budget fired immediately still streams every item to `complete` (not cut off),
   and finalizes a mode-A handoff record (`done`, full `values`).
 - a non-abide source is cut off the moment the budget fires (generator returns, no `complete` frame).
-Refs: `ui/internal/streamScope.ts` (`forAwaitStream` race + lazy `budget()`), `shared/internal/context.ts`
+Refs: `ui/internal/streamScope.ts` (`forAwaitStream` race + lazy `budget()`), `shared/internal/reactiveScope.ts`
 (`StreamScope.budget`).
 
 **6. (Optional) Socket-core convergence** — extract the shared append-only buffer + subscriber set with

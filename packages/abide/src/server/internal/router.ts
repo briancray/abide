@@ -20,7 +20,6 @@
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
 import { health } from '../../shared/health.ts'
-import { getContext } from '../../shared/internal/context.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import {
@@ -31,6 +30,7 @@ import {
 } from '../../shared/internal/memoChannels.ts'
 import type { MuxDownstream } from '../../shared/internal/muxDownstream.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
@@ -681,7 +681,7 @@ async function dispatch(
                     )
                     const body = streamSoftNav(
                         shell,
-                        getContext(),
+                        reactiveScope(),
                         config,
                         url.pathname + url.search,
                         sharedLevels,
@@ -703,7 +703,7 @@ async function dispatch(
                 // actually bundled CSS (TODO #6/#20). Both URLs are immutable + content-addressed.
                 const build = await clientBuildFor(config)
                 const chunk = build.chunkByPattern.get(match.pattern)
-                const body = streamPageDocument(shell, getContext(), config, {
+                const body = streamPageDocument(shell, reactiveScope(), config, {
                     devReloadScript: config.devReloadScript,
                     clientHref: `/__abide/chunk/${build.entry}`,
                     cssHref:
@@ -1049,7 +1049,7 @@ export function createApp(config: AppConfig = {}): App {
                 }
                 await applyIdentityCookie(scope, response)
                 if (cors !== undefined) applyCors(cors, request, response)
-                const traced = getContext().traceparent
+                const traced = reactiveScope().traceparent
                 if (traced !== undefined) {
                     response.headers.set('traceparent', traced)
                     response.headers.set('traceresponse', traced)

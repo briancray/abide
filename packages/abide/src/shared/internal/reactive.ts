@@ -6,7 +6,7 @@
 // `state` is THE atom (ADR 0023) — `memo` and `channel` store their value in one. The name `signal` is
 // retired here so nothing in abide collides with the future TC39 `Signal`.
 
-import { getContext } from './context.ts'
+import { reactiveScope } from './reactiveScope.ts'
 
 // Node statuses. Ordered so higher = more stale; DISPOSED is terminal above DIRTY.
 const CLEAN = 0
@@ -318,7 +318,7 @@ export interface EffectScope {
 let openScopeCount = 0
 
 export function openEffectScope(): EffectScope {
-    const context = getContext()
+    const context = reactiveScope()
     if (context.effectScopes === undefined) context.effectScopes = []
     const stack = context.effectScopes
     const scope: EffectScope = { disposers: [], stack }
@@ -348,7 +348,7 @@ export function effect(fn: () => void | (() => void)): () => void {
     node.updateIfNecessary() // runs synchronously to establish subscriptions
     const dispose = () => disposeNode(node)
     if (openScopeCount > 0) {
-        const stack = getContext().effectScopes
+        const stack = reactiveScope().effectScopes
         const scope = stack === undefined ? undefined : stack[stack.length - 1]
         if (scope !== undefined) scope.disposers.push(dispose)
     }

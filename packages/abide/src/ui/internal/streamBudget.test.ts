@@ -8,7 +8,7 @@
 // (no wall-clock racing) so the branch is proven deterministically.
 
 import { expect, test } from 'bun:test'
-import { createContext, runInContext } from '../../shared/internal/context.ts'
+import { createReactiveScope, enterScope } from '../../shared/internal/reactiveScope.ts'
 import { openRenderState, type RenderStream, type StreamFrame } from './renderState.ts'
 import { type ForAwaitStreamConfig, forAwaitStream } from './streamScope.ts'
 
@@ -86,8 +86,8 @@ async function startStreamer(
     frames: AsyncGenerator<StreamFrame>
 }> {
     const { scope, fireBudget } = manualScope()
-    const ctx = createContext()
-    runInContext(ctx, () => {
+    const ctx = createReactiveScope()
+    enterScope(ctx, () => {
         openRenderState().stream = scope
     })
     const config: ForAwaitStreamConfig = {
@@ -101,7 +101,7 @@ async function startStreamer(
         config.args = async () => ({ n: 3 })
     }
     let shell = ''
-    await runInContext(ctx, async () => {
+    await enterScope(ctx, async () => {
         shell = await forAwaitStream(config)
     })
     expect(scope.streamers.length).toBe(1)

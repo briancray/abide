@@ -167,7 +167,7 @@ function genElement(
     if (!isVoid) {
         // Children keep their own awaited `bodyExpr` IIFE. (Inlining sync children into the parent
         // accumulator was tried and reverted: it silently broke streaming SSR — a later `{#for await}`
-        // stopped seeing the per-render stream scope (`getContext().stream`) and fell back to a fully
+        // stopped seeing the per-render stream scope (`reactiveScope().stream`) and fell back to a fully
         // buffered drain. The unit oracle can't catch that, docs e2e `bench.spec` does.)
         out += `  $out += await ${bodyExpr(analysis, children)}($scope);\n`
         out += `  $out += ${JSON.stringify(`</${name}>`)};\n`

@@ -94,7 +94,7 @@ migration needs the patch/claim protocol): the `{target?, html, reads}` envelope
 **Verified:** 2 integration tests (fast→inline no-slot, slow→out-of-order patch+move-script+ordering) +
 907 unit + tsc + lint + `abide check packages/docs` + docs e2e (92). Refs: `ui/internal/streamScope.ts`
 (new), `ui/internal/emitServer.ts`, `ui/internal/{ast,parse,templatePlan}.ts` (`inline`),
-`shared/internal/context.ts` (`StreamScope`), `server/internal/{pages,router}.ts`, `server/pages.test.ts`.
+`ui/internal/renderState.ts` (`RenderStream`; was `shared/internal/context.ts`’s `StreamScope` before ADR 0026), `server/internal/{pages,router}.ts`, `server/pages.test.ts`.
 
 ### PR3 — First-load progressive hydration (client CLAIMS streamed subtrees) ✅ LANDED
 Decision (a) **unwrap**: `runtime.awaitBlock`'s hydrate path calls `unwrapStreamSlot(parent, open)`
@@ -190,7 +190,7 @@ Works for any source (local generator / RPC / socket) — HTML is streamed, no v
 the existing `{#for await}` e2e green (client still re-iterates over the streamed list — a safe state)
 + 911 unit + tsc + lint + `abide check` + docs e2e (95). Refs: `ui/internal/streamScope.ts`
 (`forAwaitStream`/`DeferredStreamer`/generalized `drainPatches`/`Patch` union), `ui/internal/emitServer.ts`,
-`shared/internal/context.ts` (`streamBudget`/`streamers`/`StreamFrame`), `server/internal/pages.ts`.
+`ui/internal/renderState.ts` (`budget`/`streamers`/`StreamFrame`; moved out of `shared/internal/` by ADR 0026), `server/internal/pages.ts`.
 
 ### PR7 — Continuous handoff — client claim / attach → SUPERSEDED by `replayable-streams.md`
 The naive versions here were shown unsound (a "static claim" leaves item-body `onclick`/state dead) or

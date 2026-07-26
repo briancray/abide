@@ -9,7 +9,7 @@ import type { Middleware } from '../server/internal/middleware.ts'
 import type { HydrationSeed, RenderDocumentOptions } from '../server/internal/pages.ts'
 import { documentHead, documentTail, renderDocument, warmPages } from '../server/internal/pages.ts'
 import { encode } from '../shared/internal/codec.ts'
-import { onContextDispose } from '../shared/internal/context.ts'
+import { onScopeDispose } from '../shared/internal/reactiveScope.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { loadEmittedServer } from '../ui/internal/emit.ts'
 
@@ -312,7 +312,7 @@ function disposalProbe(): { count: () => number; register: () => void } {
     return {
         count: () => count,
         register: () => {
-            onContextDispose(() => {
+            onScopeDispose(() => {
                 count++
             })
         },
