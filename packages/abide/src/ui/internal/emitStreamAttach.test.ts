@@ -3,7 +3,7 @@
 // The headline invariant: an RPC/model `{#for await}` source is NEVER re-invoked on the client at
 // hydrate — the client ADOPTS the seeded transcript (mode A, completed) or RESUMES it over the
 // resumable HTTP replay (mode B, open) instead of re-running the source. These tests drive the real
-// SSR streaming path (install a StreamScope, render, `collectSeed`) then the emitted `hydrate` with a
+// SSR streaming path (install a render stream, render, `collectSeed`) then the emitted `hydrate` with a
 // SPIED source, and assert zero client-side source calls + a live/reactive item mount.
 
 import { describe, expect, test } from 'bun:test'
@@ -13,6 +13,7 @@ import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { memo } from '../../shared/memo.ts'
 import { resumeStreamSource } from './bootstrap.ts'
 import { loadEmitted } from './emit.ts'
+import { openRenderState } from './renderState.ts'
 import { createStreamScope, drainPatches } from './streamScope.ts'
 
 function tick(): Promise<void> {
@@ -25,7 +26,7 @@ function flush(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-// SSR a source through the streaming path: install a per-render StreamScope, render the shell, drain
+// SSR a source through the streaming path: install a per-render stream, render the shell, drain
 // any streamers (so a streamed list's handle is finalized), and collect the seed. Returns the painted
 // HTML + the seed (its `streams` section carries the §5 handoff records).
 async function ssrStream(
@@ -35,7 +36,9 @@ async function ssrStream(
     const emitted = await loadEmitted(source)
     const ctx = createContext()
     const streamScope = createStreamScope()
-    ctx.stream = streamScope
+    runInContext(ctx, () => {
+        openRenderState().stream = streamScope
+    })
     let html = ''
     await runInContext(ctx, async () => {
         html = await emitted.render(serverScope)

@@ -3,8 +3,8 @@ import { SCENARIOS } from '@abide/bench/scenarios'
 import { VANILLA_BASELINES } from '@abide/bench/vanillaBaselines'
 import { GET } from 'abide/server/GET'
 import { jsonl } from 'abide/server/jsonl'
-import { getContext } from 'abide/shared/internal/context'
 import { loadEmittedServer } from 'abide/ui/internal/emit'
+import { withoutRenderStream } from 'abide/ui/internal/renderState'
 
 // LIVE FRONTEND RENDER BENCH (server side).
 //
@@ -35,16 +35,10 @@ const BUDGET = { minTimeMs: 120, minIters: 20, warmupIters: 5 }
 // ambient stream scope for its duration: the emitted render then takes its no-scope path and builds the
 // pure buffered string — byte-identical, and exactly the hot path this bench means to measure. The scope
 // is per-request, so this only affects the render we own; it is restored before control returns to the
-// page's `{#for await}` drain.
+// page's `{#for await}` drain. `withoutRenderStream` is the framework's name for that operation
+// (ADR 0026) — this used to save/restore the internal `context.stream` field by hand.
 async function renderIsolated(render: () => Promise<unknown>): Promise<void> {
-    const context = getContext()
-    const savedStream = context.stream
-    context.stream = undefined
-    try {
-        await render()
-    } finally {
-        context.stream = savedStream
-    }
+    await withoutRenderStream(render)
 }
 
 export interface BenchRow {

@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { createContext, getContext, runInContext } from './context.ts'
+import {
+    createContext,
+    getContext,
+    onContextDispose,
+    releaseContext,
+    retainContext,
+    runInContext,
+} from './context.ts'
 
 describe('createContext', () => {
     test('returns a fresh context with an empty cache', () => {
@@ -155,5 +162,45 @@ describe('runInContext across async boundaries', () => {
 
         expect(a).toBe(1)
         expect(b).toBe(2)
+    })
+})
+
+// ── ADR 0026 — retain/release refcount ─────────────────────────────────────────────────────────────
+//
+// The mechanism that replaced `runInScope`'s `if (context.stream === undefined)` disposal branch. The
+// contract is narrow and worth pinning directly, because both ways of getting it wrong are silent:
+// releasing early tears down slots a streamed drain is still reading, and never releasing leaks every
+// request's effect subscriptions onto module-level state.
+describe('retain/release', () => {
+    test('the implicit single hold disposes on first release', () => {
+        let disposed = 0
+        const context = createContext()
+        runInContext(context, () => onContextDispose(() => disposed++))
+
+        releaseContext(context)
+        expect(disposed).toBe(1)
+    })
+
+    test('a retain defers disposal until the matching release', () => {
+        let disposed = 0
+        const context = createContext()
+        runInContext(context, () => onContextDispose(() => disposed++))
+
+        retainContext(context) // e.g. a streaming drain that outlives the handler
+        releaseContext(context) // runInScope finishing
+        expect(disposed).toBe(0) // still held — the drain is mid-flight
+
+        releaseContext(context) // drain finished
+        expect(disposed).toBe(1)
+    })
+
+    test('an extra release cannot dispose twice', () => {
+        let disposed = 0
+        const context = createContext()
+        runInContext(context, () => onContextDispose(() => disposed++))
+
+        releaseContext(context)
+        releaseContext(context)
+        expect(disposed).toBe(1)
     })
 })

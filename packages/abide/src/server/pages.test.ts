@@ -9,6 +9,7 @@ import type { Middleware } from '../server/internal/middleware.ts'
 import type { HydrationSeed, RenderDocumentOptions } from '../server/internal/pages.ts'
 import { documentHead, documentTail, renderDocument, warmPages } from '../server/internal/pages.ts'
 import { encode } from '../shared/internal/codec.ts'
+import { onContextDispose } from '../shared/internal/context.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { loadEmittedServer } from '../ui/internal/emit.ts'
 
@@ -293,6 +294,83 @@ test('a short-circuiting middleware blocks the SSR page', async () => {
     expect(response.status).toBe(403)
     const body = await response.text()
     expect(body).not.toContain('secret')
+
+    await app.stop()
+})
+
+// ── ADR 0026 D1 gate — disposal accounting ─────────────────────────────────────────────────────────
+//
+// A request's reactive context is disposed exactly ONCE, and for a STREAMED reply that happens after
+// the drain finishes, not when the handler returns — the response body is still being produced. Today
+// that is expressed by `runInScope` branching on `context.stream`; D1 replaces it with a retain/release
+// refcount so the primitive stops knowing what a stream is. These cases pin the OBSERVABLE contract so
+// the swap cannot change it: premature disposal would tear down the memo slots the drain is still
+// reading, and a missed release would leak every request's effect subscriptions onto module state.
+
+function disposalProbe(): { count: () => number; register: () => void } {
+    let count = 0
+    return {
+        count: () => count,
+        register: () => {
+            onContextDispose(() => {
+                count++
+            })
+        },
+    }
+}
+
+test('a BUFFERED page disposes its context exactly once, by the time the response resolves', async () => {
+    const probe = disposalProbe()
+    const app = await createTestApp({
+        routes: {
+            mark: GET(() => {
+                probe.register()
+                return 'ok'
+            }),
+        },
+        pages: { '/': "<script>import mark from 'abide-rpc:mark'</script><p>{await mark()}</p>" },
+    })
+
+    const body = await (await app.fetch('/')).text()
+    expect(stripAnchors(body)).toContain('<p>ok</p>')
+    expect(probe.count()).toBe(1)
+
+    await app.stop()
+})
+
+test('a STREAMED page defers disposal until the drain completes, then disposes exactly once', async () => {
+    const probe = disposalProbe()
+    const app = await createTestApp({
+        routes: {
+            slow: GET(async () => {
+                probe.register()
+                await new Promise((r) => setTimeout(r, 40))
+                return 'late'
+            }),
+        },
+        pages: {
+            '/': "<script>import slow from 'abide-rpc:slow'</script><main>{#await slow()}<i>pending</i>{:then v}<p>{v}</p>{/await}</main>",
+        },
+    })
+
+    const response = await app.fetch('/')
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+
+    // The shell has flushed (placeholder present) but the slow read has not landed, so the request's
+    // work is NOT finished and the context must still be alive.
+    const first = new TextDecoder().decode((await reader.read()).value)
+    expect(first).toContain('<template id="ab-p:0">')
+    expect(first).toContain('<i>pending</i>')
+    expect(probe.count()).toBe(0)
+
+    let rest = ''
+    for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        rest += new TextDecoder().decode(value)
+    }
+    expect(rest).toContain('late')
+    expect(probe.count()).toBe(1)
 
     await app.stop()
 })

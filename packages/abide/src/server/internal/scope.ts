@@ -12,12 +12,13 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import {
-    disposeContext,
     getContext,
     type MemoContext,
+    releaseContext,
     runInContext,
 } from '../../shared/internal/context.ts'
 import type { RouteInfo, RouteKind } from '../../shared/internal/routeInfo.ts'
+import { log } from '../../shared/log.ts'
 
 // `RouteInfo`/`RouteKind` moved to `shared/internal/` (ADR 0026) so `shared/route.ts` can name the type
 // it returns without importing up. Re-exported here because every server + ui importer already reaches
@@ -85,7 +86,6 @@ export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T 
     // without importing this module (ADR 0026).
     const context: MemoContext = {
         slots: scope.slots,
-        states: {},
         requestScoped: true,
         route: scope.route,
         traceparent: scope.traceparent,
@@ -104,16 +104,47 @@ export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T 
             return fn()
         }),
     )
-    // Tear the request's context-scoped reactive nodes down once its work is finished. A STREAMING page
-    // reply is not finished here — its drain runs off the response body — so that one disposes itself at
-    // the end of the drain (`renderDocumentStream`), which is also where the stream scope is cleared.
+    // Release the hold this call implicitly took. That tears the request's context-scoped reactive nodes
+    // down UNLESS someone else retained it — which a streamed page reply does, because its drain runs off
+    // the response body and is not finished here. `runInScope` no longer knows that streaming exists
+    // (ADR 0026); it knows only that it is done with the context.
     if (result instanceof Promise) {
         return result.finally(() => {
-            if (context.stream === undefined) disposeContext(context)
+            releaseContext(context)
+            watchForLeakedRetain(context)
         }) as Promise<T>
     }
-    if (context.stream === undefined) disposeContext(context)
+    releaseContext(context)
+    watchForLeakedRetain(context)
     return result
+}
+
+// How long a context may legitimately outlive its handler before an outstanding retain looks like a bug
+// rather than a slow stream. Generous: a long-poll `{#for await}` is bounded by its RPC timeout, not by
+// this.
+const RETAIN_WARN_MS = 60_000
+
+// Dev-only leak detector for the retain/release refcount (ADR 0026). An unmatched retain is SILENT
+// otherwise — the context is simply never disposed, so its per-request memo slots keep effect
+// subscriptions alive on module-level `state` and the process climbs. That is the exact failure
+// `disposers` exists to prevent, so it should be loud in dev rather than found in production memory.
+//
+// Unref'd: this timer must never hold the process open (it would break `abide run` and any short-lived
+// script). Armed only when the handler finished while someone else still held the context, which for a
+// non-streaming request is never.
+function watchForLeakedRetain(context: MemoContext): void {
+    if (Bun.env.NODE_ENV === 'production') return
+    if ((context.retains ?? 0) <= 0) return
+    const timer = setTimeout(() => {
+        if ((context.retains ?? 0) > 0) {
+            log.channel('abide:ssr').warn(
+                `a request context is still retained ${RETAIN_WARN_MS}ms after its handler returned ` +
+                    `(retains=${context.retains}) — a retainContext() without a matching releaseContext() ` +
+                    `leaks its effect subscriptions onto module state`,
+            )
+        }
+    }, RETAIN_WARN_MS)
+    timer.unref?.()
 }
 
 // The active request scope — but ONLY while the active reactive context is still the one it was

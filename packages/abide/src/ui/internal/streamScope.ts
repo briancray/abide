@@ -8,16 +8,16 @@
 // out-of-order `<template>` + move-script patch. Blocking forms (`{await fn()}`, `{#await p then v}`)
 // never call this — they await inline as before.
 
+import { markIterableDone } from '../../shared/internal/iterableDone.ts'
+import { log } from '../../shared/log.ts'
 import type {
     DeferredStreamer,
     DeferredSubtree,
+    RenderStream,
     StreamFrame,
     StreamHandleRecord,
-    StreamScope,
-} from '../../shared/internal/context.ts'
-import { getContext } from '../../shared/internal/context.ts'
-import { markIterableDone } from '../../shared/internal/iterableDone.ts'
-import { log } from '../../shared/log.ts'
+} from './renderState.ts'
+import { renderState } from './renderState.ts'
 
 // The race sentinel the deadline resolves to. Identity-compared, so it can never collide with a read
 // value (a read resolving to this exact symbol is impossible — it is module-private).
@@ -54,7 +54,7 @@ function timerPromise(ms: number, sentinel: symbol): Promise<symbol> {
 // which a still-running streamed list is cut off (client re-iterates) so an SSR `{#for await}` never
 // hangs. It applies ONLY to NON-abide sources (raw generators / `fetch().body`); an abide RPC source is
 // bounded by its OWN bilateral timeout and gets no global cap at all (replayable-streams.md §6).
-export function createStreamScope(): StreamScope {
+export function createStreamScope(): RenderStream {
     let budgetPromise: Promise<symbol> | undefined
     return {
         deadlinePassed: timerPromise(envMs('ABIDE_SSR_DEADLINE', 4), DEADLINE_PASSED),
@@ -102,7 +102,7 @@ async function settle(read: Promise<unknown>, config: AwaitStreamConfig): Promis
 // position — the resolved branch (fast) or a sentinel-bracketed fallback (deferred).
 export async function awaitStream(config: AwaitStreamConfig): Promise<string> {
     const read = Promise.resolve(config.read())
-    const scope = getContext().stream
+    const scope = renderState()?.stream
     // No streaming scope (a direct `render()` in tests / non-page SSR) → behave like the blocking
     // emitter: await fully, render inline. Keeps those outputs byte-identical to the pre-streaming path.
     if (scope === undefined) return await settle(read, config)
@@ -206,7 +206,7 @@ async function resolveArgs(config: ForAwaitStreamConfig): Promise<unknown> {
 
 // Remove a handoff record (an errored stream has no sound "adopt + surface error" handoff in the first
 // build — dropping the record makes the client re-run, matching today's behavior).
-function dropHandle(scope: StreamScope, handle: StreamHandleRecord): void {
+function dropHandle(scope: RenderStream, handle: StreamHandleRecord): void {
     const at = scope.streamHandles.indexOf(handle)
     if (at !== -1) scope.streamHandles.splice(at, 1)
 }
@@ -226,7 +226,7 @@ function dropHandle(scope: StreamScope, handle: StreamHandleRecord): void {
 // inline; no `data-ab-count`; no handle) and the client re-iterates it.
 export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<string> {
     const { source, next } = await toIterator(config.source())
-    const scope = getContext().stream
+    const scope = renderState()?.stream
 
     // No streaming scope (direct render / tests) → drain fully inline (byte-identical to today). No seed
     // is produced in this path, so there is nothing to hand off — the client re-iterates.
@@ -405,7 +405,7 @@ export function documentPatch(patch: Patch): string {
 // fast subtree/item flushes before a slow sibling). A subtree resolves once (a `fill`); a streamer
 // yields many `append`s then a `complete`. New deferreds/streamers registered mid-drain are picked up
 // each loop.
-export async function* drainPatches(scope: StreamScope): AsyncGenerator<Patch> {
+export async function* drainPatches(scope: RenderStream): AsyncGenerator<Patch> {
     interface Ready {
         key: string
         patch: Patch | null // null = this source produced nothing more (drop it from the race).

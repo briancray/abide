@@ -8,22 +8,18 @@
 // (no wall-clock racing) so the branch is proven deterministically.
 
 import { expect, test } from 'bun:test'
-import {
-    createContext,
-    runInContext,
-    type StreamFrame,
-    type StreamScope,
-} from '../../shared/internal/context.ts'
+import { createContext, runInContext } from '../../shared/internal/context.ts'
+import { openRenderState, type RenderStream, type StreamFrame } from './renderState.ts'
 import { type ForAwaitStreamConfig, forAwaitStream } from './streamScope.ts'
 
-// A StreamScope whose deadline has already passed (so `forAwaitStream` takes the streaming path
+// A RenderStream whose deadline has already passed (so `forAwaitStream` takes the streaming path
 // immediately) and whose budget is a promise the test resolves on demand.
-function manualScope(): { scope: StreamScope; fireBudget: () => void } {
+function manualScope(): { scope: RenderStream; fireBudget: () => void } {
     let fireBudget!: () => void
     const budgetPromise = new Promise<symbol>((resolve) => {
         fireBudget = () => resolve(Symbol('abide.ssr.budget'))
     })
-    const scope: StreamScope = {
+    const scope: RenderStream = {
         deadlinePassed: Promise.resolve(Symbol('abide.ssr.deadline')),
         budget: () => budgetPromise,
         deferred: [],
@@ -84,14 +80,16 @@ async function startStreamer(
     attachable: boolean,
     src: AsyncIterable<string>,
 ): Promise<{
-    scope: StreamScope
+    scope: RenderStream
     fireBudget: () => void
     shell: string
     frames: AsyncGenerator<StreamFrame>
 }> {
     const { scope, fireBudget } = manualScope()
     const ctx = createContext()
-    ctx.stream = scope
+    runInContext(ctx, () => {
+        openRenderState().stream = scope
+    })
     const config: ForAwaitStreamConfig = {
         source: () => src,
         renderItem: async (value) => `<li>${String(value)}</li>`,

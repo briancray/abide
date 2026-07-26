@@ -17,64 +17,6 @@ import { isBrowser } from './isBrowser.ts'
 import type { EffectScope } from './reactive.ts'
 import type { RouteInfo } from './routeInfo.ts'
 
-// The per-render streaming-SSR scratchpad (streaming-ssr-plan.md, PR2). Present only while an SSR page
-// render is streaming; a streaming-form read (`{#await}` block) that hasn't settled by the deadline
-// registers a deferred subtree here, which the document stream drains into out-of-order patches. The
-// scheduler LOGIC lives in `ui/internal/streamScope.ts`; this is just the per-request carrier (like
-// `states`), kept here so `getContext()` reaches it from the emitted `render` without new plumbing.
-export interface StreamScope {
-    // Resolves (to a sentinel) after the SSR deadline (default 4ms). A `{#await}` read (or the initial
-    // `{#for await}` items) that settles before it renders inline (warm/fast pages stay byte-identical);
-    // work still pending after it is deferred + streamed as a patch.
-    deadlinePassed: Promise<symbol>
-    // LAZILY-ARMED last-resort `{#for await}` streaming budget (default 5min, `ABIDE_SSR_STREAM_BUDGET`).
-    // Consulted ONLY by a NON-abide source (raw generator / `fetch().body`), which is cut off when it
-    // fires (client re-iterates) — this is why an unbounded SSR `{#for await}` never hangs the body. An
-    // abide RPC source is bounded by its own bilateral timeout and NEVER calls this (§6), so a page whose
-    // streaming sources are all abide RPCs never schedules the timer. Memoized: one timer per render, max.
-    budget: () => Promise<symbol>
-    deferred: DeferredSubtree[]
-    streamers: DeferredStreamer[]
-    // Handoff records for attachable `{#for await}` sources (replayable-streams.md §5). One per
-    // ATTACHABLE (known-RPC) streamed list, keyed by `listId` (its `<abide-list>` id). `collectSeed`
-    // drains these into the seed's `streams` section so the client ADOPTS the decoded transcript (mode
-    // A, `done`) or RESUMES over `?__abide_from=<count>` (mode B, open) instead of re-invoking the source. A
-    // streamer mutates its own record's `count`/`values`/`done` as it flushes; the record is final by
-    // the time `collectSeed` runs (after the drain). Non-attachable sources register nothing.
-    streamHandles: StreamHandleRecord[]
-    nextId: number
-}
-
-// A per-render, mutable record backing one attachable `{#for await}` handoff. `name` is the source's
-// RPC route name (null when the source is attachable-tagged but ran without one — defensive; a null
-// name is inline-adopt-only, never resumed). `values` is the append-only decoded transcript captured
-// during SSR; `count` = `values.length` at flush; `done` flips true when the source closed normally.
-export interface StreamHandleRecord {
-    listId: string
-    name: string | null
-    args: unknown
-    done: boolean
-    count: number
-    values: unknown[]
-}
-
-export interface DeferredSubtree {
-    id: number
-    // Render the resolved subtree HTML (then/catch branch + finally). `null` when the subtree's read
-    // errored with no `{:catch}` — the drain emits an empty patch that clears the placeholder (PR5).
-    render: () => Promise<{ html: string } | null>
-}
-
-// A streamed `{#for await}` (PR6): a multi-yield deferred that appends rendered items to its
-// `<abide-list>` container as the source yields them, then a `complete` frame iff the source ended
-// within the budget (the client then claims the items rather than re-iterating).
-export interface DeferredStreamer {
-    id: number
-    run: () => AsyncGenerator<StreamFrame>
-}
-
-export type StreamFrame = { op: 'append'; html: string } | { op: 'complete' }
-
 export interface MemoContext {
     slots: Map<string, unknown>
     // ADR 0026. The three per-request facts `shared/` needs, which used to be reached by importing UP
@@ -91,16 +33,6 @@ export interface MemoContext {
     // generated lazily by the first `trace()` call and cached here for the request's lifetime. The
     // router's `finalize` reads it back from here to stamp `traceparent`/`traceresponse`.
     traceparent?: string | undefined
-    // Per-request ordered recorder of `state(initial)` initial values, pushed in call order during
-    // SSR (§5 state-initializer record/replay). `collectSeed` drains it into the hydration seed so the
-    // client replays each cell's server-computed initial by ordinal instead of re-evaluating it. Grouped
-    // into per-component buckets, KEYED BY SITE PATH (the component's stable per-module site id, plus the
-    // item index inside a loop) rather than by mount order — so a component's `state()`-sequence divergence
-    // stays contained to its bucket, and its bucket cannot shift when a sibling region mounts
-    // asynchronously on one side only. Built by `pages.makeRecordingState`, replayed by `seededState`.
-    states: Record<string, unknown[]>
-    // Set while an SSR page render is streaming (undefined otherwise / on the client).
-    stream?: StreamScope | undefined
     // True for the whole lifetime of a page-render request (set by `renderPage`, never cleared — the
     // request context is discarded after). A socket's `[Symbol.asyncIterator]` consults this: inside a
     // render it resolves to snapshot-then-complete (client-sockets.md CS5), so iterating a live topic
@@ -115,10 +47,13 @@ export interface MemoContext {
     // a MODULE-level `state`, which outlives the request. Without teardown each request would leave a dead
     // observer on that module state forever: unbounded memory, and O(requests) work on every write.
     disposers?: (() => void)[] | undefined
+    // Outstanding holds on this context's lifetime (ADR 0026). Absent means the implicit single hold
+    // taken by whoever entered it. See `retainContext`/`releaseContext`.
+    retains?: number | undefined
 }
 
 export function createContext(): MemoContext {
-    return { slots: new Map<string, unknown>(), states: {} }
+    return { slots: new Map<string, unknown>() }
 }
 
 // Register teardown for a node whose lifetime is the ACTIVE context's. No-op bookkeeping on a long-lived
@@ -137,6 +72,26 @@ export function disposeContext(context: MemoContext): void {
     if (disposers === undefined) return
     context.disposers = undefined
     for (const dispose of disposers) dispose()
+}
+
+// RETAIN / RELEASE (ADR 0026). A request's context normally dies when its handler returns, but a
+// STREAMED reply is still producing bytes off the response body at that point, so its slots and effects
+// must outlive the handler.
+//
+// This used to be spelled `if (context.stream === undefined) disposeContext(context)` in `runInScope` —
+// the primitive's teardown branching on a RENDER field, which is the coupling ADR 0026 exists to
+// remove. A refcount says the same thing without naming streaming: the context lives while anyone still
+// needs it. Whoever extends its life takes a retain and releases in a `finally`.
+export function retainContext(context: MemoContext): void {
+    context.retains = (context.retains ?? 1) + 1
+}
+
+// Release one hold; dispose at zero. Idempotent past zero — a double release cannot re-run disposers,
+// because `disposeContext` clears the list.
+export function releaseContext(context: MemoContext): void {
+    const remaining = (context.retains ?? 1) - 1
+    context.retains = remaining
+    if (remaining <= 0) disposeContext(context)
 }
 
 // Client-side single module-level cache (one per tab/session). Lazily created.

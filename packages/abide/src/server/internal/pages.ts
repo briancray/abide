@@ -15,7 +15,12 @@
 
 import { encode } from '../../shared/internal/codec.ts'
 import type { MemoContext } from '../../shared/internal/context.ts'
-import { disposeContext, getContext, runInContext } from '../../shared/internal/context.ts'
+import {
+    getContext,
+    releaseContext,
+    retainContext,
+    runInContext,
+} from '../../shared/internal/context.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
@@ -24,6 +29,7 @@ import { state } from '../../shared/state.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
+import { closeRenderState, openRenderState, renderState } from '../../ui/internal/renderState.ts'
 import { escapeHtml, Raw } from '../../ui/internal/serverRuntime.ts'
 import { createStreamScope, documentPatch, drainPatches } from '../../ui/internal/streamScope.ts'
 import { cookies } from '../cookies.ts'
@@ -90,8 +96,16 @@ function pageImports(
 //                   stay ordinal in the component that contains them; only nested components branch).
 // The page + its layouts share the ROOT bucket (`""`) — `renderLevel` hands every level the same recorder
 // and `compose.childComponent` is not an adapter, so composition never opens one. See §5 / decision 10.
+// Inside a page render `openRenderState()` has always run, so an absent state is a framework bug, not
+// a condition to branch on — say so loudly rather than silently recording seeds into a dropped bucket.
+function renderStateOrThrow(): { states: Record<string, unknown[]> } {
+    const state = renderState()
+    if (state === undefined) throw new Error('renderState(): called outside a page render')
+    return state
+}
+
 function makeRecordingState(): StateFactory {
-    const buckets = getContext().states
+    const buckets = renderStateOrThrow().states
     function at(sitePath: string, bucketPath: string): StateFactory {
         let bucket = buckets[bucketPath]
         if (bucket === undefined) {
@@ -172,7 +186,8 @@ export async function renderPage(
     // socket iterated in a `{#for await}` resolves to snapshot-then-complete instead of a live topic
     // that would hang the render (client-sockets.md CS5). Never cleared — the context dies with the request.
     getContext().rendering = true
-    if (streaming) getContext().stream = createStreamScope()
+    const render = openRenderState()
+    if (streaming) render.stream = createStreamScope()
     const imports = pageImports(config.routes ?? {}, config.sockets ?? {})
     // The shared ROOT state recorder (bucket 0) for this render — page + layouts record into it; each
     // `<Component/>` adapter opens its own bucket via `.forComponent()` (per-component-localized seed).
@@ -308,7 +323,7 @@ export function collectSeed(config: AppConfig): HydrationSeed {
     // per-component buckets KEYED BY SITE PATH (`makeRecordingState`). Empty buckets are dropped: a key is
     // computed from the template, not from position, so an absent one costs nothing and simply replays as
     // "no seed for that site". Skip the whole field when nothing recorded any state.
-    const recorded = getContext().states
+    const recorded = renderStateOrThrow().states
     const seed: HydrationSeed = {}
     if (reads.length > 0) seed.reads = reads
     // Encode the whole bucket map once (lossy: an unsupported initial → `null` node, never a throw) so the
@@ -322,7 +337,7 @@ export function collectSeed(config: AppConfig): HydrationSeed {
     // Attachable `{#for await}` handoffs recorded during this render (§5). Values/args are JSON-safed
     // like state initials — a non-serializable entry drops to `null` rather than crashing the seed. The
     // decoded values leak nothing the SSR HTML did not already paint.
-    const streamRecords = getContext().stream?.streamHandles
+    const streamRecords = renderState()?.stream?.streamHandles
     if (streamRecords !== undefined && streamRecords.length > 0) {
         seed.streams = streamRecords.map((record) => ({
             listId: record.listId,
@@ -419,7 +434,10 @@ export function streamPageDocument(
     config: AppConfig,
     opts?: RenderDocumentOptions,
 ): ReadableStream<Uint8Array> {
-    const stream = ctx.stream
+    const stream = runInContext(ctx, () => renderState()?.stream)
+    // This reply is still producing bytes after `runInScope` returns, so hold the context open past it
+    // (ADR 0026). Released in the `finally` below, whichever way the drain ends.
+    retainContext(ctx)
     const encoder = new TextEncoder()
     const head = documentHead(opts)
     return new ReadableStream<Uint8Array>({
@@ -442,8 +460,8 @@ export function streamPageDocument(
             const seed = runInContext(ctx, () => collectSeed(config))
             enc(documentTail(seed, opts))
             controller.close()
-            ctx.stream = undefined // per-render scope — never leak deferreds onto a reused context.
-            disposeContext(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
+            runInContext(ctx, closeRenderState)
+            releaseContext(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
         },
     })
 }
@@ -464,7 +482,8 @@ export function streamSoftNav(
     urlPath: string,
     sharedLevels = 0,
 ): ReadableStream<Uint8Array> {
-    const stream = ctx.stream
+    const stream = runInContext(ctx, () => renderState()?.stream)
+    retainContext(ctx) // see streamPageDocument — the drain outlives runInScope (ADR 0026)
     const encoder = new TextEncoder()
     return new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -513,8 +532,8 @@ export function streamSoftNav(
                     // Raced with a client disconnect between the guard and here — nothing to do.
                 }
             }
-            ctx.stream = undefined
-            disposeContext(ctx)
+            runInContext(ctx, closeRenderState)
+            releaseContext(ctx)
         },
     })
 }
