@@ -10,6 +10,7 @@ import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
+import { indent } from './indent.ts'
 import { applyStatic, attrBuilder } from './serverRuntime.ts'
 import { splitParams } from './splitParams.ts'
 import type { AttrPlan, ServerChunk, TemplatePlan } from './templatePlan.ts'
@@ -435,11 +436,21 @@ export function emitServerModule(plan: TemplatePlan, analysis: ScopeAnalysis): s
         moduleImports +
         `\n` +
         emitModuleEnsure(analysis) +
+        // Mirror of the client `mount`: the setup preamble runs inside an open effect scope, so the
+        // `watch`es a `<script>` creates are OWNED — here by the request, which disposes them when its
+        // work is finished (a render is a component's whole life on the server). The scope closes before
+        // the chunk phase so only setup effects are in it, and the `finally` closes it on a throw too.
         `\nexport async function render($scope) {\n` +
-        emitInstanceSetup(analysis) +
-        `  let $out = "";\n` +
-        genChunks(analysis, plan.serverChunks) +
-        `  return $out;\n}\n` +
+        `  const $setup = $rt.openRenderScope();\n` +
+        `  try {\n` +
+        indent(emitInstanceSetup(analysis), 2) +
+        `    $rt.closeEffectScope($setup);\n` +
+        `    let $out = "";\n` +
+        indent(genChunks(analysis, plan.serverChunks), 2) +
+        `    return $out;\n` +
+        `  } finally {\n` +
+        `    $rt.closeEffectScope($setup);\n` +
+        `  }\n}\n` +
         // Default component adapter — emitted for EVERY module (pages import `{render}` and ignore it). A
         // consumer `<Card>` invokes this: build a child scope inheriting the caller's `$parent` scope,
         // install the caller's props as `props()` and children as `children`, then reuse this module's own

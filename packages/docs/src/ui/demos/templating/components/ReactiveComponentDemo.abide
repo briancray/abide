@@ -4,8 +4,8 @@
   import Pending from "./StatusPending.abide"
   import Done from "./StatusDone.abide"
 
-  // A cell can hold a COMPONENT. `<Current/>` where `Current` is a computed re-mounts whenever the
-  // computed picks a different component — a reactive/dynamic component, no special syntax.
+  // A cell can hold a COMPONENT. `<Current/>` where `Current` is a memo re-mounts whenever the
+  // memo picks a different component — a reactive/dynamic component, no special syntax.
   let done = state(false)
   const Current = memo(() => done ? Done : Pending)
 </script>

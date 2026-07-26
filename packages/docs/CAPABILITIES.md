@@ -8,22 +8,40 @@ Legend:
 - **RT** = runtime-only (`bun test` / `createTestApp` / CLI): no browser surface, or best asserted server-side.
 - **PW+RT** = has both a browser surface and a server/machine surface worth covering in each harness.
 
-Status of each item: `[ ]` = no dedicated docs page + test yet, `[x]` = covered.
+Status of each item: `[ ]` = no dedicated docs page + test yet, `[~]` = partially covered (the
+parenthetical says what is and isn't), `[x]` = covered.
 Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, agent).
 
 ---
 
 ## Coverage summary (verify phase)
 
-- **Total capabilities in this manifest: 135** (~91 browser-facing PW/PW+RT, ~44 runtime-only RT).
-- **Playwright suite: 22 spec files, 153 tests — ALL PASSING (serial).** They drive the real docs app
+- **Total capabilities in this manifest: 164** (119 browser-facing PW/PW+RT, 43 runtime-only RT, 2 `unit`).
+  By status: **124 `[x]`, 7 `[~]`, 33 `[ ]`** — i.e. ~75% covered, and the manifest deliberately lists
+  capabilities it does *not* yet cover, so a `[ ]` is a known gap rather than an oversight.
+- **Playwright suite: 25 spec files, 172 tests — ALL PASSING.** They drive the real docs app
   (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
   binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, raw SSR-emitter bytes,
   and machine surfaces fetched from the browser.
-  - `rpc` (20), `routing` (19), `bindings` (15), `platform` (14), `ssr-emit` (10), `control` (9),
-    `sockets` (8), `reactivity` (8), `caching-memos` (7), `cache` (6), `caching-global` (5),
-    `build-deploy` (5), `smoke` (4), `rpc-probes` (4), `bench` (4), `streaming` (3), `bench-client` (3),
-    `hydration` (3), `uploads` (2), `bench-server` (2), `styling` (1), `nav-perf` (1).
+  - `rpc` (22), `routing` (22), `bindings` (15), `platform` (14), `memo` (14), `ssr-emit` (10),
+    `control` (9), `sockets` (8), `memo-verbs` (6), `state` (5), `memo-global` (5), `build-deploy` (5),
+    `smoke` (4), `rpc-probes` (4), `bench` (4), `watch` (4), `streaming` (3), `hydration` (3),
+    `channel` (4), `bench-client` (3), `uploads` (2), `bench-server` (2), `sidebar` (2), `styling` (1),
+    `nav-perf` (1).
+  - Note: `bench.spec.ts`'s two re-run tests were flaky under CPU contention (they failed in a
+    full-suite run while passing 3/3 in isolation). Both asserted that two *live* microbenchmark
+    measurements DIFFER — but an identical iteration count is a legitimate outcome of measuring twice,
+    so the assertion, not the framework, was wrong. Both now go through `expectRerunRepaints`, which
+    tags the current row nodes and requires every one to vanish before the corpus streams back in —
+    proving the `{#for await}` clear-and-restream structurally. Strictly stronger than the old check:
+    it also catches a regression to in-place patching, which value inequality could not distinguish
+    from a genuine re-run.
+  - Note: `sidebar.spec.ts` pins a soft-nav bug the suite could not have caught before: the sidebar's
+    per-page card index was built from a `bind:element` attachment assumed to re-fire per navigation. It
+    does not — the root layout SURVIVES a cross-route soft-nav (only the diverging suffix is swapped) —
+    so after navigating, the sidebar kept showing the previous page's cards under the previous link. A
+    hard reload hid it. The rebuild now hangs off `route()`; both the stale-index and the no-cards-page
+    cases are asserted.
   - Note: `hydration.spec.ts` "soft-nav … keeps every demo tab correctly seeded" was flaky under CPU
     contention — diagnosed as a TEST race (it counted `.sample` after `toHaveURL`, which resolves on the
     history push BEFORE the soft-nav content swap, so it read the outgoing page's samples). Framework
@@ -37,7 +55,7 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
   single read/mutation) gets a "Run again" button (`replayable`). Coupled capabilities that share one
   reactive signal (e.g. the reactivity chain, the verb mutations, the socket) live in one cohesive
   component so the shared behaviour — which the e2e asserts — is preserved.
-- **Runtime (`bun test`) suite in `packages/abide`: 1072 tests — ALL PASSING.** Covers the RT-only
+- **Runtime (`bun test`) suite in `packages/abide`: 1274 tests across 91 files — ALL PASSING.** Covers the RT-only
   capabilities (agent, CLI/build, `createTestApp`, RPC `opts` internals, template compiler units) and
   the browser-facing runtime primitives at the unit level.
 - Every capability marked `[x]` below with a Playwright note has a browser test; RT-only items are
@@ -58,7 +76,12 @@ abide-check` (from `packages/docs`).
 The verify phase exercised the pages in a real browser and exposed three genuine framework issues in
 the `.abide` compiler (`packages/abide/src/ui/internal/`). None were fixed (framework code is
 out of scope); the docs pages use supported workarounds so the capability still demonstrates live,
-and each workaround is commented in-page:
+and each workaround is commented in-page.
+
+(A fourth — dependency position not surviving into `abide check` — was resolved by **ADR 0025**
+rather than patched: the source is now always a thunk, so the un-type-checkable form no longer
+exists and `abide check` is clean. A separate pre-existing defect found alongside it, destructured
+parameters not binding their names, WAS fixed — it emitted invalid JS.)
 
 1. **Bare two-way binds over a state var don't wire write-back.** `bind:value={x}` /
    `bind:checked={x}` / `bind:group={x}` / `bind:element={x}` where `x` is a `let x = state()` var
@@ -74,7 +97,6 @@ and each workaround is commented in-page:
    (`transformScript.ts:266` scans for the name but hits the `*` token), so `{#for await x of gen()}`
    throws `gen is not defined`. Workaround: assign a generator *expression* to a const
    (`const gen = async function* () { … }`).
-
 Also noticed: pre-encoded HTML entities in static template text (e.g. `&amp;`) are passed through raw
 on SSR but treated as literal text on the client, so they double-escape after hydration — author with
 literal characters (`&`) instead.
@@ -138,12 +160,14 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `error(status, message?, init?)` | RT | [x] (/rpc/responses, caught in browser) |
 | `error.typed(name, status, schema?)` + `fn.isError(e, name)` narrowing | PW+RT | [x] (/rpc/responses; narrowed by `.kind`) |
 | `redirect(url, status=302, init?)` | PW+RT | [x] (/rpc/responses) |
+| Baseline response headers stamped at one choke point (`nosniff`, `Referrer-Policy`; `Cache-Control: private, no-cache` + `Vary: Cookie` by default), each only when the response didn't set it | PW | [x] (/rpc/responses RawResponseDemo reads them off the untouched `Response` per helper) |
+| `raw`'s `init` reaches the underlying fetch (`{ redirect: "manual" }` → opaque response) | PW | [x] (/rpc/responses RawResponseDemo) |
 
 ## 3. Call surface (isomorphic RPC consumption)
 | Capability | Kind | Status |
 | --- | --- | --- |
 | `fn(args)` — smart read (cache + coalesce + reactive; SSR in-proc → browser fetch) | PW+RT | [x] (/rpc/reads) |
-| `fn.raw(args, init?)` — raw `Response`, full bypass (reads AND mutations) | PW+RT | [x] (/rpc/reads `rpcGreet.raw`; platform/lifecycle `lifecycleThrow.raw({})` on a POST) |
+| `fn.raw(args, init?)` — raw `Response`, full bypass (reads AND mutations) | PW+RT | [x] (/rpc/reads `rpcGreet.raw`; /rpc/responses RawResponseDemo across all four helpers; platform/lifecycle `lifecycleThrow.raw({})` on a POST) |
 | bare call on a streaming handler → replay-then-live `AsyncIterable<C>` (client proxy decodes jsonl/sse by content-type → same memo → stream slot) | PW+RT | [x] (/rpc/streaming; browser `{#for await x of rpc()}` for jsonl + sse, verified streaming + re-run) |
 | `fn.peek` — reactive probe | PW | [x] (/rpc/reads) |
 | Read URL args — two forms: canonical `?__abide_args=<json>` blob (browser proxy / test app / MCP) OR flat per-field query params (`?key=beta&n=5`, curl-friendly; coerced to each input-schema field type, raw passthrough when undeclared) | RT | [ ] (abide `decodeQueryArgs`/router unit tests; no docs-app demo) |
@@ -151,36 +175,47 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 ## 4. Cache verbs + probes (isomorphic — `abide/shared/*`)
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `fn.invalidate(args?)` — partial-object match; `()` = whole callable | PW+RT | [x] (/caching: counter + partial-match) |
-| `fn.refresh(args?)` | PW+RT | [x] (/caching: counter + refreshing) |
-| `fn.publish(args, value)` — broadcasts server→clients | PW+RT | [x] (/caching PublishDemo: value-form rewrites the slot, no re-fetch) |
-| `fn.publish(args, updater)` — local / shared-slot | PW+RT | [x] (/caching PublishDemo: updater-form derives next value locally) |
-| Partial-args match (superset slots) | RT | [x] (/caching: invalidate `{team:"red"}`) |
-| Global `invalidate({ tags })` | PW+RT | [x] (/caching TagsInvalidateDemo: `invalidate({tags:["docs"]})` drops both tagged shared reads) |
-| Global `refresh({ tags })` | PW+RT | [x] (/caching TagsRefreshDemo: `refresh({tags:["docs"]})` revalidates both in place) |
+| `fn.invalidate(args?)` — partial-object match; `()` = whole callable | PW+RT | [x] (/memo/verbs: counter + partial-match) |
+| `fn.refresh(args?)` | PW+RT | [x] (/memo/verbs: counter + refreshing) |
+| `fn.publish(args, value)` — broadcasts server→clients | PW+RT | [x] (/memo/verbs PublishDemo: value-form rewrites the slot, no re-fetch) |
+| `fn.publish(args, updater)` — local / shared-slot | PW+RT | [x] (/memo/verbs PublishDemo: updater-form derives next value locally) |
+| Partial-args match (superset slots) | RT | [x] (/memo/verbs: invalidate `{team:"red"}`) |
+| Global `invalidate({ tags })` | PW+RT | [x] (/memo/verbs TagsInvalidateDemo: `invalidate({tags:["docs"]})` drops both tagged shared reads) |
+| Global `refresh({ tags })` | PW+RT | [x] (/memo/verbs TagsRefreshDemo: `refresh({tags:["docs"]})` revalidates both in place) |
 | Probe `fn.pending` | PW | [x] (/rpc/probes ProbesDemo: slow read) |
 | Probe `fn.refreshing` | PW | [x] (/rpc/probes RefreshingDemo: refreshing flips yes over a retained value while pending stays no) |
 | Probe `fn.peek` | PW | [x] (/rpc/probes ProbesDemo: counter peek) |
 | Probe `fn.error` | PW | [x] (/rpc/probes FlakyDemo: flaky 400) |
 | Probe `fn.watch` | PW | [x] (/rpc/probes WatchMethodDemo: `watch(() => fn.peek(...), …)` tally) |
-| Global `pending({tags})` / `refreshing({tags})` | PW | [x] (/caching/global TagProbesDemo: the aggregate tag probe over slow tagged reads) |
+| Global `pending({tags})` / `refreshing({tags})` | PW | [x] (/memo/global TagProbesDemo: the aggregate tag probe over slow tagged reads) |
 | `done(iterable)` → boolean | PW+RT | [x] (/templating/async: `done-status` streaming→complete + restart) |
-| `online()` → reactive boolean | PW | [x] (/caching/global OnlineDemo + platform/observability: online-flag + offline-toggle reactivity) |
-| `reachable(host)` → await boolean | PW+RT | [x] (/caching/global ReachableDemo: `cacheReachable` RPC, self vs dead port) |
-| `abide/shared/memo` — the memoizer primitive | PW+RT | [x] (/caching/memo MemoReuseDemo: repeated reads reuse one slot; ServerStateDemo: an isomorphic server-owned `state`+`watch` graph driven by RPCs) |
-| `memo.*` probes on a bare `memo()` (`peek`/`pending`/`refreshing`/`error`/`watch`) | PW | [x] (/caching/probes Memo{Peek,Pending,Refreshing,Error,Watch}ProbeDemo) |
-| `cache: false` — opt a read/mutation OUT of the memo (every call runs) | PW+RT | [x] (/caching CacheFalseDemo: `cacheOff` climbs every call, `cacheOn` holds) |
+| `online()` → reactive boolean | PW | [x] (/memo/global OnlineDemo + platform/observability: online-flag + offline-toggle reactivity) |
+| `reachable(host)` → await boolean | PW+RT | [x] (/memo/global ReachableDemo: `cacheReachable` RPC, self vs dead port) |
+| `abide/shared/memo` — the memoizer primitive | PW+RT | [x] (/memo MemoAsyncDemo: argless + async is one reused slot, untracked until refresh; MemoArgsDemo: the argument is the key — a slot per key, invalidated independently; ServerStateDemo: an isomorphic server-owned `state`+`watch` graph driven by RPCs) |
+| `memo.*` probes on a bare `memo()` (`peek`/`pending`/`refreshing`/`error`/`watch`) | PW | [x] (/memo/probes Memo{Peek,Pending,Refreshing,Error,Watch}ProbeDemo) |
+| `cache: false` — opt a read/mutation OUT of the memo (every call runs) | PW+RT | [x] (/memo/verbs CacheFalseDemo: `cacheOff` climbs every call, `cacheOn` holds) |
 
 ## 5. Reactivity (isomorphic — `abide/shared/*` state/watch; UI — `abide/ui/*`)
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `state(initial, transform?)` — writable cell (isomorphic: `abide/shared/state`, server-usable) | PW+RT | [x] (/templating/reactivity; server-side in `src/shared/serverReactive.ts` → /caching/memo ServerStateDemo) |
-| `memo(fn)` — auto-tracked derived value (ADR 0024) | PW | [x] (/templating/reactivity; also server-side in ServerStateDemo) |
-| `memo(src, transform?).state()` — writable projection, provisional until re-fill | PW | [x] (/templating/reactivity) |
-| `state.shared(key, initial)` — cell shared by key (instances + tabs) | PW | [x] (/templating/reactivity: `SharedTally.abide` ×2, cross-instance + cross-tab) |
-| `memo(source, transform)` — tracks the source only, transform untracked | PW | [x] (/templating/reactivity MemoProjectionDemo) |
-| Dependency position — a bare cell/memo as `watch`/`memo`'s first argument stays the NODE (no thunk) | PW | [x] (/templating/reactivity WatchSourceDemo: `watch(count, handler)`) |
-| `watch(source, handler)` / `watch(thunk)` — isomorphic (`abide/shared/watch`; fires server-side too) | PW+RT | [x] (/templating/reactivity; server-side in ServerStateDemo's `serverReactive.ts`) |
+| `state(initial, transform?)` — writable cell (isomorphic: `abide/shared/state`, server-usable) | PW+RT | [x] (/state; server-side in `src/shared/serverReactive.ts` → /memo ServerStateDemo) |
+| `memo(fn)` — auto-tracked derived value (ADR 0024) | PW | [x] (/memo; also server-side in ServerStateDemo) |
+| `memo(src, transform?).state()` — writable projection, provisional until re-fill | PW | [x] (/memo) |
+| `state.shared(key, initial)` — cell shared by key (instances + tabs) | PW | [x] (/state: `SharedTally.abide` ×2, cross-instance + cross-tab) |
+| `memo(source, transform)` — tracks the source thunk only, transform untracked | PW | [x] (/memo MemoSourceDemo: the transform reads a second cell; bumping it recomputes nothing, the next source change picks it up) |
+| The source is always an argless THUNK (ADR 0025) — no dependency-position exception | PW | [x] (/watch WatchSourceDemo `watch(() => count, h)`; /memo MemoSourceDemo `memo(() => count, t)`; unit: analyzeScope "source position (ADR 0025 — thunk only)") |
+| Several declared inputs are what the thunk RETURNS — no API of their own | PW | [x] (/memo MemoSourcesDemo + /watch WatchSourcesDemo: `() => ({ a, b })`, one object into the transform/handler) |
+| A KEYED body may be SYNCHRONOUS — args are the whole dependency set (body untracked), and the read is the VALUE, not a promise | PW+RT | [x] (/memo MemoKeyedSyncDemo: one slot per key, value present in the SSR HTML; RT: keyed-sync + untracked + seeded-async cases in memo.test.ts) |
+| A destructured PARAMETER binds its names (shadows a same-named cell; the pattern is not expanded) | unit | [x] (analyzeScope "destructured parameter bindings" — object/array/nested/renamed/default; previously emitted invalid JS) |
+| `watch(source, handler)` / `watch(thunk)` — isomorphic (`abide/shared/watch`; fires server-side too) | PW+RT | [x] (/watch; server-side in ServerStateDemo's `serverReactive.ts`) |
+| A watch may RETURN a teardown — it runs before every re-run and once when the component goes away (the lifecycle hook, in place of `onMount`/`onDestroy`) | PW+RT | [x] (/watch WatchTeardownDemo + WatchTeardownTicker: the interval is cleared before the re-subscribe and again when the component unmounts; RT: watch.test.ts "the returned teardown" + ui/internal/watchTeardown.test.ts for the component-unmount half) |
+| A component OWNS its `<script>` effects — same ownership server-side, where a render is the component's whole life, so a finished request disposes them (no `onMount`/`onDestroy`, no is-this-the-browser branch) | RT | [x] (ui/internal/serverEffectScope.test.ts: a finished request runs its render's teardowns and detaches them from a module-level `state`; and two renders interleaved across an `await` in setup keep their own effects — the owner scope is per request, not per process) |
+| `channel<T>(opts?)` — the pub/sub primitive; `publish(msg)` + iterate to subscribe | PW | [x] (/channel ChannelPublishDemo: a browser-owned channel, no transport) |
+| `channel` `Args` names the ROOM — per-room hubs, lazily created (ADR 0023) | PW | [x] (/channel ChannelRoomsDemo: a publish to `{room:"blue"}` is invisible to a `{room:"red"}` subscriber) |
+| The publish KEY is a positional that vanishes when there is none — argless `memo`/void `channel` publish `fn.publish(value)`, keyed ones `fn.publish({ id }, value)` | PW+RT | [x] (/channel ChannelKeyLadderDemo: rung 1 publishes the message alone, rung 2 keys first and hits one slot; RT: channel.test.ts "void channel: direct iteration…" + "…the explicit (undefined, message) form", memo.test.ts "an argless memo publishes bare") |
+| `watch` carries the same vanishing key — `fn.watch(handler)` / `fn.watch({ id }, handler)` | RT | [x] (channel.test.ts "watch on a void channel takes the handler alone"; memo.test.ts "an argless memo watches with the handler alone") |
+| `channel` implements the shared read surface (`peek`/`chunks`/`invalidate`; status probes degenerate in-process) | PW | [x] (/channel ChannelProbesDemo) |
+| `channel` `tail` replay for a late joiner | PW | [x] (/channel: `tail: 5` / `tail: 3`, replayed on re-subscribe) |
 | `props<T>()` — reactive prop reader | PW | [~] (/templating/components — props read reactively by a child component; the degenerate page-level reader demo was removed) |
 | `html(str)` / `` html`…` `` — raw HTML | PW | [x] (/templating/bindings RawHtmlDemo) |
 | `navigate(target, { replace?, keepScroll? })` — target is a resolved href; compose with `url()` | PW | [x] (/pages/routing navigate() + navigate(url(...)) e2e) |
@@ -222,8 +257,9 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 ## 8. Async reads in templates
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `{fn(args)}` — non-blocking peek (undefined while pending, auto-streams SSR) | PW | [x] (/rpc/reads) |
-| `{await fn()}` — blocks SSR (value in initial HTML) / suspends client | PW | [x] (/rpc/reads) |
+| `{fn(args)}` — bare call = the awaitable coalesced load (`Promise<T>`); the runtime auto-awaits it, so it blocks SSR exactly like `{await fn()}` and differs only in TYPE (`.field` on it is a checker error) | PW | [ ] (prose at /rpc/reads; NO demo exercises the bare form — the page demos `.peek()`, `{await}`, `{#await}`, inline-then) |
+| `{fn.peek(args)}` — the non-blocking `T \| undefined` snapshot (undefined while pending; subscribes + kicks the load) | PW | [x] (/rpc/reads PeekReadDemo; call-surface row in §3) |
+| `{await fn()}` — blocks SSR (value in initial HTML) / fills on settle client-side | PW | [x] (/rpc/reads) |
 | `{#await}` — explicit pending/then/catch | PW | [x] (/rpc/reads + /rpc/responses) |
 | `fn.pending()` / `fn.error()` template probes | PW | [x] (/rpc/reads ProbesDemo: `probe-pending-flag` / `probe-error-flag`) |
 
@@ -279,7 +315,7 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | `trace()` → W3C traceparent | PW+RT | [x] (platform/observability renders trace() traceparent) |
 | `health()` → `Promise<{ reachable, version, ... }>` — isomorphic (server baseline in-proc; client `await`s a fetch of `/__abide/health`) | PW+RT | [x] (platform/observability + platform/lifecycle call `await health()`) |
 | `online()` → reactive boolean (browser connectivity) | PW | [x] (platform/observability, offline-toggle) |
-| `reachable(host)` → await boolean | PW+RT | [x] (/caching: `cacheReachable`) |
+| `reachable(host)` → await boolean | PW+RT | [x] (/memo/verbs: `cacheReachable`) |
 | `withJsonSchema(schema)` → `toJSONSchema()` | RT | [x] (`shared/withJsonSchema.test.ts`) |
 | `HttpError` / `ValidationErrorData` types | PW+RT | [ ] |
 | `render(path, params?, query?)` → HTML string | RT | [ ] (not implemented — needs ambient app-config + route matching; removed from CLAUDE.md) |
@@ -306,7 +342,7 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | Claude Code engine (engine tools OFF by default) | RT | [ ] |
 | Types: `NeutralMessage` / `AgentFrame` / `AgentSurface` / `AgentEngine` | RT | [ ] |
 
-## 15. CLI / build (RUNTIME-only — `bun test`, not Playwright)
+## 15. CLI / build (mostly RUNTIME — `bun test`; 3 rows are browser-facing, see bucket note)
 | Capability | Kind | Status |
 | --- | --- | --- |
 | `abide scaffold <name>` | RT | [ ] |
@@ -333,29 +369,36 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 
 | # | Bucket | Items | Playwright-relevant (PW / PW+RT) | Runtime-only (RT) |
 | --- | --- | --- | --- | --- |
-| 1 | RPC helpers — verbs | 13 | 6 | 7 |
+| 1 | RPC helpers — verbs | 16 | 9 | 7 |
 | 2 | Responses | 6 | 5 | 1 |
-| 3 | Call surface | 4 | 4 | 0 |
-| 4 | Cache verbs + probes | 19 | 14 | 5 |
-| 5 | Reactivity (shared state/watch + UI) | 9 | 9 | 0 |
+| 3 | Call surface | 5 | 4 | 1 |
+| 4 | Cache verbs + probes | 19 | 18 | 1 |
+| 5 | Reactivity (shared state/watch + UI) | 13 | 12 | 1 |
 | 6 | Template bindings / directives | 12 | 12 | 0 |
-| 7 | Control flow | 11 | 11 | 0 |
-| 8 | Async reads in templates | 4 | 4 | 0 |
-| 9 | Routing / navigation | 7 | 7 | 0 |
+| 7 | Control flow | 13 | 12 | 0 |
+| 8 | Async reads in templates | 5 | 5 | 0 |
+| 9 | Routing / navigation | 10 | 10 | 0 |
 | 10 | Sockets | 11 | 7 | 4 |
-| 11 | Auth / request scope | 6 | 3 | 3 |
-| 12 | Config / observability | 10 | 6 | 4 |
-| 13 | Machine surfaces | 7 | 3 | 4 |
-| 14 | Agent | 6 | 0 | 6 |
-| 15 | CLI / build | 9 | 0 | 9 |
+| 11 | Auth / request scope | 9 | 6 | 3 |
+| 12 | Config / observability | 10 | 5 | 5 |
+| 13 | Machine surfaces | 7 | 2 | 5 |
+| 14 | Agent | 6 | 1 | 5 |
+| 15 | CLI / build | 12 | 3 | 9 |
 | 16 | Testing harness | 1 | 0 | 1 |
-| | **Total** | **135** | **~91 browser-facing** | **~44 runtime-only** |
+| | **Total** | **155** | **111 browser-facing** | **43 runtime-only** |
+
+> Counts are mechanical (rows per `## n.` section; PW column = `PW` or `PW+RT`). PW + RT = 154; the
+> 155th is bucket 7's one `unit` row (`checkTemplate.test.ts`), a kind outside the PW/RT taxonomy.
+> **Re-derive after editing any table** — this summary silently drifted by 18 rows before.
 
 Notes:
 - Buckets 5–9 (reactivity, template bindings, control flow, async reads, routing) are the richest
   Playwright targets — they are the `.abide` template + client runtime, only observable in a real browser.
-- Buckets 14–16 + 15 (agent, CLI/build, test harness) are strictly runtime-only: cover with `bun test`
-  and `createTestApp`, never Playwright.
+- Buckets 14–16 (agent, CLI/build, test harness) are *predominantly* runtime-only — cover with
+  `bun test` / `createTestApp` by default. Not exclusively, though: bucket 14 has one PW+RT row (the
+  browser consuming an `AgentFrame` stream) and bucket 15 has three (`abide build` via
+  `e2e/build-deploy.spec`, the server microbench, the raw SSR-emitter byte fixture). An artefact of a
+  build or an agent stream that a browser observes is legitimately browser-facing.
 - Several capabilities (RPC verbs, responses, cache verbs, sockets, machine surfaces) are **PW+RT**:
   worth one browser test (the fetch/DOM path) *and* one runtime test (the raw HTTP / machine-surface path).
 - `abide/ui/html` and `abide/ui/props` are documented public UI imports but are provided through the

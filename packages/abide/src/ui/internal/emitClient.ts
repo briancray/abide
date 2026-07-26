@@ -17,6 +17,7 @@ import { reconstructImport, rewriteCellRefs } from './analyzeScope.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
+import { indent } from './indent.ts'
 import { splitParams } from './splitParams.ts'
 import type { AttrPlan, ClientPlan, DynamicSlot, TemplatePlan } from './templatePlan.ts'
 
@@ -98,10 +99,22 @@ class ClientEmitter {
             // wrapping the next level via its `{children()}` component slot), the enclosing `$rt.component`
             // passes its marker so the level inserts before it / bounds its claimRoots correctly. Top-level
             // callers (bootstrap, tests) omit it → null, the original whole-container behaviour.
+            // The setup preamble runs inside an OPEN EFFECT SCOPE, so every `watch` a `<script>` creates
+            // hands its disposer to this instance and dies with it — that is the whole unmount story
+            // (§C4.5: no `onDestroy`; a `watch` teardown IS the cleanup hook). The scope closes before
+            // `$mount0` so template wiring keeps owning its own effects through `$sink`, and the `finally`
+            // makes a throwing preamble close it too rather than strand it open across the next mount.
             `\nexport function mount($target, $scope, $anchor) {\n` +
-            emitInstanceSetup(this.analysis) +
-            indent(fns, 2) +
-            `  return $mount0($target, $anchor === undefined ? null : $anchor, $scope);\n` +
+            `  const $setup = $rt.openEffectScope();\n` +
+            `  try {\n` +
+            indent(emitInstanceSetup(this.analysis), 2) +
+            indent(fns, 4) +
+            `    $rt.closeEffectScope($setup);\n` +
+            `    const $dispose = $mount0($target, $anchor === undefined ? null : $anchor, $scope);\n` +
+            `    return () => { $dispose(); $rt.disposeEffectScope($setup); };\n` +
+            `  } finally {\n` +
+            `    $rt.closeEffectScope($setup);\n` +
+            `  }\n` +
             `}\n\n` +
             // Whole-page fallback (PR6, decision 5): if a mismatch escapes every block-level recovery (the
             // root structure itself is wrong), clear the container and mount fresh. Hydration NEVER throws to
@@ -620,14 +633,6 @@ class ClientEmitter {
         props += '  }\n'
         return props
     }
-}
-
-function indent(code: string, spaces: number): string {
-    const pad = ' '.repeat(spaces)
-    return code
-        .split('\n')
-        .map((line) => (line === '' ? line : pad + line))
-        .join('\n')
 }
 
 export function emitClientModule(plan: TemplatePlan, analysis: ScopeAnalysis): string {

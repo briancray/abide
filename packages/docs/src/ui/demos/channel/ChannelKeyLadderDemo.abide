@@ -1,0 +1,61 @@
+<script module>
+  import { channel } from "abide/shared/channel"
+
+  // Rung 1 of the ladder — a VOID channel. There is no room to name, so the message is the whole call.
+  const pings = channel<string>({ tail: 3 })
+</script>
+
+<script>
+  import { memo } from "abide/shared/memo"
+  import { state } from "abide/shared/state"
+
+  // ONE rule, climbed a rung at a time: the key is a POSITIONAL that only exists when the callable
+  // DECLARED an input. `publish` is where you see it, because it is the verb carrying a trailing payload
+  // — every other verb takes its key last or not at all (`peek()` vs `peek({ id })`), where an omittable
+  // `void` parameter already collapses the call. `watch(handler)` / `watch({ id }, handler)` is the one
+  // other trailing-payload verb and follows the same rule.
+  //
+  // Rung 2 is a MEMO on purpose: the rule belongs to the shared read surface, not to pub/sub. Only the
+  // SEMANTICS differ per cardinality — a channel's publish appends, a memo's replaces.
+  let sent = state(0)
+  const tagged = memo(({ id }: { id: string }) => `${id} (loaded)`)
+  let published = state(0)
+
+  function ping() {
+    sent = sent + 1
+    pings.publish(`ping ${sent}`) // rung 1 — no declared room: the message is the only argument
+  }
+
+  function publishTagged() {
+    published = published + 1
+    tagged.publish({ id: "b" }, `b (published ${published})`) // rung 2 — declared args: the key comes first
+  }
+</script>
+
+<div class="row">
+  <button data-testid="ladder-ping" onclick={ping}>1 · <code>pings.publish(msg)</code></button>
+  <button data-testid="ladder-publish" onclick={publishTagged}>2 · <code>tagged.publish({'{'} id {'}'}, value)</code></button>
+</div>
+
+<ol class="grid">
+  <li>
+    <code>channel&lt;string&gt;()</code> — nothing declared, so there is no key:
+    <code>publish(msg)</code>
+    <ul data-testid="ladder-log">
+      {#for await message of pings}
+        <li>{message}</li>
+      {/for}
+    </ul>
+  </li>
+  <li>
+    <code>memo(({'{'} id {'}'}) =&gt; …)</code> — args declared, so the args ARE the key:
+    <code>publish({'{'} id {'}'}, value)</code>
+    <br />a: <strong data-testid="ladder-a">{tagged({ id: "a" })}</strong> ·
+    b: <strong data-testid="ladder-b">{tagged({ id: "b" })}</strong>
+    <span class="muted">(publishing into <code>b</code> leaves <code>a</code> untouched — one slot per key)</span>
+  </li>
+  <li>
+    <code>channel&lt;T, {'{'} room {'}'}&gt;()</code> — a room declared, so the room is the key:
+    <code>publish({'{'} room {'}'}, msg)</code> — the rooms card above.
+  </li>
+</ol>

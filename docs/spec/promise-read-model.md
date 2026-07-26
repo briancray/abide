@@ -7,7 +7,10 @@
 > re-runs and re-awaits on invalidate. Seed-primed synchronous hydration claim is preserved via a
 > runtime-only settled-value hint on the promise (`shared/internal/settledRead.ts`) — the public type
 > stays a clean `Promise<T>`. Refs: `shared/memo.ts`, `server/internal/makeRpc.ts`,
-> `ui/internal/clientProxy.ts`, `server/internal/pages.ts`, `ui/internal/runtime.ts` (`claimAwait`).
+> `ui/internal/clientProxy.ts`, `server/internal/pages.ts`, `ui/internal/runtime.ts` (`claimAwait`,
+> `interpolate`, `awaitText` — the two text paths consume the hint to write the warm value
+> synchronously and to correct a diverged claim on the hydrate pass; see decision 9 in
+> `attach-hydration-design.md`).
 > Note: the runtime AUTO-AWAITS a thenable interpolation, so a bare `{fn()}` renders the awaited value
 > (better than the projected `[object Promise]`); `{fn().field}` is still a checker type error.
 >
@@ -52,9 +55,17 @@ the #11 checker (`Property 'field' does not exist on Promise<T>`) — bind throu
 | Template | Type | Semantics |
 | --- | --- | --- |
 | `{rpc.peek()}` / `{rpc.peek()?.foo}` | `T \| undefined` | non-blocking, reactive |
-| `{rpc()}` (bare) | `Promise<T>` → the awaited value | renders once settled; `.field` on it is a type error |
+| `{rpc()}` (bare) | `Promise<T>` → the awaited value | blocking (SSR value-in-HTML); `.field` on it is a type error |
 | `{await rpc()}` | `T` | blocking (SSR value-in-HTML) |
 | `{#await rpc()}{:then v}` | `v: T` | reactive await block |
+
+**Bare and `{await}` differ in TYPE, not in timing.** `emitServer` awaits every interpolation — the
+`interp` and `await` chunks emit the same `await (expr)` — so both land the value in the initial HTML,
+and on the client neither blocks (there is no blocking on the client: both write a text node and fill
+it when the read settles). The only runtime difference is the leaf anchor form. What the `await`
+keyword buys is the `T` binding: `{rpc().field}` is a checker error, `{await rpc()}` is not. Anyone
+reading this table for a "make bare non-blocking" change should note that would be a **semantic
+change to `emitServer`**, not a documentation clarification.
 
 The checker (`emitCheck`) needs **no** operand detection and **no** special types — every row falls
 out of `Promise<T>` + `.peek(): T | undefined` with the existing lowering. This is the most
@@ -107,8 +118,11 @@ When this model lands, the guards are simplified/renamed and the checker proves 
 
 - **`Read<T> = PromiseLike<T> & Partial<T>`** (thenable hybrid): zero doc churn, but an ugly
   intersection type, a runtime unwrap-to-peek on render, and `{#if rpc()}` is always-truthy (footgun).
-- **`Promise<T>` + auto-await/suspense on bare `{rpc()}`**: bare render becomes magic (suspends);
-  rejected in favor of the loud `[object Promise]` no-magic behavior.
+- **`Promise<T>` + client SUSPENSE on bare `{rpc()}`**: rejected — a bare render that suspends the
+  surrounding region is magic the author never asked for; `{#await}` is the explicit form for that.
+  NB: the auto-AWAIT half was NOT rejected and did ship (see the header) — the runtime unwraps a
+  thenable interpolation, so a bare `{rpc()}` renders the awaited value rather than the
+  `[object Promise]` this entry originally projected. Only suspension was turned down.
 - **Type-only `PromiseLike` fudge** (type says awaitable, runtime stays sync peek): unsound —
   `await fn()` would resolve to the peek, crashing typed-safe code.
 

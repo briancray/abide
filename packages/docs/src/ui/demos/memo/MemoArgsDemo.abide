@@ -1,0 +1,33 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // Same async body as the card above — the ONLY new thing is the argument. It is the cache key, so
+  // this is no longer one slot but one slot PER KEY: alpha and beta load independently, each reuses
+  // its own settled value, and invalidate({ key: "alpha" }) drops that slot alone.
+  let alphaReads = state(0)
+  let betaReads = state(0)
+  let runs = state(0)
+  const item = memo(async ({ key }: { key: string }) => {
+    runs++
+    const at = runs
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    return `${key} #${at}`
+  })
+  const alpha = memo(() => (alphaReads ? (item.peek({ key: "alpha" }) ?? "loading") : "idle"))
+  const beta = memo(() => (betaReads ? (item.peek({ key: "beta" }) ?? "loading") : "idle"))
+
+  function readAlpha() { alphaReads++; item({ key: "alpha" }) }
+  function readBeta() { betaReads++; item({ key: "beta" }) }
+</script>
+
+<ul class="grid">
+  <li>Handler runs (both keys): <strong data-testid="args-runs">{runs}</strong></li>
+  <li><code>alpha</code>: <strong data-testid="args-alpha">{alpha}</strong> <span class="muted">(<span data-testid="args-alpha-reads">{alphaReads}</span> reads)</span></li>
+  <li><code>beta</code>: <strong data-testid="args-beta">{beta}</strong> <span class="muted">(<span data-testid="args-beta-reads">{betaReads}</span> reads)</span></li>
+</ul>
+<div class="row">
+  <button data-testid="args-read-alpha" onclick={readAlpha}>Read alpha</button>
+  <button data-testid="args-read-beta" onclick={readBeta}>Read beta</button>
+  <button data-testid="args-invalidate-alpha" onclick={() => item.invalidate({ key: "alpha" })}>Invalidate alpha</button>
+</div>

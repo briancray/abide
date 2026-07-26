@@ -6,6 +6,8 @@
 // `state` is THE atom (ADR 0023) — `memo` and `channel` store their value in one. The name `signal` is
 // retired here so nothing in abide collides with the future TC39 `Signal`.
 
+import { getContext } from './context.ts'
+
 // Node statuses. Ordered so higher = more stale; DISPOSED is terminal above DIRTY.
 const CLEAN = 0
 const CHECK = 1
@@ -288,11 +290,67 @@ export function computed<T>(fn: () => T): Computed<T> {
     return read
 }
 
+// EFFECT OWNERSHIP. While a scope is open, every effect created inside it also hands its disposer to
+// that scope, so a caller can tear down a whole batch of effects it did not itself create. That is what
+// makes a component's `<script>` effects die with the component: `mount`/`render` open a scope around
+// the setup preamble, and disposing it kills what the scope collected. There is no `onDestroy` in the
+// template grammar (§C4.5) — a `watch` teardown IS the cleanup hook, and it only holds if something
+// reaches these effects when the component goes away (unmount on the client, end of request on the
+// server).
+//
+// The stack lives on the AMBIENT CONTEXT, not on a module global, because a server `render` is async
+// and requests interleave: a process-wide stack would attribute request A's effects to request B when
+// A resumes from an `await` in its setup. One stack per context — which on the server is one per
+// request (AsyncLocalStorage) and on the client is the single session context — makes cross-request
+// attribution unrepresentable. `openScopeCount` is only a fast path so an effect created while NO
+// scope is open anywhere (template wiring, memo internals — the hot path) skips the context lookup.
+//
+// A scope carries the stack it was pushed onto, so closing and disposing NEVER re-derive the ambient
+// context. Only attribution (which scope an effect joins) is ambient; a close that ran under a
+// different context than its open would otherwise silently no-op and strand the scope open.
+export interface EffectScope {
+    disposers: Array<() => void>
+    stack: EffectScope[]
+}
+
+let openScopeCount = 0
+
+export function openEffectScope(): EffectScope {
+    const context = getContext()
+    if (context.effectScopes === undefined) context.effectScopes = []
+    const stack = context.effectScopes
+    const scope: EffectScope = { disposers: [], stack }
+    stack.push(scope)
+    openScopeCount++
+    return scope
+}
+
+// Idempotent, and pops any scope opened INSIDE this one — a setup preamble that throws must not strand
+// an open scope that then swallows the next mount's effects.
+export function closeEffectScope(scope: EffectScope): void {
+    const stack = scope.stack
+    const index = stack.lastIndexOf(scope)
+    if (index === -1) return
+    openScopeCount -= stack.length - index
+    stack.length = index
+}
+
+export function disposeEffectScope(scope: EffectScope): void {
+    for (const dispose of scope.disposers) dispose()
+    scope.disposers.length = 0
+}
+
 // biome-ignore lint/suspicious/noConfusingVoidType: void (not undefined) lets callers pass a void-returning thunk (e.g. watch.ts) whose value is ignored; undefined would break assignability
 export function effect(fn: () => void | (() => void)): () => void {
     const node = new Reactive(fn, true, true)
     node.updateIfNecessary() // runs synchronously to establish subscriptions
-    return () => disposeNode(node)
+    const dispose = () => disposeNode(node)
+    if (openScopeCount > 0) {
+        const stack = getContext().effectScopes
+        const scope = stack === undefined ? undefined : stack[stack.length - 1]
+        if (scope !== undefined) scope.disposers.push(dispose)
+    }
+    return dispose
 }
 
 export function batch(fn: () => void): void {

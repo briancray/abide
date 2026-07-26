@@ -176,9 +176,9 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 | Import | Signature |
 | --- | --- |
 | `abide/shared/state` | `state(initial, transform?)`; `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). `state` keeps only what it OWNS (ADR 0024) — derivation is `memo`'s job. Scope-free reactive atom — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`memo`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `memo({ shared })`). |
-| `abide/shared/memo` | `memo(asyncFn, opts?)` — the memoizer. Its DEPENDENCIES ARE ITS DECLARED INPUTS (ADR 0024): declare an arg and they are the cache key (today's memo/RPC, unchanged); declare none and they are inferred from the body. An **argless + synchronous** body is AUTO-TRACKED and its bare call returns `T`, not `Promise<T>` (a promise-returning derived read would blank the SSR text and refill a microtask later). An argless **async** body is not tracked — half-tracked is worse than untracked — and re-fills on `refresh`/`invalidate` only. `memo(source, transform)` tracks the source ONLY, transform untracked (mirrors `watch(source, handler)`). Naming `ttl` or `shared` keeps the classic pulled path. A `(...args)`/`(args = {})` param is a LOUD construction-time error (it reports `fn.length` 0 and would silently reclassify an args-keyed memo). |
-| `abide/shared/channel` | `channel<T>(source?, opts?)` — the pub/sub primitive on a `ChannelHub`; `socket` is its authorization+transport shell. Isomorphic (`shared/`), so a browser bundle carries it. |
-| `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too. In a `.abide`, a bare cell/memo in the source slot stays the NODE (ADR 0024 §5), so `watch(count, handler)` is the form — no thunk needed. |
+| `abide/shared/memo` | `memo(asyncFn, opts?)` — the memoizer. Its DEPENDENCIES ARE ITS DECLARED INPUTS (ADR 0024): declare an arg and they are the cache key (today's memo/RPC, unchanged); declare none and they are inferred from the body. An **argless + synchronous** body is AUTO-TRACKED and its bare call returns `T`, not `Promise<T>` (a promise-returning derived read would blank the SSR text and refill a microtask later). An argless **async** body is not tracked — half-tracked is worse than untracked — and re-fills on `refresh`/`invalidate` only. A **keyed + synchronous** body returns `T` too (`memo(({a,b}) => a+b)`; `v({a:1,b:2})` is `3`, not a promise) — its args are the whole dependency set, so the body runs UNTRACKED, one slot per key. `memo(source, transform)` tracks the source ONLY, transform untracked (mirrors `watch(source, handler)`). The source is ALWAYS an argless THUNK (ADR 0025) — the tracked region is its body, so several inputs need no API of their own: they are what the thunk returns (`memo(() => ({ a, b }), ({ a, b }) => …)`), and the transform still takes ONE argument. Naming `ttl` or `shared` keeps the classic pulled path. A `(...args)`/`(args = {})` param is a LOUD construction-time error (it reports `fn.length` 0 and would silently reclassify an args-keyed memo). |
+| `abide/shared/channel` | `channel<T, Args = void>(opts?)` — the pub/sub primitive on a `ChannelHub`; `socket` is its authorization+transport shell. Isomorphic (`shared/`), so a browser bundle carries it. `Args` names the ROOM and is a positional that vanishes when void: `ch.publish(msg)` + iterate `ch` directly for the single topic, `ch.publish({ room }, msg)` + `ch({ room })` for a roomed one. |
+| `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too. The source is ALWAYS an argless THUNK (ADR 0025): `watch(() => count, handler)`. Several inputs are what the thunk returns — `watch(() => ({ a, b }), (next, previous) => …)`, where `next`/`previous` carry it. Either form may **return a teardown**, run before every re-run and once on disposal — which for a `watch` in a component `<script>` is that component going away: UNMOUNT on the client, END OF REQUEST on the server (a render is its whole life there). That is the lifecycle hook, in place of `onMount`/`onDestroy`, and it means an isomorphic effect can hold a real resource with no is-this-the-browser branch. The return is inspected, not required: a non-function return is ignored. |
 
 `state`/`watch` are the sync/owned face of the same atom that `memo` (async/loaded) is built on — and `channel` is its push/subscribe face. The two transport laws follow the pull/push split: `rpc = memo + transport`, `socket = channel + transport`. All three primitives are isomorphic: same import, same call, both sides.
 
@@ -187,11 +187,18 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 | --- | --- |
 | `fn.invalidate(args?)` — partial-object match; `()` = whole callable | `invalidate({ tags })` |
 | `fn.refresh(args?)` | `refresh({ tags })` |
-| `fn.publish(args, value \| updater)` | — |
+| `fn.publish(args, value \| updater)` — argless callable: `fn.publish(value)` | — |
 
 `publish`: value-form broadcasts server→clients (via the `(fn,args)` channel); updater-form is local
 (client) or runs on a durable **shared** slot (server) — server updater on a per-request slot errors.
-Partial args match every superset slot.
+Partial args match every superset slot. The KEY is a positional that **disappears when there is none**:
+an argless `memo`/void `channel` publishes `fn.publish(value)` with no `undefined` placeholder, a keyed
+one names its slot/room first (`fn.publish({ id }, value)`). `publish` and `fn.watch` are the two verbs
+with a TRAILING payload, so they are the two that spell the rule out (`fn.watch(handler)` vs
+`fn.watch({ id }, handler)`); every other verb takes its key last or not at all and already collapsed
+free from an omittable `void` parameter (`peek()` vs `peek({ id })`). This is the rule `socket.publish(msg)`
+has always followed, now declared once on the shared surface. (An RPC callable is the exception: a
+zero-arg RPC infers `Args = unknown`, not `void`, so `rpc.publish(args, value)` still takes the arg slot.)
 
 ### Probes
 | Method | Global (tags) |
@@ -257,7 +264,8 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `let x = state(v, transform?)` | writable cell |
 | `const d = memo(() => …)` | derived value — auto-tracked, lazy, never serialized. A bare `d` reads the VALUE (so does `d.length`); the memo's own surface is not reachable through the binding |
 | `let x = memo(…).state()` | the writable projection: `set` IS `publish`, so a local write holds until the next re-fill |
-| `memo(a, (v) => …)` / `watch(a, h)` | dependency position — a bare cell/memo here stays the NODE, not its value |
+| `memo(() => a, (v) => …)` / `watch(() => a, h)` | declared dependencies — the source is a THUNK and its body is the tracked region (ADR 0025); a bare cell there is an ordinary read, i.e. a type error |
+| `memo(() => ({a, b}), ({a, b}) => …)` | several declared inputs — just what the thunk returns |
 | `state.shared(key, initial)` | writable cell shared by key across instances + browser tabs |
 | `watch(source, handler)` / `watch(thunk)` | reaction / auto-tracked effect |
 | `const { name = fallback, ...rest } = props()` | reactive prop reader |
@@ -287,10 +295,10 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | Form | Meaning |
 | --- | --- |
 | `{fn.peek(args)}` | non-blocking `T \| undefined` snapshot; `undefined` while pending, reactive |
-| `{await fn(args)}` | the read — blocks SSR (value in initial HTML) / suspends on client; re-awaits on invalidate |
+| `{await fn(args)}` | the read — blocks SSR (value in initial HTML); on the client fills the text node when the read settles (nothing suspends); re-awaits on invalidate |
 | `{#await fn(args)}` | reactive await block: `{:then v}` (`v: T`) / `{:catch}` / `{:finally}` |
 | `{#await fn(args) then v}` | inline blocking form: `v: T` bound in the opener, body renders once settled (no pending branch) |
-| `{fn(args)}` (bare) | renders the awaited value (the runtime auto-awaits the read promise); `{fn(args).field}` is a type error — bind via `{#await}` or use `.peek()` |
+| `{fn(args)}` (bare) | renders the awaited value (the runtime auto-awaits the read promise), so it **blocks SSR exactly like `{await fn(args)}`** — the two differ in TYPE, not timing; `{fn(args).field}` is a type error — bind via `{#await}` or use `.peek()` |
 | `fn.pending()` / `fn.error()` | probes |
 
 ### Components / pages

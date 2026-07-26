@@ -4,8 +4,8 @@
 // room), so a caller programs to the same vocabulary a `memo` exposes.
 //
 // `Args` names the ROOM. `Args = void` is the single-topic default (today's socket — iterate the channel
-// directly, `publish(msg)`); a non-void `Args` gives per-room topics (`channel({room})`, `publish({room},
-// msg)`), each a distinct hub created lazily. This mirrors exactly how a `memo` keeps per-args slots and
+// directly, `publish(msg)` with NO room placeholder); a non-void `Args` gives per-room topics
+// (`channel({room})`, `publish({room}, msg)`), each a distinct hub created lazily. This mirrors exactly how a `memo` keeps per-args slots and
 // how `rpc.publish({id}, v)` already broadcasts on the per-args `@rpc:` channel — one mechanism.
 //
 // This core is LOCAL (in-process): no transport, no auth. `socket = channel + transport + per-args auth`
@@ -21,6 +21,7 @@ import { ChannelHub, type ChannelHubOptions } from './internal/channelHub.ts'
 import { canonicalKey } from './internal/codec.ts'
 import { getContext } from './internal/context.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
+import type { Room } from './internal/room.ts'
 
 export interface ChannelOptions {
     // Replay depth for a late joiner (per room). Default 0.
@@ -72,9 +73,13 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
     // Direct iteration (`for await m of channel`) subscribes the DEFAULT (void) room.
     ch[Symbol.asyncIterator] = (): AsyncIterator<T> => cursor(undefined as Args)
     ch.__hub = (args: Args): ChannelHub<T> => hubFor(args)
-    ch.publish = (args: Args, message: T): void => {
-        hubFor(args).publish(message)
-    }
+    // The MESSAGE is always last; the room is what precedes it. Void → `[message]`, roomed →
+    // `[room, message]` (an explicit `(undefined, message)` on a void channel unpacks identically).
+    ch.publish = ((...args: [...Room<Args>, message: T]): void => {
+        const message = args[args.length - 1] as T
+        const roomArgs = args.length > 1 ? (args[0] as Args) : (undefined as Args)
+        hubFor(roomArgs).publish(message)
+    }) as Channel<T, Args>['publish']
     ch.peek = (args: Args): T | undefined => hubFor(args).peekLatest()
     ch.chunks = (args: Args): T[] | undefined => hubFor(args).tailSnapshot()
     // Degenerate on this in-process core: a local topic is immediately live, never reconnecting/errored,
@@ -93,7 +98,12 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
         }
         hubs.get(canonicalKey(args))?.clearTail()
     }
-    ch.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) => {
+    // The HANDLER is last, the room precedes it — same unpacking as `publish`.
+    ch.watch = ((
+        ...watched: [...Room<Args>, handler: (value: T | undefined) => void]
+    ): (() => void) => {
+        const handler = watched[watched.length - 1] as (value: T | undefined) => void
+        const args = (watched.length > 1 ? watched[0] : undefined) as Args
         // Live-only (no replay): fire the handler per message on this room.
         const iterator = hubFor(args).subscribe(false)
         let disposed = false
@@ -112,6 +122,6 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
             disposed = true
             void iterator.return?.()
         }
-    }
+    }) as Channel<T, Args>['watch']
     return ch
 }

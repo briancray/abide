@@ -11,19 +11,34 @@ export interface Capability {
 // #demo capabilities
 export default GET((): Capability[] => [
     {
-        name: 'Isomorphic RPC',
+        name: 'state — the owned value',
+        path: '/state',
+        blurb: 'Isomorphic writable cell, callable, shareable by key across tabs.',
+    },
+    {
+        name: 'memo — the loaded value',
+        path: '/memo',
+        blurb: 'One memoizer for everything derived; deps are its declared inputs.',
+    },
+    {
+        name: 'channel — the pushed value',
+        path: '/channel',
+        blurb: 'In-process pub/sub keyed by room — what a socket puts on the wire.',
+    },
+    {
+        name: 'watch — the effect',
+        path: '/watch',
+        blurb: 'Change-only and auto-tracked effects; fires on the server too.',
+    },
+    {
+        name: 'rpc = memo + transport',
         path: '/rpc',
         blurb: 'One callable, same name, both sides — cached and coalesced.',
     },
     {
-        name: 'Cache verbs & probes',
-        path: '/caching',
-        blurb: 'invalidate / refresh, pending / peek / error / watch, reachable.',
-    },
-    {
-        name: 'Reactivity',
-        path: '/templating/reactivity',
-        blurb: 'state + memo derivation drive fine-grained DOM updates.',
+        name: 'Surface verbs & probes',
+        path: '/memo/verbs',
+        blurb: 'invalidate / refresh / publish, peek / pending / error / watch.',
     },
     {
         name: 'Bindings & directives',
@@ -41,7 +56,7 @@ export default GET((): Capability[] => [
         blurb: 'Pages are files; folders are URLs; [name] captures params.',
     },
     {
-        name: 'Sockets',
+        name: 'socket = channel + transport',
         path: '/sockets',
         blurb: 'Isomorphic AsyncIterable subscribe + publish over a WS mux.',
     },

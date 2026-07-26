@@ -14,14 +14,9 @@
 // is single-process (S3.3) — tail buffer + fanout live in one server process.
 
 import { type ChannelOptions, channel } from '../shared/channel.ts'
+import type { Room } from '../shared/internal/room.ts'
 import { DROP } from './DROP.ts'
 import type { Middleware } from './internal/middleware.ts'
-
-// The ROOM key positional: `[]` for a single-topic (void) socket, `[args]` for a roomed one. A void
-// socket keeps today's argless surface (`publish(msg)`, `peek()`); a roomed socket adds the room key
-// (`publish({room}, msg)`, `peek({room})`). Same primitive — `Args` names the room, exactly as it keys a
-// memo's slot and the `@rpc:` broadcast channel.
-type Room<Args> = [Args] extends [void] ? [] : [args: Args]
 
 // The client-publish policy (ADR 0023 §composition). `false`/omitted = clients may not publish; `true` =
 // unmediated; a FUNCTION = mediated — it TRANSFORMS the untrusted message (or returns `DROP` to suppress),

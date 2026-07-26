@@ -77,6 +77,30 @@ soft-nav envelope, replayed into client memos before mount). See `rpc-core.md` �
    repaint a node the server got right. Rejected: eager recompute-on-claim (churn always, flash when
    values don't match).
 
+   **Exception — correct a KNOWN divergence.** Suppression means "don't recompute to compare", not
+   "never write". Where pass 1 already holds the client value without recomputing anything, it is
+   compared against the claimed node and corrected on mismatch — writing only when the values
+   actually differ, so an agreeing value still costs zero DOM writes and the anti-churn property of
+   the rejected alternative is preserved. Two cases in `ui/internal/runtime.ts`:
+
+   - a **client-only value** (e.g. a `bind:element` node ref set during mount, before the effect
+     first ran) — the original exception, scalars only;
+   - a **settled read**: an already-resolved coalesced load carries a synchronous value hint
+     (`shared/internal/settledRead.ts`), so a thenable is no longer opaque on pass 1 either.
+     `interpolate` and `awaitText` consume it exactly like a scalar.
+
+   With **no** hint the read is genuinely pending on the client (the server painted, but this slot
+   was not seeded): pass 1 keeps the server text *and registers the fill*, so resolution converges
+   the node. It must not simply return — the effect re-run that would otherwise deliver the value
+   depends on a signal change a settle-on-arrival read may never emit, stranding the server value
+   indefinitely.
+
+   NB the settled write is **not** a paint fix. Blank-then-microtask-refill is never visible
+   (microtasks drain before the rendering steps); what it buys is a DOM correct *synchronously*
+   after mount, for anything reading without awaiting — measurement, soft-nav scroll/focus
+   restoration, tests. The only genuinely visible blank is a cold read waiting a network round trip,
+   which this does not change.
+
 10. **State-initializer record/replay is IN SCOPE for #2 (hard prerequisite).** Because 9 suppresses
     the initial write, a non-deterministic `state(Date.now())` would leave the server value in the
     DOM while the client cell holds a different value — a *silent jump* on the first update, which

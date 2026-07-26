@@ -1,0 +1,18 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // Several inputs need no API of their own: they are just what the thunk RETURNS. Every read inside it
+  // is tracked, and the transform still takes one argument — whatever the thunk produced. Returning an
+  // object keeps them named, so adding an input can never shift the others.
+  let width = state(3)
+  let height = state(4)
+  const area = memo(() => ({ width, height }), ({ width, height }) => width * height)
+</script>
+
+<div class="row">
+  <button data-testid="area-w" onclick={() => width++}>Wider</button>
+  <button data-testid="area-h" onclick={() => height++}>Taller</button>
+</div>
+<p>width: <strong data-testid="area-w-val">{width}</strong> · height: <strong data-testid="area-h-val">{height}</strong></p>
+<p>area: <strong data-testid="area">{area}</strong> <span class="muted">(recomputes when <em>either</em> declared input changes)</span></p>

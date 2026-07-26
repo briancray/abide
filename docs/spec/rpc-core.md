@@ -197,6 +197,21 @@ One imported callable means two things:
    effect is **re-runnable, not one-shot**: a subtree depending on multiple pending reads
    **re-checks on each dependency's arrival and flushes only when all are ready** (a
    fire-once-and-detach model would hang multi-dependency subtrees).
+5. **Teardown is what the run RETURNS.** A `watch`/effect run may return a cleanup function; it runs
+   before the next run and again when the effect is disposed (the return is inspected, not required —
+   a non-function return is ignored, so `(n) => list.push(n)` stays legal). A component **owns** the
+   effects its `<script>` setup creates: `mount`/`render` open an **effect scope** around the setup
+   preamble, so disposal is the component going away — unmount on the client, **end of request** on the
+   server, where a render is the whole life a component gets. That is why the template grammar needs no
+   `onMount`/`onDestroy` (compiler §C4.5), and why an isomorphic effect can take a real resource (a
+   timer, a subscription) with no is-this-the-browser branch. Server-side the sweep is the request's
+   existing one — the scope registers via `onContextDispose`, so it runs after the response for a
+   buffered reply and after the drain for a streaming one, the same points that dispose a per-request
+   `memo` computed. **The owner scope is per context, never per process**: a `<script>` may `await`, and
+   a process-global owner would hand one request's effects to another that opened a scope while it was
+   parked. Without this ownership every render leaves its `watch`es subscribed to whatever they read
+   that outlives the request (a module-level `state`), so one later write re-runs one dead effect per
+   request ever served.
 
 ## 8. Mutation → read consistency
 

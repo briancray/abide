@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, type Locator, type Page, test } from '@playwright/test'
 
 // The live frontend render bench (`/platform/bench`). A streaming `GET` compiles a fixed corpus of
 // `.abide` templates and times each one's SSR `render` path, `jsonl`-streaming one row per scenario —
@@ -27,6 +27,39 @@ const SCENARIOS = [
     'class-style-directives',
     'await-block',
 ]
+
+// Assert that `.refresh()` genuinely re-invoked the streaming source and repainted the table.
+//
+// This deliberately does NOT compare a measured value before/after. Both re-run tests used to assert
+// the `iters` cell CHANGED — but the bench measures live, and two runs of the same scenario producing
+// the identical iteration count is a legitimate outcome, not a failure. That made both tests flaky
+// under CPU contention (they failed in a full-suite run while passing 3/3 in isolation).
+//
+// What actually proves a re-invoke is structural: a `{#for await}` whose source is refreshed does
+// CLEAR-AND-RESTREAM, so every row node from the previous run is torn down and replaced. Tag the
+// current nodes, then require all of them to vanish before the full corpus streams back in. This is
+// strictly stronger than the old assertion — it would also catch a regression to in-place patching,
+// which the value comparison could not distinguish from a genuine re-run.
+async function expectRerunRepaints(
+    page: Page,
+    rows: Locator,
+    scenarioCount: number,
+): Promise<void> {
+    await page.evaluate(() => {
+        for (const row of document.querySelectorAll('[data-testid="bench-row"]'))
+            row.setAttribute('data-prev-run', '1')
+    })
+
+    await page.getByTestId('rerun').click()
+
+    // Teardown: not one node from the previous run survives the restream.
+    await expect(page.locator('[data-testid="bench-row"][data-prev-run]')).toHaveCount(0, {
+        timeout: 30_000,
+    })
+    // Refill: the fresh transcript streams the whole corpus back in, with no scenario failing.
+    await expect(rows).toHaveCount(scenarioCount, { timeout: 30_000 })
+    await expect(page.getByTestId('bench-table')).not.toContainText('bench failed')
+}
 
 test('bench table fills live from the streamed corpus and stays bounded', async ({ page }) => {
     // The RAW first-load HTML actually STREAMED the rows against a `<template id="ab-l:N">` sentinel with
@@ -64,17 +97,9 @@ test('re-run button re-invokes the corpus and repaints the table', async ({ page
     const rows = page.getByTestId('bench-row')
     await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
 
-    // Capture the first scenario's iteration count, then re-run: `.refresh()` re-invokes the streaming
-    // source, the table repaints from the fresh transcript, and it settles back to the full corpus. The
-    // iteration count is measured live so it will differ run-to-run — proving a genuine re-measure.
-    const iterCell = rows.filter({ hasText: 'static-text' }).getByTestId('bench-iters')
-    const before = (await iterCell.textContent())?.trim() ?? ''
-
-    await page.getByTestId('rerun').click()
-
-    await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
-    await expect(iterCell).not.toHaveText(before)
-    await expect(page.getByTestId('bench-table')).not.toContainText('bench failed')
+    // `.refresh()` re-invokes the streaming source: the table tears down and repaints from the fresh
+    // transcript, settling back to the full corpus.
+    await expectRerunRepaints(page, rows, SCENARIOS.length)
 })
 
 test('reached via soft-nav, the streamed list still adopts and re-runs (seedOverride path)', async ({
@@ -101,13 +126,8 @@ test('reached via soft-nav, the streamed list still adopts and re-runs (seedOver
     )
     expect(survived).toBe(true)
 
-    // The adopted stream is reactive after the soft-nav: re-run re-measures the corpus.
-    const iterCell = rows.filter({ hasText: 'static-text' }).getByTestId('bench-iters')
-    const before = (await iterCell.textContent())?.trim() ?? ''
-    await page.getByTestId('rerun').click()
-    await expect(rows).toHaveCount(SCENARIOS.length, { timeout: 30_000 })
-    await expect(iterCell).not.toHaveText(before)
-    await expect(page.getByTestId('bench-table')).not.toContainText('bench failed')
+    // The adopted stream is reactive after the soft-nav: re-run tears the list down and re-streams it.
+    await expectRerunRepaints(page, rows, SCENARIOS.length)
 })
 
 // The measurement gate. Read the raw `jsonl` transcript the page renders and assert the property the

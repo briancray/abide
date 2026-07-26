@@ -8,25 +8,29 @@
 
 <main class="page">
   <h1>Async control flow</h1>
-  <p class="lead">Async blocks render a branch per promise or stream state. <code>&#123;#await&#125;</code> resolves a value (blocking SSR so it lands in the initial HTML), and <code>&#123;#for await&#125;</code> appends each chunk of an async iterable as it arrives.</p>
+  <p class="lead">Two blocks, split by how many values arrive. <code>&#123;#await&#125;</code> is for <strong>one</strong> — it renders a branch per promise state. <code>&#123;#for await&#125;</code> is for <strong>many</strong> — it appends each chunk of an async iterable as it lands. Both work identically during SSR and after hydration.</p>
 
-  <p>This block awaits a real RPC during SSR, so the value is already in the initial HTML.</p>
+  <h2>One value</h2>
+  <p>The common case needs no branches at all: await something during SSR and the value is in the initial HTML. Nothing suspends, nothing flashes — the server did the waiting.</p>
   <Demo id="await-rpc" title="Server-resolved <code>&#123;#await&#125;</code> of an RPC" server="src/server/rpc/controlGreet.ts" client="src/ui/demos/templating/async/AwaitRpcDemo.abide" tab="server">
     <AwaitRpcDemo />
   </Demo>
 
-  <p>Each click reseeds a promise held in state; the block shows the pending branch, then the resolved or rejected branch. The <code>&#123;:finally&#125;</code> branch renders once the promise settles either way.</p>
-  <Demo id="await-promise" title="Interactive <code>&#123;#await&#125;</code> / <code>&#123;:then&#125;</code> / <code>&#123;:catch&#125;</code> / <code>&#123;:finally&#125;</code>" client="src/ui/demos/templating/async/AwaitPromiseDemo.abide" tab="client">
+  <p>In the browser a promise has states worth rendering, and the block gives you one branch each. Each click below reseeds a promise held in state: the pending branch shows, then the resolved or rejected one, and <code>&#123;:finally&#125;</code> renders once it settles either way.</p>
+  <Demo id="await-promise" title="<code>&#123;#await&#125;</code> / <code>&#123;:then&#125;</code> / <code>&#123;:catch&#125;</code> / <code>&#123;:finally&#125;</code>" client="src/ui/demos/templating/async/AwaitPromiseDemo.abide" tab="client">
     <AwaitPromiseDemo />
   </Demo>
 
-  <p>A <code>&#123;#for await&#125;</code> block iterates an async iterable, appending each chunk as it arrives. If the stream throws, the <code>&#123;:catch&#125;</code> branch is appended after the chunks already emitted.</p>
+  <h2>Many values</h2>
+  <p>Swap the promise for an async iterable and <code>&#123;#for await&#125;</code> appends each chunk as it arrives — no buffer to manage, no reader to drain. If the stream throws partway, <code>&#123;:catch&#125;</code> is appended <em>after</em> the chunks already emitted, so a failure never discards what arrived.</p>
   <Demo id="for-await" title="<code>&#123;#for await&#125;</code> + <code>&#123;:catch&#125;</code>" client="src/ui/demos/templating/async/ForAwaitDemo.abide" tab="client">
     <ForAwaitDemo />
   </Demo>
 
-  <p><code>done(stream)</code> is a reactive boolean: <code>false</code> while a <code>&#123;#for await&#125;</code> is still draining the SAME stream object, <code>true</code> once it finishes. Import it from <code>abide/shared/done</code> and call it right in the template.</p>
-  <Demo id="done" title="<code>done(stream)</code> — reactive stream-completion probe" client="src/ui/demos/templating/async/DoneDemo.abide" tab="client">
+  <p>A stream has one question a promise doesn't: is it finished? <code>done(stream)</code> answers it reactively — <code>false</code> while a <code>&#123;#for await&#125;</code> is still draining that same stream object, <code>true</code> once it closes. Import it from <code>abide/shared/done</code> and call it in the template.</p>
+  <Demo id="done" title="<code>done(stream)</code> — reactive completion probe" client="src/ui/demos/templating/async/DoneDemo.abide" tab="client">
     <DoneDemo />
   </Demo>
+
+  <p class="note">Streaming over a transport is the same two blocks with an RPC as the source — see <a href="/rpc/streaming">Streaming</a>, where <code>&#123;#for await&#125;</code> also picks up the SSR→client handoff and the chunk probes.</p>
 </main>

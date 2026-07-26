@@ -12,12 +12,19 @@
 // DOM during hydration.
 
 import { markIterableDone } from '../../shared/internal/iterableDone.ts'
-import { effect, state, untrack } from '../../shared/internal/reactive.ts'
+import {
+    closeEffectScope,
+    disposeEffectScope,
+    effect,
+    openEffectScope,
+    state,
+    untrack,
+} from '../../shared/internal/reactive.ts'
 import { peekSettled } from '../../shared/internal/settledRead.ts'
 import { log } from '../../shared/log.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
-export { effect, state, untrack }
+export { closeEffectScope, disposeEffectScope, effect, openEffectScope, state, untrack }
 
 // Teardown callback: disposes an effect and/or removes created nodes. Guarded so double-calls and
 // already-detached nodes are safe.
@@ -474,25 +481,46 @@ export function interpolate(
         return disposer
     }
 
+    // Correct the CLAIMED server text to `shown` on the hydrate pass: write only on divergence, and
+    // create the node when the server printed an empty value (nothing was claimed). Synchronous callers
+    // only — a deferred fill must not create, or a late resolution would resurrect a disposed node.
+    const showPrimed = (shown: string): void => {
+        if (textNode !== null) {
+            if (textNode.data !== shown) textNode.data = shown
+        } else if (shown !== '') {
+            textNode = document.createTextNode(shown)
+            insert(parent, textNode, anchor)
+        }
+    }
+
     const dispose = effect(() => {
         const value = read()
         if (primed) {
             // First pass under hydration: `read()` above subscribed us, so trust the server's output — no
             // DOM write (decision 9). EXCEPTION: a client-only value (e.g. a `bind:element` node ref set
             // during mount, before this effect first ran) can already diverge from what the server printed
-            // — detect that mismatch against the claimed node and correct it in place. A thenable keeps the
-            // server output (resolves on a later pass); a mountable is adopted from the server DOM.
+            // — detect that mismatch against the claimed node and correct it in place. A mountable is
+            // adopted from the server DOM.
             primed = false
             if (isMountable(value)) return adoptServerMount(value)
-            if (!isThenable(value)) {
-                const shown = text(value)
-                if (textNode !== null) {
-                    if (textNode.data !== shown) textNode.data = shown
-                } else if (shown !== '') {
-                    textNode = document.createTextNode(shown)
-                    insert(parent, textNode, anchor)
-                }
+            if (isThenable(value)) {
+                // A settled hint means we know the value synchronously, so a thenable is no longer opaque
+                // here: treat it exactly like a scalar and correct a diverged claim. With NO hint the read
+                // is genuinely pending on the client (the server painted, but this slot was not seeded) —
+                // keep the server text and register the fill so resolution CONVERGES the DOM rather than
+                // waiting on a signal re-run that a settle-on-arrival read may never emit.
+                const settled = peekSettled(value)
+                if (settled !== undefined) return showPrimed(text(settled.value))
+                const generation = ++thenGeneration
+                value.then((resolved) => {
+                    // Existing node only (see `showPrimed`). A server-empty claim has nothing to correct
+                    // until the bare-read SSR semantics change, which is when this needs revisiting.
+                    if (generation === thenGeneration && textNode !== null)
+                        textNode.data = text(resolved)
+                })
+                return
             }
+            showPrimed(text(value))
             return
         }
         if (isMountable(value)) {
@@ -507,6 +535,19 @@ export function interpolate(
             insert(parent, textNode, anchor)
         }
         if (isThenable(value)) {
+            // A warm / seed-primed coalesced load resolves synchronously and tags its promise with the
+            // value hint (`shared/internal/settledRead.ts`), so write it NOW rather than blanking and
+            // refilling on the microtask. NOT a paint fix — that refill is never visible, since
+            // microtasks drain before the rendering steps. What it buys is a DOM that is correct
+            // SYNCHRONOUSLY after mount, for anything that reads without awaiting (measurement,
+            // soft-nav scroll/focus restoration, tests), plus one less write and continuation.
+            // No hint → genuinely pending (a real network wait), clear and fill.
+            const settled = peekSettled(value)
+            if (settled !== undefined) {
+                thenGeneration++ // invalidate any in-flight promise
+                textNode.data = text(settled.value)
+                return
+            }
             const generation = ++thenGeneration
             textNode.data = ''
             value.then((resolved) => {
@@ -549,7 +590,22 @@ export function awaitText(
         const value = read()
         if (primed) {
             // Trust the server-resolved value already in `claimed` (decision 9); wire future updates only.
+            // EXCEPTION, mirroring `interpolate`: a settled hint gives us the value synchronously, so a
+            // divergence from what the server printed is correctable in place instead of silently kept.
             primed = false
+            const settledPrimed = peekSettled(value)
+            if (settledPrimed !== undefined) {
+                const shown = text(settledPrimed.value)
+                if (claimed.data !== shown) claimed.data = shown
+            }
+            return
+        }
+        // Warm / seed-primed reads carry the value hint — write without the clear-then-microtask-refill,
+        // so the DOM is correct synchronously after mount (see `interpolate`; not a paint fix).
+        const settled = peekSettled(value)
+        if (settled !== undefined) {
+            generation++ // invalidate any in-flight fill
+            claimed.data = text(settled.value)
             return
         }
         const current = ++generation

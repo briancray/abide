@@ -10,35 +10,38 @@
 
 <main class="page">
   <h1>Components</h1>
-  <p class="lead">An <strong>inline component</strong> is a TitleCase <code>&#123;#component&#125;</code> taking a single props object — a reusable builder invoked as a tag <code>&lt;Name/&gt;</code>, passable as a first-class value, and identical during SSR and after hydration. Its <code>&lt;slot/&gt;</code> is filled automatically from the markup between its tags.</p>
+  <p class="lead">An <strong>inline component</strong> is a TitleCase <code>&#123;#component&#125;</code> taking a single props object — a reusable builder invoked as a tag <code>&lt;Name/&gt;</code>. It starts as "name some markup and use it twice" and ends as a first-class value you can pass around; every step below is that same declaration, asked to do a little more.</p>
 
-  <p>The <code>&lt;Card&gt;</code> component receives a reactive <code>title</code> prop and renders whatever sits between its tags via its single <code>&lt;slot/&gt;</code>. Both the prop and the slot stay live after hydration.</p>
-  <Demo id="card" title="Component with <code>&lt;slot/&gt;</code>" client="src/ui/demos/templating/components/CardDemo.abide">
-    <CardDemo />
-  </Demo>
-
-  <p>A component is a reusable builder invoked as a tag for repeated markup.</p>
-  <Demo id="chip" title="Components — <code>&#123;#component&#125;</code> invoked as <code>&lt;Chip/&gt;</code>" client="src/ui/demos/templating/components/ChipDemo.abide">
+  <h2>Name some markup</h2>
+  <p>The whole idea: declare a builder, invoke it as a tag. TitleCase is what distinguishes it from an element — a lowercase name is a parse error, because lowercase is reserved for tags.</p>
+  <Demo id="chip" title="<code>&#123;#component&#125;</code> invoked as <code>&lt;Chip/&gt;</code>" client="src/ui/demos/templating/components/ChipDemo.abide">
     <ChipDemo />
   </Demo>
 
-  <p>Components are first-class values: pass one as a prop and let the receiver invoke it.</p>
-  <Demo id="render-prop" title="Component passed as a render-prop" client="src/ui/demos/templating/components/RenderPropDemo.abide">
-    <RenderPropDemo />
+  <h2>Give it content</h2>
+  <p>Props go in as attributes and stay reactive. Whatever sits <em>between</em> the tags fills the component's <code>&lt;slot/&gt;</code> — so a component can wrap content it knows nothing about. Both stay live after hydration.</p>
+  <Demo id="card" title="Props + <code>&lt;slot/&gt;</code>" client="src/ui/demos/templating/components/CardDemo.abide">
+    <CardDemo />
   </Demo>
 
-  <p>A component written <em>inside</em> another component's tags is passed to it as a same-named prop and invoked as a tag — named slots with no new syntax. The leftover markup fills the default <code>&lt;slot/&gt;</code>.</p>
+  <p>One slot covers most cases; when you need two, you don't learn new syntax. A component written <em>inside</em> another's tags is passed to it as a same-named prop and invoked as a tag — named slots, falling out of the rule already in play. The leftover markup still fills the default <code>&lt;slot/&gt;</code>.</p>
   <Demo id="named-slot" title="Nested <code>&#123;#component&#125;</code> as a named-slot prop" client="src/ui/demos/templating/components/NamedSlotDemo.abide">
     <NamedSlotDemo />
   </Demo>
 
-  <p>A cell or memo can hold a component. <code>&lt;Current/&gt;</code> where <code>Current</code> is a <code>memo</code> re-mounts whenever the derivation selects a different component — a reactive component.</p>
-  <Demo id="reactive-component" title="Reactive component — a cell-named tag <code>&lt;Current/&gt;</code>" client="src/ui/demos/templating/components/ReactiveComponentDemo.abide">
-    <ReactiveComponentDemo />
+  <p>And when the props are already an object, spread them: <code>&#123;...obj&#125;</code> hands every key to the child, exactly as writing each <code>name=&#123;value&#125;</code> by hand would. (On an element the same syntax sets attributes instead — see <a href="/templating/bindings#spread">bindings</a>.)</p>
+  <Demo id="spread-props" title="<code>&#123;...obj&#125;</code> — spread into a child's props" client="src/ui/demos/templating/components/SpreadPropsDemo.abide">
+    <SpreadPropsDemo />
   </Demo>
 
-  <p>Spreading an object into a component with <code>&#123;...obj&#125;</code> hands every key to the child as a prop — the same object-to-props flow as writing each <code>name=&#123;value&#125;</code> by hand. (Element spread sets attributes instead; see <a href="/templating/bindings#spread">bindings</a>.)</p>
-  <Demo id="spread-props" title="<code>&#123;...obj&#125;</code> — spread into a child component's props" client="src/ui/demos/templating/components/SpreadPropsDemo.abide">
-    <SpreadPropsDemo />
+  <h2>A component is a value</h2>
+  <p>Nothing so far required a component to be a special kind of thing, and it isn't one. Pass it as a prop and let the receiver decide where to invoke it — the render-prop pattern, with no API behind it.</p>
+  <Demo id="render-prop" title="A component passed as a render-prop" client="src/ui/demos/templating/components/RenderPropDemo.abide">
+    <RenderPropDemo />
+  </Demo>
+
+  <p>Because it is a value, a <a href="/state">cell</a> or <a href="/memo">memo</a> can hold one. <code>&lt;Current/&gt;</code> where <code>Current</code> is a memo re-mounts whenever the derivation picks a different component — a dynamic component, again with no new syntax.</p>
+  <Demo id="reactive-component" title="Reactive component — a memo-named tag <code>&lt;Current/&gt;</code>" client="src/ui/demos/templating/components/ReactiveComponentDemo.abide">
+    <ReactiveComponentDemo />
   </Demo>
 </main>

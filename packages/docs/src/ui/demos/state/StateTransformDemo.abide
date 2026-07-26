@@ -1,0 +1,15 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  // The optional second argument runs on EVERY write, so the cell can never hold a value the transform
+  // wouldn't produce. Here it clamps into 0..10 — hammering either button can't escape the range.
+  let count = state(0, (value) => Math.max(0, Math.min(10, value)))
+  function reset() { count = 0 }
+</script>
+
+<div class="row">
+  <button data-testid="t-dec" onclick={() => count--}>Decrement</button>
+  <button data-testid="t-inc" onclick={() => count++}>Increment</button>
+  <button data-testid="t-reset" onclick={reset}>Reset</button>
+</div>
+<p>Count: <strong data-testid="t-count">{count}</strong> <span class="muted">(every write clamps into 0..10)</span></p>

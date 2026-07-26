@@ -282,6 +282,17 @@ socket surface. `amend` retired as a name (incl. the `CacheFrame.verb` wire valu
 (`publish(args, cur => next)`) is a scalar-only overload; the server-per-request fail-closed guard
 (`cell.ts:728`) is preserved.
 
+**Amendment (the key is a `Room` positional).** `args` is written above as a fixed first parameter, which
+forced an argless `memo` / void `channel` to pass an `undefined` placeholder — while `socket.publish(msg)`,
+built on the same surface, did not. The key is now the same `Room<Args>` positional the socket already
+used, declared once on `ReactiveReadSurface`: `publish(...[...Room<Args>, next])`, i.e. `publish(value)`
+when nothing was declared and `publish({ id }, value)` when it was. `watch` — the only other verb with a
+trailing payload — takes it identically; every other verb's key is last-or-only, where an omittable `void`
+parameter already collapsed the call. A second, explicitly generic-safe `(args, next)` overload remains for
+code forwarding an *unresolved* `Args` (a deferred conditional tuple cannot be spread), and both arities
+unpack the same way, so the two-argument form stays correct at runtime. NOT extended to the `Rpc` surface:
+a zero-arg RPC infers `Args = unknown`, a different discriminator than `void`.
+
 ### 3. Egress keys on whether the surface has a transport
 
 - **Server-backed surface** (RPC/socket proxy — has an egress transport): client `publish` **must egress**

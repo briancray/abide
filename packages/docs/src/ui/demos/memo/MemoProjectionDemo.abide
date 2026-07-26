@@ -1,0 +1,18 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // memo(source, transform?).state() — a writable cell reseeded whenever its source changes. A local
+  // write holds until the next reseed. Here the draft seeds to count × 100; bumping it edits locally,
+  // and changing count reseeds and discards those edits.
+  let count = state(0)
+  let draft = memo(() => count, (value) => value * 100).state()
+  function bumpDraft() { draft = draft + 1 }
+</script>
+
+<div class="row">
+  <button data-testid="proj-inc" onclick={() => count++}>Increment count</button>
+  <button data-testid="bump-draft" onclick={bumpDraft}>Bump draft +1</button>
+</div>
+<p>Count: <strong data-testid="proj-count">{count}</strong></p>
+<p>Draft: <strong data-testid="draft">{draft}</strong> <span class="muted">(seeded to count × 100, editable until count changes)</span></p>

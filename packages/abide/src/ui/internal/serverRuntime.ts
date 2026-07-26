@@ -5,15 +5,39 @@
 // rules, class/style merge order, `Raw` handling) so emitted server output matches the interpreter
 // byte-for-byte (modulo comment anchors). This never ships to the browser.
 
+import {
+    getContext,
+    onContextDispose,
+    serverDefaultContext,
+} from '../../shared/internal/context.ts'
+import type { EffectScope } from '../../shared/internal/reactive.ts'
+import { disposeEffectScope, openEffectScope } from '../../shared/internal/reactive.ts'
+
 // Re-exported so the emitted server `{#for await}` can flip the `done(source)` probe when it fully
 // drains a stream within the SSR pass (see emitServer.ts).
 export { markIterableDone } from '../../shared/internal/iterableDone.ts'
-
+// The emitted `render` closes its setup scope with this (the client's `mount` uses the same call).
+export { closeEffectScope } from '../../shared/internal/reactive.ts'
 // Streaming SSR: the emitted streaming `{#await}` block calls `$rt.awaitStream(...)` (PR2 — deadline
 // race, render inline if fast, defer + placeholder if slow); the streaming `{#for await}` block calls
 // `$rt.forAwaitStream(...)` (PR6 — drain to the deadline inline, then append items into an `<abide-list>`
 // as they stream). See `streamScope.ts`.
 export { awaitStream, forAwaitStream } from './streamScope.ts'
+
+// A server render's setup effects belong to the REQUEST. `render` opens a scope around its `<script>`
+// preamble; this registers that scope's teardown on the ambient context, which `disposeContext` sweeps
+// when the request's work is finished — after the response for a buffered reply, after the drain for a
+// streaming one. Without it every SSR render would leave its `watch`es subscribed to whatever they read
+// that outlives the request (a module-level `state`), so a single later write would re-run one dead
+// effect per request ever served — the same unbounded edge `memo`'s auto-tracked fill disposes.
+// A render under the process-global DEFAULT context (a bare script, a build-time render — no request)
+// registers nothing: that context is never swept, so a growing disposer list would be its own leak.
+// Same rule `memo` applies to a per-request slot's backing.
+export function openRenderScope(): EffectScope {
+    const scope = openEffectScope()
+    if (getContext() !== serverDefaultContext()) onContextDispose(() => disposeEffectScope(scope))
+    return scope
+}
 
 // Marks already-safe HTML that must NOT be escaped (component calls / `{children()}` slot).
 export class Raw {

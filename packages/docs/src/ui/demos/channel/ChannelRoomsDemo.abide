@@ -1,0 +1,43 @@
+<script>
+  import { state } from "abide/shared/state"
+  import channelPost from "$server/rpc/channelPost"
+  import channelRead from "$server/rpc/channelRead"
+
+  // The channel itself lives in $shared/roomChannel and is owned by the SERVER; these two RPCs publish
+  // into a room and read one room's tail through the shared read surface. Publish into the room you are
+  // NOT watching and nothing shows up — per-room isolation is the primitive's own keying, not a socket
+  // feature layered on top.
+  let room = state("red")
+  let tail = state<{ at: number; text: string }[]>([])
+  let latest = state<string>("—")
+
+  async function read() {
+    const snap = await channelRead({ room })
+    tail = snap.tail
+    latest = snap.latest === null ? "—" : snap.latest.text
+  }
+
+  async function post(target: string) {
+    await channelPost({ room: target, text: `note → ${target}` })
+    await read()
+  }
+
+  async function switchRoom() {
+    room = room === "red" ? "blue" : "red"
+    await read()
+  }
+</script>
+
+<div class="row">
+  <button data-testid="room-post-red" onclick={() => post("red")}>Publish to red</button>
+  <button data-testid="room-post-blue" onclick={() => post("blue")}>Publish to blue</button>
+  <button data-testid="room-switch" onclick={switchRoom}>Watch the other room</button>
+  <button data-testid="room-read" onclick={read}>Read</button>
+</div>
+
+<p>Watching room: <strong data-testid="room-name">{room}</strong> · <code>peek()</code>: <strong data-testid="room-latest">{latest}</strong></p>
+<ul class="grid" data-testid="room-log">
+  {#for note of tail by note.at}
+    <li>#{note.at} — {note.text}</li>
+  {/for}
+</ul>

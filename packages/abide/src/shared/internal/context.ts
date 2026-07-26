@@ -12,6 +12,9 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { isBrowser } from './isBrowser.ts'
+// Type-only (erased): the effect-owner scope reactive.ts pushes onto this context. Runtime direction
+// stays one-way — reactive.ts imports `getContext` from here, never the reverse.
+import type { EffectScope } from './reactive.ts'
 
 // The per-render streaming-SSR scratchpad (streaming-ssr-plan.md, PR2). Present only while an SSR page
 // render is streaming; a streaming-form read (`{#await}` block) that hasn't settled by the deadline
@@ -86,6 +89,10 @@ export interface MemoContext {
     // render it resolves to snapshot-then-complete (client-sockets.md CS5), so iterating a live topic
     // can't hang the render; an RPC/socket-transport/background request leaves it false → live subscribe.
     rendering?: boolean | undefined
+    // Open EFFECT-OWNER scopes (reactive.ts), innermost last. Per-context rather than per-process
+    // because a server `render` is async: with one process-wide stack, a setup preamble that awaits
+    // would resume with another request's scope on top and hand it that request's effects.
+    effectScopes?: EffectScope[] | undefined
     // Teardown for reactive nodes whose lifetime is this context's. A per-request slot that takes `memo`'s
     // AUTO-TRACKED fill path (ADR 0024 §2) owns a `computed` subscribed to whatever the body reads — often
     // a MODULE-level `state`, which outlives the request. Without teardown each request would leave a dead

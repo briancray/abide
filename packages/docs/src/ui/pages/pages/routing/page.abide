@@ -12,26 +12,32 @@
   <h1>File-based routing &amp; navigation</h1>
   <p class="lead">Pages are files: a folder chain is the URL, and a <code>[slug]</code> segment captures into <code>route().params</code>. Every page here lives under <code>src/ui/pages/pages/routing/</code> — this hub is <code>pages/routing/page.abide</code> served at <code>/pages/routing</code>. Links and <code>navigate()</code> perform soft client-side navigation: the content swaps in place with no full document reload.</p>
 
+  <h2>Where am I?</h2>
+  <p>Start with the readout. <code>route()</code> is isomorphic and reactive — name, kind, params, URL, and whether a navigation is in flight — so every claim on the rest of this page is checkable against this card as you click around.</p>
+
   <Demo id="route-readout" title="<code>route()</code> — Current route" client="src/ui/demos/pages/routing/RouteReadoutDemo.abide" tab="client">
     <RouteReadoutDemo />
   </Demo>
 
-  <p>Each href is built with <code>url("/pages/routing/[slug]", &#123; slug &#125;)</code>, filling the dynamic segment. The one file <code>pages/routing/[slug]/page.abide</code> serves them all.</p>
+  <h2>Segments that capture</h2>
+  <p>A folder is a URL; a bracketed folder is a <em>parameter</em>. Each href below is built with <code>url("/pages/routing/[slug]", &#123; slug &#125;)</code>, filling the dynamic segment. The one file <code>pages/routing/[slug]/page.abide</code> serves them all.</p>
   <Demo id="slug-links" title="Param routes — <code>[slug]</code>" client="src/ui/demos/pages/routing/SlugLinksDemo.abide" tab="client">
     <SlugLinksDemo />
   </Demo>
 
-  <p><code>url("/pages/routing/[slug]", &#123; slug &#125;, &#123; ref, page &#125;)</code> also appends a query string; with no <code>[name]</code> segments it collapses to <code>url(path, query)</code>. The built href flows straight into an <code>&lt;a href&gt;</code>.</p>
+  <p>The same builder appends a query string — the part of a URL that isn't a route. <code>url("/pages/routing/[slug]", &#123; slug &#125;, &#123; ref, page &#125;)</code>; with no <code>[name]</code> segments it collapses to <code>url(path, query)</code>. The built href flows straight into an <code>&lt;a href&gt;</code>.</p>
   <Demo id="query-links" title="<code>url(…)</code> — params &amp; query" client="src/ui/demos/pages/routing/QueryLinksDemo.abide" tab="client">
     <QueryLinksDemo />
   </Demo>
 
-  <p>Beyond a required <code>[name]</code>, a segment can be <strong>optional</strong> — <code>[[page]]</code> matches zero or one segment (absent → the param is omitted) — or a <strong>rest</strong> catch-all — <code>[...path]</code> captures the remaining segments as a <code>/</code>-joined string. Match precedence is most-specific-wins: <code>literal &gt; required &gt; optional &gt; rest</code>. <code>url()</code> mirrors this — it drops an absent optional segment and expands a rest param.</p>
+  <p>Two more segment kinds cover the rest of the shapes. Beyond a required <code>[name]</code>, a segment can be <strong>optional</strong> — <code>[[page]]</code> matches zero or one segment (absent → the param is omitted) — or a <strong>rest</strong> catch-all — <code>[...path]</code> captures the remaining segments as a <code>/</code>-joined string. Match precedence is most-specific-wins: <code>literal &gt; required &gt; optional &gt; rest</code>. <code>url()</code> mirrors this — it drops an absent optional segment and expands a rest param.</p>
   <Demo id="optional-rest-links" title="Optional &amp; rest segments — <code>[[page]]</code> / <code>[...path]</code>" client="src/ui/demos/pages/routing/OptionalRestLinksDemo.abide" tab="client">
     <OptionalRestLinksDemo />
   </Demo>
 
-  <p>A sibling static route. Exact routes win over the <code>[slug]</code> param route, so this resolves to the dedicated page. <code>navigate</code> takes an already-resolved href, so compose it with <code>url()</code> — <code>navigate(url(&hellip;))</code> — for a params + query target. <code>navigate(target, options?)</code> also takes an optional second argument: <code>&#123; replace &#125;</code> swaps the current history entry instead of pushing a new one (so Back skips it), and <code>&#123; keepScroll &#125;</code> holds the scroll position instead of jumping to the top.</p>
+  <h2>Moving without a link</h2>
+  <p>Everything above was an <code>&lt;a href&gt;</code>. <code>navigate()</code> is the same navigation from code — and the demo also shows a sibling static route, which wins over the <code>[slug]</code> param route by the precedence just described.</p>
+  <p><code>navigate</code> takes an already-resolved href, so compose it with <code>url()</code> — <code>navigate(url(&hellip;))</code> — for a params + query target. <code>navigate(target, options?)</code> also takes an optional second argument: <code>&#123; replace &#125;</code> swaps the current history entry instead of pushing a new one (so Back skips it), and <code>&#123; keepScroll &#125;</code> holds the scroll position instead of jumping to the top.</p>
   <Demo id="navigate" title="Programmatic navigation — <code>navigate()</code>" client="src/ui/demos/pages/routing/NavigateDemo.abide" tab="client">
     <NavigateDemo />
   </Demo>

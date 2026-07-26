@@ -9,7 +9,7 @@ import { watch } from 'abide/shared/watch'
 // NOTE the explicit `total()` / `total.set(...)` calls below. In a `.abide` `<script>` you write bare
 // `total` / `total = x` and the compiler rewrites those to `total()` / `total.set(x)` for you.
 // There is no compiler here — plain `.ts` — so you call the `State` surface yourself:
-//   total()         // tracked read (subscribes the surrounding computed/watch)
+//   total()         // tracked read (subscribes the surrounding memo/watch)
 //   total.set(next) // publish a new value
 //   total.peek()    // untracked read (no subscription)
 //

@@ -1,0 +1,17 @@
+<script>
+  import { state } from "abide/shared/state"
+  import Ticker from "./WatchTeardownTicker.abide"
+
+  // The harness: this file only mounts and unmounts the ticker. It registers no lifecycle hook of its
+  // own — the child's `watch` teardown IS the unmount hook, and the log it writes outlives it.
+  let mounted = state(true)
+  let log = state.shared("watch-teardown-log", "")
+</script>
+
+<div class="row">
+  <button data-testid="wtd-toggle" onclick={() => mounted = !mounted}>{mounted ? "Unmount" : "Mount"} the ticker</button>
+</div>
+
+{#if mounted}<Ticker />{/if}
+
+<p>Effect log: <strong data-testid="wtd-log">{log}</strong></p>

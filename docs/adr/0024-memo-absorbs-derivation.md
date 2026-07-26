@@ -113,6 +113,12 @@ draft = draft + 1        // → draft.set(…) → memo.publish → provisional 
 
 ### 5. `.abide` auto-calls memo-bound identifiers, except in dependency position
 
+> **SUPERSEDED by ADR 0025.** The dependency-position exception below was removed: a `memo`/`watch`
+> source is always an argless THUNK, so a bare cell there is an ordinary read. The rest of this ADR
+> (§1–4) stands. Kept for the record — the reasoning that follows is exactly what 0025 re-examined,
+> and its "compiler-only change with no runtime or type change" claim is what did not hold: the change
+> was un-type-checkable under `emitCheck`'s declaration-unwrapping strategy.
+
 A memo-bound identifier reads as a bare identifier, exactly as a cell does today:
 
 ```js
@@ -188,7 +194,8 @@ no special-casing, the signature is just `transform: (v: S) => T`.
 - **`.state()` as the general memo read**, typed `State<T|undefined> & PromiseLike<State<T>>`. Clever but
   redundant: reading already has three well-defined forms. Narrowing `.state()` to the writable projection
   is strictly smaller.
-- **Passing raw nodes as `memo(a, t)` without the compiler suppression.** Auto-call reads `a` first, so
+- **Passing raw nodes as `memo(a, t)` without the compiler suppression.** (Moot under ADR 0025 — the
+  source is a thunk, so there is no suppression to omit.) Auto-call reads `a` first, so
   the transform receives a value instead of a node. Either the thunk or the suppression is required; the
   suppression was chosen because it also improves `watch`.
 - **Compiler auto-parallelization of independent top-level awaits.** See §6.

@@ -133,6 +133,38 @@ test.describe('Response helpers', () => {
             'redirected: true → /rpc/reads',
         )
     })
+
+    // `fn.raw` is the view UNDER the decoded cards: each helper's own status line, plus the baseline
+    // headers the router stamps at one choke point on every response.
+    test('raw() shows each helper status line and the router baseline headers', async ({
+        page,
+    }) => {
+        await page.goto('/rpc/responses')
+        const wire = page.getByTestId('wire-result')
+
+        await page.getByTestId('wire-json').click()
+        await expect(wire).toContainText('status: 200 OK')
+        await expect(wire).toContainText('content-type: application/json')
+        // Stamped by the router, not the handler — and only where the response didn't set it.
+        await expect(wire).toContainText('x-content-type-options: nosniff')
+        await expect(wire).toContainText('referrer-policy: strict-origin-when-cross-origin')
+        await expect(wire).toContainText('cache-control: private, no-cache')
+        await expect(wire).toContainText('vary: Cookie')
+        await expect(wire).toContainText('"greeting":"Hello, raw!"')
+
+        // A raw call does NOT throw on a failure status — that is the whole bypass.
+        await page.getByTestId('wire-error').click()
+        await expect(wire).toContainText('status: 422')
+        await expect(wire).toContainText('note text is required')
+
+        await page.getByTestId('wire-typed').click()
+        await expect(wire).toContainText('status: 429')
+
+        // `redirect: "manual"` passed through raw's `init`: the Fetch spec withholds the 302 and the
+        // Location header from JS, so the demo reports the opaque response honestly.
+        await page.getByTestId('wire-redirect').click()
+        await expect(wire).toContainText('0 (opaque)')
+    })
 })
 
 test.describe('Streaming', () => {

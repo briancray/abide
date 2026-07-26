@@ -1,0 +1,11 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  // The whole primitive: a cell holds a value, you write it, everything reading it updates.
+  let count = state(0)
+</script>
+
+<div class="row">
+  <button data-testid="inc" onclick={() => count++}>Increment</button>
+</div>
+<p>Count: <strong data-testid="count">{count}</strong></p>

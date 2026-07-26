@@ -1,0 +1,51 @@
+<script module>
+  import { channel } from "abide/shared/channel"
+
+  const feed = channel<string>({ tail: 3 })
+  const seq = { n: 0 }
+</script>
+
+<script>
+  import { state } from "abide/shared/state"
+
+  // A channel implements the SAME read surface a memo does — peek / chunks / pending / refreshing /
+  // error / done + refresh / invalidate / publish / watch. On this in-process core the STATUS probes are
+  // degenerate (a local topic is immediately live, never reconnecting, never errored) and peek/chunks
+  // read the hub directly rather than through a reactive node — so this card snapshots them on demand.
+  // Putting the same channel on the wire (a `socket`) is what makes those probes reactive.
+  let latest = state<string | undefined>(undefined)
+  let tail = state<string[]>([])
+  let read = state(0)
+
+  function publish() {
+    seq.n = seq.n + 1
+    feed.publish(`message ${seq.n}`)
+  }
+
+  function probe() {
+    latest = feed.peek()
+    // `chunks()` is declared on the SHARED read surface, where a scalar memo slot has no element type
+    // to promise — so it widens to `unknown[]` even though a channel's transcript is `T[]`.
+    tail = (feed.chunks() as string[] | undefined) ?? []
+    read = read + 1
+  }
+
+  // `invalidate` on a channel clears the retained tail without detaching live subscribers.
+  function clearTail() {
+    feed.invalidate()
+    probe()
+  }
+</script>
+
+<div class="row">
+  <button data-testid="probe-publish" onclick={publish}>Publish</button>
+  <button data-testid="probe-read" onclick={probe}>Read probes</button>
+  <button data-testid="probe-clear" onclick={clearTail}>invalidate (clear tail)</button>
+</div>
+
+<ul class="grid">
+  <li><code>peek()</code> — latest: <strong data-testid="probe-peek">{latest ?? "—"}</strong></li>
+  <li><code>chunks()</code> — tail ({tail.length}/3): <strong data-testid="probe-chunks">{tail.join(", ") || "—"}</strong></li>
+  <li><code>pending()</code> / <code>done()</code>: <strong data-testid="probe-status">{feed.pending()} / {feed.done()}</strong> <span class="muted">(degenerate on a local channel)</span></li>
+  <li class="muted">probes read {read} times</li>
+</ul>

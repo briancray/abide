@@ -1,0 +1,31 @@
+<script module>
+  import { channel } from "abide/shared/channel"
+
+  // The whole primitive: a topic you publish to and iterate. No transport, no authorization, no
+  // connection — this one is owned by a browser module. It is at MODULE scope so it outlives any single
+  // component instance, which is what a topic is for.
+  const chatter = channel<string>()
+</script>
+
+<script>
+  import { state } from "abide/shared/state"
+
+  // `publish(args, message)` — `args` names the room. This channel's room type is `void`, so there is
+  // no room to name and the message is the only argument.
+  let sent = state(0)
+  function send() {
+    sent = sent + 1
+    chatter.publish("message " + sent)
+  }
+</script>
+
+<div class="row">
+  <button data-testid="ch-send" onclick={send}>Publish</button>
+</div>
+
+<p class="muted">Iterating the channel <em>is</em> the subscription: <code>{'{'}#for await m of chatter{'}'}</code>.</p>
+<ul class="grid" data-testid="ch-log">
+  {#for await message of chatter}
+    <li>{message}</li>
+  {/for}
+</ul>

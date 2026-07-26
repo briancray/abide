@@ -1,0 +1,50 @@
+<script>
+  import { state } from "abide/shared/state"
+  import rpcGreet from "$server/rpc/rpcGreet"
+  import rpcBoom from "$server/rpc/rpcBoom"
+  import rpcLimited from "$server/rpc/rpcLimited"
+  import rpcGoHome from "$server/rpc/rpcGoHome"
+
+  // `fn.raw(args, init?)` returns the UNTOUCHED Response — memo bypassed, nothing thrown, nothing
+  // decoded. That makes it the only way to SEE what each helper above actually put on the wire: the
+  // status line the helper chose, plus the baseline headers the router stamps at one choke point on
+  // every response (each only if the response didn't set it itself).
+  let wire = state(null)
+
+  const BASELINE = ["content-type", "location", "x-content-type-options", "referrer-policy", "cache-control", "vary"]
+
+  // One monomorphic shape for every helper, so the readout below never branches.
+  async function show(helper, call) {
+    const response = await call()
+    const headers = []
+    for (const name of BASELINE) {
+      const value = response.headers.get(name)
+      if (value !== null) headers.push(name + ": " + value)
+    }
+    // A `redirect: "manual"` fetch resolves to an OPAQUE redirect: the Fetch spec hides the 302, the
+    // Location header, and the body from JS. The wire really does carry them — the server tab and
+    // `curl -i` show it — the browser just won't hand them over.
+    const opaque = response.type === "opaqueredirect"
+    wire = {
+      helper,
+      status: opaque ? "0 (opaque)" : response.status + " " + response.statusText,
+      headers: opaque ? ["(withheld from JS by the Fetch spec)"] : headers,
+      body: opaque ? "" : (await response.text()).slice(0, 200),
+    }
+  }
+</script>
+
+<div class="row">
+  <button data-testid="wire-json" onclick={() => show("json(data)", () => rpcGreet.raw({ name: "raw" }))}>json</button>
+  <button data-testid="wire-error" onclick={() => show("error(422, …)", () => rpcBoom.raw({ ok: false }))}>error</button>
+  <button data-testid="wire-typed" onclick={() => show("error.typed('RateLimited', 429)", () => rpcLimited.raw({ tokens: 0 }))}>error.typed</button>
+  <button data-testid="wire-redirect" onclick={() => show("redirect(url, 302)", () => rpcGoHome.raw({ to: "/rpc" }, { redirect: "manual" }))}>redirect</button>
+</div>
+
+{#if wire}
+  <pre class="out" data-testid="wire-result">{wire.helper}
+status: {wire.status}
+{#for header of wire.headers by header}{header}
+{/for}{#if wire.body}
+body: {wire.body}{/if}</pre>
+{/if}

@@ -60,14 +60,11 @@ export interface Binding {
 // `memos` are auto-called memos: only the BARE reference becomes `m()`. A memo is read-only and carries a
 // surface, so `m.peek()` / `m.refresh()` / `m.state()` and an explicit `m()` are left alone — reach into
 // the VALUE with `{m}` or `{m().field}`.
-// `depCallees` are the callees whose FIRST argument is DEPENDENCY position (`watch`, `memo`). A bare
-// cell/memo there is the NODE, not its value, so the auto-call is suppressed — the wart that used to force
-// `watch(() => count, h)`. A cell already IS `(): T`, which is what a `source: () => T` expects, so this is
-// a compiler-only change with no runtime or type change.
+// There is no dependency-position exception (ADR 0025): a `memo`/`watch` source is ALWAYS a thunk, so
+// every identifier inside it is an ordinary read and needs no special casing here.
 export interface CellScope {
     cells: Set<string>
     memos: Set<string>
-    depCallees: Set<string>
 }
 
 export interface ScriptInfo {
@@ -507,11 +504,64 @@ interface Scopes {
 // Collect the simple identifiers bound by parameters within a `(` … `)` group (open/close token
 // indices). Records the first identifier after `(` or a top-level `,`; skips defaults/types/
 // destructuring (best-effort). `filter` decides which names matter.
+// Collect the identifiers BOUND by a destructuring parameter pattern (`{ a, b }`, `[a]`, nested, with
+// defaults and rest). A property KEY is not a binding — in `{ a: renamed }` the binding is `renamed` —
+// and everything after a `=` is a DEFAULT VALUE, i.e. an ordinary reference that must still be rewritten.
+// A computed key (`{ [k]: v }`) is skipped whole, since `k` is a reference too.
+function collectPatternBindings(
+    tokens: Tok[],
+    open: number,
+    close: number,
+    filter: (name: string) => boolean,
+    matchClose: Map<number, number>,
+): number[] {
+    const names: number[] = []
+    let depth = 0
+    let defaultDepth = -1 // depth at which the current default-value expression began; -1 = none
+    for (let j = open + 1; j < close; j++) {
+        const t = tokenAt(tokens, j)
+        const kind = t.kind
+        if (isOpen(kind)) {
+            // A computed key is `[expr]` followed by `:` — its contents are references, not bindings.
+            const patternClose = matchClose.get(j)
+            if (
+                kind === K.OpenBracketToken &&
+                patternClose !== undefined &&
+                tokens[patternClose + 1]?.kind === K.ColonToken
+            ) {
+                j = patternClose
+                continue
+            }
+            depth++
+            continue
+        }
+        if (isClose(kind)) {
+            depth--
+            if (defaultDepth !== -1 && depth < defaultDepth) defaultDepth = -1
+            continue
+        }
+        if (kind === K.CommaToken) {
+            if (defaultDepth === depth) defaultDepth = -1
+            continue
+        }
+        if (kind === K.EqualsToken) {
+            if (defaultDepth === -1) defaultDepth = depth
+            continue
+        }
+        if (defaultDepth !== -1) continue // inside a default value — a reference, leave it alone
+        if (!isIdentifierLike(kind)) continue
+        if (tokens[j + 1]?.kind === K.ColonToken) continue // property key; the binding is its value
+        if (filter(t.text)) names.push(j)
+    }
+    return names
+}
+
 function collectParamBindings(
     tokens: Tok[],
     open: number,
     close: number,
     filter: (name: string) => boolean,
+    matchClose: Map<number, number>,
 ): number[] {
     const params: number[] = []
     let depth = 0
@@ -520,6 +570,24 @@ function collectParamBindings(
         const t = tokenAt(tokens, j)
         const kind = t.kind
         if (isOpen(kind)) {
+            // A DESTRUCTURING parameter binds every name inside its pattern. Without this the names stay
+            // unregistered, so a pattern that happens to reuse a cell's name both loses its shadow AND
+            // gets rewritten as if it were an object literal — emitting invalid JS (`({ a: a() }) =>`).
+            const patternClose = matchClose.get(j)
+            if (depth === 0 && expectName && patternClose !== undefined && patternClose < close) {
+                for (const idx of collectPatternBindings(
+                    tokens,
+                    j,
+                    patternClose,
+                    filter,
+                    matchClose,
+                )) {
+                    params.push(idx)
+                }
+                j = patternClose
+                expectName = false
+                continue
+            }
             depth++
             expectName = false
             continue
@@ -649,7 +717,7 @@ function buildScopes(tokens: Tok[], braces: BraceInfo, filter: (name: string) =>
             if (p < n && tokenAt(tokens, p).kind === K.OpenParenToken) {
                 const close = matchClose.get(p)
                 if (close !== undefined) {
-                    const params = collectParamBindings(tokens, p, close, filter)
+                    const params = collectParamBindings(tokens, p, close, filter, matchClose)
                     let b = close + 1
                     while (b < n && tokenAt(tokens, b).kind !== K.OpenBraceToken) b++
                     if (b < n && tokenAt(tokens, b).kind === K.OpenBraceToken) {
@@ -691,7 +759,7 @@ function buildScopes(tokens: Tok[], braces: BraceInfo, filter: (name: string) =>
                 if (prev.kind === K.CloseParenToken) {
                     const open = matchOpen.get(i - 1)
                     if (open !== undefined)
-                        params = collectParamBindings(tokens, open, i - 1, filter)
+                        params = collectParamBindings(tokens, open, i - 1, filter, matchClose)
                 } else if (isIdentifierLike(prev.kind) && filter(prev.text)) {
                     params = [i - 1]
                 }
@@ -787,7 +855,7 @@ function rhsExtent(tokens: Tok[], start: number): number {
 }
 
 export function rewriteCellRefs(code: string, scope: CellScope): string {
-    const { cells: cellNames, memos: memoNames, depCallees } = scope
+    const { cells: cellNames, memos: memoNames } = scope
     if (cellNames.size === 0 && memoNames.size === 0) return code
     const tokens = tokenize(code)
     if (tokens.length === 0) return code
@@ -803,33 +871,6 @@ export function rewriteCellRefs(code: string, scope: CellScope): string {
         if (declNameIdx.has(i)) return false // declaration / parameter name
         if (isShadowed(shadows, tokenAt(tokens, i).text, i)) return false
         return true
-    }
-
-    // Is `tokens[i]` the sole first argument of a DEPENDENCY-POSITION callee (`watch(count, h)`,
-    // `memo(a, t)`)? There the bare identifier is the NODE — auto-calling it would hand the API a value.
-    const inDependencyPosition = (i: number): boolean => {
-        if (depCallees.size === 0) return false
-        const after = tokens[i + 1]?.kind
-        if (after !== K.CommaToken && after !== K.CloseParenToken) return false
-        if (i === 0 || tokenAt(tokens, i - 1).kind !== K.OpenParenToken) return false
-        let j = i - 2
-        if (j < 0) return false
-        // Walk back over an explicit generic argument list (`memo<Foo>(a, t)`) to reach the callee name.
-        const arity = greaterArity(tokenAt(tokens, j).kind)
-        if (arity > 0) {
-            let depth = arity
-            j--
-            while (j >= 0 && depth > 0) {
-                const kind = tokenAt(tokens, j).kind
-                if (kind === K.LessThanToken) depth--
-                else depth += greaterArity(kind)
-                j--
-            }
-            if (depth !== 0) return false
-        }
-        if (j < 0) return false
-        const callee = tokenAt(tokens, j)
-        return isIdentifierLike(callee.kind) && depCallees.has(callee.text)
     }
 
     // Object-literal property key or method name (`{ n: … }`, `{ n() {} }`) — not a reference.
@@ -928,12 +969,6 @@ export function rewriteCellRefs(code: string, scope: CellScope): string {
             const nextKind = next?.kind
 
             if (isObjectKey(i)) {
-                i++
-                continue
-            }
-
-            // A bare cell/memo in dependency position stays the NODE (ADR 0024 §5).
-            if (inDependencyPosition(i)) {
                 i++
                 continue
             }
@@ -1596,15 +1631,15 @@ function matchingParen(text: string, open: number): number {
 }
 
 // Recognise a `memo(...)` initializer and classify it (ADR 0024 §5), where `memoLocal` is the local bound
-// to `abide/shared/memo` and `known` is every cell/memo already declared above this one.
+// to `abide/shared/memo`.
 //   'cell' — `memo(…).state()`: the WRITABLE projection, indistinguishable from `state(…)` at the
 //            reference-rewrite level (read `n()`, write `n.set(x)`).
-//   'memo' — auto-called: the compiler can SEE an argless, non-async fn literal (or, in the two-argument
-//            source form, a bare cell/memo node), so a bare reference reads as the value.
+//   'memo' — auto-called: the compiler can SEE an argless, non-async fn literal in the source position,
+//            with or without a transform, so a bare reference reads as the value.
 //   null   — anything opaque (`memo(someFnRef)`, an async body, an arged handler): a plain const binding.
 //            Guessing wrong would emit a call with undefined args, or a promise-returning read that blanks
 //            the server-rendered text and refills it a microtask later (ADR 0024 §3).
-function memoKind(init: string, memoLocal: string, known: Set<string>): 'memo' | 'cell' | null {
+function memoKind(init: string, memoLocal: string): 'memo' | 'cell' | null {
     const bare = init.match(new RegExp(`^${escapeRegExp(memoLocal)}\\b`))
     if (bare === null) return null
     const rest = init.slice(bare[0].length)
@@ -1621,9 +1656,10 @@ function memoKind(init: string, memoLocal: string, known: Set<string>): 'memo' |
     const source = args[0] ?? ''
     const transform = args[1]
     if (transform !== undefined && /^async\b/.test(transform)) return null
+    // The source is always an ARGLESS THUNK (ADR 0025) — that is the whole rule, with or without a
+    // transform. A node reference or an object literal here is not a source and never classifies.
     if (/^\(\s*\)\s*=>/.test(source)) return 'memo'
     if (/^function\s*\*?\s*\(\s*\)/.test(source)) return 'memo'
-    if (/^[A-Za-z_$][\w$]*$/.test(source) && known.has(source)) return 'memo'
     return null
 }
 
@@ -1769,7 +1805,6 @@ interface RawScript {
     bindings: Binding[]
     cells: Set<string>
     memos: Set<string>
-    depCallees: Set<string>
     declared: Set<string>
     cssImports: string[]
     componentImports: ComponentImport[]
@@ -1794,9 +1829,7 @@ function localForSpecifier(
     return fallback
 }
 
-// `outerNodes` carries the cells/memos of an enclosing script (the module script, when analysing the
-// instance one) so the two-argument `memo(source, transform)` form still recognises a node declared there.
-function analyzeScript(content: string, outerNodes?: Set<string>): RawScript {
+function analyzeScript(content: string): RawScript {
     const records = scanTopLevel(content)
     const imports: ImportBinding[] = []
     const cssImports: string[] = []
@@ -1826,16 +1859,10 @@ function analyzeScript(content: string, outerNodes?: Set<string>): RawScript {
     const stateLocal = localForSpecifier(imports, 'abide/shared/state', 'state', 'state')
     const propsLocal = localForSpecifier(imports, 'abide/ui/props', 'props', 'props')
     const memoLocal = localForSpecifier(imports, 'abide/shared/memo', 'memo', 'memo')
-    const watchLocal = localForSpecifier(imports, 'abide/shared/watch', 'watch', 'watch')
-    // The two APIs whose FIRST argument is a source NODE, not a value (ADR 0024 §5).
-    const depCallees = new Set<string>([memoLocal, watchLocal])
 
     const bindings: Binding[] = []
     const cells = new Set<string>()
     const memos = new Set<string>()
-    // Every node in scope at this point of the walk — declaration order matters, so `memo(a, t)` only
-    // recognises `a` when it was declared above.
-    const nodes = new Set<string>(outerNodes)
     const declared = new Set<string>()
 
     for (const record of records) {
@@ -1877,20 +1904,17 @@ function analyzeScript(content: string, outerNodes?: Set<string>): RawScript {
             let kind: BindingKind = 'const'
             if (isSimpleIdentifier(pattern)) {
                 const cell = cellKind(init, stateLocal)
-                const derived = cell === null ? memoKind(init, memoLocal, nodes) : null
+                const derived = cell === null ? memoKind(init, memoLocal) : null
                 if (cell) {
                     kind = cell
                     cells.add(pattern)
-                    nodes.add(pattern)
                 } else if (derived === 'cell') {
                     // `memo(…).state()` — the writable projection reads and writes exactly like a cell.
                     kind = 'state'
                     cells.add(pattern)
-                    nodes.add(pattern)
                 } else if (derived === 'memo') {
                     kind = 'memo'
                     memos.add(pattern)
-                    nodes.add(pattern)
                 } else if (isPropsInit(init, propsLocal)) {
                     kind = 'prop'
                 }
@@ -1916,7 +1940,6 @@ function analyzeScript(content: string, outerNodes?: Set<string>): RawScript {
         bindings,
         cells,
         memos,
-        depCallees,
         declared,
         cssImports,
         componentImports,
@@ -1927,25 +1950,18 @@ function analyzeScript(content: string, outerNodes?: Set<string>): RawScript {
 
 export function analyzeScope(root: Root): ScopeAnalysis {
     const moduleRaw = root.moduleScript ? analyzeScript(root.moduleScript.content) : null
-    const instanceRaw = root.instanceScript
-        ? analyzeScript(
-              root.instanceScript.content,
-              moduleRaw === null ? undefined : new Set([...moduleRaw.cells, ...moduleRaw.memos]),
-          )
-        : null
+    const instanceRaw = root.instanceScript ? analyzeScript(root.instanceScript.content) : null
 
     const cellNames = new Set<string>()
     const memoNames = new Set<string>()
-    const depCallees = new Set<string>()
     const declared = new Set<string>()
     for (const raw of [moduleRaw, instanceRaw]) {
         if (!raw) continue
         for (const name of raw.cells) cellNames.add(name)
         for (const name of raw.memos) memoNames.add(name)
-        for (const name of raw.depCallees) depCallees.add(name)
         for (const name of raw.declared) declared.add(name)
     }
-    const cellScope: CellScope = { cells: cellNames, memos: memoNames, depCallees }
+    const cellScope: CellScope = { cells: cellNames, memos: memoNames }
 
     // Module setup can only reference module cells; instance setup can reference both (module bindings
     // are in scope for the instance).
@@ -1954,7 +1970,6 @@ export function analyzeScope(root: Root): ScopeAnalysis {
               setupCode: rewriteCellRefs(moduleRaw.strippedCode, {
                   cells: moduleRaw.cells,
                   memos: moduleRaw.memos,
-                  depCallees: moduleRaw.depCallees,
               }),
               imports: moduleRaw.imports,
               bindings: moduleRaw.bindings,

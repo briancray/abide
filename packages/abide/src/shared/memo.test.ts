@@ -187,6 +187,34 @@ describe('memo — publish', () => {
         })
     })
 
+    test('an argless memo publishes bare — no `undefined` key placeholder', async () => {
+        await withContext(async () => {
+            const c = memo(async () => 'loaded')
+            await c()
+            expect(c.peek()).toBe('loaded')
+
+            c.publish('X') // `Room<void>` = `[]`, so the value is the only argument
+            expect(c.peek()).toBe('X')
+
+            c.publish((current) => `${current}!`)
+            expect(c.peek()).toBe('X!')
+        })
+    })
+
+    // `watch` carries the same vanishing key positional — the handler alone on an argless memo.
+    test('an argless memo watches with the handler alone (no key placeholder)', async () => {
+        await withContext(async () => {
+            const c = memo(async () => 'loaded')
+            await c()
+            const seen: (string | undefined)[] = []
+            const dispose = c.watch((value) => seen.push(value))
+            c.publish('X')
+            await tick()
+            dispose()
+            expect(seen).toContain('X')
+        })
+    })
+
     test('watch fires the handler on slot change', async () => {
         await withContext(async () => {
             const c = memo(async (n: number) => n * 2)
@@ -568,6 +596,168 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
             expect(runs).toBe(1)
             a.set(2)
             expect(derived()).toBe(202)
+        })
+    })
+
+    // Several inputs need no API of their own (ADR 0025): they are just what the source thunk returns.
+    test('a thunk returning several values tracks EVERY read inside it', () => {
+        withContext(() => {
+            const a = state(1)
+            const b = state(10)
+            let runs = 0
+            const sum = memo(
+                () => ({ a: a(), b: b() }),
+                (values) => {
+                    runs++
+                    return values.a + values.b
+                },
+            )
+            expect(sum()).toBe(11)
+            expect(runs).toBe(1)
+
+            a.set(2)
+            expect(sum()).toBe(12)
+            b.set(20)
+            expect(sum()).toBe(22)
+            expect(runs).toBe(3)
+        })
+    })
+
+    test('the transform is called with ONE argument — whatever the thunk returned', () => {
+        withContext(() => {
+            const a = state(1)
+            const b = state(2)
+            let received: unknown[] = []
+            const combined = memo(() => ({ a: a(), b: b() }), ((...args: unknown[]) => {
+                received = args
+                return 0
+            }) as never)
+            combined()
+            expect(received).toHaveLength(1)
+            expect(received[0]).toEqual({ a: 1, b: 2 })
+        })
+    })
+
+    test('only the THUNK is tracked — a read in the transform is not a dependency', () => {
+        withContext(() => {
+            const a = state(1)
+            const other = state(100)
+            let runs = 0
+            const derived = memo(
+                () => a(),
+                (value) => {
+                    runs++
+                    return value + other()
+                },
+            )
+            expect(derived()).toBe(101)
+            other.set(200)
+            expect(derived()).toBe(101)
+            expect(runs).toBe(1)
+            a.set(2)
+            expect(derived()).toBe(202)
+        })
+    })
+
+    // A KEYED body can be synchronous too, and then the read IS the value — no promise to await, so the
+    // SSR text is never blanked. Args stay the whole dependency set: the body runs UNTRACKED.
+    test('a keyed SYNC body returns its value directly, not a promise', () => {
+        withContext(() => {
+            const v = memo(({ a, b }: { a: number; b: number }) => a + b)
+            const read = v({ a: 1, b: 2 }) as unknown
+            expect(read).toBe(3)
+            expect(read).not.toBeInstanceOf(Promise)
+        })
+    })
+
+    test('a keyed sync memo still keys per args and reuses each slot', () => {
+        withContext(() => {
+            let runs = 0
+            const v = memo(({ n }: { n: number }) => {
+                runs++
+                return n * 2
+            })
+            expect(v({ n: 1 })).toBe(2)
+            expect(v({ n: 2 })).toBe(4)
+            expect(v({ n: 1 })).toBe(2) // reused, not re-run
+            expect(runs).toBe(2)
+
+            v.invalidate({ n: 1 })
+            expect(v({ n: 1 })).toBe(2)
+            expect(runs).toBe(3) // dropped, so it ran again
+        })
+    })
+
+    test('a keyed sync body is UNTRACKED — a cell it reads is not a dependency', () => {
+        withContext(() => {
+            const factor = state(10)
+            let runs = 0
+            const v = memo(({ n }: { n: number }) => {
+                runs++
+                return n * factor()
+            })
+            expect(v({ n: 2 })).toBe(20)
+            factor.set(100)
+            expect(v({ n: 2 })).toBe(20) // args are the whole dependency set
+            expect(runs).toBe(1)
+        })
+    })
+
+    test('an ASYNC keyed body is unaffected — the read is still a promise', async () => {
+        await withContext(async () => {
+            const v = memo(async ({ n }: { n: number }) => n * 2)
+            const read = v({ n: 2 })
+            expect(read).toBeInstanceOf(Promise)
+            expect(await read).toBe(4)
+        })
+    })
+
+    // A slot can be settled without the body ever running (hydration seed / publish). Short-circuiting
+    // there before the body is classified would hand a raw value back from an async memo.
+    test('a seeded async memo still reads as a promise', async () => {
+        await withContext(async () => {
+            let calls = 0
+            const v = memo(async ({ id }: { id: string }) => {
+                calls++
+                return `loaded ${id}`
+            })
+            v.seed({ id: 'a' }, 'seeded a')
+            const read = v({ id: 'a' })
+            expect(read).toBeInstanceOf(Promise)
+            expect(await read).toBe('seeded a')
+            expect(calls).toBe(0) // the seed stayed authoritative
+        })
+    })
+
+    // The keyed form and the source/transform form are disjoint — the SECOND argument tells them apart.
+    // An args-taking body paired with a transform is neither, and would silently call the handler with
+    // no arguments, so it fails at construction.
+    test('an args-taking body paired with a transform is a loud construction-time error', () => {
+        withContext(() => {
+            expect(() =>
+                memo(({ id }: { id: number }) => id, ((v: unknown) => v) as never),
+            ).toThrow(/ARGLESS thunk/)
+        })
+    })
+
+    test('the KEYED form is untouched — an args-taking body still pairs with options', () => {
+        withContext(() => {
+            const keyed = memo(({ id }: { id: number }) => id * 2, { ttl: 50 })
+            expect(keyed.peek({ id: 2 })).toBeUndefined() // a slot per key, not a source thunk
+        })
+    })
+
+    test('a memo is readable inside the thunk, so declared inputs compose', () => {
+        withContext(() => {
+            const a = state(1)
+            const doubled = memo(() => a() * 2)
+            const combined = memo(
+                () => ({ base: a(), twice: doubled() }),
+                (values) => values.base + values.twice,
+            )
+            expect(combined()).toBe(3)
+            a.set(5)
+            expect(combined()).toBe(15)
         })
     })
 })

@@ -11,13 +11,17 @@ test('home page loads with the abide heading and capability nav', async ({ page 
     // The sidebar (the app's root layout) indexes every sample by capability.
     const sidebar = page.locator('aside.sidebar')
     await expect(sidebar.getByRole('link', { name: 'Home' })).toBeVisible()
-    await expect(sidebar.getByRole('link', { name: 'Reactive primitives' })).toBeVisible()
-    await expect(sidebar.getByRole('link', { name: 'The memo primitive' })).toBeVisible()
+    // The sidebar leads with the three primitives, then the two transports built on them.
+    await expect(sidebar.getByRole('link', { name: 'state — owned' })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: 'memo — loaded' })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: 'channel — pushed' })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: 'rpc = memo + transport' })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: 'socket = channel + transport' })).toBeVisible()
     await expect(sidebar.getByRole('link', { name: 'Machine surfaces' })).toBeVisible()
 
     // The capability cards (in the page content) are rendered from the `capabilities` RPC.
     await expect(
-        page.locator('.content').getByRole('link', { name: 'Isomorphic RPC' }),
+        page.locator('.content').getByRole('link', { name: 'memo — the loaded value' }),
     ).toBeVisible()
 })
 
@@ -29,10 +33,10 @@ test('clicking an in-app nav link soft-navigates without a full page reload', as
         ;(window as unknown as { __abideNoReload?: boolean }).__abideNoReload = true
     })
 
-    await page.locator('aside.sidebar').getByRole('link', { name: 'Reactive primitives' }).click()
+    await page.locator('aside.sidebar').getByRole('link', { name: 'state — owned' }).click()
 
-    await expect(page).toHaveURL(/\/templating\/reactivity$/)
-    await expect(page.locator('h1')).toHaveText('Reactive primitives')
+    await expect(page).toHaveURL(/\/state$/)
+    await expect(page.locator('h1')).toHaveText('state — the owned value')
 
     const survived = await page.evaluate(
         () => (window as unknown as { __abideNoReload?: boolean }).__abideNoReload === true,

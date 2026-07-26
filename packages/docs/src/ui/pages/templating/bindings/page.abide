@@ -19,65 +19,81 @@
 
 <main class="page">
   <h1>Bindings & directives</h1>
-  <p class="lead">Every template binding and directive, each wired to a live input so it can be typed, clicked, and checked. The two-way binds stay in sync both directions.</p>
+  <p class="lead">Everything that connects a value to the DOM, in four steps: text out, attributes out, events in, and the two-way binds that do both. Each is wired to a live input, so it can be typed at, clicked, and checked.</p>
 
+  <h2>Out — text</h2>
+  <p>The smallest binding there is: <code>{'{'}expr{'}'}</code> puts a value in a text node, escaped. It is reactive by construction — when the value changes, that one text node updates and nothing else is touched.</p>
   <Demo id="escaped" title={"<code>{expr}</code> — escaped text"} client="src/ui/demos/templating/bindings/EscapedTextDemo.abide">
     <EscapedTextDemo />
   </Demo>
 
+  <p>Escaping is the default because it is the safe one. When you genuinely have markup, <code>html(...)</code> is the explicit opt-out — deliberately noisy at the call site, since that is where the trust decision lives.</p>
   <Demo id="raw" title={"<code>{html(...)}</code> — raw HTML"} client="src/ui/demos/templating/bindings/RawHtmlDemo.abide">
     <RawHtmlDemo />
   </Demo>
 
+  <h2>Out — attributes</h2>
+  <p>The same expression in an attribute position. One rule to remember: an attribute takes the <em>whole</em> value (<code>name={'{'}expr{'}'}</code>), and quoted values interpolate too, so <code>class="btn {'{'}size{'}'}"</code> mixes literal and reactive text.</p>
   <Demo id="attr" title={"<code>name={expr}</code> — reactive attribute"} client="src/ui/demos/templating/bindings/ReactiveAttrDemo.abide">
     <ReactiveAttrDemo />
   </Demo>
 
+  <p>Two directives narrow that to the cases you reach for constantly — toggling one class, setting one style property — so you don't rebuild a whole string to change one bit.</p>
+  <Demo id="classdir" title={"<code>class:name={cond}</code> — toggle one class"} client="src/ui/demos/templating/bindings/ClassDirectiveDemo.abide">
+    <ClassDirectiveDemo />
+  </Demo>
+
+  <Demo id="styledir" title={"<code>style:prop={value}</code> — set one property"} client="src/ui/demos/templating/bindings/StyleDirectiveDemo.abide">
+    <StyleDirectiveDemo />
+  </Demo>
+
+  <p>And when the set of attributes is itself data, spread it. Useful for a component that forwards unknown attributes to its root element.</p>
+  <Demo id="spread" title={"<code>{...expr}</code> — spread attributes"} client="src/ui/demos/templating/bindings/SpreadAttrsDemo.abide">
+    <SpreadAttrsDemo />
+  </Demo>
+
+  <h2>In — events</h2>
+  <p>Values flow back on native DOM events. There is no synthetic event system and no custom names: <code>onclick</code>, <code>oninput</code>, and friends attach the real listener, and the event you receive is the real one.</p>
   <Demo id="events" title={"<code>on&lt;event&gt;={fn}</code> — native events"} client="src/ui/demos/templating/bindings/NativeEventsDemo.abide">
     <NativeEventsDemo />
   </Demo>
 
-  <Demo id="value" title="<code>bind:value</code>" client="src/ui/demos/templating/bindings/BindValueDemo.abide">
+  <h2>Both — two-way binds</h2>
+  <p>An attribute out plus an event in is such a common pair that it has its own form. <code>bind:value</code> is that pair for a text input: type, and the cell holds what you typed.</p>
+  <Demo id="value" title="<code>bind:value</code> — the pair, in one directive" client="src/ui/demos/templating/bindings/BindValueDemo.abide">
     <BindValueDemo />
   </Demo>
 
-  <Demo id="barevalue" title={"<code>bind:value={x}</code> — bare state var"} client="src/ui/demos/templating/bindings/BareStateBindDemo.abide">
+  <p class="note">One sharp edge, called out here because the demo below is the workaround rather than the ideal: a <strong>bare</strong> state var (<code>bind:value={'{'}x{'}'}</code>) does not wire write-back — the var evaluates to its value, not the cell. Use the <code>{'{'} get, set {'}'}</code> accessor form. It is a documented compiler limitation, not a design choice.</p>
+  <Demo id="barevalue" title={"<code>bind:value={x}</code> — bare state var (the known limit)"} client="src/ui/demos/templating/bindings/BareStateBindDemo.abide">
     <BareStateBindDemo />
   </Demo>
 
-  <Demo id="checked" title="<code>bind:checked</code>" client="src/ui/demos/templating/bindings/BindCheckedDemo.abide">
+  <p>The same directive over the other input shapes. A checkbox binds a boolean; a radio group binds the one chosen value; a checkbox group binds an array of the checked ones — same name, shape follows the element.</p>
+  <Demo id="checked" title="<code>bind:checked</code> — a boolean" client="src/ui/demos/templating/bindings/BindCheckedDemo.abide">
     <BindCheckedDemo />
   </Demo>
 
-  <Demo id="group" title="<code>bind:group</code> — radios (single value)" client="src/ui/demos/templating/bindings/BindGroupDemo.abide">
+  <Demo id="group" title="<code>bind:group</code> — radios (one value)" client="src/ui/demos/templating/bindings/BindGroupDemo.abide">
     <BindGroupDemo />
   </Demo>
 
-  <Demo id="group-checkbox" title="<code>bind:group</code> — checkboxes (array)" client="src/ui/demos/templating/bindings/BindGroupCheckboxDemo.abide">
+  <Demo id="group-checkbox" title="<code>bind:group</code> — checkboxes (an array)" client="src/ui/demos/templating/bindings/BindGroupCheckboxDemo.abide">
     <BindGroupCheckboxDemo />
   </Demo>
 
-  <Demo id="derived" title={"<code>bind:value={{get,set}}</code> — derived accessor"} client="src/ui/demos/templating/bindings/DerivedAccessorDemo.abide">
+  <p>Finally, the escape hatch that makes the rest composable: a bind target does not have to be a cell. Give it <code>{'{'} get, set {'}'}</code> and you can validate, clamp, or reshape on the way through — the same accessor form the bare-var note above points at.</p>
+  <Demo id="derived" title={"<code>bind:value={{get,set}}</code> — a derived accessor"} client="src/ui/demos/templating/bindings/DerivedAccessorDemo.abide">
     <DerivedAccessorDemo />
   </Demo>
 
-  <Demo id="noderef" title="<code>bind:element</code> — node ref cell" client="src/ui/demos/templating/bindings/NodeRefDemo.abide">
+  <h2>Reaching the element itself</h2>
+  <p>When you need the DOM node — to focus it, measure it, or hand it to a library — <code>bind:element</code> gives it to you two ways. A cell receives the node; a <em>function</em> is called with it on mount and can return a teardown, which makes it the place to put per-instance setup.</p>
+  <Demo id="noderef" title="<code>bind:element={cell}</code> — the node itself" client="src/ui/demos/templating/bindings/NodeRefDemo.abide">
     <NodeRefDemo />
   </Demo>
 
-  <Demo id="attach" title="<code>bind:element</code> — attach fn" client="src/ui/demos/templating/bindings/AttachFnDemo.abide">
+  <Demo id="attach" title="<code>bind:element={fn}</code> — attach + teardown" client="src/ui/demos/templating/bindings/AttachFnDemo.abide">
     <AttachFnDemo />
-  </Demo>
-
-  <Demo id="classdir" title={"<code>class:name={cond}</code>"} client="src/ui/demos/templating/bindings/ClassDirectiveDemo.abide">
-    <ClassDirectiveDemo />
-  </Demo>
-
-  <Demo id="styledir" title={"<code>style:prop={value}</code>"} client="src/ui/demos/templating/bindings/StyleDirectiveDemo.abide">
-    <StyleDirectiveDemo />
-  </Demo>
-
-  <Demo id="spread" title={"<code>{...expr}</code> — spread attributes"} client="src/ui/demos/templating/bindings/SpreadAttrsDemo.abide">
-    <SpreadAttrsDemo />
   </Demo>
 </main>

@@ -1,0 +1,68 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import MemoDerivedDemo from "$ui/demos/memo/MemoDerivedDemo.abide"
+  import MemoSourceDemo from "$ui/demos/memo/MemoSourceDemo.abide"
+  import MemoSourcesDemo from "$ui/demos/memo/MemoSourcesDemo.abide"
+  import MemoProjectionDemo from "$ui/demos/memo/MemoProjectionDemo.abide"
+  import MemoKeyedSyncDemo from "$ui/demos/memo/MemoKeyedSyncDemo.abide"
+  import MemoAsyncDemo from "$ui/demos/memo/MemoAsyncDemo.abide"
+  import MemoArgsDemo from "$ui/demos/memo/MemoArgsDemo.abide"
+  import ServerStateDemo from "$ui/demos/memo/ServerStateDemo.abide"
+</script>
+
+<main class="page">
+  <h1><code>memo</code> — the loaded value</h1>
+  <p class="lead">The second primitive: one memoizer covering everything derived. <strong>A memo's dependencies are its declared inputs</strong> (ADR 0024) — declare args and they are the cache key; declare none and they are inferred from what the body reads. That single rule spans a synchronous derivation off a <a href="/state"><code>state</code></a> and an async slot with cache, coalescing, and a reactive read surface. It is why there is no separate <code>computed</code> or <code>linked</code> primitive, and why <a href="/rpc"><code>rpc = memo + transport</code></a>.</p>
+
+  <h2>Argless — dependencies inferred from the body</h2>
+  <p>An argless, <em>synchronous</em> body is auto-tracked: it subscribes to whatever it reads and recomputes lazily. Its bare call returns <code>T</code>, not a promise, so it renders in the initial HTML instead of blanking and refilling a microtask later. Drive <code>count</code> and <code>doubled</code> follows with a fine-grained update to only its text node.</p>
+  <Demo id="derived" title="<code>memo(() =&gt; …)</code> — auto-tracked derivation" client="src/ui/demos/memo/MemoDerivedDemo.abide">
+    <MemoDerivedDemo />
+  </Demo>
+
+  <h2>With a source thunk — dependencies declared</h2>
+  <p>Pass a <strong>thunk</strong> and what it reads becomes the <em>whole</em> dependency set: <code>memo(source, transform)</code> tracks the thunk only, and the transform runs untracked. That is the useful part — a transform can read anything it likes without that read becoming a trigger. Below, the transform reads <code>factor</code>, so bumping factor alone recomputes nothing; the next change to <code>count</code> picks up its current value.</p>
+  <p>The source is <em>always</em> a thunk (ADR 0025). That one rule is why there is no dependency-declaring syntax to learn: the tracked region is just an arrow body you can point at. Same signature slot, same rule, as <a href="/watch"><code>watch(source, handler)</code></a>.</p>
+  <Demo id="source" title="<code>memo(source, transform)</code> — the source is the dependency" client="src/ui/demos/memo/MemoSourceDemo.abide">
+    <MemoSourceDemo />
+  </Demo>
+
+  <p>Several inputs need no API of their own — they are just what the thunk <strong>returns</strong>. Every read inside it is tracked, and the transform still receives ONE argument: whatever the thunk produced. Return an object and they stay named, so adding an input never shifts the others.</p>
+  <Demo id="sources" title="<code>memo(() =&gt; ({'{'} a, b {'}'}), transform)</code> — several declared inputs" client="src/ui/demos/memo/MemoSourcesDemo.abide">
+    <MemoSourcesDemo />
+  </Demo>
+
+  <h2>Projecting a memo back to a writable cell</h2>
+  <p>Everything so far is read-only — a memo derives, it doesn't hold. <code>.state()</code> projects any memo back into a writable cell whose <code>set</code> IS <code>publish</code>: a local write is provisional and holds only until the next re-fill. That is the shape behind every editable field seeded from loaded data. Here the draft seeds to count × 100; bumping it edits locally, and changing count reseeds and discards those edits.</p>
+  <Demo id="projection" title="<code>memo(…).state()</code> — writable projection" client="src/ui/demos/memo/MemoProjectionDemo.abide">
+    <MemoProjectionDemo />
+  </Demo>
+
+  <h2>With args — one slot per key</h2>
+  <p>Everything above was one slot. Declare an <strong>argument</strong> and it becomes the cache key, so the memo keeps one slot per key — <code>{'{'} w: 3, h: 4 {'}'}</code> and <code>{'{'} w: 2, h: 5 {'}'}</code> are independent, each reused on the next read with the same key.</p>
+  <p>Declaring an argument also settles the dependency question: the args <em>are</em> the whole dependency set, so the body runs <strong>untracked</strong>. And a synchronous body is still synchronous — the read is the value, not a promise, so it renders straight into the server HTML with nothing to await.</p>
+  <Demo id="keyed-sync" title="<code>memo((args) =&gt; …)</code> — the argument is the cache key" client="src/ui/demos/memo/MemoKeyedSyncDemo.abide">
+    <MemoKeyedSyncDemo />
+  </Demo>
+
+  <h2>Argless and async — the loaded value</h2>
+  <p>Everything so far returned its value on the spot. Now the other axis: make the body <em>async</em>. Back to no args, so it is one slot again — but a <strong>loaded</strong> one: the read is coalesced (concurrent callers share one run), the settled value is retained, and the slot carries the full read surface (<code>peek</code>/<code>pending</code>/<code>refreshing</code>/<code>error</code>/<code>watch</code> + <code>refresh</code>/<code>invalidate</code>/<code>publish</code>). The <a href="/memo/verbs">verbs</a>, the <a href="/memo/probes">probes</a>, and the <a href="/memo/global">global tag selectors</a> each have their own page.</p>
+  <p>The other half of async is what it costs: an argless async body is <strong>not</strong> auto-tracked. Half-tracked is worse than untracked, so a load re-fills on <code>refresh</code>/<code>invalidate</code> only. The handler below reads <code>label</code> and counts its real runs — read again and the count <strong>holds</strong>, rename and nothing re-runs, <code>refresh</code> re-runs and picks up the current label. This runs entirely in the browser over a plain async function; no transport involved.</p>
+  <Demo id="memo-async" title="<code>memo(async () =&gt; …)</code> — one loaded slot" client="src/ui/demos/memo/MemoAsyncDemo.abide" tab="client">
+    <MemoAsyncDemo />
+  </Demo>
+
+  <h2>Keyed and async — a loaded slot per key</h2>
+  <p>Both axes at once, and nothing new to learn: the same async body as the card above, keyed the same way as the card before it. The single loaded slot becomes <strong>one loaded slot per key</strong>. Below, <code>alpha</code> and <code>beta</code> load independently and each reuses its own value; <code>invalidate({'{'} key: "alpha" {'}'})</code> drops that slot alone, so the next alpha read re-runs while beta keeps the value it already has. This is exactly the shape an <a href="/rpc">RPC</a> takes — <code>rpc = memo + transport</code>, and the transport is the only difference.</p>
+  <Demo id="memo-args" title="<code>memo(async (args) =&gt; …)</code> — keyed AND loaded" client="src/ui/demos/memo/MemoArgsDemo.abide" tab="client">
+    <MemoArgsDemo />
+  </Demo>
+
+  <h2>Isomorphic — a reactive graph running on the server</h2>
+  <p><code>state</code> and <code>memo</code> live in <code>abide/shared/*</code>, so neither is client-only. A <strong>server</strong> module can own a <code>state</code>, and other server modules import it, derive from it (<code>memo</code>), and subscribe to it (<code>watch</code>): a reactive graph running entirely on the server. Here two RPCs (separate modules) write and read a <code>state</code> in <code>$shared/serverReactive</code>; the write propagates through a server-side <code>memo</code> and fires a server-side <code>watch</code>.</p>
+  <p>One thing stands out in the server tab: the explicit <code>total()</code> and <code>total.set(x)</code>. Inside a <code>.abide</code> <code>&lt;script&gt;</code> you write bare <code>total</code> and <code>total = x</code>, and the compiler rewrites them to those calls for you. There's no compiler in plain <code>.ts</code>, so you call the <code>State</code> surface directly — a cell is <strong>callable</strong>: <code>total()</code> (tracked read, subscribes the enclosing <code>memo</code>/<code>watch</code>), <code>.set(next)</code> (publish), and <code>.peek()</code> (untracked read). It's the same cell either way; the bare-identifier sugar is a <code>.abide</code>-only convenience.</p>
+  <Demo id="server-state" title="<code>state</code> + <code>memo</code> + <code>watch</code> across server modules" server="src/shared/serverReactive.ts" client="src/ui/demos/memo/ServerStateDemo.abide" tab="server">
+    <ServerStateDemo />
+  </Demo>
+  <p class="note">Module-level server <code>state</code> is <strong>process-global</strong> (one value across all requests) — right for a global like this counter; for mutable per-request or per-user state, reach for <code>memo: {'{'} shared {'}'}</code> instead, which is guarded and identity-safe.</p>
+</main>

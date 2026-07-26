@@ -36,6 +36,7 @@ import { type Computed, computed, effect, type State, state, untrack } from './i
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
+import type { Room } from './internal/room.ts'
 import { markSettled } from './internal/settledRead.ts'
 import {
     sharedCacheEvictIfNeeded,
@@ -157,7 +158,10 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     (args: Args): Promise<T>
     // Widens the shared `publish` with the scalar UPDATER form (read-modify-write): a `Memo` value slot
     // may be mutated from its current value. A channel/socket only appends, so this overload is
-    // memo-specific. The value form is inherited from ReactiveReadSurface.
+    // memo-specific. The key stays a `Room` positional, so an ARGLESS memo publishes bare — `m.publish(v)`,
+    // no `undefined` placeholder — while a keyed one names its slot: `m.publish({id}, v)`.
+    publish(...args: [...Room<Args>, next: T | ((current: T | undefined) => T)]): void
+    // The generic-safe two-argument form (see `ReactiveReadSurface.publish`).
     publish(args: Args, next: T | ((current: T | undefined) => T)): void
     // The WRITABLE PROJECTION of one slot (ADR 0024 §4) — and only that; reading a memo is the bare call,
     // `{…}`, `.peek()` and `await`, which already have defined blocking behaviour. The returned cell reads
@@ -202,6 +206,24 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
 export interface SyncMemo<T> extends Omit<Memo<void, T>, 'load'> {
     (): T
 }
+
+// A KEYED memo whose body is SYNCHRONOUS. Args are still the whole dependency set (the body runs
+// untracked, one slot per key), but there is nothing to await, so the bare call returns `T` — same
+// reasoning as `SyncMemo`: a promise here would blank the server-rendered text and refill it a microtask
+// later. Every probe/verb is inherited unchanged; only the read differs.
+export interface SyncKeyedMemo<Args, T> extends Omit<Memo<Args, T>, 'load'> {
+    (args: Args): T
+}
+
+// Excludes a DEFERRED body from the synchronous overload: inference sets `T` from the body's return, and a
+// promise or an async iterable collapses to `never`, which the body is not assignable to — so the call
+// falls through to the loading overload instead. A stream body is deferred too: an async generator is not
+// a `Promise`, and a keyed stream slot belongs to the replayable-transcript path, not this one.
+type NotDeferred<T> = T extends Promise<unknown> | AsyncIterable<unknown> ? never : T
+
+// Sentinel for "this keyed read is not synchronous after all" — distinct from any value a body may return,
+// including `undefined`.
+const DEFERRED: unique symbol = Symbol('abide.memo.deferred')
 
 let memoCounter = 0
 
@@ -313,13 +335,22 @@ export function memo<C>(
     opts?: MemoOptions,
 ): Memo<void, AsyncIterable<C>>
 export function memo<T>(fn: () => T, opts?: SyncMemoOptions): SyncMemo<T>
-// The TWO-ARGUMENT form (ADR 0024 §1): the source thunk is the declared input, so only it is tracked and
-// the transform runs untracked — the same rule and the same mechanism as `watch(source, handler)`.
+// The TWO-ARGUMENT form (ADR 0024 §1, ADR 0025): the source THUNK is the declared input, so only it is
+// tracked and the transform runs untracked — the same rule and mechanism as `watch(source, handler)`.
+// The source is always a thunk, which is what makes the tracked region a plain lexical thing you can see:
+// several inputs need no API of their own, they are just what the thunk returns (`() => ({ a, b })`).
 export function memo<S, T>(
     source: () => S,
     transform: (value: S) => T,
     opts?: SyncMemoOptions,
 ): SyncMemo<T>
+// KEYED + SYNCHRONOUS: the args are the cache key and the whole dependency set, and the read IS the value.
+// Declared before the loading overload so a plain-valued body picks it; a promise-returning body fails
+// `NotPromise` and falls through.
+export function memo<Args, T>(
+    fn: (args: Args) => NotDeferred<T>,
+    opts?: SyncMemoOptions,
+): SyncKeyedMemo<Args, T>
 export function memo<Args, T>(fn: (args: Args) => Promise<T> | T, opts?: MemoOptions): Memo<Args, T>
 // One runtime object serves every overload — the auto-tracked path is a second FILL PATH for the same
 // slot, not a second surface (ADR 0024 §3), so the implementation signature just spans both faces.
@@ -327,13 +358,24 @@ export function memo<Args, T>(
     body: (args: Args) => Promise<T> | T,
     transformOrOpts?: ((value: never) => unknown) | MemoOptions,
     trailingOpts?: MemoOptions,
-): Memo<Args, T> | SyncMemo<T> {
+): Memo<Args, T> | SyncMemo<T> | SyncKeyedMemo<Args, T> {
     const transform =
         typeof transformOrOpts === 'function'
             ? (transformOrOpts as unknown as (value: unknown) => T)
             : undefined
     const opts: MemoOptions | undefined =
         transform === undefined ? (transformOrOpts as MemoOptions | undefined) : trailingOpts
+    // The two forms are disjoint and the SECOND argument tells them apart: an object is options and the
+    // body is an args-keyed loader (what an RPC builds); a function is a transform and the body must then
+    // be the argless SOURCE THUNK (ADR 0025). Pairing an args-taking body with a transform is neither —
+    // it would call the handler with no arguments and memoize the result under one slot.
+    if (transform !== undefined && body.length > 0) {
+        throw new TypeError(
+            'memo: a source paired with a transform must be an ARGLESS thunk (ADR 0025) — ' +
+                '`memo(() => …, transform)`. A handler that takes args is the KEYED form, and it pairs ' +
+                'with options, not a transform.',
+        )
+    }
     // Collapse the two-argument form into ONE argless body so everything below sees a single `fn`: the
     // source read stays tracked (it IS the declared input), the transform is wrapped in `untrack`.
     const fn: (args: Args) => Promise<T> | T =
@@ -357,6 +399,14 @@ export function memo<Args, T>(
     // which is also what the `SyncMemoOptions` overload encodes so types and runtime cannot disagree.
     // Whether it ACTUALLY takes it is decided by the first run — see `resolveMode`.
     const autoEligible = fn.length === 0 && ttl === Infinity && !shared
+    // A KEYED body can also be synchronous, and then the read IS the value — there is nothing to await, and
+    // handing back a promise would blank the SSR text and refill it a microtask later (the same reasoning as
+    // ADR 0024 §3). It does NOT get the auto-tracked backing: its args are the whole dependency set, so the
+    // body runs untracked and the value lives in the ordinary slot state machine, which is what keeps a
+    // hydration `seed`, a `publish`, and `invalidate` authoritative over it.
+    const keyedSyncEligible = fn.length > 0 && ttl === Infinity && !shared
+    // Undecided until the first run proves it, exactly like `resolveMode`.
+    let keyedSync: boolean | undefined
     if (fn.length === 0 && declaresParameters(fn)) {
         throw new TypeError(
             'memo: a rest or defaulted parameter (`(...args) => …` / `(args = {}) => …`) reports ' +
@@ -795,6 +845,57 @@ export function memo<Args, T>(
 
     // The coalesced-load core: return the in-flight promise, the settled value/error/stream cursor, or
     // start a load. Non-reactive on its own (uses `state.peek()`); the bare call adds the subscription.
+    // The KEYED SYNCHRONOUS read. Returns the value, or DEFERRED when this memo turns out to load — in
+    // which case the already-produced promise is handed to `startLoad`, so `fn` is never run twice.
+    //
+    // Reading `slot.state()` FIRST (a tracked read, so the caller subscribes) is what makes a hydration
+    // `seed`, a `publish`, and an `invalidate` authoritative: a settled slot is returned as-is and `fn`
+    // stays uncalled. Only an idle or expired slot runs the body, and it runs UNTRACKED because the args
+    // are the whole dependency set.
+    function readKeyedSync(slot: Slot<Args, T>): T | typeof DEFERRED {
+        const current = slot.state()
+        // A STREAM slot is never this memo's business: it is a replayable transcript (including one warmed
+        // by the SSR `seedStream` handoff, whose whole point is that the client does NOT re-invoke the
+        // source). Hand it straight to the classic path, which returns a fresh cursor over it.
+        if (current.status === 'stream') return DEFERRED
+        const settled =
+            !isExpired(slot) && (current.status === 'value' || current.status === 'error')
+        if (settled) {
+            // A settled slot only short-circuits once the body has been PROVEN synchronous. Until then it
+            // must not: a slot can be settled without the body ever running (a hydration `seed`, a
+            // `publish`), and returning its value here would hand a raw `T` back from an async memo whose
+            // contract is `Promise<T>`. An idle slot falls through and the run below classifies it.
+            if (keyedSync !== true) return DEFERRED
+            if (current.status === 'value') return current.value as T
+            throw current.error
+        }
+        // An in-flight load means a previous read already classified this memo as loading.
+        if (slot.inflight !== null) return DEFERRED
+
+        let produced: Promise<T> | T
+        try {
+            produced = untrack(() => fn(slot.args))
+        } catch (caught) {
+            keyedSync = true
+            slot.loadedAt = Date.now()
+            setState(slot, { status: 'error', value: undefined, error: caught, refreshing: false })
+            throw caught
+        }
+        const tagged = responseSourceOf(produced)
+        if (tagged?.kind === 'stream' || isThenable(produced) || isStreamSource(produced)) {
+            keyedSync = false
+            void startLoad(slot, false, { produced }).catch(() => {
+                // Retained on the slot and re-thrown to whoever awaits the read.
+            })
+            return DEFERRED
+        }
+        keyedSync = true
+        const value = (tagged?.kind === 'value' ? tagged.value : produced) as T
+        slot.loadedAt = Date.now()
+        setState(slot, { status: 'value', value, error: undefined, refreshing: false })
+        return value
+    }
+
     function coalescedLoad(slot: Slot<Args, T>): Promise<T> {
         const state = slot.state.peek()
         // A settled/open stream slot hands back a fresh cursor over the shared buffer with no re-run — unless
@@ -834,6 +935,10 @@ export function memo<Args, T>(
             const state = autoState(auto)
             if (state.status === 'error') throw state.error
             return state.value as T
+        }
+        if (keyedSyncEligible && keyedSync !== false) {
+            const settled = readKeyedSync(slot)
+            if (settled !== DEFERRED) return settled as T
         }
         slot.state()
         return untrack(() => coalescedLoad(slot))
@@ -983,7 +1088,14 @@ export function memo<Args, T>(
         broadcast('invalidate', args)
     }
 
-    c.publish = (args: Args, next: T | ((current: T | undefined) => T)): void => {
+    // The VALUE (or updater) is always LAST; the slot key is what precedes it — an argless memo passes
+    // none (`publish(v)`), a keyed one passes its args (`publish({id}, v)`), and the explicit
+    // `(undefined, v)` two-argument form unpacks identically.
+    c.publish = ((
+        ...published: [...Room<Args>, next: T | ((current: T | undefined) => T)]
+    ): void => {
+        const next = published[published.length - 1] as T | ((current: T | undefined) => T)
+        const args = (published.length > 1 ? published[0] : undefined) as Args
         const slot = ensureSlot(args)
         resolveMode(slot)
         const auto = slot.auto
@@ -1026,7 +1138,7 @@ export function memo<Args, T>(
         log.channel('abide:memo').trace(`publish ${id}`)
         // Both forms broadcast the resolved VALUE (value-form frame) on a shared slot.
         broadcast('publish', args, value)
-    }
+    }) as Memo<Args, T>['publish']
 
     c.snapshot = (): Array<{ args: Args; value: T }> =>
         untrack(() => {
@@ -1085,7 +1197,12 @@ export function memo<Args, T>(
         startStream(slot, source, encoding)
     }
 
-    c.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) => {
+    // The HANDLER is last, the slot key precedes it — same unpacking as `publish`.
+    c.watch = ((
+        ...watched: [...Room<Args>, handler: (value: T | undefined) => void]
+    ): (() => void) => {
+        const handler = watched[watched.length - 1] as (value: T | undefined) => void
+        const args = (watched.length > 1 ? watched[0] : undefined) as Args
         const slot = ensureSlot(args)
         resolveMode(slot)
         let first = true
@@ -1148,7 +1265,7 @@ export function memo<Args, T>(
             last = value
             untrack(() => handler(value))
         })
-    }
+    }) as Memo<Args, T>['watch']
 
     // Tag registry hooks (rpc-core §8, PR4). A shared memo carrying tags registers these so the global
     // `invalidate/refresh({ tags })` selectors can act on it. Tag invalidate/refresh act on ALL current

@@ -89,7 +89,11 @@ navigation**.
    component that re-mounts on identity change. A component-valued prop types as `Component<Props>`.
 4. **`{...expr}` spread** — props onto components, attributes onto elements; reactive.
 5. **No `onMount`/`onDestroy`.** `<script>` body = setup; effect/`watch`/`bind:element`-fn
-   teardown = cleanup.
+   teardown = cleanup. The emitted `mount` AND `render` run the setup preamble inside an open **effect
+   scope**, so the instance owns every `watch` its script created: unmount disposes them on the client,
+   end of request on the server (a render is a component's whole life there). That ownership is what
+   makes the returned teardown a real lifecycle hook (rpc-core §7.5) rather than a re-run-only one, on
+   both sides.
 6. **Capitalized tag = component**, lowercase = element (sole discriminator; components must
    still be in scope/imported).
 
@@ -278,15 +282,17 @@ Mechanism:
      belong to RPC/socket callables, which are imports, and imports are never rewritten. `abide check`
      unwraps the binding to its value, so `d.peek()` fails on both sides rather than silently returning
      the wrong thing.
-   - **Except in DEPENDENCY position.** The sole first argument of `watch(…)` / `memo(…)` is a source
-     NODE, so a bare cell/memo there is left alone: `watch(count, handler)` and `memo(a, (v) => v + 2)`
-     both pass the node. This is a compiler-only change with no runtime or type change (a cell already
-     IS `(): T`, which is what a `source: () => T` expects), and it removes the wart that used to force
-     `watch(() => count, h)`. An explicit generic (`memo<T>(a, t)`) still resolves the callee.
-   - **Auto-call needs a visible argless fn literal at the declaration** — `memo(() => …)`, or a bare
-     node in the two-argument source form. `memo(someFnRef)` is opaque, and an `async` body would
-     produce a promise-returning read that blanks the server-rendered text (see
-     `promise-read-model.md`); neither auto-calls, so both stay plain `const` bindings.
+   - **No dependency-position exception (ADR 0025).** A `watch`/`memo` source is always an argless
+     THUNK, so every identifier inside it is an ordinary read and the rewriter has ONE rule, not two:
+     `watch(() => count, handler)`, `memo(() => a, (v) => v + 2)`. A bare cell in that slot reads as a
+     value, which is a type error at the call (`number` is not `() => T`) — the right diagnostic, since
+     the thunk is not optional. Several inputs need no syntax of their own: they are what the thunk
+     returns, `memo(() => ({ a, b }), ({ a, b }) => a + b)`.
+   - **Auto-call needs a visible argless fn literal at the declaration** — `memo(() => …)`, with or
+     without a transform. `memo(someFnRef)` is opaque, an ARGS-taking body is a keyed callable rather
+     than a value, and an `async` argless body would produce a promise-returning read that blanks the
+     server-rendered text (see `promise-read-model.md`); none auto-call, so all stay plain `const`
+     bindings.
 7. **Two `<script>` lowerings, one scanner.** The RUNTIME lowering (`analyzeScope` → the emitted
    `render`/`mount`) runs in-process on the SSR/build hot path; the TYPE-CHECK lowering (C10) runs
    out-of-process in `tsgo`. Both are **token-scanner-based, not AST-based** — TS7 ships **no

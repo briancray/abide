@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test'
 test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded', async ({
     page,
 }) => {
-    await page.goto('/templating/reactivity')
+    await page.goto('/state')
     await page.getByRole('link', { name: 'Async blocks', exact: true }).click() // soft-nav → /templating/async
     await expect(page).toHaveURL(/\/templating\/async$/)
     // `toHaveURL` resolves on the history push — BEFORE the soft-nav content swap. Wait for the destination

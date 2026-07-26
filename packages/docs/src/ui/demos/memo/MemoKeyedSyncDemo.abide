@@ -1,0 +1,19 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // Declare an argument and it becomes the CACHE KEY — one slot per key. Two things follow, and both
+  // are visible below: the body runs UNTRACKED (the args are the whole dependency set), and because it
+  // returns a plain value there is nothing to await, so the read IS the value.
+  let w = state(3)
+  let h = state(4)
+  const area = memo(({ w, h }: { w: number; h: number }) => w * h)
+</script>
+
+<div class="row">
+  <button data-testid="keyed-w" onclick={() => w++}>Wider</button>
+  <button data-testid="keyed-h" onclick={() => h++}>Taller</button>
+</div>
+<p>w: <strong data-testid="keyed-w-val">{w}</strong> · h: <strong data-testid="keyed-h-val">{h}</strong></p>
+<p>area: <strong data-testid="keyed-area">{area({ w, h })}</strong> <span class="muted">(a value, not a promise — so it lands in the SSR HTML)</span></p>
+<p>a different key is a different slot: <code>area({'{'} w: 2, h: 5 {'}'})</code> = <strong data-testid="keyed-other">{area({ w: 2, h: 5 })}</strong> <span class="muted">(unaffected by the buttons)</span></p>

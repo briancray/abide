@@ -13,17 +13,15 @@ import { parse } from './parse.ts'
 const CELLS = (...names: string[]): CellScope => ({
     cells: new Set(names),
     memos: new Set(),
-    depCallees: new Set(),
 })
 
 // `collectFreeIdentifiers` / `rewriteFreeIdentifiers` take a plain set of DECLARED script bindings.
 const DECLARED = (...names: string[]): Set<string> => new Set(names)
 
-// An auto-called memo scope (ADR 0024 §5) with the framework dependency-position callees in place.
+// An auto-called memo scope (ADR 0024 §5).
 const MEMOS = (...names: string[]): CellScope => ({
     cells: new Set(),
     memos: new Set(names),
-    depCallees: new Set(['memo', 'watch']),
 })
 
 // ---------------------------------------------------------------------------
@@ -599,45 +597,91 @@ describe('rewriteCellRefs memo auto-call', () => {
     })
 })
 
-describe('rewriteCellRefs dependency position', () => {
-    test('watch(count, handler) keeps the NODE — the wart the thunk used to work around', () => {
-        expect(
-            rewriteCellRefs('watch(count, handler)', {
-                ...CELLS('count'),
-                depCallees: new Set(['watch']),
-            }),
-        ).toBe('watch(count, handler)')
+// A destructured PARAMETER binds its names — they shadow a same-named cell, and the pattern is a binding
+// form, not an object literal. Before this was handled, a collision both lost the shadow and expanded the
+// pattern, emitting invalid JS (`({ a: a() }) =>`, `([a()]) =>`). The multi-dependency form makes the
+// collision the normal spelling (`memo({ a, b }, ({ a, b }) => …)`), so it is pinned here.
+describe('rewriteCellRefs destructured parameter bindings', () => {
+    test('an object pattern parameter shadows the cell and is not expanded', () => {
+        expect(rewriteCellRefs('list.map(({ a }) => a + 1)', CELLS('a'))).toBe(
+            'list.map(({ a }) => a + 1)',
+        )
     })
 
-    test('watch(count) — the single-argument thunk form — also keeps the node', () => {
-        expect(
-            rewriteCellRefs('watch(count)', { ...CELLS('count'), depCallees: new Set(['watch']) }),
-        ).toBe('watch(count)')
+    test('an array pattern parameter shadows the cell and is not expanded', () => {
+        expect(rewriteCellRefs('list.map(([a]) => a + 1)', CELLS('a'))).toBe(
+            'list.map(([a]) => a + 1)',
+        )
     })
 
-    test('memo(a, transform) keeps the node; the transform body still reads', () => {
-        expect(
-            rewriteCellRefs('memo(a, (v) => v + b)', { ...MEMOS('a', 'b'), cells: new Set() }),
-        ).toBe('memo(a, (v) => v + b())')
+    test('a destructured function parameter binds too', () => {
+        expect(rewriteCellRefs('function f({ a }) { return a }', CELLS('a'))).toBe(
+            'function f({ a }) { return a }',
+        )
     })
 
-    test('an explicit generic argument list still resolves the callee', () => {
-        expect(rewriteCellRefs('memo<number>(a, t)', MEMOS('a'))).toBe('memo<number>(a, t)')
+    test('a RENAMED property binds the new name; the key is not a reference', () => {
+        expect(rewriteCellRefs('list.map(({ x: a }) => a + 1)', CELLS('a'))).toBe(
+            'list.map(({ x: a }) => a + 1)',
+        )
     })
 
-    test('a cell in any OTHER argument position still reads', () => {
-        expect(
-            rewriteCellRefs('watch(source, count)', {
-                ...CELLS('count', 'source'),
-                depCallees: new Set(['watch']),
-            }),
-        ).toBe('watch(source, count())')
+    test('a DEFAULT value is still a reference and is rewritten', () => {
+        expect(rewriteCellRefs('list.map(({ x = a }) => x + 1)', CELLS('a'))).toBe(
+            'list.map(({ x = a() }) => x + 1)',
+        )
     })
 
-    test('a cell passed to a non-dependency callee still reads', () => {
+    test('a nested pattern binds at every level', () => {
+        expect(rewriteCellRefs('list.map(({ o: { a } }) => a + 1)', CELLS('a'))).toBe(
+            'list.map(({ o: { a } }) => a + 1)',
+        )
+    })
+
+    test('the shadow ends with the function — the outer cell still reads after it', () => {
+        expect(rewriteCellRefs('list.map(({ a }) => a + 1); use(a)', CELLS('a'))).toBe(
+            'list.map(({ a }) => a + 1); use(a())',
+        )
+    })
+})
+
+describe('rewriteCellRefs source position (ADR 0025 — thunk only)', () => {
+    // There is no dependency-position exception any more. A `memo`/`watch` source is a THUNK, so every
+    // identifier is an ordinary read and the rewriter has one rule instead of two.
+    test('inside the source thunk a cell reads like anywhere else', () => {
+        expect(rewriteCellRefs('watch(() => count, handler)', CELLS('count'))).toBe(
+            'watch(() => count(), handler)',
+        )
+    })
+
+    test('several inputs are just what the thunk returns — values, not nodes', () => {
         expect(
-            rewriteCellRefs('log(count)', { ...CELLS('count'), depCallees: new Set(['watch']) }),
-        ).toBe('log(count())')
+            rewriteCellRefs('memo(() => ({ a, b }), ({ a, b }) => a + b)', CELLS('a', 'b')),
+        ).toBe('memo(() => ({ a: a(), b: b() }), ({ a, b }) => a + b)')
+    })
+
+    test('the transform body still reads its own cells', () => {
+        expect(rewriteCellRefs('memo(() => a, (v) => v + b)', MEMOS('a', 'b'))).toBe(
+            'memo(() => a(), (v) => v + b())',
+        )
+    })
+
+    test('a BARE cell in the source slot now reads as a value, like every other argument', () => {
+        // The old sugar suppressed this read. It is a type error at the call (`number` is not `() => T`),
+        // which is exactly the diagnostic a reader wants — the thunk is not optional.
+        expect(rewriteCellRefs('watch(count, handler)', CELLS('count'))).toBe(
+            'watch(count(), handler)',
+        )
+    })
+
+    test('an explicit generic argument list is untouched', () => {
+        expect(rewriteCellRefs('memo<number>(() => a, t)', MEMOS('a'))).toBe(
+            'memo<number>(() => a(), t)',
+        )
+    })
+
+    test('a cell passed to any other callee still reads', () => {
+        expect(rewriteCellRefs('log(count)', CELLS('count'))).toBe('log(count())')
     })
 })
 
@@ -665,6 +709,24 @@ describe('analyzeScope memo bindings', () => {
         expect([...analysis.cellScope.memos]).toEqual([])
     })
 
+    // The multi-dependency form is a sync memo like every other declared-source form — without this it
+    // stays unclassified and a bare `{d}` renders the memo FUNCTION instead of its value.
+    test('a source thunk WITH a transform is auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo(() => ({ a, b }), ({ a, b }) => a + b)",
+        )
+        expect([...analysis.cellScope.memos]).toEqual(['d'])
+        expect([...analysis.cellScope.cells]).toEqual([])
+    })
+
+    test('a source thunk with a .state() projection is still a writable CELL', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; let d = memo(() => a, (v) => v).state()",
+        )
+        expect([...analysis.cellScope.cells]).toEqual(['d'])
+        expect([...analysis.cellScope.memos]).toEqual([])
+    })
+
     test('an opaque fn reference is NOT auto-called (guessing would emit undefined args)', () => {
         const analysis = scopeOf(
             "import { memo } from 'abide/shared/memo'; const d = memo(loadThing)",
@@ -686,25 +748,20 @@ describe('analyzeScope memo bindings', () => {
         expect([...analysis.cellScope.memos]).toEqual([])
     })
 
-    test('the two-argument source form recognises a node declared above', () => {
+    // A BARE node source no longer classifies — the source must be a thunk (ADR 0025), and guessing
+    // otherwise would auto-call a binding whose initializer the compiler cannot see through.
+    test('a bare node in the source slot is NOT auto-called', () => {
         const analysis = scopeOf(
             "import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let a = state(1); const d = memo(a, (v) => v + 1)",
         )
-        expect([...analysis.cellScope.memos]).toEqual(['d'])
-    })
-
-    test('watch and memo are registered as dependency-position callees', () => {
-        const analysis = scopeOf(
-            "import { memo } from 'abide/shared/memo'; import { watch } from 'abide/shared/watch'; const d = memo(() => 1)",
-        )
-        expect([...analysis.cellScope.depCallees].sort()).toEqual(['memo', 'watch'])
+        expect([...analysis.cellScope.memos]).toEqual([])
     })
 
     test('a memo declared in the MODULE script is visible to the instance script', () => {
         const analysis = analyzeScope(
             parse(
                 "<script module>import { memo } from 'abide/shared/memo'; const base = memo(() => 1)</script>" +
-                    "<script>import { memo } from 'abide/shared/memo'; const d = memo(base, (v) => v + 1)</script>" +
+                    "<script>import { memo } from 'abide/shared/memo'; const d = memo(() => base, (v) => v + 1)</script>" +
                     '<span>{d}</span>',
             ),
         )

@@ -1,6 +1,7 @@
 <script module>
   import "../app.css"
   import { route } from "abide/shared/route"
+  import { watch } from "abide/shared/watch"
 
   // The sample index mirrors the file-based route tree (src/ui/pages/**) — in abide the navigation
   // IS the routing, so the sidebar shows exactly the pages that exist. Grouped by capability.
@@ -8,8 +9,27 @@
     { title: "Start", items: [
       { href: "/", label: "Home" },
     ] },
+    { title: "Primitives", items: [
+      { href: "/state", label: "state — owned" },
+      { href: "/memo", label: "memo — loaded" },
+      { href: "/channel", label: "channel — pushed" },
+      { href: "/watch", label: "watch — effects" },
+      { href: "/memo/verbs", label: "Surface verbs" },
+      { href: "/memo/probes", label: "Reactive probes" },
+      { href: "/memo/global", label: "Global probes" },
+    ] },
+    { title: "Transport", items: [
+      { href: "/rpc", label: "rpc = memo + transport" },
+      { href: "/rpc/reads", label: "Reads" },
+      { href: "/rpc/mutations", label: "Mutations" },
+      { href: "/rpc/responses", label: "Responses" },
+      { href: "/rpc/streaming", label: "Streaming" },
+      { href: "/rpc/uploads", label: "File uploads" },
+      { href: "/rpc/probes", label: "RPC probes" },
+      { href: "/sockets", label: "socket = channel + transport" },
+      { href: "/sockets/probes", label: "Socket probes" },
+    ] },
     { title: "Templating", items: [
-      { href: "/templating/reactivity", label: "Reactive primitives" },
       { href: "/templating/bindings", label: "Bindings & directives" },
       { href: "/templating/conditionals", label: "Conditionals" },
       { href: "/templating/lists", label: "Lists" },
@@ -18,19 +38,6 @@
       { href: "/templating/components", label: "Components" },
       { href: "/templating/styling", label: "Scoped <style>" },
     ] },
-    { title: "RPC", items: [
-      { href: "/rpc", label: "Isomorphic RPC" },
-      { href: "/rpc/reads", label: "Reads" },
-      { href: "/rpc/mutations", label: "Mutations" },
-      { href: "/rpc/responses", label: "Responses" },
-      { href: "/rpc/streaming", label: "Streaming" },
-      { href: "/rpc/uploads", label: "File uploads" },
-      { href: "/rpc/probes", label: "Reactive probes" },
-    ] },
-    { title: "Sockets", items: [
-      { href: "/sockets", label: "Live publish" },
-      { href: "/sockets/probes", label: "Reactive probes" },
-    ] },
     { title: "Pages", items: [
       { href: "/pages/routing", label: "Routing & navigation" },
       { href: "/pages/structure", label: "Page file structure" },
@@ -38,12 +45,6 @@
       { href: "/pages/data", label: "Data & props" },
       { href: "/pages/ssr", label: "Streaming SSR" },
       { href: "/pages/hydration", label: "Hydration health" },
-    ] },
-    { title: "Caching & memos", items: [
-      { href: "/caching/memo", label: "The memo primitive" },
-      { href: "/caching", label: "Cache verbs" },
-      { href: "/caching/probes", label: "Reactive probes" },
-      { href: "/caching/global", label: "Global probes" },
     ] },
     { title: "Platform", items: [
       { href: "/platform/config", label: "Config" },
@@ -78,25 +79,48 @@
   // mounts, list its `<section class="sample" id>` cards in the sidebar under the active page, and
   // scroll-spy the one in view. Pure progressive enhancement — the page works without it.
   //
-  // A soft-nav recreates this content region (dispose → innerHTML shell swap → hydrate), so bind:element
-  // re-fires per navigation — sometimes while the destination's sample cards or the sidebar's reactive
-  // `idx-active` class haven't settled yet. Reading the DOM synchronously here therefore raced (empty
-  // content wiped the links and never rebuilt). Defer the build to the next frame and re-query then, so
-  // the final settled DOM is what we scrape; a transient empty mount just no-ops.
+  // The attachment fires ONCE, not per navigation: this is the root layout, and a cross-route soft-nav
+  // that shares a layout prefix keeps the outer layouts alive and swaps only the diverging suffix. So
+  // `.content-inner` is never re-created and `bind:element` never re-runs — the page content changes
+  // underneath a node that stays put. (It previously assumed the opposite, which left the PREVIOUS page's
+  // card list in the sidebar after every soft-nav.) The rebuild therefore hangs off `route()`.
+  //
+  // Timing is still racy in the other direction: when a rebuild starts, the destination's sample cards and
+  // the sidebar's reactive `idx-active` class have not necessarily landed yet, so the build retries for a
+  // bounded run of frames and the teardown clears eagerly — a page with no cards then simply has no index.
   function indexSamples(contentNode: Element) {
     if (typeof IntersectionObserver === "undefined") return
     let frame = 0
+    let attempts = 0
     let spy: IntersectionObserver | undefined
     let sub: HTMLDivElement | undefined
+
+    function teardown() {
+      if (frame !== 0) {
+        cancelAnimationFrame(frame)
+        frame = 0
+      }
+      spy?.disconnect()
+      spy = undefined
+      sub?.remove()
+      sub = undefined
+      // Belt and braces: a racing rebuild may have left a block anchored under a now-stale link.
+      for (const stale of document.querySelectorAll(".idx-samples")) stale.remove()
+    }
 
     function build() {
       frame = 0
       const active = document.querySelector(".idx-link.idx-active")
       const samples = Array.from(contentNode.querySelectorAll("section.sample[id]"))
-      if (active === null || samples.length === 0) return
-
-      // Clear any prior block (a racing mount may have left one anchored under a now-stale link).
-      for (const stale of document.querySelectorAll(".idx-samples")) stale.remove()
+      if (active === null || samples.length === 0) {
+        // Not settled yet: the content swap and the sidebar's reactive `idx-active` class land on their
+        // own schedules. Retry for a bounded run of frames rather than leaving the page unindexed.
+        if (attempts < 30) {
+          attempts++
+          frame = requestAnimationFrame(build)
+        }
+        return
+      }
 
       sub = document.createElement("div")
       sub.className = "idx-samples"
@@ -125,12 +149,23 @@
       for (const s of samples) spy.observe(s)
     }
 
-    frame = requestAnimationFrame(build)
+    function rebuild() {
+      teardown()
+      attempts = 0
+      frame = requestAnimationFrame(build)
+    }
+
+    rebuild()
+
+    // The root layout SURVIVES a soft-nav — a cross-route nav sharing a layout prefix keeps the outer
+    // layouts alive and swaps only the diverging suffix — so this attachment does NOT re-fire per
+    // navigation: the page content changes underneath a node that stays put. Rebuilding therefore has to
+    // hang off the thing that actually changed, which is the route.
+    const stopWatching = watch(() => route().url.pathname, rebuild)
 
     return () => {
-      if (frame !== 0) cancelAnimationFrame(frame)
-      spy?.disconnect()
-      sub?.remove()
+      stopWatching()
+      teardown()
     }
   }
 </script>

@@ -1,0 +1,22 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { watch } from "abide/shared/watch"
+
+  // The same declaration shape as `memo(() => …, transform)`. Every read inside the thunk is tracked,
+  // and the `next` / `previous` the handler already receives carry whatever the thunk returned — so a
+  // handler reads what changed by NAME, never by position.
+  let width = state(3)
+  let height = state(4)
+  let lastChange = state("nothing yet")
+  watch(() => ({ width, height }), (next, previous) => {
+    const changed = next.width === previous.width ? "height" : "width"
+    lastChange = changed + ": " + previous[changed] + " → " + next[changed]
+  })
+</script>
+
+<div class="row">
+  <button data-testid="ws-multi-w" onclick={() => width++}>Wider</button>
+  <button data-testid="ws-multi-h" onclick={() => height++}>Taller</button>
+</div>
+<p>width: <strong data-testid="ws-multi-w-val">{width}</strong> · height: <strong data-testid="ws-multi-h-val">{height}</strong></p>
+<p>last change: <strong data-testid="ws-multi-last">{lastChange}</strong> <span class="muted">(read from <code>next</code>/<code>previous</code> by name)</span></p>

@@ -23,11 +23,20 @@ test('void channel: direct iteration subscribes, publish fans out, peek/chunks r
     const ch = channel<number>({ tail: 3 })
     const got = collect(ch, 2) // `for await m of channel` = the default (void) room
     await delay(5)
-    ch.publish(undefined, 1)
-    ch.publish(undefined, 2)
+    // A void channel has no room to name: the message is the ONLY argument (`Room<void>` = `[]`).
+    ch.publish(1)
+    ch.publish(2)
     expect(await got).toEqual([1, 2])
-    expect(ch.peek(undefined)).toBe(2)
-    expect(ch.chunks(undefined)).toEqual([1, 2])
+    expect(ch.peek()).toBe(2)
+    expect(ch.chunks()).toEqual([1, 2])
+})
+
+test('void channel: the explicit (undefined, message) form unpacks to the same room', async () => {
+    const ch = channel<number>({ tail: 2 })
+    ch.publish(undefined, 1) // the generic-safe two-argument form (what forwarding code emits)
+    ch.publish(2)
+    expect(ch.chunks()).toEqual([1, 2])
+    expect(ch.peek()).toBe(2)
 })
 
 test('rooms: a subscriber to room A does NOT receive room B (server-side isolation)', async () => {
@@ -79,6 +88,23 @@ test('watch fires the handler per message on a room', async () => {
     expect(seen).toEqual(['a', 'b'])
 })
 
+// `watch` is the other verb with a TRAILING payload, so it takes the same vanishing key positional
+// `publish` does — the handler is the only argument on a void channel.
+test('watch on a void channel takes the handler alone (no room placeholder)', async () => {
+    const ch = channel<string>()
+    const seen: string[] = []
+    const dispose = ch.watch((v) => {
+        if (v !== undefined) seen.push(v)
+    })
+    await delay(5)
+    ch.publish('a')
+    await delay(5)
+    dispose()
+    ch.publish('b')
+    await delay(5)
+    expect(seen).toEqual(['a'])
+})
+
 // The unification guard (ADR 0023): `state` / `memo` / `channel` are the three isomorphic primitives, so
 // `channel` must carry the SAME reactive read surface `memo` does — the vocabulary a caller programs to
 // is the primitive's, not the transport's. If a probe is ever added to one and not the other, the
@@ -112,7 +138,7 @@ test('channel runs in a browser-shaped environment (isomorphic, no server scope)
     const ch = channel<string>({ tail: 1 })
     const seen = collect(ch, 1)
     await delay(5)
-    ch.publish(undefined, 'browser')
+    ch.publish('browser')
     expect(await seen).toEqual(['browser'])
-    expect(ch.peek(undefined)).toBe('browser')
+    expect(ch.peek()).toBe('browser')
 })

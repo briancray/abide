@@ -1,0 +1,17 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { watch } from "abide/shared/watch"
+
+  // The thunk reads `count`, so `count` is its dependency — nothing declares that. It runs once on
+  // mount (hence a message before any click) and again after every change. It WRITES `label`, which it
+  // never reads, so there is no cycle: values in, effect out.
+  let count = state(0)
+  let label = state("")
+  watch(() => { label = "count is " + count })
+</script>
+
+<div class="row">
+  <button data-testid="wt-inc" onclick={() => count++}>Increment</button>
+</div>
+<p>Count: <strong data-testid="wt-count">{count}</strong></p>
+<p>The effect wrote: <strong data-testid="wt-label">{label}</strong></p>

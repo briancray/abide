@@ -1,0 +1,20 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // Declare the dependency instead of inferring it. The first argument is always a THUNK, and what it
+  // reads is the whole dependency set — you can see the tracked region, it is the arrow body.
+  //
+  // Only the thunk is tracked. The transform reads `factor` too, but that read does NOT subscribe —
+  // bumping factor alone recomputes nothing; the next change to count picks up its current value.
+  let count = state(1)
+  let factor = state(10)
+  const scaled = memo(() => count, (value) => value * factor)
+</script>
+
+<div class="row">
+  <button data-testid="src-count" onclick={() => count++}>Increment count (tracked)</button>
+  <button data-testid="src-factor" onclick={() => factor++}>Increment factor (untracked)</button>
+</div>
+<p>count: <strong data-testid="src-count-val">{count}</strong> · factor: <strong data-testid="src-factor-val">{factor}</strong></p>
+<p>scaled: <strong data-testid="src-scaled">{scaled}</strong> <span class="muted">(count × factor, recomputed only when <em>count</em> changes)</span></p>

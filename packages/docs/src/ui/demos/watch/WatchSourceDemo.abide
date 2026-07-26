@@ -1,0 +1,18 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { watch } from "abide/shared/watch"
+
+  // watch(source, handler) — runs the handler on change only (not on the initial read). Here every
+  // count change pushes a side effect that increments a separate `changes` cell. The source is a THUNK,
+  // so what it reads is exactly what this watch depends on — nothing implicit, nothing positional.
+  let count = state(0)
+  let changes = state(0)
+  watch(() => count, () => { changes = changes + 1 })
+</script>
+
+<div class="row">
+  <button data-testid="ws-dec" onclick={() => count--}>Decrement</button>
+  <button data-testid="ws-inc" onclick={() => count++}>Increment</button>
+</div>
+<p>Count: <strong data-testid="ws-count">{count}</strong></p>
+<p>Count changed <strong data-testid="changes">{changes}</strong> times since load <span class="muted">(<code>watch(source, handler)</code>, change-only)</span></p>

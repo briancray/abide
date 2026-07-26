@@ -7,19 +7,22 @@
 
 <main class="page">
   <h1>Request scope</h1>
-  <p class="lead">Two per-request accessors. <code>cookies()</code> reads the request's <code>Bun.CookieMap</code>; <code>context()</code> is a free-form carrier bag handed from middleware to handler. Each is shown on its own below.</p>
+  <p class="lead">A handler doesn't take the request as a parameter — it <em>asks</em> for what it needs, ambiently. This page goes in the order the request itself does: read what the client sent, carry your own values alongside it, then wrap the whole thing in middleware that can stop it.</p>
 
+  <h2>Reading what arrived</h2>
   <p><code>cookies()</code> reads the request cookie jar. The browser sets <code>document.cookie</code>, then the RPC reads it back server-side — the value round-trips through the request scope.</p>
   <Demo id="cookies" title="cookies()" server="src/server/rpc/platformCookies.ts" client="src/ui/demos/platform/scope/CookiesDemo.abide" tab="server">
     <CookiesDemo />
   </Demo>
 
-  <p><code>context()</code> is the per-request carrier bag. A per-RPC middleware writes into it; the handler beneath it in the onion reads it back — the hand-off from a middleware layer to the handler.</p>
+  <h2>Carrying your own</h2>
+  <p>Cookies come from the client; <code>context()</code> is the same idea for values <em>you</em> put on the request. It is the per-request carrier bag. A per-RPC middleware writes into it; the handler beneath it in the onion reads it back — the hand-off from a middleware layer to the handler.</p>
   <Demo id="context" title="context()" server="src/server/rpc/platformContext.ts" client="src/ui/demos/platform/scope/ContextDemo.abide" tab="server">
     <ContextDemo />
   </Demo>
 
-  <p>A per-RPC <code>middleware</code> array composes an onion around the handler. The first layer <em>authorizes</em>: it either returns an <code>error(403)</code> Response to short-circuit (the handler never runs), or calls <code>next()</code> and lets the second layer run. Both calls hit the real router pipeline in the browser:</p>
+  <h2>Wrapping the request</h2>
+  <p>Both accessors above are read <em>inside</em> a handler. Middleware is the layer around it — and the reason <code>context()</code> exists, since it is how a layer hands something down. A per-RPC <code>middleware</code> array composes an onion around the handler. The first layer <em>authorizes</em>: it either returns an <code>error(403)</code> Response to short-circuit (the handler never runs), or calls <code>next()</code> and lets the second layer run. Both calls hit the real router pipeline in the browser:</p>
 
   <Demo id="guard" title="RPC <code>middleware</code> — onion + short-circuit" server="src/server/rpc/platformGuard.ts" client="src/ui/demos/platform/scope/GuardDemo.abide" tab="server">
     <GuardDemo />

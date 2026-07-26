@@ -1,0 +1,31 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { watch } from "abide/shared/watch"
+
+  // This effect OWNS an interval, so it must be able to give it back. Whatever the watch RETURNS is its
+  // teardown, and it runs at exactly the moments the resource has to go: before every re-run (the speed
+  // changed, so the old timer is cleared before the new one starts) and when the component goes away —
+  // unmount in the browser, end of the request during SSR, since a render is the whole life a component
+  // gets there. That return is the whole lifecycle: no onMount/onDestroy to reach for, and no
+  // is-this-the-browser branch, because the effect is cleaned up on both sides.
+  let speed = state(800)
+  let ticks = state(0)
+  let log = state.shared("watch-teardown-log", "")
+
+  // A plain array, deliberately: reading a CELL in the effect would make it depend on its own writes.
+  const lines: string[] = []
+  const record = (line: string) => { lines.push(line); log = lines.join(" → ") }
+
+  watch(() => {
+    const every = speed
+    ticks = 0
+    const timer = setInterval(() => { ticks = ticks + 1 }, every)
+    record("start " + every + "ms")
+    return () => { clearInterval(timer); record("stop " + every + "ms") }
+  })
+</script>
+
+<div class="row">
+  <button data-testid="wtd-speed" onclick={() => speed = speed === 800 ? 300 : 800}>Interval: {speed}ms — change it</button>
+</div>
+<p>Ticks since this effect last started: <strong data-testid="wtd-ticks">{ticks}</strong></p>

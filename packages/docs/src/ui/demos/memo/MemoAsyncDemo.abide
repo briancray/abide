@@ -1,0 +1,36 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // Argless and ASYNC — still no key, so still ONE slot. The body loads, which changes two things
+  // versus the synchronous derivation above: the slot gains the full read surface (peek/pending/
+  // refreshing/error), and it is NOT auto-tracked. Half-tracked is worse than untracked (ADR 0024 §2),
+  // so an async body re-fills on refresh/invalidate only — it reads `label` here, and renaming does
+  // nothing until the next refresh picks up the current value.
+  let label = state("alpha")
+  let reads = state(0)
+  let runs = state(0)
+  const loaded = memo(async () => {
+    runs++
+    const at = runs
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    return `${label} #${at}`
+  })
+  // Gated so the card starts idle: a `.peek()` in the markup subscribes AND kicks the load.
+  const value = memo(() => (reads ? (loaded.peek() ?? "loading") : "idle"))
+
+  function read() { reads++; loaded() }
+  function rename() { label = label === "alpha" ? "beta" : "alpha" }
+</script>
+
+<ul class="grid">
+  <li>Handler runs: <strong data-testid="async-runs">{runs}</strong></li>
+  <li>Value: <strong data-testid="async-value">{value}</strong></li>
+  <li>Reads requested: <strong data-testid="async-reads">{reads}</strong></li>
+  <li>label: <strong data-testid="async-label">{label}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="async-read" onclick={read}>Read</button>
+  <button data-testid="async-rename" onclick={rename}>Rename (no re-run)</button>
+  <button data-testid="async-refresh" onclick={() => loaded.refresh()}>Refresh</button>
+</div>

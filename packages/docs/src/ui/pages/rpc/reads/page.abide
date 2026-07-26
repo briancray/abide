@@ -11,40 +11,48 @@
 
 <main class="page">
   <h1>Reads</h1>
-  <p class="lead">A read is <code>GET</code> or <code>HEAD</code> — args go in the URL, the result is cached and coalesced. In a template its bare call is the awaitable, coalesced load (<code>Promise&lt;T&gt;</code>); <code>fn.peek(args)</code> is the non-blocking <code>T | undefined</code> snapshot. On the server the blocking forms land the value in SSR HTML; in the browser the peek is non-blocking while the blocking forms suspend.</p>
+  <p class="lead">A read is <code>GET</code> or <code>HEAD</code>: args go in the URL, the result is cached and coalesced by the <a href="/memo">memo</a> underneath. Define it once, call it by name on either side. This page is the call, then the four ways to render it, then the escape hatch.</p>
 
-  <p>A GET read blocks SSR so its value is already in this HTML:</p>
+  <h2>The read</h2>
+  <p>Import the RPC and call it. On the server that is an in-process call; in the browser it is a fetch of the same name — and the read blocks SSR, so the value below is already in this HTML before any JavaScript runs.</p>
   <Demo id="get" title="Read — <code>GET</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/GetReadDemo.abide" tab="server">
     <GetReadDemo />
   </Demo>
 
-  <p>Identical semantics to GET; a HEAD carries headers only. This raw fetch reports its status line:</p>
+  <p><code>HEAD</code> is the same read with no body — identical semantics, headers only. Useful as a liveness ping, which is what the raw fetch below reports.</p>
   <Demo id="head" title="Read — <code>HEAD</code>" server="src/server/rpc/rpcPing.ts" client="src/ui/demos/rpc/reads/HeadPingDemo.abide" tab="server">
     <HeadPingDemo />
   </Demo>
 
-  <p>Awaited during SSR; the string is already in this HTML:</p>
+  <h2>Rendering it: blocking or not</h2>
+  <p>Everything below reads the <em>same</em> RPC. The only question is what you want to happen while it is in flight, and there are two answers — wait, or show what you have.</p>
+
+  <p>Waiting is the default and the simplest: <code>{'{'}await fn(){'}'}</code> blocks the render, so the value lands in the server HTML. Nothing suspends on the client; the text node fills when the read settles.</p>
   <Demo id="await-read" title="<code>{'{'}await fn(){'}'}</code> — blocking read" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/AwaitReadDemo.abide" tab="client">
     <AwaitReadDemo />
   </Demo>
 
-  <p>The peek is <code>undefined</code> while pending in the browser (it subscribes and kicks the load), the value once loaded:</p>
+  <p>Not waiting is <code>peek</code>: a reactive <code>T | undefined</code> snapshot that never blocks. It subscribes the caller and kicks a coalesced load, so it is <code>undefined</code> for one beat and then the value. This is the form to reach for when a slow read shouldn't hold up the paint.</p>
   <Demo id="peek-read" title="<code>{'{'}fn.peek(args){'}'}</code> — non-blocking snapshot" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/PeekReadDemo.abide" tab="client">
     <PeekReadDemo />
   </Demo>
 
+  <h2>Rendering it: branching on the outcome</h2>
+  <p>A read can also fail, and <code>{'{'}#await{'}'}</code> is where that becomes visible: three branches for the three states, so a pending message and an error path are structural rather than something you hand-roll.</p>
   <Demo id="await-block" title="<code>{'{'}#await{'}'}</code> / <code>{'{'}:then{'}'}</code> / <code>{'{'}:catch{'}'}</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/AwaitBlockDemo.abide" tab="client">
     <AwaitBlockDemo />
   </Demo>
 
-  <p>The <code>then</code> binding folds into the opener: no pending branch, <code>v</code> is the resolved value (<code>T</code>), and the body renders once the read settles.</p>
+  <p>When you don't need a pending branch, the <code>then</code> binding folds into the opener. Same blocking behaviour as <code>{'{'}await fn(){'}'}</code>, but it binds the resolved value — the compact form for "I just want the value, typed".</p>
   <Demo id="await-inline" title="<code>{'{'}#await fn() then v{'}'}</code> — inline blocking form" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/AwaitInlineDemo.abide" tab="client">
     <AwaitInlineDemo />
   </Demo>
 
+  <h2>Stepping outside the memo</h2>
+  <p>All of the above go through the memo — cached, coalesced, throwing on failure. <code>fn.raw(args, init?)</code> is the door out: the untouched <code>Response</code>, no caching and nothing thrown, so you read the status, headers, and body yourself. See what the response helpers put on the wire on <a href="/rpc/responses#raw">Responses</a>.</p>
   <Demo id="raw" title="Raw bypass — untouched <code>Response</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/RawDemo.abide" tab="client">
     <RawDemo />
   </Demo>
 
-  <p>Beyond <code>peek</code>, a read carries the full reactive probe surface — <code>pending</code>, <code>refreshing</code>, <code>error</code>, <code>watch</code>. They have their own page: <a href="/rpc/probes">Reactive probes</a>.</p>
+  <p class="note">Beyond <code>peek</code>, a read carries the full reactive probe surface — <code>pending</code>, <code>refreshing</code>, <code>error</code>, <code>watch</code> — because it is a memo. They have their own page: <a href="/rpc/probes">RPC probes</a>.</p>
 </main>
