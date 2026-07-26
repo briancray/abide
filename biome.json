@@ -49,5 +49,27 @@
             "quoteStyle": "single",
             "semicolons": "asNeeded"
         }
-    }
+    },
+    "overrides": [
+        {
+            "includes": ["packages/abide/src/shared/**", "!packages/abide/src/shared/**/*.test.ts"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
+                                        "group": ["**/server/**"],
+                                        "message": "ADR 0026: shared/ is the bottom layer and must not import from server/. Move the dependency down, or read it off the reactive scope."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
 }
