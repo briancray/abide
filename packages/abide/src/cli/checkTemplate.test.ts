@@ -197,3 +197,103 @@ test('a wrong RPC-style argument in a template call is caught', async () => {
     expect(result.ok).toBe(false)
     expect(result.diagnostics.some((d) => d.line === 4)).toBe(true)
 })
+
+test('a bare `{fn()}` interpolation of a promise-returning read is a loud error', async () => {
+    const files = {
+        'src/lib/getUser.ts': 'export async function getUser(): Promise<string> { return "x" }\n',
+        'src/ui/pages/p/page.abide':
+            '<script>\n' + // 1
+            "import { getUser } from '../../../lib/getUser.ts'\n" + // 2
+            '</script>\n' + // 3
+            '<p>{getUser()}</p>\n', // 4  bare interpolation of Promise<string> → error on line 4
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.ok).toBe(false)
+    const diag = result.diagnostics.find((d) => d.line === 4)
+    expect(diag).toBeDefined()
+    // The remedy travels with the diagnostic, so the fix is readable without opening the docs.
+    expect(diag?.message).toContain('{await expr}')
+})
+
+test('`{await fn()}` — the form the diagnostic points at — type-checks clean', async () => {
+    const files = {
+        'src/lib/getUser.ts': 'export async function getUser(): Promise<string> { return "x" }\n',
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import { getUser } from '../../../lib/getUser.ts'\n" +
+            '</script>\n' +
+            '<p>{await getUser()}</p>\n',
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+test('a sometimes-thenable value stays legal — the passthrough case the auto-await serves', async () => {
+    const files = {
+        'src/lib/maybe.ts': 'export function maybe(): string | Promise<string> { return "x" }\n',
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import { maybe } from '../../../lib/maybe.ts'\n" +
+            '</script>\n' +
+            '<p>{maybe()}</p>\n',
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+// `rpc = memo + transport`, so the promise diagnostic must key on the TYPE, not on which callable it
+// is. ADR 0024 classification decides that for a memo: an argless SYNCHRONOUS body returns `T` (and so
+// stays legal bare), an async one returns `Promise<T>` (and so reads exactly like a bare RPC read).
+const MEMO_SHIM =
+    'export function memo<T>(fn: () => T): { (): T; peek(): T | undefined; invalidate(): void }\n' +
+    '{ return null as never }\n'
+
+test('an argless SYNCHRONOUS memo stays legal bare — it returns T, not a promise', async () => {
+    const files = {
+        'src/lib/memo.ts': MEMO_SHIM,
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import { memo } from '../../../lib/memo.ts'\n" +
+            'const d = memo(() => 41 + 1)\n' +
+            '</script>\n' +
+            '<p>{d}</p>\n',
+    }
+    const result = await check(await makeProject(files))
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+test('an ASYNC memo hits the same diagnostic as a bare RPC read', async () => {
+    const files = {
+        'src/lib/memo.ts': MEMO_SHIM,
+        'src/ui/pages/p/page.abide':
+            '<script>\n' + // 1
+            "import { memo } from '../../../lib/memo.ts'\n" + // 2
+            'const d = memo(async () => "hi")\n' + // 3
+            '</script>\n' + // 4
+            '<p>{d}</p>\n', // 5  auto-called binding reads Promise<string> → error
+    }
+    const result = await check(await makeProject(files))
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.find((d) => d.line === 5)?.message).toContain('{await expr}')
+})
+
+test('an ASYNC memo read as `{await d}` type-checks clean', async () => {
+    const files = {
+        'src/lib/memo.ts': MEMO_SHIM,
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import { memo } from '../../../lib/memo.ts'\n" +
+            'const d = memo(async () => "hi")\n' +
+            '</script>\n' +
+            '<p>{await d}</p>\n',
+    }
+    const result = await check(await makeProject(files))
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})

@@ -11,5 +11,5 @@ export default GET(
         runs++
         return { tag, runs }
     },
-    { memo: { shared: true, ttl: 700 } },
+    { memo: { crossRequest: true, ttl: 700 } },
 )

@@ -11,7 +11,6 @@
 // parses JSON. MUTATIONS (POST/PUT/PATCH/DELETE) are a plain async callable — a JSON-body POST
 // with `Content-Type: application/json` (satisfies the CSRF gate), never cached.
 
-import type { Mutation, Rpc } from '../../server/internal/makeRpc.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import {
     decodeStreamResponse,
@@ -19,6 +18,7 @@ import {
 } from '../../shared/internal/decodeStreamResponse.ts'
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import type { MutationCallSurface, RpcCallSurface } from '../../shared/internal/rpcSurface.ts'
 import { memo } from '../../shared/memo.ts'
 import { applyMemoFrame } from './applyMemoFrame.ts'
 import { subscribeMemoChannel } from './mux.ts'
@@ -102,7 +102,7 @@ export function clientProxy<Args = unknown, T = unknown>(
     name: string,
     method: string,
     opts?: { base?: string; shared?: boolean; memo?: boolean; ttl?: number | null },
-): Rpc<Args, T> | Mutation<Args, T> {
+): RpcCallSurface<Args, T> | MutationCallSurface<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
     // A read OR mutation whose author set `memo: false` bypasses the client memo on the bare call
@@ -162,7 +162,7 @@ export function clientProxy<Args = unknown, T = unknown>(
         }
         ensureSubscribed(args as Args)
         return backing(args as Args)
-    }) as Rpc<Args, T>
+    }) as RpcCallSurface<Args, T>
     rpc.peek = (args: Args): T | undefined => {
         ensureSubscribed(args)
         return backing.peek(args)

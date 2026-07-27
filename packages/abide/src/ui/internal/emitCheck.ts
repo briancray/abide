@@ -49,7 +49,10 @@ export interface CheckModule {
 // an expression to be type-checked without an unused-expression lint; `__entries` types `{#for item, i}`
 // as `[index, item]`; `children` is the intrinsic slot callable.
 const HEADER =
-    `interface __AbideState<__T> { (): __T; set(value: __T): void; peek(): __T; }\n` +
+    // `untracked()`, not `peek()` (ADR 0027 D2) — this shim must match `shared/internal/reactive.ts`'s
+    // real `State`, and `peek` now means the REACTIVE snapshot on `memo`/`channel` (see `__AbideMemo`
+    // below, whose `peek` returns `__T | undefined` precisely because it subscribes and may be cold).
+    `interface __AbideState<__T> { (): __T; set(value: __T): void; untracked(): __T; }\n` +
     `type __AbideWiden<__T> = [__T] extends [never] ? any : __T extends readonly never[] ? any[] : [__T] extends [null | undefined] ? any : __T;\n` +
     `declare function __abideUnwrap<__T>(cell: __AbideState<__T>): __AbideWiden<__T>;\n` +
     // An auto-called MEMO binding (ADR 0024 §5) reads as its VALUE, exactly as a cell does — the rewrite
@@ -61,6 +64,13 @@ const HEADER =
     `declare function __abideUnwrap<__T>(memo: __AbideMemo<__T>): __AbideWiden<__T>;\n` +
     `declare function __abideUnwrap<__T>(value: __T): __T;\n` +
     `declare function __ref(value: unknown): void;\n` +
+    // The TEXT-interpolation sink. It accepts anything `__ref` does EXCEPT a definite thenable, so a bare
+    // `{fn()}` on a promise-returning read is a loud error pointing at `{await fn()}`. `__T` is inferred
+    // from the naked member of the intersection (a conditional type is not an inference site on its own),
+    // and the conditional DISTRIBUTES — so `T | Promise<T>` stays legal on purpose: a value that is only
+    // sometimes a promise is the passthrough case, where the auto-await is doing real work.
+    `type __AbideNoPromise<__T> = __T extends PromiseLike<unknown> ? { __abide_error: 'this is a Promise — write {await expr} so it types as T' } : unknown;\n` +
+    `declare function __text<__T>(value: __T & __AbideNoPromise<__T>): void;\n` +
     `declare function __entries<__T>(list: Iterable<__T> | ArrayLike<__T>): IterableIterator<[number, __T]>;\n` +
     `declare function children(): unknown;\n` +
     // A component value — the type of a `{#component}`, an imported `.abide`, or a component-valued prop
@@ -206,6 +216,28 @@ function refExpr(node: { start: number; end: number }, expr: string, e: WalkEmit
     e.emitSynthetic(');\n')
 }
 
+// Same guard for a TEXT interpolation, through the sink that rejects a thenable.
+//
+// This is a CONCEPT BOUNDARY, not a typing apology (ADR 0027 D3). There are three read forms and they do
+// different things: `{await fn()}` BLOCKS (the value lands in the initial HTML), `{fn.peek()}` does NOT
+// (reactive `T | undefined`), and `{#await fn()}` branches. A bare `{fn()}` is none of them — it is the
+// AWAITABLE, and `emitServer` awaits every expression slot unconditionally (it is type-blind and cannot
+// tell a promise-returning read from a plain value), so it renders identically to `{await fn()}` while
+// typing as `Promise<T>` — the author hits `Property 'x' does not exist on Promise<T>` at the first field
+// access. Rejecting it keeps one spelling per behaviour.
+//
+// The auto-await is a passthrough BACKSTOP for the untyped path, which is why `__AbideNoPromise` below
+// distributes and leaves `T | Promise<T>` legal on purpose. It is deliberately not a second way to spell
+// the read: making the bare call mean "non-blocking" would need the emitter to carry types, and — the
+// argument that actually decides it — a plain `.ts` has no compiler, so `fn(args)` is a `Promise<T>`
+// there no matter what. One expression would mean two things by file extension, which is precisely what
+// "isomorphism by default — same callable, same name, same intent on both sides" forbids.
+function textExpr(node: { start: number; end: number }, expr: string, e: WalkEmit): void {
+    e.emitSynthetic('__text(')
+    e.emitExpr(node.start, node.end, expr)
+    e.emitSynthetic(');\n')
+}
+
 function walk(nodes: TemplateNode[], e: WalkEmit): void {
     for (const node of nodes) walkNode(node, e)
 }
@@ -218,8 +250,9 @@ function walkNode(node: TemplateNode, e: WalkEmit): void {
         case 'Style':
             return
         case 'Interpolation':
-            // `{children()}` / `{name(args)}` component calls are ordinary interpolations — checked as-is.
-            refExpr(node, node.expression, e)
+            // `{children()}` / `{name(args)}` component calls are ordinary interpolations — checked as-is,
+            // but through the sink that rejects a bare thenable (see `textExpr`).
+            textExpr(node, node.expression, e)
             return
         case 'Html':
             refExpr(node, node.expression, e)

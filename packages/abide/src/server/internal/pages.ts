@@ -14,6 +14,7 @@
 // replays them from cache instead of re-fetching on hydration. An empty seed serialises to `{}`.
 
 import { encode } from '../../shared/internal/codec.ts'
+import type { HydrationSeed, SeedRead, StreamHandle } from '../../shared/internal/hydrationSeed.ts'
 import type { ReactiveScope } from '../../shared/internal/reactiveScope.ts'
 import {
     enterScope,
@@ -253,43 +254,10 @@ async function warmLevel(source: string, dir: string | undefined, label: string)
     }
 }
 
-// One recorded SSR read for the hydration seed: the RPC route name, the args it was called with, and
-// the (output-shaped) value it resolved to.
-export interface SeedRead {
-    name: string
-    args: unknown
-    value: unknown
-}
-
-// One attachable `{#for await}` stream handed off to the client (replayable-streams.md §5). `listId`
-// matches the `<abide-list id>` the SSR painted; `name`/`args` identify the source RPC for a mode-B
-// resume (`GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>`); `done` picks the mode (true → adopt `values`, false
-// → resume); `count` is the flushed item count (= `values.length`); `values` is the decoded transcript
-// so mode A re-mounts with zero network. `values` is absent only if it wasn't JSON-serializable.
-export interface StreamHandle {
-    listId: string
-    name: string | null
-    args: unknown
-    done: boolean
-    count: number
-    values?: unknown[]
-}
-
-// The hydration seed payload. Empty (`{}`) when the page resolved no reads and declared no state.
-export interface HydrationSeed {
-    reads?: SeedRead[]
-    // Recorded `state(initial)` initials, grouped per component in call order, so the client seeds each
-    // memo with the same value the server rendered (decision 10). Present only when the page declared
-    // state. These are hydrated NON-RPC values, so — unlike the JSON-only RPC `reads`/`streams` — the
-    // whole `unknown[][]` bucket structure is serialized with the rich value codec (`encode`), preserving
-    // Date/Map/Set/BigInt/TypedArray and shared/circular references across the record. The field holds
-    // that one `encode(...)` string; the client `decode`s it. A codec-unsupported initial (function/
-    // symbol/class instance) is encoded as `null` rather than crashing the render (lossy mode).
-    states?: string
-    // Attachable `{#for await}` handoff records (§5). Present only when the page streamed a known-RPC
-    // source; the client adopts/resumes each instead of re-invoking the source on hydrate.
-    streams?: StreamHandle[]
-}
+// The SSR→client handoff contract lives in `shared/internal/hydrationSeed.ts` (ADR 0027 D10) so `ui/`
+// can name it without importing `server/`. Re-exported here because this module is what WRITES the
+// seed, and every server-side caller already reaches for it through `pages.ts`.
+export type { HydrationSeed, SeedRead, StreamHandle }
 
 // Keep a recorded state initial JSON-serializable so serialising the seed never throws (a non-JSON
 // value — e.g. BigInt, circular — is dropped to `null`; documented seed-contract limitation). Returns

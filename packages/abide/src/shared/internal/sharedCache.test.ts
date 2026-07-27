@@ -33,7 +33,8 @@ function makeScope(overrides?: Partial<RequestScope>): RequestScope {
 // fail-closed handler's value was NEVER cached — an error slot has no value).
 function hasCachedValue(): boolean {
     for (const entry of sharedStore().values()) {
-        const status = (entry as { state: { peek(): { status: string } } }).state.peek().status
+        const status = (entry as { state: { untracked(): { status: string } } }).state.untracked()
+            .status
         if (status === 'value') return true
     }
     return false
@@ -53,7 +54,7 @@ describe('shared store — cross-request memoization', () => {
                 calls++
                 return n * 2
             },
-            { shared: true },
+            { crossRequest: true },
         )
 
         const first = await runInScope(
@@ -84,7 +85,7 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
                         // Touching request scope from a shared (scope-exited) handler must throw.
                         return `secret-for-${identity().id}`
                     },
-                    { shared: true },
+                    { crossRequest: true },
                 )
 
                 const promise = runInScope(
@@ -103,14 +104,14 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
     }
 
     test('a shared handler calling request() also rejects and does not cache', async () => {
-        const c = memo(async (_n: number) => request().url, { shared: true })
+        const c = memo(async (_n: number) => request().url, { crossRequest: true })
         const promise = runInScope(makeScope(), () => c(2))
         await expect(promise).rejects.toThrow(/no active request scope/)
         expect(hasCachedValue()).toBe(false)
     })
 
     test('a shared handler that is pure over its args caches and serves from the shared store', async () => {
-        const c = memo(async (n: number) => n + 100, { shared: true })
+        const c = memo(async (n: number) => n + 100, { crossRequest: true })
         const value = await runInScope(makeScope(), () => c(7))
         expect(value).toBe(107)
         expect(hasCachedValue()).toBe(true)
@@ -124,7 +125,7 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
 // write into the request's Map.
 describe('fail-closed checkpoint (a) — the full accessor matrix', () => {
     test('a shared handler calling cookies() rejects and does not cache', async () => {
-        const c = memo(async (_n: number) => cookies().toJSON(), { shared: true })
+        const c = memo(async (_n: number) => cookies().toJSON(), { crossRequest: true })
         await expect(runInScope(makeScope(), () => c(11))).rejects.toThrow(
             /no active request scope/,
         )
@@ -132,7 +133,7 @@ describe('fail-closed checkpoint (a) — the full accessor matrix', () => {
     })
 
     test('a shared handler calling context() rejects and does not cache', async () => {
-        const c = memo(async (_n: number) => Object.keys(context()), { shared: true })
+        const c = memo(async (_n: number) => Object.keys(context()), { crossRequest: true })
         await expect(runInScope(makeScope(), () => c(12))).rejects.toThrow(
             /no active request scope/,
         )
@@ -145,7 +146,7 @@ describe('fail-closed checkpoint (a) — the full accessor matrix', () => {
             innerCalls++
             return n * 2
         })
-        const outer = memo(async (n: number) => (await inner(n)) + 1, { shared: true })
+        const outer = memo(async (n: number) => (await inner(n)) + 1, { crossRequest: true })
 
         const scope = makeScope()
         expect(await runInScope(scope, () => outer(21))).toBe(43)
@@ -159,10 +160,10 @@ describe('fail-closed checkpoint (a) — the full accessor matrix', () => {
 
 describe('fail-closed checkpoint (b) — ambient-entry guard', () => {
     test('a shared read with no active request scope throws a clear error', () => {
-        const c = memo(async (n: number) => n, { shared: true })
+        const c = memo(async (n: number) => n, { crossRequest: true })
         // The guard runs at the read entry (synchronously) on both the reactive peek and load paths.
-        expect(() => c(1)).toThrow('shared memo read requires an active request scope')
-        expect(() => c(1)).toThrow('shared memo read requires an active request scope')
+        expect(() => c(1)).toThrow('crossRequest memo read requires an active request scope')
+        expect(() => c(1)).toThrow('crossRequest memo read requires an active request scope')
     })
 })
 
@@ -194,7 +195,10 @@ describe('LRU eviction by ABIDE_MAX_SHARED_CACHE_SIZE', () => {
         // Each value is a 10-char string → ~12 JSON bytes ("xxxxxxxxxx" with quotes). Ceiling 30 bytes
         // holds ~2 slots; a 3rd load overflows and evicts the oldest.
         Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE = '30'
-        const c = memo(async (_n: number) => `${'v'.repeat(10)}`, { shared: true, key: 'lru-memo' })
+        const c = memo(async (_n: number) => `${'v'.repeat(10)}`, {
+            crossRequest: true,
+            key: 'lru-memo',
+        })
 
         await runInScope(makeScope(), () => c(1))
         await runInScope(makeScope(), () => c(2))

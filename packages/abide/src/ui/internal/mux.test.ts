@@ -151,7 +151,7 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
 
 test('server shared-publish broadcast reaches an authorized subscriber and applies to a local memo', async () => {
     const prof = GET(({ id }: { id: string }) => ({ id, secret: `secret-${id}` }), {
-        memo: { shared: true },
+        memo: { crossRequest: true },
     })
     running = await createTestApp({ routes: { prof: prof } })
 

@@ -22,8 +22,8 @@
 // client RPC memos BEFORE mount, so an SSR-computed read resolves from cache instead of re-fetching;
 // any remaining keys become mount props.
 
-import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
+import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'

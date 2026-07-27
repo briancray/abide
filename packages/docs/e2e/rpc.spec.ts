@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // Drives the RPC-bucket docs pages in a real browser: SSR reads landing in HTML, mutations called
 // over fetch after hydration, streaming (jsonl/sse) reads rendered with {#for await}, typed-error
-// narrowing, redirects, and the three template async-read forms.
+// narrowing, redirects, and the template async-read forms.
 
 test.describe('Reads', () => {
     test('GET read is server-rendered into the HTML', async ({ page }) => {
@@ -31,7 +31,9 @@ test.describe('Reads', () => {
         await expect(header).not.toContainText("{'{'}")
     })
 
-    test('{fn()} peek renders the read value', async ({ page }) => {
+    test('{fn.peek() ?? "…"} renders the snapshot, the fallback handling the undefined', async ({
+        page,
+    }) => {
         await page.goto('/rpc/reads')
         await expect(page.getByTestId('peek-read')).toHaveText('Hello from abide, peek!')
     })

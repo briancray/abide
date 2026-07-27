@@ -89,7 +89,7 @@ describe('socket transport — WebSocket mux', () => {
     test(
         'a WS subscriber receives a server-side publish',
         async () => {
-            const ticks = socket<number>({ clientPublish: true, tail: 2 })
+            const ticks = socket<number>({ clientPublish: true, channel: { tail: 2 } })
             const app = await start({ sockets: { ticks } })
 
             const c = client(app)
@@ -106,7 +106,7 @@ describe('socket transport — WebSocket mux', () => {
     test(
         'tail replay — a late subscriber replays the last N messages',
         async () => {
-            const ticks = socket<number>({ clientPublish: true, tail: 2 })
+            const ticks = socket<number>({ clientPublish: true, channel: { tail: 2 } })
             const app = await start({ sockets: { ticks } })
 
             // Publish before anyone subscribes; tail:2 retains the last two.
@@ -126,7 +126,7 @@ describe('socket transport — WebSocket mux', () => {
     test(
         'client publish over the WS reaches subscribers',
         async () => {
-            const ticks = socket<string>({ clientPublish: true, tail: 2 })
+            const ticks = socket<string>({ clientPublish: true, channel: { tail: 2 } })
             const app = await start({ sockets: { ticks } })
 
             const subscriber = client(app)
@@ -170,7 +170,7 @@ describe('socket transport — HTTP face', () => {
     test(
         'POST publishes a client message that reaches WS subscribers',
         async () => {
-            const ticks = socket<string>({ clientPublish: true, tail: 2 })
+            const ticks = socket<string>({ clientPublish: true, channel: { tail: 2 } })
             const app = await start({ sockets: { ticks } })
 
             const subscriber = client(app)
@@ -209,7 +209,7 @@ describe('socket transport — HTTP face', () => {
     test(
         'GET streams messages over SSE',
         async () => {
-            const ticks = socket<string>({ clientPublish: true, tail: 2 })
+            const ticks = socket<string>({ clientPublish: true, channel: { tail: 2 } })
             const app = await start({ sockets: { ticks } })
 
             // Seed the tail so the SSE subscribe replays an immediate frame — Bun's client `fetch`
@@ -257,7 +257,7 @@ describe('socket transport — rooms + per-room auth', () => {
     test(
         'rooms — a subscriber to room A does not receive room B over the mux',
         async () => {
-            const feed = socket<string, { room: string }>({ tail: 2 })
+            const feed = socket<string, { room: string }>({ channel: { tail: 2 } })
             const app = await start({ sockets: { feed } })
 
             const c = client(app)
@@ -275,7 +275,10 @@ describe('socket transport — rooms + per-room auth', () => {
     test(
         'per-room auth — an unauthorized identity is DENIED the guarded room but allowed a public one',
         async () => {
-            const feed = socket<string, { room: string }>({ tail: 2, middleware: [roomGuard] })
+            const feed = socket<string, { room: string }>({
+                channel: { tail: 2 },
+                middleware: [roomGuard],
+            })
             const app = await start({ sockets: { feed } })
 
             const c = client(app) // anonymous
@@ -296,7 +299,10 @@ describe('socket transport — rooms + per-room auth', () => {
     test(
         'per-room auth — the owner identity is admitted to the guarded room and receives its messages',
         async () => {
-            const feed = socket<string, { room: string }>({ tail: 2, middleware: [roomGuard] })
+            const feed = socket<string, { room: string }>({
+                channel: { tail: 2 },
+                middleware: [roomGuard],
+            })
             const app = await start({ sockets: { feed } })
 
             const owner = app.as({ id: 'owner', authenticated: true })
@@ -319,7 +325,7 @@ describe('socket transport — rooms + per-room auth', () => {
         'per-room publish auth — an unauthorized client CANNOT publish into a guarded room',
         async () => {
             const feed = socket<string, { room: string }>({
-                tail: 2,
+                channel: { tail: 2 },
                 middleware: [roomGuard],
                 clientPublish: true,
             })

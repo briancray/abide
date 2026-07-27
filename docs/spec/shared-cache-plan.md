@@ -33,7 +33,7 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
 ## 1. Ordered PRs (each keeps `bun test` green)
 - **PR1 — Shared storage + fail-closed purity** (no transport). `shared/internal/sharedCache.ts`:
   process-global `Map` + `sharedStore()` + `sharedCacheEvictIfNeeded()` (LRU by
-  `ABIDE_MAX_SHARED_CACHE_SIZE`, JSON-byte measure). `MemoOptions.shared?`; `ensureSlot`/`selectSlots`
+  `ABIDE_MAX_SHARED_CACHE_SIZE`, JSON-byte measure). `MemoOptions.crossRequest?`; `ensureSlot`/`selectSlots`
   route through `slotCache()`. Fail-closed = two checkpoints (§2.1). LRU lands here. Risk: LOW-MED.
 - **PR2 — Broadcast substrate** (server→server). `server/internal/cacheChannels.ts`:
   `Map<channel, SocketHub<CacheFrame>>` + `cacheChannelName(rpc,args)` + `publishCacheFrame`. Memo gets

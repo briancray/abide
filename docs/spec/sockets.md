@@ -112,7 +112,9 @@ replayable*. Declarative by default (validated pass-through relay); server logic
    - **`canSubscribe` PARKED** — default subscribe authz = connect-time auth + exposure
      toggle; per-socket subscribe gating (`admin-feed` vs `public-feed`) is a documented
      future predicate.
-   - **Socket API surface: `{ tail, ttl, clientPublish, schema, clients, handler? }`.**
+   - **Socket API surface: `{ channel, clientPublish, schema, clients, middleware? }`** — where
+     `channel` is the pub/sub primitive's own `{ tail?, maxAge? }`, nested rather than flattened
+     (ADR 0027 D1), so `socket = channel + transport` holds in the OPTIONS as well as the code.
      A cross-origin socket-access gate (`crossOrigin`, parallel to the RPC opt-in) is
      **deferred** — sockets are hard-gated to a same-origin `Origin` (WS) or bearer/app-token
      auth today; see auth.md AU8-CSWSH. The earlier declared-but-unenforced `crossOrigin` socket

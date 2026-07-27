@@ -61,8 +61,28 @@
                             "options": {
                                 "patterns": [
                                     {
+                                        "group": ["**/server/**", "**/ui/**"],
+                                        "message": "ADR 0026/0027: shared/ is the bottom layer and must not import from server/ or ui/. Move the dependency down, or read it off the reactive scope."
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["packages/abide/src/ui/**", "!packages/abide/src/ui/**/*.test.ts"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noRestrictedImports": {
+                            "level": "error",
+                            "options": {
+                                "patterns": [
+                                    {
                                         "group": ["**/server/**"],
-                                        "message": "ADR 0026: shared/ is the bottom layer and must not import from server/. Move the dependency down, or read it off the reactive scope."
+                                        "message": "ADR 0027 D10: the layer order is shared <- ui <- server. ui/ must not import from server/ — including `import type`, which still makes ui/ uncompilable without server/. Move the shared contract down to shared/ (see shared/internal/hydrationSeed.ts, rpcSurface.ts, matchRoute.ts)."
                                     }
                                 ]
                             }

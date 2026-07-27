@@ -211,7 +211,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'set-flush-1',
             note: 'set + flush, 1 observer',
             run: async () => {
-                setState1.set(setState1.peek() + 1)
+                setState1.set(setState1.untracked() + 1)
                 await afterFlush()
             },
             baseline: {
@@ -228,7 +228,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'set-flush-10',
             note: 'set + flush, 10 observers',
             run: async () => {
-                setState10.set(setState10.peek() + 1)
+                setState10.set(setState10.untracked() + 1)
                 await afterFlush()
             },
             baseline: {
@@ -245,7 +245,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'set-flush-100',
             note: 'set + flush, 100 observers',
             run: async () => {
-                setState100.set(setState100.peek() + 1)
+                setState100.set(setState100.untracked() + 1)
                 await afterFlush()
             },
             baseline: {

@@ -596,7 +596,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
                 () => a(),
                 (value) => {
                     runs++
-                    return value + other.peek()
+                    return value + other.untracked()
                 },
             )
             expect(derived()).toBe(101)
@@ -804,7 +804,7 @@ describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
             let runs = 0
             const stop = effect(() => {
                 runs++
-                draft.peek()
+                draft.untracked()
             })
             expect(runs).toBe(1)
             draft.set(6)
@@ -817,7 +817,8 @@ describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
         await withScope(async () => {
             const byId = memo(async (args: { id: number }) => args.id * 10)
             expect(await byId({ id: 2 })).toBe(20)
-            const cell = byId.state({ id: 2 })
+            // Keyed + async → the room comes first, the initial trails it (ADR 0027 D7).
+            const cell = byId.state({ id: 2 }, 0)
             expect(cell()).toBe(20)
             cell.set(99)
             expect(byId.peek({ id: 2 })).toBe(99)
@@ -887,5 +888,144 @@ describe('memo — a per-request auto slot does not outlive its request', () => 
             seen = reactiveScope()
         })
         expect(seen?.disposers).toBeUndefined()
+    })
+})
+
+// ADR 0027 D8 — the auto-tracking diagnostic.
+//
+// Whether an argless memo is REACTIVE is decided by what its body returns: a synchronous value is
+// auto-tracked, a promise is not (ADR 0024 §2 — half-tracked is worse than untracked). That choice
+// stands; what was wrong is that it was silent. Adding one `await` to a working derivation converts it
+// into a manually-invalidated cache that never updates again, and nothing said so — while the LESS
+// consequential misclassification (`fn.length`, the rest/defaulted-param spoof) already threw.
+describe('auto-tracking diagnostic (ADR 0027 D8)', () => {
+    // The warning rides the `abide:memo` channel, which is DEBUG-gated (`log.ts`), so capture with it on.
+    function captureWarnings(run: () => void): string[] {
+        const writes: string[] = []
+        const original = process.stderr.write.bind(process.stderr)
+        Bun.env.DEBUG = 'abide:*'
+        ;(process.stderr as { write: (chunk: string) => boolean }).write = (
+            chunk: string,
+        ): boolean => {
+            writes.push(String(chunk))
+            return true
+        }
+        try {
+            run()
+        } finally {
+            ;(process.stderr as { write: typeof original }).write = original
+            delete Bun.env.DEBUG
+        }
+        return writes
+    }
+
+    test('an argless ASYNC memo warns that it is not auto-tracked', () => {
+        const warnings = captureWarnings(() => {
+            const loaded = memo(async () => 1)
+            void loaded() // first run is what proves the body async
+        })
+        const text = warnings.join('')
+        expect(text).toContain('NOT auto-tracked')
+        expect(text).toContain('refresh()')
+        // The message must name the FIX, not just the symptom.
+        expect(text).toContain('memo(() => ({ a, b }), async ({ a, b }) => …)')
+    })
+
+    test('an argless SYNC memo (the auto-tracked path) stays silent', () => {
+        const warnings = captureWarnings(() => {
+            const source = state(1)
+            const derived = memo(() => source() * 2)
+            expect(derived()).toBe(2)
+        })
+        expect(warnings.join('')).not.toContain('NOT auto-tracked')
+    })
+
+    test('it warns at most ONCE per memo, not once per call', () => {
+        const warnings = captureWarnings(() => {
+            const loaded = memo(async () => 1)
+            void loaded()
+            loaded.invalidate()
+            void loaded()
+            loaded.invalidate()
+            void loaded()
+        })
+        const hits = warnings.join('').split('NOT auto-tracked').length - 1
+        expect(hits).toBe(1)
+    })
+
+    // The reason `MemoOptions.loader` exists. Every rpc handler is an async argless-or-keyed function
+    // wrapped in a memo, so without the marker this diagnostic would fire on every zero-arg rpc in the
+    // app — noise that would train people to ignore it.
+    test('a LOADER-marked memo (what makeRpc builds) stays silent', () => {
+        const warnings = captureWarnings(() => {
+            const rpcLike = memo(async () => 1, { loader: true })
+            void rpcLike()
+        })
+        expect(warnings.join('')).not.toContain('NOT auto-tracked')
+    })
+})
+
+// ADR 0027 D7 — the writable projection is a real `State<T>`.
+//
+// `c.state` used to cast `c.peek(args) as T` twice while `peek` returns `T | undefined`, so a projection
+// of a COLD slot handed back `undefined` typed as `T`. `State<T | undefined>` is not the fix: `State` is
+// invariant across read and write, so widening the read widens `set` — and `publish` takes `next: T`
+// precisely because `undefined` is the sentinel for "not loaded", which a local write must not be able
+// to forge. The initial closes the hole instead of relocating it.
+describe('memo.state — the writable projection (ADR 0027 D7)', () => {
+    test('an ASYNC projection reads the initial while the slot is cold, then the value', async () => {
+        await withScope(async () => {
+            const loaded = memo(async ({ id }: { id: number }) => id * 10)
+            const cell = loaded.state({ id: 2 }, -1)
+            expect(cell()).toBe(-1) // cold — the initial, NOT `undefined as T`
+            expect(await loaded({ id: 2 })).toBe(20)
+            expect(cell()).toBe(20)
+        })
+    })
+
+    test('set() is publish — a local write holds until the next re-fill', async () => {
+        await withScope(async () => {
+            const loaded = memo(async ({ id }: { id: number }) => id * 10)
+            const cell = loaded.state({ id: 3 }, 0)
+            expect(await loaded({ id: 3 })).toBe(30)
+            cell.set(99)
+            expect(cell()).toBe(99)
+            expect(loaded.peek({ id: 3 })).toBe(99)
+        })
+    })
+
+    // A SYNC memo has no cold hole (never pending) so it needs no initial — and crucially its read must
+    // go through the THROWING path, or the old `as T` lie would just move from "cold" to "errored".
+    test('a SYNC projection needs no initial and RETHROWS an errored body', () => {
+        const source = state(1)
+        const derived = memo(() => source() * 2)
+        expect(derived.state()()).toBe(2)
+
+        const boom = memo((): number => {
+            throw new Error('derivation failed')
+        })
+        expect(() => boom.state()()).toThrow('derivation failed')
+    })
+
+    // `state` is the one trailing-payload verb whose payload is optional, so arity alone is ambiguous.
+    // `fn.length` disambiguates: an argless memo has no room, so a lone argument IS the initial.
+    test('an ARGLESS async memo reads its lone argument as the initial, not as a room key', async () => {
+        await withScope(async () => {
+            const loaded = memo(async () => 7)
+            const cell = loaded.state(-5)
+            expect(cell()).toBe(-5) // cold → the initial
+            expect(await loaded()).toBe(7)
+            expect(cell()).toBe(7)
+        })
+    })
+
+    test('untracked() reads without subscribing and honours the initial too', async () => {
+        await withScope(async () => {
+            const loaded = memo(async () => 7)
+            const cell = loaded.state(-5)
+            expect(cell.untracked()).toBe(-5)
+            expect(await loaded()).toBe(7)
+            expect(cell.untracked()).toBe(7)
+        })
     })
 })

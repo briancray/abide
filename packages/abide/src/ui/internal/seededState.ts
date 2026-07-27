@@ -22,8 +22,8 @@
 // bucket) continues the same sequence instead of restarting it. The page + its layouts share the root
 // bucket (`""`). Everything resets per page mount, since the cursors are created per `makeSeededState`.
 
-import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { decode } from '../../shared/internal/codec.ts'
+import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
 import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
 

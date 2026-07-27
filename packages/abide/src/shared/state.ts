@@ -9,7 +9,7 @@
 // cell wrapping a first. The brand is a global-registry symbol so the analysis can detect a cell
 // (syntactically, at the declaration) without importing anything from here (keeps the one-export-per-
 // file rule intact). The cell is CALLABLE — `count()` reads and `count.set(x)` writes, exactly the
-// atom's own call/`set`/`peek`.
+// atom's own call/`set`/`untracked`.
 
 import { type State as ReactiveState, state as reactiveState } from './internal/reactive.ts'
 
@@ -24,7 +24,7 @@ type StateKind = 'state' | 'shared'
 // registry would leak one request's state into another's, so `.shared` must stay per-render there.
 const isClient = typeof document !== 'undefined'
 
-// A callable branded reactive cell — the atom's shape (`()` tracks, `set()` publishes, `peek()` reads
+// A callable branded reactive cell — the atom's shape (`()` tracks, `set()` publishes, `untracked()` reads
 // untracked) plus the kind brand.
 export interface State<T> extends ReactiveState<T> {
     [STATE_CELL]: StateKind
@@ -43,7 +43,7 @@ function makeState<T>(initial: T, transform?: (value: T) => T): State<T> {
     const backing = reactiveState<T>(transform ? transform(initial) : initial)
     const cell = (() => backing()) as State<T>
     cell.set = (value: T) => backing.set(transform ? transform(value) : value)
-    cell.peek = () => backing.peek()
+    cell.untracked = () => backing.untracked()
     cell[STATE_CELL] = 'state'
     return cell
 }
@@ -88,7 +88,7 @@ function makeShared<T>(key: string, initial: T): State<T> {
         const backing = reactiveState<T>(initial)
         const cell = (() => backing()) as State<T>
         cell.set = (value: T) => backing.set(value)
-        cell.peek = () => backing.peek()
+        cell.untracked = () => backing.untracked()
         cell[STATE_CELL] = 'shared'
         return cell
     }
@@ -111,7 +111,7 @@ function makeShared<T>(key: string, initial: T): State<T> {
             }
         }
     }
-    cell.peek = () => backing.peek() as T
+    cell.untracked = () => backing.untracked() as T
     cell[STATE_CELL] = 'shared'
     return cell
 }

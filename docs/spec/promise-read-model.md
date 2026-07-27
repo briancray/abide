@@ -55,7 +55,7 @@ the #11 checker (`Property 'field' does not exist on Promise<T>`) — bind throu
 | Template | Type | Semantics |
 | --- | --- | --- |
 | `{rpc.peek()}` / `{rpc.peek()?.foo}` | `T \| undefined` | non-blocking, reactive |
-| `{rpc()}` (bare) | `Promise<T>` → the awaited value | blocking (SSR value-in-HTML); `.field` on it is a type error |
+| `{rpc()}` (bare) | `Promise<T>` → the awaited value | **REJECTED by the checker** (see below); would render blocking, value-in-HTML |
 | `{await rpc()}` | `T` | blocking (SSR value-in-HTML) |
 | `{#await rpc()}{:then v}` | `v: T` | reactive await block |
 
@@ -66,6 +66,24 @@ it when the read settles). The only runtime difference is the leaf anchor form. 
 keyword buys is the `T` binding: `{rpc().field}` is a checker error, `{await rpc()}` is not. Anyone
 reading this table for a "make bare non-blocking" change should note that would be a **semantic
 change to `emitServer`**, not a documentation clarification.
+
+### AMENDED: the bare form is a checker error
+
+Leaving both forms legal made the read two-ways-to-spell, and the bare one is strictly worse: same
+timing, no `T`. `emitCheck` now routes a TEXT interpolation through a sink that rejects a definite
+thenable (`__text` / `__AbideNoPromise` in `HEADER`), so `{rpc()}` fails `abide check` with the remedy
+in the message. The considered-and-rejected alternative was making the runtime render `[object Promise]`
+— i.e. dropping the auto-await from `interp`. That was rejected because the auto-await is NOT an
+interpolation special case: every expression slot in `emitServer` awaits (attrs `:144`, dirs `:149`–`:155`,
+spread `:158`, props `:194`, `{#if}` `:281`, `{#for}` head `:329`, `interp` `:249`). Dropping it from
+`interp` alone would ADD the only non-awaiting slot; dropping it everywhere breaks `<Foo v={rpc()}/>`
+and `{#for await x of rpc()}` (an RPC read is `Promise<AsyncIterable<C>>`, which `for await` cannot
+iterate — `emitCheck.ts:372`). A silent `[object Promise]` in shipped HTML also inverts the project's
+loud-failure posture. So: the TYPE gets stricter, the runtime stays forgiving.
+
+The conditional DISTRIBUTES, so `T | Promise<T>` is deliberately still legal — a value that is only
+sometimes a promise is the passthrough case the auto-await exists for. `any` passes too (it collapses
+the conditional to `unknown`), so this never false-positives on an untyped import.
 
 The checker (`emitCheck`) needs **no** operand detection and **no** special types — every row falls
 out of `Promise<T>` + `.peek(): T | undefined` with the existing lowering. This is the most

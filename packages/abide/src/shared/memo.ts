@@ -17,11 +17,11 @@
 // revalidating over a retained value. pending/error/refreshing/peek are derived views of
 // the one slot, not separate channels.
 //
-// The opt-in server SHARED cross-request cache (`memo: { shared: true }`, rpc-core §2) is wired
+// The opt-in server CROSS-REQUEST cache (`memo: { crossRequest: true }`, rpc-core §2) is wired
 // here: a shared memo stores its slots in the process-global `sharedStore()` and runs its handler
-// fail-closed (scope-exited + ambient-guarded), server-only. A shared memo's verbs also fire an
+// fail-closed (scope-exited + ambient-guarded), server-only. A crossRequest memo's verbs also fire an
 // injectable, TRANSPORT-FREE `notify` sink (rpc-core §8 broadcast, PR2): the memo just calls it —
-// `createApp` binds it to the actual channel publish (the memo never imports transport). A shared
+// `createApp` binds it to the actual channel publish (the memo never imports transport). A crossRequest
 // memo declaring `tags` (PR4) registers itself in the server tag registry so the global
 // `invalidate/refresh({ tags })` selectors can drop/revalidate + broadcast its slots. TODO (later
 // PRs): the client-side channel join/apply.
@@ -53,8 +53,9 @@ import {
 import { tagStreamTranscript } from './internal/streamTranscript.ts'
 import { log } from './log.ts'
 
-// `shared` is a SERVER concept (cross-request store + scope isolation). On the client a shared-flagged
-// memo behaves like a normal client memo, so every shared-only branch below is gated on `!isBrowser`.
+// `crossRequest` is a SERVER concept (cross-request store + scope isolation). On the client a
+// crossRequest-flagged memo behaves like a normal client memo, so every crossRequest-only branch below
+// is gated on `!isBrowser`.
 
 // "stream" is the streaming-read slot (replayable-streams.md §4): the resolved value is not a scalar
 // but a ReplayableStream the read fans out via `consume()`. Scalar (`value`) and stream slots stay
@@ -117,7 +118,7 @@ interface AutoBacking<T> {
     filled: () => boolean
 }
 
-// SERVER-ONLY broadcast sink (rpc-core §8, PR2). A shared memo calls this when a verb changes a
+// SERVER-ONLY broadcast sink (rpc-core §8, PR2). A crossRequest memo calls this when a verb changes a
 // slot: `invalidate`/`refresh` pass `(verb, args)`; value-form `publish` passes `(verb, args, value)`.
 // The sink is transport-free from the memo's view — `createApp` binds it to a channel publish. `args`
 // is the selector as given to the verb (partial or full), typed loosely since it may be a subset.
@@ -133,24 +134,38 @@ export interface MemoOptions {
     // Explicit, stable memo id. Auto-generated per instance when omitted.
     key?: string
     // Opt-in server cross-request cache (rpc-core §2). Server-only; INERT on the client (a
-    // shared-flagged client memo behaves like a normal client memo). Slots live in the process-global
-    // `sharedStore()` keyed only by args — safe ONLY for functions pure over their args. Enforced
-    // fail-closed: the handler runs outside the request scope and a read requires an active scope.
-    shared?: boolean
-    // SERVER-ONLY broadcast sink (rpc-core §8, PR2). Only invoked on a `shared` memo — a non-shared
-    // memo never broadcasts even if a sink is present. Injected transport-free; `createApp` binds it.
+    // crossRequest-flagged client memo behaves like a normal client memo). Slots live in the
+    // process-global `sharedStore()` keyed only by args — safe ONLY for functions pure over their args.
+    // Enforced fail-closed: the handler runs outside the request scope and a read requires an active one.
+    //
+    // NAMED `crossRequest`, not `shared` (ADR 0027 D5). `state.shared(key)` is the other `shared`, and
+    // the two were exact MIRROR IMAGES on the isomorphism axis — `state.shared` is client-real and
+    // server-degraded (cross-instance + cross-tab), this one is server-real and client-inert
+    // (cross-request). A reader who learned one had learned the opposite of the other. `state.shared`
+    // keeps the plain-English name because a reader guesses it correctly unaided; the escape from the
+    // request deserves a name that SAYS it escapes, since it is the dangerous-if-impure one.
+    crossRequest?: boolean
+    // SERVER-ONLY broadcast sink (rpc-core §8, PR2). Only invoked on a `crossRequest` memo — a
+    // request-scoped memo never broadcasts even if a sink is present. Injected transport-free;
+    // `createApp` binds it.
     notify?: MemoNotify
-    // Cache tags (rpc-core §8, PR4). Server-only and honored ONLY on a `shared` memo: the memo
+    // Cache tags (rpc-core §8, PR4). Server-only and honored ONLY on a `crossRequest` memo: the memo
     // registers under each tag so the global `invalidate/refresh({ tags })` selectors can drop/
-    // revalidate + broadcast its slots. Inert on the client and on a non-shared memo.
+    // revalidate + broadcast its slots. Inert on the client and on a request-scoped memo.
     tags?: string[]
+    // INTERNAL (set by `makeRpc`, never by an author): this memo wraps a LOADER — an rpc handler —
+    // rather than a derivation. An async body is the expected shape for a loader, so the auto-tracking
+    // diagnostic (ADR 0027 D8) does not apply and would fire on every zero-arg rpc as pure noise.
+    // Explicit rather than inferred from `notify`: keying a diagnostic off an unrelated field is the
+    // implicit coupling this ADR exists to remove.
+    loader?: boolean
 }
 
-// Options an AUTO-TRACKED memo may carry (ADR 0024 §1-3). `ttl` and `shared` are retention policies for a
-// PULLED value; a synchronous derivation has nothing to retain and no cross-request identity, so naming
-// either one is what opts a memo back onto the classic promise path — the type and the runtime classifier
-// agree on that (see the overloads on `memo`).
-export type SyncMemoOptions = Omit<MemoOptions, 'ttl' | 'shared'>
+// Options an AUTO-TRACKED memo may carry (ADR 0024 §1-3). `ttl` and `crossRequest` are retention policies
+// for a PULLED value; a synchronous derivation has nothing to retain and no cross-request identity, so
+// naming either one is what opts a memo back onto the classic promise path — the type and the runtime
+// classifier agree on that (see the overloads on `memo`).
+export type SyncMemoOptions = Omit<MemoOptions, 'ttl' | 'crossRequest'>
 
 // A `memo` is the SCOPED / LOSSLESS / PULL implementation of the shared `ReactiveReadSurface` (the
 // probe/verb vocabulary — peek/pending/refreshing/error/chunks/done/refresh/invalidate/publish/watch,
@@ -172,7 +187,24 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     // `{…}`, `.peek()` and `await`, which already have defined blocking behaviour. The returned cell reads
     // the slot reactively (`.peek()` semantics) and its `set` IS `publish`, so a local write is provisional
     // until the next re-fill. That is the whole of the retired `state.linked`.
-    state(args: Args): State<T>
+    //
+    // The INITIAL is required here and the key is a `Room` positional (ADR 0027 D7): `m.state(initial)`
+    // when nothing was declared, `m.state({ id }, initial)` when it was. An async slot can be COLD, where
+    // `peek` is `undefined` — and `State<T>` is invariant across read and write, so widening it to
+    // `State<T | undefined>` would also widen `set`, letting a local write forge the very sentinel that
+    // means "not loaded" (`publish` takes `next: T` for exactly that reason). The initial closes the hole
+    // instead of moving it: the cell reads `peek(args) ?? initial`, so it is genuinely `T`. This also makes
+    // the sibling relationship exact — `state(initial)` has always required one, and an owned writable cell
+    // with no value was the anomaly. `SyncMemo`/`SyncKeyedMemo` override it away (see below).
+    //
+    // `state` is the THIRD verb with a trailing payload, after `publish` and `watch`. The rule, stated
+    // once: every verb with a trailing payload takes the key as a `Room` positional.
+    // NB: no generic-safe two-argument overload here, unlike `publish`/`watch`. That form exists on those
+    // two because the client proxy and the broadcast-frame applier forward an UNRESOLVED `Args` and cannot
+    // spread a deferred conditional tuple. Nothing forwards `state` — it is only ever called on a memo
+    // whose `Args` is concrete — so the extra overload would buy nothing and it is what makes the
+    // `SyncMemo`/`SyncKeyedMemo` narrowings below unrepresentable.
+    state(...args: [...Room<Args>, initial: T]): State<T>
     // Resume a RETAINED stream transcript from chunk index `from` (replay `chunks[from..]` then live) —
     // the server side of the SSR→client attach (replayable-streams.md §5). `fresh: true` (with no cursor)
     // means no retained transcript exists, so the caller must run fresh from 0 and REPLACE, not append.
@@ -226,6 +258,13 @@ function isStreamSeed(source: unknown): source is StreamSeed {
 // (`peek()`, `refresh()`, `invalidate()`, `state()`) — a `void` parameter may be omitted.
 export interface SyncMemo<T> extends Memo<void, T> {
     (): T
+    // NO initial (ADR 0027 D7). A sync memo has no cold hole to fill: it is never `pending` (its fill is
+    // synchronous) and a throwing body RETHROWS on read rather than yielding `undefined`, so the read is
+    // `T`-or-throw and `State<T>` is already sound. An `initial` here would be dead weight the author
+    // could never observe. Declared OPTIONAL rather than absent because the base signature is a rest
+    // TUPLE, which TypeScript compares element-by-element — a strictly-shorter override is not assignable
+    // to it, where an optional trailing parameter is.
+    state(initial?: T): State<T>
 }
 
 // A KEYED memo whose body is SYNCHRONOUS. Args are still the whole dependency set (the body runs
@@ -234,6 +273,8 @@ export interface SyncMemo<T> extends Memo<void, T> {
 // later. Every probe/verb is inherited unchanged; only the read differs.
 export interface SyncKeyedMemo<Args, T> extends Memo<Args, T> {
     (args: Args): T
+    // Keyed, but still synchronous — so the key stays and the initial becomes optional (see `SyncMemo`).
+    state(...args: [...Room<Args>, initial?: T]): State<T>
 }
 
 // Excludes a DEFERRED body from the synchronous overload: inference sets `T` from the body's return, and a
@@ -408,24 +449,49 @@ export function memo<Args, T>(
               }
     const ttl = opts?.ttl ?? Infinity
     const id = opts?.key ?? `memo#${++memoCounter}`
-    // `shared` is server-only; on the client it is inert (falls through to the client context cache).
-    const shared = opts?.shared === true && !isBrowser
+    // `crossRequest` is server-only; on the client it is inert (falls through to the client cache).
+    const crossRequest = opts?.crossRequest === true && !isBrowser
     const notify = opts?.notify
-    // Tags are honored only on a shared (server) memo — the tag registry is a server concept.
-    const tags = shared ? (opts?.tags ?? []) : []
+    // Tags are honored only on a crossRequest (server) memo — the tag registry is a server concept.
+    const tags = crossRequest ? (opts?.tags ?? []) : []
 
     // Could this memo take the AUTO-TRACKED path (ADR 0024 §1-2)? Only an argless `fn` declares no inputs,
     // and only a memo with no retention policy has nothing to retain: an explicit `ttl` (including the
-    // `ttl: 0` a `memo: false` read compiles to) or `shared: true` keeps the classic pulled-value machinery,
+    // `ttl: 0` a `memo: false` read compiles to) or `crossRequest: true` keeps the classic pulled machinery,
     // which is also what the `SyncMemoOptions` overload encodes so types and runtime cannot disagree.
     // Whether it ACTUALLY takes it is decided by the first run — see `resolveMode`.
-    const autoEligible = fn.length === 0 && ttl === Infinity && !shared
+    const autoEligible = fn.length === 0 && ttl === Infinity && !crossRequest
+
+    // ADR 0027 D8 — the auto-tracking diagnostic.
+    //
+    // An argless memo declares NO inputs, so whether it is reactive is decided by what its body
+    // RETURNS: a synchronous value is auto-tracked, a promise is not (§2 — half-tracked is worse than
+    // untracked). That choice is correct and stays. What was wrong is that it was made SILENTLY, on the
+    // highest-stakes axis in the model: adding one `await` to a working derivation converts it into a
+    // manually-invalidated cache that never updates again, and nothing anywhere says so. Note the
+    // asymmetry this fixes — the LESS consequential misclassification (`fn.length`, just below) already
+    // throws; the one that silently costs you reactivity said nothing.
+    //
+    // Fires at most once per memo, on the first run that proves the body async. Not an error: both paths
+    // are legal and useful, and the fix is a one-liner the message names — declare the inputs
+    // (`memo(() => ({ a, b }), async ({ a, b }) => …)`, ADR 0025), which tracks the thunk and runs the
+    // async transform untracked. Undiscoverable, though, if you never learn you lost something.
+    let warnedUntracked = false
+    const warnUntracked = (produced: string): void => {
+        if (warnedUntracked || opts?.loader === true) return
+        warnedUntracked = true
+        log.channel('abide:memo').warn(
+            `memo ${id}: an argless memo whose body returns ${produced} is NOT auto-tracked — ` +
+                'its dependencies are not observed, so it re-fills only on refresh()/invalidate(). ' +
+                'To track inputs, declare them: memo(() => ({ a, b }), async ({ a, b }) => …).',
+        )
+    }
     // A KEYED body can also be synchronous, and then the read IS the value — there is nothing to await, and
     // handing back a promise would blank the SSR text and refill it a microtask later (the same reasoning as
     // ADR 0024 §3). It does NOT get the auto-tracked backing: its args are the whole dependency set, so the
     // body runs untracked and the value lives in the ordinary slot state machine, which is what keeps a
     // hydration `seed`, a `publish`, and `invalidate` authoritative over it.
-    const keyedSyncEligible = fn.length > 0 && ttl === Infinity && !shared
+    const keyedSyncEligible = fn.length > 0 && ttl === Infinity && !crossRequest
     // Undecided until the first run proves it, exactly like `resolveMode`.
     let keyedSync: boolean | undefined
     if (fn.length === 0 && declaresParameters(fn)) {
@@ -437,23 +503,23 @@ export function memo<Args, T>(
         )
     }
 
-    // Fire the broadcast sink for a slot-changing verb — ONLY on a shared memo (broadcast is a
-    // shared-slot concept). Transport-free: the memo just calls the injected function.
+    // Fire the broadcast sink for a slot-changing verb — ONLY on a crossRequest memo (broadcast is a
+    // cross-request-slot concept). Transport-free: the memo just calls the injected function.
     function broadcast(
         verb: 'invalidate' | 'refresh' | 'publish',
         args: unknown,
         value?: unknown,
     ): void {
-        if (shared && notify !== undefined) notify(verb, args, value)
+        if (crossRequest && notify !== undefined) notify(verb, args, value)
     }
     // Namespace slots within the backing cache map. \x00 keeps the prefix distinct from any
     // canonicalKey output.
     const prefix = `\x00memo\x00${id}\x00`
 
-    // The cache Map backing this memo's slots: the process-global shared store for a `shared` memo,
+    // The cache Map backing this memo's slots: the process-global shared store for a `crossRequest` memo,
     // otherwise the ambient per-context cache (per-request on the server, singleton on the client).
     function slots(): Map<string, unknown> {
-        return shared ? sharedStore() : reactiveScope().slots
+        return crossRequest ? sharedStore() : reactiveScope().slots
     }
 
     // The LRU-bounded store backing `cache`, if any. Only the shared store and the persistent server
@@ -465,18 +531,18 @@ export function memo<Args, T>(
         return undefined
     }
 
-    // Fail-closed checkpoint (b), rpc-core §2: a shared read must run inside an active request scope
+    // Fail-closed checkpoint (b), rpc-core §2: a crossRequest read must run inside an active request scope
     // (an authorized caller). A bare script/cron read has no gate and no client to serve, so it
     // throws rather than silently touching the cross-request store. Server-only; inert on the client.
     function guardSharedRead(): void {
-        if (shared && reactiveScope().requestScoped !== true) {
-            throw new Error('shared memo read requires an active request scope')
+        if (crossRequest && reactiveScope().requestScoped !== true) {
+            throw new Error('crossRequest memo read requires an active request scope')
         }
     }
 
     // Move a bounded slot to MRU on read so LRU eviction drops least-recently-read first.
     function touchOnRead(slot: Slot<Args, T>): void {
-        if (!shared && isBrowser) return
+        if (!crossRequest && isBrowser) return
         const store = boundedStore(slots())
         if (store !== undefined) sharedCacheTouch(store, slot.key)
     }
@@ -544,7 +610,7 @@ export function memo<Args, T>(
 
     function isExpired(slot: Slot<Args, T>): boolean {
         if (ttl === Infinity) return false
-        const state = slot.state.peek()
+        const state = slot.state.untracked()
         if (state.status === 'stream') {
             // An OPEN stream is retained regardless of ttl (§2); a CLOSED one expires on the ttl-from-close
             // clock (`loadedAt` is stamped when the ReplayableStream settles, not when `fn` resolved).
@@ -571,7 +637,7 @@ export function memo<Args, T>(
     ): Promise<T> {
         if (slot.inflight !== null) return slot.inflight
 
-        const current = slot.state.peek()
+        const current = slot.state.untracked()
         if (keepStale && current.status === 'value') {
             setState(slot, {
                 status: 'value',
@@ -628,11 +694,11 @@ export function memo<Args, T>(
                 }
             })()
 
-        // Fail-closed checkpoint (a), rpc-core §2: a shared handler runs OUTSIDE the request scope, so
+        // Fail-closed checkpoint (a), rpc-core §2: a crossRequest handler runs OUTSIDE the request scope, so
         // identity()/cookies()/request()/context() throw if it touches request scope → the read rejects
         // (error slot) and the value is never cached, in dev AND prod. A nested non-shared memo lands in
         // the neutral default scope. Non-shared memos keep running in the ambient scope.
-        const promise = shared ? exitScope(runLoad) : runLoad()
+        const promise = crossRequest ? exitScope(runLoad) : runLoad()
 
         slot.inflight = promise
         return promise
@@ -678,8 +744,12 @@ export function memo<Args, T>(
             // A promise or a decoded-chunk source is NOT a synchronous derivation — hand it back for the
             // classic path (§2: half-tracked is worse than untracked, so an async body is not tracked at all).
             const tagged = responseSourceOf(produced)
-            if (tagged?.kind === 'stream') return { run: runs, deferred: produced }
+            if (tagged?.kind === 'stream') {
+                warnUntracked('an async iterable')
+                return { run: runs, deferred: produced }
+            }
             if (isThenable(produced) || isStreamSource(produced)) {
+                warnUntracked('a promise')
                 return { run: runs, deferred: produced }
             }
             const value = (tagged?.kind === 'value' ? tagged.value : produced) as T
@@ -720,7 +790,7 @@ export function memo<Args, T>(
         const backing = createAutoBacking(slot)
         // `peek` (not a tracked read): the probe establishes ITS OWN dependencies either way, and a caller
         // must not end up subscribed to a node we may be about to drop.
-        const first = backing.fill.peek()
+        const first = backing.fill.untracked()
         if ('deferred' in first) {
             backing.fill.dispose()
             void startLoad(slot, false, { produced: first.deferred }).catch(() => {
@@ -740,8 +810,8 @@ export function memo<Args, T>(
     // slot to idle). `eager` additionally pulls right away, which is what makes `refresh` eager.
     function autoRefill(auto: AutoBacking<T>, eager: boolean): void {
         auto.override.set(null)
-        auto.version.set(auto.version.peek() + 1)
-        if (eager) auto.merged.peek()
+        auto.version.set(auto.version.untracked() + 1)
+        if (eager) auto.merged.untracked()
     }
 
     // Remove a slot from the backing map entirely — distinct from dropSlot (which resets to idle but
@@ -760,17 +830,17 @@ export function memo<Args, T>(
     }
 
     // Last consumer of a stream slot detached (ref-count hit 0). Dispose a settled ttl:0 slot; for a
-    // still-open stream everyone abandoned, abort the source unless it is a retained (shared, ttl>0) run
+    // still-open stream everyone abandoned, abort the source unless it is a retained (crossRequest, ttl>0) run
     // that should complete for a late joiner (§2 empty-refcount policy).
     function onStreamRefCountZero(slot: Slot<Args, T>, stream: ReplayableStream<unknown>): void {
         // A stale callback (the slot already re-ran into a NEW stream under the same key) must not touch it.
-        if (slot.state.peek().stream !== stream) return
+        if (slot.state.untracked().stream !== stream) return
         if (stream.settled) {
             // Dispose a ttl:0 slot, or an OVERFLOWED transcript (never retained for replay), on drain.
             if (ttl === 0 || stream.overflowed) disposeSlot(slot)
             return
         }
-        if (!(shared && ttl > 0)) {
+        if (!(crossRequest && ttl > 0)) {
             stream.abort()
             disposeSlot(slot)
         }
@@ -780,14 +850,14 @@ export function memo<Args, T>(
     // Concurrent/late reads fan out via `consume()` (a fresh cursor each); the source is never re-run.
     function bumpStreamTick(slot: Slot<Args, T>): void {
         const tick = slot.streamTick
-        if (tick !== undefined) tick.set(tick.peek() + 1)
+        if (tick !== undefined) tick.set(tick.untracked() + 1)
     }
 
     // Incremental per-chunk accounting (replayable-streams.md §4): grow the slot's recorded size as the
     // transcript grows so an OPEN stream pressures the LRU live, and OVERFLOW past the per-stream cap so a
     // runaway can't grow unbounded. Only the two bounded server stores account; per-request/client don't.
     function accountStreamChunk(slot: Slot<Args, T>, stream: ReplayableStream<unknown>): void {
-        if (slot.state.peek().stream !== stream) return // stale (slot re-ran)
+        if (slot.state.untracked().stream !== stream) return // stale (slot re-ran)
         const store = boundedStore(slots())
         if (store === undefined) return
         if (stream.bytes > streamBufferCap()) {
@@ -863,7 +933,7 @@ export function memo<Args, T>(
                 stream.fail(caught)
             } finally {
                 // Only touch the slot if it STILL holds this stream (not superseded by an invalidate/re-run).
-                if (slot.state.peek().stream === stream) {
+                if (slot.state.untracked().stream === stream) {
                     // TTL-from-close (§2): the retention clock starts when the transcript settles, not at fn-resolve.
                     slot.loadedAt = Date.now()
                     // The transcript is now a CLOSED value: unpin (LRU-evictable) and record its final size.
@@ -980,7 +1050,7 @@ export function memo<Args, T>(
     }
 
     function coalescedLoad(slot: Slot<Args, T>): Promise<T> {
-        const state = slot.state.peek()
+        const state = slot.state.untracked()
         // A settled/open stream slot hands back a fresh cursor over the shared buffer with no re-run — unless
         // it OVERFLOWED (not a valid replay target), in which case fall through to a fresh run.
         if (
@@ -1042,7 +1112,7 @@ export function memo<Args, T>(
         touchOnRead(slot)
         const auto = slot.auto
         if (auto !== undefined) return autoState(auto).value
-        if (slot.state.peek().status === 'stream') {
+        if (slot.state.untracked().status === 'stream') {
             return readStreamReactive(slot, (chunks) =>
                 chunks.length > 0 ? chunks[chunks.length - 1] : undefined,
             ) as T | undefined
@@ -1095,7 +1165,7 @@ export function memo<Args, T>(
         guardSharedRead()
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return { cursor: undefined, fresh: true }
-        const state = slot.state.peek()
+        const state = slot.state.untracked()
         // A retained, non-overflowed transcript is resumable — replay from `from` then continue live.
         if (
             state.status === 'stream' &&
@@ -1140,7 +1210,7 @@ export function memo<Args, T>(
             autoRefill(auto, false) // lazy: re-runs `fn` on the next pull
             return
         }
-        const state = slot.state.peek()
+        const state = slot.state.untracked()
         // Invalidating an OPEN stream aborts its source and gracefully ends live consumers (§4) — a value
         // slot has nothing to tear down.
         if (state.status === 'stream' && state.stream !== undefined && !state.stream.settled) {
@@ -1174,7 +1244,7 @@ export function memo<Args, T>(
             // The auto-tracked write (ADR 0024 §4): stamp the run being overridden, so the next re-fill of
             // any declared input drops it. `fill.peek()` pulls a stale fill first, so the updater form and
             // the stamp both see the CURRENT run.
-            const base = auto.fill.peek()
+            const base = auto.fill.untracked()
             const current = untrack(() => autoState(auto))
             const value =
                 typeof next === 'function'
@@ -1188,15 +1258,15 @@ export function memo<Args, T>(
             broadcast('publish', args, value)
             return
         }
-        const current = slot.state.peek()
+        const current = slot.state.untracked()
         let value: T
         if (typeof next === 'function') {
             // Updater-form. A closure can't cross the wire (rpc-core §2 tension): on a SHARED slot the
             // updater runs against the durable value here, then broadcasts its RESULT as a value-form
-            // frame. A SERVER per-request (non-shared) slot inside a request scope has nothing durable to
+            // frame. A SERVER per-request (request-scoped) slot inside a request scope has nothing durable to
             // broadcast an updater against → error. On the client (or a bare/default-context server call
             // with no request scope), an updater-form publish stays a local mutation.
-            if (!shared && reactiveScope().requestScoped === true) {
+            if (!crossRequest && reactiveScope().requestScoped === true) {
                 throw new Error(
                     'publish updater-form is not supported on a per-request memo; pass a value instead',
                 )
@@ -1207,7 +1277,7 @@ export function memo<Args, T>(
         }
         setState(slot, { status: 'value', value, error: undefined, refreshing: current.refreshing })
         log.channel('abide:memo').trace(`publish ${id}`)
-        // Both forms broadcast the resolved VALUE (value-form frame) on a shared slot.
+        // Both forms broadcast the resolved VALUE (value-form frame) on a crossRequest slot.
         broadcast('publish', args, value)
     }) as Memo<Args, T>['publish']
 
@@ -1220,12 +1290,12 @@ export function memo<Args, T>(
                     // Report an auto slot only once something has actually pulled it — reading it here would
                     // otherwise RUN `fn` for every cold derivation just to collect the seed.
                     if (!auto.filled()) continue
-                    const state = auto.merged.peek()
+                    const state = auto.merged.untracked()
                     if (state.status === 'value')
                         result.push({ args: slot.args, value: state.value as T })
                     continue
                 }
-                const state = slot.state.peek()
+                const state = slot.state.untracked()
                 if (state.status === 'value')
                     result.push({ args: slot.args, value: state.value as T })
             }
@@ -1247,12 +1317,41 @@ export function memo<Args, T>(
     // The WRITABLE PROJECTION (ADR 0024 §4). `set` IS `publish`, so a local write holds until the next
     // re-fill — the whole of the retired `state.linked`. Reading is `peek` semantics (reactive,
     // non-blocking); the blocking reads stay on the memo itself.
-    c.state = (args: Args): State<T> => {
-        const cell = (() => c.peek(args) as T) as State<T>
-        cell.set = (value: T) => c.publish(args, value)
-        cell.peek = () => untrack(() => c.peek(args)) as T
+    // The key is a `Room` positional and the INITIAL is the trailing payload, unpacked exactly as
+    // `publish`/`watch` do: `state(initial)` on an argless memo, `state({ id }, initial)` on a keyed one.
+    // Both arities unpack identically, so the generic-safe two-argument form stays correct at runtime.
+    //
+    // Note what is NOT here any more: this used to read `c.peek(args) as T` twice, casting away the
+    // `undefined` a cold slot really returns, and it synthesized the untracked read as
+    // `untrack(() => c.peek(args))` — manufacturing one primitive's `peek` out of the other's, four lines
+    // apart, which was the clearest possible evidence that the word meant two things (ADR 0027 D2).
+    // With `untracked` named for what it does and an `initial` closing the cold hole, both lies are gone
+    // and the projection is a real `State<T>`.
+    c.state = ((...args: unknown[]): State<T> => {
+        // Unpacking is keyed off `fn.length`, not off arity alone, because `state` is the one trailing-
+        // payload verb whose payload is OPTIONAL (a sync memo needs no initial), which would otherwise
+        // make `m.state(x)` ambiguous — room key, or initial? An ARGLESS memo has no room, so a lone
+        // argument can only be the initial; a KEYED memo always names its room first, so the initial is
+        // whatever follows it. `publish`/`watch` never hit this because their payload is mandatory.
+        const keyed = fn.length > 0
+        const slotArgs = (keyed ? args[0] : undefined) as Args
+        const hasInitial = args.length > (keyed ? 1 : 0)
+        const initial = hasInitial ? (args[args.length - 1] as T) : undefined
+
+        // No retained value? With an initial (the ASYNC projection) that is the answer. Without one this
+        // is a SYNC memo, whose bare call is T-or-throw — so defer to it, and an errored slot RETHROWS
+        // here exactly as it would on a direct read. Reading `peek` alone would have moved the old
+        // `as T` lie from "cold" to "errored" rather than removing it.
+        const read = (): T => {
+            const value = c.peek(slotArgs)
+            if (value !== undefined) return value
+            return hasInitial ? (initial as T) : (c(slotArgs) as T)
+        }
+        const cell = read as State<T>
+        cell.set = (value: T) => c.publish(slotArgs, value)
+        cell.untracked = () => untrack(read)
         return cell
-    }
+    }) as Memo<Args, T>['state']
 
     c.seedStream = (
         args: Args,
@@ -1338,7 +1437,7 @@ export function memo<Args, T>(
         })
     }) as Memo<Args, T>['watch']
 
-    // Tag registry hooks (rpc-core §8, PR4). A shared memo carrying tags registers these so the global
+    // Tag registry hooks (rpc-core §8, PR4). A crossRequest memo carrying tags registers these so the global
     // `invalidate/refresh({ tags })` selectors can act on it. Tag invalidate/refresh act on ALL current
     // slots and broadcast PER SLOT on that slot's `(rpc,args)` channel (unlike a bare-args verb, which
     // broadcasts once for the selector) so per-args subscribers each receive their own frame. pending/
@@ -1370,7 +1469,7 @@ export function memo<Args, T>(
         return any
     }
 
-    if (shared && tags.length > 0) {
+    if (crossRequest && tags.length > 0) {
         registerTaggedMemo({
             tags,
             invalidate: invalidateForTags,

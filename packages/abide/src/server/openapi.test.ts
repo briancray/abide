@@ -73,6 +73,38 @@ test('buildRegistry captures rpcs, schemas, clients, and sockets', () => {
     expect(ticks.clientPublish).toBe(true)
 })
 
+// ADR 0027 D9. `clients` was typed `unknown` and its normalizer ignored anything it did not
+// recognise, so BOTH of these silently did nothing. The `false` case was the worse of the two: it is
+// documented in CLAUDE.md as one of the three accepted values, and `typeof false !== 'object'` sent it
+// down the "all surfaces on" branch — the exact OPPOSITE of what it says.
+test('clients: false withholds every surface (it used to mean the opposite)', () => {
+    const hidden = GET(() => ({ ok: true }), { clients: false })
+    const config: TestAppConfig = { routes: { hidden } }
+    const registry = buildRegistry(config)
+
+    const entry = registry.rpcs.find((rpc) => rpc.name === 'hidden')
+    if (!entry) throw new Error('expected a hidden rpc in the registry')
+    expect(entry.clients.browser).toBe(false)
+    expect(entry.clients.mcp).toBe(false)
+    expect(entry.clients.cli).toBe(false)
+})
+
+test('clients: true (and an absent clients) leaves every surface reachable', () => {
+    const open = GET(() => ({ ok: true }), { clients: true })
+    const bare = GET(() => ({ ok: true }))
+    const config: TestAppConfig = { routes: { open, bare } }
+    const registry = buildRegistry(config)
+
+    for (const name of ['open', 'bare']) {
+        const entry = registry.rpcs.find((rpc) => rpc.name === name)
+        if (!entry) throw new Error(`expected a ${name} rpc in the registry`)
+        // Absent flag === reachable; nothing is explicitly withheld.
+        expect(entry.clients.browser).toBeUndefined()
+        expect(entry.clients.mcp).toBeUndefined()
+        expect(entry.clients.cli).toBeUndefined()
+    }
+})
+
 test('buildRegistry leaves inputSchema undefined for a Standard Schema', () => {
     const standardSchema: StandardSchemaV1<{ id: string }, { id: string }> = {
         '~standard': {

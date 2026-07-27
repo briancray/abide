@@ -11,6 +11,7 @@
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
+import { log } from '../../shared/log.ts'
 import { clientPublishAllowed } from '../socket.ts'
 import type { AppConfig, Route } from './router.ts'
 
@@ -21,6 +22,16 @@ export interface Clients {
     mcp?: boolean
     cli?: boolean
 }
+
+// The AUTHORED shape of the `clients` option — REACHABILITY only (which surfaces reach this callable),
+// never authorization; auth is `middleware`, which runs per-request and can short-circuit. These flags
+// gate surface GENERATION (OpenAPI omission, MCP tool list, CLI registration, client-bundle inclusion),
+// which is a different mechanism at a different time.
+//
+// Typed as of ADR 0027 D9. It was `unknown`, and an untyped public option plus a silently-lenient
+// normalizer is exactly how a documented feature evaporates: neither the compiler nor a dead-field scan
+// can see a shape nobody declared. Two documented behaviours had rotted behind it — see `resolveClients`.
+export type ClientsOption = boolean | Clients
 
 export interface RpcEntry {
     name: string
@@ -58,15 +69,55 @@ export interface Registry {
     sockets: SocketEntry[]
 }
 
-// Normalise the (untyped) `options.clients` into the flat Clients shape. A non-object is treated
-// as "all surfaces on".
-function resolveClients(raw: unknown): Clients {
-    if (typeof raw !== 'object' || raw === null) return {}
+// The three surfaces a callable can be reachable from. Named once so the normalizer can both READ them
+// and recognise anything that is NOT one of them.
+const CLIENT_SURFACES = ['browser', 'mcp', 'cli'] as const
+
+// Normalise the authored `clients` option into the flat `Clients` shape.
+//
+// ADR 0027 D9 fixed two documented behaviours that silently did nothing here, both caused by the same
+// shape: the option was typed `unknown`, and this function ignored whatever it did not recognise.
+//
+//  1. `clients: false` — documented in CLAUDE.md as one of the three accepted values, but `typeof false
+//     !== 'object'` fell into the "all surfaces on" branch, so it meant the exact OPPOSITE of what it
+//     said. It now withholds all three. (This is still not authorization: the raw HTTP endpoint remains
+//     — what is withheld is generation/advertisement on the three client surfaces.)
+//  2. `clients: { browser: { validate: … } }` — advertised as shipping the real validator client-side
+//     for parity, never implemented. RETRACTED rather than built: `clients` is reachability, and
+//     shipping a validator is a BUNDLING decision that belongs next to `schemas`. A nested object now
+//     warns instead of being dropped in silence.
+//
+// Unrecognised input is LOUD (`abide:rpc`) rather than dropped — that silence is what let both rot.
+function resolveClients(raw: unknown, label: string): Clients {
+    if (raw === undefined || raw === true) return {} // absent / explicit `true` → every surface on
+    if (raw === false) return { browser: false, mcp: false, cli: false }
+    if (typeof raw !== 'object' || raw === null) {
+        log.channel('abide:rpc').warn(
+            `${label}: \`clients\` must be a boolean or { browser?, mcp?, cli? } — got ${typeof raw}. Ignoring.`,
+        )
+        return {}
+    }
     const source = raw as Record<string, unknown>
     const clients: Clients = {}
-    if (typeof source.browser === 'boolean') clients.browser = source.browser
-    if (typeof source.mcp === 'boolean') clients.mcp = source.mcp
-    if (typeof source.cli === 'boolean') clients.cli = source.cli
+    for (const surface of CLIENT_SURFACES) {
+        const value = source[surface]
+        if (value === undefined) continue
+        if (typeof value === 'boolean') {
+            clients[surface] = value
+            continue
+        }
+        log.channel('abide:rpc').warn(
+            `${label}: \`clients.${surface}\` must be a boolean — got ${typeof value}. Ignoring (the surface stays reachable). ` +
+                `NB: \`clients.browser: { validate }\` was retracted in ADR 0027 D9 — \`clients\` is reachability, not bundling.`,
+        )
+    }
+    for (const key of Object.keys(source)) {
+        if (!(CLIENT_SURFACES as readonly string[]).includes(key)) {
+            log.channel('abide:rpc').warn(
+                `${label}: unknown \`clients.${key}\` — expected one of ${CLIENT_SURFACES.join(', ')}. Ignoring.`,
+            )
+        }
+    }
     return clients
 }
 
@@ -84,10 +135,12 @@ function rpcEntry(name: string, route: Route): RpcEntry {
         name,
         method: meta.method,
         read: meta.read,
-        shared: memoOpt?.shared === true,
+        // Wire/internal field name (the client spec has always called it `shared`); the AUTHORED
+        // option is `crossRequest` (ADR 0027 D5). Renaming reached the authoring surface, not the payload.
+        shared: memoOpt?.crossRequest === true,
         memo: memoed,
         ttl,
-        clients: resolveClients(options.clients),
+        clients: resolveClients(options.clients, `rpc "${name}"`),
     }
 
     const inputSchema = jsonSchemaOf(schemas?.input)
@@ -115,9 +168,13 @@ export function buildRegistry(config: AppConfig): Registry {
         const entry: SocketEntry = {
             name,
             clientPublish: clientPublishAllowed(options.clientPublish),
-            tail: typeof options.tail === 'number' ? options.tail : 0,
-            ttl: typeof options.ttl === 'number' ? options.ttl : Infinity,
-            clients: resolveClients(options.clients),
+            // The channel's own options (ADR 0027 D1). `maxAge` is the channel's word for the
+            // per-MESSAGE age window; the registry/wire spec keeps calling it `ttl` because that is
+            // what the CLIENT spec field has always been named — the rename is to the authoring
+            // surface, not to the transport payload.
+            tail: typeof options.channel?.tail === 'number' ? options.channel.tail : 0,
+            ttl: typeof options.channel?.maxAge === 'number' ? options.channel.maxAge : Infinity,
+            clients: resolveClients(options.clients, `socket "${name}"`),
         }
         const messageSchema = jsonSchemaOf(options.schema)
         if (messageSchema !== undefined) entry.messageSchema = messageSchema

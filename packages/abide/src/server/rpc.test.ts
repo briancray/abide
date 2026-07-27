@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { createTestApp } from '../test/createTestApp.ts'
 import { DELETE } from './DELETE.ts'
 import { GET } from './GET.ts'
-import { HEAD } from './HEAD.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './internal/requestScope.ts'
 import { PATCH } from './PATCH.ts'
 import { POST } from './POST.ts'
@@ -22,7 +22,7 @@ function makeScope(overrides?: Partial<RequestScope>): RequestScope {
     }
 }
 
-describe('read RPC (GET/HEAD) — cache + coalesce', () => {
+describe('read RPC (GET; HEAD is router-derived) — cache + coalesce', () => {
     test('two loads with the same args call the handler once', async () => {
         let calls = 0
         const get = GET(async (n: number) => {
@@ -111,17 +111,27 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
         })
     })
 
-    test('HEAD behaves as a read (caches like GET)', async () => {
-        let calls = 0
-        const head = HEAD(async (n: number) => {
-            calls++
-            return n
-        })
-        await runInScope(makeScope(), async () => {
-            await head(1)
-            await head(1)
-            expect(calls).toBe(1)
-        })
+    // ADR 0027 D6: there is no `HEAD` helper. HTTP `HEAD` IS `GET` minus the body, so the router
+    // derives it — a HEAD request reaches the registered GET handler (routes key by NAME, and the
+    // dispatch gates on `meta.read`, not on the verb) and the server drops the body. This test pins
+    // the derived behaviour end-to-end, which is what the deleted `HEAD()` helper never checked: it
+    // only ever asserted that a second constructor produced the same metadata.
+    test('a HEAD request reaches the GET handler and carries no body', async () => {
+        const hello = GET(async ({ n }: { n: number }) => ({ n }))
+        const app = await createTestApp({ routes: { hello } })
+        try {
+            const query = `?__abide_args=${encodeURIComponent(JSON.stringify({ n: 1 }))}`
+            const head = await app.fetch(`/__abide/rpc/hello${query}`, { method: 'HEAD' })
+            expect(head.status).toBe(200)
+            expect(head.headers.get('content-type')).toContain('application/json')
+            expect(await head.text()).toBe('') // HEAD never carries a body
+
+            // Same route, same args, over GET — the body the HEAD response described.
+            const get = await app.fetch(`/__abide/rpc/hello${query}`)
+            expect(await get.json()).toEqual({ n: 1 })
+        } finally {
+            await app.stop()
+        }
     })
 })
 
@@ -222,9 +232,6 @@ describe('__rpc router metadata', () => {
         const noop = () => 0
         expect(GET(noop).__rpc.method).toBe('GET')
         expect(GET(noop).__rpc.read).toBe(true)
-        expect(HEAD(noop).__rpc.method).toBe('HEAD')
-        expect(HEAD(noop).__rpc.read).toBe(true)
-
         expect(POST(noop).__rpc.method).toBe('POST')
         expect(POST(noop).__rpc.read).toBe(false)
         expect(PUT(noop).__rpc.method).toBe('PUT')

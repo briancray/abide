@@ -111,7 +111,7 @@ describe('mutation shared ttl:0 — cross-request coalescing collapses side effe
                 await sleep(5)
                 return args.id
             },
-            { memo: { ttl: 0, shared: true } },
+            { memo: { ttl: 0, crossRequest: true } },
         )
 
         const a = runInScope(makeScope(), () => m({ id: 7 }))

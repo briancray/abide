@@ -476,8 +476,12 @@ export function interpolate(
                 if (settled !== undefined) return showPrimed(text(settled.value))
                 const generation = ++thenGeneration
                 value.then((resolved) => {
-                    // Existing node only (see `showPrimed`). A server-empty claim has nothing to correct
-                    // until the bare-read SSR semantics change, which is when this needs revisiting.
+                    // Existing node only (see `showPrimed`). A server-empty claim has nothing to correct,
+                    // and that is now SETTLED rather than pending: bare-read SSR semantics do not change
+                    // (ADR 0027 D3). `emitServer` awaits every expression slot unconditionally — it must,
+                    // being type-blind — so `{fn()}` blocks the render exactly like `{await fn()}`, and the
+                    // non-blocking read is spelled `{fn.peek()}`. The auto-await here stays a passthrough
+                    // backstop for a `T | Promise<T>` value, not a second way to spell the read.
                     if (generation === thenGeneration && textNode !== null)
                         textNode.data = text(resolved)
                 })

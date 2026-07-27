@@ -1,30 +1,26 @@
+<script module>
+  import { channel } from "abide/shared/channel"
+
+  // A ROOMED channel — `Args` names the room, so each distinct args value gets its own hub, created
+  // lazily. Owned by a browser module like the card above it: rooms are the primitive's own keying, so
+  // there is still no transport here, nothing to connect to, and nothing on the server.
+  const notes = channel<{ at: number; text: string }, { room: string }>({ tail: 3 })
+</script>
+
 <script>
   import { state } from "abide/shared/state"
-  import channelPost from "$server/rpc/channelPost"
-  import channelRead from "$server/rpc/channelRead"
 
-  // The channel itself lives in $shared/roomChannel and is owned by the SERVER; these two RPCs publish
-  // into a room and read one room's tail through the shared read surface. Publish into the room you are
-  // NOT watching and nothing shows up — per-room isolation is the primitive's own keying, not a socket
-  // feature layered on top.
+  // Publish into the room you are NOT watching and nothing shows up.
   let room = state("red")
-  let tail = state<{ at: number; text: string }[]>([])
-  let latest = state<string>("—")
+  let sent = state(0)
 
-  async function read() {
-    const snap = await channelRead({ room })
-    tail = snap.tail
-    latest = snap.latest === null ? "—" : snap.latest.text
+  function post(target: string) {
+    sent = sent + 1
+    notes.publish({ room: target }, { at: sent, text: `note → ${target}` })
   }
 
-  async function post(target: string) {
-    await channelPost({ room: target, text: `note → ${target}` })
-    await read()
-  }
-
-  async function switchRoom() {
+  function switchRoom() {
     room = room === "red" ? "blue" : "red"
-    await read()
   }
 </script>
 
@@ -32,12 +28,11 @@
   <button data-testid="room-post-red" onclick={() => post("red")}>Publish to red</button>
   <button data-testid="room-post-blue" onclick={() => post("blue")}>Publish to blue</button>
   <button data-testid="room-switch" onclick={switchRoom}>Watch the other room</button>
-  <button data-testid="room-read" onclick={read}>Read</button>
 </div>
 
-<p>Watching room: <strong data-testid="room-name">{room}</strong> · <code>peek()</code>: <strong data-testid="room-latest">{latest}</strong></p>
+<p>Watching room: <strong data-testid="room-name">{room}</strong> · <code>tail: 3</code>, so switching back replays that room's last three.</p>
 <ul class="grid" data-testid="room-log">
-  {#for note of tail by note.at}
+  {#for await note of notes({ room })}
     <li>#{note.at} — {note.text}</li>
   {/for}
 </ul>

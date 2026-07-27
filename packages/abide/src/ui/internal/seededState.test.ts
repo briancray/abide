@@ -9,8 +9,8 @@
 // `<script>`), so a recorded bucket replays by ordinal.
 
 import { expect, test } from 'bun:test'
-import type { HydrationSeed } from '../../server/internal/pages.ts'
 import { encode } from '../../shared/internal/codec.ts'
+import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
 import { memo } from '../../shared/memo.ts'
 import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
@@ -32,35 +32,35 @@ function seed(buckets: unknown[][]): HydrationSeed {
 
 test('consumes seed.states by ordinal, in call order', () => {
     const s = makeSeededState(seed([[10, 20, 30]]))
-    expect(s(1).peek()).toBe(10)
-    expect(s(2).peek()).toBe(20)
-    expect(s(3).peek()).toBe(30)
+    expect(s(1).untracked()).toBe(10)
+    expect(s(2).untracked()).toBe(20)
+    expect(s(3).untracked()).toBe(30)
 })
 
 test('falls back to the literal initial when the ordinal overflows the seed', () => {
     const s = makeSeededState(seed([[10]]))
-    expect(s(1).peek()).toBe(10)
-    expect(s(2).peek()).toBe(2) // no seed slot 1 → literal initial
+    expect(s(1).untracked()).toBe(10)
+    expect(s(2).untracked()).toBe(2) // no seed slot 1 → literal initial
 })
 
 test('falls back to the literal initial when the seed carries no states', () => {
     const s = makeSeededState({})
-    expect(s(7).peek()).toBe(7)
-    expect(s(8).peek()).toBe(8)
+    expect(s(7).untracked()).toBe(7)
+    expect(s(8).untracked()).toBe(8)
 })
 
 test("re-applies the page's transform to the RAW seed value (matches the server cell)", () => {
     // Server recorded the raw initial 5; the client passes transform through, reaching 6 (== server cell).
     const s = makeSeededState(seed([[5]]))
     const cell = s(0, (v: number) => v + 1)
-    expect(cell.peek()).toBe(6)
+    expect(cell.untracked()).toBe(6)
 })
 
 test('transform still applies to later writes on a seeded cell', () => {
     const s = makeSeededState(seed([[5]]))
     const cell = s(0, (v: number) => v + 1)
     cell.set(10)
-    expect(cell.peek()).toBe(11)
+    expect(cell.untracked()).toBe(11)
 })
 
 test('a derivation never consumes a seed slot (ADR 0024: derivation is memo, not state)', () => {
@@ -68,8 +68,8 @@ test('a derivation never consumes a seed slot (ADR 0024: derivation is memo, not
     // A `memo` is not a `state` call at all, so it cannot advance the per-component ordinal.
     const derived = memo(() => 1)
     expect(derived()).toBe(1)
-    expect(s(0).peek()).toBe(100)
-    expect(s(0).peek()).toBe(200)
+    expect(s(0).untracked()).toBe(100)
+    expect(s(0).untracked()).toBe(200)
 })
 
 // A recording `state` for the SERVER side of the round-trip: pushes each raw initial in call order.

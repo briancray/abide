@@ -19,20 +19,22 @@
     <GetReadDemo />
   </Demo>
 
-  <p><code>HEAD</code> is the same read with no body — identical semantics, headers only. Useful as a liveness ping, which is what the raw fetch below reports.</p>
-  <Demo id="head" title="Read — <code>HEAD</code>" server="src/server/rpc/rpcPing.ts" client="src/ui/demos/rpc/reads/HeadPingDemo.abide" tab="server">
+  <p><code>HEAD</code> is the same read with no body — headers only, useful as a liveness ping. There is <strong>no <code>HEAD</code> helper</strong>: HTTP <code>HEAD</code> <em>is</em> <code>GET</code> minus the body, so the router derives it from the <code>GET</code> you already declared. The server tab below is an ordinary <code>GET</code>; the raw fetch beside it asks for <code>HEAD</code> and gets a 200 status line with an empty body.</p>
+  <Demo id="head" title="Read — <code>HEAD</code>, derived from <code>GET</code>" server="src/server/rpc/rpcPing.ts" client="src/ui/demos/rpc/reads/HeadPingDemo.abide" tab="server">
     <HeadPingDemo />
   </Demo>
 
   <h2>Rendering it: blocking or not</h2>
   <p>Everything below reads the <em>same</em> RPC. The only question is what you want to happen while it is in flight, and there are two answers — wait, or show what you have.</p>
 
-  <p>Waiting is the default and the simplest: <code>{'{'}await fn(){'}'}</code> blocks the render, so the value lands in the server HTML. Nothing suspends on the client; the text node fills when the read settles.</p>
+  <p>Waiting is the default and the one to write: <code>{'{'}await fn(args){'}'}</code> blocks the render, so the value lands in the server HTML — the string below is in this document before any JavaScript runs. Nothing suspends on the client; the text node fills when the read settles.</p>
   <Demo id="await-read" title="<code>{'{'}await fn(){'}'}</code> — blocking read" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/AwaitReadDemo.abide" tab="client">
     <AwaitReadDemo />
   </Demo>
 
-  <p>Not waiting is <code>peek</code>: a reactive <code>T | undefined</code> snapshot that never blocks. It subscribes the caller and kicks a coalesced load, so it is <code>undefined</code> for one beat and then the value. This is the form to reach for when a slow read shouldn't hold up the paint.</p>
+  <p class="note">The <code>await</code> is not optional. Every expression slot is auto-awaited at runtime, so a bare <code>{'{'}fn(args){'}'}</code> would render the value too — but it types as <code>Promise&lt;T&gt;</code>, which dead-ends the moment you want a field. <code>abide check</code> rejects it and points here, so there is one form, not two.</p>
+
+  <p>Not waiting is <code>peek</code>: a reactive <code>T | undefined</code> snapshot that never blocks. It returns whatever the slot holds at that instant and kicks a coalesced load — so it is the value when the slot is already warm (on the server too, if an earlier read of the same call settled during that render), and <code>undefined</code> when it is cold. Reach for it when a slow read shouldn't hold up the paint, and when you want to compose an expression around that <code>undefined</code> rather than have the framework hide it: it is an ordinary value, so the placeholder is ordinary too — <code>{'{'}fn.peek(args) ?? 'Loading…'{'}'}</code>.</p>
   <Demo id="peek-read" title="<code>{'{'}fn.peek(args){'}'}</code> — non-blocking snapshot" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/PeekReadDemo.abide" tab="client">
     <PeekReadDemo />
   </Demo>

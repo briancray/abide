@@ -30,7 +30,7 @@ describe('socket — replay (tail / ttl)', () => {
     })
 
     test('tail:3 — a new subscriber replays the last 3 messages in order', async () => {
-        const sock = socket<number>({ tail: 3 })
+        const sock = socket<number>({ channel: { tail: 3 } })
         sock.publish(1)
         sock.publish(2)
         sock.publish(3)
@@ -41,7 +41,7 @@ describe('socket — replay (tail / ttl)', () => {
     })
 
     test('ttl — tail entries older than ttl are not replayed', async () => {
-        const sock = socket<number>({ tail: 5, ttl: 20 })
+        const sock = socket<number>({ channel: { tail: 5, maxAge: 20 } })
         sock.publish(1)
         await delay(40) // 1 ages past ttl
         sock.publish(2)
@@ -85,7 +85,7 @@ describe('socket — fanout & ordering', () => {
     // on-time consumer and fails right here, which is exactly what this test exists to catch.
     test('a synchronous burst larger than tail still reaches a live subscriber intact', async () => {
         const BURST = 200
-        const sock = socket<number>({ tail: 4 }) // tail deliberately far smaller than the burst
+        const sock = socket<number>({ channel: { tail: 4 } }) // tail deliberately far smaller than the burst
         const got = collect(sock, BURST)
         await delay(5) // let the subscriber attach and park
 

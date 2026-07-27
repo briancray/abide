@@ -51,7 +51,7 @@ Same code, ambient scope differs by side:
 
 Opt-in deliberately crosses requests, so the auth-free property is made *structural*:
 
-1. **Opt-in per-call-site** via the `memo` opt (`{ shared: true, ttl }`). Not a global
+1. **Opt-in per-call-site** via the `memo` opt (`{ crossRequest: true, ttl }`). Not a global
    mode; the default stays per-request-throwaway.
 2. **Key = `(callSiteId, serialize(args))` and nothing ambient** — no cookies/auth/request
    in the key. This is exactly why shared is only safe for functions pure over their args.
@@ -237,7 +237,7 @@ One imported callable means two things:
      cannot perform (§5.2).
    - `user.refresh(args)`: like invalidate but eager reload; server-broadcast eager.
    - `user.publish(...)` — one name, two signatures; a slot is *shared* iff its RPC/`memo` sets
-     `memo: { shared: true }`:
+     `memo: { crossRequest: true }`:
      | Caller | value-form `publish(args, v)` | updater-form `publish(args, cur => next)` |
      | --- | --- | --- |
      | Client (any slot) | local swap | local swap |
@@ -292,10 +292,21 @@ One imported callable means two things:
    (422/400), narrowed like any §9 typed error — a well-known member of every RPC's error
    union.
 
-### Client-side validation opt-in
+### Client-side validation opt-in — **RETRACTED (ADR 0027 D9), never implemented**
 
-- **Binary flag on the client surface: `clients: { browser: { validate: false | true } }`.**
-  Default `false` → nothing shipped. No structural middle tier.
+> **Status: not built, and the spelling below is withdrawn.** `resolveClients` only ever read
+> booleans, so `clients: { browser: { validate: true } }` was dropped on the floor — the author
+> configured nothing and was told nothing. It survived a dead-field sweep because the option was
+> typed `unknown`: there was no declared shape for a scan to find.
+>
+> Retracted rather than implemented because the flag was in the **wrong place**. `clients` is
+> *reachability* — which surfaces reach a callable. Shipping a validator is a *bundling* decision
+> about a **schema**, so if this is ever built it belongs next to `schemas`, not inside `clients`.
+> Keeping it here also blurred the one boundary `CLAUDE.md` states twice in bold: `clients` is not
+> authorization. The design below is retained as the record of what was intended.
+
+- ~~**Binary flag on the client surface: `clients: { browser: { validate: false | true } }`.**
+  Default `false` → nothing shipped. No structural middle tier.~~
 - When `true`, the bundler ships the user's **actual validator** (+ schema) to the client and
   validates before `fetch`, so client and server reach the **same verdict** — full refinement
   parity including `.refine`/cross-field checks. The validator runtime is **shared across all
@@ -416,7 +427,7 @@ pages — nothing is reserved outside `/__abide/*`.
    (designed, not yet built — `replayable-streams.md`):** mutations would route through the
    memo too and **coalesce by default** (`memo: { ttl: 0 }` — dedupe identical *concurrent*
    calls, retain nothing after settle, so sequential mutations each execute); opt in to
-   caching/replay with `memo: { ttl, shared }`, opt OUT with `memo: false`. The read/mutation
+   caching/replay with `memo: { ttl, crossRequest }`, opt OUT with `memo: false`. The read/mutation
    split would narrow to the wire (method, URL vs body, CSRF) + the default TTL (`∞`/`0`).
 2. **No request batching.** Coalescing (dedup identical in-flight) yes; batching (combine
    distinct calls in one tick into one round-trip) **no** — it couples requests (HOL),
@@ -435,7 +446,7 @@ pages — nothing is reserved outside `/__abide/*`.
    `ABIDE_RPC_TIMEOUT`, per-RPC overridable. The server deadline gives SSR peek reads their
    own bound (closing the slowloris hole where only streams had a deadline). **`maxBodySize`**
    = per-RPC override of `ABIDE_MAX_REQUEST_BODY_SIZE`, enforced pre-parse.
-5. **`memo` opt = the value-cache config for that RPC** (`{ ttl, shared, tags, … }`) —
+5. **`memo` opt = the value-cache config for that RPC** (`{ ttl, crossRequest, tags, … }`) —
    the in-memory reactive/coalescing cache (§2–§3, §8 tags), **not** HTTP `Cache-Control`.
    HTTP response caching, if wanted, rides response-init headers separately. **Wire default:**
    the router stamps `Cache-Control: private, no-cache` + `Vary: Cookie` on any response that
@@ -466,7 +477,7 @@ pages — nothing is reserved outside `/__abide/*`.
 ## RPC options (consolidated)
 
 `{ schemas: { input?, output?, files? }, clients: { browser?, mcp?, cli? },
-crossOrigin?, maxBodySize?, timeout?, memo: { ttl?, shared?, tags?, … } }`
+crossOrigin?, maxBodySize?, timeout?, memo: { ttl?, crossRequest?, tags?, … } }`
 (+ `stream` is not a flag — any handler may return a stream by returning `jsonl`/`sse`.)
 
 ---

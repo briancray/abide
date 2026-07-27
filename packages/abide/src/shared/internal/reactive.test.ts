@@ -22,11 +22,11 @@ describe('state', () => {
         let runs = 0
         effect(() => {
             runs++
-            count.peek() // must not subscribe
+            count.untracked() // must not subscribe
         })
         expect(runs).toBe(1)
         count.set(6)
-        expect(count.peek()).toBe(6)
+        expect(count.untracked()).toBe(6)
     })
 
     test('holds function values', () => {

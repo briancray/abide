@@ -13,7 +13,9 @@ export interface ChatMessage {
 // returning `undefined`. The mediator's presence IS the permission (ADR 0023).
 // #demo socket-def
 export default socket<ChatMessage>({
-    tail: 20,
+    // The pub/sub knobs are the CHANNEL's own, nested rather than flattened (ADR 0027 D1) — a socket
+    // adds transport and authorization, not vocabulary.
+    channel: { tail: 20 },
     clientPublish: (message) => {
         const text = message && typeof message.text === 'string' ? message.text.trim() : ''
         if (text.length === 0) return

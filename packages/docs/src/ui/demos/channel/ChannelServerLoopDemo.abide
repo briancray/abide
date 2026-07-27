@@ -1,0 +1,61 @@
+<script>
+  import { state } from "abide/shared/state"
+  import chatterSay from "$server/rpc/chatterSay"
+  import chatterSeen from "$server/rpc/chatterSeen"
+  import chatterRestart from "$server/rpc/chatterRestart"
+
+  // Nothing on THIS side iterates the channel. The subscription is a plain `for await` loop in
+  // $server/chatterLoop.ts — ordinary server code, no template involved. These buttons only publish
+  // into the topic and read back what that loop kept, so the list below is the loop's own transcript.
+  let seen = state([])
+  let running = state(true)
+  let sent = state(0)
+
+  async function read() {
+    const snap = await chatterSeen()
+    seen = snap.seen
+    running = snap.running
+  }
+
+  async function publish(text) {
+    await chatterSay({ text })
+    await read()
+  }
+
+  async function say() {
+    sent = sent + 1
+    await publish("message " + sent)
+  }
+
+  async function stop() {
+    await publish("stop")
+  }
+
+  async function restart() {
+    const snap = await chatterRestart()
+    seen = snap.seen
+    running = snap.running
+    sent = 0
+  }
+</script>
+
+<div class="row">
+  <button data-testid="loop-say" onclick={say} disabled={!running}>Publish a message</button>
+  <button data-testid="loop-stop" onclick={stop} disabled={!running}>Publish "stop" (breaks the loop)</button>
+  <button data-testid="loop-read" onclick={read}>Read what the loop kept</button>
+  <button data-testid="loop-restart" onclick={restart}>Restart the loop</button>
+</div>
+
+<p>
+  The loop is
+  {#if running}
+    <strong data-testid="loop-status">subscribed</strong> — it is sitting in <code>await</code> on the next message.
+  {:else}
+    <strong data-testid="loop-status">unsubscribed</strong> — it hit <code>break</code>, so publishing now reaches no one.
+  {/if}
+</p>
+<ul class="grid" data-testid="loop-log">
+  {#for message of seen}
+    <li>{message}</li>
+  {/for}
+</ul>

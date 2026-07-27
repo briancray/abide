@@ -18,11 +18,11 @@
 // the top on the SHELL frame unless `keepScroll`; back/forward stays the browser's (`scrollRestoration`
 // is left `'auto'`) and abide only corrects the clamp it can't see — see `settleScroll`/`stampScroll`.
 
-import { matchRoute } from '../server/internal/matchRoute.ts'
-import type { HydrationSeed } from '../server/internal/pages.ts'
-import type { RouteInfo } from '../server/internal/requestScope.ts'
 import { decodeJsonlStream } from '../shared/internal/decodeStreamResponse.ts'
+import type { HydrationSeed } from '../shared/internal/hydrationSeed.ts'
+import { matchRoute } from '../shared/internal/matchRoute.ts'
 import { setClientRoute } from '../shared/internal/routeHolder.ts'
+import type { RouteInfo } from '../shared/internal/routeInfo.ts'
 import { bootstrapPage, buildPageScope } from './internal/bootstrap.ts'
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
 import {

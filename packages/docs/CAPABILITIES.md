@@ -133,7 +133,7 @@ Import `abide/server/{VERB}`; handler takes one positional object arg. Reads →
 | Capability | Kind | Status |
 | --- | --- | --- |
 | `GET(fn, opts?)` — read | PW+RT | [x] (/rpc/reads) |
-| `HEAD(fn, opts?)` — read, identical to GET | RT | [x] (/rpc/reads raw HEAD fetch) |
+| `HEAD` — router-DERIVED from `GET`, no helper (ADR 0027 D6) | RT | [x] (/rpc/reads raw HEAD fetch) |
 | `POST(fn, opts?)` — mutating | PW+RT | [x] (/rpc/mutations) |
 | `PUT(fn, opts?)` — mutating | PW+RT | [~] (verb supported; browser demo consolidated to POST + DELETE on /rpc/mutations) |
 | `PATCH(fn, opts?)` — mutating | PW+RT | [~] (verb supported; browser demo consolidated to POST + DELETE on /rpc/mutations) |

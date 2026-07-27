@@ -4,6 +4,7 @@
   import ChannelRoomsDemo from "$ui/demos/channel/ChannelRoomsDemo.abide"
   import ChannelProbesDemo from "$ui/demos/channel/ChannelProbesDemo.abide"
   import ChannelKeyLadderDemo from "$ui/demos/channel/ChannelKeyLadderDemo.abide"
+  import ChannelServerLoopDemo from "$ui/demos/channel/ChannelServerLoopDemo.abide"
 </script>
 
 <main class="page">
@@ -17,10 +18,18 @@
     <ChannelPublishDemo />
   </Demo>
 
+  <h2>The subscription is plain <code>for await</code></h2>
+  <p>The template block is markup's <em>spelling</em> of the subscription, not the subscription itself. A <code>Channel&lt;T&gt;</code> <strong>is</strong> an <code>AsyncIterable&lt;T&gt;</code> — <code>for await (const m of chatter)</code> is the whole API, and it works in an ordinary <code>.ts</code> module with no template anywhere near it: in an RPC handler, in <code>onStart</code>, at module scope, in a script under <code>abide run</code>. Iterate to subscribe; leave the loop to unsubscribe. A roomed channel is the same loop with the room named — <code>for await (const m of chatter({'{'} room {'}'}))</code>.</p>
+  <p>The card below is the proof: <strong>nothing on the client iterates anything</strong>. The subscription is a <code>for await</code> in a plain server module, and the buttons only publish into the topic and read back what that loop kept. Publish <code>"stop"</code> and the loop <code>break</code>s — publishing after that reaches no one, because leaving the loop <em>is</em> unsubscribing.</p>
+  <p class="note">One caveat, and it is the reason a page can never hang on this: iterated <strong>inside an SSR page render</strong>, a channel yields its <code>tail</code> snapshot and then <em>completes</em> — a live topic has no end, so a render that waited for one would never finish. Everywhere else on the server the same loop is a genuine live subscription that stays open until you break out of it.</p>
+  <Demo id="server-loop" title="<code>for await (const m of chatter)</code> — subscribing from plain server code" server="src/server/chatterLoop.ts" client="src/ui/demos/channel/ChannelServerLoopDemo.abide" tab="server">
+    <ChannelServerLoopDemo />
+  </Demo>
+
   <h2><code>Args</code> names the room</h2>
   <p>A non-void <code>Args</code> gives per-room topics — <code>channel({'{'}room{'}'})</code> subscribes one, <code>publish({'{'}room{'}'}, msg)</code> addresses one — each a distinct hub created lazily. This is the same mechanism a <code>memo</code> uses to keep one slot per args, which is exactly the point: rooms are not a socket feature bolted on, they are the primitive's key. Publish into the room you are <em>not</em> watching and nothing shows up; switch rooms and that room's tail is what you read.</p>
-  <p>This one is owned by the <strong>server</strong> — the channel lives in <code>$shared/roomChannel</code> and two RPCs drive it, the same shape as the server-side <code>state</code> graph on the <a href="/memo">memo page</a>. It is also the honest reason it isn't inline: an <code>.abide</code> <code>&lt;script&gt;</code> can't yet parse a type-argument list containing a top-level comma, so <code>channel&lt;T, Args&gt;</code> is only expressible in plain <code>.ts</code> today.</p>
-  <Demo id="rooms" title="<code>channel&lt;T, Args&gt;</code> — per-room isolation" server="src/shared/roomChannel.ts" client="src/ui/demos/channel/ChannelRoomsDemo.abide" tab="server">
+  <p>This card is owned by a <strong>browser module</strong>, exactly like the one above — the rooms below never leave the page. That is the whole claim: a room is a key on the primitive, not a topic on a connection. The same <code>channel&lt;T, Args&gt;</code> in a server module — like the loop in the card above — keys its rooms identically; a <a href="/sockets">socket</a> is what carries one of those server-owned rooms to a browser, and it changes none of this.</p>
+  <Demo id="rooms" title="<code>channel&lt;T, Args&gt;</code> — per-room isolation" client="src/ui/demos/channel/ChannelRoomsDemo.abide" tab="client">
     <ChannelRoomsDemo />
   </Demo>
 

@@ -21,12 +21,21 @@
 * use simple loops (for, for of) and straightforward control flow instead of deep iterator chains or high generic combinators in tight loops
 * keep objects and arrays monomorphic so the JIT can optimize them agressively
 * minimize dynamic features and complex closures in performance critical sections
+* never `await` a value that is usually already settled — guard it (`isThenable(v) ? await v : v`); an unconditional await costs a promise wrap and a microtask tick at every call site, and a template slot pays it per row
+* detect the common shape and skip the general algorithm — the expensive general path is the fallback, not the default
 * use descriptive variable and function names instead of abbrevations
-* write terse comments only when why is unclear. do not write comments where code is self explanatory
+* write terse comments only when why is unclear. do not write comments where code is self explanatory — and when something was tried and reverted, record the MECHANISM, not just the outcome; an outcome-only note freezes the decision permanently
 * use monomorphic types and narrowing/widening instead of ad-hoc or one use types
 * use tailwindcss classes for styling, and prefer tailwind classes over style properties when possible.
 * constants should be UPPERCASE_SNAKE_CASE always, including their files
 * do not worry about backwards compatibility if there is a better way to do something at any level unless it changes a public api - then discuss
+
+# performance and measurement
+
+* a performance claim is a RATIO against hand-written code in the same substrate — absolute ms from a DOM emulator describe the emulator, not the framework
+* correctness tests cannot guard a performance contract: when the contract is "does less work", assert the work (nodes moved, allocations, calls) — the wrong implementation still produces the right output
+* budget emitted code in three numbers: allocations per template node, microtask ticks per row, DOM nodes per list item
+* a benchmark case earns its place by DISTINGUISHING implementations, not by being representative — a full reverse cannot tell a minimal keyed reconcile from a rebuild; a two-row swap can
 
 > The authoritative design lives in `docs/spec/*.md`. This file is the generated public-API
 > reference. Core model: three isomorphic primitives — **`state`** (own), **`memo`** (load), **`channel`**
@@ -43,7 +52,7 @@
 | Import | Signature | Notes |
 | --- | --- | --- |
 | `abide/server/GET` | `GET(fn, opts?)` | Read-only. |
-| `abide/server/HEAD` | `HEAD(fn, opts?)` | Read-only, identical to `GET` |
+| *(no `HEAD` helper)* | — | HTTP `HEAD` **is** `GET` minus the body, so the router derives it: a `HEAD` request reaches the registered `GET` handler and the body is dropped. Declaring one was never meaningful — a `HEAD` handler that returns a payload is nonsense over the wire, and `GET`+`HEAD` on one resource could hold divergent bodies (ADR 0027 D6) |
 | `abide/server/POST` | `POST(fn, opts?)` | Mutating. |
 | `abide/server/PUT` | `PUT(fn, opts?)` | Mutating |
 | `abide/server/PATCH` | `PATCH(fn, opts?)` | Mutating |
@@ -59,7 +68,7 @@ reserved transport params are namespaced (`__abide_args`, `__abide_from`) so the
 handler's own arg fields; the JSON blob wins when both are present.
 
 **RPC `opts`**: `{ schemas?: { input?, output?, files? }, clients?: { browser?, mcp?, cli? },
-middleware?, crossOrigin?, maxBodySize?, timeout?, memo?: false | { ttl?, shared?, tags? } }`.
+middleware?, crossOrigin?, maxBodySize?, timeout?, memo?: false | { ttl?, crossRequest?, tags? } }`.
 - **No schema** → input/output JSON Schema is **type-derived** (TS7), runtime-enforced, loud on
   unrepresentable types. The handler arg needs no annotation when a destructuring **default** types it
   (`GET(({ n = 0 }) => …)` derives `{ n?: number }`); an annotation or explicit generic still works. A
@@ -69,14 +78,20 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, memo?: false | { ttl?, shared
   **flow from the schema's parsed output** (`GET(({ n }) => …, { schemas: { input: z.object(…) } })`;
   `n` is typed, no annotation). `schemas.output`, when a Standard Schema, is type-checked against the
   handler's return payload (a drifted return is a compile error at the call).
-- **`clients`** = *reachability only* (which surfaces reach it; `true`/`false`/`{…}`). **Not
-  authorization** — auth is `middleware`. `{ browser: { validate: false | true } }`; `true` ships
-  the real validator client-side for parity.
+- **`clients`** = *reachability only*, typed `boolean | { browser?, mcp?, cli? }` — which surfaces
+  reach it. **Not authorization** — auth is `middleware`. The three flags gate surface **generation**
+  (OpenAPI omission, MCP tool list, CLI registration, client-bundle inclusion) at build time;
+  middleware runs per-request and can short-circuit. Different mechanism, different time.
+  `false` withholds all three (the raw HTTP endpoint still exists — again, not auth); `true`/absent
+  leaves all three reachable. An unrecognized key or a non-boolean flag **warns** on `abide:rpc`
+  rather than being dropped in silence. There is no `clients.browser.validate` — it was advertised,
+  never implemented, and is retracted (ADR 0027 D9): `clients` is reachability, and shipping a
+  validator is a *bundling* decision that belongs next to `schemas`.
 - **`middleware`**: `Array<(next) => Response>` run for this RPC (composed inside the global chain).
 - **`memo`** (unified across verbs; `docs/spec/replayable-streams.md`): `ttl` (ms; **reads** default ∞,
   **mutations** default `0` = coalesce identical concurrent in-flight calls, retain nothing — a mutation
   that sets `memo: { ttl }` retains like a read on **both** the server and client memo, so its
-  `peek`/`refresh`/`refreshing` probes come alive), `shared` (opt-in cross-request server cache;
+  `peek`/`refresh`/`refreshing` probes come alive), `crossRequest` (opt-in cross-request server cache;
   ambient-scope reads fail-closed; pure-over-args), `tags`.
   `memo: false` opts a call OUT of the memo entirely (every call runs; a mutation's at-least-once). A
   `FormData` mutation body always bypasses (can't be keyed). A streaming handler that yields an
@@ -127,7 +142,7 @@ traced request also carries `traceresponse` (alongside the echoed `traceparent`)
 ### Sockets
 | Import | Signature |
 | --- | --- |
-| `abide/server/socket` | `socket<T, Args=void>(opts?)`; opts: `{ tail?, ttl?, clientPublish?, schema?, clients?, middleware? }` |
+| `abide/server/socket` | `socket<T, Args=void>(opts?)`; opts: `{ channel?, clientPublish?, schema?, clients?, middleware? }`. A transported form **nests** its primitive's options rather than flattening them (ADR 0027 D1), so the pub/sub knobs are the channel's own — `channel: { tail?, maxAge? }` — and a socket adds only transport + authorization vocabulary. `maxAge` is the per-MESSAGE age window; it is deliberately NOT `ttl`, which everywhere else means a memo's per-SLOT retention |
 
 `Socket<T, Args=void>` is an isomorphic `AsyncIterable<T>` with an **identical surface on both sides**
 (one `.d.ts`): `for await` + `publish(msg): void` + the reactive memo-probe vocabulary — `peek()`
@@ -175,8 +190,8 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 ### Reactive primitives
 | Import | Signature |
 | --- | --- |
-| `abide/shared/state` | `state(initial, transform?)`; `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). `state` keeps only what it OWNS (ADR 0024) — derivation is `memo`'s job. Scope-free reactive atom — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`memo`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `memo({ shared })`). |
-| `abide/shared/memo` | `memo(asyncFn, opts?)` — the memoizer. Its DEPENDENCIES ARE ITS DECLARED INPUTS (ADR 0024): declare an arg and they are the cache key (today's memo/RPC, unchanged); declare none and they are inferred from the body. An **argless + synchronous** body is AUTO-TRACKED and its bare call returns `T`, not `Promise<T>` (a promise-returning derived read would blank the SSR text and refill a microtask later). An argless **async** body is not tracked — half-tracked is worse than untracked — and re-fills on `refresh`/`invalidate` only. A **keyed + synchronous** body returns `T` too (`memo(({a,b}) => a+b)`; `v({a:1,b:2})` is `3`, not a promise) — its args are the whole dependency set, so the body runs UNTRACKED, one slot per key. `memo(source, transform)` tracks the source ONLY, transform untracked (mirrors `watch(source, handler)`). The source is ALWAYS an argless THUNK (ADR 0025) — the tracked region is its body, so several inputs need no API of their own: they are what the thunk returns (`memo(() => ({ a, b }), ({ a, b }) => …)`), and the transform still takes ONE argument. Naming `ttl` or `shared` keeps the classic pulled path. A `(...args)`/`(args = {})` param is a LOUD construction-time error (it reports `fn.length` 0 and would silently reclassify an args-keyed memo). |
+| `abide/shared/state` | `state(initial, transform?)`; `.shared(key, initial)` (cell shared by key across instances + tabs via `BroadcastChannel`; `.shared` degrades to per-render on the server). `state` keeps only what it OWNS (ADR 0024) — derivation is `memo`'s job. A cell is CALLABLE: `x()` tracked read, `x.set(v)` write, `x.untracked()` read WITHOUT subscribing. That last one is **not** `peek`: `peek` on `memo`/`channel` SUBSCRIBES (a memo's also kicks the load) and returns `T | undefined` — the opposite behaviour on the tracking axis, so the untracked escape hatch has its own name (ADR 0027 D2). In a `.abide` `<script>` the compiler writes the calls for you. Scope-free reactive atom — **isomorphic**: usable in a plain `.ts` on either side, so server modules can own a value and other modules import + derive (`memo`) + subscribe (`watch`) from it. Module-level state is **process-global** (safe for derived/immutable-source graphs; for mutable cross-request/user state use `memo({ crossRequest })`). |
+| `abide/shared/memo` | `memo(asyncFn, opts?)` — the memoizer. Its DEPENDENCIES ARE ITS DECLARED INPUTS (ADR 0024): declare an arg and they are the cache key (today's memo/RPC, unchanged); declare none and they are inferred from the body. An **argless + synchronous** body is AUTO-TRACKED and its bare call returns `T`, not `Promise<T>` (a promise-returning derived read would blank the SSR text and refill a microtask later). An argless **async** body is not tracked — half-tracked is worse than untracked — and re-fills on `refresh`/`invalidate` only. A **keyed + synchronous** body returns `T` too (`memo(({a,b}) => a+b)`; `v({a:1,b:2})` is `3`, not a promise) — its args are the whole dependency set, so the body runs UNTRACKED, one slot per key. `memo(source, transform)` tracks the source ONLY, transform untracked (mirrors `watch(source, handler)`). The source is ALWAYS an argless THUNK (ADR 0025) — the tracked region is its body, so several inputs need no API of their own: they are what the thunk returns (`memo(() => ({ a, b }), ({ a, b }) => …)`), and the transform still takes ONE argument. Naming `ttl` or `crossRequest` keeps the classic pulled path — a memo can be **tracked or retained, not both**. Since whether a memo is reactive is decided by what its body RETURNS, an argless memo that returns a promise **warns on `abide:memo`** (ADR 0027 D8): adding one `await` to a working derivation silently turns it into a manually-invalidated cache, so the loss is now announced and the message names the fix. A `(...args)`/`(args = {})` param is a LOUD construction-time error (it reports `fn.length` 0 and would silently reclassify an args-keyed memo). |
 | `abide/shared/channel` | `channel<T, Args = void>(opts?)` — the pub/sub primitive on a `ChannelHub`; `socket` is its authorization+transport shell. Isomorphic (`shared/`), so a browser bundle carries it. `Args` names the ROOM and is a positional that vanishes when void: `ch.publish(msg)` + iterate `ch` directly for the single topic, `ch.publish({ room }, msg)` + `ch({ room })` for a roomed one. |
 | `abide/shared/watch` | `watch(source, handler)` / `watch(thunk)` — auto-tracked effect; fires server-side too. The source is ALWAYS an argless THUNK (ADR 0025): `watch(() => count, handler)`. Several inputs are what the thunk returns — `watch(() => ({ a, b }), (next, previous) => …)`, where `next`/`previous` carry it. Either form may **return a teardown**, run before every re-run and once on disposal — which for a `watch` in a component `<script>` is that component going away: UNMOUNT on the client, END OF REQUEST on the server (a render is its whole life there). That is the lifecycle hook, in place of `onMount`/`onDestroy`, and it means an isomorphic effect can hold a real resource with no is-this-the-browser branch. The return is inspected, not required: a non-function return is ignored. |
 
@@ -193,10 +208,11 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 (client) or runs on a durable **shared** slot (server) — server updater on a per-request slot errors.
 Partial args match every superset slot. The KEY is a positional that **disappears when there is none**:
 an argless `memo`/void `channel` publishes `fn.publish(value)` with no `undefined` placeholder, a keyed
-one names its slot/room first (`fn.publish({ id }, value)`). `publish` and `fn.watch` are the two verbs
-with a TRAILING payload, so they are the two that spell the rule out (`fn.watch(handler)` vs
-`fn.watch({ id }, handler)`); every other verb takes its key last or not at all and already collapsed
-free from an omittable `void` parameter (`peek()` vs `peek({ id })`). This is the rule `socket.publish(msg)`
+one names its slot/room first (`fn.publish({ id }, value)`). **Every verb with a TRAILING payload takes the key as a `Room` positional** — that is the rule, not a
+list. Today there are three: `publish`, `fn.watch` (`fn.watch(handler)` vs `fn.watch({ id }, handler)`),
+and `memo.state` (`m.state(initial)` vs `m.state({ id }, initial)`, ADR 0027 D7). Every other verb takes
+its key last or not at all and already collapsed free from an omittable `void` parameter (`peek()` vs
+`peek({ id })`). This is the rule `socket.publish(msg)`
 has always followed, now declared once on the shared surface. (An RPC callable is the exception: a
 zero-arg RPC infers `Args = unknown`, not `void`, so `rpc.publish(args, value)` still takes the arg slot.)
 
@@ -249,7 +265,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate. A mutation call is the same, but posts args in the body (default `ttl:0` retains nothing) |
 | `fn.peek(args)` | reactive `T \| undefined` snapshot — subscribes + kicks a coalesced load; the non-blocking display read |
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
-| `memo.state(args)` | the WRITABLE PROJECTION of one slot (`memo` only): a live cell over that slot whose `set` IS `publish`, so a local write is provisional until the next re-fill |
+| `memo.state(args, initial)` | the WRITABLE PROJECTION of one slot (`memo` only): a live cell over that slot whose `set` IS `publish`, so a local write is provisional until the next re-fill. The key is a `Room` positional and the `initial` trails it (`m.state(initial)` argless, `m.state({id}, initial)` keyed) — required on an **async** memo because a cold slot has no value and `State<T>` is invariant, so widening the read would also let `set` forge the not-loaded sentinel. A **sync** memo needs none: it is never pending and rethrows, so its read is already `T`-or-throw |
 | `fn.refresh(args?)` / `fn.invalidate(args?)` / `fn.publish(args, v)` | surface verbs (partial match) |
 | `fn.peek` / `fn.pending` / `fn.refreshing` / `fn.error` / `fn.watch` | reactive probes |
 | `fn.isError(e, name)` | narrow a typed error |
@@ -263,7 +279,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | --- | --- |
 | `let x = state(v, transform?)` | writable cell |
 | `const d = memo(() => …)` | derived value — auto-tracked, lazy, never serialized. A bare `d` reads the VALUE (so does `d.length`); the memo's own surface is not reachable through the binding |
-| `let x = memo(…).state()` | the writable projection: `set` IS `publish`, so a local write holds until the next re-fill |
+| `let x = memo(…).state(initial)` | the writable projection: `set` IS `publish`, so a local write holds until the next re-fill. `initial` is required on an async memo (cold slot), omitted on a sync one |
 | `memo(() => a, (v) => …)` / `watch(() => a, h)` | declared dependencies — the source is a THUNK and its body is the tracked region (ADR 0025); a bare cell there is an ordinary read, i.e. a type error |
 | `memo(() => ({a, b}), ({a, b}) => …)` | several declared inputs — just what the thunk returns |
 | `state.shared(key, initial)` | writable cell shared by key across instances + browser tabs |
@@ -298,7 +314,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `{await fn(args)}` | the read — blocks SSR (value in initial HTML); on the client fills the text node when the read settles (nothing suspends); re-awaits on invalidate |
 | `{#await fn(args)}` | reactive await block: `{:then v}` (`v: T`) / `{:catch}` / `{:finally}` |
 | `{#await fn(args) then v}` | inline blocking form: `v: T` bound in the opener, body renders once settled (no pending branch) |
-| `{fn(args)}` (bare) | renders the awaited value (the runtime auto-awaits the read promise), so it **blocks SSR exactly like `{await fn(args)}`** — the two differ in TYPE, not timing; `{fn(args).field}` is a type error — bind via `{#await}` or use `.peek()` |
+| `{fn(args)}` (bare) | **a `abide check` error** — "this is a Promise — write `{await expr}` so it types as T". A **concept boundary**, not a typing accident (ADR 0027 D3): the three forms above do three different things (`await` blocks · `peek` doesn't · `{#await}` branches), and the bare call is the *awaitable*, not a fourth read. It is not the non-blocking form — on the server it is the BLOCKING one, since `emitServer` awaits every expression slot unconditionally (it is type-blind and cannot tell a promise-returning read from a plain value), so it renders identically to `{await fn(args)}` while typing as `Promise<T>`, which dead-ends at the first `.field`. Making it mean "non-blocking" would also break the project's first law: a plain `.ts` has no compiler, so `fn(args)` is a `Promise<T>` there regardless, and one expression would mean two things by file extension. The auto-await stays a backstop for the untyped/passthrough path (a `T \| Promise<T>` union is deliberately still legal) |
 | `fn.pending()` / `fn.error()` | probes |
 
 ### Components / pages

@@ -1,8 +1,8 @@
 <script>
   import { state } from "abide/shared/state"
 
-  // HEAD has identical semantics to GET but carries headers only. This raw HEAD fetch reports the
-  // status line with no body.
+  // `rpcPing` is declared as an ordinary GET — there is no HEAD helper. The router derives HEAD from
+  // it, so this raw HEAD fetch reaches the same handler and reports the status line with no body.
   let headStatus = state(0)
 
   async function head() {

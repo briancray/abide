@@ -34,6 +34,11 @@ export interface ChannelOptions {
 export interface Channel<T, Args = void> extends ReactiveReadSurface<Args, T>, AsyncIterable<T> {
     // Subscribe to the room `args` — a fresh replay-then-live cursor. `for await (const m of channel(args))`.
     (args: Args): AsyncIterable<T>
+    // Narrows the shared surface's `chunks(): unknown[] | undefined`. That signature is right for a MEMO,
+    // whose value type and chunk type differ (a `StreamRead<Args, C>` yields `C`s while `T` is the value),
+    // but a channel's transcript IS its messages — so the room's tail is `T[]`, and a caller (e.g.
+    // `socket.chunks`, which delegates straight here) should not have to re-assert that.
+    chunks(args: Args): T[] | undefined
     // TRANSPORT hook (internal): the room's hub, for the server-form (`socket`) to wire replay-controlled
     // subscribe / tail snapshot / server publish onto the mux. Not part of the public pub/sub surface.
     __hub(args: Args): ChannelHub<T>

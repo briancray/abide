@@ -22,6 +22,7 @@
 import { health } from '../../shared/health.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
+import { matchRoute } from '../../shared/internal/matchRoute.ts'
 import {
     type MemoFrame,
     memoChannelHub,
@@ -69,7 +70,6 @@ import {
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { sharedLayoutDepth } from './layouts.ts'
 import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
-import { matchRoute } from './matchRoute.ts'
 import { handleMcp } from './mcp.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { buildOpenApi } from './openapi.ts'
@@ -921,7 +921,7 @@ export function createApp(config: AppConfig = {}): App {
     // transport-free. Value-form `publish` carries a `value`; invalidate/refresh do not.
     for (const [name, route] of Object.entries(routes)) {
         const meta = route.__rpc
-        if (meta.read && meta.options.memo !== false && meta.options.memo?.shared === true) {
+        if (meta.read && meta.options.memo !== false && meta.options.memo?.crossRequest === true) {
             // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
             ;(route as Rpc<any, any>).bindBroadcast((verb, args, value): void => {
                 const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }

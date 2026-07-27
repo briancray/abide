@@ -18,13 +18,18 @@
 // memo policy: a mutation defaults to `memo: { ttl: 0 }` (replayable-streams.md §1) — coalesce
 // identical CONCURRENT in-flight calls, retain nothing after settle — where a read retains (ttl ∞).
 // A non-shared mutation's slot is per-request, so ttl:0 is inert for the normal one-call-per-request
-// case and preserves at-least-once across separate requests; cross-request dedup needs `shared: true`.
+// case and preserves at-least-once across separate requests; cross-request dedup needs `crossRequest: true`.
 // An author who WANTS a mutation cached sets `memo: { ttl }` and the whole surface reflects it. `memo:
 // false` opts the bare CALL out of the memo (direct run, at-least-once) for a non-idempotent handler;
 // the probe surface stays present but reads an empty slot. A `FormData` body always bypasses the memo
 // (it can't be safely keyed — see §1).
 
 import type { Payload } from '../../shared/internal/responseSource.ts'
+import type {
+    MutationCallArgs,
+    RpcCallArgs,
+    RpcCallSurface,
+} from '../../shared/internal/rpcSurface.ts'
 import { markSettled } from '../../shared/internal/settledRead.ts'
 import { type Memo, type MemoNotify, type MemoOptions, memo } from '../../shared/memo.ts'
 
@@ -34,6 +39,7 @@ import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import type { StandardSchemaV1 } from '../../shared/StandardSchema.ts'
 import type { CrossOriginOption } from './cors.ts'
 import type { Middleware } from './middleware.ts'
+import type { ClientsOption } from './registry.ts'
 
 // A minimal, JSON-Schema-ish description of the file fields a multipart mutation accepts (TODO #8).
 // `required` names the file fields that MUST be present as a `File`; `properties` optionally
@@ -59,7 +65,10 @@ export interface RpcSchemas {
 
 export interface RpcOptions {
     schemas?: RpcSchemas
-    clients?: unknown
+    // REACHABILITY only — which surfaces reach this rpc. NOT authorization (that is `middleware`).
+    // Typed as of ADR 0027 D9; it was `unknown`, which is how two documented behaviours rotted here
+    // unseen by both the compiler and a dead-field scan. See `registry.ts`'s `resolveClients`.
+    clients?: ClientsOption
     // Optional human/machine description for the RPC, surfaced into the registry and every machine
     // surface (OpenAPI operation summary, MCP tool description, CLI --help). Schema-level
     // description/title still wins per MS1.2; this fills the gap when the schema carries none.
@@ -71,7 +80,7 @@ export interface RpcOptions {
     // `false` opts a call OUT of the memo entirely (replayable-streams.md §1): a mutation runs every call
     // (no coalescing); a read runs at ttl:0. `{ … }` overrides the per-verb default (reads ttl:∞,
     // mutations ttl:0).
-    memo?: false | { ttl?: number; shared?: boolean; tags?: string[] }
+    memo?: false | { ttl?: number; crossRequest?: boolean; tags?: string[] }
 }
 
 // An `output` schema, when present, must ACCEPT the handler's resolved return payload — its Standard
@@ -112,55 +121,14 @@ export interface RpcMeta<Args, T> {
 // handler with a declared args type (`GET((a: { id: string }) => …)`) keeps `Args` concrete, so the
 // argument stays REQUIRED. `unknown extends Args` is true only for `unknown`/`any`, false for any
 // concrete shape — exactly the discriminator between "no declared input" and "declared input".
-export type RpcCallArgs<Args> = unknown extends Args ? [args?: Args] : [args: Args]
+// The call surface itself lives in `shared/internal/rpcSurface.ts` (ADR 0027 D10) so the browser proxy
+// can name it without importing `server/`; `Rpc` is that surface PLUS the server-only construction meta.
+export type { MutationCallArgs, RpcCallArgs }
 
-// A mutation-call argument tuple — same zero-arg discriminator as `RpcCallArgs`, but a mutation also
-// accepts a `FormData` in the arg slot. A ZERO-arg mutation (`POST(() => …)`) makes the argument
-// OPTIONAL so a bare `fn()` type-checks (parity with a zero-arg read); a declared arg stays REQUIRED.
-export type MutationCallArgs<Args> = unknown extends Args
-    ? [args?: Args | FormData]
-    : [args: Args | FormData]
-
-export interface Rpc<Args, T> {
-    // THE READ (Promise-read model): the bare call is the awaitable, coalesced load; it also subscribes
-    // the calling reactive context, so `{await fn()}` / `{#await fn()}` re-await on invalidate. Use
-    // `.peek()` for the non-blocking `T | undefined` snapshot.
-    (...args: RpcCallArgs<Args>): Promise<T>
-    // Reactive peek: subscribes, kicks a coalesced load when cold, returns value or undefined.
-    peek(...args: RpcCallArgs<Args>): T | undefined
-    pending(...args: RpcCallArgs<Args>): boolean
-    // Revalidating over a retained value (distinct from first-load `pending`). Reactive.
-    refreshing(...args: RpcCallArgs<Args>): boolean
-    error(...args: RpcCallArgs<Args>): unknown
-    // Run `handler` whenever this slot's value changes; returns a dispose function. Reactive probe.
-    watch(args: Args, handler: (value: T | undefined) => void): () => void
-    // Raw `Response`, full bypass of the memo (rpc-core call surface): on the client a bare fetch to
-    // `/__abide/rpc/<name>`; on the server the handler run wrapped in a JSON `Response` (or its own Response).
-    raw(args: Args, init?: RequestInit): Promise<Response>
-    // Narrow a caught value to this RPC's typed error by name (`fn.isError(e, "RateLimited")`).
-    isError(e: unknown, name: string): boolean
-    // Partial selector matches every superset slot (spec: partial-object match); mirrors `Memo`.
-    refresh(args?: Partial<Args> | Args): void
-    invalidate(args?: Partial<Args> | Args): void
-    // Mutate the retained value in place (value-form or updater-form); mirrors `Memo`. On a `shared`
-    // read this broadcasts (value-form directly, updater-form resolves server-side then broadcasts).
-    publish(args: Args, next: T | ((current: T | undefined) => T)): void
-    // §5 hydration: `snapshot()` records this read's resolved slots for the seed; `seed()` replays a
-    // recorded (args, value) into the cache so the client resolves from cache instead of re-fetching.
-    snapshot(): Array<{ args: Args; value: T }>
-    seed(args: Args, value: T): void
-    // §5 streaming hydration: install a warm stream slot from an SSR `{#for await}` handoff (a mode-A
-    // array transcript, or a mode-B "prefix then resumed tail" AsyncIterable) so the client replays it with
-    // no re-invoke and the chunk probes + refresh work.
-    seedStream(
-        args: Args,
-        source: readonly unknown[] | AsyncIterable<unknown>,
-        encoding?: 'jsonl' | 'sse',
-    ): void
-    // SERVER-ONLY broadcast seam (rpc-core §8, PR2). `createApp` calls this on a `shared` read to bind
-    // the memo's transport-free `notify` sink to a channel publish. Transport stays out of makeRpc —
-    // the sink is supplied by createApp (which alone knows the route NAME). A no-op until bound.
-    bindBroadcast(sink: MemoNotify): void
+// The isomorphic call surface (probes, verbs, hydration seams) plus the ONE member that is genuinely
+// server-side: the construction meta the router reads. The browser proxy implements everything in
+// `RpcCallSurface` and has no `__rpc`, which is exactly where this line is drawn.
+export interface Rpc<Args, T> extends RpcCallSurface<Args, T> {
     readonly __rpc: RpcMeta<Args, T>
 }
 
@@ -323,16 +291,20 @@ export function makeRead<Args, T>(
     } else {
         const memoConfig = options.memo
         if (memoConfig?.ttl !== undefined) memoOptions.ttl = memoConfig.ttl
-        // `shared` opts this read into the process-global cross-request cache (rpc-core §2). Server-only
-        // and fail-closed inside the memo: the handler runs scope-exited and reads require a live scope.
-        if (memoConfig?.shared === true) memoOptions.shared = true
-        // Tags register a shared read for the global `invalidate/refresh({ tags })` selectors (rpc-core
-        // §8). Honored only on a shared memo (the tag registry is server-only); inert otherwise.
+        // `crossRequest` opts this read into the process-global cross-request cache (rpc-core §2).
+        // Server-only and fail-closed inside the memo: the handler runs scope-exited and reads require a
+        // live scope. Named for what it does — `state.shared` is a different concept (ADR 0027 D5).
+        if (memoConfig?.crossRequest === true) memoOptions.crossRequest = true
+        // Tags register a crossRequest read for the global `invalidate/refresh({ tags })` selectors
+        // (rpc-core §8). Honored only on a crossRequest memo (server-only registry); inert otherwise.
         if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
     }
     // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets
     // the actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
     let broadcast: MemoNotify | undefined
+    // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
+    // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.
+    memoOptions.loader = true
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }
@@ -364,9 +336,12 @@ export function makeMutation<Args, R>(
     const memoed = options.memo !== false
     const memoConfig = options.memo === false ? undefined : options.memo
     const memoOptions: MemoOptions = { ttl: memoConfig?.ttl ?? 0 }
-    if (memoConfig?.shared === true) memoOptions.shared = true
+    if (memoConfig?.crossRequest === true) memoOptions.crossRequest = true
     if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
     let broadcast: MemoNotify | undefined
+    // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
+    // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.
+    memoOptions.loader = true
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }

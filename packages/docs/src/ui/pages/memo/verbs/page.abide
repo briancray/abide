@@ -37,7 +37,7 @@
 
   <h2>Retention policy</h2>
   <p>The verbs act on a slot; these two decide how long a slot lives and who sees it. A <code>shared</code> read's slot is process-global. Each <code>raw()</code> is a separate request: the shared read returns the <strong>same</strong> run count both times (one handler run served both), while a per-request (non-shared) read re-runs and <strong>climbs</strong>. The shared handler is identity-independent and fail-closed.</p>
-  <Demo id="shared" title="<code>memo: {'{'} shared: true {'}'}</code> — cross-request cache" server="src/server/rpc/cacheShared.ts" client="src/ui/demos/memo/SharedDemo.abide" tab="server">
+  <Demo id="shared" title="<code>memo: {'{'} crossRequest: true {'}'}</code> — cross-request cache" server="src/server/rpc/cacheShared.ts" client="src/ui/demos/memo/SharedDemo.abide" tab="server">
     <SharedDemo />
   </Demo>
 

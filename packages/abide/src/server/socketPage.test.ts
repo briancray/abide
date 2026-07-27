@@ -13,7 +13,7 @@ import type { AppConfig } from './internal/router.ts'
 import { socket } from './socket.ts'
 
 test('SSR reads a socket probe off $scope (peek renders the latest published message)', async () => {
-    const chat = socket<string>({ tail: 5 })
+    const chat = socket<string>({ channel: { tail: 5 } })
     chat.publish('newest')
     const app = await createTestApp({
         sockets: { chat },
@@ -27,7 +27,7 @@ test('SSR reads a socket probe off $scope (peek renders the latest published mes
 })
 
 test('SSR {#for await} over a socket renders the tail snapshot and COMPLETES (CS5, no hang)', async () => {
-    const feed = socket<string>({ tail: 3 })
+    const feed = socket<string>({ channel: { tail: 3 } })
     feed.publish('a')
     feed.publish('b')
     const app = await createTestApp({
@@ -47,7 +47,7 @@ test('SSR {#for await} over a socket renders the tail snapshot and COMPLETES (CS
 
 test('the client bundle ships SOCKET_SPECS for an imported browser-reachable socket', async () => {
     const config: AppConfig = {
-        sockets: { chat: socket<string>({ tail: 4, clientPublish: true }) },
+        sockets: { chat: socket<string>({ channel: { tail: 4 }, clientPublish: true }) },
         pages: {
             '/': "<script>import { chat } from '../server/sockets/chat.ts'</script><p>{chat.peek()}</p>",
         },

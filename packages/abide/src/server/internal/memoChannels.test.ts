@@ -48,7 +48,7 @@ describe('memoChannels — broadcast substrate', () => {
         const profile = makeRead(
             'GET',
             async ({ id }: { id: number }) => ({ id, name: `n${id}` }),
-            { memo: { shared: true } },
+            { memo: { crossRequest: true } },
         )
         bindLikeCreateApp(profile, 'profileA')
 
@@ -65,7 +65,7 @@ describe('memoChannels — broadcast substrate', () => {
 
     test("shared read value-form publish broadcasts {verb:'publish', value}", async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id, count: 0 }), {
-            memo: { shared: true },
+            memo: { crossRequest: true },
         })
         bindLikeCreateApp(profile, 'profileB')
 
@@ -78,7 +78,7 @@ describe('memoChannels — broadcast substrate', () => {
 
     test('shared read updater-form publish broadcasts the RESOLVED value', async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id, count: 1 }), {
-            memo: { shared: true },
+            memo: { crossRequest: true },
         })
         bindLikeCreateApp(profile, 'profileC')
 
@@ -107,7 +107,7 @@ describe('memoChannels — broadcast substrate', () => {
 
     test('createApp binds shared read broadcast via the route name seam', async () => {
         const profile = makeRead('GET', async ({ id }: { id: number }) => ({ id }), {
-            memo: { shared: true },
+            memo: { crossRequest: true },
         })
         const app = createApp({ routes: { profileE: profile } })
         try {

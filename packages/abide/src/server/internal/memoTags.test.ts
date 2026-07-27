@@ -65,7 +65,7 @@ describe('cache tags — global invalidate({ tags })', () => {
                 callsX++
                 return { id, v: 'x' }
             },
-            { memo: { shared: true, tags: ['user'] } },
+            { memo: { crossRequest: true, tags: ['user'] } },
         )
         const readY = makeRead(
             'GET',
@@ -73,7 +73,7 @@ describe('cache tags — global invalidate({ tags })', () => {
                 callsY++
                 return { id, v: 'y' }
             },
-            { memo: { shared: true, tags: ['user'] } },
+            { memo: { crossRequest: true, tags: ['user'] } },
         )
         bindLikeCreateApp(readX, 'readX')
         bindLikeCreateApp(readY, 'readY')
@@ -109,7 +109,7 @@ describe('cache tags — global invalidate({ tags })', () => {
                 calls++
                 return id
             },
-            { memo: { shared: true, tags: ['a'] } },
+            { memo: { crossRequest: true, tags: ['a'] } },
         )
         bindLikeCreateApp(read, 'readA')
 
@@ -134,7 +134,7 @@ describe('cache tags — global invalidate({ tags })', () => {
                 calls++
                 return id
             },
-            { memo: { shared: true, tags: ['user', 'org'] } },
+            { memo: { crossRequest: true, tags: ['user', 'org'] } },
         )
         bindLikeCreateApp(read, 'readMulti')
 
@@ -152,7 +152,7 @@ describe('cache tags — global invalidate({ tags })', () => {
 
     test('selects each memo once even when it carries several listed tags', async () => {
         const read = makeRead('GET', async ({ id }: { id: number }) => id, {
-            memo: { shared: true, tags: ['a', 'b'] },
+            memo: { crossRequest: true, tags: ['a', 'b'] },
         })
         bindLikeCreateApp(read, 'readDedup')
         await runInScope(makeScope('readDedup'), () => read({ id: 1 }))
@@ -175,7 +175,7 @@ describe('cache tags — global refresh({ tags })', () => {
                 calls++
                 return { id, calls }
             },
-            { memo: { shared: true, tags: ['user'] } },
+            { memo: { crossRequest: true, tags: ['user'] } },
         )
         bindLikeCreateApp(read, 'readR')
 
@@ -197,7 +197,7 @@ describe('cache tags — global refresh({ tags })', () => {
 describe('cache tags — @tag channel', () => {
     test('invalidate({ tags }) emits a frame on the @tag:<tag> channel', async () => {
         const read = makeRead('GET', async ({ id }: { id: number }) => id, {
-            memo: { shared: true, tags: ['user'] },
+            memo: { crossRequest: true, tags: ['user'] },
         })
         bindLikeCreateApp(read, 'readTagChan')
         await runInScope(makeScope('readTagChan'), () => read({ id: 1 }))
@@ -224,7 +224,7 @@ describe('cache tags — local reactive probes', () => {
                 await new Promise((r) => setTimeout(r, 20))
                 return id
             },
-            { memo: { shared: true, tags: ['user'] } },
+            { memo: { crossRequest: true, tags: ['user'] } },
         )
         bindLikeCreateApp(read, 'readProbe')
 

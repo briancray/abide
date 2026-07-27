@@ -51,7 +51,7 @@ describe('shared streaming — one run across requests', () => {
                     yield i
                 }
             },
-            { shared: true, ttl: 10_000 },
+            { crossRequest: true, ttl: 10_000 },
         )
 
         const a = runInScope(makeScope(), async () => drain(await c({ id: 3 })))
@@ -77,7 +77,7 @@ describe('shared streaming — byte accounting & eviction', () => {
                 olderRuns++
                 return 'x'.repeat(40) // JSON ~42 bytes
             },
-            { shared: true },
+            { crossRequest: true },
         )
         await runInScope(makeScope(), () => older({ k: 'a' }))
         expect(olderRuns).toBe(1)
@@ -86,7 +86,7 @@ describe('shared streaming — byte accounting & eviction', () => {
             async function* () {
                 yield 'y'.repeat(80) // JSON ~82 bytes → 42 + 82 = 124 > 100
             },
-            { shared: true, ttl: 10_000 },
+            { crossRequest: true, ttl: 10_000 },
         )
         await runInScope(makeScope(), async () => drain(await streamer({ k: 'b' })))
 
@@ -109,7 +109,7 @@ describe('shared streaming — per-stream cap (overflow)', () => {
                     yield 'z'.repeat(20) // ~22 bytes each → overflow after ~3 chunks
                 }
             },
-            { shared: true, ttl: 10_000 },
+            { crossRequest: true, ttl: 10_000 },
         )
 
         const first = await runInScope(makeScope(), async () => drain(await c({})))
@@ -139,7 +139,7 @@ describe('shared streaming — open stream is pinned', () => {
                 await gate // park the source OPEN
                 yield 'c'.repeat(20)
             },
-            { shared: true, ttl: 10_000 },
+            { crossRequest: true, ttl: 10_000 },
         )
 
         const collectedA: string[] = []

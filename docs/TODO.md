@@ -689,7 +689,7 @@ the known shortcuts and gaps. Ordered by impact.
       quote may appear inside `{…}`). Unit tests (`emitCapabilities.test.ts`) + e2e (`rpc.spec.ts` header
       assertion). Docs headers now render `{await fn()}` via the natural `{'{'}` escape.
 
-23. **Declared-but-unimplemented public options (from the 2026-07-25 `/simplify` sweep).** Three
+23. **Declared-but-unimplemented public options (from the 2026-07-25 `/simplify` sweep).** Four
     documented public API fields are declared, typed, and advertised in the docs — and never read by
     any code path. Each is a spec/impl gap, not dead code, so the cleanup pass deliberately left them
     in place rather than deleting the surface. Deciding *implement vs. retract* is a public-API call:
@@ -709,6 +709,21 @@ the known shortcuts and gaps. Ordered by impact.
       neither `claudeEngine.ts` nor `claudeCodeEngine.ts` touches it, though every sibling
       (`model`/`system`/`maxTokens`/`signal`/`tools`/`approval`) is read. Mentioned in
       `docs/spec/agent.md:58`. Passing it through to the Messages API is a two-line fix.
+    - **`clients.browser.validate`** (found 2026-07-26; **DECIDED: retract** — ADR 0027 D9). The
+      fourth of this class, missed by the original sweep because it is not a declared *field*: the
+      option is typed `clients?: unknown` (`server/internal/makeRpc.ts:62`), so there was nothing for
+      a dead-field scan to find. CLAUDE.md documents `{ browser: { validate: false | true } }` —
+      "`true` ships the real validator client-side for parity" — but `resolveClients`
+      (`server/internal/registry.ts:61-70`) reads booleans only, so `typeof {…} === 'boolean'` fails,
+      the key is dropped, and `clients.browser` stays `undefined`, which `:18` treats as *exposed*.
+      Worse than inert: the author configures nothing and is told nothing. Retracting rather than
+      implementing, because `clients` is *reachability* and shipping a validator is a *bundling*
+      decision — it belongs next to `schemas` if wanted. Fix is three parts: type `clients` properly
+      (the internal `Clients` shape already exists), `log.warn` on an unrecognized key, and cut the
+      sub-option from CLAUDE.md + `docs/spec/machine-surfaces.md`. **The generalizable lesson:** an
+      `unknown`-typed public option plus a silently-lenient normalizer is how a documented feature
+      evaporates without any scan catching it — the other three in this item were all findable
+      because they were typed.
 24. **`rpcTools.ts` is orphaned because the agent tool-default was never wired.** `rpcTools()`
     (`server/internal/rpcTools.ts`, 45 lines incl. `asJsonSchema`/`toTool`) has no importer outside
     `server/agent.test.ts`. Its own header says it is "the mapping the app-config default surface is
@@ -746,6 +761,23 @@ the known shortcuts and gaps. Ordered by impact.
       chunks), and `ChannelHub` ships regardless via the public isomorphic `channel()`. TODO #6's
       client floor is untouched; the win is a predictability one (an app calling `invalidate({tags})`
       client-side can no longer silently pull broadcast code in).
+      **Reopened in part (2026-07-26, ADR 0027 D10) — the audit covered four of six edges.** The
+      original edge table counted `shared→ui: 0`, `shared→server: 8`, `ui→shared: 35`, `server→ui: 9`
+      and never counted `ui→server` or `server→shared`. `ui→server` is **6 imports and is the
+      violation that survived**: `ui/navigate.ts:21` pulls `matchRoute` as a VALUE out of
+      `server/internal/`, plus five `import type` (`HydrationSeed` ×3, `RouteInfo`, `Mutation`/`Rpc`).
+      Current counts, all six: `shared→ui 0` · `shared→server 0` · `ui→shared 47` · **`ui→server 6`** ·
+      `server→shared 72` · `server→ui 7`. `server→ui` is legitimate and stays (SSR is the server
+      rendering UI; the build pipeline is the server invoking the emitter). The fix is to move
+      `matchRoute` to `shared/internal/` — it is pure route matching used by both sides, so it was
+      always a `shared/` citizen, and today it ships into the browser from `server/`, making this a
+      bundling hazard and not only a hygiene one — move the three types to `shared/`, and add the two
+      missing biome patterns (`ui/** ↛ **/server/**`, `shared/** ↛ **/ui/**`). Type-only imports are
+      banned too: they still make `ui/` uncompilable without `server/`, and biome's
+      `noRestrictedImports` cannot distinguish them, so banning is the *cheaper* rule — allowing them
+      needs an exception mechanism to maintain. **The lesson is the enforcement gap, not the edge:**
+      the rule was correctly named here, and the one edge that got a biome override is the one that
+      has stayed clean; the edge nobody counted is the one that drifted.
     - ~~**`MemoContext` declares the entire SSR-streaming protocol.**~~ **DONE (2026-07-26, ADR 0026
       D1-D2).** The five interfaces moved to `ui/internal/renderState.ts`, keyed off the reactive scope
       by `WeakMap<ReactiveScope, RenderState>` — no second `AsyncLocalStorage`, and emitted code still
@@ -1003,3 +1035,87 @@ From the adversarial review — recorded so they're deliberate:
     refactors then broke it. Tightening the map is a public-API change with its own blast radius —
     the bench genuinely needs SOME of this surface, so the real question is which pieces graduate to a
     supported export and which get an `internal/` that actually means it. Filed, not folded in.
+34. ~~**The enforcement sweep — ten decisions (ADR 0027, 2026-07-26).**~~ **DONE (2026-07-26) — all ten
+    landed.** Gates: typecheck green in all four packages · `bun test` 1314 pass / 0 fail · the emit
+    byte-parity oracle UNCHANGED (178 snapshots) · `abide check` clean on docs + starter + fixtures ·
+    biome at baseline (6 warnings → 5; D1 removed one) · **docs Playwright e2e 173/173**.
+    **Three corrections to the ADR were found by implementing it**, all recorded in it: D4's
+    `channel.pending` derivation was RETRACTED (wrong on three counts; the docs app settled it),
+    D9 GREW (typing `clients` exposed `clients: false` meaning the opposite of its documentation), and
+    D10 could not be done as written (moving `Rpc` to `shared/` would have dragged middleware + CORS
+    into the bottom layer; the fix was a type split along a seam that already existed). D6 turned out
+    to need no code beyond a deletion — the router already derived `HEAD`. Original entry follows.
+    A root-to-leaf audit of the
+    concept tree found **no bad decisions** across nine branches; every ADR held up under adversarial
+    reading. It found the same failure nine times: *a rule stated at the root and enforced one layer
+    short of the leaves.* Where a rule was expressed as a type, a biome override, or a delegation, it
+    held. Where it was expressed as prose or as an enumeration, it drifted. Full rationale + file:line
+    targets in `docs/adr/0027-vocabulary-and-enforcement-sweep.md`; tracked here as work.
+    - **D1 — always nest primitive options.** `socket({ channel: ChannelOptions, … })`. Flattening
+      `tail`/`ttl` gave up the namespace, which is why `socket({ ttl })` (per-message age) collided
+      with `memo({ ttl })` (per-slot retention); `channel` had already renamed its own to `maxAge`
+      and `socket` translated back (`server/socket.ts:93`). Nesting deletes the translation instead
+      of renaming it. **Breaking.**
+    - **D2 — `peek` is the reactive non-blocking read, framework-wide.** `state.peek()` /
+      `Computed.peek()` → `untracked()`. Today the one verb on all three primitives is inverted on
+      the tracking axis: `state.peek` reads `node.value` and never subscribes (`reactive.ts:283`);
+      `memo.peek` subscribes *and* kicks a load (`memo.ts:882`). The two are declared eight lines
+      apart in one string literal (`emitCheck.ts:52` vs `:60`). Rename toward `state` — `memo.peek` is
+      load-bearing (template grammar, RPC + socket surface, `ReactiveReadSurface`) while `state.peek`
+      is nearly invisible to authors, and `state.peek()` is just a second spelling of `untrack()`.
+      ⚠️ The cell shape lives in four places; missing `emitCheck`'s `__AbideState` or the fixtures
+      presents as a "not a function" framework bug. **Breaking.**
+    - **D3 — bare `{fn(args)}` stays a check error, restated as a boundary** (`await` = blocking,
+      `peek` = non-blocking, auto-await = passthrough backstop). Not made the non-blocking read
+      because on the server it is the *blocking* one — `emitServer.ts:253` awaits every text slot
+      unconditionally, and must, being type-blind. The decisive argument is the project goal: in a
+      plain `.ts` there is no compiler, so a `.abide`-only meaning would make one expression mean two
+      things by file extension. Deletes the parked note at `runtime.ts:487`. Docs only.
+    - **D4 — `socket` composes `channel` instead of re-deriving it.** `server/socket.ts:115-118`
+      re-hardcodes the four constants `channel.ts:87-90` already defines, and `:110/:112` reach
+      through `ch.__hub(...)` rather than calling `ch.peek`/`ch.chunks` — duplicated degenerate probes
+      are how you tell a composition law is aspirational. Also: `channel.pending` is the one genuine
+      lie and must be derived (`tailSnapshot() === undefined`) — today `peek() → undefined` plus
+      `pending() → false` tells a consumer "delivered, and empty" about a channel that has never
+      received anything. Probe liveness is a **transport** property, which is what makes the
+      server/client divergence a consequence of the model rather than an inconsistency.
+    - **D5 — `memo({ shared })` → `memo({ crossRequest })`.** The two `shared`s are exact mirror
+      images: `state.shared` is client-real / server-degraded, `memo({shared})` is server-real /
+      client-inert. `state.shared` keeps the name because a reader guesses it correctly unaided.
+      **Breaking.**
+    - **D6 — delete `HEAD`; the router derives it from `GET`.** `HEAD.ts` is `GET.ts` with the verb
+      string swapped. HTTP `HEAD` *is* GET-minus-body — a router job. Today two divergent handlers can
+      be registered for one resource. Rejected alternative (recorded): a hand-written `HEAD` can be
+      genuinely cheaper (headers without the work) — unused here, and the honest shape for it is
+      `GET(fn, { head })`, not a parallel constructor. **Breaking.**
+    - **D7 — `memo.state` takes an initial, via the `Room` positional.** `c.state` casts
+      `c.peek(args) as T` twice while `peek` returns `T | undefined`, so a `State<T>` from a cold memo
+      hands back `undefined` typed as `T`. Not fixed by `State<T | undefined>`: `State` is invariant
+      across read/write (`reactive.ts:263`) and `publish` takes `next: T` where `undefined` is the
+      cold sentinel, so widening would let a local write forge "not loaded". Sync needs no initial —
+      never pending (`:1053-1057`), rethrows on error (`:1023`). **Condition:** the sync projection
+      must read through the throwing path, not `peek`, or the lie moves from "cold" to "errored".
+      **Consequence:** `state` becomes the *third* trailing-payload verb, so restate CLAUDE.md and
+      ADR 0023 §2's "the two verbs" as a law — *every verb with a trailing payload takes the key as a
+      `Room` positional.* **Breaking.**
+    - **D8 — warn on a silent drop to the untracked path** (`abide:memo`). Three signals decide
+      whether a memo ever updates and the two silent ones are the consequential ones: a thenable body
+      (`:679-684`) and `ttl`/`crossRequest` named (`:422`) both drop to the classic path, while the
+      *less* consequential `fn.length` misclassification is the one that throws (`:431`). So adding
+      one `await` silently converts a reactive derivation into a manually-invalidated cache. ADR 0024
+      §2 ("half-tracked is worse than untracked") stands — a warning, not an error; both paths are
+      legal and the escape hatch exists (ADR 0025), it is just undiscoverable if you never learn you
+      lost something.
+    - **D9 — see #23** (fourth bullet).
+    - **D10 — see #26** (completes the edge audit).
+    **Landing order + couplings:** D10 first (mechanical, only runtime bundling hazard, and its biome
+    rules then guard everything after); **D2+D7 together** (both rewrite `c.state` — D2 removes the
+    `untrack` wrapper, D7 removes the casts); **D5+D8 together** (both touch `memo.ts:422/428`); then
+    D1, D4, D6, D9 independently; D3 is docs only.
+    **Gates:** `cd packages/abide && bun test` from the package cwd (never repo root — the
+    cwd-relative happy-dom preload is skipped otherwise); the emit byte-parity oracle hash for
+    anything touching D2/D7, per #32's gate; `bun run e2e:ci` against `packages/docs` for
+    emitter/runtime regressions `bun test` misses. Do not overlap test runs.
+    **Reverses nothing** in ADR 0023/0024/0025/0026 — the three-primitive model, both transport laws,
+    the `Room` positional, "half-tracked is worse than untracked", and one-way layering all stand as
+    written. This mechanizes them.

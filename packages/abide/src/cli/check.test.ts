@@ -98,10 +98,15 @@ test('a page with no <script> is skipped (no diagnostics)', async () => {
 
 // A `State`-shaped factory (matched structurally by the checker's `__abideUnwrap`) stands in for
 // `abide/shared/state`, so these exercise the real type engine without a workspace-resolution dependency.
+// NB: `untracked()`, not `peek()` (ADR 0027 D2). This stub must stay STRUCTURALLY identical to the real
+// `State` in `shared/internal/reactive.ts`, because `emitCheck`'s `__abideUnwrap` overload resolves on
+// that shape — a drifted member here silently stops the unwrap from matching and every bare cell read
+// reports as `Cell<T>` instead of `T`. This is the fourth place the cell shape is written down
+// (state.ts, the emit target, emitCheck's `__AbideState`, here); the type checker cannot connect them.
 const CELL_MODULE =
-    'export interface Cell<T> { (): T; set(v: T): void; peek(): T }\n' +
+    'export interface Cell<T> { (): T; set(v: T): void; untracked(): T }\n' +
     'export function state<T>(initial: T): Cell<T> {\n' +
-    '  return Object.assign(() => initial, { set: () => {}, peek: () => initial })\n' +
+    '  return Object.assign(() => initial, { set: () => {}, untracked: () => initial })\n' +
     '}\n'
 
 test('state vars type as their value: concrete inits keep inference, empty/nullish inits stay usable', async () => {

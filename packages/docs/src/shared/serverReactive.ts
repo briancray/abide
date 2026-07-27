@@ -9,12 +9,16 @@ import { watch } from 'abide/shared/watch'
 // NOTE the explicit `total()` / `total.set(...)` calls below. In a `.abide` `<script>` you write bare
 // `total` / `total = x` and the compiler rewrites those to `total()` / `total.set(x)` for you.
 // There is no compiler here — plain `.ts` — so you call the `State` surface yourself:
-//   total()         // tracked read (subscribes the surrounding memo/watch)
-//   total.set(next) // publish a new value
-//   total.peek()    // untracked read (no subscription)
+//   total()           // tracked read (subscribes the surrounding memo/watch)
+//   total.set(next)   // publish a new value
+//   total.untracked() // untracked read (no subscription)
+//
+// It is `untracked()`, not `peek()`, because `peek` means the OPPOSITE on the other two primitives:
+// `memo.peek(args)` / `channel.peek(args)` SUBSCRIBE and return `T | undefined` (ADR 0027 D2). Both
+// spellings appear side by side one file over, in `serverReactiveRead.ts`.
 //
 // Module-level state is PROCESS-GLOBAL (one value across all requests) — fine for this global counter;
-// for mutable per-request/per-user state, use `memo({ shared })` instead.
+// for mutable per-request/per-user state, use `memo({ crossRequest })` instead.
 export const total = state(0)
 
 // A derived value in the same module — recomputes off `total` on read. An argless `memo` declares no

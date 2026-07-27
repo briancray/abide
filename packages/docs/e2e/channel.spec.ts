@@ -77,3 +77,37 @@ test('peek() / chunks() / invalidate() — the shared read surface over a hub', 
     await page.getByTestId('probe-clear').click()
     await expect(page.getByTestId('probe-chunks')).toHaveText('—')
 })
+
+// The server-side loop: the subscription is a plain `for await` in a .ts module, not a template block.
+// Nothing on the client iterates — the buttons publish and read back what that loop kept. The loop is
+// PROCESS-GLOBAL, so this test restarts it first to be order-independent.
+test('for await in plain server code — iterate to subscribe, break to unsubscribe', async ({
+    page,
+}) => {
+    await page.goto(PAGE)
+
+    const log = page.getByTestId('loop-log')
+    await page.getByTestId('loop-restart').click()
+    await expect(page.getByTestId('loop-status')).toHaveText('subscribed')
+    await expect(log.locator('li')).toHaveCount(0)
+
+    await page.getByTestId('loop-say').click()
+    await expect(log.locator('li')).toHaveCount(1)
+    await page.getByTestId('loop-say').click()
+    await expect(log.locator('li')).toHaveCount(2)
+
+    // Publishing "stop" makes the loop `break` — leaving the loop IS unsubscribing.
+    await page.getByTestId('loop-stop').click()
+    await expect(page.getByTestId('loop-status')).toHaveText('unsubscribed')
+
+    // A publish after the break reaches no one: the transcript must not grow.
+    await page.getByTestId('loop-read').click()
+    await expect(log.locator('li')).toHaveCount(2)
+
+    // Re-entering the loop is a fresh subscription on the same channel.
+    await page.getByTestId('loop-restart').click()
+    await expect(page.getByTestId('loop-status')).toHaveText('subscribed')
+    await expect(log.locator('li')).toHaveCount(0)
+    await page.getByTestId('loop-say').click()
+    await expect(log.locator('li')).toHaveCount(1)
+})

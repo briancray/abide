@@ -33,7 +33,7 @@ function fixtureConfig(): TestAppConfig {
             hidden: GET(async () => ({ ok: true }), { clients: { mcp: false } }),
         },
         sockets: {
-            ticks: socket<number>({ tail: 8, clientPublish: true }),
+            ticks: socket<number>({ channel: { tail: 8 }, clientPublish: true }),
         },
     }
 }

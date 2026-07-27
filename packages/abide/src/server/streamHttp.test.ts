@@ -63,7 +63,7 @@ describe('streaming read HTTP transport', () => {
                             yield i
                         }
                     },
-                    { memo: { shared: true, ttl: 10_000 } },
+                    { memo: { crossRequest: true, ttl: 10_000 } },
                 ),
             },
         })
@@ -88,7 +88,7 @@ describe('resumable stream replay (?__abide_from=count)', () => {
                     async function* (_a: Record<string, never>) {
                         for (let i = 0; i < 5; i++) yield i
                     },
-                    { memo: { shared: true, ttl: 10_000 } },
+                    { memo: { crossRequest: true, ttl: 10_000 } },
                 ),
             },
         })
@@ -112,7 +112,7 @@ describe('resumable stream replay (?__abide_from=count)', () => {
                         yield 1
                         yield 2
                     },
-                    { memo: { shared: true, ttl: 10_000 } },
+                    { memo: { crossRequest: true, ttl: 10_000 } },
                 ),
             },
         })
@@ -152,7 +152,7 @@ describe('transport helpers behave like their raw forms (see-through)', () => {
                             })(),
                         )
                     },
-                    { memo: { shared: true, ttl: 10_000 } },
+                    { memo: { crossRequest: true, ttl: 10_000 } },
                 ),
             },
         })

@@ -59,10 +59,10 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
     // Deliver one inbound message: update the reactive latest/chunks, mark live, fan out to iterators.
     function deliver(message: unknown): void {
         latest.set({ value: message, time: Date.now() })
-        const next = chunks.peek().concat([message])
+        const next = chunks.untracked().concat([message])
         if (next.length > cap) next.splice(0, next.length - cap)
         chunks.set(next)
-        if (status.peek() !== 'error') status.set('live')
+        if (status.untracked() !== 'error') status.set('live')
         for (const sub of localSubs) sub.push(message)
     }
 
@@ -83,7 +83,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
                 replay: true,
                 onMessage: deliver,
                 onAck: (): void => {
-                    if (status.peek() !== 'error') status.set('live')
+                    if (status.untracked() !== 'error') status.set('live')
                 },
                 onError: (error: unknown): void => {
                     errorValue = error
@@ -91,7 +91,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
                     for (const sub of localSubs) sub.close()
                 },
                 onReconnecting: (): void => {
-                    if (status.peek() === 'live') status.set('refreshing')
+                    if (status.untracked() === 'live') status.set('refreshing')
                 },
             },
             base,
