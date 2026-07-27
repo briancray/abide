@@ -1,10 +1,9 @@
 <script>
   import { state } from "abide/shared/state"
 
-  // bind:value two-way.
+  // bind:value two-way over a bare state var — the plain sugar, no hand-written accessor (#14).
   let value = state("hello")
-  const valueBind = { get: () => value, set: (next) => { value = next } }
 </script>
 
-<input id="value-input" bind:value={valueBind} />
+<input id="value-input" bind:value={value} />
 <p>Mirror: <span id="value-out">{value}</span></p>

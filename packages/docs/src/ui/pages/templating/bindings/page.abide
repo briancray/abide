@@ -5,7 +5,6 @@
   import ReactiveAttrDemo from "$ui/demos/templating/bindings/ReactiveAttrDemo.abide"
   import NativeEventsDemo from "$ui/demos/templating/bindings/NativeEventsDemo.abide"
   import BindValueDemo from "$ui/demos/templating/bindings/BindValueDemo.abide"
-  import BareStateBindDemo from "$ui/demos/templating/bindings/BareStateBindDemo.abide"
   import BindCheckedDemo from "$ui/demos/templating/bindings/BindCheckedDemo.abide"
   import BindGroupDemo from "$ui/demos/templating/bindings/BindGroupDemo.abide"
   import BindGroupCheckboxDemo from "$ui/demos/templating/bindings/BindGroupCheckboxDemo.abide"
@@ -59,14 +58,9 @@
   </Demo>
 
   <h2>Both — two-way binds</h2>
-  <p>An attribute out plus an event in is such a common pair that it has its own form. <code>bind:value</code> is that pair for a text input: type, and the cell holds what you typed.</p>
-  <Demo id="value" title="<code>bind:value</code> — the pair, in one directive" client="src/ui/demos/templating/bindings/BindValueDemo.abide">
+  <p>An attribute out plus an event in is such a common pair that it has its own form. <code>bind:value</code> is that pair for a text input: type, and the cell holds what you typed. Name the state var and you are done — the compiler synthesizes the write-back, so there is no accessor to hand-write for the ordinary case.</p>
+  <Demo id="value" title={"<code>bind:value={x}</code> — the pair, in one directive"} client="src/ui/demos/templating/bindings/BindValueDemo.abide">
     <BindValueDemo />
-  </Demo>
-
-  <p class="note">One sharp edge, called out here because the demo below is the workaround rather than the ideal: a <strong>bare</strong> state var (<code>bind:value={'{'}x{'}'}</code>) does not wire write-back — the var evaluates to its value, not the cell. Use the <code>{'{'} get, set {'}'}</code> accessor form. It is a documented compiler limitation, not a design choice.</p>
-  <Demo id="barevalue" title={"<code>bind:value={x}</code> — bare state var (the known limit)"} client="src/ui/demos/templating/bindings/BareStateBindDemo.abide">
-    <BareStateBindDemo />
   </Demo>
 
   <p>The same directive over the other input shapes. A checkbox binds a boolean; a radio group binds the one chosen value; a checkbox group binds an array of the checked ones — same name, shape follows the element.</p>
@@ -82,7 +76,7 @@
     <BindGroupCheckboxDemo />
   </Demo>
 
-  <p>Finally, the escape hatch that makes the rest composable: a bind target does not have to be a cell. Give it <code>{'{'} get, set {'}'}</code> and you can validate, clamp, or reshape on the way through — the same accessor form the bare-var note above points at.</p>
+  <p>Finally, the escape hatch that makes the rest composable: a bind target does not have to be a cell. Give it <code>{'{'} get, set {'}'}</code> and you can validate, clamp, or reshape on the way through — the same accessor the compiler writes for you above, now yours to put logic in.</p>
   <Demo id="derived" title={"<code>bind:value={{get,set}}</code> — a derived accessor"} client="src/ui/demos/templating/bindings/DerivedAccessorDemo.abide">
     <DerivedAccessorDemo />
   </Demo>

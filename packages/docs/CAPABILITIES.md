@@ -17,15 +17,15 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 ## Coverage summary (verify phase)
 
 - **Total capabilities in this manifest: 164** (119 browser-facing PW/PW+RT, 43 runtime-only RT, 2 `unit`).
-  By status: **124 `[x]`, 7 `[~]`, 33 `[ ]`** — i.e. ~75% covered, and the manifest deliberately lists
+  By status: **126 `[x]`, 7 `[~]`, 33 `[ ]`** — i.e. ~76% covered, and the manifest deliberately lists
   capabilities it does *not* yet cover, so a `[ ]` is a known gap rather than an oversight.
-- **Playwright suite: 25 spec files, 172 tests — ALL PASSING.** They drive the real docs app
+- **Playwright suite: 25 spec files, 174 tests — ALL PASSING.** They drive the real docs app
   (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
   binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, raw SSR-emitter bytes,
   and machine surfaces fetched from the browser.
   - `rpc` (22), `routing` (22), `bindings` (15), `platform` (14), `memo` (14), `ssr-emit` (10),
-    `control` (9), `sockets` (8), `memo-verbs` (6), `state` (5), `memo-global` (5), `build-deploy` (5),
-    `smoke` (4), `rpc-probes` (4), `bench` (4), `watch` (4), `streaming` (3), `hydration` (3),
+    `control` (10), `sockets` (8), `memo-verbs` (6), `state` (5), `memo-global` (5), `build-deploy` (5),
+    `smoke` (4), `rpc-probes` (4), `bench` (4), `watch` (4), `streaming` (4), `hydration` (3),
     `channel` (4), `bench-client` (3), `uploads` (2), `bench-server` (2), `sidebar` (2), `styling` (1),
     `nav-perf` (1).
   - Note: `bench.spec.ts`'s two re-run tests were flaky under CPU contention (they failed in a
@@ -245,6 +245,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `{#for}` keyless positional | PW | [x] (/templating/lists) |
 | `{#for await}` + `{:catch}` | PW | [x] (/templating/async) |
 | `{#await p}` / `{:then}` / `{:catch}` / `{:finally}` | PW | [x] (/templating/async) |
+| a streaming `{#await}` inside an `{#if}` BRANCH still streams (the emitter's inlining invariant — a collapsed branch frame silently buffers, same bytes, no throw) | PW | [x] (/pages/ssr `branch-block` + e2e/streaming.spec) |
 | `{#switch}` / `{:case}` / `{:default}` | PW | [x] (/templating/conditionals) |
 | `{#try}` / `{:catch}` / `{:finally}` — error boundary | PW | [x] (/templating/errors) |
 | Inline component `{#component Name()}` (TitleCase) invoked `<Name/>` + `<slot/>` + pass as prop | PW | [x] (/templating/components) |
@@ -259,7 +260,8 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | --- | --- | --- |
 | `{fn(args)}` — bare call = the awaitable coalesced load (`Promise<T>`); the runtime auto-awaits it, so it blocks SSR exactly like `{await fn()}` and differs only in TYPE (`.field` on it is a checker error) | PW | [ ] (prose at /rpc/reads; NO demo exercises the bare form — the page demos `.peek()`, `{await}`, `{#await}`, inline-then) |
 | `{fn.peek(args)}` — the non-blocking `T \| undefined` snapshot (undefined while pending; subscribes + kicks the load) | PW | [x] (/rpc/reads PeekReadDemo; call-surface row in §3) |
-| `{await fn()}` — blocks SSR (value in initial HTML) / fills on settle client-side | PW | [x] (/rpc/reads) |
+| `{await fn()}` — blocks SSR (value in initial HTML) / fills on settle client-side | PW | [x] (/rpc/reads; /templating/async AwaitRpcDemo — re-awaits in place on `refresh`) |
+| a `refresh` that lands a DIFFERENT value re-awaits; an identity-equal re-fill wakes nobody | PW | [x] (/templating/async: `controlGreet` carries a run counter precisely so the refresh is observable) |
 | `{#await}` — explicit pending/then/catch | PW | [x] (/rpc/reads + /rpc/responses) |
 | `fn.pending()` / `fn.error()` template probes | PW | [x] (/rpc/reads ProbesDemo: `probe-pending-flag` / `probe-error-flag`) |
 

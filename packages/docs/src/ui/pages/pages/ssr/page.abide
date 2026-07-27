@@ -1,6 +1,12 @@
 <script>
   import streamSlow from "$server/rpc/streamSlow"
   import streamBoom from "$server/rpc/streamBoom"
+  import streamBranch from "$server/rpc/streamBranch"
+  import { state } from "abide/shared/state"
+
+  // TRUE at SSR on purpose: the third block below has to actually render on the server for the
+  // branch-arm case to be exercised at all.
+  let branchOpen = state(true)
 </script>
 
 <main class="page">
@@ -39,5 +45,22 @@
     {:catch failure}
       <i data-testid="error-value">{failure.message}</i>
     {/await}
+  </div>
+
+  <h2 class="mt-8">Streamed from inside an <code>{'{'}#if{'}'}</code> branch</h2>
+  <p>A streaming read does not have to sit directly under an element. Inside an <code>{'{'}#if{'}'}</code> — or a <code>{'{'}:case{'}'}</code>, or a <code>{'{'}:catch{'}'}</code> — it streams exactly the same way: the branch keeps its own render frame, so the shell still flushes with a placeholder and the resolved branch still arrives as an out-of-order patch.</p>
+
+  <div data-testid="branch-block" class="rounded border border-slate-200 p-4">
+    {#if branchOpen}
+      {#await streamBranch()}
+        <span data-testid="branch-pending">loading…</span>
+      {:then result}
+        <b data-testid="branch-value">runs: {result.runs}</b>
+      {:catch failure}
+        <span data-testid="branch-error">{failure.message}</span>
+      {/await}
+    {:else}
+      <span data-testid="branch-closed">closed</span>
+    {/if}
   </div>
 </main>

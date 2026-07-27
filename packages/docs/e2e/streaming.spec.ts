@@ -55,6 +55,37 @@ test('a slow {#await} read streams, then hydration claims it in place + it stays
     expect(warnings.filter((text) => /hydrat/i.test(text))).toEqual([])
 })
 
+// REGRESSION GUARD for the emitter's inlining invariant (streaming-ssr-plan, "a frame around a streaming
+// participant is LOAD-BEARING"). `emitServer.inlinableChildren` collapses a level's async frame when the
+// subtree owns no streaming participant, and it RECURSES through `{#if}`/`{#switch}`/`{#try}` because
+// those own their own frame. So a streaming block inside a BRANCH arm is reachable, and a blanket inline
+// there reproduces the bug that was tried and reverted: the block loses the per-render stream scope and
+// silently falls back to a fully buffered drain.
+//
+// Nothing throws when that happens and the final DOM is identical — which is why this asserts the raw
+// first-load BYTES rather than the rendered result. A unit test on emitted output cannot see it.
+test('a streaming {#await} inside an {#if} branch still streams', async ({ page }) => {
+    const raw = await (await page.request.get('/pages/ssr')).text()
+
+    // Scope to the branch block itself — the page has two OTHER streaming blocks, so a page-wide
+    // `toContain('<!--ab-p:')` would pass even with this block fully buffered.
+    const start = raw.indexOf('data-testid="branch-block"')
+    expect(start).toBeGreaterThan(-1) // the branch arm rendered at SSR; otherwise this proves nothing
+    const block = raw.slice(start, raw.indexOf('</div>', start))
+
+    // A streaming slot INSIDE the branch. A collapsed frame renders the resolved value inline instead,
+    // with no slot comment at all — that is the exact difference this test exists to see.
+    expect(block).toContain('<!--ab-p:')
+    expect(block).not.toContain('branch-value')
+    // ...and the resolved branch arrives later as an out-of-order patch.
+    expect(raw.slice(start)).toContain('data-ab-patch')
+
+    await page.goto('/pages/ssr')
+    const value = page.getByTestId('branch-value')
+    await expect(value).toBeVisible()
+    await expect(value).toContainText('runs:')
+})
+
 // Streaming ERROR (PR5): a slow read that REJECTS with a `{:catch}` streams the catch branch as its
 // patch (no 500 — the shell already flushed). Server-side the catch sees the raw error (proven in the
 // abide integration tests); the BROWSER shows the client's view — the handler throw became an HTTP 500

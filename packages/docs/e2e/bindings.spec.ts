@@ -45,19 +45,12 @@ test('on<event> native listeners fire', async ({ page }) => {
     await expect(page.locator('#typed-out')).toHaveText('typed text')
 })
 
-test('bind:value round-trips text', async ({ page }) => {
+test('bind:value over a bare state var round-trips text (#14)', async ({ page }) => {
     const out = page.locator('#value-out')
     await expect(out).toHaveText('hello')
+    // Editing the input writes back through the compiler-synthesized accessor into the bare state cell.
     await page.locator('#value-input').fill('world')
     await expect(out).toHaveText('world')
-})
-
-test('bind:value over a bare state var round-trips text (#14)', async ({ page }) => {
-    const out = page.locator('#barevalue-out')
-    await expect(out).toHaveText('direct')
-    // Editing the input writes back through the compiler-synthesized accessor into the bare state cell.
-    await page.locator('#barevalue-input').fill('typed-directly')
-    await expect(out).toHaveText('typed-directly')
 })
 
 test('bind:checked round-trips a checkbox', async ({ page }) => {

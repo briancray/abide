@@ -79,11 +79,25 @@ test('keyless positional {#for} maps a plain value list', async ({ page }) => {
     await expect(nums).toHaveCount(2)
 })
 
-test('{#await}/{:then}/{:catch}/{:finally} tracks a promise through settle', async ({ page }) => {
+test('a bare {await} resolves during SSR and re-awaits on refresh', async ({ page }) => {
     await page.goto('/templating/async')
 
-    // The RPC-backed {#await} resolves during SSR — its value is in the initial HTML.
-    await expect(page.getByTestId('rpc-await')).toContainText('Hello, control flow')
+    // The RPC-backed bare {await} interpolation resolves during SSR — its value is in the initial HTML.
+    const greeting = page.getByTestId('rpc-await')
+    await expect(greeting).toContainText('Hello, control flow')
+    const before = await greeting.textContent()
+
+    // "Run again" refreshes the memo and the interpolation re-awaits IN PLACE. This asserts the value
+    // moves, which is the only thing that proves the refresh woke the reader: a refresh landing an
+    // identity-equal value is now a deliberate no-op, so a fixed-string handler would pass a
+    // toContainText check while the button did nothing.
+    await page.getByTestId('replay').click()
+    await expect(greeting).not.toHaveText(before ?? '')
+    await expect(greeting).toContainText('Hello, control flow')
+})
+
+test('{#await}/{:then}/{:catch}/{:finally} tracks a promise through settle', async ({ page }) => {
+    await page.goto('/templating/async')
 
     // Success path: pending → then, with finally.
     await page.getByTestId('run-success').click()

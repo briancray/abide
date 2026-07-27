@@ -8,11 +8,11 @@
 
 <main class="page">
   <h1>Async control flow</h1>
-  <p class="lead">Two blocks, split by how many values arrive. <code>&#123;#await&#125;</code> is for <strong>one</strong> — it renders a branch per promise state. <code>&#123;#for await&#125;</code> is for <strong>many</strong> — it appends each chunk of an async iterable as it lands. Both work identically during SSR and after hydration.</p>
+  <p class="lead">Three forms, split by how many values arrive and whether you need to see the waiting. <code>&#123;await&#125;</code> is the plain interpolation for <strong>one</strong> value — no branches, the server does the waiting. <code>&#123;#await&#125;</code> is for one value when you want a branch per promise state. <code>&#123;#for await&#125;</code> is for <strong>many</strong> — it appends each chunk of an async iterable as it lands. All three work identically during SSR and after hydration.</p>
 
   <h2>One value</h2>
   <p>The common case needs no branches at all: await something during SSR and the value is in the initial HTML. Nothing suspends, nothing flashes — the server did the waiting.</p>
-  <Demo id="await-rpc" title="Server-resolved <code>&#123;#await&#125;</code> of an RPC" server="src/server/rpc/controlGreet.ts" client="src/ui/demos/templating/async/AwaitRpcDemo.abide" tab="server">
+  <Demo id="await-rpc" title="Server-resolved <code>&#123;await&#125;</code> of an RPC" server="src/server/rpc/controlGreet.ts" client="src/ui/demos/templating/async/AwaitRpcDemo.abide" tab="server">
     <AwaitRpcDemo />
   </Demo>
 
