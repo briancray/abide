@@ -62,8 +62,9 @@ Shapes that recur, each with a live example from this repo:
 - **Two things serving one role** — a range bounded by both a leading and a trailing marker when one end
   plus a derivation suffices.
 - **A parameter threaded but unreferenced** — `$start` sat in the emitted factory signature untouched.
-- **A field read only to copy itself forward** — `refreshing: current.refreshing`, present only to
-  survive a rebuild it should not have needed.
+- **A field read only to copy itself forward** — `refreshing: current.refreshing`. Note what this one
+  actually is: not vestigial, but a site *preserving* a value where its neighbours *set* one. Same
+  shape, opposite intent. Removing the field around it is what broke a spinner mid-load (below).
 - **Two axes sharing one carrier** — a status flag inside a value envelope, so each wakes the other's
   readers. Splitting removes code *and* fixes behaviour.
 - **A wrapper whose only job is to call through** — a frame that allocates an array and a closure to
@@ -72,6 +73,21 @@ Shapes that recur, each with a live example from this repo:
 
 In generated code, read the *emitted output* rather than the emitter. `$indexState` and `$start` were
 obvious in fifteen lines of emitted JavaScript and invisible in the emitter that produced them.
+
+**A mechanical removal is shape-safe, not intent-safe.** This list is a pattern-matcher, and matching a
+pattern is where the danger starts, not where it ends.
+
+`refreshing` appeared at fourteen construction sites. Thirteen wrote a literal; one wrote
+`current.refreshing`, preserving what a `publish` must not clear because a publish lands *beside* an
+outstanding load rather than ending it. A regex removed all fourteen identically, and `typecheck`
+confirmed every site was handled — which was true, and useless, because the type system compares shape
+and the sites differed only in meaning. A green build, and a spinner that vanished mid-load and never
+came back.
+
+So before removing a repeated field, parameter or node: **list every site and say out loud what each one
+is for.** If they are not all the same answer, the odd one out is carrying the invariant, and it needs
+somewhere to live before the thing around it goes. Related: `PERFORMANCE.md` §5, on why the guards
+written at the time all missed it.
 
 ## 4. Prove equivalence with an oracle, not a hunch
 
@@ -141,7 +157,8 @@ A removal is behaviour-preserving or it is a bug, so the whole suite is the guar
 - `bun test` from `packages/abide` — **from the package directory**, or the happy-dom preload is skipped
   and ~236 tests fail spuriously
 - `bun run typecheck` — removing a required field makes every construction site a compile error, which
-  is the cheapest possible way to find them all
+  is the cheapest way to **find** them all. It does not tell you they meant the same thing; see §3. A
+  clean typecheck after a mechanical removal is the beginning of the review, not the end of it
 - `bunx biome check`
 - `cd packages/docs && bun run e2e:ci` for anything touching emit, runtime, hydration or the reactive core
 - `cd packages/bench && bun run bench` — its equivalence assertions cover all 24 scenarios
