@@ -4,8 +4,16 @@
 // frontend build shares — `render` (SSR string), `mount` (client DOM construction), and `update` (a
 // reactive state change flushed to the DOM). Reports mean ns/op per metric.
 //
-//   bun run bench            # human table
-//   bun run bench -- --json  # machine-readable JSON (consumed by bench:delta)
+//   bun run bench                        # human table, whole corpus
+//   bun run bench -- --json              # machine-readable JSON (consumed by bench:delta)
+//   bun run bench -- --list              # print the scenario names, run nothing
+//   bun run bench -- list-swap-1000      # run only the scenarios matching these patterns
+//   bun run bench -- for-list-* if       # …several (substring, or glob when a `*` is present)
+//
+// Selecting a subset changes only WHICH scenarios run, never how they are measured — each keeps its own
+// warmup and adaptive budget — so a filtered row is comparable to the same row from a full run. That is
+// what makes the filter usable while iterating on one hot path: `--only` the scenario you are moving,
+// then re-run the whole corpus before believing the result.
 //
 // Every metric is measured TWICE: once through abide, once through the hand-written framework-free
 // equivalent in `src/vanillaBaselines.ts` — same op, same harness, same process. The second table reports
@@ -21,6 +29,7 @@
 
 import 'abide/test/happydom'
 import { type EmittedModule, loadEmitted } from 'abide/ui/internal/emit'
+import { type BenchSelection, benchSelection } from './src/benchSelection.ts'
 import {
     DEFAULT_MIN_ITERS,
     DEFAULT_MIN_TIME_MS,
@@ -32,6 +41,7 @@ import {
     NEAR_FLOOR_FACTOR,
 } from './src/measure.ts'
 import { SCENARIOS, type Scenario } from './src/scenarios.ts'
+import { selectBenches } from './src/selectBenches.ts'
 import { VANILLA_BASELINES, type VanillaBaseline } from './src/vanillaBaselines.ts'
 
 const UPDATES_PER_ROUND = 20
@@ -59,6 +69,8 @@ export interface BenchReport {
     minIters: number
     // Per-iteration cost of the timing loop itself — see `measureFloor`.
     harnessFloorNs: number
+    // Scenarios in the whole corpus, so a filtered report says so rather than reading as a shrunken one.
+    corpusSize: number
     scenarios: ScenarioResult[]
 }
 
@@ -230,10 +242,18 @@ async function assertEquivalent(
     }
 }
 
-export async function runBench(): Promise<BenchReport> {
+export async function runBench(
+    selection: BenchSelection = benchSelection([]),
+): Promise<BenchReport> {
+    const selected = selectBenches(
+        SCENARIOS.map((s) => s.name),
+        selection,
+        'scenarios',
+    )
     const scenarios: ScenarioResult[] = []
     const floor = await measureFloor()
     for (const scenario of SCENARIOS) {
+        if (!selected.has(scenario.name)) continue
         const mod = await loadEmitted(scenario.src)
         const baseline = VANILLA_BASELINES[scenario.name]
         if (baseline === undefined)
@@ -273,6 +293,7 @@ export async function runBench(): Promise<BenchReport> {
         minTimeMs: DEFAULT_MIN_TIME_MS,
         minIters: DEFAULT_MIN_ITERS,
         harnessFloorNs: floor.nsPerOp,
+        corpusSize: SCENARIOS.length,
         scenarios,
     }
 }
@@ -300,6 +321,11 @@ function printTable(report: BenchReport): void {
     console.log(
         `\nmean ns/op · warmup ${DEFAULT_WARMUP_ITERS} · ≥${report.minTimeMs}ms/≥${report.minIters} iters per metric`,
     )
+    if (report.scenarios.length !== report.corpusSize) {
+        console.log(
+            `filtered: ${report.scenarios.length} of ${report.corpusSize} scenarios — re-run without a filter before trusting a verdict`,
+        )
+    }
 }
 
 function printBaseline(report: BenchReport): void {
@@ -331,7 +357,7 @@ function printBaseline(report: BenchReport): void {
 
 if (import.meta.main) {
     const json = process.argv.includes('--json')
-    const report = await runBench()
+    const report = await runBench(benchSelection(process.argv.slice(2), { positional: true }))
     if (json) {
         console.log(JSON.stringify(report))
     } else {

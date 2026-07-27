@@ -3,8 +3,15 @@
 // The frontend bench (`run.ts`) covers the UI triad (render/mount/update). This harness covers the
 // OTHER half of every request: the server-dispatch + memo/RPC hot paths.
 //
-//   bun run bench:server            # human table
-//   bun run bench:server -- --json  # machine-readable JSON
+//   bun run bench:server                  # human table, every bench
+//   bun run bench:server -- --json        # machine-readable JSON
+//   bun run bench:server -- --list        # print the `group/name` labels, run nothing
+//   bun run bench:server -- memo          # run only the benches matching these patterns…
+//   bun run bench:server -- stream/* route  # …substring, or glob when a `*` is present
+//
+// A filter selects by the printed `group/name` label, so a bare group name (`memo`, `probe`) takes the
+// whole tier. Selecting away every `dispatch/*` bench also skips BOOTING the two loopback test apps —
+// the slow part of this harness — so an iteration loop on a primitive costs a fraction of a full run.
 //
 // Two tiers:
 //   • PRIMITIVES — the shared recipes from `src/serverBenches.ts` (also streamed live by the docs
@@ -22,7 +29,8 @@
 // Timing methodology is shared with `run.ts` via `src/measure.ts` so numbers stay comparable.
 
 import { GET } from 'abide/server/GET'
-import { createTestApp } from 'abide/test/createTestApp'
+import { createTestApp, type TestApp } from 'abide/test/createTestApp'
+import { type BenchSelection, benchSelection } from './src/benchSelection.ts'
 import {
     DEFAULT_MIN_ITERS,
     DEFAULT_MIN_TIME_MS,
@@ -33,7 +41,8 @@ import {
     NEAR_FLOOR_FACTOR,
 } from './src/measure.ts'
 import { createReactiveBenches } from './src/reactiveBenches.ts'
-import { createServerBenches, type ServerBench } from './src/serverBenches.ts'
+import { selectBenches } from './src/selectBenches.ts'
+import { createServerBenches } from './src/serverBenches.ts'
 
 export interface ServerBenchResult {
     group: string
@@ -52,31 +61,76 @@ export interface ServerBenchReport {
     minIters: number
     // Per-iteration cost of the timing loop itself — see `measureFloor`.
     harnessFloorNs: number
+    // Benches in the whole corpus, so a filtered report says so rather than reading as a shrunken one.
+    corpusSize: number
     results: ServerBenchResult[]
 }
 
-export async function runServerBench(): Promise<ServerBenchReport> {
+type BenchCall = (args: { n: number }) => Promise<unknown>
+
+// Everything a loopback bench needs, resolved once at boot — nothing here is looked up inside the timed
+// op, which measures the round trip and nothing else.
+interface DispatchContext {
+    app: TestApp
+    call: BenchCall
+    call10: BenchCall
+}
+
+// The loopback tier, declared before anything boots so its labels can be listed and filtered alongside
+// the primitives — only a selection that keeps one of these pays to start the two servers.
+interface DispatchBench {
+    name: string
+    note: string
+    run: (ctx: DispatchContext) => Promise<void>
+}
+
+const DISPATCH_BENCHES: DispatchBench[] = [
+    {
+        name: 'health',
+        note: 'GET /__abide/health (loopback floor)',
+        run: async (ctx) => {
+            await ctx.app.fetch('/__abide/health')
+        },
+    },
+    {
+        name: 'rpc-read',
+        note: 'warm RPC read, 0 middleware',
+        run: async (ctx) => {
+            await ctx.call({ n: 1 })
+        },
+    },
+    {
+        name: 'rpc-read-mw10',
+        note: 'warm RPC read, 10 middleware',
+        run: async (ctx) => {
+            await ctx.call10({ n: 1 })
+        },
+    },
+]
+
+function benchCall(app: TestApp): BenchCall {
+    const call = app.rpc.bench as BenchCall | undefined
+    if (call === undefined) throw new Error('bench route not registered on the test app')
+    return call
+}
+
+export async function runServerBench(
+    selection: BenchSelection = benchSelection([]),
+): Promise<ServerBenchReport> {
+    const primitives = [...(await createServerBenches()), ...(await createReactiveBenches())]
+    const labels = [
+        ...primitives.map((bench) => `${bench.group}/${bench.name}`),
+        ...DISPATCH_BENCHES.map((bench) => `dispatch/${bench.name}`),
+    ]
+    const selected = selectBenches(labels, selection, 'benches')
+
     const results: ServerBenchResult[] = []
     const floor = await measureFloor()
-    const record = async (
-        group: string,
-        name: string,
-        note: string,
-        op: () => Promise<void> | void,
-    ): Promise<void> => {
-        results.push({
-            group,
-            name,
-            note,
-            metric: await measure(op),
-            vanilla: null,
-            vanillaNote: null,
-        })
-    }
 
     // Each recipe is timed twice — once through abide, once through its hand-written baseline (where one
     // exists), back to back in the same process so the ratio is hardware-neutral.
-    const recordBench = async (bench: ServerBench): Promise<void> => {
+    for (const bench of primitives) {
+        if (!selected.has(`${bench.group}/${bench.name}`)) continue
         results.push({
             group: bench.group,
             name: bench.name,
@@ -87,44 +141,37 @@ export async function runServerBench(): Promise<ServerBenchReport> {
         })
     }
 
-    // ── PRIMITIVES (shared with the docs live bench) ────────────────────────────────────────────────
-    for (const bench of await createServerBenches()) {
-        await recordBench(bench)
-    }
-
-    // ── REACTIVE / STREAM / CHANNEL PRIMITIVES (ADR 0023 baseline) ──────────────────────────────────
-    for (const bench of await createReactiveBenches()) {
-        await recordBench(bench)
-    }
-
     // ── END-TO-END (loopback, CLI-only) ─────────────────────────────────────────────────────────────
-    const app = await createTestApp({
-        routes: { bench: GET(({ n = 0 }: { n?: number }) => ({ n, ok: true })) },
-    })
-    const app10 = await createTestApp({
-        routes: { bench: GET(({ n = 0 }: { n?: number }) => ({ n, ok: true })) },
-        middleware: Array.from(
-            { length: 10 },
-            () => (next: () => Response | Promise<Response>) => next(),
-        ),
-    })
-    const callBench = app.rpc.bench
-    const callBench10 = app10.rpc.bench
-    if (callBench === undefined || callBench10 === undefined)
-        throw new Error('bench route not registered on the test app')
-    try {
-        await record('dispatch', 'health', 'GET /__abide/health (loopback floor)', async () => {
-            await app.fetch('/__abide/health')
+    // Booting two servers is the slow part of this harness, so a selection that keeps no `dispatch/*`
+    // bench skips it entirely rather than starting and stopping them for nothing.
+    const dispatch = DISPATCH_BENCHES.filter((bench) => selected.has(`dispatch/${bench.name}`))
+    if (dispatch.length > 0) {
+        const app = await createTestApp({
+            routes: { bench: GET(({ n = 0 }: { n?: number }) => ({ n, ok: true })) },
         })
-        await record('dispatch', 'rpc-read', 'warm RPC read, 0 middleware', async () => {
-            await callBench({ n: 1 })
+        const app10 = await createTestApp({
+            routes: { bench: GET(({ n = 0 }: { n?: number }) => ({ n, ok: true })) },
+            middleware: Array.from(
+                { length: 10 },
+                () => (next: () => Response | Promise<Response>) => next(),
+            ),
         })
-        await record('dispatch', 'rpc-read-mw10', 'warm RPC read, 10 middleware', async () => {
-            await callBench10({ n: 1 })
-        })
-    } finally {
-        await app.stop()
-        await app10.stop()
+        try {
+            const ctx: DispatchContext = { app, call: benchCall(app), call10: benchCall(app10) }
+            for (const bench of dispatch) {
+                results.push({
+                    group: 'dispatch',
+                    name: bench.name,
+                    note: bench.note,
+                    metric: await measure(() => bench.run(ctx)),
+                    vanilla: null,
+                    vanillaNote: null,
+                })
+            }
+        } finally {
+            await app.stop()
+            await app10.stop()
+        }
     }
 
     return {
@@ -132,6 +179,7 @@ export async function runServerBench(): Promise<ServerBenchReport> {
         minTimeMs: DEFAULT_MIN_TIME_MS,
         minIters: DEFAULT_MIN_ITERS,
         harnessFloorNs: floor.nsPerOp,
+        corpusSize: labels.length,
         results,
     }
 }
@@ -181,6 +229,11 @@ function printTable(report: ServerBenchReport): void {
         `† within ${NEAR_FLOOR_FACTOR}× of the ${report.harnessFloorNs.toFixed(0)} ns harness floor (an empty op through the same loop) — ` +
             'that constant is added to both sides, so the ratio is squashed toward 1.00× and understates the real one',
     )
+    if (results.length !== report.corpusSize) {
+        console.log(
+            `filtered: ${results.length} of ${report.corpusSize} benches — re-run without a filter before trusting a verdict`,
+        )
+    }
     const noted = results.filter((r) => r.vanillaNote !== null)
     if (noted.length > 0) {
         console.log('\nhand-written as:')
@@ -192,7 +245,7 @@ function printTable(report: ServerBenchReport): void {
 
 if (import.meta.main) {
     const json = process.argv.includes('--json')
-    const report = await runServerBench()
+    const report = await runServerBench(benchSelection(process.argv.slice(2), { positional: true }))
     if (json) {
         console.log(JSON.stringify(report))
     } else {

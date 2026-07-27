@@ -186,6 +186,15 @@ glitch-free notification (~27 ns/observer) are likewise the model working, not o
 | SSR render, live | `/platform/bench` | streamed render bench + the O(n) gate |
 | **real browser** | `/platform/bench/client` | **any DOM-op claim** — mount, unmount, hydrate, update |
 
+Every CLI runner takes an **explicit list** instead of the whole suite: `--list` prints its labels,
+then bare patterns select (`bun run bench for-list-1000`, `bun run bench:server memo probe`,
+`bun run bench:gate stream`). A pattern is a case-insensitive substring of the label the runner prints —
+a group name takes the whole tier — or an anchored glob when it carries a `*`. `bench:delta` spells it
+`--only=a,b` because its positional is already the base ref, and forwards the same selection to both
+sides and both corpora. Filtering changes only *which* benches run, never how they are measured, so a
+filtered row is comparable to the same row from a full run — but a verdict still wants the full corpus,
+and every filtered table says so.
+
 Adding a scenario touches **five** places, and the e2e specs are what stop it silently vanishing:
 `packages/bench/src/scenarios.ts`, `src/vanillaBaselines.ts`, the docs page's `scopesFor`
 (`src/ui/pages/platform/bench/client/page.abide`), and both `packages/docs/e2e/bench.spec.ts` and

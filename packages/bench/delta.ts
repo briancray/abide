@@ -7,9 +7,17 @@
 //     probe, stream, watch, fanout, codec. Loopback `dispatch/*` rows are included but are the noisiest
 //     (they carry a TCP floor); read those relative to `dispatch/health`.
 //
-//   bun run bench:delta            # working tree vs HEAD
-//   bun run bench:delta -- <ref>   # working tree vs <ref> (branch, tag, or SHA)
-//   bun run bench:delta -- --no-fail   # report only; do not exit non-zero on a regression
+//   bun run bench:delta                  # working tree vs HEAD
+//   bun run bench:delta -- <ref>         # working tree vs <ref> (branch, tag, or SHA)
+//   bun run bench:delta -- --no-fail     # report only; do not exit non-zero on a regression
+//   bun run bench:delta -- --only=memo,list-swap-1000   # A/B only these benches, on BOTH sides
+//   bun run bench:delta -- --list        # print what each corpus can run, A/B nothing
+//
+// The selection is `--only=` here and not a bare positional, because this runner's positional is already
+// the base ref. It is forwarded verbatim to both corpora on both sides, so base and current always measure
+// the same set — and since it halves the work TWICE over (two sides × two corpora), narrowing to the
+// benches a change can plausibly move is what makes an A/B affordable mid-edit. Patterns that match only
+// one corpus are fine: the other simply contributes no rows.
 //
 // Both corpora also carry their vanilla baselines. Those rows run the SAME hand-written code on both
 // sides, so they are printed as a NOISE CONTROL — their worst swing is this run's noise floor, and a
@@ -40,8 +48,35 @@ const BENCH_PKG_DIR = import.meta.dir
 const REPO_ROOT = join(BENCH_PKG_DIR, '..', '..')
 const THRESHOLD = Number(process.env.ABIDE_BENCH_THRESHOLD ?? 5)
 
-const baseRef = process.argv.slice(2).find((a) => !a.startsWith('-')) ?? 'HEAD'
 const noFail = process.argv.includes('--no-fail')
+
+// One pass over argv: the first bare word is the base ref, and the selection flags are collected to be
+// forwarded to every child harness so both sides and both corpora measure the same set. `--only
+// <patterns>` is normalised to the `=` form so its VALUE can never be mistaken for the base ref.
+// (`--list` is answered below and never reaches a child that is trying to produce JSON.)
+const selectionArgs: string[] = []
+let ref = ''
+{
+    const argv = process.argv.slice(2)
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i] ?? ''
+        if (arg === '--list' || arg.startsWith('--only=')) {
+            selectionArgs.push(arg)
+            continue
+        }
+        if (arg === '--only') {
+            const next = argv[i + 1]
+            if (next === undefined)
+                throw new Error('--only needs a comma-separated list of patterns')
+            selectionArgs.push(`--only=${next}`)
+            i++
+            continue
+        }
+        if (arg.startsWith('-')) continue
+        if (ref === '') ref = arg
+    }
+}
+const baseRef = ref === '' ? 'HEAD' : ref
 
 async function git(args: string[], cwd: string): Promise<string> {
     const proc = Bun.spawn(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' })
@@ -56,7 +91,7 @@ async function git(args: string[], cwd: string): Promise<string> {
 
 // Run one bench harness at `cwd` and parse its JSON report (last JSON line of stdout).
 async function runScriptAt<T>(cwd: string, script: string): Promise<T> {
-    const proc = Bun.spawn(['bun', 'run', script, '--json'], {
+    const proc = Bun.spawn(['bun', 'run', script, '--json', ...selectionArgs], {
         cwd,
         stdout: 'pipe',
         stderr: 'inherit',
@@ -208,7 +243,10 @@ function flag(row: Row): string {
 function printDelta(rows: Row[]): void {
     const labelWidth = Math.max(8, ...rows.map((r) => r.label.length))
     const head = `${'metric'.padEnd(labelWidth)}  ${'base'.padStart(10)}  ${'current'.padStart(10)}  ${'delta'.padStart(9)}  flag`
-    console.log(`\nworking tree vs ${baseRef} (threshold ±${THRESHOLD}%, negative = faster)\n`)
+    const filter = selectionArgs.length > 0 ? ` · filtered by ${selectionArgs.join(' ')}` : ''
+    console.log(
+        `\nworking tree vs ${baseRef} (threshold ±${THRESHOLD}%, negative = faster)${filter}\n`,
+    )
     console.log(head)
     console.log('-'.repeat(head.length))
     for (const r of rows) {
@@ -232,6 +270,21 @@ function printDelta(rows: Row[]): void {
             `${controls.length} vanilla control(s) excluded from the verdict — worst swing ±${worst.toFixed(1)}%, this run's noise floor`,
         )
     }
+}
+
+// `--list` asks what the corpora CONTAIN, not how they moved: answer it from the working tree and exit,
+// rather than building a base worktree to print the same names twice.
+if (selectionArgs.includes('--list')) {
+    for (const script of ['run.ts', 'server.ts']) {
+        const proc = Bun.spawn(['bun', 'run', script, '--list'], {
+            cwd: BENCH_PKG_DIR,
+            stdout: 'inherit',
+            stderr: 'inherit',
+            env: process.env,
+        })
+        await proc.exited
+    }
+    process.exit(0)
 }
 
 console.log(`benchmarking base ref: ${baseRef} …`)

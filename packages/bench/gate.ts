@@ -1,6 +1,12 @@
 // HOT-PATH SHAPE GATE — the fast, hardware-neutral perf check that `bun run verify` runs.
 //
-//   bun run bench:gate
+//   bun run bench:gate                 # every bound
+//   bun run bench:gate -- --list       # print the bound labels, check nothing
+//   bun run bench:gate -- memo stream  # check only the bounds naming a matching bench
+//
+// A filter matches either side of a bound's ratio, and only the benches those bounds need are measured —
+// so re-checking one hot path while iterating costs two timings, not the whole primitive corpus. Unlike
+// the report runners, an empty selection FAILS here: "all 0 ratios within bounds" is a false green.
 //
 // Why ratios and not absolute ns: a committed absolute baseline is machine-specific and goes stale the
 // moment anyone benches on different hardware. RATIOS between two benches measured in the SAME process on
@@ -16,8 +22,10 @@
 // which boot a real server and carry a TCP floor (slow and noisy for a gate). Use `bun run bench:server`
 // for the full table and `bun run bench:delta` to A/B a specific change.
 
+import { benchSelection } from './src/benchSelection.ts'
 import { measure } from './src/measure.ts'
 import { createReactiveBenches } from './src/reactiveBenches.ts'
+import { selectBenches } from './src/selectBenches.ts'
 import { createServerBenches } from './src/serverBenches.ts'
 
 const MIN_TIME_MS = Number(process.env.ABIDE_BENCH_GATE_TIME ?? 80)
@@ -81,10 +89,37 @@ const BOUNDS: Bound[] = [
     },
 ]
 
+// A bound's label carries both sides, so a plain substring pattern (`memo`, `stream`) selects every bound
+// whose ratio touches that tier without the filter needing to know which side it landed on.
+function boundLabel(bound: Bound): string {
+    return `${bound.numerator} / ${bound.denominator}`
+}
+
+const selection = benchSelection(process.argv.slice(2), { positional: true })
+const selected = selectBenches(BOUNDS.map(boundLabel), selection, 'bounds')
+const bounds = BOUNDS.filter((bound) => selected.has(boundLabel(bound)))
+if (bounds.length === 0) {
+    console.error(
+        '\x1b[31m✗ bench gate: no bound selected — a gate that checks nothing is a false pass\x1b[0m',
+    )
+    process.exit(1)
+}
+
+// Only the benches the selected bounds actually divide are measured — unfiltered that is already a subset
+// of the corpus (the gate names ~10 of ~30 recipes), and a filtered run is two timings. Each bench keeps
+// its own warmup and budget, so which OTHER benches ran does not move a ratio.
+const needed = new Set<string>()
+for (const bound of bounds) {
+    needed.add(bound.numerator)
+    needed.add(bound.denominator)
+}
+
 const timings = new Map<string, number>()
 for (const bench of [...(await createServerBenches()), ...(await createReactiveBenches())]) {
+    const label = `${bench.group}/${bench.name}`
+    if (!needed.has(label)) continue
     const metric = await measure(bench.run, { minTimeMs: MIN_TIME_MS, minIters: MIN_ITERS })
-    timings.set(`${bench.group}/${bench.name}`, metric.nsPerOp)
+    timings.set(label, metric.nsPerOp)
 }
 
 interface Checked {
@@ -94,7 +129,7 @@ interface Checked {
 }
 
 const checked: Checked[] = []
-for (const bound of BOUNDS) {
+for (const bound of bounds) {
     const numerator = timings.get(bound.numerator)
     const denominator = timings.get(bound.denominator)
     if (numerator === undefined || denominator === undefined) {
@@ -132,4 +167,8 @@ if (failures.length > 0) {
     )
     process.exit(1)
 }
-console.log(`\n\x1b[32m✓ all ${checked.length} hot-path ratios within bounds\x1b[0m`)
+const scope =
+    checked.length === BOUNDS.length
+        ? `all ${checked.length}`
+        : `${checked.length} of ${BOUNDS.length} selected`
+console.log(`\n\x1b[32m✓ ${scope} hot-path ratios within bounds\x1b[0m`)
