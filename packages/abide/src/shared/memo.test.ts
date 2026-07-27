@@ -151,6 +151,40 @@ describe('memo — refresh / invalidate', () => {
         })
     })
 
+    // A publish is the one state write that is NOT a settle: the load it lands beside is still
+    // outstanding. When `refreshing` moved out of the envelope, `publish` stopped carrying the old
+    // `refreshing: current.refreshing` forward and started clearing the flag through the shared settle
+    // path — so the spinner vanished with a load still in flight and nothing raised it again.
+    test('a publish during an in-flight refresh leaves the refreshing flag up', async () => {
+        await withScope(async () => {
+            let release: (value: string) => void = () => {}
+            let calls = 0
+            const load = memo(async ({ id }: { id: number }) => {
+                calls++
+                if (calls === 1) return `user-${id}`
+                return await new Promise<string>((resolve) => {
+                    release = resolve
+                })
+            })
+            await load({ id: 1 })
+
+            load.refresh({ id: 1 })
+            await tick()
+            expect(load.refreshing({ id: 1 })).toBe(true)
+
+            load.publish({ id: 1 }, 'published-while-loading')
+            await tick()
+            // The load has NOT settled — the flag must survive the out-of-band value.
+            expect(load.refreshing({ id: 1 })).toBe(true)
+            expect(load.peek({ id: 1 })).toBe('published-while-loading')
+
+            release('user-1-reloaded')
+            await tick()
+            // Now it really did settle.
+            expect(load.refreshing({ id: 1 })).toBe(false)
+        })
+    })
+
     test('a refresh that yields a DIFFERENT value still wakes value readers', async () => {
         await withScope(async () => {
             let calls = 0

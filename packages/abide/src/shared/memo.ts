@@ -12,10 +12,15 @@
 // `state.linked` (§4). Two factories became zero.
 //
 // Each cache slot `(memoId, canonicalKey(args))` IS a state (§7.2): reading it in a
-// tracking context subscribes; resolve/invalidate/publish re-run subscribers. The slot is a
-// state machine idle -> pending -> value | error, with a `refreshing` flag while
-// revalidating over a retained value. pending/error/refreshing/peek are derived views of
-// the one slot, not separate channels.
+// tracking context subscribes; resolve/invalidate/publish re-run subscribers ONLY when the write
+// is observable — an idempotent one hands back the state object it already held (see `setState`).
+// The slot is a state machine idle -> pending -> value | error; pending/error/peek are derived
+// views of that one state.
+//
+// `refreshing` is the exception: its own signal on the slot, not a field of the envelope, because
+// value and status are two AXES. A keepStale refresh flips it on and back while the value stays
+// put, and folding it into the envelope woke every VALUE reader twice per refresh to report that
+// a spinner had come and gone.
 //
 // The opt-in server CROSS-REQUEST cache (`memo: { crossRequest: true }`, rpc-core §2) is wired
 // here: a shared memo stores its slots in the process-global `sharedStore()` and runs its handler
@@ -62,8 +67,10 @@ import { log } from './log.ts'
 // monomorphic in their own field — a stream slot's `value` is always undefined and vice versa.
 type Status = 'idle' | 'pending' | 'value' | 'error' | 'stream'
 
-// One immutable snapshot of a slot's state. Held inside the slot state; every transition
-// replaces it with a fresh object so the state's `===` comparison always fires.
+// One immutable snapshot of a slot's state. Held inside the slot state, and NEVER mutated in place —
+// which is what lets `setState` hand the SAME object back when a transition is observably a no-op, so
+// the state's `===` comparison does not fire and no reader wakes. Replacing it with a fresh object on
+// every transition is the bug, not the contract: identity is the propagation cutoff.
 interface SlotState<T> {
     status: Status
     value: T | undefined
@@ -304,10 +311,7 @@ function idleState<T>(): SlotState<T> {
 // real updates. `SlotState` is always replaced, never mutated in place, so sharing one is safe.
 function sameSlotState<T>(a: SlotState<T>, b: SlotState<T>): boolean {
     return (
-        a.status === b.status &&
-        a.value === b.value &&
-        a.error === b.error &&
-        a.stream === b.stream
+        a.status === b.status && a.value === b.value && a.error === b.error && a.stream === b.stream
     )
 }
 
@@ -647,12 +651,16 @@ export function memo<Args, T>(
     // value already held, a ttl re-fill of unchanged data — notified every reader anyway. Same reasoning
     // as `merged`; `value` is compared by identity for the same reason.
     //
-    // Writing a state also SETTLES the slot — every caller but one is a load finishing, a publish, or a
-    // drop. So the refreshing flag clears here by default and the single exception (`startLoad`'s
-    // keepStale branch) raises it immediately after, rather than each of the eight settle points having
-    // to remember to lower it.
-    function setState(slot: Slot<Args, T>, next: SlotState<T>): void {
-        slot.refreshing.set(false)
+    // Writing a state usually SETTLES the slot — a load finishing, a drop. So the refreshing flag clears
+    // here by default, rather than each of the eight settle points having to remember to lower it.
+    // `startLoad`'s keepStale branch raises it immediately after; `publish` opts out via `keepRefreshing`
+    // because it is the one caller that is NOT a settle — a value arriving out of band does not end the
+    // load that is still outstanding, and reporting `refreshing() === false` with a load in flight
+    // contradicts rpc-core §7.3. Opting out LEAVES the flag rather than restoring it: clearing and
+    // re-raising would wake the refreshing axis twice to report no net change, which is the exact
+    // double-wake this split exists to remove.
+    function setState(slot: Slot<Args, T>, next: SlotState<T>, keepRefreshing = false): void {
+        if (!keepRefreshing) slot.refreshing.set(false)
         const current = slot.state.untracked()
         slot.state.set(sameSlotState(current, next) ? current : next)
     }
@@ -1325,7 +1333,8 @@ export function memo<Args, T>(
         } else {
             value = next
         }
-        setState(slot, { status: 'value', value, error: undefined })
+        // A publish does not end an outstanding load, so it leaves the refreshing axis alone.
+        setState(slot, { status: 'value', value, error: undefined }, true)
         log.channel('abide:memo').trace(`publish ${id}`)
         // Both forms broadcast the resolved VALUE (value-form frame) on a crossRequest slot.
         broadcast('publish', args, value)

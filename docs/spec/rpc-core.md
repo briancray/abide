@@ -183,13 +183,31 @@ One imported callable means two things:
    `state.computed`/`state.linked` are gone (ADR 0024).
 2. **Each cache slot `(callSiteId, args)` *is* a `state`.** Reading it in a tracking context
    subscribes; changes (resolve, `invalidate`, `publish`, socket broadcast) re-run
-   subscribers. The slot is a state machine: `idle → pending → value | error`, with a
-   `refreshing` flag when revalidating over a retained value. `.pending`/`.error`/
-   `.refreshing`/`.peek` are **derived views of the one slot**, not separate channels.
-3. **Update semantics: push-notify + pull-recompute, microtask-batched, glitch-free
+   subscribers. The slot is a state machine: `idle → pending → value | error`. `.pending`/`.error`/
+   `.peek` are **derived views of the one slot**, not separate channels.
+3. **`refreshing` is its own signal, NOT a field of the slot state.** Value and status are two
+   AXES, and a slot carries one signal per axis. A `refresh` over a retained value flips
+   `refreshing` on and back while the value never moves; folding it into the state envelope meant
+   every such flip rebuilt the envelope and woke every VALUE reader — twice per refresh — to report
+   that a spinner had come and gone. Separate signals mean a probe wakes for its own axis and no
+   other: `.refreshing` readers see the flip, `{await fn()}` / `.peek` readers do not.
+4. **An observably-identical write wakes nobody.** A slot state is immutable, so a transition that
+   produces the same `status`/`value`/`error`/`stream` re-writes the SAME object and the reactive
+   graph's `oldValue !== value` cutoff stops propagation there. This covers a `refresh` that
+   recomputes the same result, a `publish` of the value already held, and a ttl re-fill of unchanged
+   data. Three consequences worth stating:
+   - `value` is compared by **IDENTITY**, exactly like every other derived primitive. A body that
+     hands back a fresh object each run genuinely may have changed, and guessing otherwise would drop
+     real updates — so it still propagates.
+   - The cutoff applies to the derived read's OUTPUT, not to the recompute. The body still runs; what
+     stops is the wake-up.
+   - The residual over-notification is **deliberate and one-directional**: a `.pending`/`.error`
+     reader still wakes on a pure value change, because they share the one state. Splitting further
+     buys less than it costs (`docs/PERFORMANCE.md` §7 carries the ledger).
+5. **Update semantics: push-notify + pull-recompute, microtask-batched, glitch-free
    (topological).** A burst of writes (5 socket publishes) → one recompute; no intermediate
    inconsistent state observed.
-4. **Server renders once, but flush effects are re-runnable.** SSR paints the DOM once — there is no
+6. **Server renders once, but flush effects are re-runnable.** SSR paints the DOM once — there is no
    live re-render of the served HTML after flush. (`watch`/effects themselves are isomorphic and DO fire
    server-side — a server module can own a `state` and `watch` it — but they don't re-paint an
    already-flushed page.) The one server use of the render graph is "flush this subtree's HTML patch +
@@ -197,7 +215,7 @@ One imported callable means two things:
    effect is **re-runnable, not one-shot**: a subtree depending on multiple pending reads
    **re-checks on each dependency's arrival and flushes only when all are ready** (a
    fire-once-and-detach model would hang multi-dependency subtrees).
-5. **Teardown is what the run RETURNS.** A `watch`/effect run may return a cleanup function; it runs
+7. **Teardown is what the run RETURNS.** A `watch`/effect run may return a cleanup function; it runs
    before the next run and again when the effect is disposed (the return is inspected, not required —
    a non-function return is ignored, so `(n) => list.push(n)` stays legal). A component **owns** the
    effects its `<script>` setup creates: `mount`/`render` open an **effect scope** around the setup
