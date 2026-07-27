@@ -118,6 +118,48 @@ function settledStatement(expr: string, use: (value: string) => string): string 
     return `    { const $v = (${expr}); ${use('($rt.isThenable($v) ? await $v : $v)')} }\n`
 }
 
+// A branch body assigned to `target`. A stream-free body writes straight into a shadowed accumulator
+// instead of an awaited IIFE — inside a `{#for}` that frame is per ROW, and a branch is the commonest
+// thing a row contains.
+function branchBody(
+    analysis: BindingAnalysis,
+    children: ServerChunk[],
+    target: string,
+    pad: string,
+): string {
+    if (!inlinableChildren(children))
+        return `${target} = await ${bodyExpr(analysis, children)}($scope);`
+    return `let $out = "";\n${genChunks(analysis, children)}${pad}${target} = $out;`
+}
+
+// A branch body RETURNED from the enclosing arrow (the `{#switch}` shape) rather than assigned.
+function branchReturn(analysis: BindingAnalysis, children: ServerChunk[], pad: string): string {
+    if (!inlinableChildren(children)) return `return await ${bodyExpr(analysis, children)}($scope);`
+    return `let $out = "";\n${genChunks(analysis, children)}${pad}return $out;`
+}
+
+// One level of an `{#if}` / `{:else if}` / `{:else}` chain, nested so later conditions stay unevaluated.
+function genIfChain(
+    analysis: BindingAnalysis,
+    branches: { expr: string | null; children: ServerChunk[] }[],
+    index: number,
+    pad: string,
+): string {
+    const branch = branches[index]
+    if (branch === undefined) return ''
+    const body = branchBody(analysis, branch.children, '$r', `${pad}  `)
+    if (branch.expr === null) return `${pad}{ ${body} }\n`
+    const rest =
+        index + 1 < branches.length
+            ? ` else {\n${genIfChain(analysis, branches, index + 1, `${pad}  `)}${pad}}`
+            : ''
+    return (
+        `${pad}{ const $v = (${branch.expr});\n` +
+        `${pad}  if ($rt.isThenable($v) ? await $v : $v) { ${body} }${rest}\n` +
+        `${pad}}\n`
+    )
+}
+
 // An async arrow that renders a chunk list against a `$scope` param and returns a string.
 function bodyExpr(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
     return `(async ($scope) => {\n  let $out = "";\n${genChunks(analysis, chunks)}  return $out;\n})`
@@ -381,18 +423,11 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
                 chunk.siteId,
             )
         case 'if': {
-            let out = '  {\n    let $r = "";\n'
-            let first = true
-            for (const branch of chunk.branches) {
-                if (branch.expr === null) {
-                    out += `    else { $r = await ${bodyExpr(analysis, branch.children)}($scope); }\n`
-                } else {
-                    out += `    ${first ? 'if' : 'else if'} (await (${branch.expr})) { $r = await ${bodyExpr(analysis, branch.children)}($scope); }\n`
-                    first = false
-                }
-            }
-            out += '    $out += $r;\n  }\n'
-            return out
+            // An `else if` chain has to stay LAZY — a later condition must not run when an earlier one
+            // matched — so the guarded awaits nest rather than hoisting into temps up front. Each level
+            // opens its own block, and the inner `const $v` shadows the outer one, which is why the same
+            // name is safe all the way down.
+            return `  {\n    let $r = "";\n${genIfChain(analysis, chunk.branches, 0, '    ')}    $out += $r;\n  }\n`
         }
         case 'for': {
             let body = `    const $c = Object.create($scope);\n`
@@ -495,15 +530,21 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
             return out
         }
         case 'switch': {
+            // Same two treatments as `{#if}`: the discriminant and each case expression settle through
+            // the guard rather than an unconditional await, and a stream-free case body returns a
+            // locally accumulated string instead of an awaited IIFE. Cases are still tried in order and
+            // stop at the first match, so nothing is evaluated that was not evaluated before.
             let out = '  $out += await (async ($scope) => {\n'
-            out += `    const $subject = await (${chunk.discriminant});\n`
+            out += `    const $d = (${chunk.discriminant});\n`
+            out += '    const $subject = $rt.isThenable($d) ? await $d : $d;\n'
             for (const c of chunk.cases) {
                 if (c.expr === null) continue
-                out += `    if ((await (${c.expr})) === $subject) return await ${bodyExpr(analysis, c.children)}($scope);\n`
+                out += `    { const $v = (${c.expr});\n`
+                out += `      if (($rt.isThenable($v) ? await $v : $v) === $subject) { ${branchReturn(analysis, c.children, '      ')} }\n`
+                out += '    }\n'
             }
             const fallback = chunk.cases.find((c) => c.expr === null)
-            if (fallback)
-                out += `    return await ${bodyExpr(analysis, fallback.children)}($scope);\n`
+            if (fallback) out += `    { ${branchReturn(analysis, fallback.children, '    ')} }\n`
             out += '    return "";\n  })($scope);\n'
             return out
         }

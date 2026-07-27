@@ -89,6 +89,53 @@ test('a keyed {#for} renders the exact source order after arbitrary mutation', a
     expect(mutations).toBe(2400)
 })
 
+// The fuzz above keys each row BY ITS OWN VALUE, so it can never produce the commonest reactive update
+// there is: same keys, different values. That is the shape `reconcile`'s fast path claims — no item
+// enters, leaves or moves, so it skips the whole diff and only hands each item its new value. If that
+// path ever stopped writing the value through, every test above would still pass.
+test('a keyed {#for} updates values in place when the keys are unchanged', async () => {
+    const mod = await loadEmitted(
+        '<ul>{#for row of rows() by row.id}<li>{row.text}</li>{/for}</ul>',
+    )
+    const rows = [
+        { id: 1, text: 'a' },
+        { id: 2, text: 'b' },
+        { id: 3, text: 'c' },
+    ]
+    const cell = state(rows)
+    const host = document.createElement('div')
+    const cleanup = mod.mount(host, { rows: cell })
+    await flush()
+    const text = (): string[] => {
+        const out: string[] = []
+        for (const row of host.querySelectorAll('li')) out.push(row.textContent ?? '')
+        return out
+    }
+    expect(text()).toEqual(['a', 'b', 'c'])
+
+    // Same ids in the same order — the fast path — with two of the three values changed.
+    const painted = host.querySelectorAll('li')[1]
+    cell.set([
+        { id: 1, text: 'A' },
+        { id: 2, text: 'b' },
+        { id: 3, text: 'C' },
+    ])
+    await flush()
+    expect(text()).toEqual(['A', 'b', 'C'])
+    // Updated IN PLACE: the node is the same one, not a rebuilt row.
+    expect(host.querySelectorAll('li')[1]).toBe(painted)
+
+    // A key change on the same length must fall through to the real diff, not the fast path.
+    cell.set([
+        { id: 1, text: 'A' },
+        { id: 9, text: 'nine' },
+        { id: 3, text: 'C' },
+    ])
+    await flush()
+    expect(text()).toEqual(['A', 'nine', 'C'])
+    cleanup()
+})
+
 // The fuzz above cannot catch a reorder that is merely WASTEFUL — moving every row still lands the
 // right order, so a subsequence solve that silently degenerates to "nothing is in place" passes it
 // clean. (It did, once.) This pins the property that actually matters: the number of rows the DOM

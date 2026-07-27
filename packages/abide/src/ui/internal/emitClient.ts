@@ -505,9 +505,16 @@ class ClientEmitter {
             keyFor = `($value, $index) => {\n    const $k = Object.create($scope);\n${bindItem}    return (($scope) => (${key}))($k);\n  }`
         }
 
-        let createItem = '($p, $start, $end, $value, $index) => {\n'
-        createItem += '    const $itemState = $rt.state($value);\n'
-        createItem += '    const $indexState = $rt.state($index);\n'
+        // Each backing cell is emitted ONLY where something reads it. `$itemState` is read solely by
+        // the `simple` binding's getter (a destructured item rebinds from `$value`/`$v` instead), and
+        // `$indexState` solely by the index getter, which exists only when the block declares an index.
+        // Emitting them unconditionally allocated a live reactive cell per ITEM at mount and wrote it
+        // per item on every reconcile — for `{#for n of items by n}`, both were pure waste.
+        const needsItemState = simple
+        const needsIndexState = index !== null
+        let createItem = '($p, $end, $value, $index) => {\n'
+        if (needsItemState) createItem += '    const $itemState = $rt.state($value);\n'
+        if (needsIndexState) createItem += '    const $indexState = $rt.state($index);\n'
         createItem += '    const $child = Object.create($scope);\n'
         // A component inside the loop gets a DISTINCT seed bucket per iteration (see emitServer's `for`).
         // Only emitted when the body has one — this allocates per item.
@@ -524,7 +531,9 @@ class ClientEmitter {
         }
         createItem += `    const $dispose = $rt.untrack(() => $mount${bodyId}($p, $end, $child));\n`
         createItem += '    return {\n'
-        createItem += '      update: ($v, $i) => { $itemState.set($v); $indexState.set($i);'
+        createItem += '      update: ($v, $i) => {'
+        if (needsItemState) createItem += ' $itemState.set($v);'
+        if (needsIndexState) createItem += ' $indexState.set($i);'
         if (!simple) createItem += ` ${bindPattern('$child', item, '$v')}`
         createItem += ' },\n'
         createItem += '      dispose: () => $dispose(),\n'

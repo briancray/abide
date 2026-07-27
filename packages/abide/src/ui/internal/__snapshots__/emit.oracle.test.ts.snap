@@ -238,19 +238,19 @@ exports[`emit regression — client DOM else if 1`] = `"<!--[-->B<!--if--><!--]-
 
 exports[`emit regression — client DOM else if to else 1`] = `"<!--[-->C<!--if--><!--]-->"`;
 
-exports[`emit regression — client DOM for array 1`] = `"<!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+exports[`emit regression — client DOM for array 1`] = `"<!--[--><li>a<!----></li><!--/for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
 
-exports[`emit regression — client DOM for index 1`] = `"<!--[--><!--for--><li>0<!---->:a<!----></li><!--/for--><!--for--><li>1<!---->:b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+exports[`emit regression — client DOM for index 1`] = `"<!--[--><li>0<!---->:a<!----></li><!--/for--><li>1<!---->:b<!----></li><!--/for--><!--for-end--><!--]-->"`;
 
 exports[`emit regression — client DOM for empty 1`] = `"<!--[--><!--for-end--><!--]-->"`;
 
-exports[`emit regression — client DOM for destructure 1`] = `"<!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+exports[`emit regression — client DOM for destructure 1`] = `"<!--[--><li>a<!----></li><!--/for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
 
-exports[`emit regression — client DOM for keyed by key 1`] = `"<!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+exports[`emit regression — client DOM for keyed by key 1`] = `"<!--[--><li>a<!----></li><!--/for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
 
-exports[`emit regression — client DOM for + prefix (outer scope) 1`] = `"<!--[--><!--for-->&gt;<!---->a<!----> <!--/for--><!--for-end--><!--]-->"`;
+exports[`emit regression — client DOM for + prefix (outer scope) 1`] = `"<!--[-->&gt;<!---->a<!----> <!--/for--><!--for-end--><!--]-->"`;
 
-exports[`emit regression — client DOM for in if in element (true) 1`] = `"<ul><!--[--><!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]--><!--if--><!--]--></ul>"`;
+exports[`emit regression — client DOM for in if in element (true) 1`] = `"<ul><!--[--><!--[--><li>a<!----></li><!--/for--><li>b<!----></li><!--/for--><!--for-end--><!--]--><!--if--><!--]--></ul>"`;
 
 exports[`emit regression — client DOM for in if in element (false) 1`] = `"<ul><!--[--><!--if--><!--]--></ul>"`;
 
@@ -266,17 +266,17 @@ exports[`emit regression — client DOM try ok 1`] = `"<!--[-->ok<!--try--><!--]
 
 exports[`emit regression — client DOM try finally 1`] = `"<!--[-->a!<!--try--><!--]-->"`;
 
-exports[`emit regression — client DOM component props (client) 1`] = `"<!--[--><div class="card"><h1>Hello</h1><!--slot--></div><!--Card--><!--]-->"`;
+exports[`emit regression — client DOM component props (client) 1`] = `"<!--[--><div class="card"><h1>Hello</h1><!--slot--></div><!--]-->"`;
 
-exports[`emit regression — client DOM component children slot (client) 1`] = `"<!--[--><div class="card"><h1>Hi</h1><!--slot-->slotted Bob<!----></div><!--Card--><!--]-->"`;
+exports[`emit regression — client DOM component children slot (client) 1`] = `"<!--[--><div class="card"><h1>Hi</h1><!--slot-->slotted Bob<!----></div><!--]-->"`;
 
-exports[`emit regression — client DOM component defined and used 1`] = `"<ul><!--[--><li>a<!----></li><!--Item--><!--]--><!--[--><li>b<!----></li><!--Item--><!--]--></ul>"`;
+exports[`emit regression — client DOM component defined and used 1`] = `"<ul><!--[--><li>a<!----></li><!--]--><!--[--><li>b<!----></li><!--]--></ul>"`;
 
-exports[`emit regression — client DOM component hoisted 1`] = `"<ul><!--[--><li>a<!----></li><!--Item--><!--]--></ul>"`;
+exports[`emit regression — client DOM component hoisted 1`] = `"<ul><!--[--><li>a<!----></li><!--]--></ul>"`;
 
-exports[`emit regression — client DOM component not escaped 1`] = `"<!--[--><b>hi<!----></b><!--Raw--><!--]-->"`;
+exports[`emit regression — client DOM component not escaped 1`] = `"<!--[--><b>hi<!----></b><!--]-->"`;
 
-exports[`emit regression — client DOM component client fragment 1`] = `"<!--[-->Hi Bob<!---->!<!--Greeting--><!--]-->"`;
+exports[`emit regression — client DOM component client fragment 1`] = `"<!--[-->Hi Bob<!---->!<!--]-->"`;
 
 exports[`emit regression — client DOM script emits nothing 1`] = `"<p>5<!----></p>"`;
 
@@ -296,9 +296,9 @@ exports[`emit regression — client DOM reactive if toggle 1`] = `"<!--[--><!--i
 
 exports[`emit regression — client DOM reactive if toggle 2`] = `"<!--[--><p>yes</p><!--if--><!--]-->"`;
 
-exports[`emit regression — client DOM reactive keyed reorder 1`] = `"<!--[--><!--for--><li>1<!----></li><!--/for--><!--for--><li>2<!----></li><!--/for--><!--for--><li>3<!----></li><!--/for--><!--for-end--><!--]-->"`;
+exports[`emit regression — client DOM reactive keyed reorder 1`] = `"<!--[--><li>1<!----></li><!--/for--><li>2<!----></li><!--/for--><li>3<!----></li><!--/for--><!--for-end--><!--]-->"`;
 
-exports[`emit regression — client DOM reactive keyed reorder 2`] = `"<!--[--><!--for--><li>3<!----></li><!--/for--><!--for--><li>1<!----></li><!--/for--><!--for--><li>2<!----></li><!--/for--><!--for-end--><!--]-->"`;
+exports[`emit regression — client DOM reactive keyed reorder 2`] = `"<!--[--><li>3<!----></li><!--/for--><li>1<!----></li><!--/for--><li>2<!----></li><!--/for--><!--for-end--><!--]-->"`;
 
 exports[`emit regression — client DOM reactive switch 1`] = `"<!--[-->one<!--switch--><!--]-->"`;
 

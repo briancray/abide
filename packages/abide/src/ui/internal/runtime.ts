@@ -385,7 +385,7 @@ export function warnHydrationMismatch(where: string, error: unknown): void {
 // disposers, so no half-built state leaks.
 function claimBlock(
     open: Node | null,
-    marker: Node,
+    marker: Node | null,
     where: string,
     body: () => Disposer,
 ): Disposer {
@@ -850,8 +850,14 @@ export function component(
         throw new Error(`<${name}> is not a component in scope (expected a mount function)`)
     }
     requireOpen(open, `component <${name}>`)
-    const marker = document.createComment(name)
-    insert(parent, marker, anchor)
+    // The component's own `<!--]-->` close anchor IS its insertion point, so there is no separate
+    // `<!--Name-->` marker. One used to be created and inserted here, giving every component site
+    // THREE comment nodes where the template's open/close pair already bounds the region: the marker
+    // was only ever the node to mount before and the end bound for a mismatch clear, and `anchor` is
+    // both. Dropping it also removes a client-only node the server never emitted, so the hydrated DOM
+    // now matches the server's exactly. The anchors belong to the enclosing mount's roots, which is
+    // what removes them — hence nothing to undo here beyond the inner disposer.
+    //
     // Claim: point the cursor at the component's server region so a pass-through component's
     // `{children()}` mount fn claims the server-rendered children in place (rather than re-creating).
     if (hydrating) hydrateSeek(open !== null ? open.nextSibling : null)
@@ -862,11 +868,10 @@ export function component(
     )
     // The children mount claims the server region; a mismatch inside it recovers locally (decision 5).
     const inner = isMountable(result)
-        ? claimBlock(open, marker, `component <${name}>`, () => result.mount(parent, marker))
+        ? claimBlock(open, anchor, `component <${name}>`, () => result.mount(parent, anchor))
         : null
     return () => {
         if (inner !== null) inner()
-        remove(marker)
     }
 }
 
@@ -1284,7 +1289,6 @@ export interface ForItemHandle {
 // Builds an item body between the given markers (already inserted into `parent`).
 export type ForItemFactory = (
     parent: Node,
-    startMarker: Comment,
     endMarker: Comment,
     value: unknown,
     index: number,
@@ -1300,7 +1304,10 @@ export interface ForOptions {
 
 interface ListItem {
     key: unknown
-    startMarker: Comment
+    // An item owns ONE marker, its trailing `endMarker` — the node its body mounts before and the
+    // stable end of its range. It used to own a leading one too, purely so the reorder had a lower
+    // bound; that bound is derived in `stampFirstNodes` now, which costs a pointer walk instead of a
+    // comment node per item (created, inserted and removed) for the whole life of every list.
     endMarker: Comment
     handle: ForItemHandle
     // Scratch flag owned by `reconcile`: set on the items carried into the next run, so the removal
@@ -1310,6 +1317,11 @@ interface ListItem {
     // the top of a run so the reorder can ask where a survivor used to sit without a second Map.
     // Meaningless between runs.
     position: number
+    // Scratch field owned by `reconcile`: the first node of this item's DOM range, stamped from the
+    // live sibling chain just before the reorder. Derived rather than stored, because an item's first
+    // node CHANGES — an interpolation that starts empty creates its text node lazily, in front of the
+    // anchor it was cloned with. Meaningless between runs.
+    firstNode: Node
 }
 
 // `oldPositions` entry for an item built during this reconcile — it has no previous position, and is
@@ -1395,17 +1407,14 @@ function createListItem(
     key: unknown,
     factory: ForItemFactory,
 ): ListItem {
-    const startMarker = document.createComment('for')
     const endMarker = document.createComment('/for')
-    insert(parent, startMarker, blockEnd)
     insert(parent, endMarker, blockEnd)
-    const handle = factory(parent, startMarker, endMarker, value, index)
-    return { key, startMarker, endMarker, handle, reused: false, position: 0 }
+    const handle = factory(parent, endMarker, value, index)
+    return { key, endMarker, handle, reused: false, position: 0, firstNode: endMarker }
 }
 
 function removeListItem(item: ListItem): void {
     item.handle.dispose()
-    remove(item.startMarker)
     remove(item.endMarker)
 }
 
@@ -1455,13 +1464,11 @@ function claimStreamedRegion(
             if (at === null || at === regionEnd) break
             const value = chunks[claimed]
             const key = options.keyFor(value, claimed)
-            const startMarker = document.createComment('for')
-            insert(parent, startMarker, hydrateNode())
             const endMarker = document.createComment('/for')
             beginForItem()
-            const handle = options.createItem(parent, startMarker, endMarker, value, claimed)
+            const handle = options.createItem(parent, endMarker, value, claimed)
             insert(parent, endMarker, hydrateNode())
-            items.push({ key, startMarker, endMarker, handle, reused: false, position: 0 })
+            items.push({ key, endMarker, handle, reused: false, position: 0, firstNode: endMarker })
             claimed++
         }
     } catch (error) {
@@ -1613,13 +1620,18 @@ export function forBlock(
             for (let index = 0; index < list.length; index++) {
                 const value = list[index]
                 const key = options.keyFor(value, index)
-                const startMarker = document.createComment('for')
-                insert(parent, startMarker, hydrateNode())
                 const endMarker = document.createComment('/for')
                 beginForItem()
-                const handle = options.createItem(parent, startMarker, endMarker, value, index)
+                const handle = options.createItem(parent, endMarker, value, index)
                 insert(parent, endMarker, hydrateNode())
-                items.push({ key, startMarker, endMarker, handle, reused: false, position: 0 })
+                items.push({
+                    key,
+                    endMarker,
+                    handle,
+                    reused: false,
+                    position: 0,
+                    firstNode: endMarker,
+                })
             }
         } catch (error) {
             if (!(error instanceof HydrationMismatch)) throw error
@@ -1650,6 +1662,37 @@ export function forBlock(
     }
 
     function reconcile(list: unknown[]): void {
+        // Keys are computed ONCE, up front, and read from here on — the diff below used to call
+        // `keyFor` inline, which meant the same key could not be compared before deciding how much
+        // work the run needs.
+        const count = list.length
+        const nextKeys: unknown[] = new Array(count)
+        for (let index = 0; index < count; index++)
+            nextKeys[index] = options.keyFor(list[index], index)
+
+        // FAST PATH — the key sequence is unchanged, so no item enters, leaves or moves and only the
+        // VALUES can differ. That is what a reactive list update usually is (edit a field, select a
+        // row), and it needs none of the machinery below: no index of the old items, no per-item
+        // bookkeeping arrays, no subsequence solve, no reorder walk. Just hand each item its value.
+        //
+        // Detecting it costs one identity comparison per item against keys we had to compute anyway,
+        // and it is the difference between ~100ns and ~30ns per item on a thousand-row list.
+        if (count === items.length) {
+            let sameKeys = true
+            for (let index = 0; index < count; index++) {
+                if ((items[index] as ListItem).key !== nextKeys[index]) {
+                    sameKeys = false
+                    break
+                }
+            }
+            if (sameKeys) {
+                for (let index = 0; index < count; index++) {
+                    ;(items[index] as ListItem).handle.update(list[index], index)
+                }
+                return
+            }
+        }
+
         // One index of the reusable old items, and one scratch flag per item — no `used` Set and no
         // `kept` Set. Claiming a key DELETES it from the index, which is what stops a non-unique `by`
         // key from reusing the same item twice (the old `used` Set's job).
@@ -1671,9 +1714,9 @@ export function forBlock(
         let ascending = true
         let highestSoFar = -1
 
-        for (let index = 0; index < list.length; index++) {
+        for (let index = 0; index < count; index++) {
             const value = list[index]
-            const key = options.keyFor(value, index)
+            const key = nextKeys[index]
             const existing = oldMap.get(key)
             if (existing !== undefined) {
                 oldMap.delete(key) // claimed — a repeat of this key must build a fresh item
@@ -1710,6 +1753,27 @@ export function forBlock(
         // need moving. The largest such set is the longest increasing subsequence of `oldPositions`, so
         // solve for it once and skip those indices. Freshly built items are never in it — they were
         // appended at `blockEnd` and always have to be placed.
+        // Each item's range starts where the previous one ended, so one forward walk of the LIVE sibling
+        // chain stamps every lower bound. It runs HERE — after the removals and the creations, before any
+        // move — because it reads the DOM as it actually stands: the surviving items still in their old
+        // relative order, then the freshly built ones appended at `blockEnd`. Walking `items` for the
+        // survivors is what keeps that ordered without a sort; it is already in old DOM order.
+        {
+            let cursor: Node | null = open !== null ? open.nextSibling : parent.firstChild
+            for (let index = 0; index < items.length; index++) {
+                const item = items[index]
+                if (item === undefined || !item.reused) continue
+                item.firstNode = cursor ?? item.endMarker
+                cursor = item.endMarker.nextSibling
+            }
+            for (let index = 0; index < nextItems.length; index++) {
+                if (oldPositions[index] !== NEW_ITEM) continue
+                const item = nextItems[index] as ListItem
+                item.firstNode = cursor ?? item.endMarker
+                cursor = item.endMarker.nextSibling
+            }
+        }
+
         const keptInPlace = ascending ? null : increasingSubsequence(oldPositions)
         let keptCursor = keptInPlace === null ? -1 : keptInPlace.length - 1
         let reference: Node = blockEnd
@@ -1720,14 +1784,14 @@ export function forBlock(
                 // Survivors are already in ascending order, so they are already correct relative to one
                 // another; only a freshly built item (appended at `blockEnd`) needs positioning.
                 if (oldPositions[index] === NEW_ITEM && item.endMarker.nextSibling !== reference) {
-                    moveRange(parent, item.startMarker, item.endMarker, reference)
+                    moveRange(parent, item.firstNode, item.endMarker, reference)
                 }
             } else if (keptCursor >= 0 && keptInPlace[keptCursor] === index) {
                 keptCursor-- // named by the subsequence — leave it exactly where it is
             } else if (item.endMarker.nextSibling !== reference) {
-                moveRange(parent, item.startMarker, item.endMarker, reference)
+                moveRange(parent, item.firstNode, item.endMarker, reference)
             }
-            reference = item.startMarker
+            reference = item.firstNode
         }
 
         items = nextItems
