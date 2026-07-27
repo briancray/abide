@@ -459,6 +459,51 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
         })
     })
 
+    // A derived value that recomputes to the SAME result must not wake its readers — the whole reason
+    // to wrap a cheap derivation is that it converts "an input changed" into "the output changed", which
+    // is rarer. That cutoff lives in the reactive node (`oldValue !== value`), and `memo` silently
+    // defeated it by rebuilding a fresh state envelope on every run: identity always differed, so five
+    // writes that never flipped a boolean re-ran every downstream reader five times. Nothing here caught
+    // it, because every other test in this block asserts VALUES, and the values were always right.
+    test('a re-run producing the same value does not wake downstream readers', async () => {
+        await withScope(async () => {
+            const count = state(0)
+            let bodyRuns = 0
+            const gate = memo(() => {
+                bodyRuns++
+                return count() > 5
+            })
+            let readerRuns = 0
+            const stop = effect(() => {
+                readerRuns++
+                gate()
+            })
+            expect(readerRuns).toBe(1)
+
+            // Crosses the threshold — a genuine flip, so the reader must re-run.
+            count.set(10)
+            await tick()
+            expect(gate()).toBe(true)
+            expect(readerRuns).toBe(2)
+
+            // Four more writes, all on the same side of the threshold. The body re-runs (its input
+            // changed); the reader must not (its input did not).
+            const bodyBefore = bodyRuns
+            for (const value of [11, 12, 13, 14]) count.set(value)
+            await tick()
+            expect(gate()).toBe(true)
+            expect(bodyRuns).toBeGreaterThan(bodyBefore)
+            expect(readerRuns).toBe(2)
+
+            // Flipping back propagates again — the cutoff must not swallow a real change.
+            count.set(0)
+            await tick()
+            expect(gate()).toBe(false)
+            expect(readerRuns).toBe(3)
+            stop()
+        })
+    })
+
     test('nothing runs until something reads (lazy)', () => {
         withScope(() => {
             let runs = 0

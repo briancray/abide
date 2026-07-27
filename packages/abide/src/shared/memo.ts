@@ -293,6 +293,21 @@ function idleState<T>(): SlotState<T> {
     return { status: 'idle', value: undefined, error: undefined, refreshing: false }
 }
 
+// Do two slot states describe the same observable read? Used to keep a derived value's identity STABLE
+// across a re-run that produced the same result, which is what lets the reactive graph cut propagation
+// (see `merged`). `value` is compared by IDENTITY, exactly like every other derived primitive: a body
+// that hands back a fresh object each run genuinely may have changed, and guessing otherwise would drop
+// real updates. `SlotState` is always replaced, never mutated in place, so sharing one is safe.
+function sameSlotState<T>(a: SlotState<T>, b: SlotState<T>): boolean {
+    return (
+        a.status === b.status &&
+        a.value === b.value &&
+        a.error === b.error &&
+        a.refreshing === b.refreshing &&
+        a.stream === b.stream
+    )
+}
+
 // Per-stream transcript cap in bytes (replayable-streams.md §4). Read fresh each call. Default =
 // Infinity (UNBOUNDED) — mirroring ABIDE_MAX_SHARED_CACHE_SIZE's consciously-accepted memory tradeoff;
 // the env var is the operator mitigation. When set, a stream exceeding it OVERFLOWs (bounded memory,
@@ -762,11 +777,31 @@ export function memo<Args, T>(
         // An override survives only until the next fill. Reading `fill()` FIRST means a stale dependency is
         // recomputed (advancing `run`) before the stamps are compared, so a dependency change drops the
         // override in the same pull — "provisional until re-fill" (ADR 0024 §Context).
+        // A derived value that re-computes to the SAME result must not wake its readers. `reactive.ts`
+        // already cuts propagation on `oldValue !== value` — but `fill` builds a fresh envelope on every
+        // run, so identity always differed and that cutoff never fired. The effect was that
+        // `memo(() => count() > 5)` re-ran every downstream reader on every write to `count`, even
+        // across writes that never flipped the boolean: the memoizer's cost with none of its benefit,
+        // and measurably WORSE than reading the predicate inline at any real fan-out.
+        //
+        // Hand back the previous state object when nothing observable changed. This is applied to
+        // `merged`'s OUTPUT rather than to `fill` on purpose: `fill`'s per-run `run` stamp is what
+        // supersedes a stale `publish` override below, so it has to keep advancing.
+        let previous: SlotState<T> | null = null
         const merged = computed<SlotState<T>>(() => {
             const base = fill()
-            if ('deferred' in base) return idleState<T>()
-            const current = override()
-            return current !== null && current.run === base.run ? current.state : base.state
+            const next =
+                'deferred' in base
+                    ? idleState<T>()
+                    : (() => {
+                          const current = override()
+                          return current !== null && current.run === base.run
+                              ? current.state
+                              : base.state
+                      })()
+            if (previous !== null && sameSlotState(previous, next)) return previous
+            previous = next
+            return next
         })
         // A PER-REQUEST slot's backing must not outlive the request: its `fill` subscribes to whatever the
         // body read, which is often a MODULE-level `state` that lives for the whole process. The slots of a
