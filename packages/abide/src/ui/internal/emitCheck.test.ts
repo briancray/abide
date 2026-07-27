@@ -194,6 +194,27 @@ describe('state binding shapes (inference / annotation / explicit generic)', () 
         expect(wrapped('let f: () => void = fn')).toContain(': () => void = __abideUnwrap( fn);')
     })
 
+    // A type-argument list is one unit. Splitting inside it severed `channel<T, Args>(…)` into two bogus
+    // declarators (`channel<T` and `Args>(…)`), which is why a two-parameter generic was unwritable in a
+    // `.abide` script at all.
+    test('a type argument list with a top-level comma stays ONE declarator', () => {
+        expect(wrapped('const notes = channel<Note, { room: string }>({ tail: 3 })')).toContain(
+            '= __abideUnwrap( channel<Note, { room: string }>({ tail: 3 }));',
+        )
+    })
+
+    test('a comma-bearing generic ANNOTATION stays one declarator', () => {
+        expect(wrapped('let m: Map<string, number> = new Map()')).toContain(
+            'm: Map<string, number> = __abideUnwrap( new Map());',
+        )
+    })
+
+    test('a `<` comparison still splits the declarator list', () => {
+        const code = wrapped('let a = x < y, b = 2')
+        expect(code).toContain('__abideUnwrap( x < y);')
+        expect(code).toContain('__abideUnwrap( 2);')
+    })
+
     test('a destructuring binding is copied verbatim (never unwrapped)', () => {
         const code = wrapped('const { title = "x" } = props()')
         expect(code).toContain('{ title = "x" } = props();')

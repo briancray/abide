@@ -1,5 +1,9 @@
+import { skipTypeArguments } from './skipTypeArguments.ts'
+
 // Split a component/param list at top-level commas — bracket/brace/paren-depth aware so a destructuring
-// param (`{ a, b }`) or a default with a comma-bearing initializer stays one part. Empty parts drop.
+// param (`{ a, b }`) or a default with a comma-bearing initializer stays one part. A type-argument list
+// (`state<Map<K, V>>(…)`, `let m: Map<K, V> = …`) is stepped over whole, so its comma is not a split.
+// Empty parts drop.
 export function splitParams(params: string): string[] {
     const parts: string[] = []
     let depth = 0
@@ -8,7 +12,10 @@ export function splitParams(params: string): string[] {
         const char = params[i]
         if (char === '{' || char === '[' || char === '(') depth++
         else if (char === '}' || char === ']' || char === ')') depth--
-        else if (char === ',' && depth === 0) {
+        else if (char === '<' && depth === 0) {
+            const end = skipTypeArguments(params, i)
+            if (end !== -1) i = end - 1
+        } else if (char === ',' && depth === 0) {
             parts.push(params.slice(start, i).trim())
             start = i + 1
         }

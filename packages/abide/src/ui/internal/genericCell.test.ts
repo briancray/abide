@@ -29,14 +29,43 @@ test('a generic `state<T>(...)` var write rewrites to `.set()`', () => {
 })
 
 test('nested-generic `state<Array<number>>(...)` (no top-level comma) is still a cell', () => {
-    // `callFollows` skips a balanced `<...>` incl. nested `>>`. NB: a generic type arg with a TOP-LEVEL
-    // comma (`state<Map<K, V>>`) is NOT recognised — `splitTopLevelCommas` can't track `<>` (the
-    // generic-vs-comparison ambiguity), so it splits on the comma. Use `Record`/`Array` or a cast there.
+    // `callFollows` skips a balanced `<...>` incl. nested `>>`.
     const out = emit(
         `import { state } from "abide/shared/state"\n  let m = state<Array<number>>([])`,
         '<p>{m.length}</p>',
     )
     expect(out).toContain('m()')
+})
+
+// A type argument list with a TOP-LEVEL comma used to split the declarator mid-type, which both broke
+// the binding and leaked the tail's type names into scope as fake module bindings (`{ room: string }>`
+// read as a destructuring pattern → a `string` binding → ReferenceError on module init).
+test('a top-level comma in a type argument list does not split the declarator', () => {
+    const out = emit(
+        `import { state } from "abide/shared/state"\n  let m = state<Map<string, number>>(new Map())`,
+        '<p>{m.size}</p>',
+    )
+    expect(out).toContain('m()')
+})
+
+test('a two-parameter generic at module scope binds only the declared name', () => {
+    const { client } = emitModuleSource(
+        '<script module>\n' +
+            'import { channel } from "abide/shared/channel"\n' +
+            'const notes = channel<{ text: string }, { room: string }>({ tail: 3 })\n' +
+            '</script><p>{notes.peek({ room: "a" })?.text}</p>',
+    )
+    expect(client).toContain('$module = { notes }')
+    expect(client).toContain('const { notes } = $ensureModule($scope)')
+})
+
+test('a `<` comparison in a declarator list is not read as a type argument list', () => {
+    const out = emit(
+        `import { state } from "abide/shared/state"\n  let over = state(1 < 2), n = state(5)`,
+        '<p>{over} {n}</p>',
+    )
+    expect(out).toContain('over()')
+    expect(out).toContain('n()')
 })
 
 test('generic `memo<T>(...)` is recognised as an auto-called memo', () => {

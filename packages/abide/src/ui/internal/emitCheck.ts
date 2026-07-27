@@ -21,6 +21,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
+import { skipTypeArguments } from './skipTypeArguments.ts'
 
 // A verbatim span of the generated file: [genStart, genEnd) maps to original offset `origStart`.
 export interface Segment {
@@ -778,7 +779,11 @@ function splitTopLevelCommas(text: string): CommaPart[] {
         }
         if (char === '{' || char === '[' || char === '(') depth++
         else if (char === '}' || char === ']' || char === ')') depth--
-        else if (char === ',' && depth === 0) {
+        else if (char === '<' && depth === 0) {
+            // A type-argument list is one unit: `channel<T, Args>(…)` is a single declarator, not two.
+            const end = skipTypeArguments(text, index)
+            if (end !== -1) index = end - 1
+        } else if (char === ',' && depth === 0) {
             parts.push({ text: text.slice(start, index), start })
             start = index + 1
         }
