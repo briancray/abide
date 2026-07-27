@@ -145,8 +145,11 @@ response didn't already set it (so a handler/helper/middleware stays in control)
 nosniff` and `Referrer-Policy: strict-origin-when-cross-origin` on all; `Strict-Transport-Security` in
 production; `X-Frame-Options: SAMEORIGIN` on HTML documents. Any response without its own `Cache-Control`
 defaults to `Cache-Control: private, no-cache` + `Vary: Cookie` (identity-scoped by default) — content-
-addressed `/__abide/chunk/` assets opt out by declaring their own immutable long-cache. A response in a
-traced request also carries `traceresponse` (alongside the echoed `traceparent`).
+addressed `/__abide/chunk/` assets opt out by declaring their own immutable long-cache. **Every** response
+carries `traceparent` + `traceresponse`: the router mints a traceparent per request when none came in
+(propagating a well-formed incoming one), so the trace is a property of the request rather than of whether
+a handler called `trace()`. The one exemption is the `/__abide/chunk/` asset — static, identity-free,
+immutable, cross-user-shared, and joined by no span.
 
 ### Sockets
 | Import | Signature |
@@ -252,7 +255,7 @@ value change still wakes them (`docs/spec/rpc-core.md` §7.3–7.4).
 | `abide/shared/url` | `url(path \| URL, params?, query?)` — in-app href resolver; `params` fill dynamic segments (`[name]` required, `[[name]]` optional, `[...name]` rest — a `/`-joined string; typed from the path literal), `query` appends a query string. No-dynamic-segment path (or a `URL`) collapses to `url(target, query?)` |
 | `abide/shared/health` | `health()` → `Promise<{ reachable, version, ... }>` — isomorphic: server returns the baseline in-proc, client `await`s a fetch of `/__abide/health` (full merged doc) |
 | `abide/shared/log` | `log(...)`, `.info/.warn/.error/.trace`, `.channel(name)`. Every line carries a channel label — the un-channeled `log(...)` uses the **app name** (`ABIDE_APP_NAME`/package.json/`"abide"`, always on); `.channel('abide:…')` names a framework channel gated by `DEBUG` (server) / `localStorage.debug` (browser). `error` always emits; `warn/info/trace` gated. Channels: `abide:{bundle,cli,health,hydrate,identity,memo,router,rpc,socket,ssr,stream}` |
-| `abide/shared/trace` | `trace()` → W3C traceparent \| undefined |
+| `abide/shared/trace` | `trace()` → W3C traceparent \| undefined. **Isomorphic**: on the server it is the request's (minted for every non-asset request, so it always answers inside one); in the **browser** it is the trace ADOPTED from the request that rendered the live page, re-adopted on every nav (carried by the hydration seed, or by a param-nav confirm's `traceresponse`). The client never mints one — an id generated there would name a trace no server span belongs to — so it is `undefined` only before the first page hydrates. A browser **RPC call carries it as a CHILD span** (same trace id, fresh span id — W3C's caller-names-the-span rule; reads, mutations, `.raw`, stream resume), so the handler's work joins the page's trace. A **navigation carries nothing** by design: a nav is a new operation, and propagating would grow one immortal trace per tab. Cross-origin (`ABIDE_APP_URL`) the proxy declines to volunteer one (it would preflight every read); the server still accepts one — `traceparent` is in the default CORS allowed-headers |
 
 ## UI — `abide/ui/*` (client-only)
 | Import | Signature |

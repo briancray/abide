@@ -41,4 +41,9 @@ export interface HydrationSeed {
     // Attachable `{#for await}` handoff records (§5). Present only when the page streamed a known-RPC
     // source; the client adopts/resumes each instead of re-invoking the source on hydrate.
     streams?: StreamHandle[]
+    // CO2.3: the `traceparent` of the request that rendered this page, so the client can ADOPT it and
+    // `trace()` answers in the browser. It rides the seed because a first-load DOCUMENT response's
+    // headers are not readable from JS — the `traceresponse` header the same response carries is only
+    // reachable to a `fetch` caller (which is how a param/query nav, seedless by design, picks it up).
+    trace?: string
 }

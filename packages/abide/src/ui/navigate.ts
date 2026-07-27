@@ -12,12 +12,21 @@
 // A middleware short-circuit still arrives as a JSON `{redirect}` envelope (handled first). Link clicks
 // and back/forward drive the same path (see bootstrap.ts).
 //
+// TRACING (CO2.3): a nav fetch deliberately carries NO `traceparent`, which is the opposite of what an
+// RPC call does. A navigation is a new logical operation, not a continuation of the page it left:
+// propagating the live page's trace would grow ONE immortal trace for the tab's whole session, and the
+// destination would report the trace id of the page BEFORE it. So every nav (full soft-nav, partial
+// cross-nav, and the param/query confirm) lets the server mint a fresh trace, and the client ADOPTS it —
+// from the `seed` frame where the nav hydrates, from the confirm's `traceresponse` header where it does
+// not (a param/query nav keeps its mount and never sees a seed).
+//
 // CODE-SPLITTING (TODO #6): `mountPathname` is now async — it `loadPageEntry`s the destination's
 // content-hashed chunk (deferring the chunk BODY, not the pattern match) before claiming. `softLoad`
 // primes that chunk up front so its import overlaps the fetch/stream. SCROLL: a forward nav resets to
 // the top on the SHELL frame unless `keepScroll`; back/forward stays the browser's (`scrollRestoration`
 // is left `'auto'`) and abide only corrects the clamp it can't see — see `settleScroll`/`stampScroll`.
 
+import { adoptTrace } from '../shared/internal/adoptTrace.ts'
 import { decodeJsonlStream } from '../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../shared/internal/hydrationSeed.ts'
 import { matchRoute } from '../shared/internal/matchRoute.ts'
@@ -344,6 +353,11 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
         try {
             const confirm = await fetch(path, { headers: { 'Abide-Nav': from } })
             if (gen !== navGen) return // superseded by a newer nav
+            // CO2.3: a param/query nav keeps the live mount, so it never hydrates and never sees a
+            // seed — the confirm response's `traceresponse` is the only carrier for the trace of the
+            // request this navigation actually made. Without it `trace()` would keep answering with
+            // the previous page's id, which is worse than a stale route: it points at the wrong span.
+            adoptTrace(confirm.headers.get('traceresponse'))
             const type = confirm.headers.get('content-type') ?? ''
             if (!type.includes('application/jsonl') && type.includes('application/json')) {
                 const envelope = (await confirm.json().catch(() => null)) as {

@@ -88,7 +88,7 @@ test('[emit] SSR document records the resolved read into #__abide-seed', async (
     await app.stop()
 })
 
-test('[emit] a read-free page still emits an empty seed', async () => {
+test('[emit] a read-free page seeds no reads (only the request trace)', async () => {
     const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
     const html = await (await app.fetch('/')).text()
@@ -96,7 +96,8 @@ test('[emit] a read-free page still emits an empty seed', async () => {
     expect(match).not.toBeNull()
     const seedJson = match?.[1]
     if (seedJson === undefined) throw new Error('expected a seed script tag')
-    expect(JSON.parse(seedJson)).toEqual({})
+    // `trace` (CO2.3) is on every seed — the client adopts it so `trace()` answers in the browser.
+    expect(Object.keys(JSON.parse(seedJson))).toEqual(['trace'])
 
     await app.stop()
 })

@@ -80,11 +80,12 @@ test('the soft-nav envelope carries the recorded state initials', async () => {
     await app.stop()
 })
 
-test('a state-free page still emits an empty seed (no additive `states` key)', async () => {
+test('a state-free page adds no `states` key (the seed carries only the request trace)', async () => {
     const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
     const html = await (await app.fetch('/')).text()
-    expect(readSeedFromDocument(html)).toEqual({})
+    // `trace` (CO2.3) is on every seed; `states` must still be absent, not an empty bucket map.
+    expect(Object.keys(readSeedFromDocument(html))).toEqual(['trace'])
 
     await app.stop()
 })

@@ -12,6 +12,7 @@ import { parseSoftNav } from '../test/parseSoftNav.ts'
 // The seed script embeds JSON with `<` escaped to `<`; parse it back the way the client does.
 function readSeedFromDocument(html: string): {
     reads?: Array<{ name: string; args: unknown; value: unknown }>
+    trace?: string
 } {
     const match = html.match(/<script type="application\/json" id="__abide-seed">(.*?)<\/script>/s)
     expect(match).not.toBeNull()
@@ -35,11 +36,18 @@ test('SSR document records the resolved read into #__abide-seed', async () => {
     await app.stop()
 })
 
-test('a read-free page still emits an empty seed', async () => {
+test('a read-free page seeds only the trace (CO2.3)', async () => {
+    // The seed used to be byte-identically `{}` here. It now always carries the rendering request's
+    // traceparent — the client's only way to adopt it, since a document response's headers are not
+    // JS-readable — and nothing else. A regression that leaks another field into a read-free, state-
+    // free page's seed shows up as an extra key on this exact-shape assertion.
     const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
-    const html = await (await app.fetch('/')).text()
-    expect(readSeedFromDocument(html)).toEqual({})
+    const response = await app.fetch('/')
+    const seed = readSeedFromDocument(await response.text())
+    expect(Object.keys(seed)).toEqual(['trace'])
+    // Same id the response stamps, so a client log line and a server span line up.
+    expect(seed.trace).toBe(response.headers.get('traceresponse') ?? '')
 
     await app.stop()
 })

@@ -17,6 +17,7 @@ import {
     isStreamContentType,
 } from '../../shared/internal/decodeStreamResponse.ts'
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
+import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import type { MutationCallSurface, RpcCallSurface } from '../../shared/internal/rpcSurface.ts'
 import { memo } from '../../shared/memo.ts'
@@ -79,16 +80,48 @@ function isRead(method: string): boolean {
     return method === 'GET' || method === 'HEAD'
 }
 
+// CO2.3 — the trace header for an RPC call, so the handler's server work joins the trace of the page
+// that called it (`rpc = memo + transport`, and the transport is where the trace crosses). Empty
+// before any page has adopted a trace, and empty CROSS-ORIGIN by deliberate omission:
+//   • `traceparent` is not a CORS-safelisted request header, so adding it to a read would turn a
+//     simple GET into a preflighted one — an extra round trip per read for a bundle/remote app
+//     (`ABIDE_APP_URL`), which is a steep price for a correlation id;
+//   • W3C's own privacy guidance is not to hand trace context to a receiver you don't control, and a
+//     cross-origin `base` is exactly the case abide cannot vouch for.
+// A cross-origin caller that WANTS to carry one still can — `traceparent` is in the default CORS
+// allowed-headers list, so the server accepts it; it is the browser proxy that declines to volunteer.
+function traceHeaders(sameOrigin: boolean): Record<string, string> {
+    if (!sameOrigin) return {}
+    const traceparent = outgoingTraceparent()
+    return traceparent === undefined ? {} : { traceparent }
+}
+
+// Does `base` point back at the origin serving this page? An empty base is same-origin by
+// construction (a relative URL). An unparseable base is treated as cross-origin — fail closed.
+function isSameOrigin(base: string): boolean {
+    if (base === '') return true
+    if (typeof location === 'undefined') return false
+    try {
+        return new URL(base, location.href).origin === location.origin
+    } catch {
+        return false
+    }
+}
+
 // The mutation request shape (client → `/rpc/<name>`): a plain-object arg is JSON (`content-type:
 // application/json` satisfies the CSRF gate); a FormData arg is sent raw (the browser sets the
 // multipart boundary) with the `x-abide` header a cross-site form can't forge (TODO #8 upload).
-function mutationInit(method: string, args: unknown): RequestInit {
+function mutationInit(method: string, args: unknown, sameOrigin: boolean): RequestInit {
     const isFormData = typeof FormData !== 'undefined' && args instanceof FormData
     return {
         method,
         headers: isFormData
-            ? { 'x-abide': '1' }
-            : { 'content-type': 'application/json', 'x-abide': '1' },
+            ? { 'x-abide': '1', ...traceHeaders(sameOrigin) }
+            : {
+                  'content-type': 'application/json',
+                  'x-abide': '1',
+                  ...traceHeaders(sameOrigin),
+              },
         body: isFormData ? (args as FormData) : JSON.stringify(args ?? {}),
     }
 }
@@ -105,6 +138,8 @@ export function clientProxy<Args = unknown, T = unknown>(
 ): RpcCallSurface<Args, T> | MutationCallSurface<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
+    // Decided once per proxy, not per call: `base` is fixed for the proxy's life.
+    const sameOrigin = isSameOrigin(base)
     // A read OR mutation whose author set `memo: false` bypasses the client memo on the bare call
     // (direct fetch every time; at-least-once for a mutation), mirroring the server. Default reads and
     // mutations are memoed.
@@ -115,8 +150,11 @@ export function clientProxy<Args = unknown, T = unknown>(
     // response parses JSON. Same for reads and mutations — only the request differs.
     const load = async (args: Args | FormData): Promise<T> => {
         const response = read
-            ? await fetch(readUrl(base, name, args), { method })
-            : await fetch(`${base}/__abide/rpc/${name}`, mutationInit(method, args))
+            ? await fetch(readUrl(base, name, args), {
+                  method,
+                  headers: traceHeaders(sameOrigin),
+              })
+            : await fetch(`${base}/__abide/rpc/${name}`, mutationInit(method, args, sameOrigin))
         if (!response.ok) throw await toHttpError(response)
         if (isStreamContentType(response.headers.get('content-type'))) {
             return decodeStreamResponse(response) as unknown as T
@@ -185,9 +223,13 @@ export function clientProxy<Args = unknown, T = unknown>(
     // GETs `?__abide_args=`; a mutation POSTs the body + CSRF header. `init` overrides wholesale.
     rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> =>
         read
-            ? fetch(readUrl(base, name, args), { method, ...(init ?? {}) })
+            ? fetch(readUrl(base, name, args), {
+                  method,
+                  headers: traceHeaders(sameOrigin),
+                  ...(init ?? {}),
+              })
             : fetch(`${base}/__abide/rpc/${name}`, {
-                  ...mutationInit(method, args),
+                  ...mutationInit(method, args, sameOrigin),
                   ...(init ?? {}),
               })
     rpc.isError = (e: unknown, name: string): boolean =>

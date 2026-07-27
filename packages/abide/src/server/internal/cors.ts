@@ -10,7 +10,10 @@
 import { appendVary } from './applyResponseHeaders.ts'
 
 const DEFAULT_METHODS = 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS'
-const DEFAULT_HEADERS = 'content-type, authorization, x-abide'
+// `traceparent` is in the default allowlist so a cross-origin caller CAN carry trace context (CO2.3)
+// without every app having to spell it out. The browser proxy still declines to volunteer one
+// cross-origin (see `clientProxy`'s `traceHeaders`) — this admits the callers that choose to.
+const DEFAULT_HEADERS = 'content-type, authorization, x-abide, traceparent'
 const DEFAULT_MAX_AGE = 600
 
 export type CrossOriginOption =

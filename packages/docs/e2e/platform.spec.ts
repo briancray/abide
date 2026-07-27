@@ -72,6 +72,68 @@ test('trace(): the traceparent renders from the RPC read', async ({ page }) => {
     await expect(observe).toContainText('traceparent = 00-')
 })
 
+test('trace(): the browser ADOPTS the page request traceparent (never mints its own)', async ({
+    page,
+}) => {
+    const response = await page.goto('/platform/observability')
+    const block = page.locator('#trace-client-block')
+    const rendered = (await block.textContent()) ?? ''
+    const traceparent = /rendered during SSR\s+= (\S+)/.exec(rendered)?.[1]
+    expect(traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
+    // Same id the document response stamped — the seed and the header agree.
+    expect(response?.headers().traceresponse).toBe(traceparent)
+
+    // Read it again IN THE BROWSER, after hydration: the adopted value, not "(none)" and not a
+    // freshly minted client id.
+    await page.getByTestId('trace-client-read').click()
+    await expect(block).toContainText(`read in this browser = ${traceparent}`)
+})
+
+test('trace(): a soft-nav re-adopts — the browser follows the NEW request, not the first load', async ({
+    page,
+}) => {
+    await page.goto('/platform/observability')
+    const block = page.locator('#trace-client-block')
+    const first = /rendered during SSR\s+= (\S+)/.exec((await block.textContent()) ?? '')?.[1]
+
+    // Leave and come back through the sidebar (soft-nav, no document load), then re-read in-browser.
+    await page.getByRole('link', { name: 'Config', exact: true }).click()
+    await expect(page).toHaveURL(/\/platform\/config$/)
+    await page.getByRole('link', { name: 'Observability', exact: true }).click()
+    await expect(page).toHaveURL(/\/platform\/observability$/)
+
+    await page.getByTestId('trace-client-read').click()
+    const after = /read in this browser\s+= (\S+)/.exec((await block.textContent()) ?? '')?.[1]
+    expect(after).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
+    // A second request is a second trace: a stale adopted id would point at the wrong span.
+    expect(after).not.toBe(first)
+})
+
+test('trace(): a client-side RPC call JOINS the page trace (same trace id, new span)', async ({
+    page,
+}) => {
+    await page.goto('/platform/observability')
+    const pageTraceparent = /rendered during SSR\s+= (\S+)/.exec(
+        (await page.locator('#trace-client-block').textContent()) ?? '',
+    )?.[1]
+    const pageTraceId = pageTraceparent?.split('-')[1]
+
+    // "Run again" refreshes the read, so THIS call is issued by the browser (the first one ran in-proc
+    // during SSR). The proxy sends a child traceparent, the handler reports what it received.
+    const observe = page.locator('#observe-block')
+    // The SSR'd card already shows the page request's own traceparent, and the trace ID half is stable
+    // by design — so waiting on the traceId would pass before the refresh even lands. Wait for the SPAN
+    // half to move instead: that only happens once the browser-issued call has come back.
+    await expect(observe).toContainText(`traceparent = ${pageTraceparent}`)
+    await page.getByTestId('replay').click()
+    await expect(observe).not.toContainText(`traceparent = ${pageTraceparent}`)
+
+    const rpcTraceparent = /traceparent = (\S+)/.exec((await observe.textContent()) ?? '')?.[1]
+    expect(rpcTraceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
+    // Same trace id — the call JOINED the page's trace rather than starting its own.
+    expect(rpcTraceparent?.split('-')[1]).toBe(pageTraceId)
+})
+
 test('health(): the /__abide/health probe fetched straight in-browser', async ({ page }) => {
     await page.goto('/platform/observability')
     await page.locator('#health-btn').click()

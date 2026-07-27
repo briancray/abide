@@ -22,8 +22,10 @@
 // client RPC memos BEFORE mount, so an SSR-computed read resolves from cache instead of re-fetching;
 // any remaining keys become mount props.
 
+import { adoptTrace } from '../../shared/internal/adoptTrace.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
+import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
@@ -100,9 +102,14 @@ export async function* resumeStreamSource(
             ? `&${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
             : ''
     let response: Response
+    // A resume IS an RPC call (the same handler, continued), so it carries the trace like one — a
+    // fresh span under the page's trace. `base` is the app's own origin here; a cross-origin base is
+    // handled by the proxy's same-origin rule, and a resume of a cross-origin stream is not reachable.
+    const traceparent = outgoingTraceparent()
     try {
         response = await fetch(
             `${base}/__abide/rpc/${name}?${RPC_QUERY_PARAMS.from}=${count}${argsQuery}`,
+            traceparent === undefined ? undefined : { headers: { traceparent } },
         )
     } catch {
         return // prefix stands, slot closes
@@ -170,10 +177,15 @@ export function buildPageScope(
     }
     replayReads(seed, imports)
     replayStreams(seed, imports, base ?? '')
-    // Strip ALL internal seed sections — `reads`, `states`, and `streams` are hydration plumbing, not
-    // page props. Leaving `states`/`streams` in would make client `props()` return an encoded blob /
-    // handoff records while the server's `props()` returns `{}` — an isomorphism break + internal leak.
-    const { reads: _reads, states: _states, streams: _streams, ...props } = seed
+    // CO2.3: adopt the rendering request's traceparent onto the tab scope, so a browser `trace()` (and
+    // every log line, which auto-correlates on it) names the server span that produced this page. Runs
+    // on first load AND on a full soft-nav's sub-hydrate, each carrying its own request's id.
+    adoptTrace(seed.trace)
+    // Strip ALL internal seed sections — `reads`, `states`, `streams`, and `trace` are hydration
+    // plumbing, not page props. Leaving `states`/`streams` in would make client `props()` return an
+    // encoded blob / handoff records while the server's `props()` returns `{}` — an isomorphism break
+    // + internal leak.
+    const { reads: _reads, states: _states, streams: _streams, trace: _trace, ...props } = seed
     imports.route = route
     imports.url = url
     imports.navigate = navigate

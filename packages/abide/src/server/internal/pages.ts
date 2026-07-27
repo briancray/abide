@@ -27,6 +27,7 @@ import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
 import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
+import { trace } from '../../shared/trace.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
@@ -320,6 +321,13 @@ export function collectSeed(config: AppConfig): HydrationSeed {
             values: record.values.map(jsonSafeState),
         }))
     }
+    // CO2.3: hand this request's traceparent to the client so `trace()` answers in the browser. Runs
+    // in the render's request scope, so it is the SAME id the response stamps as `traceresponse`. This
+    // is the one seed field a read-free, state-free page still carries — the seed script is no longer
+    // byte-identically `{}` for such a page, which is the deliberate cost of a trace that is a
+    // property of every request rather than of whether the page happened to read something.
+    const traceparent = trace()
+    if (traceparent !== undefined) seed.trace = traceparent
     return seed
 }
 

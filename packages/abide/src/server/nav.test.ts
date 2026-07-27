@@ -72,7 +72,11 @@ test('a soft-nav request (Abide-Nav header) returns a streamed JSONL envelope of
     expect(stripAnchors(envelope.html)).toContain('<span>99</span>')
     expect(envelope.html).not.toContain('<!doctype html>')
     expect(envelope.html).not.toContain('__abide-app')
-    expect(envelope.seed).toEqual({})
+    // Read-free page → no `reads`; the soft-nav seed still carries THIS nav request's trace (CO2.3),
+    // which is how the client's `trace()` follows a navigation instead of freezing on the first load.
+    const seed = envelope.seed as { trace?: string }
+    expect(Object.keys(seed)).toEqual(['trace'])
+    expect(seed.trace).toBe(response.headers.get('traceresponse') ?? '')
     expect(envelope.url).toBe('/users/99')
 
     await app.stop()

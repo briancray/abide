@@ -5,6 +5,7 @@
   import ObserveDemo from "$ui/demos/platform/observability/ObserveDemo.abide"
   import HealthFetchDemo from "$ui/demos/platform/observability/HealthFetchDemo.abide"
   import LogDemo from "$ui/demos/platform/observability/LogDemo.abide"
+  import TraceClientDemo from "$ui/demos/platform/observability/TraceClientDemo.abide"
 </script>
 
 
@@ -37,6 +38,14 @@
 
   <Demo id="observe" title="trace() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/observability/ObserveDemo.abide" tab="server">
     <ObserveDemo />
+  </Demo>
+
+  <p>Every request gets one, whether or not a handler asks: the router propagates a well-formed incoming <code>traceparent</code> and otherwise mints one when it builds the scope, so every response carries <code>traceparent</code> + <code>traceresponse</code>. (The single exception is a content-addressed <code>/__abide/chunk/</code> asset — immutable, identity-free, and joined by no span.)</p>
+  <p><code>trace()</code> is isomorphic, so it answers in the <strong>browser</strong> too — with the id of the request that rendered the live page, re-adopted on every navigation. The client never mints one of its own; an id generated in a tab would name a trace no server span belongs to. That is what makes a client log line land on the same trace as the server work that produced what it is logging about.</p>
+  <p>An <strong>RPC call from the browser carries it</strong>: the proxy sends the page's trace id with a <em>fresh span id</em>, which is what W3C asks of a caller — the call names its own span instead of re-sending the one it sits inside. So the handler's server work joins the trace of the page that called it. Click <em>Run again</em> on the card above and the <code>traceId</code> holds steady while the <code>traceparent</code>'s span half moves. A <strong>navigation</strong> deliberately does the opposite and carries nothing: a nav is a new operation, not a continuation, and propagating would grow one immortal trace for the tab's whole session.</p>
+
+  <Demo id="trace-client" title="trace() in the browser (adopted, never minted)" client="src/ui/demos/platform/observability/TraceClientDemo.abide" tab="client">
+    <TraceClientDemo />
   </Demo>
 
   <h2>What should I record?</h2>

@@ -70,6 +70,39 @@ Scope: boot-time config (`env(schema)`) and the observability surface
    **Auto-correlated into log lines.** `trace()` returns the current traceparent or `undefined`.
    The response echoes both `traceparent` and **`traceresponse`** (W3C Trace Context Level 2, the
    response-side header) so a caller can correlate its response with the trace.
+   - **Minted EAGERLY, per request, not on first read.** An incoming well-formed `traceparent` is
+     propagated; otherwise the router mints one when it builds the scope, so a `trace()` inside a
+     request always answers and **every response carries the pair** — including one from a handler
+     that never mentions tracing. The trace is a property of the request, not of whether anyone
+     asked. The **one exemption is a content-addressed asset** (`/__abide/chunk/*`): a static,
+     identity-free, immutable, cross-user-shared byte response that no span will ever join.
+   - **`trace()` answers in the BROWSER too — with the server's id, never its own.** The client
+     never mints (an id generated there would name a trace no server span belongs to); it **adopts**
+     the traceparent of the request that rendered the live page and re-adopts on every navigation,
+     so a browser log line correlates with the server span that produced what it is logging about.
+     The carrier is the **hydration seed** (`seed.trace`) on first load and on a full soft-nav —
+     a document response's headers are not JS-readable — and the confirm response's `traceresponse`
+     header on a param/query nav, which keeps its mount and therefore has no seed. A malformed value
+     is dropped rather than adopted, so `trace()` is always a valid traceparent or `undefined`.
+   - **An RPC call from the browser CARRIES it — as a child span.** The proxy sends `traceparent`
+     with the page's trace id and a **fresh span id**, which is what W3C asks of a caller (the
+     `parent-id` field is "the id of this request as known by the caller"): re-sending the span it
+     sits inside would collapse every call a page makes into one span. The server propagates a
+     well-formed incoming traceparent verbatim, so the id the caller minted **is** the id the
+     handler's work reports — caller and callee agree on the span's name, under one trace id.
+     Applies to reads, mutations, `.raw`, and a stream `?__abide_from=` resume (it is the same call,
+     continued).
+   - **A NAVIGATION deliberately carries nothing.** A nav is a new logical operation, not a
+     continuation of the page it left: propagating would grow **one immortal trace per tab** for the
+     session's whole life, and the destination would report the trace id of the page *before* it. So
+     every nav (full soft-nav, partial cross-nav, param/query confirm) lets the server mint a fresh
+     trace, which the client then adopts. **The split is the point** — a call inside a page joins its
+     trace; a move between pages starts one.
+   - **Cross-origin, the browser proxy declines to volunteer one** (a bundle/remote app pointed at
+     `ABIDE_APP_URL`): `traceparent` is not CORS-safelisted, so sending it would turn a simple GET
+     into a preflighted one — an extra round trip per read — and W3C's own privacy guidance is not to
+     hand trace context to a receiver you don't control. A cross-origin caller that *wants* to carry
+     one still can: `traceparent` is in the default CORS allowed-headers list.
 4. **`onHealth()` = app-defined health hook (a `src/app.ts` export), merged into `/__abide/health`**
    over the framework stub `{ reachable, version, startedAt, uptime }` (app fields win). It is
    **request-scoped** (reads `identity()`/`context()`), and `reachable: false` or a throw answers

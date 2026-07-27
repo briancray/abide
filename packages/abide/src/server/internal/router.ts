@@ -20,6 +20,7 @@
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
 import { health } from '../../shared/health.ts'
+import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import { matchRoute } from '../../shared/internal/matchRoute.ts'
@@ -35,6 +36,7 @@ import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
+import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
 import { validateStandard } from '../../shared/StandardSchema.ts'
 import { validationError } from '../../shared/ValidationErrorData.ts'
@@ -113,9 +115,11 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
     )
 }
 
-// W3C Trace Context (CO2.3): `version-traceid-spanid-flags`, all lower-case hex. Used to validate
-// an incoming `traceparent` header before propagating it onto the request scope.
-const TRACEPARENT_PATTERN = /^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/
+// Content-addressed client assets. The one route class that is NOT traced: it is a static byte
+// response with no handler, no identity, and an immutable long-cache — minting a trace id per chunk
+// fetch would spend entropy and two response headers on something no span will ever join, and the
+// `Vary`-free immutable response is shared across users, so a per-request header on it is a lie.
+const CHUNK_PREFIX = '/__abide/chunk/'
 
 // A request carries an Authorization: Bearer token → it is a stateless machine surface whose
 // identity is request-scoped and never persisted into an abide-identity cookie (AU6.3).
@@ -593,11 +597,11 @@ async function dispatch(
     // name embeds a content hash, so the response is immutable + long-cacheable. renderDocument injects
     // `<script type="module" src="/__abide/chunk/<loader>-<hash>.js">` (the loader lazily imports the
     // matched route's chunk); the stylesheet is linked only when the app bundled CSS.
-    if (url.pathname.startsWith('/__abide/chunk/')) {
+    if (url.pathname.startsWith(CHUNK_PREFIX)) {
         const method = scope.request.method.toUpperCase()
         if (method !== 'GET' && method !== 'HEAD')
             return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD' } })
-        const name = url.pathname.slice('/__abide/chunk/'.length)
+        const name = url.pathname.slice(CHUNK_PREFIX.length)
         const build = await clientBuildFor(config)
         const content = build.files.get(name)
         if (content === undefined) return error(404, `Not found: ${url.pathname}`)
@@ -974,12 +978,18 @@ export function createApp(config: AppConfig = {}): App {
                 navigating: false,
             }
             // CO2.3: propagate an incoming, well-formed traceparent so a browser→server(→server) chain
-            // shares one trace id; otherwise leave it unset and let the first trace() call generate one.
+            // shares one trace id; otherwise MINT one here, eagerly, for every request but a static
+            // asset. Minting eagerly rather than on the first `trace()` call is what makes the trace a
+            // property of the REQUEST instead of a property of whether anyone happened to ask: every
+            // response then carries `traceparent`/`traceresponse`, the client can adopt it on hydrate,
+            // and an untraced request stops being the silent default.
             const incomingTrace = request.headers.get('traceparent')
             const propagatedTrace =
                 incomingTrace !== null && TRACEPARENT_PATTERN.test(incomingTrace)
                     ? incomingTrace
-                    : undefined
+                    : url.pathname.startsWith(CHUNK_PREFIX)
+                      ? undefined
+                      : generateTraceparent()
             // Identity resolution can throw (a malformed/tampered token that fails to unseal). Degrade
             // to an anonymous principal so the request still gets a scope, and defer the error into the
             // in-scope try below so onError sees it (rather than escaping as a bare 500 before scope).

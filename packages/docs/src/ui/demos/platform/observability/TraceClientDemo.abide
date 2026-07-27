@@ -1,0 +1,24 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { trace } from "abide/shared/trace"
+
+  // trace() is isomorphic. During SSR it is THIS page request's traceparent; on hydrate the browser
+  // ADOPTS that same id (off the hydration seed — a document response's headers aren't readable from
+  // JS) and re-adopts it on every navigation. The browser never mints one of its own: an id generated
+  // in a tab would name a trace no server span belongs to. So the button reads back exactly the id the
+  // server rendered, and a client log line lands on the same trace as the request that produced it.
+  const rendered = trace() ?? "(none)"
+  let readHere = state("(press the button)")
+
+  function readTraceHere() {
+    readHere = trace() ?? "(none)"
+  }
+</script>
+
+<pre class="out" id="trace-client-block">rendered during SSR  = {rendered}
+read in this browser = {readHere}</pre>
+<div class="row">
+  <button data-testid="trace-client-read" onclick={readTraceHere}>
+    Read trace() in the browser ▸
+  </button>
+</div>
