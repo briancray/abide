@@ -426,10 +426,7 @@ export async function* drainPatches(scope: RenderStream): AsyncGenerator<Patch> 
             key,
             subtree.render().then((result) => ({
                 key,
-                patch:
-                    result === null
-                        ? null
-                        : ({ op: 'fill', id: subtree.id, html: result.html } as Patch),
+                patch: { op: 'fill', id: subtree.id, html: result.html } as Patch,
                 advance: null,
             })),
         )

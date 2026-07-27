@@ -63,9 +63,11 @@ export interface StreamHandleRecord {
 
 export interface DeferredSubtree {
     id: number
-    // Render the resolved subtree HTML (then/catch branch + finally). `null` when the subtree's read
-    // errored with no `{:catch}` — the drain emits an empty patch that clears the placeholder (PR5).
-    render: () => Promise<{ html: string } | null>
+    // Render the resolved subtree HTML (then/catch branch + finally). A read that errors with no
+    // `{:catch}` is NOT signalled back through the return: `awaitStream` catches it, logs, and renders
+    // `{ html: '' }` so the patch still lands and CLEARS the stuck fallback (PR5). That is why there is
+    // no null here — the drain has no nothing-to-patch case, because clearing IS the patch.
+    render: () => Promise<{ html: string }>
 }
 
 // A streamed `{#for await}` (PR6): a multi-yield deferred that appends rendered items to its
