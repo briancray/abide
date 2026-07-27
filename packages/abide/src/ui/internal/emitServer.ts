@@ -577,6 +577,8 @@ function genChunks(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
     for (const chunk of chunks) {
         if (chunk.kind !== 'componentDef') continue
         const patterns = chunk.params.trim() === '' ? [] : splitParams(chunk.params)
+        // A snapshot here, unlike the client (`bindLazyPattern`): a server render reads each param once
+        // by construction, so accessors would buy nothing and cost a `defineProperty` per param per row.
         let binds = ''
         for (const [i, pattern] of patterns.entries())
             binds += `    ${bindPattern('$s', pattern, `$args[${i}]`)}\n`

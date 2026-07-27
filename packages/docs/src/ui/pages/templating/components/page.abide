@@ -6,6 +6,7 @@
   import SpreadPropsDemo from "$ui/demos/templating/components/SpreadPropsDemo.abide"
   import NamedSlotDemo from "$ui/demos/templating/components/NamedSlotDemo.abide"
   import ReactiveComponentDemo from "$ui/demos/templating/components/ReactiveComponentDemo.abide"
+  import ComponentInBlockDemo from "$ui/demos/templating/components/ComponentInBlockDemo.abide"
 </script>
 
 <main class="page">
@@ -43,5 +44,11 @@
   <p>Because it is a value, a <a href="/state">cell</a> or <a href="/memo">memo</a> can hold one. <code>&lt;Current/&gt;</code> where <code>Current</code> is a memo re-mounts whenever the derivation picks a different component — a dynamic component, again with no new syntax.</p>
   <Demo id="reactive-component" title="Reactive component — a memo-named tag <code>&lt;Current/&gt;</code>" client="src/ui/demos/templating/components/ReactiveComponentDemo.abide">
     <ReactiveComponentDemo />
+  </Demo>
+
+  <h2>Inside control flow</h2>
+  <p>A block body is ordinary markup, so nothing new applies here either: a <code>&#123;#for&#125;</code> invokes <code>&lt;Row/&gt;</code> once per keyed item, and a <code>&#123;#if&#125;</code> branch can <em>declare</em> its own component in the branch body — visible where it is written, and invoked as a tag like any other. Keying still does what keying does: a reversed list <strong>moves</strong> each row's whole component range rather than rebuilding it, so a row that carries state keeps it, and re-keying with new objects updates the props of the nodes already there.</p>
+  <Demo id="in-block" title="A component invoked — and defined — inside <code>&#123;#for&#125;</code> / <code>&#123;#if&#125;</code>" client="src/ui/demos/templating/components/ComponentInBlockDemo.abide">
+    <ComponentInBlockDemo />
   </Demo>
 </main>

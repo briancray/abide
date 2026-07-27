@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { RENDER_BENCH_SCENARIOS } from './RENDER_BENCH_SCENARIOS.ts'
 
 // The live frontend render bench (`/platform/bench`). A streaming `GET` compiles a fixed corpus of
 // `.abide` templates and times each one's SSR `render` path, `jsonl`-streaming one row per scenario —
@@ -12,24 +13,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test'
 // its hand-written vanilla baseline), so a full corpus takes noticeably longer than Playwright's 5s
 // default to stream in.
 
-// The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus, in corpus order (the
-// `server: false` interaction-only scenarios are not render-benched). Kept in sync with that corpus.
-const SCENARIOS = [
-    'static-text',
-    'interpolation',
-    'attributes',
-    'if-else',
-    'for-list-100',
-    'for-list-1000',
-    'for-list-10000',
-    'nested-for-if-50',
-    'switch',
-    'class-style-directives',
-    'await-block',
-    'many-interpolations',
-    'deep-tree-10',
-    'component-list-100',
-]
+const SCENARIOS = RENDER_BENCH_SCENARIOS
 
 // Assert that `.refresh()` genuinely re-invoked the streaming source and repainted the table.
 //

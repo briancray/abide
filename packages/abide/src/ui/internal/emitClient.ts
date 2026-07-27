@@ -13,7 +13,8 @@
 // `()/.set()`, and free/block-bound template identifiers read off `$scope`.
 
 import type { BindingAnalysis } from './analyzeBindings.ts'
-import { isSimpleIdentifier, reconstructImport, rewriteCellRefs } from './analyzeBindings.ts'
+import { reconstructImport, rewriteCellRefs } from './analyzeBindings.ts'
+import { bindLazyPattern } from './bindLazyPattern.ts'
 import { bindPattern } from './bindPattern.ts'
 import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
@@ -370,9 +371,13 @@ class ClientEmitter {
         if (name === undefined) throw new Error('component-def slot is missing its name')
         const params = slot.meta.params ?? ''
         const patterns = params.trim() === '' ? [] : splitParams(params)
+        // LAZY, not a copy: `$args[0]` is the caller's props object, whose every key is a getter over
+        // the caller's scope. Copying the values out here reads each getter once, under the `untrack`
+        // that wraps the factory call — so the body would render a snapshot and never re-read it. See
+        // `bindLazyPattern`.
         let binds = ''
         for (const [i, pattern] of patterns.entries())
-            binds += `    ${bindPattern('$s', pattern, `$args[${i}]`)}\n`
+            binds += `    ${bindLazyPattern('$s', pattern, `$args[${i}]`)}\n`
         const body = slot.meta.body
         if (body === undefined) throw new Error('component-def slot is missing its body')
         const bodyId = this.idFor(body)
@@ -490,7 +495,6 @@ class ClientEmitter {
         if (item === undefined) throw new Error('for slot is missing its item pattern')
         const index = slot.meta.index ?? null
         const key = slot.meta.key ?? null
-        const simple = isSimpleIdentifier(item)
         const body = slot.meta.body
         if (body === undefined) throw new Error('for slot is missing its body')
         const bodyId = this.idFor(body)
@@ -505,12 +509,16 @@ class ClientEmitter {
             keyFor = `($value, $index) => {\n    const $k = Object.create($scope);\n${bindItem}    return (($scope) => (${key}))($k);\n  }`
         }
 
-        // Each backing cell is emitted ONLY where something reads it. `$itemState` is read solely by
-        // the `simple` binding's getter (a destructured item rebinds from `$value`/`$v` instead), and
-        // `$indexState` solely by the index getter, which exists only when the block declares an index.
-        // Emitting them unconditionally allocated a live reactive cell per ITEM at mount and wrote it
-        // per item on every reconcile — for `{#for n of items by n}`, both were pure waste.
-        const needsItemState = simple
+        // Each backing cell is emitted ONLY where something reads it. `$itemState` is read by the item
+        // binding's getters and `$indexState` by the index getter, which exists only when the block
+        // declares an index. Emitting them unconditionally allocated a live reactive cell per ITEM at
+        // mount and wrote it per item on every reconcile — for `{#for n of items by n}`, pure waste.
+        //
+        // A destructured item used to skip the cell and re-assign the extracted names from `$v` on every
+        // `update` instead. Those were plain property writes, which notify nobody: the body had already
+        // subscribed to `$child.t`, so a reconcile that handed the row a new object left it rendering the
+        // old one. Both shapes now read through the one cell.
+        const needsItemState = true
         const needsIndexState = index !== null
         let createItem = '($p, $end, $value, $index) => {\n'
         if (needsItemState) createItem += '    const $itemState = $rt.state($value);\n'
@@ -521,20 +529,15 @@ class ClientEmitter {
         if (slot.meta.hasComponent === true)
             createItem +=
                 '    if ($scope.state && $scope.state.forItem) $child.state = $scope.state.forItem($index);\n'
-        if (simple) {
-            createItem += `    Object.defineProperty($child, ${JSON.stringify(item.trim())}, { get: () => $itemState(), configurable: true });\n`
-        } else {
-            createItem += `    ${bindPattern('$child', item, '$value')}\n`
-        }
+        createItem += `    ${bindLazyPattern('$child', item, '$itemState()')}\n`
         if (index !== null) {
             createItem += `    Object.defineProperty($child, ${JSON.stringify(index)}, { get: () => $indexState(), configurable: true });\n`
         }
         createItem += `    const $dispose = $rt.untrack(() => $mount${bodyId}($p, $end, $child));\n`
         createItem += '    return {\n'
         createItem += '      update: ($v, $i) => {'
-        if (needsItemState) createItem += ' $itemState.set($v);'
+        createItem += ' $itemState.set($v);'
         if (needsIndexState) createItem += ' $indexState.set($i);'
-        if (!simple) createItem += ` ${bindPattern('$child', item, '$v')}`
         createItem += ' },\n'
         createItem += '      dispose: () => $dispose(),\n'
         createItem += '    };\n  }'

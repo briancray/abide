@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { RENDER_BENCH_SCENARIOS } from './RENDER_BENCH_SCENARIOS.ts'
 
 // Routing bucket: file-based pages, [param] routes, route() (kind/name/params/url), navigate(target),
 // url(path, params?, query?) href building (params + query string, compose via navigate(url(...))),
@@ -396,8 +397,12 @@ test('soft-nav to a streaming page scrolls to top on shell, not when the stream 
 
     await page.locator('a[href="/platform/bench"]').first().click()
     await expect(page.locator('h1')).toHaveText('Frontend render bench (live)')
-    // The frontend corpus is fixed at 11 render-benched scenarios (bench.spec.ts owns the list).
-    await expect(page.getByTestId('bench-row')).toHaveCount(11, { timeout: 60_000 })
+    // Wait for the WHOLE corpus, not a partial count: `lastRowAt` below is meant to be the final row's
+    // arrival, and a count the streaming list merely passes through on its way to the total both reads
+    // the probe early and silently survives the corpus growing.
+    await expect(page.getByTestId('bench-row')).toHaveCount(RENDER_BENCH_SCENARIOS.length, {
+        timeout: 60_000,
+    })
 
     const probe = await page.evaluate(
         () =>

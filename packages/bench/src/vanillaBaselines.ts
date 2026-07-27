@@ -352,6 +352,57 @@ export const VANILLA_BASELINES: Record<string, VanillaBaseline> = {
         },
     },
 
+    'component-if': {
+        // Same as `if-else`'s baseline, except the branch body is a function — because that is what the
+        // scenario's component IS with no framework. One call, no boundary.
+        note: 'ternary calling a plain function for the branch',
+        render: (scope) => {
+            const shown = (msg: string): string => `<p>${msg}</p>`
+            return shown(scope.show ? (scope.msg as string) : 'hidden')
+        },
+        mount: (host, scope) => {
+            const shown = (msg: string): HTMLElement => {
+                const node = document.createElement('p')
+                node.textContent = msg
+                return node
+            }
+            host.appendChild(shown(scope.show ? (scope.msg as string) : 'hidden'))
+            return teardown(host)
+        },
+    },
+
+    'component-if-toggle': {
+        // `if-toggle`'s baseline with each branch behind its own builder function — the framework-free
+        // shape of a two-component branch. Building a <p> is the whole cost; there is nothing to dispose.
+        note: 'swap one built <p> for the other branch',
+        mount: (host) => {
+            let on = true
+            const onBranch = (): HTMLElement => {
+                const node = document.createElement('p')
+                node.textContent = 'A'
+                return node
+            }
+            const offBranch = (): HTMLElement => {
+                const node = document.createElement('p')
+                node.textContent = 'B'
+                return node
+            }
+            const button = document.createElement('button')
+            button.textContent = 't'
+            host.appendChild(button)
+            host.appendChild(onBranch())
+            button.addEventListener('click', () => {
+                on = !on
+                host.lastElementChild?.replaceWith(on ? onBranch() : offBranch())
+            })
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
     // The keyed-list mutations. Each keeps the node array a hand-written page would keep, and performs
     // the MINIMUM DOM work that reaches the same end state — that minimum is the whole point of the
     // comparison, so none of these rebuilds the list when it does not have to.
@@ -373,6 +424,46 @@ export const VANILLA_BASELINES: Record<string, VanillaBaseline> = {
                 const first = nodes[1] as HTMLElement
                 const second = nodes[998] as HTMLElement
                 // Park `first` where `second` sits, then put `second` back where `first` came from.
+                const afterFirst = first.nextSibling
+                list.insertBefore(first, second)
+                list.insertBefore(second, afterFirst)
+                nodes[1] = second
+                nodes[998] = first
+            })
+            host.appendChild(button)
+            host.appendChild(list)
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
+    'component-list-swap-1000': {
+        // Identical to `list-swap-1000`'s baseline except each row comes from a builder function. A
+        // hand-written row is still ONE node however it was built, so the move is still two
+        // `insertBefore` calls — which is exactly the asymmetry the ratio is meant to price: abide has a
+        // range to relocate here and vanilla does not.
+        note: 'two insertBefore calls over function-built rows',
+        mount: (host) => {
+            const button = document.createElement('button')
+            button.textContent = 'swap'
+            const row = (item: number): HTMLElement => {
+                const node = document.createElement('li')
+                node.textContent = String(item)
+                return node
+            }
+            const list = document.createElement('ul')
+            const nodes: HTMLElement[] = []
+            for (let i = 0; i < 1000; i++) {
+                const node = row(i)
+                list.appendChild(node)
+                nodes.push(node)
+            }
+            button.addEventListener('click', () => {
+                const first = nodes[1] as HTMLElement
+                const second = nodes[998] as HTMLElement
                 const afterFirst = first.nextSibling
                 list.insertBefore(first, second)
                 list.insertBefore(second, afterFirst)

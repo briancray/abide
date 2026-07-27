@@ -1,0 +1,53 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  // A control-flow body is ordinary markup, so it can INVOKE a component — `<Row/>` once per keyed item,
+  // its props as reactive as anywhere else — and it can DEFINE one: the `{:else}` branch below declares
+  // `Collapsed` inside its own body. The keyed reconcile MOVES a row's whole component range rather than
+  // rebuilding it, which is why the marked node below survives a reverse.
+  let items = state([
+    { id: 1, label: "Alpha" },
+    { id: 2, label: "Beta" },
+    { id: 3, label: "Gamma" },
+  ])
+  let expanded = state(true)
+  let nextId = 4
+
+  function add() {
+    items = [...items, { id: nextId, label: "Item " + nextId }]
+    nextId++
+  }
+
+  function reverse() {
+    items = [...items].reverse()
+  }
+
+  // New objects, same keys: every row keeps its node and only the prop changes.
+  function shout() {
+    items = items.map((item) => ({ id: item.id, label: item.label.toUpperCase() }))
+  }
+</script>
+
+{#component Row({ item, index })}
+  <li data-testid="block-row" class="row"><b data-testid="block-label">{item.label}</b> <small>#{index}</small></li>
+{/component}
+
+<div class="controls">
+  <button data-testid="block-add" onclick={add}>Add a row</button>
+  <button data-testid="block-reverse" onclick={reverse}>Reverse</button>
+  <button data-testid="block-shout" onclick={shout}>Shout</button>
+  <button data-testid="block-toggle" onclick={() => expanded = !expanded}>{expanded ? "Collapse" : "Expand"}</button>
+</div>
+
+{#if expanded}
+  <ul data-testid="block-list">
+    {#for item, i of items by item.id}
+      <Row item={item} index={i}/>
+    {/for}
+  </ul>
+{:else}
+  {#component Collapsed({ count })}
+    <p data-testid="block-collapsed">{count} rows hidden</p>
+  {/component}
+  <Collapsed count={items.length}/>
+{/if}

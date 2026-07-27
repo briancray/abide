@@ -202,3 +202,36 @@ test('a keyed {#for} moves only the rows that actually changed place', async () 
     const reversed = await movedRows((list) => list.reverse())
     expect(reversed).toBeGreaterThan(size / 2)
 })
+
+// A DESTRUCTURED item pattern (`{#for { id, t } of rows by id}`) used to skip the backing cell the
+// simple `{#for n of items}` form gets, and re-assign the extracted names onto the item scope on every
+// `update` instead. Plain property writes notify nobody, so a body that had already subscribed to
+// `$child.t` kept rendering the object the row was CREATED with — invisible while the list only grows,
+// shrinks or reorders (the row's own fields don't change then), and wrong the moment a reconcile hands
+// a surviving key a new object. Both shapes read through the one cell now.
+test('a destructured {#for} item re-renders when its key survives with a new object', async () => {
+    const mod = await loadEmitted('<ul>{#for { id, t } of rows() by id}<li>{t}</li>{/for}</ul>')
+    const cell = state([
+        { id: 1, t: 'A' },
+        { id: 2, t: 'B' },
+    ])
+    const host = document.createElement('div')
+    const cleanup = mod.mount(host, { rows: cell })
+    await flush()
+    const texts = (): string[] =>
+        Array.from(host.querySelectorAll('li'), (row) => row.textContent ?? '')
+    expect(texts()).toEqual(['A', 'B'])
+    const first = host.querySelector('li')
+
+    // Same keys, fresh objects — no structural work, so nothing re-mounts and only the binding can
+    // deliver the new text.
+    cell.set([
+        { id: 1, t: 'a' },
+        { id: 2, t: 'b' },
+    ])
+    await flush()
+    expect(texts()).toEqual(['a', 'b'])
+    expect(host.querySelector('li')).toBe(first) // patched in place, not rebuilt
+
+    cleanup()
+})

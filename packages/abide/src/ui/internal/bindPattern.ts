@@ -1,14 +1,14 @@
 import { extractBindingNames } from './analyzeBindings.ts'
-
-// A destructure of nothing but shorthand identifiers — `{ a }`, `{ a, b }`, with an optional trailing
-// comma. Deliberately narrow: a default (`{ a = 1 }`), a rename (`{ a: b }`), a rest (`{ ...rest }`),
-// a nested pattern or an array pattern all fail this and take the general path below, where the real
-// destructuring syntax does the work rather than this regex trying to reimplement it.
-const SHORTHAND_OBJECT_PATTERN = /^\{\s*[A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*)*\s*,?\s*\}$/
+import { SHORTHAND_OBJECT_PATTERN } from './SHORTHAND_OBJECT_PATTERN.ts'
 
 // Emit statement(s) binding `pattern` from `valueExpr` onto the scope object `target`. A bare
 // identifier is a direct `target["x"] = value` assignment; a destructuring pattern runs an IIFE that
 // binds the pattern then `Object.assign`s the extracted names back onto `target`.
+//
+// This SNAPSHOTS `valueExpr`, which is what a block wants when it re-binds the pattern itself on every
+// reconcile (a `{#for}` item, a `{:catch}` error). Where the source is LIVE — a component's props
+// object, built by the caller as getters over its own scope — a snapshot freezes the binding; that
+// case is `bindLazyPattern`.
 export function bindPattern(target: string, pattern: string, valueExpr: string): string {
     const trimmed = pattern.trim()
     if (/^[A-Za-z_$][\w$]*$/.test(trimmed))

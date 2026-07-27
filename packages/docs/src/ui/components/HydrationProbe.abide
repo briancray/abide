@@ -15,6 +15,13 @@
   // RED chip = a block that claimed/re-rendered against its contract — a real regression to eyeball.
   const { label = "", expect = "server" } = props()
   let origin = state(typeof document === "undefined" ? "server" : "client")
+
+  // A SECOND seeded cell, carrying this probe's own `label`. `origin` cannot see a seed-ORDINAL desync:
+  // every probe seeds the identical string "server", so a probe replaying a NEIGHBOUR's slot reads the
+  // right value by accident. This one is distinct per instance, so replaying the wrong slot yields
+  // someone else's label. That is the axis that matters when several probes mount from ONE `{#for}` body
+  // (each needs its own seed id) — and it is orthogonal to `origin`, which reports create-vs-claim.
+  let seeded = state(label)
 </script>
 
 <style>
@@ -26,10 +33,11 @@
 
 <span
   class="probe"
-  class:probe-ok={origin === expect}
-  class:probe-bad={origin !== expect}
+  class:probe-ok={origin === expect && seeded === label}
+  class:probe-bad={origin !== expect || seeded !== label}
   data-testid="probe"
   data-origin={origin}
   data-label={label}
-  data-ok={origin === expect ? "true" : "false"}
-><small>{label}</small> {origin === expect ? "✓" : "✗"} {origin}</span>
+  data-seed-ok={seeded === label ? "true" : "false"}
+  data-ok={origin === expect && seeded === label ? "true" : "false"}
+><small>{label}</small> {origin === expect && seeded === label ? "✓" : "✗"} {origin}</span>

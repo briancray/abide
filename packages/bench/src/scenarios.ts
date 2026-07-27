@@ -183,6 +183,33 @@ export const SCENARIOS: Scenario[] = [
         scope: () => ({ items: range(100) }),
         rows: 100,
     },
+    {
+        // The same boundary in a BRANCH instead of a list — `if-else` renders this exact markup with the
+        // body inline, so again the difference between the two is the boundary alone. A list amortises a
+        // boundary's fixed cost over 100 rows; this is that cost at n=1, on the block path (claim, mount,
+        // and dispose of one component inside a `{#if}`), which is where a per-boundary regression that a
+        // list's per-row noise would swallow shows up.
+        name: 'component-if',
+        src: '{#component Shown({ msg })}<p>{msg}</p>{/component}{#if show}<Shown msg={msg}/>{:else}<p>hidden</p>{/if}',
+        scope: () => ({ show: true, msg: 'visible' }),
+    },
+    {
+        // Toggling a branch whose BOTH sides are components: every update disposes one component boundary
+        // and builds the other. Paired with `if-toggle`, which swaps the same two `<p>`s with the bodies
+        // inline — so this is the price of tearing a boundary down and standing one back up, the half of a
+        // component's cost a static render never pays. Both branches are components deliberately: a
+        // component-vs-plain toggle would alternate the two directions and report their average.
+        name: 'component-if-toggle',
+        src: "<script>import { state } from 'abide/shared/state'; let on = state(true)</script><button onclick={() => (on = !on)}>t</button>{#component OnBranch()}<p>A</p>{/component}{#component OffBranch()}<p>B</p>{/component}{#if on}<OnBranch/>{:else}<OffBranch/>{/if}",
+        scope: () => ({ state, watch }),
+        server: false,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('component-if-toggle scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
 
     // ---------------------------------------------------------------------------
     // KEYED-LIST MUTATIONS. `list-append-update` and `list-reverse-1000` cover the two extremes (one
@@ -202,6 +229,25 @@ export const SCENARIOS: Scenario[] = [
         update: async (host) => {
             const button = host.querySelector('button')
             if (!button) throw new Error('list-swap-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        // The same two-row exchange where each row is a COMPONENT. This is the one mutation shape a
+        // component boundary changes qualitatively: a plain row is ONE node, so a move is one
+        // `insertBefore`; a component row is a RANGE (its anchors plus its content), so the reconcile has
+        // to move the whole range and cannot get away with moving a single node. `list-swap-1000` is the
+        // same swap over plain rows — a reconcile that rebuilds a moved component instead of relocating it
+        // is invisible in the output and shows up only as the gap between these two.
+        name: 'component-list-swap-1000',
+        src: "<script>import { state } from 'abide/shared/state'; let items = state(Array.from({ length: 1000 }, (_, i) => i))</script><button onclick={() => { const next = [...items]; const held = next[1]; next[1] = next[998]; next[998] = held; items = next }}>swap</button>{#component Row({ item })}<li>{item}</li>{/component}<ul>{#for n of items by n}<Row item={n}/>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('component-list-swap-1000 scenario is missing its button')
             button.click()
             await flush()
         },

@@ -208,3 +208,57 @@ test('inline components: <slot/>, tag invocation, render-props, spread, named sl
     await page.getByTestId('reactive-toggle').click()
     await expect(page.getByTestId('reactive-status')).toHaveText('Done ✓')
 })
+
+test('an inline component invoked — and defined — inside {#for}/{#if}', async ({ page }) => {
+    // Every other components test invokes at the top level. This one puts the invocation INSIDE a block
+    // body (the `{#for}` path that gives each item its own component scope) and puts a `{#component}`
+    // DEFINITION inside a branch body, then drives both through SSR, hydration, and reconciliation.
+
+    // SSR half: the rows are component-rendered in the initial HTML, not painted by the client.
+    const raw = await (await page.request.get('/templating/components')).text()
+    expect(raw).toContain('data-testid="block-row"')
+    expect(raw.match(/data-testid="block-label"/g)?.length).toBe(3)
+
+    await page.goto('/templating/components')
+    const rows = page.getByTestId('block-row')
+    await expect(rows).toHaveCount(3)
+    await expect(rows.nth(0)).toContainText('Alpha')
+    await expect(rows.nth(0)).toContainText('#0')
+
+    // Tag the first row's DOM node. A keyed reconcile MOVES a component row's whole range; a rebuild
+    // produces identical text, so only node identity distinguishes the two.
+    await rows.nth(0).evaluate((node) => node.setAttribute('data-marked', 'yes'))
+
+    await page.getByTestId('block-add').click()
+    await expect(rows).toHaveCount(4)
+    await expect(rows.nth(3)).toContainText('Item 4')
+
+    await page.getByTestId('block-reverse').click()
+    await expect(rows.nth(0)).toContainText('Item 4')
+    // Alpha moved to the end carrying its node — the component instance was relocated, not rebuilt —
+    // and the `index` prop recomputed for it on the way.
+    await expect(rows.nth(3)).toContainText('Alpha')
+    await expect(rows.nth(3)).toContainText('#3')
+    await expect(rows.nth(3)).toHaveAttribute('data-marked', 'yes')
+
+    // Same keys, fresh objects: the prop updates THROUGH the component boundary, in place.
+    await page.getByTestId('block-shout').click()
+    await expect(rows.nth(3)).toContainText('ALPHA')
+    await expect(rows.nth(3)).toHaveAttribute('data-marked', 'yes')
+
+    // The {:else} branch declares `Collapsed` in its own body and invokes it there.
+    await page.getByTestId('block-toggle').click()
+    await expect(page.getByTestId('block-list')).toHaveCount(0)
+    await expect(page.getByTestId('block-collapsed')).toHaveText('4 rows hidden')
+
+    // Its `count` prop stays live while the branch is mounted — a declared param is an accessor over
+    // the caller's props, not a value copied in at mount.
+    await page.getByTestId('block-add').click()
+    await expect(page.getByTestId('block-collapsed')).toHaveText('5 rows hidden')
+
+    // Back to the {#if} branch: the whole list stands up again from the same keyed data.
+    await page.getByTestId('block-toggle').click()
+    await expect(page.getByTestId('block-collapsed')).toHaveCount(0)
+    await expect(rows).toHaveCount(5)
+    await expect(rows.nth(0)).toContainText('ITEM 4')
+})

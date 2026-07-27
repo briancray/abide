@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { RENDER_BENCH_SCENARIOS } from './RENDER_BENCH_SCENARIOS.ts'
+import { UPDATE_BENCH_SCENARIOS } from './UPDATE_BENCH_SCENARIOS.ts'
 
 // The live in-browser mount/hydrate/update bench (`/platform/bench/client`) — the client counterpart to
 // the SSR render bench. A `GET` AOT-compiles the corpus's client modules, `Bun.build`s them into ONE
@@ -9,39 +11,13 @@ import { expect, test } from '@playwright/test'
 // critically — that the reactive update scenarios actually PATCH the DOM (the bundle's own `state`
 // instance shares its runtime scheduler; the page's separate copy would silently fail to propagate).
 
-// The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus (mount + unmount +
-// hydrate passes), then the interactive ones (update pass). Kept in sync with that corpus.
-const RENDER_SCENARIOS = [
-    'static-text',
-    'interpolation',
-    'attributes',
-    'if-else',
-    'for-list-100',
-    'for-list-1000',
-    'for-list-10000',
-    'nested-for-if-50',
-    'switch',
-    'class-style-directives',
-    'await-block',
-    'many-interpolations',
-    'deep-tree-10',
-    'component-list-100',
-]
-const UPDATE_SCENARIOS = [
-    'state-update',
-    'list-append-update',
-    'list-reverse-1000',
-    'if-toggle',
-    'list-swap-1000',
-    'list-remove-1000',
-    'list-partial-update-1000',
-    'list-select-1000',
-    'list-replace-1000',
-    'list-clear-1000',
-]
+// The server-renderable corpus drives the mount + unmount + hydrate passes; the interactive one drives
+// the update pass.
+const RENDER_SCENARIOS = RENDER_BENCH_SCENARIOS
+const UPDATE_SCENARIOS = UPDATE_BENCH_SCENARIOS
 
-// Four passes over a 24-scenario corpus, each scenario timed twice (abide, then its hand-written
-// baseline) against a ≥100ms floor — and six of the update scenarios drive 1000-row lists. That is
+// Four passes over a 27-scenario corpus, each scenario timed twice (abide, then its hand-written
+// baseline) against a ≥100ms floor — and seven of the update scenarios drive 1000-row lists. That is
 // comfortably past Playwright's 30s default, so the whole run gets its own budget.
 test('run measures every scenario across all four hot paths', async ({ page }) => {
     test.setTimeout(180_000)

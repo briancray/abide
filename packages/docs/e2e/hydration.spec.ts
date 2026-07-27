@@ -25,12 +25,18 @@ test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded
 })
 
 // /pages/hydration embeds a HydrationProbe in every hydration scenario (static, {#if}, {#for},
-// nested component, streamed {#await}:then, streamed {#for await} item). Each probe is a seeded
+// nested component, an inline {#component} DEFINED in an {#if} branch, an inline {#component} invoked
+// per item inside a {#for}, streamed {#await}:then, streamed {#for await} item). Each probe is a seeded
 // `state` that reads "server" only when its block was server-rendered AND cleanly CLAIMED; a
 // create-fallback (mismatch / a streamed branch the client couldn't claim) flips it to "client". A
 // probe carries what it SHOULD read (`data-ok` = origin matches its contract) — "server" for a
 // claiming block, "client" for the {#for await} list that re-renders by design. So "zero mismatches"
 // (data-ok="false") is a cross-scenario proof of correct hydration — the eyeball test, asserted.
+//
+// Each probe ALSO seeds its own `label`, reported as `data-seed-ok`. `origin` is blind to a seed-ORDINAL
+// desync because every probe seeds the identical "server" string — a probe that replays a neighbour's
+// slot still reads the right value. The label is distinct per instance, so it is the axis that catches
+// the several-components-from-one-{#for}-body case, where each instance needs its own seed id.
 const PROBE = '[data-testid="probe"]'
 const RICH_PROBE = '[data-testid="rich-probe"]'
 
@@ -59,10 +65,12 @@ test('every hydration scenario hydrates to its contract on a hard load (no misma
     await page.goto('/pages/hydration')
     // The streamed scenarios settle after their reads; wait for the last chunk, then assert the matrix.
     await expect(page.locator(`${PROBE}[data-label="chunk-3"]`)).toBeVisible()
-    await expect(page.locator(`${PROBE}`)).toHaveCount(10)
+    await expect(page.locator(`${PROBE}`)).toHaveCount(14)
     await expect(page.locator(`${PROBE}[data-ok="false"]`)).toHaveCount(0)
     // The claiming blocks (all but the 3 {#for await} chunks) genuinely CLAIMED — server-origin.
-    await expect(page.locator(`${PROBE}[data-origin="server"]`)).toHaveCount(7)
+    await expect(page.locator(`${PROBE}[data-origin="server"]`)).toHaveCount(11)
+    // Every probe replayed ITS OWN seed slot — the per-instance guard the origin axis cannot give.
+    await expect(page.locator(`${PROBE}[data-seed-ok="false"]`)).toHaveCount(0)
     // Rich-typed state() seed initials (Date/BigInt/Map) round-trip through the hydration value codec.
     await expectRichSeedRoundTrips(page.locator(RICH_PROBE))
     expect(warnings.filter((t) => /hydrat/i.test(t))).toEqual([])
@@ -78,8 +86,9 @@ test('every hydration scenario still hydrates to its contract when reached by a 
     await page.locator('aside.sidebar').getByRole('link', { name: 'Hydration health' }).click()
     await expect(page).toHaveURL(/\/pages\/hydration$/)
     await expect(page.locator(`${PROBE}[data-label="chunk-3"]`)).toBeVisible()
-    await expect(page.locator(`${PROBE}`)).toHaveCount(10)
+    await expect(page.locator(`${PROBE}`)).toHaveCount(14)
     await expect(page.locator(`${PROBE}[data-ok="false"]`)).toHaveCount(0)
+    await expect(page.locator(`${PROBE}[data-seed-ok="false"]`)).toHaveCount(0)
     // The streamed single-{#await} claimed cleanly across the soft-nav (the fix's real coverage).
     await expect(page.locator(`${PROBE}[data-label="await-then"]`)).toHaveAttribute(
         'data-origin',
