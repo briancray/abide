@@ -637,8 +637,18 @@ export function memo<Args, T>(
         return Date.now() - slot.loadedAt >= ttl
     }
 
+    // Writing a state that is observably identical to the current one must not wake anybody. The cell
+    // short-circuits an equal SET, but every state here is a freshly built object, so identity always
+    // differed and an idempotent refill — a `refresh` that produced the same value, a `publish` of the
+    // value already held, a ttl re-fill of unchanged data — notified every reader anyway. Same reasoning
+    // as `merged`; `value` is compared by identity for the same reason.
+    //
+    // NB this does NOT collapse the two wake-ups a `keepStale` refresh sends (`refreshing: true`, then
+    // the settled state): those are genuinely different states. Sparing a VALUE reader from a status
+    // flip needs the read surface split per probe, which is a semantic change, not this one.
     function setState(slot: Slot<Args, T>, next: SlotState<T>): void {
-        slot.state.set(next)
+        const current = slot.state.untracked()
+        slot.state.set(sameSlotState(current, next) ? current : next)
     }
 
     // Begin (or coalesce onto) a load for this slot. `keepStale` retains the current value and

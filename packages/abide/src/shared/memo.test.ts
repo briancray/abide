@@ -196,6 +196,35 @@ describe('memo — publish', () => {
         })
     })
 
+    // Writing the value a slot already holds is observably a no-op, so it must not wake readers. Every
+    // slot state is a freshly built object, so identity always differed and an idempotent write — this,
+    // a ttl re-fill of unchanged data, a refresh that produced the same result — notified everyone.
+    test('publishing the value a slot already holds wakes nobody', async () => {
+        await withScope(async () => {
+            const c = memo(async ({ id }: { id: number }) => `user-${id}`)
+            await c({ id: 1 })
+            let reads = 0
+            const seen: (string | undefined)[] = []
+            const dispose = effect(() => {
+                reads++
+                seen.push(c.peek({ id: 1 }))
+            })
+            await tick()
+            const settled = reads
+
+            for (let i = 0; i < 3; i++) c.publish({ id: 1 }, 'user-1')
+            await tick()
+            expect(reads).toBe(settled)
+
+            // A genuinely different value still propagates — the cutoff must not swallow a real write.
+            c.publish({ id: 1 }, 'CHANGED')
+            await tick()
+            expect(reads).toBe(settled + 1)
+            expect(seen.at(-1)).toBe('CHANGED')
+            dispose()
+        })
+    })
+
     test('an argless memo publishes bare — no `undefined` key placeholder', async () => {
         await withScope(async () => {
             const c = memo(async () => 'loaded')
