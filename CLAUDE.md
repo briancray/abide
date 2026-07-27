@@ -23,6 +23,7 @@
 * minimize dynamic features and complex closures in performance critical sections
 * never `await` a value that is usually already settled — guard it (`isThenable(v) ? await v : v`); an unconditional await costs a promise wrap and a microtask tick at every call site, and a template slot pays it per row
 * detect the common shape and skip the general algorithm — the expensive general path is the fallback, not the default
+* when a shared path gains a DEFAULT with exceptions, enumerate the exceptions from the call sites rather than inferring them — "every caller but one" is one grep away from being checked, and a missed exception fails silently
 * use descriptive variable and function names instead of abbrevations
 * write terse comments only when why is unclear. do not write comments where code is self explanatory — and when something was tried and reverted, record the MECHANISM, not just the outcome; an outcome-only note freezes the decision permanently
 * use monomorphic types and narrowing/widening instead of ad-hoc or one use types

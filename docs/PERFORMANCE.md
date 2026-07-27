@@ -93,6 +93,20 @@ worked examples. Both were written *after* verifying they fail against the bug t
 **Always verify a new guard fails for the right reason.** Reintroduce the bug, watch the test fail,
 restore. A guard that has never failed is a guard that may be asserting nothing.
 
+**A guard covers the axis you were thinking about, and no other.** That is the limit of the technique,
+and it is how the fourth propagation bug got in — introduced by the fix for the third.
+
+Splitting `refreshing` out of the state envelope left `setState` clearing the flag by default, with the
+change claiming *one* exception: a keepStale refresh, which raises it again immediately after. There
+were two. A `publish` lands **beside** an outstanding load rather than ending it, so it must leave the
+flag alone — the old code said so, in a `refreshing: current.refreshing` that the field removal swept
+away. The result was a spinner that vanished mid-load and never came back, and the guards written at the
+time all exercised refresh-then-settle: the axis already in mind.
+
+So: **when a shared path gains a default with exceptions, enumerate the exceptions from the call sites
+rather than inferring them.** Every caller of `setState` was reachable by one grep. The claim "every
+call site but one" was checkable in a minute and was not checked.
+
 ## 6. The failure mode to grep for first: a fresh wrapper
 
 `reactive.ts` cuts propagation on `oldValue !== value`. Any value re-wrapped in a fresh envelope per
