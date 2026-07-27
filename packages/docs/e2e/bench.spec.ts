@@ -13,7 +13,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test'
 // default to stream in.
 
 // The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus, in corpus order (the
-// four `server: false` interaction-only scenarios are not render-benched). Kept in sync with that corpus.
+// `server: false` interaction-only scenarios are not render-benched). Kept in sync with that corpus.
 const SCENARIOS = [
     'static-text',
     'interpolation',
@@ -26,6 +26,9 @@ const SCENARIOS = [
     'switch',
     'class-style-directives',
     'await-block',
+    'many-interpolations',
+    'deep-tree-10',
+    'component-list-100',
 ]
 
 // Assert that `.refresh()` genuinely re-invoked the streaming source and repainted the table.

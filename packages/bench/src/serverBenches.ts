@@ -6,8 +6,8 @@
 // and inside a docs page render — no server socket, no loopback (the end-to-end `createTestApp` dispatch
 // benches stay CLI-only in `server.ts`; booting a real server is wrong for a live page).
 
-import { matchRoute } from 'abide/server/internal/matchRoute'
 import { canonicalKey } from 'abide/shared/internal/codec'
+import { matchRoute } from 'abide/shared/internal/matchRoute'
 import { memo } from 'abide/shared/memo'
 
 export interface ServerBench {

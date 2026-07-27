@@ -26,6 +26,11 @@
   // scenarios inject `{ state, watch }` (their `<script>` reads them from scope) plus any list `seed`.
   // Their `state`/`watch` come from the BUNDLE (`mod.state`/`mod.watch`, threaded in per run) — the
   // page's own copies are a different module instance whose state the bundled effects can not track.
+  // The corpus's render/mount scopes, rebuilt CLIENT-SIDE. They cannot ride the RPC payload with the
+  // rest of a scenario, because a scope holds live things JSON has no form for — the `state`/`watch`
+  // functions the interactive templates close over, and the `await-block` promise. So this list is
+  // hand-kept in lockstep with `@abide/bench/scenarios`; adding a scenario there means adding it here.
+  // The run loop throws on a name it cannot resolve rather than skipping it, so drift fails loudly.
   function scopesFor(mod) {
     return [
       { name: "static-text", scope: () => ({}) },
@@ -39,10 +44,19 @@
       { name: "for-list-10000", scope: () => ({ items: range(10000) }) },
       { name: "nested-for-if-50", scope: () => ({ rows: range(50).map((i) => ({ id: i, on: i % 2 === 0 })) }) },
       { name: "class-style-directives", scope: () => ({ active: true, big: false, hue: "red", width: "40px" }) },
+      { name: "many-interpolations", scope: () => ({ a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8 }) },
+      { name: "deep-tree-10", scope: () => ({ v: "leaf" }) },
+      { name: "component-list-100", scope: () => ({ items: range(100) }) },
       { name: "state-update", scope: () => ({ state: mod.state, watch: mod.watch }) },
       { name: "list-append-update", scope: () => ({ state: mod.state, watch: mod.watch }) },
       { name: "list-reverse-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
       { name: "if-toggle", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-swap-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-remove-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-partial-update-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-select-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-replace-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
+      { name: "list-clear-1000", scope: () => ({ state: mod.state, watch: mod.watch }) },
     ]
   }
 
@@ -56,23 +70,44 @@
     return Promise.resolve().then(() => Promise.resolve())
   }
 
-  // Adaptive mount timing (browser). Build a fresh DETACHED host per op — mount then tear down — so no
-  // state accumulates and no layout/paint is triggered (the host is never in the document). The clock is
-  // read once per iteration; total elapsed is ≥ the budget, so `performance.now`'s coarse resolution is
-  // negligible against the mean. This is the same op the CLI benches with happy-dom.
+  // Adaptive mount timing (browser). A fresh DETACHED host per op, so no state accumulates and no
+  // layout/paint is triggered (the host is never in the document). Only the mount is on the clock —
+  // the scope is built before it and the teardown runs after it, both outside — so this figure is
+  // construction and nothing else. `measureUnmount` below owns the other half. Same op the CLI benches
+  // with happy-dom.
   function measureMount(mount, scope) {
     for (let i = 0; i < WARMUP; i++) mount(document.createElement("div"), scope())()
     let iters = 0
-    const start = performance.now()
-    let elapsedMs = 0
+    let totalMs = 0
     do {
       const host = document.createElement("div")
-      const cleanup = mount(host, scope())
-      cleanup()
+      const built = scope()
+      const t0 = performance.now()
+      const cleanup = mount(host, built)
+      totalMs += performance.now() - t0
       iters++
-      elapsedMs = performance.now() - start
-    } while (elapsedMs < MIN_TIME_MS || iters < MIN_ITERS)
-    return { nsPerOp: (elapsedMs * 1e6) / iters, iters }
+      cleanup()
+    } while (totalMs < MIN_TIME_MS || iters < MIN_ITERS)
+    return { nsPerOp: (totalMs * 1e6) / iters, iters }
+  }
+
+  // Teardown, timed on its own — disposing every effect and removing every node the mount built. It
+  // used to be folded into `measureMount` (one op did both), which hid it completely: it is a real
+  // cost with its own failure modes, and it is what per-item DOM bookkeeping moves. The mount above
+  // now excludes it, and builds the scope outside the clock too, so both figures are the op and
+  // nothing else. Mirrors the CLI runner's `benchMount`/`benchUnmount` split.
+  function measureUnmount(mount, scope) {
+    for (let i = 0; i < WARMUP; i++) mount(document.createElement("div"), scope())()
+    let iters = 0
+    let totalMs = 0
+    do {
+      const cleanup = mount(document.createElement("div"), scope())
+      const t0 = performance.now()
+      cleanup()
+      totalMs += performance.now() - t0
+      iters++
+    } while (totalMs < MIN_TIME_MS || iters < MIN_ITERS)
+    return { nsPerOp: (totalMs * 1e6) / iters, iters }
   }
 
   // Hydrate timing (browser). Parse the server-rendered HTML ONCE into a template, then time a batch of
@@ -148,6 +183,7 @@
 
 <script>
   let mountRows = state([])
+  let unmountRows = state([])
   let hydrateRows = state([])
   let updateRows = state([])
   let running = state(false)
@@ -161,6 +197,7 @@
     running = true
     failed = false
     mountRows = []
+    unmountRows = []
     hydrateRows = []
     updateRows = []
     try {
@@ -184,7 +221,11 @@
         if (scenario.update) continue
         const entry = mod.scenarios[scenario.name]
         const scope = scopeFor(scenario.name)
-        if (entry === undefined || scope === undefined) continue
+        // LOUD, not skipped. `scopesFor` is hand-maintained against the shared corpus, so a scenario
+        // added there but not here would otherwise vanish from this page with no error at all — the
+        // bench would quietly measure less than it claims to.
+        if (entry === undefined || scope === undefined)
+          throw new Error("bench scenario has no compiled entry or client scope, add it to scopesFor — " + scenario.name)
         const { nsPerOp, iters } = measureMount(entry.mount, scope)
         const baseline = mod.VANILLA_BASELINES[scenario.name]
         const vanilla = baseline ? measureMount(baseline.mount, scope) : null
@@ -202,13 +243,45 @@
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
 
+      // Unmount pass — teardown on its own clock, over the same pure-render corpus. The hand-written
+      // baseline here is `host.replaceChildren()`, ONE engine call, which a framework tracking
+      // per-item disposers structurally cannot match; read this ratio as a regression guard and a
+      // pointer at per-item bookkeeping, not as a like-for-like overhead figure.
+      const unmounts = []
+      for (const scenario of bundle.scenarios) {
+        if (scenario.update) continue
+        const entry = mod.scenarios[scenario.name]
+        const scope = scopeFor(scenario.name)
+        if (entry === undefined || scope === undefined)
+          throw new Error("bench scenario has no compiled entry or client scope, add it to scopesFor — " + scenario.name)
+        const { nsPerOp, iters } = measureUnmount(entry.mount, scope)
+        const baseline = mod.VANILLA_BASELINES[scenario.name]
+        const vanilla = baseline ? measureUnmount(baseline.mount, scope) : null
+        unmounts.push({
+          name: scenario.name,
+          nsPerOp,
+          iters,
+          rows: scenario.rows,
+          nsPerRow: scenario.rows ? nsPerOp / scenario.rows : null,
+          vanillaNsPerOp: vanilla ? vanilla.nsPerOp : null,
+          vanillaNote: baseline ? baseline.note : null,
+          ratio: vanilla ? nsPerOp / vanilla.nsPerOp : null,
+        })
+        unmountRows = [...unmounts]
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+
       // Hydrate pass — attach to server-rendered HTML (first-load interactivity).
       const hydrates = []
       for (const scenario of bundle.scenarios) {
         if (scenario.html === null) continue
         const entry = mod.scenarios[scenario.name]
         const scope = scopeFor(scenario.name)
-        if (entry === undefined || scope === undefined) continue
+        // LOUD, not skipped. `scopesFor` is hand-maintained against the shared corpus, so a scenario
+        // added there but not here would otherwise vanish from this page with no error at all — the
+        // bench would quietly measure less than it claims to.
+        if (entry === undefined || scope === undefined)
+          throw new Error("bench scenario has no compiled entry or client scope, add it to scopesFor — " + scenario.name)
         const { nsPerOp, iters } = measureHydrate(entry.hydrate, scenario.html, scope)
         hydrates.push({
           name: scenario.name,
@@ -228,7 +301,11 @@
         if (!scenario.update) continue
         const entry = mod.scenarios[scenario.name]
         const scope = scopeFor(scenario.name)
-        if (entry === undefined || scope === undefined) continue
+        // LOUD, not skipped. `scopesFor` is hand-maintained against the shared corpus, so a scenario
+        // added there but not here would otherwise vanish from this page with no error at all — the
+        // bench would quietly measure less than it claims to.
+        if (entry === undefined || scope === undefined)
+          throw new Error("bench scenario has no compiled entry or client scope, add it to scopesFor — " + scenario.name)
         const { nsPerOp, iters } = await measureUpdate(entry.mount, scope)
         const baseline = mod.VANILLA_BASELINES[scenario.name]
         const vanilla = baseline ? await measureUpdate(baseline.mount, scope) : null
@@ -311,6 +388,46 @@
       {/if}
       {#for row of mountRows by row.name}
         <tr class="border-b border-slate-100" data-testid="mount-row">
+          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+          <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+          <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
+        </tr>
+      {/for}
+    </tbody>
+  </table>
+
+  <h2 class="mt-2 mb-1 text-lg font-semibold">unmount — tear the subtree down</h2>
+  <p class="mb-3 text-sm text-slate-500">
+    The other half of a mount, and until recently invisible: both used to be timed as ONE op, so
+    disposing every effect and removing every node of a list was folded into the mount figure. It is
+    its own cost, with its own failure modes — a disposer list that grows per item, a range removal
+    that walks — and it is what a change to per-item DOM bookkeeping moves. Read the
+    <strong>×</strong> here with care: the hand-written baseline is a single
+    <code>replaceChildren()</code> call, which a framework tracking per-item disposers cannot match by
+    construction. It is a regression guard and a pointer, not a like-for-like overhead number.
+  </p>
+  <table class="mb-8 w-full border-collapse text-sm" data-testid="unmount-table">
+    <thead>
+      <tr class="border-b border-slate-300 text-left">
+        <th class="py-1.5 pr-4">scenario</th>
+        <th class="py-1.5 pr-4 text-right">unmount (ns/op)</th>
+        <th class="py-1.5 pr-4 text-right">vanilla JS</th>
+        <th class="py-1.5 pr-4 text-right">×</th>
+        <th class="py-1.5 pr-4 text-right">ns/row</th>
+        <th class="py-1.5 pr-4 text-right">iters</th>
+        <th class="py-1.5">hand-written as</th>
+      </tr>
+    </thead>
+    <tbody>
+      {#if unmountRows.length === 0 && !running}
+        <tr><td colspan="7" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
+      {/if}
+      {#for row of unmountRows by row.name}
+        <tr class="border-b border-slate-100" data-testid="unmount-row">
           <td class="py-1.5 pr-4 font-mono">{row.name}</td>
           <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
           <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>

@@ -3,14 +3,14 @@ import { expect, test } from '@playwright/test'
 // The live in-browser mount/hydrate/update bench (`/platform/bench/client`) — the client counterpart to
 // the SSR render bench. A `GET` AOT-compiles the corpus's client modules, `Bun.build`s them into ONE
 // self-contained browser ES module, and server-renders each scenario's HTML; the page `blob:`-imports it
-// and times three real DOM paths — `mount` (build from scratch) and `hydrate` (attach to the SSR markup)
-// over the pure-render scenarios, and `update` (click a `<button>`, await the patch) over the interactive
-// ones. This drives the real browser to prove the module instantiates, all passes measure, and —
+// and times four real DOM paths — `mount` (build from scratch), `unmount` (tear it back down) and
+// `hydrate` (attach to the SSR markup) over the pure-render scenarios, and `update` (click a `<button>`,
+// await the patch) over the interactive ones. This drives the real browser to prove the module instantiates, all passes measure, and —
 // critically — that the reactive update scenarios actually PATCH the DOM (the bundle's own `state`
 // instance shares its runtime scheduler; the page's separate copy would silently fail to propagate).
 
-// The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus (mount + hydrate passes),
-// then the interactive ones (update pass). Kept in sync with that corpus.
+// The server-renderable scenarios of the shared `@abide/bench/scenarios` corpus (mount + unmount +
+// hydrate passes), then the interactive ones (update pass). Kept in sync with that corpus.
 const RENDER_SCENARIOS = [
     'static-text',
     'interpolation',
@@ -23,10 +23,28 @@ const RENDER_SCENARIOS = [
     'switch',
     'class-style-directives',
     'await-block',
+    'many-interpolations',
+    'deep-tree-10',
+    'component-list-100',
 ]
-const UPDATE_SCENARIOS = ['state-update', 'list-append-update', 'list-reverse-1000', 'if-toggle']
+const UPDATE_SCENARIOS = [
+    'state-update',
+    'list-append-update',
+    'list-reverse-1000',
+    'if-toggle',
+    'list-swap-1000',
+    'list-remove-1000',
+    'list-partial-update-1000',
+    'list-select-1000',
+    'list-replace-1000',
+    'list-clear-1000',
+]
 
-test('run measures every scenario across all three hot paths', async ({ page }) => {
+// Four passes over a 24-scenario corpus, each scenario timed twice (abide, then its hand-written
+// baseline) against a ≥100ms floor — and six of the update scenarios drive 1000-row lists. That is
+// comfortably past Playwright's 30s default, so the whole run gets its own budget.
+test('run measures every scenario across all four hot paths', async ({ page }) => {
+    test.setTimeout(180_000)
     await page.goto('/platform/bench/client')
     await expect(page.locator('h1')).toContainText('mount/update bench')
 
@@ -36,9 +54,11 @@ test('run measures every scenario across all three hot paths', async ({ page }) 
 
     // Every pass lands its full, fixed corpus (the button re-enables only after the whole run).
     const mountRows = page.getByTestId('mount-row')
+    const unmountRows = page.getByTestId('unmount-row')
     const hydrateRows = page.getByTestId('hydrate-row')
     const updateRows = page.getByTestId('update-row')
     await expect(mountRows).toHaveCount(RENDER_SCENARIOS.length, { timeout: 60_000 })
+    await expect(unmountRows).toHaveCount(RENDER_SCENARIOS.length, { timeout: 60_000 })
     await expect(hydrateRows).toHaveCount(RENDER_SCENARIOS.length, { timeout: 60_000 })
     await expect(updateRows).toHaveCount(UPDATE_SCENARIOS.length, { timeout: 60_000 })
     await expect(page.getByTestId('run')).toBeEnabled({ timeout: 60_000 })
@@ -53,10 +73,14 @@ test('run measures every scenario across all three hot paths', async ({ page }) 
     const timing = /\d+(\.\d+)?\s*(ns|µs|ms)/
     for (const name of RENDER_SCENARIOS) {
         const mountRow = mountRows.filter({ has: page.getByRole('cell', { name, exact: true }) })
+        const unmountRow = unmountRows.filter({
+            has: page.getByRole('cell', { name, exact: true }),
+        })
         const hydrateRow = hydrateRows.filter({
             has: page.getByRole('cell', { name, exact: true }),
         })
         await expect(mountRow).toContainText(timing)
+        await expect(unmountRow).toContainText(timing)
         await expect(hydrateRow).toContainText(timing)
     }
     await expect(

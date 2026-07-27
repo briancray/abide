@@ -94,9 +94,90 @@ function childScopeCode(target: string, param: string | null, valueExpr: string)
     return out
 }
 
+// One interpolation leaf, appended to `$out` through `render`.
+//
+// The `await` is GUARDED rather than unconditional. Every expression slot auto-awaits (a `T | Promise<T>`
+// union is deliberately legal), but `await` on a non-thenable is not free — it still costs a promise wrap
+// and a microtask tick, and an interpolation in a list pays it PER ROW. `isThenable` is a couple of type
+// checks, so the common already-settled value takes the sync arm and only a real promise suspends.
+// Semantics are unchanged: a thenable is still awaited, in the same order, before the leaf is written.
+//
+// `$v` is block-scoped, so nested leaves shadow rather than collide.
+function leafStatement(render: string, expr: string, suffix: string): string {
+    return `  { const $v = (${expr}); $out += ${render}($rt.isThenable($v) ? await $v : $v)${suffix}; }\n`
+}
+
+// A statement whose expression must be SETTLED before use, with the same guarded await `leafStatement`
+// applies to text leaves — an attribute value, a directive operand, a component prop.
+//
+// Every one of these slots auto-awaits by design (a `T | Promise<T>` union is legal), but an
+// unconditional `await` costs a promise wrap and a microtask tick even for a plain string, and these
+// slots are per ATTRIBUTE per element — inside a list, per row. `$v` is block-scoped, so nested and
+// repeated uses shadow rather than collide.
+function settledStatement(expr: string, use: (value: string) => string): string {
+    return `    { const $v = (${expr}); ${use('($rt.isThenable($v) ? await $v : $v)')} }\n`
+}
+
 // An async arrow that renders a chunk list against a `$scope` param and returns a string.
 function bodyExpr(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
     return `(async ($scope) => {\n  let $out = "";\n${genChunks(analysis, chunks)}  return $out;\n})`
+}
+
+// Can this child list be emitted straight into the PARENT's `$out` accumulator instead of its own
+// awaited `bodyExpr` IIFE? Only when the subtree owns nothing that participates in streaming SSR.
+//
+// The IIFE-per-level is not free: it costs a promise + a microtask tick per element per render, which
+// on a list is per ROW (the `for-list-1000` render was ~4x this alone). But a blanket inline was tried
+// and reverted — it broke streaming SSR, because a `{#for await}`/`{#await}` reached through a
+// collapsed frame stopped seeing the per-render stream scope and silently fell back to a fully
+// buffered drain. So the predicate is deliberately CONSERVATIVE: any streaming participant anywhere in
+// the subtree (a component, an `{#await}` block, a `{#for await}`) keeps the whole level's IIFE. The
+// blocks that own their own IIFE (`if`/`switch`/`try`/sync `for`) are transparent — inlining the level
+// ABOVE them does not change the frame they run in — so we recurse through them rather than bail.
+function inlinableChildren(chunks: ServerChunk[]): boolean {
+    for (const chunk of chunks) {
+        switch (chunk.kind) {
+            case 'static':
+            case 'interp':
+            case 'html':
+            case 'await':
+            case 'style':
+                break
+            case 'element':
+                if (!inlinableChildren(chunk.children)) return false
+                break
+            case 'component':
+                // A component INVOCATION is transparent to streaming: whatever the component renders
+                // — including a streaming block — runs inside the builder's own async frame, not the
+                // caller's, so collapsing the caller's frame cannot take a stream scope away from it.
+                // Its SLOT children do render in the caller's frame, so those still have to qualify.
+                if (!inlinableChildren(chunk.children)) return false
+                break
+            case 'if':
+                for (const branch of chunk.branches)
+                    if (!inlinableChildren(branch.children)) return false
+                break
+            case 'switch':
+                for (const c of chunk.cases) if (!inlinableChildren(c.children)) return false
+                break
+            case 'try':
+                if (!inlinableChildren(chunk.children)) return false
+                if (chunk.catch && !inlinableChildren(chunk.catch.children)) return false
+                if (chunk.finally && !inlinableChildren(chunk.finally)) return false
+                break
+            case 'for':
+                // A `{#for await}` IS the streaming participant — never collapse a level around one.
+                if (chunk.await) return false
+                if (!inlinableChildren(chunk.children)) return false
+                if (chunk.catch && !inlinableChildren(chunk.catch.children)) return false
+                break
+            // `component` (may render a streaming child), `awaitBlock` (streams), `componentDef`
+            // (hoisted registration the parent frame must own) all keep the frame.
+            default:
+                return false
+        }
+    }
+    return true
 }
 
 // An element whose every attribute is a compile-time constant (or a client-only `event`, which emits
@@ -141,21 +222,33 @@ function genElement(
                     out += `    $rt.applyStatic($a, ${JSON.stringify(attr.name)}, ${JSON.stringify(attr.value)});\n`
                     break
                 case 'expr':
-                    out += `    $rt.applyExpr($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    out += settledStatement(
+                        attr.expr,
+                        (value) => `$rt.applyExpr($a, ${JSON.stringify(attr.name)}, ${value});`,
+                    )
                     break
                 case 'event':
                     break
                 case 'class':
-                    out += `    $rt.applyClassDir($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    out += settledStatement(
+                        attr.expr,
+                        (value) => `$rt.applyClassDir($a, ${JSON.stringify(attr.name)}, ${value});`,
+                    )
                     break
                 case 'style':
-                    out += `    $rt.applyStyleDir($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    out += settledStatement(
+                        attr.expr,
+                        (value) => `$rt.applyStyleDir($a, ${JSON.stringify(attr.name)}, ${value});`,
+                    )
                     break
                 case 'bind':
-                    out += `    $rt.applyBind($a, ${JSON.stringify(attr.name)}, await (${attr.expr}));\n`
+                    out += settledStatement(
+                        attr.expr,
+                        (value) => `$rt.applyBind($a, ${JSON.stringify(attr.name)}, ${value});`,
+                    )
                     break
                 case 'spread':
-                    out += `    $rt.applySpread($a, await (${attr.expr}));\n`
+                    out += settledStatement(attr.expr, (value) => `$rt.applySpread($a, ${value});`)
                     break
             }
         }
@@ -165,11 +258,17 @@ function genElement(
         out += '  }\n'
     }
     if (!isVoid) {
-        // Children keep their own awaited `bodyExpr` IIFE. (Inlining sync children into the parent
-        // accumulator was tried and reverted: it silently broke streaming SSR — a later `{#for await}`
-        // stopped seeing the per-render stream scope (`reactiveScope().stream`) and fell back to a fully
-        // buffered drain. The unit oracle can't catch that, docs e2e `bench.spec` does.)
-        out += `  $out += await ${bodyExpr(analysis, children)}($scope);\n`
+        // A stream-free child list is emitted straight into this accumulator — the child IIFE is a
+        // promise + microtask tick per element per render with nothing to show for it. Anything that
+        // participates in streaming SSR keeps its own frame; see `inlinableChildren` for why a blanket
+        // inline was tried, reverted, and is now gated. (The unit oracle can't catch that regression,
+        // docs e2e `bench.spec` can.) The child IIFE took the SAME `$scope`, so this is a pure
+        // substitution — every `let`/`const` `genChunks` emits is already block- or IIFE-scoped.
+        if (inlinableChildren(children)) {
+            out += genChunks(analysis, children)
+        } else {
+            out += `  $out += await ${bodyExpr(analysis, children)}($scope);\n`
+        }
         out += `  $out += ${JSON.stringify(`</${name}>`)};\n`
     }
     return out
@@ -191,10 +290,17 @@ function genComponent(
                 break
             case 'expr':
             case 'bind':
-                out += `    $props[${JSON.stringify(attr.name)}] = await (${attr.expr});\n`
+                out += settledStatement(
+                    attr.expr,
+                    (value) => `$props[${JSON.stringify(attr.name)}] = ${value};`,
+                )
                 break
             case 'spread':
-                out += `    { const $s = await (${attr.expr}); if ($s !== null && typeof $s === "object") Object.assign($props, $s); }\n`
+                out += settledStatement(
+                    attr.expr,
+                    (value) =>
+                        `const $s = ${value}; if ($s !== null && typeof $s === "object") Object.assign($props, $s);`,
+                )
                 break
             case 'event':
             case 'class':
@@ -211,7 +317,10 @@ function genComponent(
     out += `    if (typeof $c !== "function") throw new Error(${JSON.stringify(`<${name}> is not a component in scope (expected a render function)`)});\n`
     if (hasChildren)
         out += `    const $children = async () => new $rt.Raw(await ${bodyExpr(analysis, children)}($scope));\n`
-    else out += `    const $children = async () => new $rt.Raw("");\n`
+    // A childless `<Name/>` allocated a fresh closure AND a fresh empty `Raw` on every invocation —
+    // per row inside a list. Nothing about either is per-call: `Raw` is immutable, so one shared
+    // instance serves every childless site in the process.
+    else out += `    const $children = $rt.emptyChildren;\n`
     // 4th arg = the STABLE site id (templatePlan): the adapter opens its seed bucket by SITE, not by
     // mount order, so a component's bucket can't shift when an earlier sibling mounts asynchronously.
     out += `    const $r = await $c($props, $children, $scope, ${siteId});\n`
@@ -246,11 +355,11 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
             // One shape: the scalar plus its trailing `<!---->` leaf anchor (mirrors templatePlan.pushLeaf).
             // `renderLeaf` throws on a component — those arrive through a component slot (`<Name/>`), which
             // carries its own paired anchors — so this position is never anything but a single text leaf.
-            return `  $out += $rt.renderLeaf(await (${chunk.expr}));\n`
+            return leafStatement('$rt.renderLeaf', chunk.expr, '')
         case 'html':
-            return `  $out += $rt.renderHtml(await (${chunk.expr}));\n`
+            return leafStatement('$rt.renderHtml', chunk.expr, '')
         case 'await':
-            return `  $out += $rt.renderValue(await (${chunk.expr})) + "<!---->";\n`
+            return leafStatement('$rt.renderValue', chunk.expr, ' + "<!---->"')
         case 'style':
             return `  $out += ${JSON.stringify(`<style>${chunk.css}</style>`)};\n`
         case 'element':
@@ -295,7 +404,16 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
                 body += `    if ($scope.state && $scope.state.forItem) $c.state = $scope.state.forItem($i);\n`
             body += `    ${bindPattern('$c', chunk.item, '$value')}\n`
             if (chunk.index !== null) body += `    $c[${JSON.stringify(chunk.index)}] = $i;\n`
-            body += `    $out += await ${bodyExpr(analysis, chunk.children)}($c);\n    $i++;\n`
+            // A stream-free item body renders straight into the loop's accumulator. This is the same
+            // trade as `genElement`'s (see `inlinableChildren`), but it pays PER ROW rather than per
+            // element, so it is the single biggest lever on list-render cost. The item body took `$c`
+            // as its `$scope`, so the inline form rebinds that name in a block and is otherwise a
+            // verbatim substitution.
+            if (inlinableChildren(chunk.children)) {
+                body += `    {\n      const $scope = $c;\n${genChunks(analysis, chunk.children)}    }\n    $i++;\n`
+            } else {
+                body += `    $out += await ${bodyExpr(analysis, chunk.children)}($c);\n    $i++;\n`
+            }
             if (chunk.await) {
                 // STREAMING `{#for await}` (streaming-ssr-plan.md PR6): `$rt.forAwaitStream` drains the source up
                 // to the deadline INLINE (a fast/synchronous stream stays byte-identical to the buffered drain),
@@ -424,7 +542,15 @@ function genChunks(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
         // The component-invocation convention passes the caller's children factory as the 2nd arg, so
         // `<slot/>` (which resolves `$scope.children`) is filled automatically — no `children` param
         // needed. An explicit param of the same name overrides it via `binds`.
-        out += `  $scope[${JSON.stringify(chunk.name)}] = async (...$args) => {\n    const $s = Object.create($scope);\n    if (typeof $args[1] === "function") $s.children = $args[1];\n${binds}    return new $rt.Raw(await ${bodyExpr(analysis, chunk.children)}($s));\n  };\n`
+        // The builder's body, like an element's children, does not need a frame of its own when it
+        // holds nothing that participates in streaming — and this one is entered once per INVOCATION,
+        // so inside a list it is another promise and microtask tick per row. Same gate as everywhere
+        // else (`inlinableChildren`); the body read `$s` as its `$scope`, so the inline form rebinds
+        // that name in a block and is otherwise verbatim.
+        const body = inlinableChildren(chunk.children)
+            ? `    let $out = "";\n    {\n      const $scope = $s;\n${genChunks(analysis, chunk.children)}    }\n    return new $rt.Raw($out);\n`
+            : `    return new $rt.Raw(await ${bodyExpr(analysis, chunk.children)}($s));\n`
+        out += `  $scope[${JSON.stringify(chunk.name)}] = async (...$args) => {\n    const $s = Object.create($scope);\n    if (typeof $args[1] === "function") $s.children = $args[1];\n${binds}${body}  };\n`
     }
     for (const chunk of chunks) {
         if (chunk.kind === 'componentDef') continue

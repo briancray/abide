@@ -43,10 +43,12 @@ export interface ScenarioResult {
     name: string
     render: MetricResult | null
     mount: MetricResult | null
+    unmount: MetricResult | null
     update: MetricResult | null
     // The same op, hand-written with no framework (`src/vanillaBaselines.ts`).
     vanillaRender: MetricResult | null
     vanillaMount: MetricResult | null
+    vanillaUnmount: MetricResult | null
     vanillaUpdate: MetricResult | null
     vanillaNote: string | null
 }
@@ -84,12 +86,55 @@ async function benchVanillaRender(
     })
 }
 
+// `mount` and `unmount` are measured SEPARATELY, each with the other side of the pair outside the timer.
+//
+// They used to be one op (`mount(); cleanup()`), which meant teardown cost — disposing every effect and
+// removing every node of a list — was folded into the mount figure and could not be read on its own. It
+// is a real cost with its own failure modes (a disposer list that grows per item, a range removal that
+// walks), and it is exactly what a change to per-item DOM bookkeeping moves. So it gets its own column.
+//
+// Two consequences, both deliberate:
+//   • `mount` numbers are NOT comparable to runs recorded before the split — the op no longer includes
+//     teardown. `unmount` has no history at all.
+//   • `scenario.scope()` is now built OUTSIDE the timed region (it was inside). For a list scenario that
+//     allocation is thousands of elements and has nothing to do with mounting. Both sides do this
+//     identically, so the ratio stays honest.
 async function benchMount(mount: MountFn, scenario: Scenario): Promise<MetricResult> {
-    return measure(() => {
+    return measureManually((record) => {
         const host = document.createElement('div')
-        const cleanup = mount(host, scenario.scope())
+        const scope = scenario.scope()
+        const started = Bun.nanoseconds()
+        const cleanup = mount(host, scope)
+        record(Bun.nanoseconds() - started)
         cleanup()
     })
+}
+
+async function benchUnmount(mount: MountFn, scenario: Scenario): Promise<MetricResult> {
+    return measureManually((record) => {
+        const host = document.createElement('div')
+        const cleanup = mount(host, scenario.scope())
+        const started = Bun.nanoseconds()
+        cleanup()
+        record(Bun.nanoseconds() - started)
+    })
+}
+
+// The adaptive loop of `measure`, but timing only the region the op hands to `record` — so setup and
+// teardown around it are excluded rather than amortised into the mean.
+async function measureManually(op: (record: (ns: number) => void) => void): Promise<MetricResult> {
+    let iters = 0
+    let totalNs = 0
+    const budgetNs = DEFAULT_MIN_TIME_MS * 1e6
+    const record = (ns: number): void => {
+        totalNs += ns
+        iters++
+    }
+    for (let i = 0; i < DEFAULT_WARMUP_ITERS; i++) op(() => {})
+    do {
+        op(record)
+    } while (totalNs < budgetNs || iters < DEFAULT_MIN_ITERS)
+    return { nsPerOp: totalNs / iters, iters }
 }
 
 // Update measures reactive-patch cost only: a fresh mount is built per round (outside the timer) and
@@ -199,11 +244,13 @@ export async function runBench(): Promise<BenchReport> {
 
         const render = await benchRender(mod, scenario)
         const mount = await benchMount(mod.mount, scenario)
+        const unmount = await benchUnmount(mod.mount, scenario)
         const update = scenario.update
             ? await benchUpdate(mod.mount, scenario, scenario.update)
             : null
         const vanillaRender = await benchVanillaRender(baseline, scenario)
         const vanillaMount = await benchMount(baseline.mount, scenario)
+        const vanillaUnmount = await benchUnmount(baseline.mount, scenario)
         const vanillaUpdate =
             scenario.update && baseline.update
                 ? await benchUpdate(baseline.mount, scenario, baseline.update)
@@ -212,9 +259,11 @@ export async function runBench(): Promise<BenchReport> {
             name: scenario.name,
             render,
             mount,
+            unmount,
             update,
             vanillaRender,
             vanillaMount,
+            vanillaUnmount,
             vanillaUpdate,
             vanillaNote: baseline.note,
         })
@@ -240,12 +289,12 @@ function ratio(abide: MetricResult | null, vanilla: MetricResult | null, floorNs
 
 function printTable(report: BenchReport): void {
     const nameWidth = Math.max(8, ...report.scenarios.map((s) => s.name.length))
-    const head = `${'scenario'.padEnd(nameWidth)}  ${'render'.padStart(9)}  ${'mount'.padStart(9)}  ${'update'.padStart(9)}`
+    const head = `${'scenario'.padEnd(nameWidth)}  ${'render'.padStart(9)}  ${'mount'.padStart(9)}  ${'unmount'.padStart(9)}  ${'update'.padStart(9)}`
     console.log(head)
     console.log('-'.repeat(head.length))
     for (const s of report.scenarios) {
         console.log(
-            `${s.name.padEnd(nameWidth)}  ${fmtNs(s.render)}  ${fmtNs(s.mount)}  ${fmtNs(s.update)}`,
+            `${s.name.padEnd(nameWidth)}  ${fmtNs(s.render)}  ${fmtNs(s.mount)}  ${fmtNs(s.unmount)}  ${fmtNs(s.update)}`,
         )
     }
     console.log(
@@ -258,7 +307,8 @@ function printBaseline(report: BenchReport): void {
     const nameWidth = Math.max(8, ...report.scenarios.map((s) => s.name.length))
     const head =
         `${'scenario'.padEnd(nameWidth)}  ${'render'.padStart(9)}  ${'×'.padStart(7)}  ` +
-        `${'mount'.padStart(9)}  ${'×'.padStart(7)}  ${'update'.padStart(9)}  ${'×'.padStart(7)}  hand-written as`
+        `${'mount'.padStart(9)}  ${'×'.padStart(7)}  ${'unmount'.padStart(9)}  ${'×'.padStart(7)}  ` +
+        `${'update'.padStart(9)}  ${'×'.padStart(7)}  hand-written as`
     console.log('\n\nvanilla JS baseline — the same op with no framework (× = abide ÷ vanilla)\n')
     console.log(head)
     console.log('-'.repeat(head.length))
@@ -266,6 +316,7 @@ function printBaseline(report: BenchReport): void {
         console.log(
             `${s.name.padEnd(nameWidth)}  ${fmtNs(s.vanillaRender)}  ${ratio(s.render, s.vanillaRender, floorNs)}  ` +
                 `${fmtNs(s.vanillaMount)}  ${ratio(s.mount, s.vanillaMount, floorNs)}  ` +
+                `${fmtNs(s.vanillaUnmount)}  ${ratio(s.unmount, s.vanillaUnmount, floorNs)}  ` +
                 `${fmtNs(s.vanillaUpdate)}  ${ratio(s.update, s.vanillaUpdate, floorNs)}  ${s.vanillaNote ?? ''}`,
         )
     }

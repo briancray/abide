@@ -5,6 +5,7 @@
 // rules, class/style merge order, `Raw` handling) so emitted server output matches the interpreter
 // byte-for-byte (modulo comment anchors). This never ships to the browser.
 
+import { isThenable } from '../../shared/internal/isThenable.ts'
 import type { EffectScope } from '../../shared/internal/reactive.ts'
 import { disposeEffectScope, openEffectScope } from '../../shared/internal/reactive.ts'
 import {
@@ -24,6 +25,8 @@ export { closeEffectScope } from '../../shared/internal/reactive.ts'
 // `$rt.forAwaitStream(...)` (PR6 — drain to the deadline inline, then append items into an `<abide-list>`
 // as they stream). See `streamScheduler.ts`.
 export { awaitStream, forAwaitStream } from './streamScheduler.ts'
+// Re-exported as `$rt.isThenable`: emitted SSR code guards its awaits with it (see `emitServer`).
+export { isThenable }
 
 // A server render's setup effects belong to the REQUEST. `render` opens a scope around its `<script>`
 // preamble; this registers that scope's teardown on the ambient context, which `disposeScope` sweeps
@@ -48,6 +51,12 @@ export class Raw {
     }
 }
 
+// The children factory every CHILDLESS `<Name/>` site passes. Shared rather than emitted per site and
+// re-allocated per invocation: it closes over nothing, and `Raw` is immutable, so one instance is
+// indistinguishable from a fresh one — see `emitServer.genComponent`.
+const EMPTY_RAW = new Raw('')
+export const emptyChildren = async (): Promise<Raw> => EMPTY_RAW
+
 const ESCAPE_MAP: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
@@ -56,7 +65,14 @@ const ESCAPE_MAP: Record<string, string> = {
     "'": '&#39;',
 }
 
+// The overwhelming majority of interpolated values contain nothing to escape, and this runs once per
+// interpolation per render — per ROW inside a list. A `test()` is a scan that allocates nothing and
+// returns early; the `replace()` with a callback allocates a match and invokes the callback per hit.
+// So probe first and hand back the original string when there is no work to do.
+const NEEDS_ESCAPE = /[&<>"']/
+
 export function escapeHtml(value: string): string {
+    if (!NEEDS_ESCAPE.test(value)) return value
     return value.replace(/[&<>"']/g, (char) => ESCAPE_MAP[char] ?? char)
 }
 

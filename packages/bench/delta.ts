@@ -2,7 +2,7 @@
 //
 // Runs BOTH corpora against the WORKING TREE and against a base git ref (default HEAD), then reports the
 // per-metric change. The point is to answer "did my uncommitted abide changes speed up or slow down…":
-//   • the UI triad — render / mount / update (`run.ts`)
+//   • the UI paths — render / mount / unmount / update (`run.ts`)
 //   • the server + reactive/stream/channel primitives (`server.ts`) — route, cache-key, memo, state,
 //     probe, stream, watch, fanout, codec. Loopback `dispatch/*` rows are included but are the noisiest
 //     (they carry a TCP floor); read those relative to `dispatch/health`.
@@ -154,10 +154,11 @@ function collect(base: Corpora, current: Corpora): Row[] {
 
     // UI triad
     const baseByName = new Map(base.frontend.scenarios.map((s) => [s.name, s]))
-    const metrics: (keyof Omit<ScenarioResult, 'name'>)[] = ['render', 'mount', 'update']
+    const metrics: (keyof Omit<ScenarioResult, 'name'>)[] = ['render', 'mount', 'unmount', 'update']
     const vanillaMetrics: (keyof Omit<ScenarioResult, 'name'>)[] = [
         'vanillaRender',
         'vanillaMount',
+        'vanillaUnmount',
         'vanillaUpdate',
     ]
     for (const cur of current.frontend.scenarios) {

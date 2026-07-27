@@ -296,6 +296,261 @@ export const VANILLA_BASELINES: Record<string, VanillaBaseline> = {
         },
     },
 
+    'many-interpolations': {
+        note: 'one template literal / one textContent',
+        render: (scope) =>
+            `<p>${scope.a} ${scope.b} ${scope.c} ${scope.d} ${scope.e} ${scope.f} ${scope.g} ${scope.h}</p>`,
+        mount: (host, scope) => {
+            const paragraph = document.createElement('p')
+            paragraph.textContent = `${scope.a} ${scope.b} ${scope.c} ${scope.d} ${scope.e} ${scope.f} ${scope.g} ${scope.h}`
+            host.appendChild(paragraph)
+            return teardown(host)
+        },
+    },
+
+    'deep-tree-10': {
+        note: 'nested string literal / 10 chained createElement',
+        render: (scope) =>
+            `<div><div><div><div><div><div><div><div><div><span>${scope.v}</span></div></div></div></div></div></div></div></div></div>`,
+        mount: (host, scope) => {
+            // Build outermost-first and descend, which is what a person writing this by hand does.
+            let parent: HTMLElement = host
+            for (let depth = 0; depth < 9; depth++) {
+                const level = document.createElement('div')
+                parent.appendChild(level)
+                parent = level
+            }
+            const leaf = document.createElement('span')
+            leaf.textContent = scope.v as string
+            parent.appendChild(leaf)
+            return teardown(host)
+        },
+    },
+
+    'component-list-100': {
+        // The framework-free equivalent of a component IS a plain function: same inputs, same markup,
+        // called once per row. No props object, no child scope, no boundary anchors.
+        note: 'a plain function called per row',
+        render: (scope) => {
+            const items = scope.items as number[]
+            const row = (item: number): string => `<li>row ${item}</li>`
+            let out = '<ul>'
+            for (let i = 0; i < items.length; i++) out += row(items[i] as number)
+            return `${out}</ul>`
+        },
+        mount: (host, scope) => {
+            const items = scope.items as number[]
+            const row = (item: number): HTMLElement => {
+                const node = document.createElement('li')
+                node.textContent = `row ${item}`
+                return node
+            }
+            const list = document.createElement('ul')
+            for (let i = 0; i < items.length; i++) list.appendChild(row(items[i] as number))
+            host.appendChild(list)
+            return teardown(host)
+        },
+    },
+
+    // The keyed-list mutations. Each keeps the node array a hand-written page would keep, and performs
+    // the MINIMUM DOM work that reaches the same end state — that minimum is the whole point of the
+    // comparison, so none of these rebuilds the list when it does not have to.
+
+    'list-swap-1000': {
+        note: 'two insertBefore calls (moves, no rebuild)',
+        mount: (host) => {
+            const button = document.createElement('button')
+            button.textContent = 'swap'
+            const list = document.createElement('ul')
+            const nodes: HTMLElement[] = []
+            for (let i = 0; i < 1000; i++) {
+                const row = document.createElement('li')
+                row.textContent = String(i)
+                list.appendChild(row)
+                nodes.push(row)
+            }
+            button.addEventListener('click', () => {
+                const first = nodes[1] as HTMLElement
+                const second = nodes[998] as HTMLElement
+                // Park `first` where `second` sits, then put `second` back where `first` came from.
+                const afterFirst = first.nextSibling
+                list.insertBefore(first, second)
+                list.insertBefore(second, afterFirst)
+                nodes[1] = second
+                nodes[998] = first
+            })
+            host.appendChild(button)
+            host.appendChild(list)
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
+    'list-remove-1000': {
+        note: 'one removeChild + splice',
+        mount: (host) => {
+            const button = document.createElement('button')
+            button.textContent = 'rm'
+            const list = document.createElement('ul')
+            const nodes: HTMLElement[] = []
+            for (let i = 0; i < 1000; i++) {
+                const row = document.createElement('li')
+                row.textContent = String(i)
+                list.appendChild(row)
+                nodes.push(row)
+            }
+            button.addEventListener('click', () => {
+                const dropped = nodes[500]
+                if (dropped === undefined) return
+                list.removeChild(dropped)
+                nodes.splice(500, 1)
+            })
+            host.appendChild(button)
+            host.appendChild(list)
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
+    'list-partial-update-1000': {
+        note: '100 textContent writes, no structural work',
+        mount: (host) => {
+            const button = document.createElement('button')
+            button.textContent = 'bump'
+            const list = document.createElement('ul')
+            const nodes: HTMLElement[] = []
+            const texts: string[] = []
+            for (let i = 0; i < 1000; i++) {
+                const text = `row ${i}`
+                const row = document.createElement('li')
+                row.textContent = text
+                list.appendChild(row)
+                nodes.push(row)
+                texts.push(text)
+            }
+            button.addEventListener('click', () => {
+                for (let i = 0; i < nodes.length; i += 10) {
+                    const next = `${texts[i]}x`
+                    texts[i] = next
+                    const node = nodes[i]
+                    if (node !== undefined) node.textContent = next
+                }
+            })
+            host.appendChild(button)
+            host.appendChild(list)
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
+    'list-select-1000': {
+        // Every row toggles at MOUNT (matching the framework's initial binding run) so both sides agree
+        // on whether a `class` attribute exists at all; after that only the two affected rows are touched.
+        note: 'two classList toggles',
+        mount: (host) => {
+            let selected = -1
+            const button = document.createElement('button')
+            button.textContent = 'sel'
+            const list = document.createElement('ul')
+            const nodes: HTMLElement[] = []
+            for (let i = 0; i < 1000; i++) {
+                const row = document.createElement('li')
+                row.textContent = String(i)
+                row.classList.toggle('sel', i === selected)
+                list.appendChild(row)
+                nodes.push(row)
+            }
+            button.addEventListener('click', () => {
+                const previous = selected
+                selected = selected === 500 ? -1 : 500
+                if (previous >= 0) nodes[previous]?.classList.toggle('sel', false)
+                if (selected >= 0) nodes[selected]?.classList.toggle('sel', true)
+            })
+            host.appendChild(button)
+            host.appendChild(list)
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
+    'list-replace-1000': {
+        note: 'replaceChildren + 1000 fresh createElement',
+        mount: (host) => {
+            let values: number[] = []
+            for (let i = 0; i < 1000; i++) values.push(i)
+            const button = document.createElement('button')
+            button.textContent = 'rep'
+            const list = document.createElement('ul')
+            for (let i = 0; i < values.length; i++) {
+                const row = document.createElement('li')
+                row.textContent = String(values[i])
+                list.appendChild(row)
+            }
+            button.addEventListener('click', () => {
+                const next: number[] = []
+                for (let i = 0; i < values.length; i++) next.push((values[i] as number) + 1000)
+                values = next
+                list.replaceChildren()
+                for (let i = 0; i < values.length; i++) {
+                    const row = document.createElement('li')
+                    row.textContent = String(values[i])
+                    list.appendChild(row)
+                }
+            })
+            host.appendChild(button)
+            host.appendChild(list)
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
+    'list-clear-1000': {
+        // Alternates clear/rebuild for the reason the scenario documents — the timed op is one or the
+        // other, so this baseline alternates identically and the ratio stays apples-to-apples.
+        note: 'replaceChildren, alternating with a 1000-row rebuild',
+        mount: (host) => {
+            let filled = true
+            const button = document.createElement('button')
+            button.textContent = 'clr'
+            const list = document.createElement('ul')
+            const fill = (): void => {
+                for (let i = 0; i < 1000; i++) {
+                    const row = document.createElement('li')
+                    row.textContent = String(i)
+                    list.appendChild(row)
+                }
+            }
+            fill()
+            button.addEventListener('click', () => {
+                if (filled) list.replaceChildren()
+                else fill()
+                filled = !filled
+            })
+            host.appendChild(button)
+            host.appendChild(list)
+            return teardown(host)
+        },
+        update: async (host) => {
+            host.querySelector('button')?.click()
+            await flush()
+        },
+    },
+
     'if-toggle': {
         note: 'swap one <p> for the other branch',
         mount: (host) => {

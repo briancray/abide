@@ -151,4 +151,141 @@ export const SCENARIOS: Scenario[] = [
             await flush()
         },
     },
+
+    // ---------------------------------------------------------------------------
+    // SHAPE coverage. Everything above is WIDE and SHALLOW (one or two nesting levels), so per-LEVEL
+    // and per-BOUNDARY cost is invisible to it — exactly the class of overhead that hides in an
+    // emitter. These three vary the shape instead of the size.
+    // ---------------------------------------------------------------------------
+
+    {
+        // Real templates interleave static text with several values in ONE element. Each value is its
+        // own reactive leaf (a text node plus an anchor), so this measures per-LEAF cost at a density
+        // the single-value `interpolation` scenario never reaches.
+        name: 'many-interpolations',
+        src: '<p>{a} {b} {c} {d} {e} {f} {g} {h}</p>',
+        scope: () => ({ a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8 }),
+    },
+    {
+        // Ten nesting levels over ONE leaf value: the cost here is almost entirely per-level frame
+        // overhead, not content. A change to how the emitter brackets a level shows up here and
+        // essentially nowhere else in the corpus.
+        name: 'deep-tree-10',
+        src: '<div><div><div><div><div><div><div><div><div><span>{v}</span></div></div></div></div></div></div></div></div></div>',
+        scope: () => ({ v: 'leaf' }),
+    },
+    {
+        // A component boundary per row. `for-list-100` renders the same 100 `<li>`s with the body
+        // inline, so the DIFFERENCE between the two is the price of the boundary itself — the props
+        // object, the child scope, the children factory, and the extra anchors a component slot carries.
+        name: 'component-list-100',
+        src: '{#component Row({ item })}<li>row {item}</li>{/component}<ul>{#for n of items by n}<Row item={n}/>{/for}</ul>',
+        scope: () => ({ items: range(100) }),
+        rows: 100,
+    },
+
+    // ---------------------------------------------------------------------------
+    // KEYED-LIST MUTATIONS. `list-append-update` and `list-reverse-1000` cover the two extremes (one
+    // appended row; every row moved). These are the mutations in between — the ones that separate a
+    // keyed reconcile that does O(1) DOM work from one that rebuilds. A full reverse cannot make that
+    // distinction, because it is O(n) moves under any algorithm.
+    // ---------------------------------------------------------------------------
+
+    {
+        // Two rows exchange places. A correct keyed reconcile moves TWO ranges; a positional one
+        // rewrites every row between them.
+        name: 'list-swap-1000',
+        src: "<script>import { state } from 'abide/shared/state'; let items = state(Array.from({ length: 1000 }, (_, i) => i))</script><button onclick={() => { const next = [...items]; const held = next[1]; next[1] = next[998]; next[998] = held; items = next }}>swap</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('list-swap-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        // One row leaves from the middle. Should be a single item disposal plus a single range removal,
+        // with every surviving row's DOM untouched.
+        name: 'list-remove-1000',
+        src: "<script>import { state } from 'abide/shared/state'; let items = state(Array.from({ length: 1000 }, (_, i) => i))</script><button onclick={() => { const next = [...items]; next.splice(500, 1); items = next }}>rm</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('list-remove-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        // Every tenth row's TEXT changes and the keys all stay put — so there is no structural work at
+        // all, only 100 leaf writes. This is the scenario that catches a reconcile doing DOM moves it
+        // did not need to do.
+        name: 'list-partial-update-1000',
+        src: "<script>import { state } from 'abide/shared/state'; let rows = state(Array.from({ length: 1000 }, (_, i) => ({ id: i, text: 'row ' + i })))</script><button onclick={() => (rows = rows.map((row, i) => (i % 10 === 0 ? { id: row.id, text: row.text + 'x' } : row)))}>bump</button><ul>{#for row of rows by row.id}<li>{row.text}</li>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('list-partial-update-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        // ONE row's class toggles, but every row's `class:` binding reads the same `selected` cell — so
+        // this is the corpus's fine-grainedness probe. Hand-written, it is two `classList` calls; the
+        // ratio says how much of the list the framework re-visits to achieve the same two changes.
+        name: 'list-select-1000',
+        src: "<script>import { state } from 'abide/shared/state'; let items = state(Array.from({ length: 1000 }, (_, i) => i)); let selected = state(-1)</script><button onclick={() => (selected = selected === 500 ? -1 : 500)}>sel</button><ul>{#for n of items by n}<li class:sel={n === selected}>{n}</li>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('list-select-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        // Every key changes, so nothing can be reused: 1000 disposals plus 1000 fresh items. The
+        // worst-case reconcile, and the upper bound the other mutations should sit far below.
+        name: 'list-replace-1000',
+        src: "<script>import { state } from 'abide/shared/state'; let items = state(Array.from({ length: 1000 }, (_, i) => i))</script><button onclick={() => (items = items.map((n) => n + 1000))}>rep</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('list-replace-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
+    {
+        // Clear-by-RECONCILE (the list becomes empty), which is a different path from clear-by-DISPOSE
+        // — the latter is what the `unmount` metric measures on `for-list-1000`.
+        //
+        // READ THIS ONE CAREFULLY: an emptied list cannot be emptied again, so the button ALTERNATES
+        // clear and rebuild. Each timed op is therefore one or the other, and the reported mean is the
+        // average of a full clear and a full rebuild — NOT the cost of a clear. It is still a sound
+        // regression guard (either half getting slower moves the number); it is not a figure to quote.
+        name: 'list-clear-1000',
+        src: "<script>import { state } from 'abide/shared/state'; const all = Array.from({ length: 1000 }, (_, i) => i); let items = state(all)</script><button onclick={() => (items = items.length > 0 ? [] : all)}>clr</button><ul>{#for n of items by n}<li>{n}</li>{/for}</ul>",
+        scope: () => ({ state, watch }),
+        server: false,
+        rows: 1000,
+        update: async (host) => {
+            const button = host.querySelector('button')
+            if (!button) throw new Error('list-clear-1000 scenario is missing its button')
+            button.click()
+            await flush()
+        },
+    },
 ]

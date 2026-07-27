@@ -11,6 +11,7 @@
 // Stage 1 (this PR) only exercises the clone path; Stage 2 reuses the identical calls to walk server
 // DOM during hydration.
 
+import { isThenable } from '../../shared/internal/isThenable.ts'
 import { markIterableDone } from '../../shared/internal/iterableDone.ts'
 import {
     closeEffectScope,
@@ -26,7 +27,7 @@ import { log } from '../../shared/log.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
-export { closeEffectScope, disposeEffectScope, effect, openEffectScope, state, untrack }
+export { closeEffectScope, disposeEffectScope, effect, isThenable, openEffectScope, state, untrack }
 
 // Teardown callback: disposes an effect and/or removes created nodes. Guarded so double-calls and
 // already-detached nodes are safe.
@@ -60,14 +61,6 @@ export type ClientComponent = (
 export function text(value: unknown): string {
     if (value === null || value === undefined) return ''
     return String(value)
-}
-
-export function isThenable(value: unknown): value is Promise<unknown> {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        typeof (value as Promise<unknown>).then === 'function'
-    )
 }
 
 export function isMountable(value: unknown): value is Mountable {
@@ -113,13 +106,13 @@ export function nextSibling(node: Node | null): Node | null {
 }
 
 // Move every child of `fragment` into `parent` before `anchor`, preserving order.
+//
+// Inserting the FRAGMENT is one DOM operation that moves all of its children at once, rather than one
+// insertion per child — the same end state for a third of the work on a typical item body. The caller
+// (`emitClient`) snapshots `$roots` from `fragment.childNodes` BEFORE calling this, precisely because
+// the fragment is emptied here; that ordering is what makes the single-call form safe.
 export function finalize(fragment: Node, parent: Node, anchor: Node | null): void {
-    let child = fragment.firstChild
-    while (child !== null) {
-        const next = child.nextSibling
-        insert(parent, child, anchor)
-        child = next
-    }
+    insert(parent, fragment, anchor)
 }
 
 // ---------------------------------------------------------------------------
@@ -1309,6 +1302,64 @@ interface ListItem {
     // Scratch flag owned by `reconcile`: set on the items carried into the next run, so the removal
     // pass can spot the dropped ones without building a Set of the survivors. Meaningless between runs.
     reused: boolean
+    // Scratch field owned by `reconcile`: this item's index in the PREVIOUS `items` array, stamped at
+    // the top of a run so the reorder can ask where a survivor used to sit without a second Map.
+    // Meaningless between runs.
+    position: number
+}
+
+// `oldPositions` entry for an item built during this reconcile — it has no previous position, and is
+// never a candidate to be left in place.
+const NEW_ITEM = -1
+
+// Indices of a longest increasing subsequence of `positions`, ignoring `NEW_ITEM` entries.
+//
+// These are the items whose relative DOM order is ALREADY correct, so leaving them alone and moving
+// everything else is the minimum number of moves that reaches the target order. Patience-sorting shape:
+// `tails[length - 1]` is the index ending the best subsequence of that length, binary-searched; `previous`
+// records each index's predecessor so the answer can be walked back out at the end.
+function increasingSubsequence(positions: number[]): number[] {
+    const previous: number[] = new Array(positions.length)
+    const tails: number[] = []
+    for (let index = 0; index < positions.length; index++) {
+        const position = positions[index] as number
+        if (position === NEW_ITEM) continue
+        // The empty case is called out rather than folded into the search below: with no tails yet
+        // there is nothing to compare against, and reading `tails[0]` would compare against undefined
+        // and silently refuse to seed — leaving the subsequence permanently empty (every item then
+        // looks out of place, which is CORRECT but moves the whole list, the exact bug this fixes).
+        if (tails.length === 0) {
+            previous[index] = -1
+            tails.push(index)
+            continue
+        }
+        const last = tails[tails.length - 1] as number
+        if ((positions[last] as number) < position) {
+            previous[index] = last
+            tails.push(index)
+            continue
+        }
+        // First tail whose position is >= this one; that is the length this index improves on.
+        let low = 0
+        let high = tails.length - 1
+        while (low < high) {
+            const mid = (low + high) >> 1
+            if ((positions[tails[mid] as number] as number) < position) low = mid + 1
+            else high = mid
+        }
+        if (position < (positions[tails[low] as number] as number)) {
+            previous[index] = low > 0 ? (tails[low - 1] as number) : -1
+            tails[low] = index
+        }
+    }
+    let cursor = tails.length
+    if (cursor === 0) return tails
+    let walk = tails[cursor - 1] as number
+    while (cursor-- > 0) {
+        tails[cursor] = walk
+        walk = previous[walk] as number
+    }
+    return tails
 }
 
 // The `{#for}` source as an array. An ARRAY passes through uncopied — the list is consumed
@@ -1345,7 +1396,7 @@ function createListItem(
     insert(parent, startMarker, blockEnd)
     insert(parent, endMarker, blockEnd)
     const handle = factory(parent, startMarker, endMarker, value, index)
-    return { key, startMarker, endMarker, handle, reused: false }
+    return { key, startMarker, endMarker, handle, reused: false, position: 0 }
 }
 
 function removeListItem(item: ListItem): void {
@@ -1406,7 +1457,7 @@ function claimStreamedRegion(
             beginForItem()
             const handle = options.createItem(parent, startMarker, endMarker, value, claimed)
             insert(parent, endMarker, hydrateNode())
-            items.push({ key, startMarker, endMarker, handle, reused: false })
+            items.push({ key, startMarker, endMarker, handle, reused: false, position: 0 })
             claimed++
         }
     } catch (error) {
@@ -1564,7 +1615,7 @@ export function forBlock(
                 beginForItem()
                 const handle = options.createItem(parent, startMarker, endMarker, value, index)
                 insert(parent, endMarker, hydrateNode())
-                items.push({ key, startMarker, endMarker, handle, reused: false })
+                items.push({ key, startMarker, endMarker, handle, reused: false, position: 0 })
             }
         } catch (error) {
             if (!(error instanceof HydrationMismatch)) throw error
@@ -1599,11 +1650,22 @@ export function forBlock(
         // `kept` Set. Claiming a key DELETES it from the index, which is what stops a non-unique `by`
         // key from reusing the same item twice (the old `used` Set's job).
         const oldMap = new Map<unknown, ListItem>()
-        for (const item of items) {
+        for (let index = 0; index < items.length; index++) {
+            const item = items[index]
+            if (item === undefined) continue
             item.reused = false
+            item.position = index
             if (!oldMap.has(item.key)) oldMap.set(item.key, item)
         }
         const nextItems: ListItem[] = []
+        // Each surviving item's OLD position, in new order (`NEW_ITEM` for one built this pass). This is
+        // what the reorder below reads to decide the minimum set of moves.
+        const oldPositions: number[] = []
+        // The overwhelmingly common shapes — append, prepend-free create, a value-only update, a pure
+        // removal — leave the survivors in ascending old order. Spotting that costs one comparison per
+        // item and lets the reorder skip the sequence solve entirely.
+        let ascending = true
+        let highestSoFar = -1
 
         for (let index = 0; index < list.length; index++) {
             const value = list[index]
@@ -1614,10 +1676,14 @@ export function forBlock(
                 existing.reused = true
                 existing.handle.update(value, index)
                 nextItems.push(existing)
+                oldPositions.push(existing.position)
+                if (existing.position < highestSoFar) ascending = false
+                else highestSoFar = existing.position
             } else {
                 nextItems.push(
                     createListItem(parent, blockEnd, value, index, key, options.createItem),
                 )
+                oldPositions.push(NEW_ITEM)
             }
         }
 
@@ -1629,12 +1695,32 @@ export function forBlock(
             if (!item.reused) removeListItem(item)
         }
 
-        // Reorder DOM to match nextItems (walk back-to-front, moving out-of-place ranges).
+        // Reorder the DOM to match `nextItems`, moving as FEW ranges as possible.
+        //
+        // Walking back-to-front and moving every item whose successor isn't the expected one is correct
+        // but badly non-minimal: moving one item out of place shifts the reference its predecessor is
+        // compared against, so the predecessor mismatches too, and the mismatch CASCADES. Exchanging two
+        // rows of a thousand moved ~996 of them — a two-row swap cost the same as reversing the list.
+        //
+        // Instead: the survivors that are already in ascending old order can stay put, and only the rest
+        // need moving. The largest such set is the longest increasing subsequence of `oldPositions`, so
+        // solve for it once and skip those indices. Freshly built items are never in it — they were
+        // appended at `blockEnd` and always have to be placed.
+        const keptInPlace = ascending ? null : increasingSubsequence(oldPositions)
+        let keptCursor = keptInPlace === null ? -1 : keptInPlace.length - 1
         let reference: Node = blockEnd
         for (let index = nextItems.length - 1; index >= 0; index--) {
             const item = nextItems[index]
             if (item === undefined) continue
-            if (item.endMarker.nextSibling !== reference) {
+            if (keptInPlace === null) {
+                // Survivors are already in ascending order, so they are already correct relative to one
+                // another; only a freshly built item (appended at `blockEnd`) needs positioning.
+                if (oldPositions[index] === NEW_ITEM && item.endMarker.nextSibling !== reference) {
+                    moveRange(parent, item.startMarker, item.endMarker, reference)
+                }
+            } else if (keptCursor >= 0 && keptInPlace[keptCursor] === index) {
+                keptCursor-- // named by the subsequence — leave it exactly where it is
+            } else if (item.endMarker.nextSibling !== reference) {
                 moveRange(parent, item.startMarker, item.endMarker, reference)
             }
             reference = item.startMarker
