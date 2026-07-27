@@ -32,6 +32,9 @@
 
 # performance and measurement
 
+> The method behind these rules — how to ablate, what is inherent, when a fix is NOT worth it, and the
+> sweep checklist — is `docs/PERFORMANCE.md`. Read it before starting a performance pass.
+
 * a performance claim is a RATIO against hand-written code in the same substrate — absolute ms from a DOM emulator describe the emulator, not the framework
 * correctness tests cannot guard a performance contract: when the contract is "does less work", assert the work (nodes moved, allocations, calls) — the wrong implementation still produces the right output
 * in a reactive system that means asserting WAKE-UPS, not values: count effect re-runs and body runs, because a reader that woke when nothing it reads changed still reads the right value
