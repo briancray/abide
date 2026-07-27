@@ -2,6 +2,8 @@
 // body; `error.typed(name, status, schema?)` builds a reusable factory for a named,
 // narrowable error whose body carries the type name + payload plus a runtime marker.
 
+import type { OutcomeResponse } from '../shared/internal/responseSource.ts'
+
 // Canonical HTTP reason phrases. Bun's Response does not auto-populate statusText from a
 // status code, so we carry the common table ourselves; unknown codes fall back to "".
 const STATUS_TEXT: Record<number, string> = {
@@ -46,29 +48,37 @@ function jsonResponse(status: number, body: unknown, init?: ResponseInit): Respo
     return new Response(JSON.stringify(body), { ...init, status, headers })
 }
 
+// Both forms are typed as an `OutcomeResponse` — still an ordinary `Response` everywhere one is taken,
+// but marked as an outcome rather than a value. A failure reaches the caller as a thrown `HttpError`,
+// never as the resolved value, so a handler with a failing branch keeps its success payload clean
+// (`{#await fn()}{:then v}` can reach a field of `v`) instead of inferring `Response | T`.
 export const error: {
-    (status: number, message?: string, init?: ResponseInit): Response
+    (status: number, message?: string, init?: ResponseInit): OutcomeResponse
     typed(
         name: string,
         status: number,
         schema?: unknown,
-    ): (data?: unknown) => Response & { __typedErrorName: string }
+    ): (data?: unknown) => OutcomeResponse & { __typedErrorName: string }
 } = Object.assign(
-    (status: number, message?: string, init?: ResponseInit): Response => {
+    (status: number, message?: string, init?: ResponseInit): OutcomeResponse => {
         const statusText = reasonPhrase(status)
-        return jsonResponse(status, { status, statusText, message: message ?? statusText }, init)
+        return jsonResponse(
+            status,
+            { status, statusText, message: message ?? statusText },
+            init,
+        ) as OutcomeResponse
     },
     {
         typed(
             name: string,
             status: number,
             _schema?: unknown,
-        ): (data?: unknown) => Response & { __typedErrorName: string } {
-            return (data?: unknown): Response & { __typedErrorName: string } => {
+        ): (data?: unknown) => OutcomeResponse & { __typedErrorName: string } {
+            return (data?: unknown): OutcomeResponse & { __typedErrorName: string } => {
                 const statusText = reasonPhrase(status)
                 // `__typedError` is the in-body marker; the name/data are the narrowable payload.
                 const body = { status, statusText, error: name, name, data, __typedError: name }
-                const response = jsonResponse(status, body) as Response & {
+                const response = jsonResponse(status, body) as OutcomeResponse & {
                     __typedErrorName: string
                 }
                 // Object marker on the Response instance so the router/client can narrow synchronously.

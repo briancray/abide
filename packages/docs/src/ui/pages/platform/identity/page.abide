@@ -6,8 +6,10 @@
 <main class="page">
   <h1>Identity</h1>
   <p class="lead"><code>identity()</code> is the current request principal — never null. It starts anonymous; <code>identity.set()</code> promotes it to authenticated and the router seals a rolling cookie so it persists across requests. Log in, then watch the reflected identity flip.</p>
-
   <Demo id="identity" title="<code>identity()</code> — principal, log in, log out" server="src/server/rpc/platformIdentity.ts" client="src/ui/demos/platform/identity/IdentityDemo.abide" tab="server">
     <IdentityDemo />
   </Demo>
+  <aside class="aside">
+    <p>The principal in one loop. The read calls <code>identity()</code>; <code>login()</code> is a mutation that calls <code>identity.set()</code> server-side, and re-reading over a fresh request — now carrying the sealed <code>abide-identity</code> cookie — proves the authenticated principal survived the round trip. <code>logout()</code> puts it back to anonymous.</p>
+  </aside>
 </main>

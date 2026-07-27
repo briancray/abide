@@ -1,4 +1,5 @@
 <script module>
+  import Panel from "$ui/components/Panel.abide"
   import HydrationProbe from "$ui/components/HydrationProbe.abide"
   import RichSeedProbe from "$ui/components/RichSeedProbe.abide"
   import streamSlow from "$server/rpc/streamSlow"
@@ -14,8 +15,7 @@
   <h1>Hydration health</h1>
   <p class="lead">Every chip below is a <code>HydrationProbe</code> — a seeded <code>state</code> that reads <b>server</b> when its block was server-rendered and cleanly <em>claimed</em>, or <b>client</b> if that block re-rendered in the browser. A chip is <b class="text-green-700">green</b> when it matches what the block SHOULD do and <b class="text-red-700">red</b> when it doesn't. <strong>All green = correct hydration across every scenario.</strong> Reach this page by a hard load AND by clicking it in the sidebar (a soft-nav) — both must stay green. Note the <code>&#123;#for await&#125;</code> row: that list re-renders on the client <em>by design</em> (its server paint is a discarded placeholder), so its chips correctly expect <b>client</b>. The final row is a different proof — a <code>RichSeedProbe</code> whose <code>state</code> initials are a <code>Date</code>, a <code>BigInt</code>, and a <code>Map</code>: values the JSON seed used to flatten to <code>null</code>. It's green only when all three survive the hydration seed's rich value codec with their <em>type</em> intact.</p>
 
-  <section class="sample" id="scenarios">
-    <h2>One probe per hydration scenario</h2>
+  <Panel id="scenarios" title="One probe per hydration scenario">
     <div class="grid gap-3">
       <div class="row" data-testid="scenario-static">
         <span>Static element</span>
@@ -94,5 +94,5 @@
         <RichSeedProbe/>
       </div>
     </div>
-  </section>
+  </Panel>
 </main>

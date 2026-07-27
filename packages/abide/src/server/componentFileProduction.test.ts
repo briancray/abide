@@ -79,7 +79,9 @@ test('client build (PR3): includes the component + nested-component mount code a
     // The page's route chunk carries the component + nested-component mount code; the RPC spec lives in
     // the loader entry. Concatenate all built JS to assert the whole split graph.
     let js = ''
-    for (const [name, content] of build.files) if (name.endsWith('.js')) js += `${content}\n`
+    const decoder = new TextDecoder()
+    for (const [name, asset] of build.files)
+        if (name.endsWith('.js')) js += `${decoder.decode(asset.identity)}\n`
 
     // The component's compiled client mount carries its template literal — its presence proves the
     // component module (not the raw `.abide`) was bundled via the rewritten import specifier.

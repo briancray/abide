@@ -157,6 +157,33 @@ describe('build — content-addressed split client', () => {
         expect(manifest.hash).toBe(index.hash)
         expect(manifest.entry).toBe(index.entry)
         expect(typeof manifest.chunkByPattern).toBe('object')
+
+        // Precompressed sidecars land on disk beside their identity file, and the manifest NAMES them —
+        // `abide start` reads that list rather than probing, so a sidecar the manifest claims must exist.
+        expect(typeof index.encodings).toBe('object')
+        const encodedNames = Object.keys(index.encodings as Record<string, string[]>)
+        expect(encodedNames.length).toBeGreaterThan(0)
+        for (const name of encodedNames) {
+            for (const encoding of (index.encodings as Record<string, string[]>)[name] ?? []) {
+                const suffix = encoding === 'brotli' ? '.br' : '.gz'
+                const sidecar = Bun.file(join(outDir, name + suffix))
+                expect(await sidecar.exists()).toBe(true)
+                // A stored encoding is only ever kept because it BEAT the identity bytes; a sidecar that
+                // is not smaller means the build wrote one it should have discarded.
+                expect(sidecar.size).toBeLessThan(Bun.file(join(outDir, name)).size)
+            }
+        }
+
+        // Loading that build back reconstructs every representation byte-for-byte — the boot path for
+        // `abide start` is the same map the in-memory build produces.
+        const loaded = await loadClientBuild(FIXTURE_DIR)
+        if (loaded === undefined) throw new Error('expected a loaded client build')
+        for (const name of encodedNames) {
+            const asset = loaded.files.get(name)
+            if (asset === undefined) throw new Error(`missing asset ${name}`)
+            expect(asset.brotli).not.toBeNull()
+            expect(asset.brotli?.byteLength).toBe(Bun.file(join(outDir, `${name}.br`)).size)
+        }
     })
 
     test('abide start SERVES the pre-built dist artifacts (no rebuild)', async () => {
@@ -174,7 +201,15 @@ describe('build — content-addressed split client', () => {
         const app = await serve(FIXTURE_DIR, { dev: false, port: 0, clientBuild })
         running.push(app)
 
-        const served = await (await fetch(`${app.url}/__abide/chunk/${manifest.entry}`)).text()
+        // Ask for identity explicitly. The sentinel was written into the IDENTITY file only, while the
+        // build also wrote precompressed `.br`/`.gz` sidecars beside it — and `fetch` volunteers
+        // `Accept-Encoding: br` by default, which would serve an untampered representation and make this
+        // assertion silently about the wrong file.
+        const served = await (
+            await fetch(`${app.url}/__abide/chunk/${manifest.entry}`, {
+                headers: { 'accept-encoding': 'identity' },
+            })
+        ).text()
         expect(served).toContain(sentinel) // came from the dist file on disk, not a fresh build
         const doc = await (await fetch(`${app.url}/`)).text()
         expect(doc).toContain(`<script type="module" src="/__abide/chunk/${manifest.entry}">`)

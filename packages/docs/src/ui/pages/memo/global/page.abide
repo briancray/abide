@@ -10,33 +10,34 @@
 <main class="page">
   <h1>Global probes</h1>
   <p class="lead">The <a href="/memo/probes">per-slot probes</a> read one memo. These are their app-wide siblings — probes and verbs that act across slots or over the whole process: <code>reachable(host)</code> and <code>online()</code> report connectivity, and the tag selectors (<code>invalidate({'{'}tags{'}'})</code> / <code>refresh({'{'}tags{'}'})</code>) drop or revalidate every slot carrying a tag at once.</p>
-
-  <h2><code>reachable(host)</code></h2>
-  <p><code>reachable(host)</code> actively probes a host: the app's own origin answers (true), a dead local port is refused (false).</p>
   <Demo id="reach" title="<code>reachable(host)</code>" server="src/server/rpc/cacheReachable.ts" client="src/ui/demos/memo/ReachableDemo.abide" tab="server">
     <ReachableDemo />
   </Demo>
-
-  <h2><code>online()</code></h2>
-  <p><code>online()</code> is a reactive connectivity boolean — always true on the server, tracks <code>navigator.onLine</code> in the browser. No args, no slot: app-wide state read straight in a template.</p>
+  <aside class="aside">
+    <p><code>reachable(host)</code> actively probes a host: the app's own origin answers (true), a dead local port is refused (false).</p>
+  </aside>
   <Demo id="online" title="<code>online()</code>" client="src/ui/demos/memo/OnlineDemo.abide" tab="client">
     <OnlineDemo />
   </Demo>
-
-  <h2>Tag selectors — <code>invalidate({'{'}tags{'}'})</code> / <code>refresh({'{'}tags{'}'})</code></h2>
-  <p>Two shared reads carry the tag <code>"docs"</code>. The global verb <code>invalidate({'{'} tags: ["docs"] {'}'})</code> — run server-side (the tag registry is server-only) through a POST RPC — drops <strong>both</strong> slots at once, so a re-read of each re-fetches together.</p>
+  <aside class="aside">
+    <p><code>online()</code> is a reactive connectivity boolean — always true on the server, tracks <code>navigator.onLine</code> in the browser. No args, no slot: app-wide state read straight in a template.</p>
+  </aside>
   <Demo id="tags" title="global <code>invalidate({'{'}tags{'}'})</code> — drop every tagged slot" server="src/server/rpc/cacheTagBust.ts" client="src/ui/demos/memo/TagsInvalidateDemo.abide" tab="server">
     <TagsInvalidateDemo />
   </Demo>
-
-  <p>The eager sibling: <code>refresh({'{'} tags: ["docs"] {'}'})</code> revalidates every tagged slot in place, retaining each stale value while it re-runs — so a re-read returns a freshly climbed count.</p>
+  <aside class="aside">
+    <p>Two shared reads carry the tag <code>"docs"</code>. The global verb <code>invalidate({'{'} tags: ["docs"] {'}'})</code> — run server-side (the tag registry is server-only) through a POST RPC — drops <strong>both</strong> slots at once, so a re-read of each re-fetches together.</p>
+  </aside>
   <Demo id="tags-refresh" title="global <code>refresh({'{'}tags{'}'})</code> — eager revalidate every tagged slot" server="src/server/rpc/cacheTagRefresh.ts" client="src/ui/demos/memo/TagsRefreshDemo.abide" tab="server">
     <TagsRefreshDemo />
   </Demo>
-
-  <h2>Tag probes — <code>pending({'{'}tags{'}'})</code> / <code>refreshing({'{'}tags{'}'})</code></h2>
-  <p>The read side of the tag surface: reactive aggregates that are <strong>true</strong> if <em>any</em> shared slot carrying a tag is loading or revalidating. Like the tag verbs, they're <strong>server-side</strong> (the tag registry lives on the server), so this demo captures them in one server pass — a tagged shared read goes <code>pending</code> while it first loads, then <code>refreshing</code> while it revalidates over the retained value.</p>
+  <aside class="aside">
+    <p>The eager sibling: <code>refresh({'{'} tags: ["docs"] {'}'})</code> revalidates every tagged slot in place, retaining each stale value while it re-runs — so a re-read returns a freshly climbed count.</p>
+  </aside>
   <Demo id="tag-probes" title="<code>pending({'{'}tags{'}'})</code> / <code>refreshing({'{'}tags{'}'})</code> — server-side aggregates" server="src/server/rpc/tagProbes.ts" client="src/ui/demos/memo/TagProbesDemo.abide" tab="server">
     <TagProbesDemo />
   </Demo>
+  <aside class="aside">
+    <p>The read side of the tag surface: reactive aggregates that are <strong>true</strong> if <em>any</em> shared slot carrying a tag is loading or revalidating. Like the tag verbs, they're <strong>server-side</strong> (the tag registry lives on the server), so this demo captures them in one server pass — a tagged shared read goes <code>pending</code> while it first loads, then <code>refreshing</code> while it revalidates over the retained value.</p>
+  </aside>
 </main>

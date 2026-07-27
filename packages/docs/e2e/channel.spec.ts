@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives /channel: the third primitive with NO transport at all — an in-process pub/sub hub owned by a
 // browser module. Proves the three things the page claims: iterating IS the subscription, a non-void

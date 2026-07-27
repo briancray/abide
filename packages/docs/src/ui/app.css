@@ -5,8 +5,56 @@
    `:root` below. Stacking is done with flex/grid `gap` on the CONTAINER, never per-child margins, so the
    vertical rhythm is uniform and nothing bumps together. */
 
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
+
+/* FONTS — self-hosted from `src/ui/public/fonts/`, served same-origin at those literal paths.
+   Previously a `@import url(fonts.googleapis.com/css2?…)`, which cost a THREE-STEP serial chain on a
+   cold load: this stylesheet had to download and parse before the Google URL was even discovered, then
+   that CSS had to download and parse before the .woff2 URLs were, then those were fetched cross-origin
+   (fresh DNS + TLS, no preconnect). Measured ~2.1s to load with ~1.8s of continuous re-layout, against
+   478ms warm — the fonts were the whole delta.
+
+   The url()s are ROOT-ABSOLUTE on purpose. A relative one would be resolved by Bun's CSS bundler and
+   inlined as a base64 data URL (at any size — there is no threshold, and `loader` does not apply to CSS
+   references), pushing ~102KB of font, +33% for base64, into this render-blocking stylesheet. The
+   absolute form is passed through instead, because `src/ui/public/`'s top-level entries are marked
+   external for the client build.
+
+   One file per family, not one per weight: these are VARIABLE fonts, so all the weights the docs use
+   come out of a single face declared with a weight RANGE. That is also what the Google CSS was doing —
+   its 55 @font-face rules resolved to just 3 distinct URLs. Latin subset only; the docs are English. */
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("/fonts/inter-latin-var.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+        U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 100 800;
+    font-display: swap;
+    src: url("/fonts/jetbrains-mono-latin-var.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+        U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Space Grotesk";
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: url("/fonts/space-grotesk-latin-var.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+        U+FEFF, U+FFFD;
+}
 
 /* Scan the `.abide` templates for utility class usage — the emitted client modules live in a tmpdir,
    so this must point at the real source tree (../ = src/). */
@@ -16,342 +64,1100 @@
    deliberately cool + precise — abide is infrastructure ("remain, endure"), not a warm editorial site.
    `signal` = the electric blue of a reactive read; `live` = the green of a settled/streaming memo. */
 @theme {
-  --color-ink: #0e1420;
-  --color-ink-2: #161f2e;
-  --color-ink-line: #26324a;
-  --color-paper: #f4f6f9;
-  --color-surface: #ffffff;
-  --color-line: #e3e7ee;
-  --color-text: #1a2431;
-  --color-muted: #5c6b7f;
-  --color-signal: #345bff;
-  --color-signal-soft: #eaefff;
-  --color-live: #12b886;
+    --color-ink: #0e1420;
+    --color-ink-2: #161f2e;
+    --color-ink-line: #26324a;
+    --color-paper: #f4f6f9;
+    --color-surface: #ffffff;
+    --color-line: #e3e7ee;
+    --color-text: #1a2431;
+    --color-muted: #5c6b7f;
+    --color-signal: #345bff;
+    --color-signal-soft: #eaefff;
+    --color-live: #12b886;
 
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /* ── Scales — the single source of rhythm ─────────────────────────────────── */
 :root {
-  /* Spacing (4px base). Every padding + gap + width snaps to one of these. */
-  --space-1: 0.25rem;   /*  4 */
-  --space-2: 0.5rem;    /*  8 */
-  --space-3: 0.75rem;   /* 12 */
-  --space-4: 1rem;      /* 16 */
-  --space-5: 1.25rem;   /* 20 */
-  --space-6: 1.5rem;    /* 24 */
-  --space-7: 2rem;      /* 32 */
-  --space-8: 2.5rem;    /* 40 */
-  --space-9: 3rem;      /* 48 */
-  --space-10: 4rem;     /* 64 */
-  --space-11: 5rem;     /* 80 */
+    /* Spacing (4px base). Every padding + gap + width snaps to one of these. */
+    --space-1: 0.25rem;
+    /*  4 */
+    --space-2: 0.5rem;
+    /*  8 */
+    --space-3: 0.75rem;
+    /* 12 */
+    --space-4: 1rem;
+    /* 16 */
+    --space-5: 1.25rem;
+    /* 20 */
+    --space-6: 1.5rem;
+    /* 24 */
+    --space-7: 2rem;
+    /* 32 */
+    --space-8: 2.5rem;
+    /* 40 */
+    --space-9: 3rem;
+    /* 48 */
+    --space-10: 4rem;
+    /* 64 */
+    --space-11: 5rem;
+    /* 80 */
 
-  /* Type scale (~1.2 ratio, 15px base) + line-heights. */
-  --text-2xs: 0.6875rem;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.9375rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.375rem;
-  --text-2xl: 1.75rem;
-  --text-3xl: clamp(1.9rem, 1.4rem + 2vw, 2.6rem);
-  --leading-tight: 1.2;
-  --leading-snug: 1.4;
-  --leading-normal: 1.6;
-  --leading-code: 1.55;
+    /* Type scale (~1.2 ratio, 15px base) + line-heights. */
+    --text-2xs: 0.6875rem;
+    --text-xs: 0.75rem;
+    --text-sm: 0.8125rem;
+    --text-base: 0.9375rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.375rem;
+    --text-2xl: 1.75rem;
+    --text-3xl: clamp(1.9rem, 1.4rem + 2vw, 2.6rem);
+    --leading-tight: 1.2;
+    --leading-snug: 1.4;
+    --leading-normal: 1.6;
+    --leading-code: 1.55;
 
-  /* Radii. */
-  --radius-1: 6px;
-  --radius-2: 8px;
-  --radius-3: 10px;
-  --radius-4: 12px;
-  --radius-5: 14px;
-  --radius-pill: 999px;
+    /* Radii. */
+    --radius-1: 6px;
+    --radius-2: 8px;
+    --radius-3: 10px;
+    --radius-4: 12px;
+    --radius-5: 14px;
+    --radius-pill: 999px;
 
-  /* Layout widths (same scale family — rem multiples of the shell). */
-  --w-sidebar: 17rem;
-  --w-content: 50rem;
-  --w-prose: 40rem;
-  --w-card-min: 14rem;
+    /* Layout widths (same scale family — rem multiples of the shell). */
+    --w-sidebar: 17rem;
+    --w-cards: 54rem;
+    /* the demo column — wide enough for two code measures side by side */
+    --w-aside: 21rem;
+    /* the prose column beside it */
+    --w-content: 50rem;
+    --w-prose: 40rem;
+    --w-card-min: 14rem;
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
 @layer base {
-  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
-  body {
-    margin: 0;
-    background: var(--color-paper);
-    color: var(--color-text);
-    font-family: var(--font-sans);
-    font-size: var(--text-base);
-    line-height: var(--leading-normal);
-    -webkit-font-smoothing: antialiased;
-  }
-  /* Flow elements carry NO margin — their container's `gap` owns the rhythm. */
-  h1, h2, h3, h4, p, ul, ol, figure, pre { margin: 0; }
-  h1, h2, h3, h4 { font-family: var(--font-display); color: #0f1a2b; letter-spacing: -0.02em; line-height: var(--leading-tight); }
-  h1 { font-size: var(--text-3xl); font-weight: 700; }
-  h2 { font-size: var(--text-xl); font-weight: 600; }
-  h3 { font-size: var(--text-lg); font-weight: 600; }
-  a { color: var(--color-signal); text-decoration: none; }
-  a:hover { text-decoration: underline; text-underline-offset: 2px; }
-  ul, ol { padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); }
-  :not(pre) > code {
-    font-family: var(--font-mono);
-    font-size: 0.86em;
-    background: #eef1f6;
-    color: #243247;
-    padding: 0.12em 0.4em;
-    border-radius: var(--radius-1);
-    border: 1px solid #e2e7ef;
-  }
-  button {
-    font: inherit;
-    cursor: pointer;
-    border: 1px solid var(--color-signal);
-    background: var(--color-signal);
-    color: #fff;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-2);
-    font-weight: 500;
-    transition: filter 0.12s ease, transform 0.06s ease;
-  }
-  button:hover { filter: brightness(1.06); }
-  button:active { transform: translateY(1px); }
-  input, select, textarea {
-    font: inherit;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius-2);
-    background: var(--color-surface);
-    color: var(--color-text);
-  }
-  input:focus-visible, select:focus-visible, textarea:focus-visible,
-  button:focus-visible, a:focus-visible {
-    outline: 2px solid var(--color-signal);
-    outline-offset: 2px;
-  }
-  :root { color-scheme: light; }
+    html {
+        -webkit-text-size-adjust: 100%;
+        scroll-behavior: smooth;
+    }
+
+    body {
+        margin: 0;
+        background: var(--color-paper);
+        color: var(--color-text);
+        font-family: var(--font-sans);
+        font-size: var(--text-base);
+        line-height: var(--leading-normal);
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* Flow elements carry NO margin — their container's `gap` owns the rhythm. */
+    h1,
+    h2,
+    h3,
+    h4,
+    p,
+    ul,
+    ol,
+    figure,
+    pre {
+        margin: 0;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        font-family: var(--font-display);
+        color: #0f1a2b;
+        letter-spacing: -0.02em;
+        line-height: var(--leading-tight);
+    }
+
+    h1 {
+        font-size: var(--text-3xl);
+        font-weight: 700;
+    }
+
+    h2 {
+        font-size: var(--text-xl);
+        font-weight: 600;
+    }
+
+    h3 {
+        font-size: var(--text-lg);
+        font-weight: 600;
+    }
+
+    a {
+        color: var(--color-signal);
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    ul,
+    ol {
+        padding-left: var(--space-5);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+    }
+
+    :not(pre)>code {
+        font-family: var(--font-mono);
+        font-size: 0.86em;
+        background: #eef1f6;
+        color: #243247;
+        padding: 0.12em 0.4em;
+        border-radius: var(--radius-1);
+        border: 1px solid #e2e7ef;
+    }
+
+    button {
+        font: inherit;
+        cursor: pointer;
+        border: 1px solid var(--color-signal);
+        background: var(--color-signal);
+        color: #fff;
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-2);
+        font-weight: 500;
+        transition: filter 0.12s ease, transform 0.06s ease;
+    }
+
+    button:hover {
+        filter: brightness(1.06);
+    }
+
+    button:active {
+        transform: translateY(1px);
+    }
+
+    input,
+    select,
+    textarea {
+        font: inherit;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-2);
+        background: var(--color-surface);
+        color: var(--color-text);
+    }
+
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    button:focus-visible,
+    a:focus-visible {
+        outline: 2px solid var(--color-signal);
+        outline-offset: 2px;
+    }
+
+    :root {
+        color-scheme: light;
+    }
 }
 
 /* ── App shell (owned by the root layout) ─────────────────────────────────── */
-.shell { min-height: 100vh; }
-.sidebar {
-  position: fixed; inset: 0 auto 0 0; width: var(--w-sidebar); z-index: 20;
-  display: flex; flex-direction: column;
-  background: var(--color-ink);
-  color: #c6d2e6;
-  border-right: 1px solid var(--color-ink-line);
-}
-/* the isomorphic seam — a hairline where server DOM meets client */
-.sidebar::after {
-  content: ""; position: absolute; top: 0; right: -1px; width: 1px; height: 100%;
-  background: linear-gradient(180deg, transparent, var(--color-signal) 20%, var(--color-live) 80%, transparent);
-  opacity: 0.6;
-}
-.brand {
-  display: flex; align-items: baseline; gap: var(--space-2);
-  padding: var(--space-6) var(--space-5) var(--space-4);
-  font-family: var(--font-display); font-weight: 700; font-size: var(--text-xl); letter-spacing: -0.02em; color: #fff;
-}
-.brand small {
-  font-family: var(--font-mono); font-weight: 400; font-size: var(--text-2xs); letter-spacing: 0.04em;
-  color: #7c8db0; text-transform: uppercase;
-}
-.index { overflow-y: auto; padding: var(--space-1) var(--space-3) var(--space-7); flex: 1; display: flex; flex-direction: column; gap: var(--space-5); }
-.idx-group { display: flex; flex-direction: column; gap: 1px; }
-.idx-label {
-  font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 600;
-  letter-spacing: 0.13em; text-transform: uppercase; color: #6f80a3;
-  padding: 0 var(--space-2) var(--space-1);
-}
-.idx-link {
-  position: relative; display: flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-2); color: #b9c6dd; font-size: var(--text-sm); font-weight: 450;
-  text-decoration: none; transition: background 0.12s ease, color 0.12s ease;
-}
-.idx-link::before {
-  content: ""; width: 5px; height: 5px; border-radius: 50%; background: #3c4c68; flex: none;
-  transition: background 0.12s ease, transform 0.12s ease;
-}
-.idx-link:hover { background: var(--color-ink-2); color: #eaf1ff; text-decoration: none; }
-.idx-link:hover::before { background: #5c6f96; }
-.idx-active { background: var(--color-ink-2); color: #fff; font-weight: 600; }
-.idx-active::before {
-  background: var(--color-live); transform: scale(1.35);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-live) 70%, transparent);
+.shell {
+    min-height: 100vh;
 }
 
-.content { margin-left: var(--w-sidebar); min-height: 100vh; }
+.sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--w-sidebar);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-ink);
+    color: #c6d2e6;
+    border-right: 1px solid var(--color-ink-line);
+}
+
+/* the isomorphic seam — a hairline where server DOM meets client */
+.sidebar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -1px;
+    width: 1px;
+    height: 100%;
+    background: linear-gradient(180deg, transparent, var(--color-signal) 20%, var(--color-live) 80%, transparent);
+    opacity: 0.6;
+}
+
+.brand {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-6) var(--space-5) var(--space-4);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-xl);
+    letter-spacing: -0.02em;
+    color: #fff;
+}
+
+.brand small {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-size: var(--text-2xs);
+    letter-spacing: 0.04em;
+    color: #7c8db0;
+    text-transform: uppercase;
+}
+
+.index {
+    overflow-y: auto;
+    padding: var(--space-1) var(--space-3) var(--space-7);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.idx-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.idx-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: #6f80a3;
+    padding: 0 var(--space-2) var(--space-1);
+}
+
+.idx-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-2);
+    color: #b9c6dd;
+    font-size: var(--text-sm);
+    font-weight: 450;
+    text-decoration: none;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.idx-link::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #3c4c68;
+    flex: none;
+    transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.idx-link:hover {
+    background: var(--color-ink-2);
+    color: #eaf1ff;
+    text-decoration: none;
+}
+
+.idx-link:hover::before {
+    background: #5c6f96;
+}
+
+.idx-active {
+    background: var(--color-ink-2);
+    color: #fff;
+    font-weight: 600;
+}
+
+.idx-active::before {
+    background: var(--color-live);
+    transform: scale(1.35);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-live) 70%, transparent);
+}
+
+.content {
+    margin-left: var(--w-sidebar);
+    min-height: 100vh;
+}
+
+/* THE PAGE IS TWO COLUMNS: demo cards on the left, the prose about them on the right, each paragraph
+   level with the card it describes. Prose above a card reads as page text that happens to precede one —
+   beside it, the connection needs no explaining. One grid does it, so a row's two halves genuinely share
+   a baseline; `display: contents` on the wrappers between here and the page's own children is what lets
+   the page author cards and prose as ordinary siblings and still land them in the right columns. */
 .content-inner {
-  max-width: var(--w-content); margin: 0 auto; padding: var(--space-9) var(--space-8) var(--space-11);
-  display: flex; flex-direction: column; gap: var(--space-6);
+    display: grid;
+    grid-template-columns: minmax(0, var(--w-cards)) var(--w-aside);
+    align-items: start;
+    gap: var(--space-6) var(--space-7);
+    max-width: calc(var(--w-cards) + var(--space-7) + var(--w-aside) + 2 * var(--space-8));
+    padding: var(--space-9) var(--space-8) var(--space-11);
+}
+
+.content-col,
+.content-col>.page {
+    display: contents;
+}
+
+/* Everything a page renders is a card unless it says otherwise — the left column is the default. */
+.content-inner>*,
+.page>* {
+    grid-column: 1;
+    min-width: 0;
+}
+
+.page>h1,
+.page>.lead {
+    grid-column: 1 / -1;
+}
+
+/* …and the right column is opt-in: the aside a card carries, plus the layout's own end-of-page blocks. */
+.page>.aside,
+.rail {
+    grid-column: 2;
+}
+
+/* The prose column. Its own measure, its own rhythm — several paragraphs, a note, a list. */
+.aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    /* The grid column already bounds it; this is for the one page whose content sits inside a nested
+     layout's own box, where the aside flows under its card instead of beside it. */
+    max-width: var(--w-prose);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: var(--color-muted);
+}
+
+.aside p {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.aside> :first-child {
+    margin-top: var(--space-1);
+}
+
+.aside a {
+    color: var(--color-signal);
+}
+
+.aside code {
+    font-size: 0.94em;
+}
+
+.aside .note {
+    padding-left: var(--space-3);
+    border-left: 2px solid color-mix(in srgb, var(--color-live) 55%, var(--color-line));
+}
+
+.aside .note::before {
+    content: "note";
+    display: block;
+    margin-bottom: var(--space-1);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: #8b97a8;
+}
+
+/* The layout's own right-column blocks: the page tip at the top, where to read next at the end. */
+.rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.rail-block {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.rail-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: #8b97a8;
+}
+
+.rail-tip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-live);
+}
+
+.rail-tip p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    color: var(--color-muted);
+}
+
+.rail-tip code {
+    font-size: 0.95em;
+    background: #eef1f6;
+}
+
+.rail-link {
+    padding: var(--space-1) 0;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.12s ease;
+}
+
+.rail-link:hover {
+    color: var(--color-signal);
+    text-decoration: none;
+}
+
+.rail-next {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-4);
+    background: var(--color-surface);
+    text-decoration: none;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.rail-next:hover {
+    border-color: color-mix(in srgb, var(--color-signal) 40%, var(--color-line));
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.07);
+    text-decoration: none;
+}
+
+.rail-next-label {
+    font-family: var(--font-display);
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.rail-next:hover .rail-next-label {
+    color: var(--color-signal);
 }
 
 /* Breadcrumb — the current route as a clickable file path (a folder is a URL). */
-.crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 0; font-family: var(--font-mono); font-size: var(--text-xs); }
-.crumb-root { color: #9aa6b6; }
-.crumb-sep { color: #c4ccd6; margin: 0 var(--space-2); }
-.crumb a { color: var(--color-muted); text-decoration: none; }
-.crumb a:hover { color: var(--color-signal); text-decoration: none; }
-.crumb a:last-of-type { color: var(--color-signal); font-weight: 600; }
+.crumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+}
+
+.crumb-root {
+    color: #9aa6b6;
+}
+
+.crumb-sep {
+    color: #c4ccd6;
+    margin: 0 var(--space-2);
+}
+
+.crumb a {
+    color: var(--color-muted);
+    text-decoration: none;
+}
+
+.crumb a:hover {
+    color: var(--color-signal);
+    text-decoration: none;
+}
+
+.crumb a:last-of-type {
+    color: var(--color-signal);
+    font-weight: 600;
+}
 
 /* Sidebar sub-index — the samples on the OPEN page (injected client-side under the active link). */
-.idx-samples { display: flex; flex-direction: column; gap: 1px; margin-left: var(--space-5); padding-left: var(--space-3); border-left: 1px solid var(--color-ink-line); }
-.idx-sample {
-  padding: var(--space-1) var(--space-2); border-radius: var(--radius-1); color: #8a99b6;
-  font-size: var(--text-xs); text-decoration: none; transition: color 0.12s ease, background 0.12s ease;
+.idx-samples {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-left: var(--space-5);
+    padding-left: var(--space-3);
+    border-left: 1px solid var(--color-ink-line);
 }
-.idx-sample:hover { color: #dce6f7; text-decoration: none; }
-.idx-sample-active { color: #fff; background: var(--color-ink-2); }
+
+.idx-sample {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-1);
+    color: #8a99b6;
+    font-size: var(--text-xs);
+    text-decoration: none;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+
+.idx-sample:hover {
+    color: #dce6f7;
+    text-decoration: none;
+}
+
+.idx-sample-active {
+    color: #fff;
+    background: var(--color-ink-2);
+}
+
+/* Below this the two columns can't both hold a measure, so the grid collapses to one and every aside
+   falls in under the card it belongs to — which is the order they are authored in, so nothing is lost. */
+@media (max-width: 72rem) {
+    .content-inner {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .page>.aside,
+    .rail {
+        grid-column: 1;
+    }
+}
 
 @media (max-width: 860px) {
-  .sidebar { position: static; width: auto; }
-  .content { margin-left: 0; }
-  .content-inner { padding: var(--space-7) var(--space-5) var(--space-10); }
+    .sidebar {
+        position: static;
+        width: auto;
+    }
+
+    .content {
+        margin-left: 0;
+    }
+
+    .content-inner {
+        padding: var(--space-7) var(--space-5) var(--space-10);
+    }
 }
 
 /* ── Page content — the semantic classes the sample pages already use ─────── */
 /* In-content nav rows: the section-hub links (e.g. /platform → its sub-pages) and the per-page
    related-section links. The sidebar is the primary index; these read as secondary, in-flow links. */
 .content .nav {
-  display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); align-items: center;
-  padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-line);
-  font-size: var(--text-base);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    align-items: center;
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-line);
+    font-size: var(--text-base);
 }
-.content .nav a { color: var(--color-muted); font-weight: 500; }
-.content .nav a:hover { color: var(--color-signal); text-decoration: none; }
+
+.content .nav a {
+    color: var(--color-muted);
+    font-weight: 500;
+}
+
+.content .nav a:hover {
+    color: var(--color-signal);
+    text-decoration: none;
+}
 
 /* The page IS a vertical flow — one gap owns the rhythm between heading, prose, and every demo card. */
-.page { display: flex; flex-direction: column; gap: var(--space-6); max-width: none; margin: 0; padding: 0; }
-.lead { font-size: var(--text-lg); color: var(--color-muted); max-width: var(--w-prose); }
-.muted { color: var(--color-muted); }
-.hint { color: var(--color-live); font-weight: 500; }
-.say { font-size: var(--text-lg); }
-.via { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
-
-.row, .controls, .counter { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
-.grid, .cards, .surfaces, .caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--w-card-min), 1fr)); gap: var(--space-4); list-style: none; padding-left: 0; }
-.list, .chips, .topics, .links { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; padding-left: 0; }
-.list { flex-direction: column; }
-.links { gap: var(--space-3); }
-
-.card, .surfaces > *, .region {
-  display: flex; flex-direction: column; gap: var(--space-1);
-  background: var(--color-surface); border: 1px solid var(--color-line);
-  border-radius: var(--radius-4); padding: var(--space-4); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+.page {
+    max-width: none;
+    margin: 0;
+    padding: 0;
 }
-.card:hover { border-color: color-mix(in srgb, var(--color-signal) 40%, var(--color-line)); box-shadow: 0 4px 14px rgba(16, 24, 40, 0.07); transform: translateY(-1px); }
-.card a { font-family: var(--font-display); }
+
+.lead {
+    font-size: var(--text-lg);
+    color: var(--color-muted);
+    max-width: var(--w-prose);
+}
+
+.muted {
+    color: var(--color-muted);
+}
+
+.hint {
+    color: var(--color-live);
+    font-weight: 500;
+}
+
+.say {
+    font-size: var(--text-lg);
+}
+
+.via {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+}
+
+.row,
+.controls,
+.counter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: center;
+}
+
+.grid,
+.cards,
+.surfaces,
+.caps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--w-card-min), 1fr));
+    gap: var(--space-4);
+    list-style: none;
+    padding-left: 0;
+}
+
+.list,
+.chips,
+.topics,
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    list-style: none;
+    padding-left: 0;
+}
+
+.list {
+    flex-direction: column;
+}
+
+.links {
+    gap: var(--space-3);
+}
+
+.card,
+.surfaces>*,
+.region {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-4);
+    padding: var(--space-4);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.card:hover {
+    border-color: color-mix(in srgb, var(--color-signal) 40%, var(--color-line));
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.07);
+    transform: translateY(-1px);
+}
+
+.card a {
+    font-family: var(--font-display);
+}
 
 /* ── Sample card — a self-contained, reproducible demo unit ────────────────── */
-/* Each holds: heading (the scroll-spy anchor) · description · live demo · the exact source that
-   powers it (client .abide region + server file, if any). The card's sections butt against each other
-   with hairline separators by design, so the card itself is block flow with padded sections — not gap. */
+/* Three BANDS in reading order, each on its own ground so you never have to work out which kind of
+   thing you are looking at: ABOUT (what this shows — title + description, on the header tint) · LIVE
+   (the thing actually running, on white) · SOURCE (the code that produced it, dark panels on a tinted
+   floor). Hairlines separate them, so the card is block flow with padded sections — not gap. */
 .sample {
-  border: 1px solid var(--color-line); border-radius: var(--radius-5);
-  background: var(--color-surface); overflow: hidden;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  scroll-margin-top: var(--space-6);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-5);
+    background: var(--color-surface);
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    scroll-margin-top: var(--space-6);
 }
-.sample > h2, .sample > h3 { padding: var(--space-4) var(--space-6); font-size: var(--text-lg); border-bottom: 1px solid var(--color-line); background: #fbfcfe; }
-.sample > h2 code, .sample > h3 code { background: #eef1f6; }
-.sample > p { padding: var(--space-3) var(--space-6) 0; color: var(--color-muted); }
-/* The live-demo body IS a vertical flow — its `gap` spaces the controls, output, stream, etc. */
-.sample-demo { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5) var(--space-6) var(--space-6); }
+
+.sample-about {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-6);
+    background: #fbfcfe;
+    border-bottom: 1px solid var(--color-line);
+}
+
+.sample-about h2 {
+    font-size: var(--text-lg);
+}
+
+.sample-about h2 code {
+    background: #eef1f6;
+}
+
+/* The description reads at prose measure even when the card breaks out to two code columns — a demo
+   title can span the card, a sentence about it should not. */
+.sample-about p {
+    max-width: var(--w-prose);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+}
+
+/* The live-demo body IS a vertical flow — its `gap` spaces the controls, output, stream, etc. A panel's
+   body is the same band without the LIVE strip above it, so it carries its own top padding. */
+.sample-body { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5) var(--space-6) var(--space-6); }
+.sample-body > :only-child { margin: 0; }
+.sample-demo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-6) var(--space-6);
+}
 
 /* the "run" / live strip above a demo */
-.sample-head { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-6) 0; }
-.sample-run { font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-live); }
+.sample-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-6) 0;
+}
 
-/* Source viewer — a code-editor file-tab strip fused to the code panel below. Fixed order:
-   server, then client. The active tab shares the code panel's dark background so it visibly
-   "opens into" the source it is showing; inactive tabs are muted on a lighter tab bar. */
+.sample-run {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-live);
+}
+
+/* Source viewer — SERVER and CLIENT are two INDEPENDENT columns, each a code-editor file-tab strip
+   fused to the code panel below it. A side holding several files tabs within its own column, so the
+   pair is never a single strip you have to leave to see the other side. Fixed order: server, then
+   client. The active tab shares the code panel's dark background so it visibly "opens into" the
+   source it is showing; inactive tabs are muted on a lighter tab bar. */
+.sample-source {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(23rem, 100%), 1fr));
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: #f6f8fb;
+    border-top: 1px solid var(--color-line);
+}
+
+/* min-width: 0 — a grid item's default `auto` minimum is its content, which a wide line of code would
+   blow past, pushing the column (and the card) wider instead of scrolling inside `.code`. */
+.source-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Stacked, the card's `tab` says which side reads first; side by side (below) it has nothing to say. */
+.sample-source.lead-client .source-col[data-side="client"] {
+    order: -1;
+}
+
+/* `baseline`, not `flex-end`: the side label and the file tabs are set at different sizes, so aligning
+   their BOXES leaves their text on two different lines. Baseline-aligning still leaves the tab flush to
+   the bar's bottom edge (it is the deepest item below the shared baseline), so the active tab keeps
+   fusing into the panel. */
 .sample-tabs {
-  display: flex; gap: var(--space-1); align-items: flex-end;
-  margin: var(--space-4) var(--space-4) 0; padding: var(--space-2) var(--space-2) 0;
-  background: var(--color-ink-2);
-  border: 1px solid var(--color-ink-line); border-bottom: none;
-  border-radius: var(--radius-4) var(--radius-4) 0 0;
+    display: flex;
+    gap: var(--space-3);
+    align-items: baseline;
+    padding: var(--space-2) var(--space-3) 0;
+    background: var(--color-ink-2);
+    border: 1px solid var(--color-ink-line);
+    border-bottom: none;
+    border-radius: var(--radius-4) var(--radius-4) 0 0;
 }
+
+.tab-strip {
+    display: flex;
+    gap: var(--space-1);
+    align-items: flex-end;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.tab-side {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b7aa8;
+    white-space: nowrap;
+}
+
 .tab {
-  display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
-  font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-  color: #8b98c4; background: transparent; border: none;
-  padding: var(--space-2) var(--space-4); border-radius: var(--radius-2) var(--radius-2) 0 0;
-  transition: background 0.12s ease, color 0.12s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    white-space: nowrap;
+    color: #8b98c4;
+    background: transparent;
+    border: none;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-2) var(--radius-2) 0 0;
+    transition: background 0.12s ease, color 0.12s ease;
 }
-.tab:hover { color: #d6e2ff; background: color-mix(in srgb, var(--color-ink) 55%, transparent); }
-.tab.active { color: #fff; background: var(--color-ink); }
-.tab-file { text-transform: none; letter-spacing: 0; font-weight: 500; color: #6b7aa8; }
-.tab:hover .tab-file { color: #9fb3ff; }
-.tab.active .tab-file { color: #82aaff; }
 
-.sample-panels { margin: 0 var(--space-4) var(--space-4); }
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-.tab-panel .code { border-radius: 0 0 var(--radius-4) var(--radius-4); }
-
-.pill, .badge {
-  display: inline-flex; align-items: center; gap: var(--space-1);
-  font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500;
-  padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill);
-  background: var(--color-signal-soft); color: var(--color-signal); border: 1px solid #d7e0ff;
+.tab:hover {
+    color: #d6e2ff;
+    background: color-mix(in srgb, var(--color-ink) 55%, transparent);
 }
-.badge { font-family: var(--font-sans); }
-.err { color: #d1435b; font-weight: 500; }
+
+.tab.active {
+    color: #82aaff;
+    background: var(--color-ink);
+}
+
+.sample-panels {
+    flex: 1;
+    min-width: 0;
+}
+
+.tab-panel {
+    display: none;
+    height: 100%;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+.tab-panel .code,
+.sample-panels > .code {
+    height: 100%;
+    border-radius: 0 0 var(--radius-4) var(--radius-4);
+}
+
+/* Side by side whenever two code measures actually FIT — asked of the card, not of the viewport. The
+   card is its own column now, so there is nothing to break out of and nothing to derive from `100vw`:
+   `auto-fit` splits the pair when each side clears its minimum and stacks them when it doesn't. */
+
+.pill,
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--color-signal-soft);
+    color: var(--color-signal);
+    border: 1px solid #d7e0ff;
+}
+
+.badge {
+    font-family: var(--font-sans);
+}
+
+.err {
+    color: #d1435b;
+    font-weight: 500;
+}
 
 /* live output / stream / socket log — spaced by their flex-container's gap, never their own margin */
-.out, .log, .stream {
-  font-family: var(--font-mono); font-size: var(--text-sm); line-height: var(--leading-code);
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-3);
-  background: var(--color-ink); color: #cfe0ff; overflow-x: auto;
-  border: 1px solid var(--color-ink-line);
+.out,
+.log,
+.stream {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: var(--leading-code);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-3);
+    background: var(--color-ink);
+    color: #cfe0ff;
+    overflow-x: auto;
+    border: 1px solid var(--color-ink-line);
 }
-.log { display: flex; flex-direction: column; gap: var(--space-1); }
-.msg { padding: var(--space-1) var(--space-2); border-radius: var(--radius-1); }
-.msg[data-via="server"] { background: color-mix(in srgb, var(--color-signal) 16%, transparent); }
-.msg[data-via="client"] { background: color-mix(in srgb, var(--color-live) 16%, transparent); }
-.empty { color: color-mix(in srgb, #cfe0ff 55%, transparent); font-style: italic; }
+
+.log {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.msg {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-1);
+}
+
+.msg[data-via="server"] {
+    background: color-mix(in srgb, var(--color-signal) 16%, transparent);
+}
+
+.msg[data-via="client"] {
+    background: color-mix(in srgb, var(--color-live) 16%, transparent);
+}
+
+.empty {
+    color: color-mix(in srgb, #cfe0ff 55%, transparent);
+    font-style: italic;
+}
 
 /* route() readout — a definition list of the current route */
-.route { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-4); font-family: var(--font-mono); font-size: var(--text-sm); }
-.route dt { color: var(--color-signal); font-weight: 600; }
-.route dd { margin: 0; color: var(--color-text); }
+.route {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-1) var(--space-4);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+}
+
+.route dt {
+    color: var(--color-signal);
+    font-weight: 600;
+}
+
+.route dd {
+    margin: 0;
+    color: var(--color-text);
+}
 
 /* source caption + loading (the {source(...)} demo blocks) */
-.src-cap { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-muted); }
-.src-loading { color: var(--color-muted); font-style: italic; }
+.src-cap {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+}
+
+.src-loading {
+    color: var(--color-muted);
+    font-style: italic;
+}
 
 /* Code block theme — pairs with codeBlock()/highlight() token classes. */
 .code {
-  padding: var(--space-4); border-radius: var(--radius-4);
-  background: var(--color-ink); color: #d6e2ff; overflow-x: auto;
-  font-family: var(--font-mono); font-size: var(--text-sm); line-height: var(--leading-normal); tab-size: 2;
-  border: 1px solid var(--color-ink-line);
+    padding: var(--space-4);
+    border-radius: var(--radius-4);
+    background: var(--color-ink);
+    color: #d6e2ff;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    tab-size: 2;
+    border: 1px solid var(--color-ink-line);
 }
-.code code { font: inherit; white-space: pre; background: none; border: none; padding: 0; color: inherit; }
-.tok-keyword { color: #c792ea; }
-.tok-string  { color: #c3e88d; }
-.tok-comment { color: #7686b3; font-style: italic; }
-.tok-number  { color: #f78c6c; }
-.tok-fn      { color: #82aaff; }
-.tok-tag     { color: #f07178; }
-.tok-attr    { color: #ffcb6b; }
-.tok-brace   { color: #89ddff; }
-.tok-block   { color: #c792ea; font-weight: 600; }
-.tok-punct   { color: #8b98c4; }
 
-.caps > li { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-4); padding: var(--space-3) var(--space-4); }
+.code code {
+    font: inherit;
+    white-space: pre;
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+}
+
+.tok-keyword {
+    color: #c792ea;
+}
+
+.tok-string {
+    color: #c3e88d;
+}
+
+.tok-comment {
+    color: #7686b3;
+    font-style: italic;
+}
+
+.tok-number {
+    color: #f78c6c;
+}
+
+.tok-fn {
+    color: #82aaff;
+}
+
+.tok-tag {
+    color: #f07178;
+}
+
+.tok-attr {
+    color: #ffcb6b;
+}
+
+.tok-brace {
+    color: #89ddff;
+}
+
+.tok-block {
+    color: #c792ea;
+    font-weight: 600;
+}
+
+.tok-punct {
+    color: #8b98c4;
+}
+
+.caps>li {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-4);
+    padding: var(--space-3) var(--space-4);
+}
+
 /* class:highlight demo — the toggled state */
-.highlight { background: #fff3bf; box-shadow: inset 0 0 0 1px #ffe066; border-radius: var(--radius-1); }
+.highlight {
+    background: #fff3bf;
+    box-shadow: inset 0 0 0 1px #ffe066;
+    border-radius: var(--radius-1);
+}
 
 /* demo-local elements used inside sample markup */
-.card-body { display: flex; flex-direction: column; gap: var(--space-2); color: var(--color-text); }
-.chip { display: inline-flex; align-items: center; padding: var(--space-1) var(--space-3); background: var(--color-signal-soft); color: var(--color-signal); border: 1px solid #d7e0ff; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; }
-.framed { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px dashed color-mix(in srgb, var(--color-signal) 45%, var(--color-line)); border-radius: var(--radius-3); background: #fbfcff; }
-.raw { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--color-ink); color: #d6e2ff; border-radius: var(--radius-3); border: 1px solid var(--color-ink-line); }
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    color: var(--color-text);
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-signal-soft);
+    color: var(--color-signal);
+    border: 1px solid #d7e0ff;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.framed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px dashed color-mix(in srgb, var(--color-signal) 45%, var(--color-line));
+    border-radius: var(--radius-3);
+    background: #fbfcff;
+}
+
+.raw {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-ink);
+    color: #d6e2ff;
+    border-radius: var(--radius-3);
+    border: 1px solid var(--color-ink-line);
+}

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 import { RENDER_BENCH_SCENARIOS } from './RENDER_BENCH_SCENARIOS.ts'
 
 // Routing bucket: file-based pages, [param] routes, route() (kind/name/params/url), navigate(target),

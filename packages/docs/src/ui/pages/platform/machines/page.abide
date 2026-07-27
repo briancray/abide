@@ -1,5 +1,6 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
+  import Panel from "$ui/components/Panel.abide"
   import OpenApiDemo from "$ui/demos/platform/machines/OpenApiDemo.abide"
   import McpDemo from "$ui/demos/platform/machines/McpDemo.abide"
   import CapabilitiesDemo from "$ui/demos/platform/machines/CapabilitiesDemo.abide"
@@ -9,32 +10,37 @@
 <main class="page">
   <h1>Machine surfaces</h1>
   <p class="lead">Every RPC is automatically a machine surface — no second implementation. One handler is a browser fetch, an OpenAPI operation, and an MCP tool at once. Fetch each surface live from this browser page and render what a machine would see.</p>
-
-  <h2>The surfaces, generated</h2>
-  <p>Nothing here was written by hand. Both documents below are generated from the same RPC definitions the browser calls, which is why they cannot drift from the implementation — there is only one.</p>
-
-  <ul class="surfaces">
-    <li><a href="/openapi.json">/openapi.json</a> — an OpenAPI 3.1 document describing every RPC.</li>
-    <li><code>/__abide/mcp</code> — a Model Context Protocol endpoint exposing RPCs as tools.</li>
-  </ul>
-
+  <Panel id="surfaces" title="The surfaces, generated">
+    <ul class="surfaces">
+      <li><a href="/openapi.json">/openapi.json</a> — an OpenAPI 3.1 document describing every RPC.</li>
+      <li><code>/__abide/mcp</code> — a Model Context Protocol endpoint exposing RPCs as tools.</li>
+    </ul>
+  </Panel>
+  <aside class="aside">
+    <p>Nothing here was written by hand. Both documents here are generated from the same RPC definitions the browser calls, which is why they cannot drift from the implementation — there is only one.</p>
+  </aside>
   <Demo id="openapi" title="<code>/openapi.json</code>" client="src/ui/demos/platform/machines/OpenApiDemo.abide">
     <OpenApiDemo />
   </Demo>
-
+  <aside class="aside">
+    <p>Fetched from this browser page: the generated OpenAPI 3.1 document, rendered as its operation paths. Every RPC is projected as an operation — there is no second implementation to keep in step.</p>
+  </aside>
   <Demo id="mcp" title="<code>/__abide/mcp</code> — tools/list" client="src/ui/demos/platform/machines/McpDemo.abide">
     <McpDemo />
   </Demo>
-
-  <h2>Why that works: capabilities are data</h2>
-  <p>The surfaces above are only useful because the app's <em>capabilities are data</em>. This list is read from the same <code>capabilities</code> RPC an agent would call over MCP — one <code>GET</code> handler that a browser, an OpenAPI operation, and an MCP tool all share:</p>
+  <aside class="aside">
+    <p>The same handlers again, this time over JSON-RPC 2.0: a <code>tools/list</code> call to <code>/__abide/mcp</code>, rendered as tool names. An RPC reaches this surface when <code>clients.mcp</code> admits it.</p>
+  </aside>
   <Demo id="capabilities" title="Capabilities as data" server="src/server/rpc/capabilities.ts" client="src/ui/demos/platform/machines/CapabilitiesDemo.abide" tab="server">
     <CapabilitiesDemo />
   </Demo>
-
-  <h2>The consumer</h2>
-  <p>A description is only half of it — something has to call these tools. That is an agent — the last rung, and the same RPCs and schemas, now driven by a model. The <code>agent(engine, messages, options)</code> loop drives any <code>AgentEngine</code> (the shipped Claude / Claude Code engines, or a scripted one). Here a deterministic scripted engine requests the <code>clock</code> tool; the loop runs it in-process and streams every <code>AgentFrame</code> — consumed live with <code>{'{'}#for await{'}'}</code>:</p>
+  <aside class="aside">
+    <p>The surfaces above are only useful because the app's <em>capabilities are data</em>. This list is read from the same <code>capabilities</code> RPC an agent would call over MCP — one <code>GET</code> handler that a browser, an OpenAPI operation, and an MCP tool all share.</p>
+  </aside>
   <Demo id="agent" title="The <code>agent()</code> loop — provider-neutral, streamed" server="src/server/rpc/agentDemo.ts" client="src/ui/demos/platform/machines/AgentDemo.abide" tab="server">
     <AgentDemo />
   </Demo>
+  <aside class="aside">
+    <p>A description is only half of it — something has to call these tools. That is an agent: the same RPCs and schemas, now driven by a model. <code>agent(engine, messages, options)</code> drives any <code>AgentEngine</code> (the shipped Claude / Claude Code engines, or a scripted one). Here a deterministic scripted engine requests the <code>clock</code> tool; the loop runs it in-process and streams every <code>AgentFrame</code>, consumed live with <code>{'{'}#for await{'}'}</code>.</p>
+  </aside>
 </main>

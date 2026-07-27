@@ -1,0 +1,39 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  // The component's own script. `rows` is shared by the whole component; each ROW below owns a
+  // counter of its own that this script never sees.
+  let rows = state(["Alpha", "Beta", "Gamma"])
+
+  function addRow() {
+    rows = [...rows, "Row " + (rows.length + 1)]
+  }
+</script>
+
+<div class="controls">
+  <button data-testid="add-row" onclick={addRow}>Add row</button>
+</div>
+
+<ol data-testid="branch-list" class="list">
+  {#for row, i of rows by row}
+    <script>
+      // Branch-local: created when THIS iteration mounts, disposed when it goes. Every row gets its
+      // own `clicks` — the enclosing script has no name for it, and neither does any sibling row.
+      // `state` is the component's import; a branch-local script reuses it rather than importing.
+      let clicks = state(0)
+    </script>
+    <li>
+      {row} ·
+      <button data-testid="row-count" onclick={() => clicks++}>clicked {clicks}×</button>
+    </li>
+  {/for}
+</ol>
+
+{#if rows.length > 3}
+  <script>
+    // Branch-local in an {#if}: this cell exists only while the branch is mounted, and starts over
+    // when the branch is torn down and re-created.
+    let note = state("this branch owns its own state")
+  </script>
+  <p data-testid="branch-note" class="muted">{note}</p>
+{/if}

@@ -137,8 +137,16 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, memo?: false | { ttl?, crossR
 | `abide/server/json` | `json(data, init?)` → `TypedResponse<T>` (sees through to `data` in a memo-backed read/mutation) |
 | `abide/server/jsonl` | `jsonl(iterable, init?)` → `StreamResponse<C>`, `application/jsonl` (lazy; sees through to the iterable → ReplayableStream) |
 | `abide/server/sse` | `sse(iterable, init?)` → `StreamResponse<C>`, `text/event-stream` (lazy; sees through to the iterable → ReplayableStream, on par with jsonl; also consumable via `EventSource`; adds `Cache-Control: no-cache` + `X-Accel-Buffering: no`) |
-| `abide/server/error` | `error(status, message?, init?)`; `error.typed(name, status, schema?)` (a `405` carries `Allow`) |
-| `abide/server/redirect` | `redirect(url, status=302, init?)` |
+| `abide/server/error` | `error(status, message?, init?)` → `OutcomeResponse`; `error.typed(name, status, schema?)` (a `405` carries `Allow`) |
+| `abide/server/redirect` | `redirect(url, status=302, init?)` → `OutcomeResponse` |
+
+An `OutcomeResponse` **is** an ordinary `Response` (middleware, `onError` and the router take one
+anywhere), but it is branded as an OUTCOME rather than a value, and `Payload<R>` drops it from a
+handler's resolved-value union. That is what keeps a handler with a failing branch typed on its
+success shape: an `error()` reaches the caller as a thrown `HttpError` (what `{:catch}` binds) and a
+`redirect()` as a navigation, so neither is ever the `value` a caller reads. Untagged, `GET(({ fail }) =>
+fail ? error(503) : { greeting })` would infer `Response | { greeting }` and `{#await fn()}{:then v}`
+could not reach `v.greeting`.
 
 **Baseline response headers** — the router stamps every response at one choke point, each only when the
 response didn't already set it (so a handler/helper/middleware stays in control): `X-Content-Type-Options:
@@ -249,7 +257,6 @@ value change still wakes them (`docs/spec/rpc-core.md` §7.3–7.4).
 | `abide/shared/withJsonSchema` | `withJsonSchema(schema)` → Standard Schema that also exposes `toJSONSchema()` |
 | `abide/shared/done` | `done(iterable)` → reactive boolean: has a `{#for await}`-consumed stream finished? |
 | `abide/shared/online` | `online()` → reactive connectivity boolean (true on server; tracks `navigator.onLine`) |
-| `abide/shared/HttpError` | type: `status`, `statusText`, `kind?`, `data?` |
 | `abide/shared/ValidationErrorData` | `{ issues, fields }` |
 | `abide/shared/route` | `route()` (see above) |
 | `abide/shared/url` | `url(path \| URL, params?, query?)` — in-app href resolver; `params` fill dynamic segments (`[name]` required, `[[name]]` optional, `[...name]` rest — a `/`-joined string; typed from the path literal), `query` appends a query string. No-dynamic-segment path (or a `URL`) collapses to `url(target, query?)` |
@@ -342,8 +349,8 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | Feature | Notes |
 | --- | --- |
 | Capitalised tags | component invocation (`<Name/>`) · `<slot/>` renders default children (`{children()}` is the equivalent interpolation form) · nested inline-component defs = named component props (render-prop) · a cell- or memo-named tag (`const C = memo(…)`; `<C/>`) is a **reactive** component (re-mounts on change) · a component-valued prop types as `Component<Props>` |
-| `<script>` per-instance · `<script module>` once-per-module · nested `<script>` branch-local |
-| `<style>` component-scoped · nested `<style>` subtree-scoped · tailwind optional |
+| `<script>` per-instance · `<script module>` once-per-module · nested `<script>` branch-local (per-ITEM in a `{#for}`; must be the FIRST node of a block body, carries no `import` — it reuses the component's — and its bindings resolve off the level's `$scope`, so they shadow inside the branch and are invisible outside it) |
+| `<style>` component-scoped · nested `<style>` subtree-scoped (an element carries every scope in force, so an outer rule reaches in and an inner one cannot reach out) · tailwind optional |
 | `src/ui/pages/**/page.abide` / `layout.abide` | routes; `[name]` → `route().params.name` (required); `[[name]]` optional segment (absent → param omitted); `[...name]` rest/catch-all (terminal) → `route().params.name` is the `/`-joined remaining segments. Precedence: literal > required > optional > rest |
 | `route()` | `route().url`, `.params`, `.name`, `.kind`, `.navigating` |
 | `navigate` / `url` | `url(path, params?, query?)` builds an href; `navigate(target, options?)` moves to one — compose as `navigate(url(...), options)`. Nav always hits the server (middleware); same-route param/query nav = a pure `route()` republish (reads re-fire reactively in place — no DOM swap, no re-hydrate; scroll/focus preserved; the server round-trip is a background middleware/redirect confirm), a cross-route nav sharing a layout prefix keeps the shared outer layouts alive and grafts/claims only the diverging suffix (fully-disjoint route = whole-outlet swap) |
@@ -366,7 +373,7 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 | --- | --- |
 | `abide scaffold <name>` | scaffold + install + dev (`--no-install`/`--no-dev`/`--no-git`) |
 | `abide dev` | same pipeline as build + watch + full live-reload (over the socket mux); `--port` (default `3000`) hops to the next open port if taken; graceful `onStop` teardown on SIGINT/SIGTERM/crash |
-| `abide build` | code-split client → content-hashed chunks + `manifest.json` into `dist/_app/<hash>/`; also bakes the type-derived schema map to `dist/schemas.json` (clearing any stale one first) |
+| `abide build` | code-split client → content-hashed chunks + `manifest.json` into `dist/_app/<hash>/`, each asset **minified and precompressed** (`<name>.br` / `<name>.gz` sidecars, listed in the manifest's `encodings` so `abide start` loads them without probing); also bakes the type-derived schema map to `dist/schemas.json` (clearing any stale one first) |
 | `abide start` | serve the app against the built `dist/` client assets (no bundler at boot; builds first if absent); prefers the baked `dist/schemas.json` over a live `node`/tsgo derivation pass; `--port` (default `3000`) binds directly (hard `EADDRINUSE` on clash); graceful `onStop` teardown on SIGINT/SIGTERM/crash |
 | `abide run <file> [args...]` | run script under the abide runtime (no HTTP; `onStart`/`onStop` run) |
 | `abide compile [--target] [--out]` | standalone server executable (embeds assets) |
@@ -384,10 +391,11 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 | `src/mcp/prompts/<name>.md` / `src/mcp/resources/<name>` | MCP prompt (`{{arg}}`) / resource |
 | `src/server/config.ts` | boot-time `env(...)` schema |
 | `src/app.ts` | `middleware` + lifecycle hooks |
-| `src/ui/pages/**/page.abide` · `layout.abide` · `src/ui/public/` | routes / layouts / static |
+| `src/ui/pages/**/page.abide` · `layout.abide` | routes / layouts |
+| `src/ui/public/` | static files served VERBATIM at their literal path (`src/ui/public/fonts/x.woff2` → `GET /fonts/x.woff2`), with a real content type. The counterpart to `/__abide/chunk/`, and the inverse trade: a chunk's URL embeds a content hash so it is `immutable`, while a public file sits at a FIXED externally-known path (`/favicon.ico`, `/robots.txt`, an `og-image` a crawler fetches) and so is **revalidated** (`public, max-age=3600` + an ETag → 304), never content-addressed. Checked after the framework routes (it can never shadow `/openapi.json` or `/__abide/*`) and before page SSR. A bundled stylesheet reaches these by **ROOT-ABSOLUTE** `url('/fonts/x.woff2')` — the public dir's top-level entries are marked `external` for the client build, so the reference passes through; a RELATIVE `url()` is instead resolved by Bun and inlined as a base64 data URL (at any size — there is no threshold and `loader` does not apply to CSS), which buries the asset in the render-blocking stylesheet |
 | `src/bundle/window.ts` | `BundleWindow` config |
 | `src/.abide/*` | reserved generated-types namespace; `abide check`/`lsp` synthesize the typed `<file>.abide.d.ts` companions **virtually** (in-memory), not on disk |
-| `dist/_app/<hash>/` | content-addressed code-split client build (hashed chunks + `index.json`; a stable `dist/manifest.json` points `abide start` at it) |
+| `dist/_app/<hash>/` | content-addressed code-split client build (hashed chunks + their `.br`/`.gz` sidecars + `index.json`; a stable `dist/manifest.json` points `abide start` at it) |
 | `dist/schemas.json` | baked type-derived input/output JSON Schema map (`abide build`); `abide start` merges it at boot so prod carries no `node`/tsgo dependency |
 | `$server/*` · `$ui/*` · `$shared/*` | tsconfig-path import aliases for `src/server/*` · `src/ui/*` · `src/shared/*` (scaffolded into the app `tsconfig.json`; resolved by the Bun runtime and `abide check`). A local `.ts` imported into an `.abide` client script stays unsupported client-side (aliased or relative) — share client state via `state.shared(key)`. |
 
@@ -396,7 +404,14 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 3.1) · `/__abide/mcp` (MCP; socket → tail/publish tools) · `/__abide/sockets`
 (multiplexed WS + per-socket HTTP face) · `/__abide/health` · `/__abide/cli` (per-user install) ·
 `/__abide/inspector` (gated) · `/__abide/chunk/<name>-<hash>.(js|css)` (content-hashed, code-split client
-assets — the loader entry + per-route chunks + shared chunks + CSS; served immutable/long-cache).
+assets — the loader entry + per-route chunks + shared chunks + CSS; served immutable/long-cache, and in a
+production build **precompressed**: `abide build` stores brotli (max quality) + gzip beside each asset and
+the route negotiates `Accept-Encoding` over them, adding `Vary: Accept-Encoding` only where a URL really
+does have more than one representation. Compression is a BUILD cost, never a per-request one — which is
+what buys maximum-quality brotli, since the bytes are content-addressed and computed once per hash. An
+encoding is kept only when it beats the identity bytes by 10%, and assets under one MTU (512 B) or of an
+already-compressed format are left alone; `abide dev` skips it entirely. Measured on the docs app: 692 KB
+→ 179 KB, 74% off the client payload).
 
 ## Environment variables
 | Var | Effect |
@@ -413,5 +428,6 @@ assets — the loader entry + per-route chunks + shared chunks + CSS; served imm
 | `ABIDE_SOCKET_TIMEOUT` | socket idle/connection timeout (WS) |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | default max request body |
 | `ABIDE_DERIVE_SCHEMAS` (`0`) | disable load-time type-derived schema inference at boot (default on; `abide dev`/`run`/test app derive live via a `node`/tsgo pass, `abide build` bakes to `dist/schemas.json`) |
+| `ABIDE_COMPRESS` (`static` \| `all` \| `off`) | how much is compressed. **`static`** (default) serves the brotli/gzip variants `abide build` precomputed for `/__abide/chunk/` — free at request time. **`all`** additionally compresses DYNAMIC responses per request: streamed HTML documents (through a flushing `node:zlib` transform, so the shell still paints before a slow `{#for await}` resolves — `CompressionStream` cannot do this and would silently buffer the whole document) and buffered JSON above 1 KB. `text/event-stream` and `application/jsonl` are **never** compressed: flushing per event inflates them (an 11-byte SSE event comes out 14 bytes) and adds latency to a transport whose point is immediacy. **`off`** withholds compression everywhere, including variants already on disk. The default is not `all` because most deployments sit behind a proxy/CDN that already compresses, and compressing twice grows the payload; the surfaces with no proxy (`abide compile`, `abide bundle`) are the ones that want `all` |
 | `ABIDE_LOG_FORMAT` (`json`) / `DEBUG` / `ABIDE_DEV_SURFACE` | log format / channel gating / dev request log |
 | `ABIDE_ENABLE_INSPECTOR` / `ABIDE_INSPECT` | inspector route (off by default) / debug instrumentation |

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // These specs drive the REAL sockets demo in a real browser: the page subscribes to a live socket two
 // ways — a hand-driven async iterator (SocketsChatDemo) and the high-level `{#for await}` block +
@@ -10,6 +10,13 @@ import { expect, test } from '@playwright/test'
 // The HTTP-face SSE tests were quarantined while a byte-idle SSE stream was killed by Bun's default
 // 10s idle timeout (EventSource opened, then errored -> status "reconnecting"). Fixed by raising
 // `Bun.serve`'s `idleTimeout` + a heartbeat/`cancel()` in `server/sse.ts` (docs/TODO.md #22).
+
+// The one file in the suite that must NOT run its tests in parallel with each other. Every demo on
+// these pages publishes to the ONE server-wide `socketsChat` topic, so `peek()` — "the latest message"
+// — is last-writer-wins across the whole process. A `unique()` label keeps the other assertions honest
+// but cannot save that one: a concurrent test's publish legitimately becomes the latest. `default` mode
+// (not `serial`) keeps them sequential without making one failure skip the rest.
+test.describe.configure({ mode: 'default' })
 
 function unique(label: string): string {
     return `${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`

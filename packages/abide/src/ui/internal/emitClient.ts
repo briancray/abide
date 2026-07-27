@@ -13,10 +13,9 @@
 // `()/.set()`, and free/block-bound template identifiers read off `$scope`.
 
 import type { BindingAnalysis } from './analyzeBindings.ts'
-import { reconstructImport, rewriteCellRefs } from './analyzeBindings.ts'
+import { reconstructImport } from './analyzeBindings.ts'
 import { bindLazyPattern } from './bindLazyPattern.ts'
 import { bindPattern } from './bindPattern.ts'
-import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
 import { splitParams } from './splitParams.ts'
@@ -185,8 +184,16 @@ class ClientEmitter {
             if (slot.kind === 'componentDef') wiring += this.genComponentDef(slot)
         }
         for (const slot of plan.slots) {
-            if (slot.kind === 'componentDef') continue
+            if (slot.kind === 'componentDef' || slot.kind === 'script') continue
             wiring += this.genSlot(slot, nav, parentOf)
+        }
+
+        // The branch-local `<script>` (C9.4), if this level owns one. It runs BEFORE the structural walk
+        // and before every other slot: it is this level's setup, and the wiring below reads what it
+        // publishes on `$scope`.
+        let setup = ''
+        for (const slot of plan.slots) {
+            if (slot.kind === 'script') setup += this.genNestedScript(slot)
         }
 
         // Ancestor prefixes of every referenced path need their own intermediate variable.
@@ -202,6 +209,7 @@ class ClientEmitter {
         return (
             `function $mount${id}($target, $anchor, $scope) {\n` +
             `  const $sink = [];\n` +
+            setup +
             // Capture the cursor position that sits AFTER this level's structural walk, so it can be restored
             // once the wiring runs. Wiring for a nested block (try/await/if/switch/for) RESEEKS the module
             // cursor to claim its own body — leaving it mid-region. A caller that reads `hydrateNode()` after
@@ -366,6 +374,24 @@ class ClientEmitter {
         return `({ mount: ${this.blockFn(plan, scopeExpr)} })`
     }
 
+    // A branch-local `<script>` (C9.4): the level takes a `$scope` of its OWN, the setup publishes its
+    // bindings there (so every level nested inside inherits them and no sibling branch does), and the
+    // whole preamble runs inside an effect scope this level owns. Disposing that scope on unmount is
+    // what makes a `watch` in a branch script a real per-branch/per-iteration lifecycle hook — the same
+    // contract the root script gets from `mount`, one level down.
+    private genNestedScript(slot: DynamicSlot): string {
+        const setup = slot.meta.setup
+        if (setup === undefined) throw new Error('script slot is missing its setup code')
+        return (
+            `  $scope = Object.create($scope);\n` +
+            `  const $branch = $rt.openEffectScope();\n` +
+            `  try {\n${indent(setup, 4)}  } finally {\n` +
+            `    $rt.closeEffectScope($branch);\n` +
+            `  }\n` +
+            `  $sink.push(() => $rt.disposeEffectScope($branch));\n`
+        )
+    }
+
     private genComponentDef(slot: DynamicSlot): string {
         const name = slot.meta.name
         if (name === undefined) throw new Error('component-def slot is missing its name')
@@ -524,9 +550,10 @@ class ClientEmitter {
         if (needsItemState) createItem += '    const $itemState = $rt.state($value);\n'
         if (needsIndexState) createItem += '    const $indexState = $rt.state($index);\n'
         createItem += '    const $child = Object.create($scope);\n'
-        // A component inside the loop gets a DISTINCT seed bucket per iteration (see emitServer's `for`).
-        // Only emitted when the body has one — this allocates per item.
-        if (slot.meta.hasComponent === true)
+        // Anything in the loop body that owns state gets a DISTINCT seed bucket per iteration — a
+        // component, or a branch-local `<script>` (see emitServer's `for`). Only emitted when the body
+        // has one: this allocates per item.
+        if (slot.meta.hasComponent === true || slot.meta.hasScript === true)
             createItem +=
                 '    if ($scope.state && $scope.state.forItem) $child.state = $scope.state.forItem($index);\n'
         createItem += `    ${bindLazyPattern('$child', item, '$itemState()')}\n`
@@ -650,14 +677,15 @@ class ClientEmitter {
         }
         // A cell- or memo-named tag (`<C/>` where `const C = memo(() => …)`) is a REACTIVE component:
         // read it in an effect and re-mount on identity change. Otherwise resolve the component once.
-        if (
-            this.analysis.cellBindings.cells.has(name) ||
-            this.analysis.cellBindings.memos.has(name)
-        ) {
-            const read = rewriteCellRefs(name, this.analysis.cellBindings)
-            props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${read}), $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
+        // Both the reactive flag and the reference itself come from the plan — `templatePlan` is the
+        // only place that knows this tag's LEVEL, and a branch-local `<script>`'s bindings live on
+        // `$scope` rather than lexically.
+        const ref = slot.meta.ref
+        if (ref === undefined) throw new Error('component slot is missing its resolved reference')
+        if (slot.meta.reactive === true) {
+            props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${ref}), $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
         } else {
-            props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${componentRef(this.analysis, name)}, $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
+            props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${ref}, $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
         }
         props += '  }\n'
         return props

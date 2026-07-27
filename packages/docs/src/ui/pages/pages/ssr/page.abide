@@ -1,4 +1,5 @@
 <script>
+  import Panel from "$ui/components/Panel.abide"
   import streamSlow from "$server/rpc/streamSlow"
   import streamBoom from "$server/rpc/streamBoom"
   import streamBranch from "$server/rpc/streamBranch"
@@ -12,55 +13,57 @@
 <main class="page">
   <h1>Streaming SSR</h1>
   <p class="lead">A page renders on the server first. A <code>{'{'}#await{'}'}</code> read that settles within the render deadline lands inline in the initial HTML; one that misses it doesn't block the response — abide flushes the shell with a placeholder, then <strong>streams</strong> the resolved branch in as an out-of-order patch. Hydration claims the streamed nodes in place, so the block stays fully reactive.</p>
-
-  <h2>Slow read — shell, then streamed patch</h2>
-  <p>This <code>{'{'}#await{'}'}</code> read misses the render deadline, so SSR flushes the shell with a placeholder and streams the resolved branch in. Hydration claims the streamed nodes in place, so the block stays reactive — refresh re-fetches and re-renders it.</p>
-
-  <div data-testid="slow-block" class="rounded border border-slate-200 p-4">
-    {#await streamSlow()}
-      <span data-testid="pending">loading…</span>
-    {:then result}
-      <b data-testid="value">runs: {result.runs}</b>
-    {:catch failure}
-      <span data-testid="error">{failure.message}</span>
-    {/await}
-  </div>
-
-  <button
-    data-testid="refresh"
-    class="mt-4 rounded bg-slate-800 px-3 py-1.5 text-white"
-    onclick={() => streamSlow.refresh()}
-  >
-    Refresh
-  </button>
-
-  <h2 class="mt-8">Rejected read — the streamed <code>{'{'}:catch{'}'}</code></h2>
-  <p>A streamed read that <em>rejects</em> after the shell flushed streams its <code>{'{'}:catch{'}'}</code> branch as the patch — no 500 (headers are already out), and the client hydrates the catch branch in place.</p>
-
-  <div data-testid="error-block" class="rounded border border-slate-200 p-4">
-    {#await streamBoom()}
-      <span>loading…</span>
-    {:then ok}
-      <b>ok: {ok.ok}</b>
-    {:catch failure}
-      <i data-testid="error-value">{failure.message}</i>
-    {/await}
-  </div>
-
-  <h2 class="mt-8">Streamed from inside an <code>{'{'}#if{'}'}</code> branch</h2>
-  <p>A streaming read does not have to sit directly under an element. Inside an <code>{'{'}#if{'}'}</code> — or a <code>{'{'}:case{'}'}</code>, or a <code>{'{'}:catch{'}'}</code> — it streams exactly the same way: the branch keeps its own render frame, so the shell still flushes with a placeholder and the resolved branch still arrives as an out-of-order patch.</p>
-
-  <div data-testid="branch-block" class="rounded border border-slate-200 p-4">
-    {#if branchOpen}
-      {#await streamBranch()}
-        <span data-testid="branch-pending">loading…</span>
+  <Panel id="slow-read-shell-then-streamed-patc" title="Slow read — shell, then streamed patch">
+    <div data-testid="slow-block" class="rounded border border-slate-200 p-4">
+      {#await streamSlow()}
+        <span data-testid="pending">loading…</span>
       {:then result}
-        <b data-testid="branch-value">runs: {result.runs}</b>
+        <b data-testid="value">runs: {result.runs}</b>
       {:catch failure}
-        <span data-testid="branch-error">{failure.message}</span>
+        <span data-testid="error">{failure.message}</span>
       {/await}
-    {:else}
-      <span data-testid="branch-closed">closed</span>
-    {/if}
-  </div>
+    </div>
+    <button
+      data-testid="refresh"
+      class="mt-4 rounded bg-slate-800 px-3 py-1.5 text-white"
+      onclick={() => streamSlow.refresh()}
+    >
+      Refresh
+    </button>
+  </Panel>
+  <aside class="aside">
+    <p>This <code>{'{'}#await{'}'}</code> read misses the render deadline, so SSR flushes the shell with a placeholder and streams the resolved branch in. Hydration claims the streamed nodes in place, so the block stays reactive — refresh re-fetches and re-renders it.</p>
+  </aside>
+  <Panel id="rejected-read-the-streamed-catch" title="Rejected read — the streamed <code>{'{'}:catch{'}'}</code>">
+    <div data-testid="error-block" class="rounded border border-slate-200 p-4">
+      {#await streamBoom()}
+        <span>loading…</span>
+      {:then ok}
+        <b>ok: {ok.ok}</b>
+      {:catch failure}
+        <i data-testid="error-value">{failure.message}</i>
+      {/await}
+    </div>
+  </Panel>
+  <aside class="aside">
+    <p>A streamed read that <em>rejects</em> after the shell flushed streams its <code>{'{'}:catch{'}'}</code> branch as the patch — no 500 (headers are already out), and the client hydrates the catch branch in place.</p>
+  </aside>
+  <Panel id="streamed-from-inside-an-if-branch" title="Streamed from inside an <code>{'{'}#if{'}'}</code> branch">
+    <div data-testid="branch-block" class="rounded border border-slate-200 p-4">
+      {#if branchOpen}
+        {#await streamBranch()}
+          <span data-testid="branch-pending">loading…</span>
+        {:then result}
+          <b data-testid="branch-value">runs: {result.runs}</b>
+        {:catch failure}
+          <span data-testid="branch-error">{failure.message}</span>
+        {/await}
+      {:else}
+        <span data-testid="branch-closed">closed</span>
+      {/if}
+    </div>
+  </Panel>
+  <aside class="aside">
+    <p>A streaming read does not have to sit directly under an element. Inside an <code>{'{'}#if{'}'}</code> — or a <code>{'{'}:case{'}'}</code>, or a <code>{'{'}:catch{'}'}</code> — it streams exactly the same way: the branch keeps its own render frame, so the shell still flushes with a placeholder and the resolved branch still arrives as an out-of-order patch.</p>
+  </aside>
 </main>

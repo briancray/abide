@@ -1,4 +1,5 @@
 <script module>
+  import Panel from "$ui/components/Panel.abide"
   import benchFrontend from "$server/rpc/benchFrontend"
 
   // Format a nanosecond mean into the tightest readable unit — mirrors the CLI bench's `fmtNs`.
@@ -24,68 +25,66 @@
     its SSR <code>render</code> path, then <code>jsonl</code> streams one row per scenario — so the table
     below fills in live via <code>&#123;#for await&#125;</code>. Hit refresh to re-run the whole corpus.
   </p>
-
-  <p class="lead">
-    This measures <code>render</code> only: the pure server-side string build, which is genuinely
-    abide-bound. Notice the <strong>ns/row</strong> column holds roughly flat as the list grows
-    100&nbsp;→&nbsp;1000&nbsp;→&nbsp;10000 — render is O(n) in element count. (Client <code>mount</code>
-    is excluded here: in a JS DOM its large-list cost is dominated by the DOM backend's O(n)
-    <code>insertBefore</code>, not by abide.)
-  </p>
-
-  <p class="lead">
-    Every scenario is timed <strong>twice</strong>: once through abide, once through a hand-written,
-    framework-free equivalent that produces the same markup (the shared
-    <code>@abide/bench/vanillaBaselines</code> corpus — string concatenation, a plain loop, a ternary).
-    The <strong>×</strong> column is abide ÷ vanilla: what the framework costs over doing it by hand. It
-    is the hardware-neutral figure — the ns columns describe whatever machine this server runs on, the
-    ratio does not.
-  </p>
-
-  <p class="lead">
-    Want the mount numbers anyway? The <a href="/platform/bench/client">in-browser mount bench</a> runs
-    the same corpus through the real <code>mount</code> path, timed live in your own tab.
-  </p>
-
-  <button
-    data-testid="rerun"
-    class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white"
-    onclick={() => benchFrontend.refresh()}
-  >
-    Re-run bench
-  </button>
-
-  <table class="w-full border-collapse text-sm" data-testid="bench-table">
-    <thead>
-      <tr class="border-b border-slate-300 text-left">
-        <th class="py-1.5 pr-4">scenario</th>
-        <th class="py-1.5 pr-4 text-right">render (ns/op)</th>
-        <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-        <th class="py-1.5 pr-4 text-right">×</th>
-        <th class="py-1.5 pr-4 text-right">ns/row</th>
-        <th class="py-1.5 pr-4 text-right">iters</th>
-        <th class="py-1.5">hand-written as</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#for await row of benchFrontend()}
-        <tr class="border-b border-slate-100" data-testid="bench-row">
-          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-400" data-testid="bench-iters">{row.iters}</td>
-          <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote ?? "—"}</td>
+  <Panel id="the-corpus-timed-on-this-request" title="The corpus, timed on this request">
+    <button
+      data-testid="rerun"
+      class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white"
+      onclick={() => benchFrontend.refresh()}
+    >
+      Re-run bench
+    </button>
+    <table class="w-full border-collapse text-sm" data-testid="bench-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">scenario</th>
+          <th class="py-1.5 pr-4 text-right">render (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right">×</th>
+          <th class="py-1.5 pr-4 text-right">ns/row</th>
+          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5">hand-written as</th>
         </tr>
-      {:catch}
-        <tr><td colspan="7" class="py-2 text-red-600">bench failed</td></tr>
-      {/for}
-    </tbody>
-  </table>
-
-  <p class="mt-3 text-sm text-slate-500">
-    † the op is close enough to the timing loop's own per-iteration cost that the constant — added to both
-    sides — squashes the ratio toward 1.00×; the real multiple is higher.
-  </p>
+      </thead>
+      <tbody>
+        {#for await row of benchFrontend()}
+          <tr class="border-b border-slate-100" data-testid="bench-row">
+            <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-400" data-testid="bench-iters">{row.iters}</td>
+            <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote ?? "—"}</td>
+          </tr>
+        {:catch}
+          <tr><td colspan="7" class="py-2 text-red-600">bench failed</td></tr>
+        {/for}
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p class="lead">
+      This measures <code>render</code> only: the pure server-side string build, which is genuinely
+      abide-bound. Notice the <strong>ns/row</strong> column holds roughly flat as the list grows
+      100&nbsp;→&nbsp;1000&nbsp;→&nbsp;10000 — render is O(n) in element count. (Client <code>mount</code>
+      is excluded here: in a JS DOM its large-list cost is dominated by the DOM backend's O(n)
+      <code>insertBefore</code>, not by abide.)
+    </p>
+    <p class="lead">
+      Every scenario is timed <strong>twice</strong>: once through abide, once through a hand-written,
+      framework-free equivalent that produces the same markup (the shared
+      <code>@abide/bench/vanillaBaselines</code> corpus — string concatenation, a plain loop, a ternary).
+      The <strong>×</strong> column is abide ÷ vanilla: what the framework costs over doing it by hand. It
+      is the hardware-neutral figure — the ns columns describe whatever machine this server runs on, the
+      ratio does not.
+    </p>
+    <p class="lead">
+      Want the mount numbers anyway? The <a href="/platform/bench/client">in-browser mount bench</a> runs
+      the same corpus through the real <code>mount</code> path, timed live in your own tab.
+    </p>
+    <p class="mt-3 text-sm text-slate-500">
+      † the op is close enough to the timing loop's own per-iteration cost that the constant — added to both
+      sides — squashes the ratio toward 1.00×; the real multiple is higher.
+    </p>
+  </aside>
 </main>

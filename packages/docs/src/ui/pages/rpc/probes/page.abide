@@ -9,28 +9,28 @@
 <main class="page">
   <h1>Reactive probes</h1>
   <p class="lead">An RPC read is a <a href="/memo">memo</a> with a transport, so it carries the same reactive read surface — the <strong>probes</strong> — as any memo. <code>peek(args)</code> is the non-blocking snapshot, <code>pending(args)</code>/<code>refreshing(args)</code> track first-load vs revalidation, <code>error(args)</code> holds a rejected read, and <code>watch(args, cb)</code> fires on every change. Same vocabulary as the <a href="/memo/probes">generic-memo</a> and <a href="/sockets/probes">socket</a> probes — here over live <code>GET</code> fetches.</p>
-
-  <h2><code>peek()</code> / <code>pending()</code> / <code>error()</code> in a template</h2>
-  <p><code>fn.peek(args)</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves — all reactive, straight in the markup.</p>
   <Demo id="probes" title="In-template <code>fn.peek()</code> / <code>fn.pending()</code> / <code>fn.error()</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/probes/ProbesDemo.abide" tab="client">
     <ProbesDemo />
   </Demo>
-
-  <h2><code>pending()</code> vs <code>refreshing()</code></h2>
-  <p><code>pending(args)</code> is <strong>yes</strong> only while the <em>first</em> load is in flight; <code>refreshing(args)</code> is <strong>yes</strong> only while a re-fetch runs <em>over a value that stays on screen</em>. Load, then refresh — the value holds, <code>refreshing</code> flips to yes and <code>pending</code> stays no the whole time.</p>
+  <aside class="aside">
+    <p><code>fn.peek(args)</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves — all reactive, straight in the markup.</p>
+  </aside>
   <Demo id="refreshing" title="<code>pending</code> vs <code>refreshing</code> — first-load vs revalidation" server="src/server/rpc/cacheSlow.ts" client="src/ui/demos/rpc/probes/RefreshingDemo.abide" tab="server">
     <RefreshingDemo />
   </Demo>
-
-  <h2><code>error()</code> — a failing read</h2>
-  <p>A read that fails returns a 400; the <code>error</code> probe holds it as an <code>HttpError</code> until <code>invalidate</code> clears the slot.</p>
+  <aside class="aside">
+    <p><code>pending(args)</code> is <strong>yes</strong> only while the <em>first</em> load is in flight; <code>refreshing(args)</code> is <strong>yes</strong> only while a re-fetch runs <em>over a value that stays on screen</em>. Load, then refresh — the value holds, <code>refreshing</code> flips to yes and <code>pending</code> stays no the whole time.</p>
+  </aside>
   <Demo id="flaky" title="<code>fn.error(args)</code>" server="src/server/rpc/cacheFlaky.ts" client="src/ui/demos/rpc/probes/FlakyDemo.abide" tab="server">
     <FlakyDemo />
   </Demo>
-
-  <h2><code>watch(args, cb)</code> — the method form</h2>
-  <p>The real method <code>fn.watch(args, cb)</code> runs the callback whenever <em>this slot's</em> value changes (unlike <code>watch(thunk)</code>, which auto-tracks an expression). Load, then refresh — the counter climbs and the watch callback fires.</p>
+  <aside class="aside">
+    <p>A read that fails returns a 400; the <code>error</code> probe holds it as an <code>HttpError</code> until <code>invalidate</code> clears the slot.</p>
+  </aside>
   <Demo id="watchmethod" title="<code>watch(args, cb)</code> — the method form" server="src/server/rpc/cacheCounter.ts" client="src/ui/demos/rpc/probes/WatchMethodDemo.abide" tab="server">
     <WatchMethodDemo />
   </Demo>
+  <aside class="aside">
+    <p>The real method <code>fn.watch(args, cb)</code> runs the callback whenever <em>this slot's</em> value changes (unlike <code>watch(thunk)</code>, which auto-tracks an expression). Load, then refresh — the counter climbs and the watch callback fires.</p>
+  </aside>
 </main>

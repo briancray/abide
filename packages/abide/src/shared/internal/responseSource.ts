@@ -23,6 +23,7 @@ export type ResponseSource =
 // (not optional) so a plain `Response` doesn't structurally match — only a branded helper result does.
 declare const VALUE_BRAND: unique symbol
 declare const CHUNK_BRAND: unique symbol
+declare const OUTCOME_BRAND: unique symbol
 // `json(data)` → a Response that also remembers it resolves (through the memo see-through) to `T`.
 export interface TypedResponse<T> extends Response {
     readonly [VALUE_BRAND]: T
@@ -31,11 +32,26 @@ export interface TypedResponse<T> extends Response {
 export interface StreamResponse<C> extends Response {
     readonly [CHUNK_BRAND]: C
 }
+// `error(...)` / `redirect(...)` → a Response that is an OUTCOME, not a value. It is still an ordinary
+// `Response` (middleware, `onError` and the router hand it around as one), but it never reaches a
+// CALLER as the resolved value: an error arrives as a thrown `HttpError` — which is what `{:catch}`
+// binds — and a redirect arrives as a navigation. Untagged, a handler that can fail infers
+// `Response | T` for its success value, so `{#await fn()}{:then v}` cannot reach a field of `v`.
+export interface OutcomeResponse extends Response {
+    readonly [OUTCOME_BRAND]: true
+}
 
 // The runtime payload a handler return resolves to after the memo sees through a transport wrapper:
-// a stream helper → an AsyncIterable of its chunk; a json helper → its value; anything else unchanged.
-export type Payload<R> =
-    R extends StreamResponse<infer C> ? AsyncIterable<C> : R extends TypedResponse<infer V> ? V : R
+// an outcome → nothing (it is delivered as a throw or a navigation, never as a value); a stream helper
+// → an AsyncIterable of its chunk; a json helper → its value; anything else unchanged. Conditional
+// types distribute, so a handler returning `T | OutcomeResponse` resolves to plain `T`.
+export type Payload<R> = R extends OutcomeResponse
+    ? never
+    : R extends StreamResponse<infer C>
+      ? AsyncIterable<C>
+      : R extends TypedResponse<infer V>
+        ? V
+        : R
 
 const RESPONSE_SOURCE: unique symbol = Symbol.for('abide.responseSource')
 const STREAM_ENCODING: unique symbol = Symbol.for('abide.streamEncoding')

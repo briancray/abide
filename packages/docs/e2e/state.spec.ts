@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives the `state` primitive page in a real browser: SSR values, client hydration, and the owned
 // side of the reactive graph — the writable cell and `state.shared`. Its neighbours have their own

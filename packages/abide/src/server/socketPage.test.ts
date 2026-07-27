@@ -53,7 +53,8 @@ test('the client bundle ships SOCKET_SPECS for an imported browser-reachable soc
         },
     }
     const build = await buildClient(config)
-    const loader = build.files.get(build.entry) ?? ''
+    const entry = build.files.get(build.entry)
+    const loader = entry === undefined ? '' : new TextDecoder().decode(entry.identity)
     expect(loader).toContain('SOCKET_SPECS')
     // The spec carries the client-relevant retention/publish knobs (ttl Infinity → null). Bun
     // reformats the emitted JSON literal, so match whitespace-insensitively.

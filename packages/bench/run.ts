@@ -24,13 +24,17 @@
 // baseline cannot silently drift into measuring less work.
 //
 // Timing is adaptive: each metric runs a short warmup, then repeats until it has both spent
-// ABIDE_BENCH_TIME ms and completed ABIDE_BENCH_MIN_ITERS iterations. mount/update rebuild a fresh
-// host (and, for update, a fresh reactive tree) each round so state does not accumulate across ops.
+// ABIDE_BENCH_TIME ms and completed ABIDE_BENCH_MIN_ITERS iterations — or until ABIDE_BENCH_MAX_WALL ms
+// of wall time have passed, whichever comes first (see `benchBudget`; the iteration floor always wins).
+// mount/update rebuild a fresh host (and, for update, a fresh reactive tree) each round so state does
+// not accumulate across ops, and that untimed rebuild is what the wall cap exists to bound.
 
 import 'abide/test/happydom'
 import { type EmittedModule, loadEmitted } from 'abide/ui/internal/emit'
 import { type BenchSelection, benchSelection } from './src/benchSelection.ts'
 import {
+    benchBudget,
+    DEFAULT_MAX_WALL_MS,
     DEFAULT_MIN_ITERS,
     DEFAULT_MIN_TIME_MS,
     DEFAULT_WARMUP_ITERS,
@@ -67,6 +71,8 @@ export interface BenchReport {
     time: number
     minTimeMs: number
     minIters: number
+    // The per-metric wall ceiling that stopped a loop whose timed region is a small slice of its round.
+    maxWallMs: number
     // Per-iteration cost of the timing loop itself — see `measureFloor`.
     harnessFloorNs: number
     // Scenarios in the whole corpus, so a filtered report says so rather than reading as a shrunken one.
@@ -133,19 +139,21 @@ async function benchUnmount(mount: MountFn, scenario: Scenario): Promise<MetricR
 }
 
 // The adaptive loop of `measure`, but timing only the region the op hands to `record` — so setup and
-// teardown around it are excluded rather than amortised into the mean.
+// teardown around it are excluded rather than amortised into the mean. That exclusion is exactly why the
+// loop needs `benchBudget`'s wall ceiling and not just the sample floor: a round's untimed half can dwarf
+// its timed half, and the sample floor alone cannot see that.
 async function measureManually(op: (record: (ns: number) => void) => void): Promise<MetricResult> {
     let iters = 0
     let totalNs = 0
-    const budgetNs = DEFAULT_MIN_TIME_MS * 1e6
     const record = (ns: number): void => {
         totalNs += ns
         iters++
     }
     for (let i = 0; i < DEFAULT_WARMUP_ITERS; i++) op(() => {})
+    const budget = benchBudget()
     do {
         op(record)
-    } while (totalNs < budgetNs || iters < DEFAULT_MIN_ITERS)
+    } while (budget.more(totalNs, iters))
     return { nsPerOp: totalNs / iters, iters }
 }
 
@@ -158,7 +166,6 @@ async function benchUpdate(
 ): Promise<MetricResult> {
     let iters = 0
     let totalNs = 0
-    const budgetNs = DEFAULT_MIN_TIME_MS * 1e6
     // Warmup round.
     {
         const host = document.createElement('div')
@@ -167,6 +174,7 @@ async function benchUpdate(
         for (let i = 0; i < DEFAULT_WARMUP_ITERS; i++) await update(host)
         cleanup()
     }
+    const budget = benchBudget()
     do {
         const host = document.createElement('div')
         const cleanup = mount(host, scenario.scope())
@@ -178,7 +186,7 @@ async function benchUpdate(
             iters++
         }
         cleanup()
-    } while (totalNs < budgetNs || iters < DEFAULT_MIN_ITERS)
+    } while (budget.more(totalNs, iters))
     return { nsPerOp: totalNs / iters, iters }
 }
 
@@ -292,6 +300,7 @@ export async function runBench(
         time: Date.now(),
         minTimeMs: DEFAULT_MIN_TIME_MS,
         minIters: DEFAULT_MIN_ITERS,
+        maxWallMs: DEFAULT_MAX_WALL_MS,
         harnessFloorNs: floor.nsPerOp,
         corpusSize: SCENARIOS.length,
         scenarios,
@@ -319,7 +328,8 @@ function printTable(report: BenchReport): void {
         )
     }
     console.log(
-        `\nmean ns/op · warmup ${DEFAULT_WARMUP_ITERS} · ≥${report.minTimeMs}ms/≥${report.minIters} iters per metric`,
+        `\nmean ns/op · warmup ${DEFAULT_WARMUP_ITERS} · ≥${report.minTimeMs}ms/≥${report.minIters} iters per metric, ` +
+            `capped at ${report.maxWallMs}ms wall (ABIDE_BENCH_MAX_WALL)`,
     )
     if (report.scenarios.length !== report.corpusSize) {
         console.log(

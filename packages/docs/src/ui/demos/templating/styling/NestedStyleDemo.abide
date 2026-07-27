@@ -1,0 +1,23 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  let open = state(true)
+  function toggle() { open = !open }
+</script>
+
+<button data-testid="nested-toggle" onclick={toggle}>{open ? "Hide" : "Show"} the branch</button>
+
+<p data-testid="nested-outside" class="tone">outside the branch — the root rule only</p>
+
+{#if open}
+  <style>
+    /* Scoped to THIS branch: the attribute it generates is stamped on the branch's elements alone. */
+    .tone { color: rgb(217, 70, 239); font-weight: 700; }
+  </style>
+  <p data-testid="nested-inside" class="tone">inside the branch — the branch rule wins</p>
+{/if}
+
+<style>
+  /* The component's own scope still reaches the whole component, branch included. */
+  .tone { font-style: italic; }
+</style>

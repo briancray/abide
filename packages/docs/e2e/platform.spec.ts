@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives the platform bucket in a real browser: request-scope accessors (identity/cookies/context),
 // config (env), observability (trace/health), and the machine surfaces (OpenAPI + MCP tools/list)

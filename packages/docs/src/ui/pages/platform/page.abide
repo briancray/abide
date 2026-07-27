@@ -1,27 +1,33 @@
+<script module>
+  import Panel from "$ui/components/Panel.abide"
+</script>
+
 <main class="page">
   <h1 id="platform-title">Platform &amp; machine surfaces</h1>
   <p class="lead">The request scope, config, and observability primitives — plus lifecycle hooks, the machine surfaces every RPC is automatically exposed through, and the CLI / build tooling. Each sub-page drives one primitive as a live, interactive demo.</p>
-
-  <nav class="nav">
-    <a href="/platform/identity">Identity</a>
-    <a href="/platform/scope">Scope</a>
-    <a href="/platform/config">Config</a>
-    <a href="/platform/observability">Observability</a>
-    <a href="/platform/lifecycle">Lifecycle</a>
-    <a href="/platform/machines">Machines</a>
-  </nav>
-
-  <ul class="links">
-    <li><a href="/platform/identity">Identity</a> — <code>identity()</code>, login/logout via <code>identity.set()/clear()</code>.</li>
-    <li><a href="/platform/scope">Request scope</a> — <code>cookies()</code> + <code>context()</code> carrier bag via an RPC.</li>
-    <li><a href="/platform/config">Config</a> — <code>env(schema)</code> typed, boot-validated config.</li>
-    <li><a href="/platform/observability">Observability</a> — <code>trace()</code>, <code>health()</code>, <code>log()</code>.</li>
-    <li><a href="/platform/lifecycle">Lifecycle hooks</a> — <code>onStart</code>/<code>onStop</code> wrappers, <code>onHealth</code>, <code>onError</code>.</li>
-    <li><a href="/platform/machines">Machine surfaces</a> — <code>/openapi.json</code> + <code>/__abide/mcp</code>, capabilities as data, and the <code>agent()</code> loop.</li>
-    <li><a href="/platform/cli">CLI</a> — <code>scaffold</code> / <code>dev</code> / <code>build</code> / <code>start</code> and the standalone binaries.</li>
-    <li><a href="/platform/testing">Testing</a> — <code>createTestApp()</code>, the in-process app harness: <code>rpc</code>, <code>fetch</code>, <code>as(identity)</code>, sockets.</li>
-    <li><a href="/platform/deploy">Build &amp; deploy</a> — the content-hashed client build and how <code>start</code> serves it.</li>
-    <li><a href="/platform/bench">Render bench</a> — the live SSR render benchmark.</li>
-    <li><a href="/platform/bench/client">Mount bench (browser)</a> — the same corpus, timing the real browser <code>mount</code> path in your tab.</li>
-  </ul>
+  <Panel id="pages-in-this-section" title="Pages in this section">
+    <nav class="nav">
+      <a href="/platform/identity">Identity</a>
+      <a href="/platform/scope">Scope</a>
+      <a href="/platform/config">Config</a>
+      <a href="/platform/observability">Observability</a>
+      <a href="/platform/lifecycle">Lifecycle</a>
+      <a href="/platform/machines">Machines</a>
+    </nav>
+  </Panel>
+  <aside class="aside">
+    <ul class="links">
+      <li><a href="/platform/identity">Identity</a> — <code>identity()</code>, login/logout via <code>identity.set()/clear()</code>.</li>
+      <li><a href="/platform/scope">Request scope</a> — <code>cookies()</code> + <code>context()</code> carrier bag via an RPC.</li>
+      <li><a href="/platform/config">Config</a> — <code>env(schema)</code> typed, boot-validated config.</li>
+      <li><a href="/platform/observability">Observability</a> — <code>trace()</code>, <code>health()</code>, <code>log()</code>.</li>
+      <li><a href="/platform/lifecycle">Lifecycle hooks</a> — <code>onStart</code>/<code>onStop</code> wrappers, <code>onHealth</code>, <code>onError</code>.</li>
+      <li><a href="/platform/machines">Machine surfaces</a> — <code>/openapi.json</code> + <code>/__abide/mcp</code>, capabilities as data, and the <code>agent()</code> loop.</li>
+      <li><a href="/platform/cli">CLI</a> — <code>scaffold</code> / <code>dev</code> / <code>build</code> / <code>start</code> and the standalone binaries.</li>
+      <li><a href="/platform/testing">Testing</a> — <code>createTestApp()</code>, the in-process app harness: <code>rpc</code>, <code>fetch</code>, <code>as(identity)</code>, sockets.</li>
+      <li><a href="/platform/deploy">Build &amp; deploy</a> — the content-hashed client build and how <code>start</code> serves it.</li>
+      <li><a href="/platform/bench">Render bench</a> — the live SSR render benchmark.</li>
+      <li><a href="/platform/bench/client">Mount bench (browser)</a> — the same corpus, timing the real browser <code>mount</code> path in your tab.</li>
+    </ul>
+  </aside>
 </main>

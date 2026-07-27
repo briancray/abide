@@ -359,7 +359,11 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    `{ type: 'string', format: 'date-time' }`, etc.) so they're representable.
 4. **Output derivation unwraps the response wrapper:** `TypedResponse<T>`/`json(T)` → `T`;
    `jsonl`/`sse` → element type; `redirect`/`error` union members excluded from success
-   schema.
+   schema. That exclusion is carried in the TYPE, not just the derivation: `error()`/`redirect()`
+   return an **`OutcomeResponse`** — a `Response` with an outcome brand — and `Payload<R>` maps it
+   to `never`. An outcome never reaches a caller as the resolved value (an error arrives as a
+   thrown `HttpError`, a redirect as a navigation), so a handler with a failing branch keeps its
+   success shape instead of widening to `Response | T`.
 5. **Derived at load, not per request.** `loadApp` runs ONE batched tsgo session over every
    RPC missing a hand-written schema at boot (sub-second for a whole app — grouped by tsconfig
    project, one Node/tsgo bridge) and merges the derived **input** AND **output** schemas into
@@ -367,10 +371,13 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    the derived one wholesale; there is no per-arg-field merge), so the registry (OpenAPI/MCP),
    the router's input validation, and its output drift-check + shaping (§5.2) all consume them
    with no extra wiring. An unrepresentable position (§11.3) derives nothing and stays as-is.
-   Output derivation unwraps the response wrapper (§11.4). One type-level limitation: a
-   `json(T) | error()` union collapses to `Response` (a `TypedResponse<T>` is a subtype of
-   `Response`), erasing `T` — return the bare value in the success branch for a typed
-   success+error union. Opt out with `ABIDE_DERIVE_SCHEMAS=0`. Live derivation needs `node` on
+   Output derivation unwraps the response wrapper (§11.4). A `json(T) | error()` union used to
+   collapse to `Response` and erase `T` — a `TypedResponse<T>` is a subtype of `Response`, so the
+   union reduced to the supertype — which forced "return the bare value in the success branch" as
+   a workaround. The `OutcomeResponse` brand (§11.4) removes it: an outcome is no longer a
+   supertype of a `TypedResponse<T>`, so the union does not reduce and `Payload` distributes over
+   it to plain `T`. Both `json(T) | error()` and `T | error()` now resolve to the success payload.
+   Opt out with `ABIDE_DERIVE_SCHEMAS=0`. Live derivation needs `node` on
    PATH (the tsgo bridge can't run under Bun); `abide dev`/`run` and the test app derive live.
    **Baked (§11.5):** `abide build` writes the derived schema map to `dist/schemas.json`, and
    `loadApp` prefers it over a live tsgo pass when present — so `abide start` (and a future

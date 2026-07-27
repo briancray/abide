@@ -12,7 +12,12 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { BundleWindow } from '../bundle/BundleWindow.ts'
-import { buildClient, type ClientBuild, loadClientBuild } from '../server/internal/clientBundle.ts'
+import {
+    buildClient,
+    type ClientBuild,
+    ENCODING_EXTENSION,
+    loadClientBuild,
+} from '../server/internal/clientBundle.ts'
 import { loadApp, writeBakedSchemas } from '../server/internal/loadApp.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { check } from './check.ts'
@@ -98,10 +103,24 @@ export async function build(dir: string): Promise<string> {
     config.dev = false // production build → minify the client bundle (TODO #6).
     const built = await buildClient(config)
     const names = [...built.files.keys()].sort()
+    // Which encodings each asset ships as a sidecar. Part of the manifest — and therefore part of the
+    // hash below — because the set of representations served at a URL is part of what that URL IS: a
+    // build that gains brotli must land in a fresh immutable directory, not overwrite an old one that
+    // clients and shared caches still hold identity bytes for.
+    const encodings: Record<string, string[]> = {}
+    for (const name of names) {
+        const asset = built.files.get(name)
+        if (asset === undefined) continue
+        const available: string[] = []
+        if (asset.brotli !== null) available.push('brotli')
+        if (asset.gzip !== null) available.push('gzip')
+        if (available.length > 0) encodings[name] = available
+    }
     const manifest = {
         entry: built.entry,
         css: built.cssFile ?? null,
         files: names,
+        encodings,
         chunkByPattern: Object.fromEntries(built.chunkByPattern),
     }
     const hash = new Bun.CryptoHasher('sha256')
@@ -111,8 +130,13 @@ export async function build(dir: string): Promise<string> {
     const outDir = join(dir, 'dist', '_app', hash)
     await mkdir(outDir, { recursive: true })
     for (const name of names) {
-        const content = built.files.get(name)
-        if (content !== undefined) await Bun.write(join(outDir, name), content)
+        const asset = built.files.get(name)
+        if (asset === undefined) continue
+        await Bun.write(join(outDir, name), asset.identity)
+        if (asset.brotli !== null)
+            await Bun.write(join(outDir, name + ENCODING_EXTENSION.brotli), asset.brotli)
+        if (asset.gzip !== null)
+            await Bun.write(join(outDir, name + ENCODING_EXTENSION.gzip), asset.gzip)
     }
     const record = JSON.stringify({ hash, ...manifest }, null, 2)
     await Bun.write(join(outDir, 'index.json'), record)

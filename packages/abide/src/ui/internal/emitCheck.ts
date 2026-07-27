@@ -15,8 +15,11 @@
 // component attribute expressions, and control-flow bindings — all typed in the correct lexical scope.
 // Component invocations are checked for VALUE validity (each prop expression) but the component itself
 // is opaque (the `.abide` ambient module types the default import as `any`); CROSS-file typed component
-// signatures are PR2. Quoted attribute-value interpolation (`title="x {n}"`) and branch-local
-// `<script>`s are deferred. See `docs/spec/abide-check-lsp-plan.md`.
+// signatures are PR2. Quoted attribute-value interpolation (`title="x {n}"`) is deferred. A BRANCH-LOCAL
+// `<script>` is emitted inside the braces its block opened, which is both the right lexical scope (TS
+// then types every reference below it and none above) and the only position that keeps the segment map
+// monotonic — hoisting it above earlier siblings would emit their source spans out of order.
+// See `docs/spec/abide-check-lsp-plan.md`.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
@@ -129,7 +132,15 @@ export function emitCheck(source: string, root: Root): CheckModule {
     // lives INSIDE the function, so no top-level-await requirement on the project). Called below so it is
     // not flagged unused under `noUnusedLocals`; the call is a statement (no unused-expression lint).
     emitSynthetic('async function __render() {\n')
-    walk(root.children, { source, emitSynthetic, emitExpr, emitAt, locate })
+    walk(root.children, {
+        source,
+        emitSynthetic,
+        emitOriginal,
+        emitExpr,
+        emitAt,
+        locate,
+        rootScripts: new Set(scripts),
+    })
     emitSynthetic('}\n__render();\n')
 
     emitSynthetic('export {};\n')
@@ -204,9 +215,12 @@ export function componentDts(source: string, root: Root): string {
 interface WalkEmit {
     source: string
     emitSynthetic: (text: string) => void
+    emitOriginal: (absStart: number, text: string) => void
     emitExpr: (nodeStart: number, nodeEnd: number, exprText: string) => void
     emitAt: (abs: number, len: number) => void
     locate: (from: number, to: number, exprText: string) => number
+    // The root `<script>` / `<script module>`, already emitted above the render body.
+    rootScripts: Set<Script>
 }
 
 // Emit a `__ref(<verbatim expr>);` guard so the expression is type-checked in the current scope.
@@ -247,8 +261,16 @@ function walkNode(node: TemplateNode, e: WalkEmit): void {
     switch (node.type) {
         case 'Text':
         case 'Comment':
-        case 'Script': // root scripts already emitted; branch-local scripts deferred (PR1 limit)
         case 'Style':
+            return
+        case 'Script':
+            // A ROOT script was already emitted above the render body. A BRANCH-LOCAL one is emitted
+            // right here, inside the braces its block opened — which is both the correct lexical scope
+            // (TS's own scoping then types every reference below it, and nothing above it) and the only
+            // position that keeps the segment map monotonic. `analyzeBindings` has already required it
+            // to be the block body's first node, so "here" and "hoisted to the top" are the same place.
+            if (!e.rootScripts.has(node))
+                emitScript(e.source, node, e.emitOriginal, e.emitSynthetic)
             return
         case 'Interpolation':
             // `{children()}` / `{name(args)}` component calls are ordinary interpolations — checked as-is,

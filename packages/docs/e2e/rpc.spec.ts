@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives the RPC-bucket docs pages in a real browser: SSR reads landing in HTML, mutations called
 // over fetch after hydration, streaming (jsonl/sse) reads rendered with {#for await}, typed-error
@@ -40,6 +40,33 @@ test.describe('Reads', () => {
 
     test('{#await}/{:then} renders the resolved read', async ({ page }) => {
         await page.goto('/rpc/reads')
+        await expect(page.getByTestId('await-then')).toContainText('greeting: Hello, await block!')
+    })
+
+    // The demo exists to show THREE branches, and for years it could only ever show one: its read
+    // settled inside the 4ms SSR deadline, so `{:then}` rendered inline and the other two were dead
+    // markup. These two guard that it still demonstrates what the page claims it does.
+    test('{#await} paints its pending branch — the slow read misses the SSR deadline', async ({
+        page,
+    }) => {
+        // The SHELL is what carries the pending branch (the value follows as an out-of-order patch), so
+        // read the server's HTML directly rather than racing the patch in a hydrated page.
+        const html = await (await page.request.get('/rpc/reads')).text()
+        expect(html).toContain('data-testid="await-pending"')
+        expect(html).toContain('reading…')
+    })
+
+    test('{#await}/{:catch} renders the failure branch when the read errors', async ({ page }) => {
+        await page.goto('/rpc/reads')
+        await page.getByTestId('await-block-fail').click()
+        await expect(page.getByTestId('await-pending')).toBeVisible()
+        await expect(page.getByTestId('await-catch')).toContainText(
+            'the greeting service is unreachable',
+        )
+
+        // ...and back: the same block returns to `{:then}` through pending, so all three are reachable
+        // from one mounted block rather than one being a screenshot in the docs.
+        await page.getByTestId('await-block-read').click()
         await expect(page.getByTestId('await-then')).toContainText('greeting: Hello, await block!')
     })
 

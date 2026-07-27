@@ -34,6 +34,7 @@ import { setClientRoute } from '../shared/internal/routeHolder.ts'
 import type { RouteInfo } from '../shared/internal/routeInfo.ts'
 import { bootstrapPage, buildPageScope } from './internal/bootstrap.ts'
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
+import { HYDRATED_ATTRIBUTE } from './internal/HYDRATED_ATTRIBUTE.ts'
 import {
     loadPageEntry,
     pageBase,
@@ -172,10 +173,16 @@ export async function mountPathname(pathname: string, seed?: HydrationSeed): Pro
 }
 
 // Dispose the currently mounted page (unmount its effects). Used by app teardown.
+//
+// This is where the hydration mark comes OFF — not in `bootstrapPage`'s disposer and not in the
+// dispose-before-hydrate above. `mountPathname` disposes and re-hydrates in one synchronous window, so
+// clearing the mark there would only flicker it; here the page really is going away with nothing
+// replacing it, and a container still claiming to be hydrated would be a lie.
 export function disposeActive(): void {
     if (activeChain !== null) {
         activeChain()
         activeChain = null
+        document.getElementById(CONTAINER_ID)?.removeAttribute(HYDRATED_ATTRIBUTE)
     }
 }
 

@@ -1,4 +1,5 @@
 <script module>
+  import Panel from "$ui/components/Panel.abide"
   import { navigate } from "abide/ui/navigate"
 </script>
 
@@ -6,8 +7,9 @@
 <main class="page">
   <h1 data-testid="files-latest-heading">Latest file</h1>
   <p class="lead">A static sibling — <code>pages/routing/files/latest/page.abide</code>. It shares a prefix with the rest route <code>files/[...path]</code>, but an exact (all-literal) route always wins the match, so <code>/pages/routing/files/latest</code> reaches this dedicated page, not the catch-all.</p>
-
-  <div class="row">
-    <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
-  </div>
+  <Panel id="the-static-sibling" title="The static sibling">
+    <div class="row">
+      <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
+    </div>
+  </Panel>
 </main>

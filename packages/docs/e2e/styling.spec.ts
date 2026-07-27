@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Scoped <style> (#13/#20): a component's <style> rewrites `.swatch` → `.swatch[data-ab-*]` and
 // stamps that attribute on the element it renders — on BOTH the server HTML and the hydrated client

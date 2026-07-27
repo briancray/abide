@@ -9,8 +9,11 @@
 //   6. bench     — hot-path SHAPE gate: hardware-neutral ratio bounds over the reactive/stream/channel
 //                  primitives, so a constant-factor blowup in a per-read or per-message path fails the
 //                  push instead of shipping silently (absolute ns can't gate — it's machine-specific)
-//   7. e2e       — docs + starter Playwright suites (serial + 1 retry; browser coverage of the
-//                  samples and of the scaffolded app end-to-end)
+//   7. e2e       — docs + starter Playwright suites (browser coverage of the samples and of the
+//                  scaffolded app end-to-end). The functional specs run in PARALLEL; the in-browser
+//                  bench specs are a separate `perf` project run alone with one worker, because a
+//                  measurement taken under contention describes the contention. Both run here — the
+//                  split is about scheduling, not coverage.
 //
 // Fails fast on the first hard error and exits non-zero, so it can gate a push (CI job or a git
 // pre-push hook: `bun run verify`). Deterministic — no agents, no network beyond the local test
@@ -37,7 +40,8 @@ const steps: Step[] = [
   { name: "abide check — scaffold starter", run: () => $`bun run --filter starter abide-check` },
   { name: "test — abide bun test", run: () => $`bun run --filter abide test` },
   { name: "bench — hot-path shape gate", run: () => $`bun run bench:gate` },
-  { name: "e2e — docs Playwright (serial)", run: () => $`bun run --filter docs e2e:ci` },
+  { name: "e2e — docs Playwright (functional, parallel)", run: () => $`bun run --filter docs e2e:ci` },
+  { name: "e2e — docs Playwright (in-browser benches, 1 worker)", run: () => $`bun run --filter docs e2e:perf` },
   { name: "e2e — starter Playwright (serial)", run: () => $`bun run --filter starter e2e:ci` },
 ];
 

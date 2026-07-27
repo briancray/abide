@@ -5,9 +5,11 @@
 // A site path is built from two segments:
 //   • `/<siteId>` — a `<Component/>` invocation. `siteId` is assigned in `templatePlan` and read by BOTH
 //                   emitters, so it names the same invocation on both sides. Opens a NEW bucket.
-//   • `#<index>`  — one `{#for}` iteration. Keeps the ENCLOSING bucket (a loop body's own `state()` calls
-//                   belong to the component that contains them) but deepens the path, so a component
-//                   nested in the loop gets a distinct bucket per item.
+//   • `#<index>`  — one `{#for}` iteration. Opens a NEW bucket, so a branch-local `<script>` in the loop
+//                   body records its cells per ITEM rather than into one shared ordinal sequence. It
+//                   used to keep the enclosing bucket, which was safe only while a loop body could hold
+//                   no `state()` calls of its own — a `{#for await}` that re-drains to a different
+//                   length on the client would otherwise replay one item's cells into another's.
 //
 // Keying by SITE rather than by mount order is load-bearing. A `{#for await}` region is discarded and
 // re-created ASYNCHRONOUSLY on the client, so with a mount-order counter every component after such a
@@ -17,10 +19,10 @@
 // differs on re-drain), the key simply doesn't match and the cell falls back to its literal initial.
 //
 // Within a bucket it is still POSITIONAL (the Nth `state()` call consumes the bucket's Nth value) — a
-// component's own script runs identically on both sides, so its local order is stable. The ordinal
-// cursor lives with the BUCKET, not the factory, so a `{#for}` item scope (which shares its parent's
-// bucket) continues the same sequence instead of restarting it. The page + its layouts share the root
-// bucket (`""`). Everything resets per page mount, since the cursors are created per `makeSeededState`.
+// script runs identically on both sides, so its local order is stable. The ordinal cursor lives with the
+// BUCKET, not the factory, so two factories addressing the same bucket continue one sequence. The page +
+// its layouts share the root bucket (`""`). Everything resets per page mount, since the cursors are
+// created per `makeSeededState`.
 
 import { decode } from '../../shared/internal/codec.ts'
 import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
@@ -69,8 +71,8 @@ export function makeSeededState(
                     : initial
             return state(value, transform)
         } as StateFactory
-        // `.shared` never consumed a seed slot. `.forSite` opens the bucket of a `<Component/>` invocation;
-        // `.forItem` deepens the path for one loop iteration while keeping the enclosing bucket.
+        // `.shared` never consumed a seed slot. `.forSite` opens the bucket of a `<Component/>`
+        // invocation; `.forItem` opens one per loop iteration.
         return Object.assign(local, {
             shared: state.shared,
             forSite(siteId: number): StateFactory {
@@ -78,7 +80,8 @@ export function makeSeededState(
                 return at(next, next)
             },
             forItem(index: number): StateFactory {
-                return at(`${sitePath}#${index}`, bucketPath)
+                const next = `${sitePath}#${index}`
+                return at(next, next)
             },
         }) as StateFactory
     }

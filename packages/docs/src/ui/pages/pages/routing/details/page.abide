@@ -1,5 +1,6 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
+  import Panel from "$ui/components/Panel.abide"
   import DetailsRouteDemo from "$ui/demos/pages/routing/DetailsRouteDemo.abide"
   import { navigate } from "abide/ui/navigate"
 </script>
@@ -8,12 +9,18 @@
 <main class="page">
   <h1 data-testid="details-heading">Details</h1>
   <p class="lead">A static sibling route — <code>pages/routing/details/page.abide</code> at <code>/pages/routing/details</code>. Exact routes win over <code>[slug]</code>, so navigating here (link or <code>navigate()</code>) reaches this dedicated page, not the param page.</p>
-
   <Demo id="details-route" title="Current route" client="src/ui/demos/pages/routing/DetailsRouteDemo.abide" tab="client">
     <DetailsRouteDemo />
   </Demo>
-
-  <div class="row">
-    <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
-  </div>
+  <aside class="aside">
+    <p>The same readout from the static sibling. Compare <code>route().name</code> with the param page's: an exact route wins, so this file answered rather than <code>[slug]</code>.</p>
+  </aside>
+  <Panel id="details-back" title="Back to the hub">
+    <div class="row">
+      <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
+    </div>
+  </Panel>
+  <aside class="aside">
+    <p>The hub links back here, and this returns — the two halves of the precedence claim, walkable in both directions.</p>
+  </aside>
 </main>

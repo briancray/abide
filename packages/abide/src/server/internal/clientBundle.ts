@@ -24,16 +24,23 @@
 // soft-nav to an unvisited route lazily imports its chunk. Every output filename embeds a content hash
 // (`[hash]` in `naming`) and is served immutable under `/__abide/chunk/` (`publicPath`).
 
-import { mkdir, rm, unlink } from 'node:fs/promises'
+import { mkdir, readdir, rm, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+// Brotli is the one compressor with no Bun API: `Bun.gzipSync`/`Bun.zstdCompressSync` exist, and
+// `CompressionStream` accepts gzip/deflate/deflate-raw/zstd but NOT `br`. Since brotli is the encoding
+// worth having here (176 KB vs gzip's 209 KB across the docs app's 61 chunks) this is a necessary
+// `node:` exception, and it is confined to this build-time path — nothing per-request imports zlib.
+import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
+import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
+import { staticAssetType } from './staticAssetType.ts'
 
 // Absolute path to the bootstrap entry the generated module imports. Resolved from this file's dir
 // so Bun.build (running from a temp entry elsewhere) resolves it.
@@ -56,11 +63,36 @@ const RUNTIME_PATH = join(import.meta.dir, '../../ui/internal/runtime.ts')
 export interface ClientBuild {
     entry: string
     cssFile: string | undefined
-    files: Map<string, string>
+    files: Map<string, ChunkAsset>
     // Route pattern → its code-split chunk filename, for `<link rel="modulepreload">` of the matched
     // route's chunk (eliminates the first-load loader→dynamic-import waterfall).
     chunkByPattern: Map<string, string>
 }
+
+// One served asset, in every encoding the build produced for it. The identity bytes are `Uint8Array`
+// rather than `string` because this map is the SERVING representation, read once per request and never
+// mutated — handing the router a string made it re-encode the same UTF-8 on every chunk fetch forever.
+//
+// Monomorphic on purpose: all three fields are always present, `null` standing for "this encoding was
+// not worth keeping", so the negotiation reads the same hidden class for a compressed and an
+// incompressible asset alike.
+// The `<ArrayBuffer>` argument is not decoration: `BodyInit` (and `Bun.gzipSync`) reject the default
+// `ArrayBufferLike` form, since a SharedArrayBuffer-backed view cannot be handed to a response body.
+export interface ChunkAsset {
+    identity: Uint8Array<ArrayBuffer>
+    gzip: Uint8Array<ArrayBuffer> | null
+    brotli: Uint8Array<ArrayBuffer> | null
+}
+
+// Below one MTU there is nothing to win: the response already fits in a single segment, so compressing
+// it saves no round trip and only adds decode work at both ends.
+const MINIMUM_COMPRESSIBLE_BYTES = 512
+
+// Keep an encoding only when it is a REAL win. A build-time compressor knows the exact answer rather
+// than estimating it, so the rule is a measurement, not a heuristic: 10% smaller or it is discarded and
+// the asset serves identity. This is also what makes a generous `compressible: true` in
+// CONTENT_TYPE_BY_EXTENSION safe — a format that turns out not to compress silently drops out here.
+const MAXIMUM_COMPRESSED_RATIO = 0.9
 
 const BUNDLE_CACHE = new WeakMap<AppConfig, Promise<ClientBuild>>()
 
@@ -178,17 +210,22 @@ function resolveCssImports(
     return out
 }
 
-// Pass-through framework imports (`abide/shared/online`, `abide/ui/bundled`, …) are emitted as bare
-// `abide/*` specifiers (M3b). Bun.build runs from a tmpdir entry outside the package, so — exactly
-// like the runtime specifier above — rewrite each to its absolute path (resolved through abide's own
-// package exports) so the temp module resolves it. Deduped across the module's imports.
-function resolveModuleImports(client: string, moduleImports: { specifier: string }[]): string {
+// An ordinary `<script>` import (`@scope/pkg`, `$shared/util`, `./helper.ts`, `abide/shared/online`)
+// is emitted verbatim by the emitter. Bun.build runs from a tmpdir entry outside the app, so — exactly
+// like the runtime specifier above — rewrite each to an absolute path before the temp module is
+// written, resolved from the `.abide`'s OWN dir so the app's deps and aliases are in view. Deduped
+// across the module's imports.
+function resolveModuleImports(
+    client: string,
+    moduleImports: { specifier: string }[],
+    sourceDir: string | undefined,
+): string {
     let out = client
     const seen = new Set<string>()
     for (const { specifier } of moduleImports) {
         if (seen.has(specifier)) continue
         seen.add(specifier)
-        const absolute = Bun.resolveSync(specifier, import.meta.dir)
+        const absolute = resolvePassThroughImport(specifier, sourceDir)
         out = out.replaceAll(
             `from ${JSON.stringify(specifier)}`,
             `from ${JSON.stringify(absolute)}`,
@@ -225,7 +262,7 @@ async function emitOne(
     const existing = visited.get(key)
     if (existing !== undefined) return existing
 
-    const emitted = emitModuleSource(source)
+    const emitted = emitModuleSource(source, sourceDir)
     const analysis = emitted.analysis
     const file = join(tmpdir(), `abide-mod-${Bun.randomUUIDv7()}.ts`)
     const index = modules.length
@@ -234,7 +271,7 @@ async function emitOne(
 
     let client = emitted.client.replace('"abide/ui/internal/runtime"', JSON.stringify(RUNTIME_PATH))
     client = resolveCssImports(client, analysis.cssImports, sourceDir)
-    client = resolveModuleImports(client, analysis.moduleImports)
+    client = resolveModuleImports(client, analysis.moduleImports, sourceDir)
 
     for (const componentImport of analysis.componentImports) {
         if (sourceDir === undefined) {
@@ -395,6 +432,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
 
     try {
         const tailwind = await loadTailwindPlugin()
+        const external = await publicExternals(config.dir)
         // Minify only for an explicit production build (`abide build`/`abide start` set `config.dev =
         // false`). Dev and tests leave `dev` undefined → unminified for fast rebuilds + readable output
         // and stable in-bundle assertions. `splitting: true` code-splits each page's chain into its own
@@ -413,6 +451,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
                 asset: '[name]-[hash].[ext]',
             },
             plugins: tailwind !== null ? [tailwind] : [],
+            external,
         })
         if (!result.success) {
             const messages = result.logs.map((log) => String(log)).join('\n')
@@ -421,7 +460,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
         // Every `.js` output (loader entry + per-route chunks + shared chunks) is served by filename; any
         // imported CSS (incl. Tailwind-processed utilities) is emitted as separate `.css` asset outputs —
         // concatenated (sorted by path for a stable content hash) into ONE served, hashed stylesheet.
-        const files = new Map<string, string>()
+        const identityFiles = new Map<string, Uint8Array<ArrayBuffer>>()
         const cssParts: { path: string; text: string }[] = []
         let entry = ''
         for (const output of result.outputs) {
@@ -430,7 +469,9 @@ async function build(config: AppConfig): Promise<ClientBuild> {
                 cssParts.push({ path: output.path, text: await output.text() })
                 continue
             }
-            files.set(name, await output.text())
+            // `arrayBuffer()`, not `bytes()`: a Bun build artifact is typed as a Blob but does not carry
+            // Blob's `bytes()` at runtime, and calling it throws mid-build.
+            identityFiles.set(name, new Uint8Array(await output.arrayBuffer()))
             if (output.kind === 'entry-point') entry = name
         }
         if (entry === '') throw new Error('abide: client bundle produced no entry output.')
@@ -440,8 +481,17 @@ async function build(config: AppConfig): Promise<ClientBuild> {
         if (css !== '') {
             const hash = new Bun.CryptoHasher('sha256').update(css).digest('hex').slice(0, 16)
             cssFile = `style-${hash}.css`
-            files.set(cssFile, css)
+            identityFiles.set(cssFile, new TextEncoder().encode(css))
         }
+        // Precompress on the SAME condition as minify — an explicit production build. Compression here
+        // is affordable precisely because these assets are content-addressed and immutable: the cost is
+        // paid once per build and amortised over every request for the life of the hash, which is what
+        // buys brotli at its maximum quality. Dev rebuilds skip it (it would be seconds per keystroke
+        // for bytes localhost never waits on).
+        const compressing = config.dev === false
+        const files = new Map<string, ChunkAsset>()
+        for (const [name, identity] of identityFiles)
+            files.set(name, compressChunk(name, identity, compressing))
         // Map each route pattern → its code-split chunk filename (via the chain's unique index-prefixed
         // slug), so the SSR document can `<link rel="modulepreload">` the matched route's chunk and load
         // it in parallel with the loader — eliminating the loader→dynamic-import waterfall on first load.
@@ -458,6 +508,78 @@ async function build(config: AppConfig): Promise<ClientBuild> {
         await rm(buildDir, { recursive: true, force: true }).catch(() => {})
         for (const mod of modules) await unlink(mod.file).catch(() => {})
     }
+}
+
+// Bun's CSS bundler RESOLVES every `url()` it sees as a module path — a root-absolute
+// `url('/fonts/x.woff2')` is a hard build error ("Could not resolve"), and a RELATIVE one is inlined as a
+// base64 data URL (at any size — there is no size threshold, and the `loader` option does not apply to
+// CSS references). Neither is what a self-hosted font wants: inlining pushes the font's bytes, +33% for
+// base64, into the render-blocking stylesheet.
+//
+// So the public directory defines an EXTERNAL set: each of its top-level entries is marked external, and
+// Bun then passes matching `url()`s through verbatim for the `src/ui/public/**` route to serve. Derived
+// from the directory rather than a fixed pattern so an unresolvable `url('/typo/x.woff2')` still FAILS
+// the build loudly instead of silently emitting a 404-at-runtime reference.
+async function publicExternals(dir: string | undefined): Promise<string[]> {
+    if (dir === undefined) return []
+    let entries: string[]
+    try {
+        entries = await readdir(join(dir, 'src/ui/public'))
+    } catch {
+        return [] // No public dir — nothing is external.
+    }
+    const external: string[] = []
+    for (const entry of entries) {
+        if (entry.startsWith('.')) continue
+        external.push(`/${entry}`, `/${entry}/*`)
+    }
+    return external
+}
+
+// Build one asset's encodings. `compressing` is false for dev/test builds, which serve identity only.
+//
+// Both compressors run at their MAXIMUM setting, which would be indefensible per-request and is free
+// here: the output is keyed by a content hash, so it is computed once and served until the source
+// changes. An encoding that fails MAXIMUM_COMPRESSED_RATIO is dropped rather than stored, so the
+// serving path never has to ask whether a compressed variant is worth using — if it exists, it won.
+function compressChunk(
+    name: string,
+    identity: Uint8Array<ArrayBuffer>,
+    compressing: boolean,
+): ChunkAsset {
+    if (
+        !compressing ||
+        identity.byteLength < MINIMUM_COMPRESSIBLE_BYTES ||
+        staticAssetType(name)?.compressible !== true
+    )
+        return { identity, gzip: null, brotli: null }
+
+    const ceiling = identity.byteLength * MAXIMUM_COMPRESSED_RATIO
+    // node:zlib returns a `Buffer`, whose type argument is the permissive `ArrayBufferLike`. A Buffer is
+    // never SharedArrayBuffer-backed in practice, so narrowing it here is sound and keeps the cast at
+    // this one boundary instead of leaking `ArrayBufferLike` into ChunkAsset and every consumer.
+    const brotli = brotliCompressSync(identity, {
+        params: {
+            [zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
+            // The encoder sizes its window and its cost model from this; without it a one-shot compress
+            // assumes a stream of unknown length and leaves ratio on the table.
+            [zlibConstants.BROTLI_PARAM_SIZE_HINT]: identity.byteLength,
+        },
+    }) as Uint8Array<ArrayBuffer>
+    const gzip = Bun.gzipSync(identity, { level: 9 })
+    return {
+        identity,
+        gzip: gzip.byteLength <= ceiling ? gzip : null,
+        brotli: brotli.byteLength <= ceiling ? brotli : null,
+    }
+}
+
+// The file extension each encoding is stored under, beside its identity file in `dist/_app/<hash>/`.
+// Sidecars rather than a container format so the build output stays inspectable — `ls` shows exactly
+// what a client can be served, and any static file server could host the directory as-is.
+export const ENCODING_EXTENSION: Readonly<Record<'gzip' | 'brotli', string>> = {
+    gzip: '.gz',
+    brotli: '.br',
 }
 
 // The content-addressed client build (loader entry + per-route chunks + CSS), cached per config.
@@ -491,12 +613,26 @@ export async function loadClientBuild(dir: string): Promise<ClientBuild | undefi
         entry: string
         css: string | null
         files: string[]
+        // name → the encodings written as sidecars beside it. Recorded rather than probed so boot costs
+        // no speculative `exists()` per file per encoding, and so a half-written build is a loud missing
+        // file instead of a silently identity-only one.
+        encodings?: Record<string, string[]>
         chunkByPattern: Record<string, string>
     }
     const buildDir = join(dir, 'dist', '_app', manifest.hash)
-    const files = new Map<string, string>()
+    const encodings = manifest.encodings ?? {}
+    const files = new Map<string, ChunkAsset>()
     for (const name of manifest.files) {
-        files.set(name, await Bun.file(join(buildDir, name)).text())
+        const available = encodings[name] ?? []
+        files.set(name, {
+            identity: await Bun.file(join(buildDir, name)).bytes(),
+            gzip: available.includes('gzip')
+                ? await Bun.file(join(buildDir, name + ENCODING_EXTENSION.gzip)).bytes()
+                : null,
+            brotli: available.includes('brotli')
+                ? await Bun.file(join(buildDir, name + ENCODING_EXTENSION.brotli)).bytes()
+                : null,
+        })
     }
     return {
         entry: manifest.entry,

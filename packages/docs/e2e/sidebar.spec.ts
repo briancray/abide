@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // The sidebar's per-page card index is built client-side from the rendered `section.sample[id]` cards.
 // REGRESSION: it used to be built from a `bind:element` attachment assumed to re-fire per navigation. It
@@ -37,9 +38,9 @@ test('a soft-nav to a page with no cards leaves no stale index', async ({ page }
     await page.goto('/memo')
     await expect.poll(async () => (await sampleIndex(page)).blocks).toBe(1)
 
-    // /platform/bench renders no `.sample` cards at all, so the correct result is NO index block —
-    // the case an early return used to skip, stranding the previous page's list.
-    await page.locator('aside.sidebar').getByRole('link', { name: 'Render bench' }).click()
-    await expect(page).toHaveURL(/\/platform\/bench$/)
+    // The RPC hub is prose and links only — no `.sample` cards at all — so the correct result is NO
+    // index block, the case an early return used to skip, stranding the previous page's list.
+    await page.locator('aside.sidebar').getByRole('link', { name: 'rpc = memo + transport' }).click()
+    await expect(page).toHaveURL(/\/rpc$/)
     await expect.poll(async () => (await sampleIndex(page)).blocks).toBe(0)
 })

@@ -3,9 +3,10 @@
     "type": "module",
     "private": true,
     "exports": {
+        "./benchBudget": "./src/benchBudget.ts",
+        "./measure": "./src/measure.ts",
         "./scenarios": "./src/scenarios.ts",
         "./serverBenches": "./src/serverBenches.ts",
-        "./measure": "./src/measure.ts",
         "./vanillaBaselines": "./src/vanillaBaselines.ts"
     },
     "scripts": {

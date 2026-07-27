@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives /memo/global: the app-wide probes/verbs — reachable(host), online(), and the tag selectors
 // invalidate({tags}) / refresh({tags}) that act across every slot carrying a tag.

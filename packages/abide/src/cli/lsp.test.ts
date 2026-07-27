@@ -55,6 +55,54 @@ function parseFrames(text: string): Array<Record<string, unknown>> {
     return messages
 }
 
+// Read the server's stdout INCREMENTALLY so a test can wait for the frame it actually wants instead of
+// sleeping past the diagnostic debounce. A fixed sleep has to be long enough for the slowest machine
+// (so it costs that on every machine) and is still a race — under `bun test --parallel` a 600ms guess
+// loses to a loaded box and the publish arrives after the assertion. Waiting on the frame is both
+// faster in the common case and immune to load.
+function frameStream(stdout: ReadableStream<Uint8Array>) {
+    const reader = stdout.getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    let ended = false
+    return {
+        // Resolve once `satisfied` holds over the frames received; throw on EOF or timeout.
+        async until(
+            satisfied: (frames: Array<Record<string, unknown>>) => boolean,
+            what: string,
+            timeoutMs = 20_000,
+        ): Promise<Array<Record<string, unknown>>> {
+            const deadline = Date.now() + timeoutMs
+            for (;;) {
+                const frames = parseFrames(text)
+                if (satisfied(frames)) return frames
+                if (ended)
+                    throw new Error(`lsp: stdout closed before ${what}\n${text.slice(0, 2000)}`)
+                if (Date.now() > deadline)
+                    throw new Error(`lsp: timed out waiting for ${what}\n${text.slice(0, 2000)}`)
+                const { done, value } = await reader.read()
+                if (done) ended = true
+                else text += decoder.decode(value, { stream: true })
+            }
+        },
+        // Drain whatever is left (the server is exiting) and return every frame.
+        async rest(): Promise<Array<Record<string, unknown>>> {
+            while (!ended) {
+                const { done, value } = await reader.read()
+                if (done) ended = true
+                else text += decoder.decode(value, { stream: true })
+            }
+            return parseFrames(text)
+        },
+    }
+}
+
+const isPublish = (message: Record<string, unknown>): boolean =>
+    message.method === 'textDocument/publishDiagnostics'
+
+const diagnosticsOf = (message: Record<string, unknown> | undefined): unknown[] =>
+    (message?.params as { diagnostics?: unknown[] } | undefined)?.diagnostics ?? []
+
 test('persistent lsp: live template diagnostics on didOpen, cleared on didChange (unsaved fix)', async () => {
     const root = mkdtempSync(join(tmpdir(), 'abide-lsp-'))
     cleanupDirs.push(root)
@@ -72,8 +120,9 @@ test('persistent lsp: live template diagnostics on didOpen, cleared on didChange
         stdout: 'pipe',
         stderr: 'pipe',
     })
-    // Diagnostics are debounced (coalesced per edit), so pause past the window after each edit to let its
-    // publish land: didOpen(bad) → error publish, then didChange(fixed) → cleared publish.
+    // Diagnostics are debounced (coalesced per edit), so each edit's publish is awaited rather than
+    // slept past: didOpen(bad) → error publish, then didChange(fixed) → cleared publish.
+    const stream = frameStream(proc.stdout)
     proc.stdin.write(
         frame({
             jsonrpc: '2.0',
@@ -87,7 +136,10 @@ test('persistent lsp: live template diagnostics on didOpen, cleared on didChange
                 params: { textDocument: { uri, languageId: 'abide', version: 1, text: bad } },
             }),
     )
-    await Bun.sleep(600)
+    await stream.until(
+        (frames) => frames.some((m) => isPublish(m) && diagnosticsOf(m).length > 0),
+        'the didOpen error publish',
+    )
     proc.stdin.write(
         frame({
             jsonrpc: '2.0',
@@ -95,16 +147,17 @@ test('persistent lsp: live template diagnostics on didOpen, cleared on didChange
             params: { textDocument: { uri, version: 2 }, contentChanges: [{ text: fixed }] },
         }),
     )
-    await Bun.sleep(600)
+    await stream.until((frames) => {
+        const publishes = frames.filter(isPublish)
+        return publishes.length > 1 && diagnosticsOf(publishes[publishes.length - 1]).length === 0
+    }, 'the didChange cleared publish')
     proc.stdin.write(frame({ jsonrpc: '2.0', method: 'exit' }))
     proc.stdin.end()
-    const out = await new Response(proc.stdout).text()
+    const publishes = (await stream.rest()).filter(isPublish)
     await proc.exited
 
-    const publishes = parseFrames(out).filter((m) => m.method === 'textDocument/publishDiagnostics')
     const diagsOf = (m: Record<string, unknown> | undefined) =>
-        (m?.params as { diagnostics?: Array<{ code: number; source: string }> } | undefined)
-            ?.diagnostics ?? []
+        diagnosticsOf(m) as Array<{ code: number; source: string }>
 
     // didOpen → the template type error is reported (mapped to the .abide, source "abide").
     const withError = publishes.find((p) => diagsOf(p).length > 0)
@@ -327,7 +380,8 @@ test('persistent lsp: answers initialize with full-change sync + publishes clean
         stdout: 'pipe',
         stderr: 'pipe',
     })
-    // Diagnostics are debounced, so wait past the window before exiting to let the clean publish land.
+    // Diagnostics are debounced, so the clean publish is awaited before exiting rather than slept past.
+    const stream = frameStream(proc.stdout)
     proc.stdin.write(
         frame({
             jsonrpc: '2.0',
@@ -341,13 +395,14 @@ test('persistent lsp: answers initialize with full-change sync + publishes clean
                 params: { textDocument: { uri, languageId: 'abide', version: 1, text: clean } },
             }),
     )
-    await Bun.sleep(600)
+    await stream.until(
+        (frames) => frames.some((m) => m.id === 1) && frames.some(isPublish),
+        'the initialize response + clean publish',
+    )
     proc.stdin.write(frame({ jsonrpc: '2.0', method: 'exit' }))
     proc.stdin.end()
-    const out = await new Response(proc.stdout).text()
+    const messages = await stream.rest()
     await proc.exited
-
-    const messages = parseFrames(out)
     const init = messages.find((m) => m.id === 1)
     if (init === undefined) throw new Error('expected an initialize response')
     expect(

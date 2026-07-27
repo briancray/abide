@@ -1,4 +1,5 @@
 <script module>
+  import Panel from "$ui/components/Panel.abide"
   import { route } from "abide/shared/route"
   import { navigate } from "abide/ui/navigate"
 </script>
@@ -7,12 +8,12 @@
 <main class="page">
   <h1 data-testid="files-heading">Files</h1>
   <p class="lead">One file — <code>pages/routing/files/[...path]/page.abide</code> — is a <strong>rest / catch-all</strong> route. Every remaining path segment is captured as a single <code>/</code>-joined string in <code>route().params.path</code>.</p>
-
-  <dl class="route">
-    <dt>route().params.path</dt><dd data-testid="files-path">{route().params.path}</dd>
-  </dl>
-
-  <div class="row">
-    <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
-  </div>
+  <Panel id="rest-segment-path" title="Rest segment — <code>[...path]</code>">
+    <dl class="route">
+      <dt>route().params.path</dt><dd data-testid="files-path">{route().params.path}</dd>
+    </dl>
+    <div class="row">
+      <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
+    </div>
+  </Panel>
 </main>

@@ -45,6 +45,7 @@ import { json } from '../json.ts'
 import { jsonl } from '../jsonl.ts'
 import { clientPublishAllowed, type ErasedSocket } from '../socket.ts'
 import { sse } from '../sse.ts'
+import { applyResponseCompression } from './applyResponseCompression.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
 import {
     clearIdentityCookieHeader,
@@ -62,6 +63,7 @@ import {
     type SocketConnectionData,
 } from './channelAuth.ts'
 import { type ClientBuild, clientBuildFor } from './clientBundle.ts'
+import { compressionMode } from './compressionMode.ts'
 import {
     applyCors,
     corsAllowOrigin,
@@ -74,6 +76,7 @@ import { sharedLayoutDepth } from './layouts.ts'
 import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
 import { handleMcp } from './mcp.ts'
 import { compose, type Middleware } from './middleware.ts'
+import { negotiateEncoding } from './negotiateEncoding.ts'
 import { buildOpenApi } from './openapi.ts'
 import { renderPage, streamPageDocument, streamSoftNav } from './pages.ts'
 import { projectFormText } from './projectFormText.ts'
@@ -86,6 +89,8 @@ import {
     type RouteKind,
     runInScope,
 } from './requestScope.ts'
+import { servePublicFile } from './servePublicFile.ts'
+import { staticAssetType } from './staticAssetType.ts'
 import { validateFiles } from './validateFiles.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -118,8 +123,26 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 // Content-addressed client assets. The one route class that is NOT traced: it is a static byte
 // response with no handler, no identity, and an immutable long-cache — minting a trace id per chunk
 // fetch would spend entropy and two response headers on something no span will ever join, and the
-// `Vary`-free immutable response is shared across users, so a per-request header on it is a lie.
+// immutable response is shared across users, so a per-request header on it is a lie. A production
+// build DOES vary it on `Accept-Encoding` (precompressed brotli/gzip), which is not a per-request
+// header in that sense: it selects among fixed representations of the same content-addressed bytes and
+// stays identity-free, so the response is still shared across every client that negotiates alike.
 const CHUNK_PREFIX = '/__abide/chunk/'
+
+// Does the LAST path segment carry an extension? The cheap synchronous gate in front of the
+// `src/ui/public/**` lookup — a page route (`/memo`, `/users/7`) has none and never reaches the
+// filesystem. A leading dot does not count (`/.well-known` is a directory, not a file).
+//
+// Deliberately NOT `staticAssetType(pathname) !== undefined`, which decides the same question: this
+// runs on EVERY request, and a predicate that is two `indexOf`s beats one that also hashes an
+// extension into a table and allocates a result for the file case. It must stay in step with that
+// function's rule, which is the authority — if what counts as an extension changes there, change it
+// here too.
+function looksLikeFile(pathname: string): boolean {
+    const slash = pathname.lastIndexOf('/')
+    const dot = pathname.lastIndexOf('.')
+    return dot > slash + 1 && dot < pathname.length - 1
+}
 
 // A request carries an Authorization: Bearer token → it is a stateless machine surface whose
 // identity is request-scoped and never persisted into an abide-identity cookie (AU6.3).
@@ -250,6 +273,11 @@ async function handleUncaught(caught: unknown, config: AppConfig): Promise<Respo
 export type Route = Rpc<any, any> | StreamRead<any, any>
 
 export interface AppConfig {
+    // The project root, set by the file-based loader (`loadApp`). Two consumers, both filesystem-relative:
+    // `src/ui/public/**` static serving, and the client bundle's `external` list (which is derived from
+    // that same directory). Absent for hand-built configs — those have no project on disk, so both
+    // features simply stay off rather than guessing a cwd.
+    dir?: string
     routes?: Record<string, Route>
     middleware?: Middleware[]
     sockets?: Record<string, ErasedSocket>
@@ -603,19 +631,41 @@ async function dispatch(
             return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD' } })
         const name = url.pathname.slice(CHUNK_PREFIX.length)
         const build = await clientBuildFor(config)
-        const content = build.files.get(name)
-        if (content === undefined) return error(404, `Not found: ${url.pathname}`)
-        const contentType = name.endsWith('.css')
-            ? 'text/css; charset=utf-8'
-            : 'text/javascript; charset=utf-8'
-        return new Response(content, {
-            status: 200,
-            headers: {
-                'content-type': contentType,
-                // Content-addressed → the bytes for this URL never change; cache aggressively.
-                'cache-control': 'public, max-age=31536000, immutable',
-            },
-        })
+        const asset = build.files.get(name)
+        if (asset === undefined) return error(404, `Not found: ${url.pathname}`)
+        const contentType = staticAssetType(name)?.type ?? 'text/javascript; charset=utf-8'
+        const headers: Record<string, string> = {
+            'content-type': contentType,
+            // Content-addressed → the bytes for this URL never change; cache aggressively.
+            'cache-control': 'public, max-age=31536000, immutable',
+        }
+        // A production build precompresses this asset; dev serves identity only, and `ABIDE_COMPRESS=off`
+        // withholds the variants a build did produce. `Vary` is stamped only when the URL genuinely has
+        // more than one representation — an incompressible asset answers identically to every client, so
+        // advertising variance would split cache entries for nothing.
+        const offered = compressionMode() !== 'off'
+        const hasBrotli = offered && asset.brotli !== null
+        const hasGzip = offered && asset.gzip !== null
+        const encoding = negotiateEncoding(
+            scope.request.headers.get('accept-encoding'),
+            hasBrotli,
+            hasGzip,
+        )
+        let body = asset.identity
+        if (hasBrotli || hasGzip) {
+            headers.vary = 'Accept-Encoding'
+            if (encoding === 'br' && asset.brotli !== null) {
+                headers['content-encoding'] = 'br'
+                body = asset.brotli
+            } else if (encoding === 'gzip' && asset.gzip !== null) {
+                headers['content-encoding'] = 'gzip'
+                body = asset.gzip
+            }
+        }
+        // HEAD is GET minus the body, but its `Content-Length` must still describe the representation
+        // that a GET would return — so it is stated explicitly rather than left to the empty body.
+        if (method === 'HEAD') headers['content-length'] = String(body.byteLength)
+        return new Response(method === 'HEAD' ? null : body, { status: 200, headers })
     }
 
     // MS4: the OpenAPI 3.1 document, derived from the registry. Served by default and reached
@@ -630,6 +680,17 @@ async function dispatch(
     // (MS2.5/DX8).
     if (url.pathname === '/__abide/mcp') {
         return handleMcp(scope.request, config)
+    }
+
+    // `src/ui/public/**` served at its literal path. Placed AFTER the framework-generated routes (so a
+    // file can never shadow `/openapi.json` or `/__abide/*`) and BEFORE page SSR (so an app can serve a
+    // real `/favicon.ico` without a page pattern intercepting it). Falls through when nothing matches.
+    // The `looksLikeFile` guard is SYNCHRONOUS and runs first on purpose: without it every request —
+    // every RPC, every page nav — would allocate a promise and take a microtask tick to `await` a lookup
+    // that answers "no" for anything without a file extension. A public asset always has one.
+    if (config.dir !== undefined && looksLikeFile(url.pathname)) {
+        const publicResponse = await servePublicFile(config.dir, url.pathname, scope.request)
+        if (publicResponse !== undefined) return publicResponse
     }
 
     if (scope.route.kind !== 'rpc') {
@@ -1092,7 +1153,11 @@ export function createApp(config: AppConfig = {}): App {
                         )
                     }
                 }
-                return applyResponseHeaders(response)
+                // Compression BEFORE header stamping: it appends `Accept-Encoding` to `Vary`, and the
+                // identity-scoped default that follows appends `Cookie` to the same header.
+                return applyResponseHeaders(
+                    await applyResponseCompression(response, request, scope.route.url.pathname),
+                )
             }) as Promise<Response>
         },
         websocket: {

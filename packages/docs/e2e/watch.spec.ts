@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives /watch: the effect that carries a reactive value OUT of the graph, in both forms — the
 // auto-tracked `watch(thunk)` (dependencies inferred from the body) and the change-only

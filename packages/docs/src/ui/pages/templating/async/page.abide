@@ -9,28 +9,29 @@
 <main class="page">
   <h1>Async control flow</h1>
   <p class="lead">Three forms, split by how many values arrive and whether you need to see the waiting. <code>&#123;await&#125;</code> is the plain interpolation for <strong>one</strong> value — no branches, the server does the waiting. <code>&#123;#await&#125;</code> is for one value when you want a branch per promise state. <code>&#123;#for await&#125;</code> is for <strong>many</strong> — it appends each chunk of an async iterable as it lands. All three work identically during SSR and after hydration.</p>
-
-  <h2>One value</h2>
-  <p>The common case needs no branches at all: await something during SSR and the value is in the initial HTML. Nothing suspends, nothing flashes — the server did the waiting.</p>
   <Demo id="await-rpc" title="Server-resolved <code>&#123;await&#125;</code> of an RPC" server="src/server/rpc/controlGreet.ts" client="src/ui/demos/templating/async/AwaitRpcDemo.abide" tab="server">
     <AwaitRpcDemo />
   </Demo>
-
-  <p>In the browser a promise has states worth rendering, and the block gives you one branch each. Each click below reseeds a promise held in state: the pending branch shows, then the resolved or rejected one, and <code>&#123;:finally&#125;</code> renders once it settles either way.</p>
+  <aside class="aside">
+    <p>The common case needs no branches at all: await something during SSR and the value is in the initial HTML. Nothing suspends, nothing flashes — the server did the waiting.</p>
+  </aside>
   <Demo id="await-promise" title="<code>&#123;#await&#125;</code> / <code>&#123;:then&#125;</code> / <code>&#123;:catch&#125;</code> / <code>&#123;:finally&#125;</code>" client="src/ui/demos/templating/async/AwaitPromiseDemo.abide" tab="client">
     <AwaitPromiseDemo />
   </Demo>
-
-  <h2>Many values</h2>
-  <p>Swap the promise for an async iterable and <code>&#123;#for await&#125;</code> appends each chunk as it arrives — no buffer to manage, no reader to drain. If the stream throws partway, <code>&#123;:catch&#125;</code> is appended <em>after</em> the chunks already emitted, so a failure never discards what arrived.</p>
+  <aside class="aside">
+    <p>In the browser a promise has states worth rendering, and the block gives you one branch each. Each click here reseeds a promise held in state: the pending branch shows, then the resolved or rejected one, and <code>&#123;:finally&#125;</code> renders once it settles either way.</p>
+  </aside>
   <Demo id="for-await" title="<code>&#123;#for await&#125;</code> + <code>&#123;:catch&#125;</code>" client="src/ui/demos/templating/async/ForAwaitDemo.abide" tab="client">
     <ForAwaitDemo />
   </Demo>
-
-  <p>A stream has one question a promise doesn't: is it finished? <code>done(stream)</code> answers it reactively — <code>false</code> while a <code>&#123;#for await&#125;</code> is still draining that same stream object, <code>true</code> once it closes. Import it from <code>abide/shared/done</code> and call it in the template.</p>
+  <aside class="aside">
+    <p>Swap the promise for an async iterable and <code>&#123;#for await&#125;</code> appends each chunk as it arrives — no buffer to manage, no reader to drain. If the stream throws partway, <code>&#123;:catch&#125;</code> is appended <em>after</em> the chunks already emitted, so a failure never discards what arrived.</p>
+  </aside>
   <Demo id="done" title="<code>done(stream)</code> — reactive completion probe" client="src/ui/demos/templating/async/DoneDemo.abide" tab="client">
     <DoneDemo />
   </Demo>
-
-  <p class="note">Streaming over a transport is the same two blocks with an RPC as the source — see <a href="/rpc/streaming">Streaming</a>, where <code>&#123;#for await&#125;</code> also picks up the SSR→client handoff and the chunk probes.</p>
+  <aside class="aside">
+    <p>A stream has one question a promise doesn't: is it finished? <code>done(stream)</code> answers it reactively — <code>false</code> while a <code>&#123;#for await&#125;</code> is still draining that same stream object, <code>true</code> once it closes. Import it from <code>abide/shared/done</code> and call it in the template.</p>
+    <p class="note">Streaming over a transport is the same two blocks with an RPC as the source — see <a href="/rpc/streaming">Streaming</a>, where <code>&#123;#for await&#125;</code> also picks up the SSR→client handoff and the chunk probes.</p>
+  </aside>
 </main>

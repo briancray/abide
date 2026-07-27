@@ -1,0 +1,28 @@
+<script module>
+  import Demo from "$ui/components/Demo.abide"
+  import Panel from "$ui/components/Panel.abide"
+  import BranchScriptDemo from "$ui/demos/templating/scripts/BranchScriptDemo.abide"
+</script>
+
+<main class="page">
+  <h1>Branch-local <code>&lt;script&gt;</code></h1>
+  <p class="lead">A <code>&lt;script&gt;</code> at the top of a block body is that <strong>branch's</strong> setup: its <code>state</code> is created when the branch mounts and disposed when it goes, and inside a <code>&#123;#for&#125;</code> that means <strong>per iteration</strong>. It reuses the component's imports and reads its bindings, but nothing outside the branch can see what it declares — including a sibling branch that happens to use the same name.</p>
+  <Demo id="branch" title="Per-iteration <code>&lt;script&gt;</code>" client="src/ui/demos/templating/scripts/BranchScriptDemo.abide" tab="client">
+    <BranchScriptDemo />
+  </Demo>
+  <aside class="aside">
+    <p>Each row here owns a counter the component's own script has no name for. Adding a row adds a fresh one; the rows never share.</p>
+  </aside>
+  <Panel id="illegal-positions" title="Where a branch-local <code>&lt;script&gt;</code> may not go">
+    <ul>
+      <li>inside an element (<code>&lt;div&gt;&lt;script&gt;</code>) — the element has no lifetime of its own; move it to the enclosing block.</li>
+      <li>after other markup in the body — it is setup, so it goes first.</li>
+      <li>a second one in the same body, or a second root-level <code>&lt;script&gt;</code> — merge them.</li>
+      <li><code>&lt;script module&gt;</code> — it runs once per module, so it belongs at the top level.</li>
+    </ul>
+  </Panel>
+  <aside class="aside">
+    <p>A branch-local <code>&lt;script&gt;</code> must be the <strong>first node of a block body</strong> — the body of an <code>&#123;#if&#125;</code> branch, a <code>&#123;#for&#125;</code>, an <code>&#123;#await&#125;</code> branch, a <code>&#123;:case&#125;</code>, a <code>&#123;#try&#125;</code> branch, or a <code>&#123;#component&#125;</code>. That is the only position with a lifetime and a scope of its own, so anywhere else is a compile error rather than a script that quietly never runs.</p>
+    <p>It carries no <code>import</code> of its own — an import is module-level wherever it is written, so one here could only look conditional without being it. The component's imports are already in scope, which is why the demo above calls <code>state</code> without importing it a second time.</p>
+  </aside>
+</main>

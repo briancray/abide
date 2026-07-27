@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Count surviving `<!--ab-p:N-->` opening sentinels — hydration must leave none. Runs in the page:
 // comments are invisible to CSS selectors, so this is the only way to assert on them.

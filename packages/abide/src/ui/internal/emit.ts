@@ -15,6 +15,7 @@ import { emitClientModule } from './emitClient.ts'
 import { emitServerModule } from './emitServer.ts'
 import { parse } from './parse.ts'
 import { resolveTemplateAlias } from './resolveTemplateAlias.ts'
+import { resolvePassThroughImport } from './resolvePassThroughImport.ts'
 import { buildPlan } from './templatePlan.ts'
 
 export interface EmittedSource {
@@ -78,18 +79,41 @@ const MODULE_CACHE = new Map<string, Promise<EmittedModule>>()
 
 const INTERNAL_DIR = import.meta.dir
 
-export function emitModuleSource(source: string): EmittedSource {
-    const cached = SOURCE_CACHE.get(source)
+// An ordinary import passes through as a REAL import only if it can actually be resolved from where the
+// source lives. `sourceDir` is what makes that decidable — and it is absent for source-only callers (the
+// hermetic test harness, LSP snippets, `emitModuleSource(source)` in tests), where nothing is on disk to
+// resolve against. There, only abide's own surface passes through and everything else stays a `$scope`
+// read, which is exactly how a source-only harness injects a module binding it never wrote to disk.
+//
+// With a dir in hand there is no such excuse: a specifier that resolves to nothing is a BUILD ERROR
+// (`resolvePassThroughImport` throws and names it), not a binding that silently arrives `undefined`.
+function passesThrough(specifier: string, sourceDir: string | undefined): boolean {
+    if (sourceDir === undefined) {
+        return specifier.startsWith('abide/shared/') || specifier.startsWith('abide/ui/')
+    }
+    resolvePassThroughImport(specifier, sourceDir)
+    return true
+}
+
+export function emitModuleSource(source: string, sourceDir?: string): EmittedSource {
+    const cacheKey = `${sourceDir ?? ''}\u0000${source}`
+    const cached = SOURCE_CACHE.get(cacheKey)
     if (cached !== undefined) return cached
     const root = parse(source)
-    const analysis = analyzeBindings(root)
+    const raw = analyzeBindings(root)
+    const analysis: BindingAnalysis = {
+        ...raw,
+        moduleImports: raw.moduleImports.filter((binding) =>
+            passesThrough(binding.specifier, sourceDir),
+        ),
+    }
     const plan = buildPlan(root, analysis)
     const result: EmittedSource = {
         client: emitClientModule(plan, analysis),
         server: emitServerModule(plan, analysis),
         analysis,
     }
-    SOURCE_CACHE.set(source, result)
+    SOURCE_CACHE.set(cacheKey, result)
     return result
 }
 
@@ -153,11 +177,22 @@ async function emitTree(
     const cached = written.get(key)
     if (cached !== undefined) return cached
 
-    const emitted = emitModuleSource(source)
+    const emitted = emitModuleSource(source, dir)
     const runtimeFrom =
         side === 'client' ? '"abide/ui/internal/runtime"' : '"abide/ui/internal/serverRuntime"'
     const runtimeTo = side === 'client' ? '"./runtime.ts"' : '"./serverRuntime.ts"'
     let src = (side === 'client' ? emitted.client : emitted.server).replace(runtimeFrom, runtimeTo)
+
+    // The compiled module is written into abide's own internal dir, not next to the `.abide`, so an
+    // ordinary import ("./util.ts", "@scope/pkg", "$shared/x") would resolve against the wrong base.
+    // Rewrite each to an absolute path resolved from the SOURCE's dir before it is written.
+    for (const binding of emitted.analysis.moduleImports) {
+        const absolute = resolvePassThroughImport(binding.specifier, dir)
+        src = src.replaceAll(
+            `from ${JSON.stringify(binding.specifier)}`,
+            `from ${JSON.stringify(absolute)}`,
+        )
+    }
 
     const id = `${process.pid}-${Date.now()}-${counter++}`
     const basename = `.emit-${id}.${side}.ts`

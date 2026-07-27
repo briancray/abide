@@ -8,33 +8,25 @@
 <main class="page">
   <h1><code>state</code> — the owned value</h1>
   <p class="lead">The first of the three primitives. A <code>state</code> is a scope-free reactive atom that keeps only what it <strong>owns</strong> — derivation is <a href="/memo"><code>memo</code></a>'s job, and pushing is <a href="/channel"><code>channel</code></a>'s. It ships from <code>abide/shared/state</code>, so it is <strong>isomorphic</strong>: the same import in a page, a component, or a plain server <code>.ts</code>. Under each live demo is the exact source that powers it — read live from disk and highlighted on the server.</p>
-
-  <p>Declare it, write it, read it. Everything reading the cell updates — here, one text node.</p>
-
   <Demo id="state" title="<code>state(v)</code> — a writable cell" client="src/ui/demos/state/StateDemo.abide">
     <StateDemo />
   </Demo>
-
-  <p>That is the entire primitive. The rest of this page is three things layered on it.</p>
-
-  <h2>A transform guards every write</h2>
-  <p>The optional second argument runs on every write, so the cell can never hold a value the transform wouldn't produce — clamping, rounding, normalising. It is the one place to put an invariant, rather than at each call site.</p>
-
+  <aside class="aside">
+    <p>Declare it, write it, read it. Everything reading the cell updates — here, one text node.</p>
+    <p>Under the sugar a cell is <strong>callable</strong>: <code>count()</code> reads (and subscribes the enclosing <code>memo</code>/<code>watch</code>), <code>count.set(next)</code> writes, <code>count.untracked()</code> reads without subscribing. In a <code>.abide</code> <code>&lt;script&gt;</code> the compiler writes those calls, which is why these demos type the bare <code>count</code>; in a plain <code>.ts</code> you call the surface yourself — the <a href="/memo#server-state">server graph</a> shows that form.</p>
+  </aside>
   <Demo id="transform" title="<code>state(v, transform)</code> — an invariant on the cell" client="src/ui/demos/state/StateTransformDemo.abide">
     <StateTransformDemo />
   </Demo>
-
-  <h2>A cell is callable</h2>
-  <p>Under the sugar, <code>count()</code> reads (and subscribes the enclosing <code>memo</code>/<code>watch</code>), <code>count.set(next)</code> writes, and <code>count.untracked()</code> reads without subscribing. It is <em>not</em> called <code>peek</code>: on the other two primitives <code>peek</code> means the opposite — <code>memo.peek(args)</code> and <code>channel.peek(args)</code> <strong>do</strong> subscribe (and a memo's also kicks the load), which is why they return <code>T | undefined</code>. One word cannot mean both on the tracking axis, so the untracked escape hatch got its own name. Inside a <code>.abide</code> <code>&lt;script&gt;</code> the compiler writes those calls for you, which is why the demos above type the bare <code>count</code> and <code>count = next</code>. In a plain <code>.ts</code> there is no compiler, so you call the surface yourself — the <a href="/memo">server graph</a> shows that form.</p>
-
-  <h2>One cell, many holders</h2>
-  <p>Two separate component instances call <code>state.shared("reactivity-tally", 0)</code> with the SAME key, so they share one backing state — bump either and both update. The value also syncs across other open tabs of this app (via a <code>BroadcastChannel</code>). On the server <code>.shared</code> degrades to a per-render cell.</p>
-
+  <aside class="aside">
+    <p>The optional second argument runs on every write, so the cell can never hold a value the transform wouldn't produce — clamping, rounding, normalising. One place for the invariant, rather than every call site.</p>
+  </aside>
   <Demo id="shared" title="<code>state.shared(key, initial)</code> — cell shared by key" client="src/ui/demos/state/SharedTallyDemo.abide">
     <SharedTallyDemo />
   </Demo>
-
-  <p>Reading a cell is how something subscribes to it. To push the other way — out of the graph and into a side effect — use <a href="/watch"><code>watch</code></a>.</p>
-
-  <p class="note">A module-level <code>state</code> on the server is <strong>process-global</strong> — one value across every request. That is right for a derived or immutable-source graph (see the server graph on <a href="/memo">the memo page</a>); for mutable per-request or per-user state reach for <code>memo: {'{'} shared {'}'}</code> instead, which is guarded and identity-safe.</p>
+  <aside class="aside">
+    <p>Two component instances call <code>state.shared("reactivity-tally", 0)</code> with the SAME key, so they share one backing cell — bump either and both update. The value also syncs across other open tabs (via a <code>BroadcastChannel</code>); on the server <code>.shared</code> degrades to a per-render cell.</p>
+    <p>Reading a cell is how something subscribes to it. To push the other way — out of the graph, into a side effect — use <a href="/watch"><code>watch</code></a>.</p>
+    <p class="note">A module-level <code>state</code> on the server is <strong>process-global</strong> — one value across every request. Right for a derived or immutable-source graph (see the <a href="/memo#server-state">server graph</a>); for mutable per-request or per-user state reach for <code>memo: {'{'} shared {'}'}</code>, which is guarded and identity-safe.</p>
+  </aside>
 </main>

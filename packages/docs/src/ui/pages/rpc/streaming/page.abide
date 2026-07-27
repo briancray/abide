@@ -12,44 +12,48 @@
 <main class="page">
   <h1>Streaming</h1>
   <p class="lead">Any handler — read or mutation — can yield an <code>AsyncIterable</code>. Wrapped in <code>jsonl</code> or <code>sse</code> it becomes a replay-then-live stream: the browser callable decodes it back into an <code>AsyncIterable</code> consumed by <code>{'{'}#for await{'}'}</code>, identical on both sides. The same run is shared across concurrent and late viewers.</p>
-
   <Demo id="jsonl" title="<code>jsonl(iterable)</code> — newline-delimited stream" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/JsonlStreamDemo.abide" tab="server">
     <JsonlStreamDemo />
   </Demo>
-
+  <aside class="aside">
+    <p><code>jsonl</code> is see-through, so calling this read in the browser returns a replay-then-live <code>AsyncIterable</code> of the decoded chunks — iterated directly, with no fetch, reader or decoder to write. The button only delays the start so the chunks are visible arriving; <code>.refresh()</code> re-runs the source.</p>
+  </aside>
   <Demo id="sse" title="<code>sse(iterable)</code> — via the RPC callable (AsyncIterable)" server="src/server/rpc/rpcEvents.ts" client="src/ui/demos/rpc/streaming/SseStreamDemo.abide" tab="server">
     <SseStreamDemo />
   </Demo>
-
-  <p>The same <code>sse</code> endpoint is also consumable with the native <code>EventSource</code> DOM API — same frames on the wire, raw-DOM style:</p>
+  <aside class="aside">
+    <p>The same consumption over a different transport. An <code>sse</code> read is an <code>AsyncIterable</code> of the decoded <code>data:</code> frames — <code>text/event-stream</code> on the wire instead of <code>application/jsonl</code>, identical in the template.</p>
+  </aside>
   <Demo id="sse-eventsource" title="<code>sse(iterable)</code> — via <code>EventSource</code>" server="src/server/rpc/rpcEvents.ts" client="src/ui/demos/rpc/streaming/SseEventSourceDemo.abide" tab="client">
     <SseEventSourceDemo />
   </Demo>
-
-  <p>A <strong>streaming</strong> read swaps the value probes for <em>chunk</em> probes — one per card below: <code>fn.peek(args)</code> is the latest chunk, <code>fn.chunks(args)</code> is the transcript so far, and <code>fn.done(args)</code> reports whether the stream has closed.</p>
-
-  <h2><code>peek()</code> — the latest chunk</h2>
-  <p>The stream's current value: the most recent chunk, reactive, with no list to maintain. Reading it kicks the run; it advances as each tick lands.</p>
+  <aside class="aside">
+    <p>The same <code>sse</code> endpoint is also consumable with the native <code>EventSource</code> DOM API — same frames on the wire, raw-DOM style.</p>
+  </aside>
   <Demo id="stream-peek" title="<code>rpcTicker.peek(args)</code> — latest chunk" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamPeekDemo.abide" tab="client">
     <StreamPeekDemo />
   </Demo>
-
-  <h2><code>chunks()</code> — the transcript so far</h2>
-  <p>Every chunk seen, as a snapshot array. Render it directly with a plain <code>{'{'}#for{'}'}</code> — same data as a <code>{'{'}#for await{'}'}</code>, snapshot rather than stream.</p>
+  <aside class="aside">
+    <p>A <strong>streaming</strong> read swaps the value probes for <em>chunk</em> probes — one per card: <code>fn.peek(args)</code> is the latest chunk, <code>fn.chunks(args)</code> is the transcript so far, and <code>fn.done(args)</code> reports whether the stream has closed.</p>
+    <p>The stream's current value: the most recent chunk, reactive, with no list to maintain. Reading it kicks the run; it advances as each tick lands.</p>
+  </aside>
   <Demo id="stream-chunks" title="<code>rpcTicker.chunks(args)</code> — transcript" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamChunksDemo.abide" tab="client">
     <StreamChunksDemo />
   </Demo>
-
-  <h2><code>done()</code> — has the stream closed?</h2>
-  <p>A status probe over the run: <strong>no</strong> while chunks are still arriving, <strong>yes</strong> once the stream finishes.</p>
+  <aside class="aside">
+    <p>Every chunk seen, as a snapshot array. Render it directly with a plain <code>{'{'}#for{'}'}</code> — same data as a <code>{'{'}#for await{'}'}</code>, snapshot rather than stream.</p>
+  </aside>
   <Demo id="stream-done" title="<code>rpcTicker.done(args)</code> — closed" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamDoneDemo.abide" tab="client">
     <StreamDoneDemo />
   </Demo>
-
-  <p>Streaming reaches mutations too: a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read, and <code>.refresh()</code> re-runs the job.</p>
+  <aside class="aside">
+    <p>A status probe over the run: <strong>no</strong> while chunks are still arriving, <strong>yes</strong> once the stream finishes.</p>
+  </aside>
   <Demo id="streaming-mutation" title="Streaming mutation — <code>POST</code> yielding <code>jsonl</code>" server="src/server/rpc/rpcStreamJob.ts" client="src/ui/demos/rpc/streaming/StreamingMutationDemo.abide" tab="server">
     <StreamingMutationDemo />
   </Demo>
-
-  <p class="mt-8">Streaming reaches the page render itself, too: a slow <code>{'{'}#await{'}'}</code> read that misses the SSR deadline flushes the shell then streams its resolved branch in — see <a href="/pages/ssr">Streaming SSR</a>.</p>
+  <aside class="aside">
+    <p>Streaming reaches mutations too: a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read, and <code>.refresh()</code> re-runs the job.</p>
+    <p class="mt-8">Streaming reaches the page render itself, too: a slow <code>{'{'}#await{'}'}</code> read that misses the SSR deadline flushes the shell then streams its resolved branch in — see <a href="/pages/ssr">Streaming SSR</a>.</p>
+  </aside>
 </main>

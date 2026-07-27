@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives the /memo/verbs page in a real browser: SSR → hydration → surface VERBS + behaviour over live RPC
 // fetches. Every assertion is RELATIVE (server run counters are process-global and monotonic), so the

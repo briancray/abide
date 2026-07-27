@@ -1,5 +1,6 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
+  import Panel from "$ui/components/Panel.abide"
   import ChannelPublishDemo from "$ui/demos/channel/ChannelPublishDemo.abide"
   import ChannelRoomsDemo from "$ui/demos/channel/ChannelRoomsDemo.abide"
   import ChannelProbesDemo from "$ui/demos/channel/ChannelProbesDemo.abide"
@@ -10,62 +11,62 @@
 <main class="page">
   <h1><code>channel</code> — the pushed value</h1>
   <p class="lead">The third primitive, and the one most people meet only through its transport. Where <a href="/state"><code>state</code></a> is owned and <a href="/memo"><code>memo</code></a> is pulled, a <code>channel</code> is <strong>pushed</strong>: <code>publish(message)</code> appends to a topic and iterating it subscribes. It ships from <code>abide/shared/channel</code>, so it is isomorphic like the other two — a browser module can own a channel and fan messages out locally exactly as a server module can, and both are on this page. Nothing here opens a connection: the point of this page is the primitive <em>before</em> any transport.</p>
-
-  <h2>Publish and iterate</h2>
-  <p>Two operations, and you have seen the primitive: publish a message, iterate to receive it. The <code>{'{'}#for await{'}'}</code> block <em>is</em> the subscription — there is nothing else to wire, no connection to open, no handler to register.</p>
-  <p class="note">The room is the first argument of <code>publish</code> — but only when there is one. This channel's room type is <code>void</code>, so there is no room to name and the message is the only argument: <code>publish(message)</code>. Declare a room and it comes back in front of the message: <code>publish({'{'}room{'}'}, message)</code>. Same rule on every probe (<code>peek()</code> vs <code>peek({'{'}room{'}'})</code>), and the same rule a <a href="/sockets">socket</a> inherits — the ergonomics were never the transport's doing.</p>
   <Demo id="publish" title="<code>channel()</code> — publish + <code>{'{'}#for await{'}'}</code> subscribe" client="src/ui/demos/channel/ChannelPublishDemo.abide" tab="client">
     <ChannelPublishDemo />
   </Demo>
-
-  <h2>The subscription is plain <code>for await</code></h2>
-  <p>The template block is markup's <em>spelling</em> of the subscription, not the subscription itself. A <code>Channel&lt;T&gt;</code> <strong>is</strong> an <code>AsyncIterable&lt;T&gt;</code> — <code>for await (const m of chatter)</code> is the whole API, and it works in an ordinary <code>.ts</code> module with no template anywhere near it: in an RPC handler, in <code>onStart</code>, at module scope, in a script under <code>abide run</code>. Iterate to subscribe; leave the loop to unsubscribe. A roomed channel is the same loop with the room named — <code>for await (const m of chatter({'{'} room {'}'}))</code>.</p>
-  <p>The card below is the proof: <strong>nothing on the client iterates anything</strong>. The subscription is a <code>for await</code> in a plain server module, and the buttons only publish into the topic and read back what that loop kept. Publish <code>"stop"</code> and the loop <code>break</code>s — publishing after that reaches no one, because leaving the loop <em>is</em> unsubscribing.</p>
-  <p class="note">One caveat, and it is the reason a page can never hang on this: iterated <strong>inside an SSR page render</strong>, a channel yields its <code>tail</code> snapshot and then <em>completes</em> — a live topic has no end, so a render that waited for one would never finish. Everywhere else on the server the same loop is a genuine live subscription that stays open until you break out of it.</p>
+  <aside class="aside">
+    <p>Two operations, and you have seen the primitive: publish a message, iterate to receive it. The <code>{'{'}#for await{'}'}</code> block <em>is</em> the subscription — no connection to open, no handler to register.</p>
+    <p>This channel's room type is <code>void</code>, so the message is <code>publish</code>'s only argument. Declare a room and it comes back in front of the message — the ladder below walks that rule.</p>
+  </aside>
   <Demo id="server-loop" title="<code>for await (const m of chatter)</code> — subscribing from plain server code" server="src/server/chatterLoop.ts" client="src/ui/demos/channel/ChannelServerLoopDemo.abide" tab="server">
     <ChannelServerLoopDemo />
   </Demo>
-
-  <h2><code>Args</code> names the room</h2>
-  <p>A non-void <code>Args</code> gives per-room topics — <code>channel({'{'}room{'}'})</code> subscribes one, <code>publish({'{'}room{'}'}, msg)</code> addresses one — each a distinct hub created lazily. This is the same mechanism a <code>memo</code> uses to keep one slot per args, which is exactly the point: rooms are not a socket feature bolted on, they are the primitive's key. Publish into the room you are <em>not</em> watching and nothing shows up; switch rooms and that room's tail is what you read.</p>
-  <p>This card is owned by a <strong>browser module</strong>, exactly like the one above — the rooms below never leave the page. That is the whole claim: a room is a key on the primitive, not a topic on a connection. The same <code>channel&lt;T, Args&gt;</code> in a server module — like the loop in the card above — keys its rooms identically; a <a href="/sockets">socket</a> is what carries one of those server-owned rooms to a browser, and it changes none of this.</p>
+  <aside class="aside">
+    <p>A <code>Channel&lt;T&gt;</code> is an <code>AsyncIterable&lt;T&gt;</code>, so <code>for await (const m of chatter)</code> is the whole API — in an RPC handler, in <code>onStart</code>, at module scope, in a script under <code>abide run</code>. Iterate to subscribe; leave the loop to unsubscribe. The template block is only markup's spelling of it.</p>
+    <p>This card is the proof: nothing on the client iterates anything. The subscription is a <code>for await</code> in a plain server module, and the buttons only publish and read back what that loop kept. Publish <code>"stop"</code> and the loop <code>break</code>s — publishing after that reaches no one.</p>
+    <p class="note">Iterated <em>inside an SSR page render</em>, a channel yields its <code>tail</code> snapshot and then completes — a live topic has no end, so a render that waited for one would never finish. Everywhere else on the server the same loop stays open until you break out of it.</p>
+  </aside>
   <Demo id="rooms" title="<code>channel&lt;T, Args&gt;</code> — per-room isolation" client="src/ui/demos/channel/ChannelRoomsDemo.abide" tab="client">
     <ChannelRoomsDemo />
   </Demo>
-
-  <h2>The key is a rung, not a parameter</h2>
-  <p>Both of the cards above call <code>publish</code>, and they do not agree on its arity — that is the point. The key is a <strong>positional that only exists when the callable declared an input</strong>, so the call shrinks as you climb down the ladder and grows as you climb up. Nothing here is a channel convenience: <code>publish</code> is declared once on the shared read surface, so a <code>memo</code> obeys the same rule, and so does <code>socket</code> — which is why <code>socket.publish(msg)</code> was never the transport doing you a favour.</p>
-  <table class="w-full border-collapse text-sm" data-testid="ladder-table">
-    <thead>
-      <tr class="border-b border-slate-300 text-left">
-        <th class="py-1.5 pr-4">declared input</th>
-        <th class="py-1.5 pr-4">the callable</th>
-        <th class="py-1.5">the write</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">none</td><td class="py-1.5 pr-4"><code>channel&lt;string&gt;()</code></td><td class="py-1.5"><code>publish(msg)</code></td></tr>
-      <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">none</td><td class="py-1.5 pr-4"><code>memo(() =&gt; …)</code></td><td class="py-1.5"><code>publish(value)</code></td></tr>
-      <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">args</td><td class="py-1.5 pr-4"><code>memo(({'{'} id {'}'}) =&gt; …)</code></td><td class="py-1.5"><code>publish({'{'} id {'}'}, value)</code></td></tr>
-      <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">a room</td><td class="py-1.5 pr-4"><code>channel&lt;T, {'{'} room {'}'}&gt;()</code></td><td class="py-1.5"><code>publish({'{'} room {'}'}, msg)</code></td></tr>
-    </tbody>
-  </table>
-  <p>The other verbs get this for free — a <code>void</code> parameter is omittable, so <code>peek()</code> / <code>chunks()</code> / <code>invalidate()</code> already collapsed on their own. <code>publish</code> and <code>watch</code> are the two that carry a <em>trailing</em> payload (a message or value, a handler), which is the only place the key had to be made to vanish deliberately: <code>watch(handler)</code> against <code>watch({'{'} id {'}'}, handler)</code>.</p>
-  <p class="note">One <code>.abide</code> caveat, unrelated to the rule: an argless <code>memo</code> bound in a template auto-calls, so <code>d</code> <em>is</em> its value and the memo's own surface is not reachable through that binding — which is why the middle rung is demonstrated below with a keyed memo. In plain <code>.ts</code> (and through an imported RPC/socket callable) <code>publish(value)</code> on an argless memo is exactly what you write.</p>
+  <aside class="aside">
+    <p>A non-void <code>Args</code> gives per-room topics — <code>channel({'{'}room{'}'})</code> subscribes one, <code>publish({'{'}room{'}'}, msg)</code> addresses one — each a distinct hub created lazily. It is the mechanism a <code>memo</code> uses to keep one slot per args: rooms are the primitive's key, not a socket feature bolted on. Publish into a room you are not watching and nothing shows up.</p>
+    <p>This card is owned by a browser module, so its rooms never leave the page. A server module keys its rooms identically; a <a href="/sockets">socket</a> is what carries one of those to a browser, and it changes none of this.</p>
+  </aside>
+  <Panel id="ladder-rungs" title="The key is a rung, not a parameter">
+    <table class="w-full border-collapse text-sm" data-testid="ladder-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">declared input</th>
+          <th class="py-1.5 pr-4">the callable</th>
+          <th class="py-1.5">the write</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">none</td><td class="py-1.5 pr-4"><code>channel&lt;string&gt;()</code></td><td class="py-1.5"><code>publish(msg)</code></td></tr>
+        <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">none</td><td class="py-1.5 pr-4"><code>memo(() =&gt; …)</code></td><td class="py-1.5"><code>publish(value)</code></td></tr>
+        <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">args</td><td class="py-1.5 pr-4"><code>memo(({'{'} id {'}'}) =&gt; …)</code></td><td class="py-1.5"><code>publish({'{'} id {'}'}, value)</code></td></tr>
+        <tr class="border-b border-slate-100"><td class="py-1.5 pr-4">a room</td><td class="py-1.5 pr-4"><code>channel&lt;T, {'{'} room {'}'}&gt;()</code></td><td class="py-1.5"><code>publish({'{'} room {'}'}, msg)</code></td></tr>
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p>The cards above both call <code>publish</code> and do not agree on its arity — that is the point. The key is a positional that exists only when the callable declared an input, so the call shrinks as you climb down this ladder. <code>publish</code> is declared once on the shared surface, so a <code>memo</code> and a <code>socket</code> obey the same rule — <code>socket.publish(msg)</code> was never the transport doing you a favour.</p>
+  </aside>
   <Demo id="ladder" title="the key positional — one rule, three rungs" client="src/ui/demos/channel/ChannelKeyLadderDemo.abide" tab="client">
     <ChannelKeyLadderDemo />
   </Demo>
-
-  <h2>Retention — <code>tail</code></h2>
-  <p>The demo above keeps nothing: publish with no one iterating and the message is gone. <code>tail</code> is the one retention knob — how many recent messages a late joiner replays before going live. The channel below sets <code>tail: 3</code>, which is also what makes its <code>chunks()</code> probe non-empty.</p>
-
-  <h2>The same read surface</h2>
-  <p>A channel implements the identical probe/verb vocabulary a <a href="/memo/probes">memo</a> does — <code>peek</code> / <code>chunks</code> / <code>pending</code> / <code>refreshing</code> / <code>error</code> / <code>done</code>, plus <code>refresh</code> / <code>invalidate</code> / <code>publish</code> / <code>watch</code>. That is the whole argument of ADR 0023: two honest storage strategies (a memo's keyed slot, a channel's lossy hub) behind one surface, so a caller never branches on which it holds. On a channel <code>peek()</code> is the latest message and <code>chunks()</code> is the tail transcript.</p>
-  <p class="note">On this in-process core the status probes are <strong>degenerate</strong> — a local topic is immediately live, never reconnecting and never errored — and <code>peek</code>/<code>chunks</code> read the hub directly instead of through a reactive node, so the card below snapshots them on a button. Putting the channel on the wire is what makes them reactive; the reactive versions are on the <a href="/sockets/probes">socket probes</a> page.</p>
+  <aside class="aside">
+    <p>The other verbs got this free — a <code>void</code> parameter is omittable, so <code>peek()</code> / <code>chunks()</code> / <code>invalidate()</code> collapsed on their own. <code>publish</code> and <code>watch</code> carry a trailing payload, which is the only place the key had to be made to vanish deliberately.</p>
+    <p class="note">One <code>.abide</code> caveat, unrelated to the rule: an argless <code>memo</code> bound in a template auto-calls, so <code>d</code> <em>is</em> its value and the memo's own surface is not reachable through that binding — which is why the middle rung uses a keyed memo. In plain <code>.ts</code>, <code>publish(value)</code> on an argless memo is exactly what you write.</p>
+  </aside>
   <Demo id="probes" title="<code>peek()</code> / <code>chunks()</code> / <code>invalidate()</code> on a channel" client="src/ui/demos/channel/ChannelProbesDemo.abide" tab="client">
     <ChannelProbesDemo />
   </Demo>
-
-  <h2>Where the transport goes</h2>
-  <p>Everything above is local. <strong><code>socket</code> = <code>channel</code> + transport + per-room authorization</strong> — the socket adds the WebSocket mux, the <code>clientPublish</code> mediator, and the <code>middleware</code> that authorizes each room subscribe and publish. The pub/sub core, the rooms, and the read surface are all this page's primitive, unchanged. Continue at <a href="/sockets">sockets</a>.</p>
+  <aside class="aside">
+    <p><code>tail</code> is the one retention knob — how many recent messages a late joiner replays before going live. The card above keeps nothing; this one sets <code>tail: 3</code>, which is also what makes its <code>chunks()</code> probe non-empty.</p>
+    <p>A channel implements the identical vocabulary a memo does — <code>peek</code> / <code>chunks</code> / <code>pending</code> / <code>refreshing</code> / <code>error</code> / <code>done</code>, plus <code>refresh</code> / <code>invalidate</code> / <code>publish</code> / <code>watch</code>. That is the argument of ADR 0023: two honest storage strategies behind one surface, so a caller never branches on which it holds. Here <code>peek()</code> is the latest message and <code>chunks()</code> the tail transcript.</p>
+    <p>On this in-process core the status probes are <strong>degenerate</strong> — a local topic is immediately live, never reconnecting and never errored — and <code>peek</code>/<code>chunks</code> read the hub directly, so this card snapshots them on a button. Putting the channel on the wire is what makes them reactive: see <a href="/sockets/probes">socket probes</a>.</p>
+    <p>Everything here is local. <code>socket</code> = <code>channel</code> + transport + per-room authorization; the pub/sub core, the rooms and the read surface are all this primitive, unchanged. Continue at <a href="/sockets">sockets</a>.</p>
+  </aside>
 </main>

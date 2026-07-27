@@ -17,7 +17,8 @@
     "abide": "./src/cli/bin.ts"
   },
   "scripts": {
-    "test": "bun test",
+    "test": "bun test --parallel",
+    "test:serial": "bun test",
     "typecheck": "tsc --noEmit",
     "abide-check": "bun src/cli/bin.ts check src/server/__fixtures__/app"
   },

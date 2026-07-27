@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Regression (soft-nav seed-ordinal desync): when a page has a `{#for await}`/streamed block whose
 // hydration create-falls-back, `claimBlock` re-mounts the enclosing region in CREATE mode. That re-run
@@ -13,14 +13,17 @@ test('soft-nav to a page with {#for await} keeps every demo tab correctly seeded
     await expect(page).toHaveURL(/\/templating\/async$/)
     // `toHaveURL` resolves on the history push — BEFORE the soft-nav content swap. Wait for the destination
     // page's own content to be in the DOM before counting `.sample`, else under load we count the OUTGOING
-    // page's samples (a different number) and assert on stale indices. Then: every sample has exactly one
-    // active source panel (matching its default tab), none hidden.
+    // page's samples (a different number) and assert on stale indices. Then: every source COLUMN (server
+    // and client are independent, each with its own file tabs) has exactly one active panel, none hidden.
     await expect(page.locator('h1')).toHaveText('Async control flow')
     const samples = page.locator('.sample')
     const n = await samples.count()
     expect(n).toBeGreaterThan(0)
     for (let i = 0; i < n; i++) {
-        await expect(samples.nth(i).locator('.tab-panel.active')).toHaveCount(1)
+        const sample = samples.nth(i)
+        const columns = await sample.locator('.source-col').count()
+        expect(columns).toBeGreaterThan(0)
+        await expect(sample.locator('.tab-panel.active')).toHaveCount(columns)
     }
 })
 

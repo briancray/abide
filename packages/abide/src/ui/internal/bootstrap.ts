@@ -32,6 +32,7 @@ import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
 import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
 import { makeClientImports } from './clientProxy.ts'
+import { HYDRATED_ATTRIBUTE } from './HYDRATED_ATTRIBUTE.ts'
 import {
     type PageLoader,
     type PageMount,
@@ -218,7 +219,14 @@ export function bootstrapPage(
     // the server already rendered the seeded value), and whole-page-falls-back to a fresh mount if the
     // root structure is unrecoverable. A streamed `{#for await}` re-reads its memo (warmed above by
     // `replayStreams`) — no separate DOM handoff.
-    return hydrate(container, scope)
+    const chain = hydrate(container, scope)
+    // The page now responds to input — mark it (see HYDRATED_ATTRIBUTE). Stamped AROUND the handle, never
+    // by wrapping it: `navigate.ts` reads this return as a `ChainHandle`, a callable that also CARRIES the
+    // per-level graft records, and a fresh closure would return a disposer that has lost them (the
+    // same-chain graft then silently stops swapping content on a soft-nav). The teardown side lives at the
+    // one call site that means the page is gone for good — `disposeActive`.
+    container.setAttribute(HYDRATED_ATTRIBUTE, '')
+    return chain
 }
 
 // Left-click on a same-origin internal link, without modifier keys / new-tab intent — the click a

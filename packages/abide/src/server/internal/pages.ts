@@ -98,8 +98,9 @@ function pageImports(
 // counter assigned every component after such a block a different id on each side and it silently replayed
 // the WRONG bucket. Two path segments:
 //   • `/<siteId>` — a `<Component/>` invocation (opens a NEW bucket; its `state()` calls are ordinal within).
-//   • `#<index>`  — one `{#for}` iteration (keeps the ENCLOSING bucket, so a loop body's own `state()` calls
-//                   stay ordinal in the component that contains them; only nested components branch).
+//   • `#<index>`  — one `{#for}` iteration (opens a NEW bucket, so a branch-local `<script>` in the body
+//                   records per ITEM; keeping the enclosing bucket was safe only while a loop body could
+//                   hold no `state()` calls of its own — see `seededState.ts`).
 // The page + its layouts share the ROOT bucket (`""`) — `renderLevel` hands every level the same recorder
 // and `compose.childComponent` is not an adapter, so composition never opens one. See §5 / decision 10.
 // Inside a page render `openRenderState()` has always run, so an absent state is a framework bug, not
@@ -130,7 +131,8 @@ function makeRecordingState(): StateFactory {
                 return at(next, next)
             },
             forItem(index: number): StateFactory {
-                return at(`${sitePath}#${index}`, bucketPath)
+                const next = `${sitePath}#${index}`
+                return at(next, next)
             },
         }) as StateFactory
     }
@@ -420,12 +422,19 @@ export function streamPageDocument(
     retainScope(ctx)
     const encoder = new TextEncoder()
     const head = documentHead(opts)
+    // A reader can leave mid-reply — navigate on, close the tab, abort the fetch — and a streamed page
+    // is open for as long as its slowest read. Bun cancels the stream, and the NEXT enqueue throws
+    // "Invalid state: Controller is already closed". That is a disconnect, not a render failure, so it
+    // is traced rather than logged as an error: every abandoned load of a streamed page would otherwise
+    // cry wolf. It also has to unwind properly — the throw used to escape past `releaseScope` and
+    // strand the retained request scope (ADR 0026), which is why the teardown is now a `finally`.
+    let cancelled = false
     return new ReadableStream<Uint8Array>({
         async start(controller) {
             const enc = (chunk: string): void => controller.enqueue(encoder.encode(chunk))
-            enc(head)
-            enc(shell)
             try {
+                enc(head)
+                enc(shell)
                 if (
                     stream !== undefined &&
                     (stream.deferred.length > 0 || stream.streamers.length > 0)
@@ -434,14 +443,19 @@ export function streamPageDocument(
                         for await (const patch of drainPatches(stream)) enc(documentPatch(patch))
                     })
                 }
+                const seed = enterScope(ctx, () => collectSeed(config))
+                enc(documentTail(seed, opts))
+                controller.close()
             } catch (caught) {
-                log.channel('abide:stream').error('streaming SSR drain failed:', caught)
+                if (cancelled) log.channel('abide:stream').trace('reader left mid-stream')
+                else log.channel('abide:stream').error('streaming SSR drain failed:', caught)
+            } finally {
+                enterScope(ctx, closeRenderState)
+                releaseScope(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
             }
-            const seed = enterScope(ctx, () => collectSeed(config))
-            enc(documentTail(seed, opts))
-            controller.close()
-            enterScope(ctx, closeRenderState)
-            releaseScope(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
+        },
+        cancel() {
+            cancelled = true
         },
     })
 }

@@ -1,4 +1,5 @@
 <script module>
+  import Panel from "$ui/components/Panel.abide"
   import { route } from "abide/shared/route"
   import { navigate } from "abide/ui/navigate"
 </script>
@@ -7,15 +8,15 @@
 <main class="page">
   <h1 data-testid="blog-heading">Blog</h1>
   <p class="lead">One file — <code>pages/routing/blog/[[page]]/page.abide</code> — serves both <code>/pages/routing/blog</code> and <code>/pages/routing/blog/&lt;page&gt;</code>. The <code>[[page]]</code> segment is <strong>optional</strong>: when it is absent the param is simply omitted from <code>route().params</code>.</p>
-
-  <dl class="route">
-    <dt>route().params.page</dt><dd data-testid="blog-page">{route().params.page}</dd>
-    <dt>segment</dt><dd data-testid="blog-has-page">{route().params.page === undefined ? "absent" : "present"}</dd>
-  </dl>
-
-  <div class="row">
-    <a data-testid="blog-bare" href="/pages/routing/blog">/blog</a>
-    <a data-testid="blog-paged" href="/pages/routing/blog/2">/blog/2</a>
-    <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
-  </div>
+  <Panel id="optional-segment-page" title="Optional segment — <code>[[page]]</code>">
+    <dl class="route">
+      <dt>route().params.page</dt><dd data-testid="blog-page">{route().params.page}</dd>
+      <dt>segment</dt><dd data-testid="blog-has-page">{route().params.page === undefined ? "absent" : "present"}</dd>
+    </dl>
+    <div class="row">
+      <a data-testid="blog-bare" href="/pages/routing/blog">/blog</a>
+      <a data-testid="blog-paged" href="/pages/routing/blog/2">/blog/2</a>
+      <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
+    </div>
+  </Panel>
 </main>

@@ -14,9 +14,9 @@
 // `rewriteFreeIdentifiers` (free/block-bound names → `$scope.x`), so both emitters consume ready-to-
 // embed source. This module uses the TS7 scanner (through analyzeBindings) and NEVER ships to the browser.
 
-import type { BindingAnalysis } from './analyzeBindings.ts'
+import type { BindingAnalysis, NestedScript } from './analyzeBindings.ts'
 import { type CellBindings, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeBindings.ts'
-import type { AttributeNode, Root, TemplateNode } from './ast.ts'
+import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // ---------------------------------------------------------------------------
@@ -40,6 +40,7 @@ export type SlotKind =
     | 'try'
     | 'component'
     | 'componentDef'
+    | 'script'
 
 // The tag name of a DYNAMIC element (one with its own dynamic attrs or dynamic descendants), keyed by
 // its child-index `path` within the template level. Threaded to the client emitter so the hydrate walk
@@ -88,7 +89,15 @@ export interface SlotMeta {
     key?: string | null // for key (rewritten)
     params?: string // component params
     siteId?: number // component: its stable per-module site id (see `WalkState.nextSiteId`)
-    hasComponent?: boolean // for: does the body invoke a component? (needs a per-item state factory)
+    // for: does the body invoke a component, or own a branch-local `<script>`? Either one needs a
+    // per-item `state` factory, so that each iteration's cells get their own hydration-seed bucket.
+    hasComponent?: boolean
+    hasScript?: boolean
+    // component: the rewritten expression that RESOLVES the tag (`Card`, `$scope.Row`, `$scope.C()`),
+    // decided here where the level's bindings are known rather than re-derived per emitter.
+    ref?: string
+    reactive?: boolean // component: a cell-/memo-named tag, which re-mounts on identity change
+    setup?: string // script: the branch-local `<script>` preamble (analyzeBindings.NestedScript)
 }
 
 export interface BranchPlan {
@@ -123,11 +132,15 @@ export type ServerChunk =
           void: boolean
           attrs: AttrPlan[]
           children: ServerChunk[]
-          scopeAttr: string | null
+          // Every scope attribute in force here: the component's own (a root `<style>`) plus one per
+          // enclosing nested `<style>`. All of them are stamped, so an outer rule still reaches into an
+          // inner-scoped subtree while the inner rule cannot reach out.
+          scopeAttrs: string[]
       }
     | {
           kind: 'component'
           name: string
+          ref: string
           attrs: AttrPlan[]
           children: ServerChunk[]
           hasChildren: boolean
@@ -143,6 +156,7 @@ export type ServerChunk =
           children: ServerChunk[]
           catch: { param: string | null; children: ServerChunk[] } | null
           hasComponent: boolean
+          hasScript: boolean
       }
     | {
           kind: 'awaitBlock'
@@ -167,13 +181,12 @@ export type ServerChunk =
       }
     | { kind: 'componentDef'; name: string; params: string; children: ServerChunk[] }
     | { kind: 'style'; css: string }
+    | { kind: 'script'; setup: string }
 
 export interface TemplatePlan {
     skeletonClient: string
     slots: DynamicSlot[]
     serverChunks: ServerChunk[]
-    scopeAttr: string | null
-    scopedCss: string | null
     elementTags: ElementTag[]
 }
 
@@ -244,7 +257,11 @@ export function scopeStyles(css: string, scopeAttr: string): string {
 interface WalkState {
     cellBindings: CellBindings
     declared: Set<string>
-    scopeAttr: string | null
+    // Branch-local `<script>` preambles, keyed by node (analyzeBindings validated where each may sit).
+    nested: Map<Script, NestedScript>
+    // The scope attributes in force, outermost first: the component's own (root `<style>`) plus one per
+    // enclosing nested `<style>`. Pushed/popped around a level's walk.
+    scopeAttrs: string[]
     // Every component name reachable in this template — inline `{#component}` defs at any depth plus the
     // locals of imported `.abide` components. Used to reject the call form `{Name(…)}` (see `rejectComponentCall`).
     componentNames: Set<string>
@@ -264,11 +281,41 @@ interface LevelResult {
     // scope to carry an item-scoped state factory, so components inside the loop get distinct seed
     // buckets per iteration. Loops that don't are the common case and skip the per-item allocation.
     hasComponent: boolean
+    // Same question for a branch-local `<script>`, which needs the same per-item factory for the same
+    // reason: its `state()` calls are per ITERATION, so they must not share one ordinal sequence.
+    hasScript: boolean
 }
 
 function rewriteExpr(ctx: WalkState, expr: string): string {
     const cellRewritten = rewriteCellRefs(expr, ctx.cellBindings)
     return rewriteFreeIdentifiers(cellRewritten, ctx.declared, '$scope')
+}
+
+// The expression that REACHES a bare binding without reading it — lexical when a script declared it in
+// the emitted frame, `$scope`-qualified when it is published there instead (a branch-local `<script>`'s
+// binding). `rewriteExpr` can't serve this: on a cell it produces the READ, `name()`.
+function bindingRef(ctx: WalkState, name: string): string {
+    return ctx.declared.has(name) ? name : `$scope.${name}`
+}
+
+// The scope attribute a level's own `<style>` nodes establish, or null when it has none. Content-hashed,
+// so two branches carrying identical CSS share one attribute — their rules are identical, and sharing
+// keeps the emitted markup smaller.
+function levelScopeAttr(nodes: TemplateNode[]): string | null {
+    let css = ''
+    for (const node of nodes) if (node.type === 'Style') css += node.content
+    return css === '' ? null : `data-ab-${hashSource(css)}`
+}
+
+// The branch-local `<script>` this level owns, if any. `analyzeBindings` has already enforced that one
+// can only appear as the first node of a block body, so finding it is a lookup, not a search.
+function levelScript(ctx: WalkState, nodes: TemplateNode[]): NestedScript | null {
+    for (const node of nodes) {
+        if (node.type !== 'Script') continue
+        const info = ctx.nested.get(node)
+        if (info !== undefined) return info
+    }
+    return null
 }
 
 // Collect every component name declared or imported in this template, at any nesting depth. A nested
@@ -469,10 +516,11 @@ function planAttribute(ctx: WalkState, attr: AttributeNode): AttrPlan {
             // assigned — `bindElement` writes the element through the `set`. An attach FN (`bind:element={fn}`)
             // is not a cell name, so it falls through to `rewriteExpr` and stays a callable.
             if (ctx.cellBindings.cells.has(boundRaw)) {
+                const cell = bindingRef(ctx, boundRaw)
                 return {
                     kind: 'bind',
                     name: attr.name,
-                    expr: `{ get: () => ${boundRaw}(), set: ($v) => ${boundRaw}.set($v) }`,
+                    expr: `{ get: () => ${cell}(), set: ($v) => ${cell}.set($v) }`,
                 }
             }
             return {
@@ -486,15 +534,15 @@ function planAttribute(ctx: WalkState, attr: AttributeNode): AttrPlan {
     }
 }
 
-// Static attribute string (client skeleton) for an element's static attrs + optional scope attr.
-function staticAttrString(attrs: AttrPlan[], scopeAttr: string | null): string {
+// Static attribute string (client skeleton) for an element's static attrs + the scope attrs in force.
+function staticAttrString(attrs: AttrPlan[], scopeAttrs: string[]): string {
     let out = ''
     for (const attr of attrs) {
         if (attr.kind !== 'static') continue
         if (attr.value === null) out += ` ${attr.name}`
         else out += ` ${attr.name}="${escapeAttr(attr.value)}"`
     }
-    if (scopeAttr !== null) out += ` ${scopeAttr}`
+    for (const scopeAttr of scopeAttrs) out += ` ${scopeAttr}`
     return out
 }
 
@@ -502,7 +550,47 @@ function toClientPlan(result: LevelResult): ClientPlan {
     return { skeleton: result.skeleton, slots: result.slots, elementTags: result.elementTags }
 }
 
+// One template level: its own `<style>` scope, its own branch-local `<script>`, then the node walk.
+//
+// Both are pushed for the WHOLE level (including every level nested inside it) and popped after. The
+// script overlay SWAPS the binding sets rather than mutating them — the sets are read by reference all
+// through the walk, and a swap keeps the enclosing level's meaning of a shadowed name intact. Neither
+// push is unwound on a throw: a throw here fails the compile outright, so there is no later walk to
+// corrupt.
 function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
+    const scopeAttr = levelScopeAttr(nodes)
+    if (scopeAttr !== null) ctx.scopeAttrs.push(scopeAttr)
+
+    const script = levelScript(ctx, nodes)
+    const outerCells = ctx.cellBindings
+    const outerDeclared = ctx.declared
+    if (script !== null) {
+        const cells = new Set(outerCells.cells)
+        const memos = new Set(outerCells.memos)
+        for (const name of script.cells) cells.add(name)
+        for (const name of script.memos) memos.add(name)
+        // Its names leave `declared` — that subtraction IS the qualification: a name the level publishes
+        // on `$scope` must resolve there, including when it shadows a same-named root binding.
+        const declared = new Set(outerDeclared)
+        for (const name of script.names) declared.delete(name)
+        ctx.cellBindings = { cells, memos }
+        ctx.declared = declared
+    }
+
+    const result = walkLevelNodes(ctx, nodes, scopeAttr, script)
+
+    ctx.cellBindings = outerCells
+    ctx.declared = outerDeclared
+    if (scopeAttr !== null) ctx.scopeAttrs.pop()
+    return result
+}
+
+function walkLevelNodes(
+    ctx: WalkState,
+    nodes: TemplateNode[],
+    scopeAttr: string | null,
+    script: NestedScript | null,
+): LevelResult {
     let skeleton = ''
     const slots: DynamicSlot[] = []
     const server: ServerChunk[] = []
@@ -510,12 +598,23 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
     let childIndex = 0
     // Set when this level, or any level nested inside it, invokes a component (see `LevelResult`).
     let hasComponent = false
-    // Every nested walk goes through here so `hasComponent` propagates UP from any depth — a component
-    // inside an `{#if}` inside a `{#for}` body still marks the loop.
+    let hasScript = script !== null
+    // Every nested walk goes through here so `hasComponent`/`hasScript` propagate UP from any depth — a
+    // component (or a branch-local `<script>`) inside an `{#if}` inside a `{#for}` body still marks the loop.
     const subLevel = (children: TemplateNode[]): LevelResult => {
         const result = walkLevel(ctx, children)
         if (result.hasComponent) hasComponent = true
+        if (result.hasScript) hasScript = true
         return result
+    }
+
+    // The branch-local `<script>` is hoisted to the head of the level, exactly like a `{#component}`
+    // definition: both are zero-DOM registrations the rest of the level reads from. It is already the
+    // first node in source (analyzeBindings enforces it), so hoisting changes no ordering — it only
+    // keeps the emitters from having to find it among the chunks.
+    if (script !== null) {
+        slots.push({ kind: 'script', path: [], expr: null, meta: { setup: script.setupCode } })
+        server.push({ kind: 'script', setup: script.setupCode })
     }
     // Whether the position at `childIndex - 1` is a still-"open" static Text node that a subsequent
     // Text emission would MERGE into. The HTML parser coalesces adjacent character data, so two static
@@ -557,6 +656,8 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
             expr: null,
             meta: {
                 name: 'children',
+                ref: '$scope.children',
+                reactive: false,
                 attrs: [],
                 body: toClientPlan(emptyBody),
                 hasChildren: false,
@@ -565,6 +666,7 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
         server.push({
             kind: 'component',
             name: 'children',
+            ref: '$scope.children',
             attrs: [],
             children: [],
             hasChildren: false,
@@ -636,7 +738,7 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
                     break
                 }
                 const attrPlans = node.attributes.map((attr) => planAttribute(ctx, attr))
-                skeleton += `<${node.name}${staticAttrString(attrPlans, ctx.scopeAttr)}>`
+                skeleton += `<${node.name}${staticAttrString(attrPlans, ctx.scopeAttrs)}>`
                 const elemPath = [childIndex]
                 for (const ap of attrPlans) {
                     if (ap.kind === 'static') continue
@@ -680,7 +782,7 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
                     void: node.void,
                     attrs: attrPlans,
                     children: childServer,
-                    scopeAttr: ctx.scopeAttr,
+                    scopeAttrs: ctx.scopeAttrs.slice(),
                 })
                 childIndex++
                 break
@@ -717,12 +819,20 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
                 const hasChildren = bodyChildren.some((n) => n.type !== 'Script')
                 const siteId = ctx.nextSiteId++
                 hasComponent = true
+                // Resolve the tag HERE, where the level's bindings are known. A cell-/memo-named tag is
+                // reactive (re-mounts on identity change) and reads as a value; anything else resolves
+                // once, lexically or off `$scope`.
+                const reactive =
+                    ctx.cellBindings.cells.has(node.name) || ctx.cellBindings.memos.has(node.name)
+                const ref = rewriteExpr(ctx, node.name)
                 slots.push({
                     kind: 'component',
                     path: [childIndex + 1],
                     expr: null,
                     meta: {
                         name: node.name,
+                        ref,
+                        reactive,
                         attrs: attrPlans,
                         body: toClientPlan(sub),
                         hasChildren,
@@ -732,6 +842,7 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
                 server.push({
                     kind: 'component',
                     name: node.name,
+                    ref,
                     attrs: attrPlans,
                     children: sub.server,
                     hasChildren,
@@ -790,6 +901,7 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
                                 ? { param: catchNode.param, plan: toClientPlan(catchSub) }
                                 : null,
                         hasComponent: bodySub.hasComponent,
+                        hasScript: bodySub.hasScript,
                     },
                 })
                 server.push({
@@ -804,6 +916,7 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
                             ? { param: catchNode.param, children: catchSub.server }
                             : null,
                     hasComponent: bodySub.hasComponent,
+                    hasScript: bodySub.hasScript,
                 })
                 childIndex += 2
                 break
@@ -929,8 +1042,9 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
                 break
             }
             case 'Style': {
-                const css =
-                    ctx.scopeAttr !== null ? scopeStyles(node.content, ctx.scopeAttr) : node.content
+                // Scoped to THIS level's attribute — the innermost one in force, which is what makes a
+                // nested `<style>` reach its own subtree and nothing else.
+                const css = scopeAttr !== null ? scopeStyles(node.content, scopeAttr) : node.content
                 skeleton += `<style>${css}</style>`
                 server.push({ kind: 'style', css })
                 childIndex++
@@ -946,7 +1060,7 @@ function walkLevel(ctx: WalkState, nodes: TemplateNode[]): LevelResult {
         }
     }
 
-    return { skeleton, slots, server, elementTags, hasComponent }
+    return { skeleton, slots, server, elementTags, hasComponent, hasScript }
 }
 
 function attrKindToSlot(kind: 'expr' | 'class' | 'style' | 'bind'): SlotKind {
@@ -959,16 +1073,17 @@ function attrKindToSlot(kind: 'expr' | 'class' | 'style' | 'bind'): SlotKind {
 // ---------------------------------------------------------------------------
 
 export function buildPlan(root: Root, analysis: BindingAnalysis): TemplatePlan {
-    const styleNode = root.style
-    const scopeAttr = styleNode ? `data-ab-${hashSource(styleNode.content)}` : null
-    const scopedCss = styleNode && scopeAttr ? scopeStyles(styleNode.content, scopeAttr) : null
     const componentNames = new Set<string>()
     for (const entry of analysis.componentImports) componentNames.add(entry.local)
     collectComponentNames(root.children, componentNames)
+    // The root `<style>` needs no special case: it is simply the outermost level's own scope, which
+    // `walkLevel` establishes like any other. (Before, only a ROOT style produced a scope attribute at
+    // all, so a component whose only `<style>` was nested shipped that CSS unscoped and global.)
     const ctx: WalkState = {
         cellBindings: analysis.cellBindings,
         declared: analysis.declared,
-        scopeAttr,
+        nested: analysis.nested,
+        scopeAttrs: [],
         componentNames,
         nextSiteId: 0,
     }
@@ -977,8 +1092,6 @@ export function buildPlan(root: Root, analysis: BindingAnalysis): TemplatePlan {
         skeletonClient: level.skeleton,
         slots: level.slots,
         serverChunks: level.server,
-        scopeAttr,
-        scopedCss,
         elementTags: level.elementTags,
     }
 }

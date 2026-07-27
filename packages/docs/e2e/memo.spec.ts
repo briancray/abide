@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives /memo + /memo/probes: the bare memo() primitive and the reactive probes over a
 // plain CLIENT-SIDE memo (no RPC, no transport). Proves the probe vocabulary is a property of the memo

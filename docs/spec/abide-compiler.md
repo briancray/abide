@@ -240,9 +240,11 @@ Mechanism:
 2. **`{#for item, i of list by key}` = keyed reconciliation.** `by key` matches items and
    **moves/reuses DOM + preserves each item's effect scope/state** for survivors; creates
    new; removes gone. **`by key` is optional** — omitted → positional re-render (no identity
-   preservation); a **keyless `{#for}` dev-warns when its body has stateful bindings**
-   (`bind:`, nested `<script>`, `bind:element`), since positional reuse can strand that state
-   (prod unaffected). **Index `i` is reactive but wired only when referenced** — if the body
+   preservation); a keyless `{#for}` whose body has stateful bindings (`bind:`, nested `<script>`,
+   `bind:element`) can strand that state on reorder, since positional reuse rebinds an item's DOM to a
+   different value. **The dev warning for this is NOT built** — it never was, and it now has something
+   real to warn about: before branch-local `<script>`s existed, a loop body could hold no state of its
+   own, so the only case was `bind:`. **Index `i` is reactive but wired only when referenced** — if the body
    doesn't use `i`, no index tracking (zero cost, the common case); when used, `i` updates on
    reorder/splice without remount (a head-splice's O(n) updates are correct-by-necessity but
    are state writes only — keys preserve DOM identity, no reflow).
@@ -262,12 +264,28 @@ Mechanism:
    rewrite; no leak in/out). **Tailwind is the recommended but *optional* styling path** —
    scoped `<style>` works standalone; `<style>` covers what utilities can't (keyframes,
    complex/pseudo selectors).
-2. **Nested `<style>` = branch-subtree-scoped.**
+2. **Nested `<style>` = branch-subtree-scoped.** Each level carrying a `<style>` establishes its own
+   attribute, and an element stamps EVERY attribute in force — so a component's own rules still reach
+   into an inner-scoped subtree while the inner rules cannot reach out. A root `<style>` is not a
+   special case, just the outermost level's. (Before, the attribute came only from a ROOT `<style>`, so
+   a nested one was scoped file-wide — or, in a file with no root style, not at all.)
 3. **Root `<script>` = per-instance setup** (runs once per instance; fresh `state`; imports
    + functions). **`<script module>` = module-once** (shared constants/singletons, run once
    regardless of instance count) — **in scope**.
 4. **Nested `<script>` = branch/iteration-local reactive state** — `state`/`memo` created on
-   branch mount, disposed on unmount, reusing root imports. In `{#for}` this is **per-item state**.
+   branch mount, disposed on unmount, reusing root imports. In `{#for}` this is **per-item state**
+   (which is why a `{#for}` iteration opens its own hydration-seed bucket — `seededState.ts`).
+   Its bindings are PUBLISHED ON THE LEVEL'S `$scope`, not lexical: every template level below is a
+   separate emitted mount function on the client, so a lexical `let` would be invisible one level down.
+   Keeping those names out of `declared` is the whole mechanism — that alone makes the shared
+   free-identifier rewrite qualify them, and makes a name that shadows a root binding resolve to the
+   branch's. **Where one may go is gated** (`analyzeBindings.walkNestedScripts`), because every rejected
+   position is one where it would otherwise run never or twice: it must be the FIRST node of a BLOCK
+   BODY (an `{#if}`/`{:else}` branch, a `{#for}` body or its `{:catch}`, an `{#await}` branch, a
+   `{:case}`, a `{#try}` branch, a `{#component}` body). Inside an element or a component's children —
+   neither of which has a lifetime or a frame of its own — a second one in the same body, a second
+   ROOT-level `<script>`, a nested `<script module>`, or an `import` (module-level wherever written, so
+   one here could only look conditional) are all loud errors naming the fix.
 5. **Leaf directives:** `class:name={cond}` toggles a class reactively; `style:prop={val}`
    sets one style property reactively; `{html(expr)}` injects raw unescaped HTML (author
    owns XSS — all other `{expr}` is escaped by default); `{...expr}` spread (C4.4).

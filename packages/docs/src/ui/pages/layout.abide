@@ -1,5 +1,7 @@
 <script module>
   import "../app.css"
+  import { html } from "abide/ui/html"
+  import { memo } from "abide/shared/memo"
   import { route } from "abide/shared/route"
   import { watch } from "abide/shared/watch"
 
@@ -36,6 +38,7 @@
       { href: "/templating/async", label: "Async blocks" },
       { href: "/templating/errors", label: "Error boundary" },
       { href: "/templating/components", label: "Components" },
+      { href: "/templating/scripts", label: "Branch-local <script>" },
       { href: "/templating/styling", label: "Scoped <style>" },
     ] },
     { title: "Pages", items: [
@@ -62,6 +65,96 @@
     ] },
   ]
 
+  // ── The right rail ──────────────────────────────────────────────────────────────────────────────
+  // The content column is left-aligned against the sidebar, which leaves a gutter on the right. It
+  // carries the secondary material a page shouldn't spend its measure on: the one thing about this
+  // topic that is easy to get wrong, and where to read next.
+  //
+  // A tip is authored HERE, keyed by route, rather than in the 40-odd page files — the rail belongs to
+  // the layout, so its content does too, and adding one is a line next to the route it annotates.
+  // Markup is allowed (rendered through `html`), but keep them to a sentence: the rail is a glance.
+  const tips: Record<string, string> = {
+    "/": "Three isomorphic primitives and two transport laws over them — rpc is memo plus transport, socket is channel plus transport. Every page here is one of those five things.",
+    "/state": "<code>x.untracked()</code> reads a cell WITHOUT subscribing. That is not <code>peek</code> — a peek subscribes (and on a memo kicks the load), which is why the escape hatch has its own name.",
+    "/memo": "Whether a memo is reactive is decided by what its body RETURNS. Adding one <code>await</code> to an argless derivation quietly turns it into a manually-invalidated cache — so that case warns on <code>abide:memo</code>.",
+    "/channel": "<code>Args</code> names the ROOM, and it is a positional that vanishes when void — <code>publish(msg)</code> for a single topic, <code>publish({ room }, msg)</code> for a roomed one.",
+    "/watch": "Return a teardown and you have the lifecycle hook. It runs on unmount in the browser and at END OF REQUEST on the server, so an isomorphic effect can hold a real resource with no is-this-the-browser branch.",
+    "/memo/verbs": "Args match PARTIALLY: invalidating with a subset of the key hits every slot whose args are a superset of it.",
+    "/memo/probes": "A probe wakes for its OWN axis. <code>refreshing</code> is its own signal, so a refresh over a retained value flips the spinner without waking the readers of the value.",
+    "/memo/global": "The tag probes are SERVER-side aggregates — the tag registry is server-only, so this page reaches them over an RPC.",
+    "/rpc": "An RPC is a memo with a transport bolted on. That is why the call surface here is the one <code>memo</code> already gave you — same probes, same verbs, both sides.",
+    "/rpc/reads": "A read's args ride in the URL two ways: the canonical <code>__abide_args</code> JSON blob machine callers emit, and flat per-field query params, coerced to the schema's types, for hand-testing with curl.",
+    "/rpc/mutations": "A mutation defaults to no retention — identical in-flight calls coalesce and nothing is kept. Opt in with a memo ttl and its peek and refresh probes come alive, exactly like a read's.",
+    "/rpc/responses": "<code>error()</code> and <code>redirect()</code> are branded as OUTCOMES rather than values, so they drop out of a handler's payload type — a failing branch never widens the success shape callers read.",
+    "/rpc/streaming": "A retained transcript is RESUMABLE, and it resumes in the encoding the handler chose — jsonl comes back as jsonl, sse as sse.",
+    "/rpc/uploads": "A FormData body always bypasses the memo. It cannot be keyed, so an upload is never coalesced with another one.",
+    "/rpc/probes": "A bare call in a template is a check ERROR, not a fourth kind of read. Await blocks, peek doesn't, and the await block branches — three different things, so the awaitable itself is not one of them.",
+    "/sockets": "Subscribe by iterating, publish with <code>socket.publish</code>. A client may only publish when <code>clientPublish</code> admits it — and the mediator function IS the permission, so a mediator on a closed path is unrepresentable.",
+    "/sockets/probes": "ACTIVE probes (iterating, peek, chunks) open a subscription over the shared socket mux. STATUS probes only observe one that already exists.",
+    "/templating/bindings": "Quoted attribute values interpolate too, on component props as well as elements — mixed literal text and expressions, still reactive.",
+    "/templating/conditionals": "The switch block exists for the flat multi-branch case, where a chain of else-ifs would only be hiding that you are matching one value.",
+    "/templating/lists": "A keyless list is POSITIONAL — fine for static rows, and it dev-warns when the body is stateful, because that is the case where positions lie.",
+    "/templating/async": "The inline then form is the compact BLOCKING one: the body is the then-branch, so there is no pending state to design when you don't want one.",
+    "/templating/errors": "The try block follows JS semantics — catch binds the error, finally always renders.",
+    "/templating/components": "A component is a TAG, never a call. The call form is a compile error: an interpolation renders text, and a component renders a subtree — including when it arrives as a prop.",
+    "/templating/scripts": "A nested script must be the FIRST node of its block body, carries no imports (it reuses the component's), and runs per ITEM inside a list.",
+    "/templating/styling": "An element carries every scope in force, so an outer rule reaches into a nested subtree and an inner one can never reach out.",
+    "/pages/routing": "Segment precedence is fixed: literal, then required, then optional, then rest.",
+    "/pages/structure": "The folder IS the URL. A page file is the route; a layout file wraps everything below it.",
+    "/pages/layouts": "A cross-route nav that shares a layout prefix keeps the shared outer layouts ALIVE and grafts only the diverging suffix — which is why this sidebar never re-mounts as you browse.",
+    "/pages/data": "Props are read reactively, defaults included — destructuring the reader is the whole API.",
+    "/pages/ssr": "A read that misses the SSR deadline does not hold the document: the shell flushes and the resolved branch streams in behind it.",
+    "/pages/hydration": "Hydration CLAIMS the server's DOM instead of re-rendering it. A mismatch is a real bug, which is what these probes are for.",
+    "/platform/config": "<code>env(schema)</code> is schema-first — the result type is inferred from the schema, and it is validated at BOOT, so a missing variable fails the process rather than a request.",
+    "/platform/identity": "<code>identity()</code> never returns null. Sealing an authenticated <code>identity.set()</code> needs <code>ABIDE_IDENTITY_SECRET</code> in production.",
+    "/platform/scope": "These accessors are AMBIENT: there is no context parameter to thread down a call stack to reach the request, its cookies, or who is asking.",
+    "/platform/observability": "Every response carries a traceparent, because the trace belongs to the REQUEST — not to whether a handler happened to ask for one. The browser then adopts the trace of the request that rendered the page.",
+    "/platform/lifecycle": "<code>onStart</code> WRAPS boot rather than running before it: set up, then await the start you were handed. Returning without calling it means the app never boots.",
+    "/platform/machines": "The MCP tool list is your own RPCs — the same handlers the browser calls, so there is no second surface to keep in sync.",
+    "/platform/cli": "<code>abide cli</code> builds a DUAL-MODE binary: it self-hosts the embedded app, or targets a remote one through <code>ABIDE_APP_URL</code>.",
+    "/platform/testing": "Naming no surface is DISCOVERY mode — the test app loads the real project and runs its lifecycle hooks. Name one and you get a hermetic app instead.",
+    "/platform/deploy": "<code>abide build</code> precompresses every asset and bakes the derived schemas to disk, so production carries neither a bundler nor a type-derivation pass.",
+    "/platform/bench": "A performance claim is a RATIO against hand-written code in the same substrate. Absolute milliseconds describe the machine that produced them.",
+    "/platform/bench/client": "A case earns its place by DISTINGUISHING implementations. A full reverse cannot tell a minimal keyed reconcile from a rebuild — a two-row swap can.",
+    "/platform/bench/server": "Correctness tests cannot guard a performance contract: when the contract is 'does less work', the assertion has to be the WORK, not the output.",
+  }
+
+  // "See more" needs no authoring at all — the route tree IS the reading order, so the neighbours of the
+  // open page are already sitting in `sections`. Flattened once, at module scope.
+  type PageRef = { href: string; label: string; section: string }
+  const flatPages: PageRef[] = []
+  for (const section of sections) {
+    for (const item of section.items) flatPages.push({ href: item.href, label: item.label, section: section.title })
+  }
+
+  function pageIndex(pathname) {
+    for (let i = 0; i < flatPages.length; i++) {
+      if (flatPages[i].href === pathname) return i
+    }
+    return -1
+  }
+
+  // The rest of the open page's section, in reading order FROM HERE and wrapping round. A rail list is
+  // short, so it shows what comes next in the section rather than always restarting at its top.
+  function sectionSiblings(pathname) {
+    const here = pageIndex(pathname)
+    if (here < 0) return []
+    const group = flatPages[here].section
+    const siblings = []
+    for (let step = 1; step < flatPages.length && siblings.length < 5; step++) {
+      const candidate = flatPages[(here + step) % flatPages.length]
+      if (candidate.section === group) siblings.push(candidate)
+    }
+    return siblings
+  }
+
+  // Reading order runs THROUGH section boundaries — the last page of a section leads into the next one.
+  function nextPage(pathname) {
+    const here = pageIndex(pathname)
+    if (here < 0 || here + 1 === flatPages.length) return undefined
+    return flatPages[here + 1]
+  }
+
   // Clickable breadcrumb trail from the current path — each segment links to its cumulative path,
   // reinforcing abide's file-based routing (a folder is a URL). Reactive via route().
   function crumbs(pathname) {
@@ -74,6 +167,22 @@
     }
     return trail
   }
+
+</script>
+
+<script>
+  // The rail is DERIVED from the route, not rebuilt per navigation: this layout survives a soft-nav, so
+  // a memo over route() is what makes its contents follow the page. Each memo resolves to what the
+  // markup actually renders — an absent tip or a last page reads as "", never as a value a binding then
+  // has to reach into (a route outside the index, `__e2e/*` for one, has neither).
+  const tip = memo(() => tips[route().url.pathname] ?? "")
+  const siblings = memo(() => sectionSiblings(route().url.pathname))
+  const nextHref = memo(() => nextPage(route().url.pathname)?.href ?? "")
+  const nextLabel = memo(() => nextPage(route().url.pathname)?.label ?? "")
+  const group = memo(() => {
+    const here = pageIndex(route().url.pathname)
+    return here < 0 ? "" : flatPages[here].section
+  })
 
   // CLIENT-ONLY (attached via bind:element, which never runs on the server): after the page content
   // mounts, list its `<section class="sample" id>` cards in the sidebar under the active page, and
@@ -136,13 +245,27 @@
       }
       active.after(sub)
 
+      // DOCUMENT ORDER decides which card is "the one you are reading", not callback order: a single
+      // scroll delivers several entries at once and that array is not ordered, so acting on each in turn
+      // leaves whichever was reported last as the winner — one card behind, on a fast scroll.
+      const inBand = new Set<Element>()
       spy = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
-            if (!entry.isIntersecting) continue
-            for (const l of sub!.children) l.classList.remove("idx-sample-active")
-            linkFor.get(entry.target.id)?.classList.add("idx-sample-active")
+            if (entry.isIntersecting) inBand.add(entry.target)
+            else inBand.delete(entry.target)
           }
+          // The DEEPEST card in the band, not the first: a card is far taller than the band, so the one
+          // you scrolled to shares it with the tail of the one above. The card you have arrived at is
+          // the subject; the one you are leaving is not.
+          let active: Element | undefined
+          for (const s of samples) {
+            if (inBand.has(s)) active = s
+          }
+          // Between two cards nothing is in the band; hold the last one rather than blanking the rail.
+          if (active === undefined) return
+          for (const l of sub!.children) l.classList.remove("idx-sample-active")
+          linkFor.get(active.id)?.classList.add("idx-sample-active")
         },
         { rootMargin: "0px 0px -70% 0px", threshold: 0 },
       )
@@ -186,11 +309,41 @@
   </aside>
 
   <main class="content">
-    <div class="content-inner" bind:element={indexSamples}>
+    <div class="content-inner">
       <nav class="crumb" aria-label="Breadcrumb">
         <span class="crumb-root">src/ui</span>{#for c of crumbs(route().url.pathname) by c.href}<span class="crumb-sep">/</span><a href={c.href}>{c.label}</a>{/for}
       </nav>
-      <slot/>
+
+      {#if tip !== ""}
+        <aside class="rail rail-tip">
+          <div class="rail-label">Tip</div>
+          <p>{html(tip)}</p>
+        </aside>
+      {/if}
+
+      <!-- `display: contents` — the page's own children ARE the grid's items, so a card lands in the
+           card column and the aside beside it lands in the prose column, on the same row. -->
+      <div class="content-col" bind:element={indexSamples}>
+        <slot/>
+      </div>
+
+      <aside class="rail" aria-label="Related pages">
+        {#if siblings.length > 0}
+          <div class="rail-block">
+            <div class="rail-label">More in {group}</div>
+            {#for item of siblings by item.href}
+              <a class="rail-link" href={item.href}>{item.label}</a>
+            {/for}
+          </div>
+        {/if}
+
+        {#if nextHref !== ""}
+          <a class="rail-next" href={nextHref}>
+            <span class="rail-label">Next</span>
+            <span class="rail-next-label">{nextLabel}</span>
+          </a>
+        {/if}
+      </aside>
     </div>
   </main>
 </div>

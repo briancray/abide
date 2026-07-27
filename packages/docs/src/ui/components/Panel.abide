@@ -1,0 +1,38 @@
+<script>
+  import { props } from "abide/ui/props"
+  import { html } from "abide/ui/html"
+
+  // Content that belongs in the demo column but isn't a live demo — a table, a file tree, a set of
+  // links. It takes the same card chrome as `Demo` so the column reads as one kind of thing: header
+  // band, then body. What it does NOT take are the two bands a demo earns — no LIVE strip, because
+  // nothing runs, and no SOURCE, because there is no file behind it.
+  //
+  // The `id` is the scroll-spy anchor, same as a demo's: a panel is a section of the page, so it
+  // belongs in the sidebar's per-page index alongside the cards.
+  //
+  // `source` puts the body in a demo's SOURCE band instead of a plain one — the tinted floor and the
+  // labelled dark panel, with the string as the side label a demo spends on `server`/`client`. It is
+  // for a panel whose body IS code: it earns the band, but not the live tab strip, because there is no
+  // file on disk behind it to switch between.
+  const { id = "", title = "", source = "" } = props<{
+    id?: string
+    title?: string
+    source?: string
+  }>()
+</script>
+
+<section class="sample" id={id}>
+  <div class="sample-about">
+    <h2>{html(title)}</h2>
+  </div>
+  {#if source === ""}
+    <div class="sample-body"><slot/></div>
+  {:else}
+    <div class="sample-source">
+      <div class="source-col">
+        <div class="sample-tabs"><span class="tab-side">{source}</span></div>
+        <div class="sample-panels"><slot/></div>
+      </div>
+    </div>
+  {/if}
+</section>

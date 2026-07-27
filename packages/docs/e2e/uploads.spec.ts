@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Multipart upload (#8): the browser calls the upload RPC with a real FormData — the SAME callable as
 // on the server. The `files` schema guards the File; the JSON `input` schema guards the multipart

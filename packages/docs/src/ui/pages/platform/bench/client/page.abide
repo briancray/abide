@@ -1,6 +1,8 @@
 <script module>
+  import Panel from "$ui/components/Panel.abide"
   import benchFrontendClient from "$server/rpc/benchFrontendClient"
   import { state } from "abide/shared/state"
+  import { benchBudget } from "@abide/bench/benchBudget"
 
   // Format a nanosecond mean into the tightest readable unit — mirrors the CLI bench's `fmtNs`.
   function fmtNs(ns) {
@@ -63,8 +65,15 @@
     ]
   }
 
-  const MIN_TIME_MS = 100
-  const MIN_ITERS = 10
+  // The SAME stop rule the CLI runners use — imported, not mirrored. One copy of the policy, two
+  // surfaces, so their numbers stay comparable.
+  //
+  // A shorter budget than the CLI's, because this one runs on page load. `maxWallMs` is what keeps that
+  // promise: every loop below times only PART of its round (each rebuilds a host outside the clock), and
+  // when the timed half is the cheap one the two diverge hard — `unmount` times a teardown costing a
+  // fifth of the mount it must do first, so a pure sample floor spent ~550ms of untimed mounting per
+  // scenario per side. The extra samples buy nothing a few hundred repetitions have not already bought.
+  const BUDGET = { minTimeMs: 100, minIters: 10, maxWallMs: 100 }
   const WARMUP = 3
   const UPDATES_PER_ROUND = 20
 
@@ -82,6 +91,7 @@
     for (let i = 0; i < WARMUP; i++) mount(document.createElement("div"), scope())()
     let iters = 0
     let totalMs = 0
+    const budget = benchBudget(BUDGET)
     do {
       const host = document.createElement("div")
       const built = scope()
@@ -90,7 +100,7 @@
       totalMs += performance.now() - t0
       iters++
       cleanup()
-    } while (totalMs < MIN_TIME_MS || iters < MIN_ITERS)
+    } while (budget.more(totalMs * 1e6, iters))
     return { nsPerOp: (totalMs * 1e6) / iters, iters }
   }
 
@@ -103,13 +113,14 @@
     for (let i = 0; i < WARMUP; i++) mount(document.createElement("div"), scope())()
     let iters = 0
     let totalMs = 0
+    const budget = benchBudget(BUDGET)
     do {
       const cleanup = mount(document.createElement("div"), scope())
       const t0 = performance.now()
       cleanup()
       totalMs += performance.now() - t0
       iters++
-    } while (totalMs < MIN_TIME_MS || iters < MIN_ITERS)
+    } while (budget.more(totalMs * 1e6, iters))
     return { nsPerOp: (totalMs * 1e6) / iters, iters }
   }
 
@@ -166,6 +177,7 @@
     }
     let iters = 0
     let totalMs = 0
+    const budget = benchBudget(BUDGET)
     do {
       const host = document.createElement("div")
       const cleanup = mount(host, scope())
@@ -179,7 +191,7 @@
       totalMs += performance.now() - t0
       iters += UPDATES_PER_ROUND
       cleanup()
-    } while (totalMs < MIN_TIME_MS || iters < MIN_ITERS)
+    } while (budget.more(totalMs * 1e6, iters))
     return { nsPerOp: (totalMs * 1e6) / iters, iters }
   }
 </script>
@@ -342,174 +354,183 @@
     the module and times each path against a fresh detached host, right here in your browser — the same
     measurement the CLI <code>bun run bench</code> makes under happy-dom.
   </p>
-
-  <p class="lead">
-    <code>mount</code> and <code>update</code> are each timed <strong>twice</strong>: once through abide,
-    once through a hand-written, framework-free equivalent that builds the same DOM (the shared
-    <code>@abide/bench/vanillaBaselines</code> corpus, bundled in alongside the scenarios). The
-    <strong>×</strong> column is abide ÷ vanilla — the only figure on this page that isn't mostly a
-    measurement of your browser.
-  </p>
-
-  <button
-    data-testid="run"
-    class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white disabled:opacity-50"
-    disabled={running}
-    onclick={() => run()}
-  >
-    {running ? "Running…" : "Run browser bench"}
-  </button>
-
-  {#if failed}
-    <p class="text-red-600" data-testid="bench-failed">bench failed</p>
-  {/if}
-
-  <h2 class="mt-2 mb-1 text-lg font-semibold">mount — build the live DOM</h2>
-  <p class="mb-3 text-sm text-slate-500">
-    Constructing the DOM. Watch <strong>ns/row</strong> as the list grows 100&nbsp;→&nbsp;1000&nbsp;→&nbsp;10000:
-    unlike <code>render</code> (abide-bound, flat), mount's per-row cost is dominated by the DOM backend's
-    O(n) <code>insertBefore</code> — it reflects your browser, not abide. Which is exactly what the
-    <strong>vanilla JS</strong> column is for: the same DOM built by hand with plain
-    <code>createElement</code> calls, timed in this tab moments later. Your browser's cost is in both
-    numbers, so it cancels — the <strong>×</strong> is what abide adds.
-  </p>
-  <table class="mb-8 w-full border-collapse text-sm" data-testid="mount-table">
-    <thead>
-      <tr class="border-b border-slate-300 text-left">
-        <th class="py-1.5 pr-4">scenario</th>
-        <th class="py-1.5 pr-4 text-right">mount (ns/op)</th>
-        <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-        <th class="py-1.5 pr-4 text-right">×</th>
-        <th class="py-1.5 pr-4 text-right">ns/row</th>
-        <th class="py-1.5 pr-4 text-right">iters</th>
-        <th class="py-1.5">hand-written as</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#if mountRows.length === 0 && !running}
-        <tr><td colspan="7" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
-      {/if}
-      {#for row of mountRows by row.name}
-        <tr class="border-b border-slate-100" data-testid="mount-row">
-          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
-          <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
+  <Panel id="run-the-mount-bench" title="Run the mount bench">
+    <button
+      data-testid="run"
+      class="mb-4 rounded bg-slate-800 px-3 py-1.5 text-white disabled:opacity-50"
+      disabled={running}
+      onclick={() => run()}
+    >
+      {running ? "Running…" : "Run browser bench"}
+    </button>
+    {#if failed}
+      <p class="text-red-600" data-testid="bench-failed">bench failed</p>
+    {/if}
+  </Panel>
+  <aside class="aside">
+    <p class="lead">
+      <code>mount</code> and <code>update</code> are each timed <strong>twice</strong>: once through abide,
+      once through a hand-written, framework-free equivalent that builds the same DOM (the shared
+      <code>@abide/bench/vanillaBaselines</code> corpus, bundled in alongside the scenarios). The
+      <strong>×</strong> column is abide ÷ vanilla — the only figure on this page that isn't mostly a
+      measurement of your browser.
+    </p>
+  </aside>
+  <Panel id="mount-build-the-live-dom" title="mount — build the live DOM">
+    <table class="mb-8 w-full border-collapse text-sm" data-testid="mount-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">scenario</th>
+          <th class="py-1.5 pr-4 text-right">mount (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right">×</th>
+          <th class="py-1.5 pr-4 text-right">ns/row</th>
+          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5">hand-written as</th>
         </tr>
-      {/for}
-    </tbody>
-  </table>
-
-  <h2 class="mt-2 mb-1 text-lg font-semibold">unmount — tear the subtree down</h2>
-  <p class="mb-3 text-sm text-slate-500">
-    The other half of a mount, and until recently invisible: both used to be timed as ONE op, so
-    disposing every effect and removing every node of a list was folded into the mount figure. It is
-    its own cost, with its own failure modes — a disposer list that grows per item, a range removal
-    that walks — and it is what a change to per-item DOM bookkeeping moves. Read the
-    <strong>×</strong> here with care: the hand-written baseline is a single
-    <code>replaceChildren()</code> call, which a framework tracking per-item disposers cannot match by
-    construction. It is a regression guard and a pointer, not a like-for-like overhead number.
-  </p>
-  <table class="mb-8 w-full border-collapse text-sm" data-testid="unmount-table">
-    <thead>
-      <tr class="border-b border-slate-300 text-left">
-        <th class="py-1.5 pr-4">scenario</th>
-        <th class="py-1.5 pr-4 text-right">unmount (ns/op)</th>
-        <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-        <th class="py-1.5 pr-4 text-right">×</th>
-        <th class="py-1.5 pr-4 text-right">ns/row</th>
-        <th class="py-1.5 pr-4 text-right">iters</th>
-        <th class="py-1.5">hand-written as</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#if unmountRows.length === 0 && !running}
-        <tr><td colspan="7" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
-      {/if}
-      {#for row of unmountRows by row.name}
-        <tr class="border-b border-slate-100" data-testid="unmount-row">
-          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
-          <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
+      </thead>
+      <tbody>
+        {#if mountRows.length === 0 && !running}
+          <tr><td colspan="7" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
+        {/if}
+        {#for row of mountRows by row.name}
+          <tr class="border-b border-slate-100" data-testid="mount-row">
+            <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
+          </tr>
+        {/for}
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p class="mb-3 text-sm text-slate-500">
+      Constructing the DOM. Watch <strong>ns/row</strong> as the list grows 100&nbsp;→&nbsp;1000&nbsp;→&nbsp;10000:
+      unlike <code>render</code> (abide-bound, flat), mount's per-row cost is dominated by the DOM backend's
+      O(n) <code>insertBefore</code> — it reflects your browser, not abide. Which is exactly what the
+      <strong>vanilla JS</strong> column is for: the same DOM built by hand with plain
+      <code>createElement</code> calls, timed in this tab moments later. Your browser's cost is in both
+      numbers, so it cancels — the <strong>×</strong> is what abide adds.
+    </p>
+  </aside>
+  <Panel id="unmount-tear-the-subtree-down" title="unmount — tear the subtree down">
+    <table class="mb-8 w-full border-collapse text-sm" data-testid="unmount-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">scenario</th>
+          <th class="py-1.5 pr-4 text-right">unmount (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right">×</th>
+          <th class="py-1.5 pr-4 text-right">ns/row</th>
+          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5">hand-written as</th>
         </tr>
-      {/for}
-    </tbody>
-  </table>
-
-  <h2 class="mt-2 mb-1 text-lg font-semibold">hydrate — attach to server-rendered HTML</h2>
-  <p class="mb-3 text-sm text-slate-500">
-    The first-load cost: the browser already parsed the SSR markup, and <code>hydrate</code> walks the
-    hydration anchors to wire listeners and adopt the existing nodes — no DOM built from scratch. Compare
-    each row against its <strong>mount</strong> figure above: skipping node creation makes hydrate the
-    cheaper path for most scenarios, though walking a very large tree (<code>for-list-10000</code>) can
-    rival or exceed a fresh clone-based mount. No vanilla column here: adopting server-rendered markup is
-    a thing only a framework does, so there is nothing hand-written to compare it against.
-  </p>
-  <table class="mb-8 w-full border-collapse text-sm" data-testid="hydrate-table">
-    <thead>
-      <tr class="border-b border-slate-300 text-left">
-        <th class="py-1.5 pr-4">scenario</th>
-        <th class="py-1.5 pr-4 text-right">hydrate (ns/op)</th>
-        <th class="py-1.5 pr-4 text-right">ns/row</th>
-        <th class="py-1.5 text-right">iters</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#if hydrateRows.length === 0 && !running}
-        <tr><td colspan="4" class="py-2 text-slate-400">—</td></tr>
-      {/if}
-      {#for row of hydrateRows by row.name}
-        <tr class="border-b border-slate-100" data-testid="hydrate-row">
-          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-          <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+      </thead>
+      <tbody>
+        {#if unmountRows.length === 0 && !running}
+          <tr><td colspan="7" class="py-2 text-slate-400">Hit “Run browser bench” to measure in this tab.</td></tr>
+        {/if}
+        {#for row of unmountRows by row.name}
+          <tr class="border-b border-slate-100" data-testid="unmount-row">
+            <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
+          </tr>
+        {/for}
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p class="mb-3 text-sm text-slate-500">
+      The other half of a mount, and until recently invisible: both used to be timed as ONE op, so
+      disposing every effect and removing every node of a list was folded into the mount figure. It is
+      its own cost, with its own failure modes — a disposer list that grows per item, a range removal
+      that walks — and it is what a change to per-item DOM bookkeeping moves. Read the
+      <strong>×</strong> here with care: the hand-written baseline is a single
+      <code>replaceChildren()</code> call, which a framework tracking per-item disposers cannot match by
+      construction. It is a regression guard and a pointer, not a like-for-like overhead number.
+    </p>
+  </aside>
+  <Panel id="hydrate-attach-to-server-rendered-" title="hydrate — attach to server-rendered HTML">
+    <table class="mb-8 w-full border-collapse text-sm" data-testid="hydrate-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">scenario</th>
+          <th class="py-1.5 pr-4 text-right">hydrate (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right">ns/row</th>
+          <th class="py-1.5 text-right">iters</th>
         </tr>
-      {/for}
-    </tbody>
-  </table>
-
-  <h2 class="mt-2 mb-1 text-lg font-semibold">update — patch the DOM (fine-grained reactivity)</h2>
-  <p class="mb-3 text-sm text-slate-500">
-    Each op clicks the scenario's <code>&lt;button&gt;</code> — a <code>state</code> change — and awaits the
-    flushed DOM patch. This is where abide's fine-grained reactivity shows: a single text patch touches one
-    node, and even a 1000-row keyed reverse only reconciles, it doesn't rebuild. The vanilla row does the
-    same mutation by hand from a click handler (write the <code>textContent</code>, append the
-    <code>&lt;li&gt;</code>, re-append the reversed node array) — so a <strong>×</strong> near or below
-    1.00× means the reactive patch costs about what you'd have written yourself.
-  </p>
-  <table class="w-full border-collapse text-sm" data-testid="update-table">
-    <thead>
-      <tr class="border-b border-slate-300 text-left">
-        <th class="py-1.5 pr-4">scenario</th>
-        <th class="py-1.5 pr-4 text-right">update (ns/op)</th>
-        <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-        <th class="py-1.5 pr-4 text-right">×</th>
-        <th class="py-1.5 pr-4 text-right">iters</th>
-        <th class="py-1.5">hand-written as</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#if updateRows.length === 0 && !running}
-        <tr><td colspan="6" class="py-2 text-slate-400">—</td></tr>
-      {/if}
-      {#for row of updateRows by row.name}
-        <tr class="border-b border-slate-100" data-testid="update-row">
-          <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-          <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-          <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
-          <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
+      </thead>
+      <tbody>
+        {#if hydrateRows.length === 0 && !running}
+          <tr><td colspan="4" class="py-2 text-slate-400">—</td></tr>
+        {/if}
+        {#for row of hydrateRows by row.name}
+          <tr class="border-b border-slate-100" data-testid="hydrate-row">
+            <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+          </tr>
+        {/for}
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p class="mb-3 text-sm text-slate-500">
+      The first-load cost: the browser already parsed the SSR markup, and <code>hydrate</code> walks the
+      hydration anchors to wire listeners and adopt the existing nodes — no DOM built from scratch. Compare
+      each row against its <strong>mount</strong> figure above: skipping node creation makes hydrate the
+      cheaper path for most scenarios, though walking a very large tree (<code>for-list-10000</code>) can
+      rival or exceed a fresh clone-based mount. No vanilla column here: adopting server-rendered markup is
+      a thing only a framework does, so there is nothing hand-written to compare it against.
+    </p>
+  </aside>
+  <Panel id="update-patch-the-dom-fine-grained-" title="update — patch the DOM (fine-grained reactivity)">
+    <table class="w-full border-collapse text-sm" data-testid="update-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">scenario</th>
+          <th class="py-1.5 pr-4 text-right">update (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right">×</th>
+          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5">hand-written as</th>
         </tr>
-      {/for}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {#if updateRows.length === 0 && !running}
+          <tr><td colspan="6" class="py-2 text-slate-400">—</td></tr>
+        {/if}
+        {#for row of updateRows by row.name}
+          <tr class="border-b border-slate-100" data-testid="update-row">
+            <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
+          </tr>
+        {/for}
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p class="mb-3 text-sm text-slate-500">
+      Each op clicks the scenario's <code>&lt;button&gt;</code> — a <code>state</code> change — and awaits the
+      flushed DOM patch. This is where abide's fine-grained reactivity shows: a single text patch touches one
+      node, and even a 1000-row keyed reverse only reconciles, it doesn't rebuild. The vanilla row does the
+      same mutation by hand from a click handler (write the <code>textContent</code>, append the
+      <code>&lt;li&gt;</code>, re-append the reversed node array) — so a <strong>×</strong> near or below
+      1.00× means the reactive patch costs about what you'd have written yourself.
+    </p>
+  </aside>
 </main>

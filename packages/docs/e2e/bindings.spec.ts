@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives the /templating/bindings page in a real browser: every template binding and directive is exercised
 // through live inputs, and the two-way binds are asserted in both directions after hydration.

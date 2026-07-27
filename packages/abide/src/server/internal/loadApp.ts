@@ -325,6 +325,7 @@ export async function loadApp(dir: string): Promise<LoadedApp> {
     const app = await loadAppModule(dir)
 
     const loaded: LoadedApp = {
+        dir,
         routes,
         sockets,
         pages: pages.pages,

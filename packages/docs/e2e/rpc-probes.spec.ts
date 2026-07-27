@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // Drives /rpc/probes: the reactive read surface over a live RPC — peek/pending/error in a template,
 // pending vs refreshing, the error probe, and the watch(args, cb) method form. Assertions are relative

@@ -40,7 +40,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
-import type { Root } from './ast.ts'
+import type { Root, Script, TemplateNode } from './ast.ts'
 import { splitParams } from './splitParams.ts'
 
 const K = SyntaxKind
@@ -63,6 +63,10 @@ export type BindingKind = 'state' | 'memo' | 'const' | 'function' | 'prop' | 'im
 export interface Binding {
     name: string
     kind: BindingKind
+    // `let`/`var` (not `const`, not a function/class declaration). Only a REASSIGNABLE plain binding
+    // needs a live getter when a nested `<script>` publishes it onto `$scope` — everything else can be
+    // copied once, because a cell/memo binding is never rebound (a write lowers to `.set()`).
+    reassignable?: boolean
 }
 
 // Everything `rewriteCellRefs` needs to decide what a bare identifier MEANS (ADR 0024 §5).
@@ -99,9 +103,32 @@ export interface ComponentImport {
     specifier: string
 }
 
+// A `<script>` inside a BLOCK BODY — the branch/iteration-local setup of spec C9.4.
+//
+// Unlike the root instance script, its bindings cannot stay lexical. Every template level below it is a
+// SEPARATE emitted mount function on the client (they are siblings inside `mount`, not nested blocks),
+// so a lexical `let` would be invisible one level down. The setup therefore PUBLISHES each binding onto
+// the level's own `$scope` child, and every reference in that subtree resolves through it — which costs
+// no new rewrite rule: `templatePlan` keeps these names OUT of `declared`, and that alone is what makes
+// `rewriteFreeIdentifiers` qualify them as `$scope.x` (while `cells` still adds the `()` read).
+export interface NestedScript {
+    // The whole preamble, emitter-agnostic: `$scope` alias lines for its non-module imports, the
+    // rewritten body, then the lines publishing its bindings onto `$scope`. Both emitters embed this
+    // verbatim, having first pointed `$scope` at a fresh child object.
+    setupCode: string
+    cells: Set<string>
+    memos: Set<string>
+    // Every name it binds that resolves through `$scope` in its subtree (import locals that became REAL
+    // module imports are excluded — those stay lexical and are added to the analysis-wide `declared`).
+    names: Set<string>
+}
+
 export interface BindingAnalysis {
     module: ScriptInfo | null
     instance: ScriptInfo | null
+    // Branch-local `<script>`s, keyed by their AST node so `templatePlan` can pick each up at the level
+    // that owns it. Empty for the overwhelmingly common single-root-script component.
+    nested: Map<Script, NestedScript>
     cellNames: Set<string>
     // Everything a template-expression rewrite needs: cells, auto-called memos, dependency-position
     // callees. `cellNames` above is `cellBindings.cells` — kept as its own field because WRITABILITY (not
@@ -137,13 +164,26 @@ const SCOPE_PROVIDED_SPECIFIERS = new Set<string>([
     'abide/server/server',
 ])
 
-// A pass-through module import is an `abide/shared|ui/*` framework import that is NOT scope-provided
-// and NOT a `.abide` component / `.css` side-effect. Its local is left lexical (`declared`) and the
-// original statement is re-emitted verbatim by the client/server emitters.
+// An ordinary import is the DEFAULT: its local stays lexical (`declared`) and both emitters re-emit the
+// statement verbatim, with the specifier rewritten to an absolute path (`resolvePassThroughImport`).
+// Import a local module, a workspace package, an npm package — no ceremony, no allowlist to be on.
+//
+// Only two families are held back, and each because the name must resolve to something the importer
+// cannot see from where it sits:
+//   • SCOPE-PROVIDED primitives — `state`, `props`, `route`, the `abide/server/*` ambients. A component
+//     must get the instance bound to THIS render (same scheduler, same request), not a fresh module
+//     instance, so the runtime injects them through `$scope`.
+//   • SERVER modules — `$server/rpc/*`, `$server/sockets/*`. SSR binds the real callable; the browser
+//     gets the generated proxy under the same local (the module swap, rpc-core §6). Bundling the
+//     handler into the client is exactly what must not happen.
+// Anything else is just a module, and is treated as one. An unresolvable specifier is a BUILD ERROR
+// rather than a silent `$scope` read that arrives `undefined` at mount.
+const SERVER_MODULE_SPECIFIER = /(^|\/)\$?server\//
 function isPassThroughImport(specifier: string): boolean {
     if (specifier.endsWith('.abide') || specifier.endsWith('.css')) return false
     if (SCOPE_PROVIDED_SPECIFIERS.has(specifier)) return false
-    return specifier.startsWith('abide/shared/') || specifier.startsWith('abide/ui/')
+    if (specifier.startsWith('abide/server/')) return false
+    return !SERVER_MODULE_SPECIFIER.test(specifier)
 }
 
 // Reconstruct an `import … from "spec";` statement from a parsed binding, faithfully re-expressing
@@ -1613,7 +1653,7 @@ type StatementRecord =
           stripStart: number
           stripEnd: number
       }
-    | { kind: 'var'; rawDeclarators: string }
+    | { kind: 'var'; rawDeclarators: string; reassignable: boolean }
     | { kind: 'func'; name: string | null }
 
 // A side-effect import (`import "spec";` — no `from`, no bindings) whose specifier ends in `.css`.
@@ -1709,7 +1749,11 @@ function scanTopLevel(source: string): StatementRecord[] {
             if (kind === K.LetKeyword || kind === K.ConstKeyword || kind === K.VarKeyword) {
                 const { lastIdx, nextIdx } = stmtSpan(i)
                 const rawDeclarators = source.slice(t.end, tokenAt(tokens, lastIdx).end)
-                records.push({ kind: 'var', rawDeclarators })
+                records.push({
+                    kind: 'var',
+                    rawDeclarators,
+                    reassignable: kind !== K.ConstKeyword,
+                })
                 i = nextIdx
                 atStart = true
                 continue
@@ -1859,7 +1903,7 @@ function analyzeScript(content: string): RawScript {
                 kind = 'prop'
             }
             for (const name of names) {
-                bindings.push({ name, kind })
+                bindings.push({ name, kind, reassignable: record.reassignable })
                 declared.add(name)
             }
         }
@@ -1882,6 +1926,185 @@ function analyzeScript(content: string): RawScript {
         componentImports,
         moduleImports,
         strippedCode,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Branch-local `<script>` collection (C9.4)
+// ---------------------------------------------------------------------------
+
+// Where a `<script>` sits. A BLOCK BODY is a template level that gets its own emitted frame and its own
+// `$scope` child — which is precisely what a per-branch/per-iteration setup needs to own and to dispose.
+// Element children and component children are INLINED into their parent level and have neither, so a
+// script there would have no lifetime of its own; it is rejected rather than silently hoisted.
+type ScriptSite = 'root' | 'block' | 'element'
+
+// The nodes that decide "first" for a block body — whitespace and comments don't count.
+function isIgnorableBefore(node: TemplateNode): boolean {
+    if (node.type === 'Comment') return true
+    return node.type === 'Text' && node.value.trim() === ''
+}
+
+function scriptGateError(message: string): Error {
+    return new Error(`<script>: ${message}`)
+}
+
+interface NestedCollect {
+    nested: Map<Script, NestedScript>
+    rootScripts: Set<Script>
+}
+
+// Analyze one branch-local script against the cells and lexical names visible around it.
+function analyzeNestedScript(
+    script: Script,
+    inherited: CellBindings,
+    lexical: Set<string>,
+): NestedScript {
+    const raw = analyzeScript(script.content)
+
+    // An import is MODULE-level wherever it is written — a branch cannot import conditionally, and the
+    // bundle carries it either way — so allowing one here would only look like it meant something. It
+    // is also not legal TS in the position the check lowering emits this body into. The component's
+    // imports are already lexically in scope here, so the fix is always the same one.
+    if (raw.imports.length > 0)
+        throw scriptGateError(
+            'a branch-local <script> reuses the imports of the component it sits in — move the ' +
+                'import to the root <script>.',
+        )
+
+    // Its own cells read/write as cells, and so do the ones it inherits — an outer cell is either
+    // lexical (the root script, visible because every mount fn nests inside `mount`) or itself
+    // `$scope`-published, and the free-identifier pass below tells those two apart.
+    const cells = new Set(inherited.cells)
+    const memos = new Set(inherited.memos)
+    for (const name of raw.cells) cells.add(name)
+    for (const name of raw.memos) memos.add(name)
+
+    // LEXICALLY available to this body: what the root script declared, its own declarations, and its own
+    // real module imports. Everything else — an OUTER nested script's binding, or an ambient the scope
+    // provides — is qualified onto `$scope`, which is where both of those actually live.
+    const visible = new Set(lexical)
+    for (const name of raw.declared) visible.add(name)
+    const body = rewriteFreeIdentifiers(
+        rewriteCellRefs(raw.strippedCode, { cells, memos }),
+        visible,
+        '$scope',
+    )
+
+    // Publish the bindings. A cell/memo/const/function binding is copied once (a cell is never rebound —
+    // a write to it lowered to `.set()`); a reassignable plain `let` gets an accessor PAIR, so that it
+    // reads live rather than frozen at setup time AND a template write still lands on the variable
+    // (emitted modules are strict, where assigning through a getter-only property throws).
+    let publish = ''
+    const names = new Set<string>()
+    for (const binding of raw.bindings) {
+        if (binding.kind === 'import') continue
+        if (names.has(binding.name)) continue
+        names.add(binding.name)
+        const key = JSON.stringify(binding.name)
+        if (binding.reassignable === true && binding.kind !== 'state' && binding.kind !== 'memo')
+            publish +=
+                `Object.defineProperty($scope, ${key}, { get: () => ${binding.name}, ` +
+                `set: ($v) => { ${binding.name} = $v; }, configurable: true });\n`
+        else publish += `$scope[${key}] = ${binding.name};\n`
+    }
+
+    return { setupCode: `${body}\n${publish}`, cells: raw.cells, memos: raw.memos, names }
+}
+
+// Walk the template for branch-local `<script>`s, enforcing where one may appear and threading the
+// cells each level can see down to the levels below it.
+function walkNestedScripts(
+    nodes: TemplateNode[],
+    site: ScriptSite,
+    inherited: CellBindings,
+    lexical: Set<string>,
+    collect: NestedCollect,
+): void {
+    let own: NestedScript | null = null
+    for (const [index, node] of nodes.entries()) {
+        if (node.type !== 'Script') continue
+        if (site === 'root') {
+            // The first root-level `<script>` / `<script module>` are the component's own (lifted by the
+            // parser); a further one used to be dropped in silence.
+            if (collect.rootScripts.has(node)) continue
+            throw scriptGateError(
+                'a component has one <script> and one <script module>. A second root-level script is ' +
+                    'not merged — move its code into the first, or into the block body it belongs to.',
+            )
+        }
+        if (site === 'element')
+            throw scriptGateError(
+                'a <script> inside an element or a component body has no lifetime of its own. Move it ' +
+                    'to the first line of the enclosing {#if}/{#for}/{#component} body, or to the ' +
+                    "component's root <script>.",
+            )
+        if (node.module)
+            throw scriptGateError(
+                '<script module> runs once per module, so it cannot live in a block body. Move it to ' +
+                    'the top level of the component.',
+            )
+        if (own !== null)
+            throw scriptGateError(
+                'one <script> per block body — merge it with the one above it in this branch.',
+            )
+        if (!nodes.slice(0, index).every(isIgnorableBefore))
+            throw scriptGateError(
+                'a branch-local <script> must be the FIRST node of its block body (whitespace and ' +
+                    'comments aside), so that it is set up before anything reads it.',
+            )
+        own = analyzeNestedScript(node, inherited, lexical)
+        collect.nested.set(node, own)
+    }
+
+    // Levels below this one see this script's bindings as cells too — but NOT as lexical names.
+    let childCells = inherited
+    if (own !== null) {
+        const cells = new Set(inherited.cells)
+        const memos = new Set(inherited.memos)
+        for (const name of own.cells) cells.add(name)
+        for (const name of own.memos) memos.add(name)
+        childCells = { cells, memos }
+    }
+
+    const block = (children: TemplateNode[]): void =>
+        walkNestedScripts(children, 'block', childCells, lexical, collect)
+    const inline = (children: TemplateNode[]): void =>
+        walkNestedScripts(children, 'element', childCells, lexical, collect)
+
+    for (const node of nodes) {
+        switch (node.type) {
+            case 'Element':
+            case 'Component':
+                inline(node.children)
+                break
+            case 'IfBlock':
+                for (const branch of node.branches) block(branch.children)
+                break
+            case 'ForBlock':
+                block(node.children)
+                if (node.catch !== null) block(node.catch.children)
+                break
+            case 'AwaitBlock':
+                block(node.pending)
+                if (node.then !== null) block(node.then.children)
+                if (node.catch !== null) block(node.catch.children)
+                if (node.finally !== null) block(node.finally.children)
+                break
+            case 'SwitchBlock':
+                // `leading` is the gap between `{#switch}` and the first `{:case}` — whitespace, not a body.
+                inline(node.leading)
+                for (const arm of node.cases) block(arm.children)
+                break
+            case 'TryBlock':
+                block(node.children)
+                if (node.catch !== null) block(node.catch.children)
+                if (node.finally !== null) block(node.finally.children)
+                break
+            case 'ComponentBlock':
+                block(node.children)
+                break
+        }
     }
 }
 
@@ -1934,9 +2157,19 @@ export function analyzeBindings(root: Root): BindingAnalysis {
     if (moduleRaw !== null) for (const m of moduleRaw.moduleImports) moduleImports.push(m)
     if (instanceRaw !== null) for (const m of instanceRaw.moduleImports) moduleImports.push(m)
 
+    // Branch-local `<script>`s LAST: each is analyzed against the root's cells and lexical names, since
+    // those are exactly what is in scope around it. Nothing it binds joins `declared` — a
+    // `$scope`-published name must resolve there, which is what keeping it out of `declared` achieves.
+    const rootScripts = new Set<Script>()
+    if (root.moduleScript !== null) rootScripts.add(root.moduleScript)
+    if (root.instanceScript !== null) rootScripts.add(root.instanceScript)
+    const nested = new Map<Script, NestedScript>()
+    walkNestedScripts(root.children, 'root', cellBindings, declared, { nested, rootScripts })
+
     return {
         module,
         instance,
+        nested,
         cellNames,
         cellBindings,
         declared,

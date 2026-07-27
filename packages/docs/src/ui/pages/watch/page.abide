@@ -9,34 +9,33 @@
 <main class="page">
   <h1><code>watch</code> — the effect</h1>
   <p class="lead">The three primitives hold values; <code>watch</code> is how a value reaches something outside the graph. It is not a fourth primitive — it is the one escape hatch, and everything reactive in a rendered template is built on it. Like <a href="/state"><code>state</code></a>, <a href="/memo"><code>memo</code></a>, and <a href="/channel"><code>channel</code></a> it ships from <code>abide/shared/*</code>, so it is <strong>isomorphic</strong>: a <code>watch</code> in a plain server module fires on the server, with no client involved.</p>
-
-  <h2>Thunk — dependencies inferred from the body</h2>
-  <p>Pass one function. It runs immediately and again whenever anything it <em>read</em> changes — nothing declares the dependency, the read is the declaration. Note the effect writes a cell it never reads, which is what keeps values flowing one way: in through the reads, out through the effect.</p>
   <Demo id="watch-thunk" title="<code>watch(thunk)</code> — auto-tracked effect" client="src/ui/demos/watch/WatchThunkDemo.abide">
     <WatchThunkDemo />
   </Demo>
-
-  <h2>With a source thunk — dependencies declared</h2>
-  <p>Pass a source thunk and two things change: the handler runs <strong>on change only</strong> — not on the initial read — and the dependency set is exactly what the thunk reads, no matter what the handler touches.</p>
-  <p>The source is <em>always</em> a thunk (ADR 0025), which mirrors <code>memo(source, transform)</code> exactly — same slot in the signature, same rule, second argument untracked in both. There is no dependency-declaring syntax beyond the arrow: the tracked region is its body.</p>
-  <p class="note">Same inferred-or-declared split as <a href="/memo"><code>memo</code></a>, and the two primitives differ only in intent: a memo produces a value to be pulled, a watch performs an effect. That is why there is no separate "effect" primitive to learn.</p>
+  <aside class="aside">
+    <p>Pass one function. It runs immediately and again whenever anything it read changes — nothing declares the dependency, the read <em>is</em> the declaration. The effect writes a cell it never reads, which is what keeps values flowing one way: in through the reads, out through the effect.</p>
+  </aside>
   <Demo id="watch-source" title="<code>watch(source, handler)</code> — change-only effect" client="src/ui/demos/watch/WatchSourceDemo.abide">
     <WatchSourceDemo />
   </Demo>
-
-  <p>Several inputs are just what the thunk <strong>returns</strong>, exactly as in <a href="/memo#sources"><code>memo</code></a>. Every read inside it is tracked, and the <code>next</code>/<code>previous</code> the handler already receives carry whatever it produced — so a handler reads what changed by name, never by position.</p>
+  <aside class="aside">
+    <p>Pass a source thunk and two things change: the handler runs on change only — not on the initial read — and the dependency set is exactly what the thunk reads, whatever the handler touches.</p>
+    <p>The source is <em>always</em> a thunk (ADR 0025), mirroring <code>memo(source, transform)</code>: same signature slot, same rule, second argument untracked in both.</p>
+    <p class="note">Same inferred-or-declared split as <a href="/memo"><code>memo</code></a>; the two differ only in intent — a memo produces a value to be pulled, a watch performs an effect. That is why there is no separate "effect" primitive.</p>
+  </aside>
   <Demo id="watch-sources" title="<code>watch(() =&gt; ({'{'} a, b {'}'}), handler)</code> — several declared inputs" client="src/ui/demos/watch/WatchSourcesDemo.abide">
     <WatchSourcesDemo />
   </Demo>
-
-  <h2>Teardown — what the effect returns</h2>
-  <p>An effect that <em>takes</em> something — a timer, a listener, a subscription — has to give it back. Either form may <strong>return a function</strong>, and that returned teardown runs at the two moments the resource must go: <strong>before every re-run</strong>, so a re-subscribe never leaves the last one behind, and <strong>when the effect is disposed</strong>. A component <em>owns</em> the effects its <code>&lt;script&gt;</code> creates, so disposal is that component going away — <strong>unmount</strong> in the browser, <strong>end of the request</strong> during SSR, where a render is the whole life a component gets.</p>
-  <p class="note">This is why the grammar has no <code>onMount</code>/<code>onDestroy</code>: the <code>&lt;script&gt;</code> body is setup and the returned teardown is cleanup, so the pair stays in one place instead of two hooks that have to agree. It is also why the demo below holds a real timer with no is-this-the-browser branch — the effect is isomorphic, and so is its cleanup. <code>bind:element={'{'}fn{'}'}</code> takes the same shape for a node.</p>
+  <aside class="aside">
+    <p>Several inputs are just what the thunk returns, exactly as in <code>memo</code>. Every read inside it is tracked, and the <code>next</code>/<code>previous</code> the handler already receives carry it — so a handler reads what changed by name, never by position.</p>
+  </aside>
   <Demo id="watch-teardown" title="The returned teardown — re-run and unmount" client="src/ui/demos/watch/WatchTeardownTicker.abide">
     <WatchTeardownDemo />
   </Demo>
-  <p>Changing the interval re-runs the effect, and the log shows the <code>stop</code> line landing <em>before</em> the next <code>start</code>. Unmounting the ticker fires the same function one last time — the component is gone, and so is its timer. The same thing already happened on the server: this page's SSR ran the effect and cleared its interval when the request finished.</p>
-  <p class="note">The teardown is also the disposer's job when you hold one directly: <code>watch</code> returns a disposer, and calling it runs the teardown and detaches every read.</p>
-
-  <p class="note">The <a href="/memo/probes">per-slot probes</a> expose the same idea in method form — <code>fn.watch(args, cb)</code> fires on a memo slot's changes, and a <a href="/channel">channel</a>'s <code>watch</code> fires per message.</p>
+  <aside class="aside">
+    <p>An effect that takes something — a timer, a listener, a subscription — has to give it back. Either form may return a function, and that teardown runs at the two moments the resource must go: before every re-run, and when the effect is disposed. A component owns the effects its <code>&lt;script&gt;</code> creates, so disposal is that component going away — unmount in the browser, end of the request during SSR.</p>
+    <p>Changing the interval re-runs the effect, and the log shows <code>stop</code> landing before the next <code>start</code>. Unmounting the ticker fires it one last time. The same already happened on the server: this page's SSR ran the effect and cleared its interval when the request finished.</p>
+    <p>Holding one directly works the same way — <code>watch</code> returns a disposer, and calling it runs the teardown and detaches every read.</p>
+    <p class="note">This is why the grammar has no <code>onMount</code>/<code>onDestroy</code>: the <code>&lt;script&gt;</code> body is setup and the returned teardown is cleanup, so the pair stays in one place. It is also why this demo holds a real timer with no is-this-the-browser branch. <code>bind:element={'{'}fn{'}'}</code> takes the same shape for a node.</p>
+  </aside>
 </main>

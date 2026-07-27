@@ -1,4 +1,5 @@
 <script module>
+  import Panel from "$ui/components/Panel.abide"
   import { route } from "abide/shared/route"
   import { url } from "abide/shared/url"
 
@@ -19,26 +20,25 @@
 <main class="page">
   <h1 data-testid="carousel-heading">Item: {route().params.item}</h1>
   <p class="lead">One file — <code>pages/layouts/[item]/page.abide</code> — serves every item. The active card is chosen by <code>route().params.item</code>; switching items is a <strong>param nav</strong> (same page source, same layout chain), the case the persistence work keeps alive so the strip moves without a rebuild.</p>
-
-  <div class="carousel" data-testid="carousel-strip">
-    {#for item of ITEMS by item}
-      <a
-        href={url("/pages/layouts/[item]", { item })}
-        class="carousel-card"
-        class:active={item === route().params.item}
-        data-testid={"card-" + item}
-        data-active={item === route().params.item}
-      >{item}</a>
-    {/for}
-  </div>
-
-  <div class="row">
-    <a data-testid="to-hub" href="/pages/layouts">← back to the layouts hub</a>
-  </div>
-
-  <div hidden data-testid="carousel-filler">
-    {#for n of FILLER by n}<span>{n}</span>{/for}
-  </div>
+  <Panel id="a-carousel-item-param-nav" title="A carousel item — param nav">
+    <div class="carousel" data-testid="carousel-strip">
+      {#for item of ITEMS by item}
+        <a
+          href={url("/pages/layouts/[item]", { item })}
+          class="carousel-card"
+          class:active={item === route().params.item}
+          data-testid={"card-" + item}
+          data-active={item === route().params.item}
+        >{item}</a>
+      {/for}
+    </div>
+    <div class="row">
+      <a data-testid="to-hub" href="/pages/layouts">← back to the layouts hub</a>
+    </div>
+    <div hidden data-testid="carousel-filler">
+      {#for n of FILLER by n}<span>{n}</span>{/for}
+    </div>
+  </Panel>
 </main>
 
 <style>

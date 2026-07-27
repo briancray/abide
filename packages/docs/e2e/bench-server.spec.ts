@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // The live server-dispatch bench (`/platform/bench/server`) — the counterpart to the frontend render
 // bench. A streaming `GET` times abide's in-process per-request/per-read primitives (route classification,

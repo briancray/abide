@@ -8,22 +8,22 @@
 <main class="page">
   <h1>Reactive probes</h1>
   <p class="lead">A <a href="/sockets">socket</a> is a <a href="/channel">channel</a> on the wire, and a channel implements the same reactive read surface a <a href="/memo">memo</a> does — the <strong>probes</strong> — over a lossy hub instead of a keyed slot: <code>peek()</code> is the latest message, <code>chunks()</code> is the tail transcript, <code>done()</code> reports whether the topic is idle (no live subscription), and <code>pending()</code>/<code>refreshing()</code>/<code>error()</code> report connection status. Same vocabulary as the <a href="/memo/probes">generic-memo</a> and <a href="/rpc/probes">RPC</a> probes. The <code>peek</code>/<code>chunks</code> demos share the one <code>socketsChat</code> topic, so a publish anywhere updates both.</p>
-
-  <h2><code>peek()</code> — the latest message</h2>
-  <p>The most recent message on the topic, reactive, with no list to maintain. Reading it opens the subscription, so it updates live as messages arrive.</p>
   <Demo id="socket-peek" title="<code>socketsChat.peek()</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/PeekDemo.abide" tab="client">
     <PeekDemo />
   </Demo>
-
-  <h2><code>chunks()</code> — the tail transcript</h2>
-  <p>The recent-message tail as a snapshot array (capped by the socket's <code>tail</code>). Render it directly with a plain <code>{'{'}#for{'}'}</code> instead of appending in a <code>{'{'}#for await{'}'}</code> — same data, snapshot rather than stream.</p>
+  <aside class="aside">
+    <p>The most recent message on the topic, reactive, with no list to maintain. Reading it opens the subscription, so it updates live as messages arrive.</p>
+  </aside>
   <Demo id="socket-chunks" title="<code>socketsChat.chunks()</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/ChunksDemo.abide" tab="client">
     <ChunksDemo />
   </Demo>
-
-  <h2><code>done()</code> — idle vs live</h2>
-  <p>A status probe over the subscription lifecycle: <strong>yes</strong> while the topic is idle — no active read holds a subscription — and <strong>no</strong> once a live read opens one. It uses a standalone topic (untouched by the demos above) so it starts idle; open a subscription and it flips.</p>
+  <aside class="aside">
+    <p>The recent-message tail as a snapshot array (capped by the socket's <code>tail</code>). Render it directly with a plain <code>{'{'}#for{'}'}</code> instead of appending in a <code>{'{'}#for await{'}'}</code> — same data, snapshot rather than stream.</p>
+  </aside>
   <Demo id="socket-done" title="<code>socketsPulse.done()</code>" server="src/server/sockets/socketsPulse.ts" client="src/ui/demos/sockets/DoneDemo.abide" tab="client">
     <DoneDemo />
   </Demo>
+  <aside class="aside">
+    <p>A status probe over the subscription lifecycle: <strong>yes</strong> while the topic is idle — no active read holds a subscription — and <strong>no</strong> once a live read opens one. It uses a standalone topic (untouched by the demos above) so it starts idle; open a subscription and it flips.</p>
+  </aside>
 </main>

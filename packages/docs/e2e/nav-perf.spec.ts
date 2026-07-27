@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // C6.2 nav-perf gate. A param nav keeps the page (and its layouts) ALIVE, so its cost is O(the route-
 // driven bindings that actually change), NOT O(page size). We prove it by timing the SAME param nav on a

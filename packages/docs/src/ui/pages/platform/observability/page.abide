@@ -12,45 +12,45 @@
 <main class="page">
   <h1>Observability</h1>
   <p class="lead">Four questions an app asks about itself, in increasing depth: <em>where am I running</em>, <em>is the server healthy</em>, <em>what happened during this request</em>, and <em>what should I record</em>. Each has one import and no plumbing.</p>
-
-  <h2>Where am I running?</h2>
-  <p>The cheapest probes: two booleans, imported and called straight in a template. <code>online()</code> is <em>reactive</em> — it tracks <code>navigator.onLine</code>, so the line below re-renders when you go offline (and is simply true on the server).</p>
-
   <Demo id="online" title="online() — reactive connectivity probe" client="src/ui/demos/platform/observability/OnlineDemo.abide" tab="client">
     <p><code>online()</code> is a <em>reactive</em> connectivity boolean (true on the server; tracks <code>navigator.onLine</code> on the client, so this line re-renders when you go offline). Imported straight from <code>abide/shared/online</code> and called in the template — no RPC, no accessor plumbing.</p>
     <OnlineDemo />
   </Demo>
-
+  <aside class="aside">
+    <p>The cheapest probes: two booleans, imported and called straight in a template. <code>online()</code> is <em>reactive</em> — it tracks <code>navigator.onLine</code>, so the line here re-renders when you go offline (and is simply true on the server).</p>
+  </aside>
   <Demo id="bundled" title="bundled() — desktop-bundle probe" client="src/ui/demos/platform/observability/BundledDemo.abide" tab="client">
     <p><code>bundled()</code> is true only inside the desktop bundle, false in the browser. Imported straight from <code>abide/ui/bundled</code> and called in the template.</p>
     <BundledDemo />
   </Demo>
-
-  <h2>Is the server healthy?</h2>
-  <p>Same shape, one step out: <code>health()</code> is isomorphic, so the same call returns the framework baseline in-process on the server and fetches the full merged <code>/__abide/health</code> document from the browser. App fields from <code>onHealth()</code> merge over the stub.</p>
-
-  <Demo id="health" title="/__abide/health (fetched in-browser)" client="src/ui/demos/platform/observability/HealthFetchDemo.abide" tab="client">
+  <aside class="aside">
+    <p><code>bundled()</code> is true only inside the desktop bundle, false in a browser — the other one-import probe, called straight in the template.</p>
+  </aside>
+  <Demo id="health" title="health() — the merged health document" client="src/ui/demos/platform/observability/HealthFetchDemo.abide" tab="client">
     <HealthFetchDemo />
   </Demo>
-
-  <h2>What happened during this request?</h2>
-  <p><code>trace()</code> returns the request's W3C traceparent — the id that ties this request to whatever called it, and to whatever it calls next. The router echoes it back on the response, so a trace crosses the boundary without you threading anything.</p>
-
+  <aside class="aside">
+    <p>Same shape, one step out: <code>health()</code> is isomorphic, so the same call returns the framework baseline in-process on the server and fetches the full merged <code>/__abide/health</code> document from the browser. App fields from <code>onHealth()</code> merge over the stub.</p>
+  </aside>
   <Demo id="observe" title="trace() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/observability/ObserveDemo.abide" tab="server">
     <ObserveDemo />
   </Demo>
-
-  <p>Every request gets one, whether or not a handler asks: the router propagates a well-formed incoming <code>traceparent</code> and otherwise mints one when it builds the scope, so every response carries <code>traceparent</code> + <code>traceresponse</code>. (The single exception is a content-addressed <code>/__abide/chunk/</code> asset — immutable, identity-free, and joined by no span.)</p>
-  <p><code>trace()</code> is isomorphic, so it answers in the <strong>browser</strong> too — with the id of the request that rendered the live page, re-adopted on every navigation. The client never mints one of its own; an id generated in a tab would name a trace no server span belongs to. That is what makes a client log line land on the same trace as the server work that produced what it is logging about.</p>
-  <p>An <strong>RPC call from the browser carries it</strong>: the proxy sends the page's trace id with a <em>fresh span id</em>, which is what W3C asks of a caller — the call names its own span instead of re-sending the one it sits inside. So the handler's server work joins the trace of the page that called it. Click <em>Run again</em> on the card above and the <code>traceId</code> holds steady while the <code>traceparent</code>'s span half moves. A <strong>navigation</strong> deliberately does the opposite and carries nothing: a nav is a new operation, not a continuation, and propagating would grow one immortal trace for the tab's whole session.</p>
-
+  <aside class="aside">
+    <p><code>trace()</code> returns the request's W3C traceparent — the id that ties this request to whatever called it, and to whatever it calls next. The router echoes it back on the response, so a trace crosses the boundary without you threading anything.</p>
+  </aside>
   <Demo id="trace-client" title="trace() in the browser (adopted, never minted)" client="src/ui/demos/platform/observability/TraceClientDemo.abide" tab="client">
     <TraceClientDemo />
   </Demo>
-
-  <h2>What should I record?</h2>
+  <aside class="aside">
+    <p>Every request gets a traceparent whether or not a handler asks: the router propagates a well-formed incoming one and otherwise mints one, so every response carries <code>traceparent</code> + <code>traceresponse</code>. (The one exception is a content-addressed <code>/__abide/chunk/</code> asset — immutable, identity-free, joined by no span.)</p>
+    <p><code>trace()</code> is isomorphic, so it answers in the browser too — with the id of the request that rendered the live page, re-adopted on every navigation. The client never mints one: an id generated in a tab would name a trace no server span belongs to.</p>
+    <p>A browser RPC call carries it as a CHILD span — same trace id, fresh span id, which is what W3C asks of a caller — so the handler's work joins the page's trace. Click Run again above and the <code>traceId</code> holds while the span half moves. A navigation deliberately carries nothing: a nav is a new operation, and propagating would grow one immortal trace per tab.</p>
+  </aside>
   <Demo id="log" title="default channel + <code>log.channel(name)</code> gating" server="src/server/rpc/platformLog.ts" client="src/ui/demos/platform/observability/LogDemo.abide" tab="server">
     <p><code>log</code> is isomorphic structured logging. Every line carries a <strong>channel</strong> label. The bare <code>log()</code> / <code>.info</code> / <code>.warn</code> / <code>.error</code> / <code>.trace</code> uses the <strong>default channel</strong> — the app name (<code>docs</code> here, from <code>package.json</code>) — and is always on. <code>log.channel(name)</code> names a channel gated by <code>DEBUG</code> (debug-npm style; the browser reads <code>localStorage.debug</code>), so framework internals under <code>abide:*</code> and verbose app channels stay quiet until asked for. <code>error</code> always emits, even on a gated channel. This RPC logs server-side (browser never sees the lines) and returns the fact that it logged:</p>
     <LogDemo />
   </Demo>
+  <aside class="aside">
+    <p><code>log()</code> writes on the server, so the card reports what the handler logged rather than showing it: an <code>info</code> line on the always-on default channel (the app name) and a <code>trace</code> line on the <code>DEBUG</code>-gated <code>docs:cards</code> channel. The gated one only reaches your terminal under <code>DEBUG=docs:cards</code>.</p>
+  </aside>
 </main>

@@ -1,5 +1,6 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
+  import Panel from "$ui/components/Panel.abide"
   import JsonResponseDemo from "$ui/demos/rpc/responses/JsonResponseDemo.abide"
   import ErrorResponseDemo from "$ui/demos/rpc/responses/ErrorResponseDemo.abide"
   import TypedErrorDemo from "$ui/demos/rpc/responses/TypedErrorDemo.abide"
@@ -10,41 +11,45 @@
 <main class="page">
   <h1>Response helpers</h1>
   <p class="lead">A handler returns a plain value (auto-wrapped in <code>json</code>) or an explicit response: <code>json</code>, <code>error</code>, <code>error.typed</code>, or <code>redirect</code>. Each is a real HTTP response consumed live in the browser below. Streaming responses (<code>jsonl</code>/<code>sse</code>) have their own page — see <a href="/rpc/streaming">Streaming</a>.</p>
-
-  <h2>Returning a value</h2>
-  <p>The default needs no helper at all: return a plain value and it is serialized as JSON. <code>json(data, init?)</code> is the same thing made explicit, for when you also want to set a status or headers.</p>
   <Demo id="json" title="<code>json(data)</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/responses/JsonResponseDemo.abide" tab="server">
     <JsonResponseDemo />
   </Demo>
-
-  <h2>Returning a failure</h2>
-  <p>A failure is a return, not a throw. <code>error(status, message)</code> builds a real HTTP error response — and because the client proxy knows the shape, it surfaces as a caught <code>HttpError</code> with the status intact.</p>
+  <aside class="aside">
+    <p>The default needs no helper at all: return a plain value and it is serialized as JSON. <code>json(data, init?)</code> is the same thing made explicit, for when you also want to set a status or headers.</p>
+  </aside>
   <Demo id="error" title="<code>error(status, message)</code>" server="src/server/rpc/rpcBoom.ts" client="src/ui/demos/rpc/responses/ErrorResponseDemo.abide" tab="server">
     <ErrorResponseDemo />
   </Demo>
-
-  <p>An untyped error tells you <em>that</em> it failed. <code>error.typed(name, status, schema?)</code> tells you <em>which</em> failure, by name — so a caller can narrow one kind from another with <code>fn.isError(e, name)</code> instead of matching on status codes or message strings.</p>
+  <aside class="aside">
+    <p>A failure is a return, not a throw. <code>error(status, message)</code> builds a real HTTP error response — and because the client proxy knows the shape, it surfaces as a caught <code>HttpError</code> with the status intact.</p>
+  </aside>
   <Demo id="typed" title="<code>error.typed(name, status)</code> + narrowing" server="src/server/rpc/rpcLimited.ts" client="src/ui/demos/rpc/responses/TypedErrorDemo.abide" tab="server">
     <TypedErrorDemo />
   </Demo>
-
-  <h2>Returning a destination</h2>
-  <p>The third kind of answer is "not here, there". <code>redirect(url, status=302)</code> builds it, and the browser fetch follows it transparently — the resolved response reports <code>redirected</code> and the final <code>url</code>.</p>
+  <aside class="aside">
+    <p>An untyped error tells you <em>that</em> it failed. <code>error.typed(name, status, schema?)</code> tells you <em>which</em> failure, by name — so a caller can narrow one kind from another with <code>fn.isError(e, name)</code> instead of matching on status codes or message strings.</p>
+  </aside>
   <Demo id="redirect" title="<code>redirect(url, status)</code>" server="src/server/rpc/rpcGoHome.ts" client="src/ui/demos/rpc/responses/RedirectResponseDemo.abide" tab="server">
     <RedirectResponseDemo />
   </Demo>
-
-  <h2>What actually went on the wire</h2>
-  <p>Every card above shows the <em>decoded</em> result — a greeting, a caught error, a followed redirect. <code>fn.raw(args, init?)</code> is the view underneath: the untouched <code>Response</code>, memo bypassed and nothing thrown, so you read the status line, headers, and body yourself. (It is also the read surface's escape hatch generally — see the <a href="/rpc/reads#raw">raw bypass</a> on Reads.)</p>
-  <p>It is what proves the claim at the top of this page: each helper is a <strong>real HTTP response</strong>, not a convention. Switch between them and watch the status line change — <code>200</code>, <code>422</code>, <code>429</code>, <code>302</code> — each chosen by the helper, none by the framework.</p>
-  <p>The headers are the other half. Beyond the helper's own <code>Content-Type</code> / <code>Location</code>, the router stamps a <strong>baseline</strong> on every response at one choke point, and only where the response didn't already set it — so a handler, helper, or middleware always keeps the last word:</p>
-  <ul class="grid">
-    <li><code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: strict-origin-when-cross-origin</code> — on everything</li>
-    <li><code>Cache-Control: private, no-cache</code> + <code>Vary: Cookie</code> — the identity-scoped default, since a response may depend on who asked. Content-addressed <code>/__abide/chunk/</code> assets opt out by declaring their own immutable long-cache</li>
-    <li><code>Strict-Transport-Security</code> in production; <code>X-Frame-Options: SAMEORIGIN</code> on HTML documents; a <code>405</code> carries <code>Allow</code></li>
-  </ul>
+  <aside class="aside">
+    <p>The third kind of answer is "not here, there". <code>redirect(url, status=302)</code> builds it, and the browser fetch follows it transparently — the resolved response reports <code>redirected</code> and the final <code>url</code>.</p>
+  </aside>
+  <Panel id="baseline-headers" title="The baseline every response carries">
+    <ul class="grid">
+      <li><code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: strict-origin-when-cross-origin</code> — on everything</li>
+      <li><code>Cache-Control: private, no-cache</code> + <code>Vary: Cookie</code> — the identity-scoped default, since a response may depend on who asked. Content-addressed <code>/__abide/chunk/</code> assets opt out by declaring their own immutable long-cache</li>
+      <li><code>Strict-Transport-Security</code> in production; <code>X-Frame-Options: SAMEORIGIN</code> on HTML documents; a <code>405</code> carries <code>Allow</code></li>
+    </ul>
+  </Panel>
+  <aside class="aside">
+    <p>Beyond each helper's own <code>Content-Type</code> / <code>Location</code>, the router stamps this baseline on every response at one choke point — and only where the response didn't already set it, so a handler, helper or middleware always keeps the last word.</p>
+  </aside>
   <Demo id="raw" title="<code>fn.raw(args, init?)</code> — the untouched <code>Response</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/responses/RawResponseDemo.abide" tab="client">
     <RawResponseDemo />
   </Demo>
-  <p class="note">The redirect button passes <code>{'{'} redirect: "manual" {'}'}</code> as <code>init</code> — the second argument of <code>raw</code>, handed to the underlying fetch. The browser still won't show you the 302: the Fetch spec resolves a manual redirect to an <em>opaque</em> response with the status, <code>Location</code>, and body withheld from JS. The wire genuinely carries all three — <code>curl -i</code> on the RPC's HTTP face shows <code>302 Found</code> + <code>Location: /rpc</code> — which is a good reminder that <code>raw</code> hands you the browser's <code>Response</code>, not the server's.</p>
+  <aside class="aside">
+    <p>Every card above shows the decoded result. <code>fn.raw(args, init?)</code> is the view underneath: the untouched <code>Response</code>, memo bypassed and nothing thrown, so you read the status line, headers and body yourself. Switch between the helpers and watch the status change — <code>200</code>, <code>422</code>, <code>429</code>, <code>302</code> — each chosen by the helper, none by the framework.</p>
+    <p>The redirect button passes <code>{'{'} redirect: "manual" {'}'}</code> as <code>init</code>, the second argument of <code>raw</code>. The browser still won't show you the 302: the Fetch spec resolves a manual redirect to an opaque response with the status, <code>Location</code> and body withheld from JS. The wire carries all three — <code>curl -i</code> proves it — a reminder that <code>raw</code> hands you the browser's <code>Response</code>, not the server's.</p>
+  </aside>
 </main>

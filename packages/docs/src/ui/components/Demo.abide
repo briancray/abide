@@ -5,11 +5,17 @@
   import snippet from "$server/rpc/snippet"
 
   // A self-contained, reproducible demo card. The page renders the live demo as a child and points
-  // `client`/`server` at the REAL files that power it. The card shows the demo, then two source tabs
-  // in a fixed order — SERVER (the full `.ts`) then CLIENT (the full standalone `.abide` component) —
-  // reading both live from disk via the `snippet` RPC. `tab` picks which side opens first (server for
-  // server-centric capabilities, client for UI ones). A demo that can re-run owns its own trigger
-  // button — the card stays agnostic about what the demo does.
+  // `client`/`server` at the REAL files that power it, read live from disk via the `snippet` RPC.
+  // Each side takes a COMMA-SEPARATED list, so a demo backed by several files tabs WITHIN its own
+  // side — server files against server files, client against client — never across the pair.
+  // The two sides are their own columns, SERVER then CLIENT, side by side once the CARD has room for
+  // two readable code measures — asked of the card, not the viewport (see `.sample-source` in app.css).
+  // Below that width they stack, and `tab` says which side LEADS: it no longer picks which lone panel
+  // opens, because both are open.
+  //
+  // A card is what RUNS and what produced it, nothing else: title · live · source, each band on its own
+  // ground. The prose about a demo is not the card's — it lives in the page's right column, level with
+  // this card, authored as the `<aside>` that follows it.
   const { id = "", title = "", server = "", client = "", tab = "" } = props<{
     id?: string
     title?: string
@@ -18,31 +24,77 @@
     tab?: "" | "server" | "client"
   }>()
 
-  let active = state(tab === "" ? (server === "" ? "client" : "server") : tab)
-  function select(side) { active = side }
+  function fileList(spec: string): string[] {
+    const files: string[] = []
+    for (const part of spec.split(",")) {
+      const file = part.trim()
+      if (file !== "") files.push(file)
+    }
+    return files
+  }
+  function fileName(file: string): string { return file.slice(file.lastIndexOf("/") + 1) }
+
+  const serverFiles = fileList(server)
+  const clientFiles = fileList(client)
+
+  // One open file per side — the sides are independent, so picking a server file never hides the
+  // client source next to it.
+  let openServer = state(0)
+  let openClient = state(0)
+  function selectServer(index) { openServer = index }
+  function selectClient(index) { openClient = index }
 </script>
 
 <section class="sample" id={id}>
-  <h2>{html(title)}</h2>
-  <div class="sample-head">
-    <span class="sample-run">live</span>
+  <div class="sample-about">
+    <h2>{html(title)}</h2>
   </div>
-  <div class="sample-demo"><slot/></div>
+  <div class="sample-live">
+    <div class="sample-head">
+      <span class="sample-run">live</span>
+    </div>
+    <div class="sample-demo"><slot/></div>
+  </div>
 
-  <div class="sample-tabs" role="tablist">
-    {#if server}
-      <button class="tab" class:active={active === "server"} role="tab" onclick={() => select("server")}>server <span class="tab-file">{server.split("/").pop()}</span></button>
-    {/if}
-    <button class="tab" class:active={active === "client"} role="tab" onclick={() => select("client")}>client <span class="tab-file">{client.split("/").pop()}</span></button>
-  </div>
-  <div class="sample-panels">
-    {#if server}
-      <div class="tab-panel" class:active={active === "server"} data-target="server">
-        {#await snippet({ file: server })}<p class="src-loading">reading source…</p>{:then s}{html((s as { html: string }).html)}{/await}
+  <div class="sample-source" class:lead-client={tab === "client"}>
+    {#if serverFiles.length > 0}
+      <div class="source-col" data-side="server">
+        <div class="sample-tabs">
+          <span class="tab-side">server</span>
+          <div class="tab-strip" role="tablist" aria-label="server source files">
+            {#for file, i of serverFiles by file}
+              <button class="tab" class:active={openServer === i} role="tab" aria-selected={openServer === i ? "true" : "false"} onclick={() => selectServer(i)}>{fileName(file)}</button>
+            {/for}
+          </div>
+        </div>
+        <div class="sample-panels">
+          {#for file, i of serverFiles by file}
+            <div class="tab-panel" class:active={openServer === i} data-target="server">
+              {#await snippet({ file })}<p class="src-loading">reading source…</p>{:then s}{html((s as { html: string }).html)}{/await}
+            </div>
+          {/for}
+        </div>
       </div>
     {/if}
-    <div class="tab-panel" class:active={active === "client"} data-target="client">
-      {#await snippet({ file: client })}<p class="src-loading">reading source…</p>{:then s}{html((s as { html: string }).html)}{/await}
-    </div>
+
+    {#if clientFiles.length > 0}
+      <div class="source-col" data-side="client">
+        <div class="sample-tabs">
+          <span class="tab-side">client</span>
+          <div class="tab-strip" role="tablist" aria-label="client source files">
+            {#for file, i of clientFiles by file}
+              <button class="tab" class:active={openClient === i} role="tab" aria-selected={openClient === i ? "true" : "false"} onclick={() => selectClient(i)}>{fileName(file)}</button>
+            {/for}
+          </div>
+        </div>
+        <div class="sample-panels">
+          {#for file, i of clientFiles by file}
+            <div class="tab-panel" class:active={openClient === i} data-target="client">
+              {#await snippet({ file })}<p class="src-loading">reading source…</p>{:then s}{html((s as { html: string }).html)}{/await}
+            </div>
+          {/for}
+        </div>
+      </div>
+    {/if}
   </div>
 </section>

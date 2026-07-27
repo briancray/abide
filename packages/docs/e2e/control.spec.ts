@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // These specs drive the REAL docs app in a real browser: SSR HTML + client hydration + live
 // reactivity of every `.abide` control-flow block in the "control" capability bucket. Each block

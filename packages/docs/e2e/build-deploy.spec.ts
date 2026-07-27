@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // The Build & Deploy section — documentation pages (CLI reference + deploy guide). They are prose +
 // code blocks (no live RPC demos), so the checks are: they SSR + hydrate, render their code blocks,

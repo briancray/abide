@@ -43,6 +43,26 @@ test('falls back to the literal initial when the ordinal overflows the seed', ()
     expect(s(2).untracked()).toBe(2) // no seed slot 1 → literal initial
 })
 
+// A `{#for}` ITERATION opens its own bucket, so a branch-local `<script>`'s cells are per item.
+//
+// While a loop body could hold no `state()` of its own, sharing the enclosing bucket was safe: only a
+// nested `<Component/>` recorded, and that branched by site anyway. A branch-local `<script>` breaks
+// that assumption — its cells record once PER ITERATION into one ordinal sequence, so an item that
+// mounts out of order (a `{#for await}` re-drains asynchronously on the client) would consume the
+// neighbour's slot and replay its value, with the DOM structurally fine and nothing to catch it.
+test('each {#for} iteration replays its OWN bucket, not the next item’s slot', () => {
+    // `forSite`/`forItem` are seed plumbing the emitted code reaches dynamically, so they are not on the
+    // public `StateFactory` — name the shape here rather than widening it for everyone.
+    type SeedFactory = StateFactory & { forItem(index: number): SeedFactory }
+    const map: Record<string, unknown[]> = { '#0': ['first'], '#1': ['second'] }
+    const s = makeSeededState({ states: encode(map) } as HydrationSeed) as SeedFactory
+
+    // Item 1 replayed BEFORE item 0 — the asynchronous-remount order a shared ordinal cursor cannot
+    // survive. Keyed by item, each still lands on its own value.
+    expect(s.forItem(1)('fallback').untracked()).toBe('second')
+    expect(s.forItem(0)('fallback').untracked()).toBe('first')
+})
+
 test('falls back to the literal initial when the seed carries no states', () => {
     const s = makeSeededState({})
     expect(s(7).untracked()).toBe(7)
@@ -145,21 +165,22 @@ test('a component AFTER a {#for await} replays its OWN bucket, not a streamed it
             owned.push(initial)
             return state(initial, transform as never)
         }) as unknown as Record<string, unknown>
+        // Mirrors `pages.makeRecordingState` — keep the two in step: this is the SERVER half of the
+        // contract, and a copy that drifts from it tests a recorder no page ever uses.
         return Object.assign(rec, {
             shared: state.shared,
             forSite: (id: number) => recorderAt(`${sitePath}/${id}`, `${sitePath}/${id}`),
-            forItem: (i: number) => recorderAt(`${sitePath}#${i}`, bucketPath),
+            forItem: (i: number) => recorderAt(`${sitePath}#${i}`, `${sitePath}#${i}`),
         }) as unknown as StateFactory
     }
     const html = await emitted.render({ src: streamOfTwo(), state: recorderAt('', '') })
     expect(html).toContain('B-initial')
-    // The CONTRACT, asserted directly: every bucket key is a SITE PATH. `<A/>` is site 0 and appears once
-    // per loop item (`#0`/`#1`), `<B/>` is site 1 and is keyed by its site alone — no positional id that a
-    // streamed item could shift. Revert to a mount-order counter and these keys stop existing.
     // The CONTRACT, asserted directly: every bucket key is a SITE PATH. `<A/>` is site 0 and gets one
     // bucket PER LOOP ITEM (`#0/0`, `#1/0`); `<B/>` is site 1 and is keyed by its site alone (`/1`) — no
-    // positional id that a streamed item could shift. `""` is the page/root bucket.
-    expect(Object.keys(buckets).sort()).toEqual(['', '#0/0', '#1/0', '/1'])
+    // positional id that a streamed item could shift. `""` is the page/root bucket, and `#0`/`#1` are the
+    // iterations' own (empty here — this loop body declares no state of its own; a branch-local
+    // `<script>` is what fills them, which is why an item opens a bucket rather than sharing one).
+    expect(Object.keys(buckets).sort()).toEqual(['', '#0', '#0/0', '#1', '#1/0', '/1'])
 
     const host = document.createElement('div')
     host.innerHTML = html

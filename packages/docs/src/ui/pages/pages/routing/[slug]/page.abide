@@ -1,5 +1,6 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
+  import Panel from "$ui/components/Panel.abide"
   import SlugRouteDemo from "$ui/demos/pages/routing/SlugRouteDemo.abide"
   import ParamRpcDemo from "$ui/demos/pages/routing/ParamRpcDemo.abide"
   import { route } from "abide/shared/route"
@@ -10,20 +11,26 @@
 <main class="page">
   <h1 data-testid="slug-heading">Slug: {route().params.slug}</h1>
   <p class="lead">One file — <code>pages/routing/[slug]/page.abide</code> — serves this page for every value of <code>slug</code>. The segment is captured into <code>route().params.slug</code> during SSR and after every soft nav.</p>
-
   <Demo id="slug-route" title="Current route" client="src/ui/demos/pages/routing/SlugRouteDemo.abide">
     <SlugRouteDemo />
   </Demo>
-
-  <p>The captured slug is passed straight into an isomorphic read, awaited so its value lands in the SSR HTML:</p>
-
+  <aside class="aside">
+    <p><code>route()</code> reads the same fields during SSR and after every soft nav — <code>route().params.slug</code> is the segment captured from the path, so this one file answers for every value of it.</p>
+  </aside>
   <Demo id="param-rpc" title="Param → RPC" server="src/server/rpc/routingTopic.ts" client="src/ui/demos/pages/routing/ParamRpcDemo.abide" tab="server">
     <ParamRpcDemo />
   </Demo>
-
-  <div class="row">
-    <a data-testid="sibling-alpha" href="/pages/routing/alpha">alpha</a>
-    <a data-testid="sibling-beta" href="/pages/routing/beta">beta</a>
-    <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
-  </div>
+  <aside class="aside">
+    <p>The captured slug is passed straight into an isomorphic read, awaited so its value lands in the SSR HTML.</p>
+  </aside>
+  <Panel id="slug-siblings" title="Sibling params, one file">
+    <div class="row">
+      <a data-testid="sibling-alpha" href="/pages/routing/alpha">alpha</a>
+      <a data-testid="sibling-beta" href="/pages/routing/beta">beta</a>
+      <button data-testid="back-hub" onclick={() => navigate("/pages/routing")}>← back to hub</button>
+    </div>
+  </Panel>
+  <aside class="aside">
+    <p>Each link is a different value of the same segment, so moving between them is a <strong>param nav</strong>: same route, same file, no DOM swap — <code>route()</code> republishes and the reads above re-fire in place.</p>
+  </aside>
 </main>

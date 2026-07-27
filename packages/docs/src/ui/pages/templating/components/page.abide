@@ -7,48 +7,58 @@
   import NamedSlotDemo from "$ui/demos/templating/components/NamedSlotDemo.abide"
   import ReactiveComponentDemo from "$ui/demos/templating/components/ReactiveComponentDemo.abide"
   import ComponentInBlockDemo from "$ui/demos/templating/components/ComponentInBlockDemo.abide"
+  import InlineScopeDemo from "$ui/demos/templating/components/InlineScopeDemo.abide"
 </script>
 
 <main class="page">
   <h1>Components</h1>
   <p class="lead">An <strong>inline component</strong> is a TitleCase <code>&#123;#component&#125;</code> taking a single props object — a reusable builder invoked as a tag <code>&lt;Name/&gt;</code>. It starts as "name some markup and use it twice" and ends as a first-class value you can pass around; every step below is that same declaration, asked to do a little more.</p>
-
-  <h2>Name some markup</h2>
-  <p>The whole idea: declare a builder, invoke it as a tag. TitleCase is what distinguishes it from an element — a lowercase name is a parse error, because lowercase is reserved for tags.</p>
   <Demo id="chip" title="<code>&#123;#component&#125;</code> invoked as <code>&lt;Chip/&gt;</code>" client="src/ui/demos/templating/components/ChipDemo.abide">
     <ChipDemo />
   </Demo>
-
-  <h2>Give it content</h2>
-  <p>Props go in as attributes and stay reactive. Whatever sits <em>between</em> the tags fills the component's <code>&lt;slot/&gt;</code> — so a component can wrap content it knows nothing about. Both stay live after hydration.</p>
+  <aside class="aside">
+    <p>The whole idea: declare a builder, invoke it as a tag. TitleCase is what distinguishes it from an element — a lowercase name is a parse error, because lowercase is reserved for tags.</p>
+  </aside>
   <Demo id="card" title="Props + <code>&lt;slot/&gt;</code>" client="src/ui/demos/templating/components/CardDemo.abide">
     <CardDemo />
   </Demo>
-
-  <p>One slot covers most cases; when you need two, you don't learn new syntax. A component written <em>inside</em> another's tags is passed to it as a same-named prop and invoked as a tag — named slots, falling out of the rule already in play. The leftover markup still fills the default <code>&lt;slot/&gt;</code>.</p>
+  <aside class="aside">
+    <p>Props go in as attributes and stay reactive. Whatever sits <em>between</em> the tags fills the component's <code>&lt;slot/&gt;</code> — so a component can wrap content it knows nothing about. Both stay live after hydration.</p>
+  </aside>
   <Demo id="named-slot" title="Nested <code>&#123;#component&#125;</code> as a named-slot prop" client="src/ui/demos/templating/components/NamedSlotDemo.abide">
     <NamedSlotDemo />
   </Demo>
-
-  <p>And when the props are already an object, spread them: <code>&#123;...obj&#125;</code> hands every key to the child, exactly as writing each <code>name=&#123;value&#125;</code> by hand would. (On an element the same syntax sets attributes instead — see <a href="/templating/bindings#spread">bindings</a>.)</p>
+  <aside class="aside">
+    <p>One slot covers most cases; when you need two, you don't learn new syntax. A component written <em>inside</em> another's tags is passed to it as a same-named prop and invoked as a tag — named slots, falling out of the rule already in play. The leftover markup still fills the default <code>&lt;slot/&gt;</code>.</p>
+  </aside>
   <Demo id="spread-props" title="<code>&#123;...obj&#125;</code> — spread into a child's props" client="src/ui/demos/templating/components/SpreadPropsDemo.abide">
     <SpreadPropsDemo />
   </Demo>
-
-  <h2>A component is a value</h2>
-  <p>Nothing so far required a component to be a special kind of thing, and it isn't one. Pass it as a prop and let the receiver decide where to invoke it — the render-prop pattern, with no API behind it.</p>
+  <aside class="aside">
+    <p>And when the props are already an object, spread them: <code>&#123;...obj&#125;</code> hands every key to the child, exactly as writing each <code>name=&#123;value&#125;</code> by hand would. (On an element the same syntax sets attributes instead — see <a href="/templating/bindings#spread">bindings</a>.)</p>
+  </aside>
   <Demo id="render-prop" title="A component passed as a render-prop" client="src/ui/demos/templating/components/RenderPropDemo.abide">
     <RenderPropDemo />
   </Demo>
-
-  <p>Because it is a value, a <a href="/state">cell</a> or <a href="/memo">memo</a> can hold one. <code>&lt;Current/&gt;</code> where <code>Current</code> is a memo re-mounts whenever the derivation picks a different component — a dynamic component, again with no new syntax.</p>
+  <aside class="aside">
+    <p>Nothing so far required a component to be a special kind of thing, and it isn't one. Pass it as a prop and let the receiver decide where to invoke it — the render-prop pattern, with no API behind it.</p>
+  </aside>
   <Demo id="reactive-component" title="Reactive component — a memo-named tag <code>&lt;Current/&gt;</code>" client="src/ui/demos/templating/components/ReactiveComponentDemo.abide">
     <ReactiveComponentDemo />
   </Demo>
-
-  <h2>Inside control flow</h2>
-  <p>A block body is ordinary markup, so nothing new applies here either: a <code>&#123;#for&#125;</code> invokes <code>&lt;Row/&gt;</code> once per keyed item, and a <code>&#123;#if&#125;</code> branch can <em>declare</em> its own component in the branch body — visible where it is written, and invoked as a tag like any other. Keying still does what keying does: a reversed list <strong>moves</strong> each row's whole component range rather than rebuilding it, so a row that carries state keeps it, and re-keying with new objects updates the props of the nodes already there.</p>
+  <aside class="aside">
+    <p>Because it is a value, a <a href="/state">cell</a> or <a href="/memo">memo</a> can hold one. <code>&lt;Current/&gt;</code> where <code>Current</code> is a memo re-mounts whenever the derivation picks a different component — a dynamic component, again with no new syntax.</p>
+  </aside>
   <Demo id="in-block" title="A component invoked — and defined — inside <code>&#123;#for&#125;</code> / <code>&#123;#if&#125;</code>" client="src/ui/demos/templating/components/ComponentInBlockDemo.abide">
     <ComponentInBlockDemo />
   </Demo>
+  <aside class="aside">
+    <p>A block body is ordinary markup, so nothing new applies: a <code>{'{'}#for{'}'}</code> invokes <code>&lt;Row/&gt;</code> once per keyed item, and a <code>{'{'}#if{'}'}</code> branch can <em>declare</em> its own component in the branch body. Keying still does what keying does — a reversed list <strong>moves</strong> each row's whole component range rather than rebuilding it, so a row that carries state keeps it.</p>
+  </aside>
+  <Demo id="inline-scope" title="Per-invocation <code>&lt;script&gt;</code> + <code>&lt;style&gt;</code>" client="src/ui/demos/templating/components/InlineScopeDemo.abide">
+    <InlineScopeDemo />
+  </Demo>
+  <aside class="aside">
+    <p>An inline component owns the same two things a file component does, one level in: its <code>&lt;script&gt;</code> runs <strong>per invocation</strong>, so every tally has its own count, and its <code>&lt;style&gt;</code> reaches its own subtree — the <code>.tally</code> outside it keeps the class and none of the styling.</p>
+  </aside>
 </main>

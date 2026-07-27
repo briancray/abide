@@ -53,6 +53,22 @@ function stripAnchors(html: string): string {
     return html.replace(/<!--\[-->|<!--\]-->|<!---->/g, '')
 }
 
+// The inline/stream classification is a WALL-CLOCK race against `ABIDE_SSR_DEADLINE` (4ms by default).
+// Under `bun test --parallel` the box carries one worker per core, and a genuinely fast in-proc read —
+// plus createTestApp's cold first compile — can miss 4ms, flipping an inline assertion to a patch. The
+// tests asserting the INLINE side therefore pin a deadline no in-proc read could cross; the SLOW-side
+// tests keep the default, since their reads outlast any deadline by construction, not by luck.
+async function withSsrDeadline<T>(ms: number, run: () => Promise<T>): Promise<T> {
+    const previous = process.env.ABIDE_SSR_DEADLINE
+    process.env.ABIDE_SSR_DEADLINE = String(ms)
+    try {
+        return await run()
+    } finally {
+        if (previous === undefined) delete process.env.ABIDE_SSR_DEADLINE
+        else process.env.ABIDE_SSR_DEADLINE = previous
+    }
+}
+
 test('SSRs a page as a full HTML document with an in-proc RPC read', async () => {
     const app = await createTestApp({
         routes: { greet: GET(({ name }: { name: string }) => `hi ${name}`) },
@@ -82,7 +98,7 @@ test('a fast {#await} block renders inline — no placeholder/patch (PR2 deadlin
         },
     })
 
-    const body = await (await app.fetch('/')).text()
+    const body = await withSsrDeadline(2_000, async () => (await app.fetch('/')).text())
     // A read that settles within the macrotask deadline renders inline — byte-identical shape to before.
     expect(stripAnchors(body)).toContain('<b>INLINE</b>')
     expect(body).not.toContain('ab-p:0')
@@ -137,7 +153,7 @@ test('a fast {#await} error with no {:catch} → controlled 500 before first flu
 
     // The read settles (rejects) within the deadline, so it renders inline; with no {:catch} that rethrows
     // BEFORE the shell flushes → a controlled 500 (the TODO #7 guarantee holds for streaming forms too).
-    const response = await app.fetch('/')
+    const response = await withSsrDeadline(2_000, () => app.fetch('/'))
     expect(response.status).toBe(500)
 
     await app.stop()
@@ -340,11 +356,17 @@ test('a BUFFERED page disposes its context exactly once, by the time the respons
 
 test('a STREAMED page defers disposal until the drain completes, then disposes exactly once', async () => {
     const probe = disposalProbe()
+    // The read is held open by an explicit GATE, not a timer: the assertion below is "the shell flushed
+    // and the read has NOT landed", and a 40ms sleep only wins that race while the box is idle.
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+        release = resolve
+    })
     const app = await createTestApp({
         routes: {
             slow: GET(async () => {
                 probe.register()
-                await new Promise((r) => setTimeout(r, 40))
+                await gate
                 return 'late'
             }),
         },
@@ -363,6 +385,7 @@ test('a STREAMED page defers disposal until the drain completes, then disposes e
     expect(first).toContain('<i>pending</i>')
     expect(probe.count()).toBe(0)
 
+    release()
     let rest = ''
     for (;;) {
         const { done, value } = await reader.read()

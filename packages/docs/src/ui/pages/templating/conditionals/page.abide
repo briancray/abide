@@ -8,14 +8,16 @@
 <main class="page">
   <h1>Conditionals</h1>
   <p class="lead">A conditional block picks exactly one branch and swaps the DOM when the state it reads crosses a threshold. Nothing is diffed by hand — the block reconciles fine-grained.</p>
-
-  <p>The block picks exactly one branch and swaps the DOM when <code>level</code> crosses a threshold.</p>
   <Demo id="if" title="<code>&#123;#if&#125;</code> / <code>&#123;:else if&#125;</code> / <code>&#123;:else&#125;</code>" client="src/ui/demos/templating/conditionals/IfDemo.abide" tab="client">
     <IfDemo />
   </Demo>
-
-  <p>A value is matched against cases; an unmatched value falls through to <code>&#123;:default&#125;</code>.</p>
+  <aside class="aside">
+    <p>The block picks exactly one branch and swaps the DOM when <code>level</code> crosses a threshold.</p>
+  </aside>
   <Demo id="switch" title="<code>&#123;#switch&#125;</code> / <code>&#123;:case&#125;</code> / <code>&#123;:default&#125;</code>" client="src/ui/demos/templating/conditionals/SwitchDemo.abide" tab="client">
     <SwitchDemo />
   </Demo>
+  <aside class="aside">
+    <p>A value is matched against cases; an unmatched value falls through to <code>&#123;:default&#125;</code>.</p>
+  </aside>
 </main>

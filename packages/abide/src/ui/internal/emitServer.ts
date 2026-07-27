@@ -6,9 +6,8 @@
 // lexical `<script>` bindings from `emitSetup`. Event attributes are omitted (as `renderServer` does).
 
 import type { BindingAnalysis, ScriptInfo } from './analyzeBindings.ts'
-import { reconstructImport, rewriteCellRefs } from './analyzeBindings.ts'
+import { reconstructImport } from './analyzeBindings.ts'
 import { bindPattern } from './bindPattern.ts'
-import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
 import { applyStatic, attrBuilder } from './serverRuntime.ts'
@@ -207,6 +206,10 @@ function inlinableChildren(chunks: ServerChunk[]): boolean {
                 if (chunk.catch && !inlinableChildren(chunk.catch.children)) return false
                 if (chunk.finally && !inlinableChildren(chunk.finally)) return false
                 break
+            case 'script':
+                // A branch-local `<script>` opens an effect scope and rebinds `$scope` for the level;
+                // keeping the frame keeps that setup's extent exactly the level that declared it.
+                return false
             case 'for':
                 // A `{#for await}` IS the streaming participant — never collapse a level around one.
                 if (chunk.await) return false
@@ -233,14 +236,14 @@ function isStaticOnly(attrs: AttrPlan[]): boolean {
 
 // The open-tag attribute string for an all-static element, computed at emit time by running the SAME
 // `AttributeBuilder` the runtime would — so the baked literal is byte-identical to the builder path
-// (class/style trim + merge, boolean/bare attrs, escaping, and the trailing scope attribute all match).
-function staticAttrLiteral(attrs: AttrPlan[], scopeAttr: string | null): string {
+// (class/style trim + merge, boolean/bare attrs, escaping, and the trailing scope attributes all match).
+function staticAttrLiteral(attrs: AttrPlan[], scopeAttrs: string[]): string {
     const builder = attrBuilder()
     for (const attr of attrs) {
         if (attr.kind === 'static') applyStatic(builder, attr.name, attr.value)
         // `event` contributes no server attribute (mirrors the builder path's `case 'event': break`).
     }
-    if (scopeAttr !== null) applyStatic(builder, scopeAttr, null)
+    for (const scopeAttr of scopeAttrs) applyStatic(builder, scopeAttr, null)
     return builder.serialize()
 }
 
@@ -250,12 +253,12 @@ function genElement(
     isVoid: boolean,
     attrs: AttrPlan[],
     children: ServerChunk[],
-    scopeAttr: string | null,
+    scopeAttrs: string[],
 ): string {
     let out = ''
     if (isStaticOnly(attrs)) {
         // Fast path: no `attrBuilder()` allocation — the whole open tag is a compile-time constant.
-        out += `  $out += ${JSON.stringify(`<${name}${staticAttrLiteral(attrs, scopeAttr)}>`)};\n`
+        out += `  $out += ${JSON.stringify(`<${name}${staticAttrLiteral(attrs, scopeAttrs)}>`)};\n`
     } else {
         out += '  {\n    const $a = $rt.attrBuilder();\n'
         for (const attr of attrs) {
@@ -294,7 +297,7 @@ function genElement(
                     break
             }
         }
-        if (scopeAttr !== null)
+        for (const scopeAttr of scopeAttrs)
             out += `    $rt.applyStatic($a, ${JSON.stringify(scopeAttr)}, null);\n`
         out += `    $out += "<${name}" + $a.serialize() + ">";\n`
         out += '  }\n'
@@ -319,6 +322,7 @@ function genElement(
 function genComponent(
     analysis: BindingAnalysis,
     name: string,
+    ref: string,
     attrs: AttrPlan[],
     children: ServerChunk[],
     hasChildren: boolean,
@@ -350,12 +354,10 @@ function genComponent(
                 break // ignored on components (M4b)
         }
     }
-    // A cell- OR memo-named tag is a reactive component; SSR is a snapshot, so read its value once.
-    const componentExpr =
-        analysis.cellBindings.cells.has(name) || analysis.cellBindings.memos.has(name)
-            ? rewriteCellRefs(name, analysis.cellBindings)
-            : componentRef(analysis, name)
-    out += `    const $c = ${componentExpr};\n`
+    // `ref` was resolved by `templatePlan`, which is the only place that knows which bindings are in
+    // force at this tag's LEVEL (a branch-local `<script>`'s are published on `$scope`, not lexical). A
+    // cell-/memo-named tag is reactive; SSR is a snapshot, so `ref` already reads its value once.
+    out += `    const $c = ${ref};\n`
     out += `    if (typeof $c !== "function") throw new Error(${JSON.stringify(`<${name}> is not a component in scope (expected a render function)`)});\n`
     if (hasChildren)
         out += `    const $children = async () => new $rt.Raw(await ${bodyExpr(analysis, children)}($scope));\n`
@@ -411,12 +413,13 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
                 chunk.void,
                 chunk.attrs,
                 chunk.children,
-                chunk.scopeAttr,
+                chunk.scopeAttrs,
             )
         case 'component':
             return genComponent(
                 analysis,
                 chunk.name,
+                chunk.ref,
                 chunk.attrs,
                 chunk.children,
                 chunk.hasChildren,
@@ -431,11 +434,11 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
         }
         case 'for': {
             let body = `    const $c = Object.create($scope);\n`
-            // A component inside the loop must get a DISTINCT seed bucket per iteration, so the item scope
-            // carries an item-scoped factory (same bucket for the body's own `state()` calls — those stay
-            // ordinal within the enclosing component — but a deeper path for any `<Component/>` below).
-            // Only emitted when the body actually has one: this allocates per item per render.
-            if (chunk.hasComponent)
+            // Anything in the loop body that OWNS state must get a DISTINCT seed bucket per iteration —
+            // a `<Component/>` (whose bucket branches by site) and a branch-local `<script>` (whose
+            // `state()` calls are per iteration). Only emitted when the body has one: this allocates per
+            // item per render.
+            if (chunk.hasComponent || chunk.hasScript)
                 body += `    if ($scope.state && $scope.state.forItem) $c.state = $scope.state.forItem($i);\n`
             body += `    ${bindPattern('$c', chunk.item, '$value')}\n`
             if (chunk.index !== null) body += `    $c[${JSON.stringify(chunk.index)}] = $i;\n`
@@ -457,9 +460,10 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
                 // Same per-item state factory as the sync path above — and load-bearing HERE especially:
                 // this is the block whose client counterpart re-creates asynchronously, so its components
                 // must be named by site+item rather than by mount order.
-                const itemState = chunk.hasComponent
-                    ? `      if ($scope.state && $scope.state.forItem) $c.state = $scope.state.forItem($i);\n`
-                    : ''
+                const itemState =
+                    chunk.hasComponent || chunk.hasScript
+                        ? `      if ($scope.state && $scope.state.forItem) $c.state = $scope.state.forItem($i);\n`
+                        : ''
                 const itemBind =
                     `const $c = Object.create($scope);\n${itemState}      ${bindPattern('$c', chunk.item, '$value')}\n` +
                     (chunk.index !== null ? `      $c[${JSON.stringify(chunk.index)}] = $i;\n` : '')
@@ -567,12 +571,41 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
             return out
         }
         case 'componentDef':
-            return '' // registered up front by genChunks
+        case 'script':
+            return '' // both are emitted up front by genChunks
     }
 }
 
+// The branch-local `<script>` preamble (C9.4). Runs inside its own effect scope, so every `watch` the
+// script creates is owned by this branch/iteration and disposed when the request's scope goes — the
+// server half of "a `watch` teardown IS the lifecycle hook", where a render is the whole life.
+function genNestedScript(setup: string): string {
+    return (
+        `  const $setup = $rt.openRenderScope();\n` +
+        `  try {\n${indent(setup, 4)}  } finally {\n` +
+        `    $rt.closeEffectScope($setup);\n` +
+        `  }\n`
+    )
+}
+
 // Register component builders (hoisted) then emit the non-component chunks in order.
+//
+// A level that owns a branch-local `<script>` first gets a `$scope` of its OWN — the script publishes
+// its bindings there, and every level nested inside inherits them through the prototype chain while a
+// sibling branch never sees them. `$scope` is rebound in a nested block rather than reassigned because
+// the inlined level paths (`{#for}` items, component-def bodies) bind it with `const`.
 function genChunks(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
+    const script = chunks.find((chunk) => chunk.kind === 'script')
+    if (script !== undefined && script.kind === 'script') {
+        const rest = chunks.filter((chunk) => chunk.kind !== 'script')
+        return (
+            `  {\n    const $branch = Object.create($scope);\n` +
+            `    {\n      const $scope = $branch;\n` +
+            indent(genNestedScript(script.setup), 4) +
+            indent(genChunks(analysis, rest), 4) +
+            `    }\n  }\n`
+        )
+    }
     let out = ''
     for (const chunk of chunks) {
         if (chunk.kind !== 'componentDef') continue

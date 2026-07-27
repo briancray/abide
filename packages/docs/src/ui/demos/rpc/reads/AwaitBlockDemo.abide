@@ -1,11 +1,22 @@
 <script>
-  import rpcGreet from "$server/rpc/rpcGreet"
+  import { state } from "abide/shared/state"
+  import rpcGreetSlow from "$server/rpc/rpcGreetSlow"
 
-  // The reactive `{#await}` block: pending / `{:then}` value / `{:catch}` failure. The read into slot
-  // `{ name: "await block" }` also warms the global memo cache the `fn.peek` probe demo reads back.
+  // The reactive `{#await}` block: pending / `{:then}` value / `{:catch}` failure. All three are
+  // reachable here because the read is slow enough to be caught in flight — so the pending branch is
+  // what SSR paints into the shell, before the value patches in — and can be told to fail.
+  //
+  // `fail` is part of the ARGS, so each button reads a different memo slot. The invalidate comes
+  // FIRST: setting `fail` alone would re-run the block against an already-warm slot and jump straight
+  // to the answer, and clicking the same button twice would not move at all.
+  let fail = state(false)
+  function read(nextFail) {
+    rpcGreetSlow.invalidate({ name: "await block", fail: nextFail })
+    fail = nextFail
+  }
 </script>
 
-{#await rpcGreet({ name: "await block" })}
+{#await rpcGreetSlow({ name: "await block", fail })}
   <p data-testid="await-pending">reading…</p>
 {:then value}
   <pre class="out" data-testid="await-then">greeting: {value.greeting}
@@ -13,3 +24,8 @@ length: {value.length}</pre>
 {:catch failure}
   <p class="err" data-testid="await-catch">failed: {failure.message}</p>
 {/await}
+
+<div class="row">
+  <button data-testid="await-block-read" onclick={() => read(false)}>Read</button>
+  <button data-testid="await-block-fail" onclick={() => read(true)}>Read (failing)</button>
+</div>

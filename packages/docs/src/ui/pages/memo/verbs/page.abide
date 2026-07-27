@@ -11,40 +11,41 @@
 <main class="page">
   <h1>Surface verbs</h1>
   <p class="lead">The verbs are shared by every <a href="/memo">memo</a> and every <a href="/channel">channel</a> — and therefore by the two transports built on them, <a href="/rpc">rpc</a> and <a href="/sockets">sockets</a>. A read is just a memo slot: reuse it, <code>refresh</code> it over the stale value, <code>invalidate</code> it to force a lazy re-fetch, <code>publish</code> it in place. This page is the verbs and the retention behaviour (partial match, <code>shared</code>, <code>ttl</code>); the reactive <a href="/memo/probes">probes</a> and the <a href="/memo/global">global</a> tag selectors have their own pages. Every demo below drives a real RPC (in-process on the server, a fetch from the browser).</p>
-
-  <h2>The default: reuse</h2>
-  <p>Before any verb, the behaviour they act on. The server counts how many times the handler actually ran. Read again and again — the count <strong>holds</strong> because the slot is reused. <code>invalidate</code> drops the slot, so the next read re-fetches and the count <strong>climbs</strong>.</p>
   <Demo id="counter" title="Cached read is reused (call count holds)" server="src/server/rpc/cacheCounter.ts" client="src/ui/demos/memo/CounterCacheDemo.abide" tab="server">
     <CounterCacheDemo />
   </Demo>
-
-  <h2>Opting out</h2>
-  <p>The opposite of the default: <code>memo: false</code> opts a call OUT of the memo entirely — every call runs, on both sides (no retain, no coalesced reuse, no client cache). Read both below: the <code>memo: false</code> counter <strong>climbs</strong> on every read while the default cached one <strong>holds</strong>. (A <code>memo: false</code> mutation is the same — every call runs, at-least-once; a <code>FormData</code> body always bypasses too, since it can't be cache-keyed.)</p>
+  <aside class="aside">
+    <p>Before any verb, the behaviour they act on. The server counts how many times the handler actually ran. Read again and again — the count <strong>holds</strong> because the slot is reused. <code>invalidate</code> drops the slot, so the next read re-fetches and the count <strong>climbs</strong>.</p>
+  </aside>
   <Demo id="cache-false" title="<code>memo: false</code> — every call runs" server="src/server/rpc/cacheOff.ts" client="src/ui/demos/memo/CacheFalseDemo.abide" tab="server">
     <CacheFalseDemo />
   </Demo>
-
-  <h2>The verbs</h2>
-  <p>Now the two that act on one slot's value. <code>invalidate</code> drops it — the lazy one, re-fetching on the next read. Slots are keyed by the <em>whole</em> args object. Load all three slots, then invalidate the partial selector <code>{'{'} team: "red" {'}'}</code> — it matches every superset slot, so both <strong>red</strong> slots re-fetch (their run counts climb together) while <strong>blue</strong> is untouched.</p>
+  <aside class="aside">
+    <p>The opposite of the default: <code>memo: false</code> opts a call OUT of the memo entirely — every call runs, on both sides (no retain, no coalesced reuse, no client cache). Read both here: the <code>memo: false</code> counter <strong>climbs</strong> on every read while the default cached one <strong>holds</strong>. (A <code>memo: false</code> mutation is the same — every call runs, at-least-once; a <code>FormData</code> body always bypasses too, since it can't be cache-keyed.)</p>
+  </aside>
   <Demo id="metric" title="invalidate — partial-object match" server="src/server/rpc/cacheMetric.ts" client="src/ui/demos/memo/MetricDemo.abide" tab="server">
     <MetricDemo />
   </Demo>
-
-  <p><code>publish</code> is the other direction: instead of dropping the value, write it. Load once (the server run count is small), then <code>publish</code> the slot value in place. Value-form sets it to <code>999</code>; updater-form derives the next value from the current — both are local, so the handler never re-runs and no fetch happens.</p>
+  <aside class="aside">
+    <p>Now the two that act on one slot's value. <code>invalidate</code> drops it — the lazy one, re-fetching on the next read. Slots are keyed by the <em>whole</em> args object. Load all three slots, then invalidate the partial selector <code>{'{'} team: "red" {'}'}</code> — it matches every superset slot, so both <strong>red</strong> slots re-fetch (their run counts climb together) while <strong>blue</strong> is untouched.</p>
+  </aside>
   <Demo id="publish" title="<code>publish(args, value | updater)</code> — mutate in place, no re-fetch" server="src/server/rpc/cacheCounter.ts" client="src/ui/demos/memo/PublishDemo.abide" tab="server">
     <PublishDemo />
   </Demo>
-
-  <h2>Retention policy</h2>
-  <p>The verbs act on a slot; these two decide how long a slot lives and who sees it. A <code>shared</code> read's slot is process-global. Each <code>raw()</code> is a separate request: the shared read returns the <strong>same</strong> run count both times (one handler run served both), while a per-request (non-shared) read re-runs and <strong>climbs</strong>. The shared handler is identity-independent and fail-closed.</p>
+  <aside class="aside">
+    <p><code>publish</code> is the other direction: instead of dropping the value, write it. Load once (the server run count is small), then <code>publish</code> the slot value in place. Value-form sets it to <code>999</code>; updater-form derives the next value from the current — both are local, so the handler never re-runs and no fetch happens.</p>
+  </aside>
   <Demo id="shared" title="<code>memo: {'{'} crossRequest: true {'}'}</code> — cross-request cache" server="src/server/rpc/cacheShared.ts" client="src/ui/demos/memo/SharedDemo.abide" tab="server">
     <SharedDemo />
   </Demo>
-
-  <p>And <code>ttl</code> bounds it in time. A shared read with a 700ms TTL. Two reads inside the window return the same count (served from cache); after the window elapses the next read re-runs the handler and the count climbs.</p>
+  <aside class="aside">
+    <p>The verbs act on a slot; these two decide how long a slot lives and who sees it. A <code>shared</code> read's slot is process-global. Each <code>raw()</code> is a separate request: the shared read returns the <strong>same</strong> run count both times (one handler run served both), while a per-request (non-shared) read re-runs and <strong>climbs</strong>. The shared handler is identity-independent and fail-closed.</p>
+  </aside>
   <Demo id="ttl" title="<code>memo: {'{'} ttl {'}'}</code> — the slot expires + re-fetches" server="src/server/rpc/cacheTtl.ts" client="src/ui/demos/memo/TtlDemo.abide" tab="server">
     <TtlDemo />
   </Demo>
-
-  <p class="note"><code>refresh</code> is the eager sibling of <code>invalidate</code> — it re-runs while keeping the stale value visible, which is what makes a <code>refreshing</code> flag meaningful. It is easiest to see next to the probe that reports it, so it lives on <a href="/memo/probes">Reactive probes</a>. Acting on many slots at once is <a href="/memo/global">Global probes</a>.</p>
+  <aside class="aside">
+    <p>And <code>ttl</code> bounds it in time. A shared read with a 700ms TTL. Two reads inside the window return the same count (served from cache); after the window elapses the next read re-runs the handler and the count climbs.</p>
+    <p class="note"><code>refresh</code> is the eager sibling of <code>invalidate</code> — it re-runs while keeping the stale value visible, which is what makes a <code>refreshing</code> flag meaningful. It is easiest to see next to the probe that reports it, so it lives on <a href="/memo/probes">Reactive probes</a>. Acting on many slots at once is <a href="/memo/global">Global probes</a>.</p>
+  </aside>
 </main>

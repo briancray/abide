@@ -8,24 +8,24 @@
 <main class="page">
   <h1>Mutations</h1>
   <p class="lead">A mutation is <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, or <code>DELETE</code>: args go in the JSON body and the handler runs on every call. If you have read <a href="/rpc/reads">Reads</a>, you already know this page — a mutation is the same callable with the same surface, and the differences fit in one section at the end.</p>
-
-  <h2>Calling one</h2>
-  <p>Define it, import it, call it. The four verbs are one shape differing only in HTTP method and intent — <code>POST</code> creates, <code>PUT</code> replaces, <code>PATCH</code> partially updates, <code>DELETE</code> removes — so two are enough to show all four.</p>
-
   <Demo id="post" title="Mutation — <code>POST</code> (create)" server="src/server/rpc/rpcCreateNote.ts" client="src/ui/demos/rpc/mutations/PostMutationDemo.abide" tab="server">
     <PostMutationDemo />
   </Demo>
-
+  <aside class="aside">
+    <p>Define it, import it, call it. The four verbs are one shape differing only in HTTP method and intent — <code>POST</code> creates, <code>PUT</code> replaces, <code>PATCH</code> partially updates, <code>DELETE</code> removes — so two are enough to show all four.</p>
+  </aside>
   <Demo id="delete" title="Mutation — <code>DELETE</code> (remove)" server="src/server/rpc/rpcDeleteNote.ts" client="src/ui/demos/rpc/mutations/DeleteMutationDemo.abide" tab="server">
     <DeleteMutationDemo />
   </Demo>
-
-  <h2>What actually differs from a read</h2>
-  <p>Two things, and that is the whole list: the transport (method + body + a CSRF gate) and the default retention. A read retains forever; a mutation defaults to <code>memo: {'{'} ttl: 0 {'}'}</code> — coalesce identical concurrent calls, retain nothing — because running twice is the thing you usually want to avoid, not the thing you want cached.</p>
-  <p>Which means the difference is a <em>default</em>, not a capability. Set a <code>ttl</code> and a mutation retains like a read, and the probes that looked inert come alive. Below, a cached <code>POST</code>: a repeat call hits the retained slot (the run number holds) while <code>.refresh()</code> re-runs the handler — read entirely through <code>.peek()</code> / <code>.refreshing()</code>, the same probes a read uses.</p>
+  <aside class="aside">
+    <p><code>DELETE</code>, keyed only by id. Args ride in the JSON body and the handler runs on every click — mutations retain nothing by default, which the last card on this page opts out of.</p>
+  </aside>
   <Demo id="cached-mutation" title="Cached mutation — <code>POST</code> with a <code>memo: {'{'} ttl {'}'}</code>" server="src/server/rpc/rpcBumpCounter.ts" client="src/ui/demos/rpc/mutations/CachedMutationDemo.abide" tab="server">
     <CachedMutationDemo />
   </Demo>
-
-  <p class="note">The symmetry holds all the way out: a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read, and carries the same chunk probes. See <a href="/rpc/streaming">Streaming</a>.</p>
+  <aside class="aside">
+    <p>A mutation differs from a read in two things: the transport (method + body + a CSRF gate) and the default retention. A read retains forever; a mutation defaults to <code>memo: {'{'} ttl: 0 {'}'}</code> — coalesce identical concurrent calls, retain nothing — because running twice is what you usually want to avoid, not what you want cached.</p>
+    <p>So the difference is a default, not a capability. Set a <code>ttl</code> and a mutation retains like a read: here a repeat call hits the retained slot (the run number holds) while <code>.refresh()</code> re-runs the handler — read through <code>.peek()</code> / <code>.refreshing()</code>, the same probes a read uses.</p>
+    <p>The symmetry holds all the way out: a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read, with the same chunk probes. See <a href="/rpc/streaming">Streaming</a>.</p>
+  </aside>
 </main>

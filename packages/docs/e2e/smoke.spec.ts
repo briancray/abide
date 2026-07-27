@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 // These specs drive the REAL docs app in a real browser: SSR HTML, client hydration, live
 // reactivity, and soft client-side navigation. They are the proof the harness works end-to-end.

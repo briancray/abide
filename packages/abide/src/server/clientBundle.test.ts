@@ -23,7 +23,9 @@ function tick(): Promise<void> {
 async function allClientJs(config: AppConfig): Promise<string> {
     const build = await buildClient(config)
     let js = ''
-    for (const [name, content] of build.files) if (name.endsWith('.js')) js += `${content}\n`
+    const decoder = new TextDecoder()
+    for (const [name, asset] of build.files)
+        if (name.endsWith('.js')) js += `${decoder.decode(asset.identity)}\n`
     return js
 }
 
@@ -37,8 +39,9 @@ test('the client builds, code-splits, and serves content-hashed chunks', async (
 
     const build = await buildClient(config)
     // The loader entry boots the app; the page's emitted mount lives in a code-split CHUNK, not the entry.
-    const loader = build.files.get(build.entry)
-    if (loader === undefined) throw new Error('no loader entry')
+    const entry = build.files.get(build.entry)
+    if (entry === undefined) throw new Error('no loader entry')
+    const loader = new TextDecoder().decode(entry.identity)
     expect(loader).toContain('bootstrapApp')
     expect(loader).toContain('() => import(') // per-pattern lazy chunk loaders
 
@@ -172,8 +175,9 @@ test('tree-shaking: the loader carries specs only for RPCs a page imports', asyn
     }
 
     const build = await buildClient(config)
-    const loader = build.files.get(build.entry)
-    if (loader === undefined) throw new Error('no loader entry')
+    const entry = build.files.get(build.entry)
+    if (entry === undefined) throw new Error('no loader entry')
+    const loader = new TextDecoder().decode(entry.identity)
     // alpha is imported → its spec (keyed by route name) is present; bravo is not.
     expect(loader).toContain('alpha')
     expect(loader).not.toContain('bravo')
