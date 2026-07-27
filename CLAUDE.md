@@ -33,7 +33,10 @@
 # performance and measurement
 
 > The method behind these rules — how to ablate, what is inherent, when a fix is NOT worth it, and the
-> sweep checklist — is `docs/PERFORMANCE.md`. Read it before starting a performance pass.
+> sweep checklist — is `docs/PERFORMANCE.md`. Its sibling `docs/SIMPLIFICATION.md` applies the same
+> method to removing code without changing behaviour. Read the relevant one before starting a sweep;
+> each ends with assignable territories and the evidence a finding must carry, so a session can put
+> several agents on disjoint ground and get back comparable results.
 
 * a performance claim is a RATIO against hand-written code in the same substrate — absolute ms from a DOM emulator describe the emulator, not the framework
 * correctness tests cannot guard a performance contract: when the contract is "does less work", assert the work (nodes moved, allocations, calls) — the wrong implementation still produces the right output
@@ -227,6 +230,15 @@ zero-arg RPC infers `Args = unknown`, not `void`, so `rpc.publish(args, value)` 
 | `fn.pending` / `fn.refreshing` / `fn.peek` / `fn.error` | `pending({tags})` / `refreshing({tags})` |
 | `done(iterable)` → boolean · `online()` → reactive boolean · `reachable(host)` → `await` boolean | |
 
+A probe wakes for its OWN axis. `refreshing` is its own signal, not a field of the slot state, so a
+spinner flip over a retained value wakes `refreshing` readers and NOT value/`peek` readers — do not
+assume `fn.refresh()` re-runs your `{await fn()}`. And a write that is observably identical (same
+`status`/`value`/`error`) re-writes the same state object, so it wakes nobody at all: a `refresh`
+recomputing the same result, a `publish` of the value already held, a ttl re-fill of unchanged data.
+`value` is compared by IDENTITY, so a body returning a fresh object each run still propagates. The
+one residual over-notification is deliberate: `pending`/`error` readers share the state, so a pure
+value change still wakes them (`docs/spec/rpc-core.md` §7.3–7.4).
+
 ### Schema / errors / misc
 | Import | Notes |
 | --- | --- |
@@ -316,10 +328,10 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | Form | Meaning |
 | --- | --- |
 | `{fn.peek(args)}` | non-blocking `T \| undefined` snapshot; `undefined` while pending, reactive |
-| `{await fn(args)}` | the read — blocks SSR (value in initial HTML); on the client fills the text node when the read settles (nothing suspends); re-awaits on invalidate |
+| `{await fn(args)}` | the read — blocks SSR (value in initial HTML); on the client fills the text node when the read settles (nothing suspends); re-awaits on invalidate, and on a `refresh` that lands a DIFFERENT value (an identity-equal re-fill wakes nobody — see Probes) |
 | `{#await fn(args)}` | reactive await block: `{:then v}` (`v: T`) / `{:catch}` / `{:finally}` |
 | `{#await fn(args) then v}` | inline blocking form: `v: T` bound in the opener, body renders once settled (no pending branch) |
-| `{fn(args)}` (bare) | **a `abide check` error** — "this is a Promise — write `{await expr}` so it types as T". A **concept boundary**, not a typing accident (ADR 0027 D3): the three forms above do three different things (`await` blocks · `peek` doesn't · `{#await}` branches), and the bare call is the *awaitable*, not a fourth read. It is not the non-blocking form — on the server it is the BLOCKING one, since `emitServer` awaits every expression slot unconditionally (it is type-blind and cannot tell a promise-returning read from a plain value), so it renders identically to `{await fn(args)}` while typing as `Promise<T>`, which dead-ends at the first `.field`. Making it mean "non-blocking" would also break the project's first law: a plain `.ts` has no compiler, so `fn(args)` is a `Promise<T>` there regardless, and one expression would mean two things by file extension. The auto-await stays a backstop for the untyped/passthrough path (a `T \| Promise<T>` union is deliberately still legal) |
+| `{fn(args)}` (bare) | **a `abide check` error** — "this is a Promise — write `{await expr}` so it types as T". A **concept boundary**, not a typing accident (ADR 0027 D3): the three forms above do three different things (`await` blocks · `peek` doesn't · `{#await}` branches), and the bare call is the *awaitable*, not a fourth read. It is not the non-blocking form — on the server it is the BLOCKING one, since `emitServer` auto-awaits every expression slot: the await is GUARDED (`isThenable(v) ? await v : v`) but still type-blind, so a thenable suspends the slot either way and a bare read renders identically to `{await fn(args)}` while typing as `Promise<T>`, which dead-ends at the first `.field`. Making it mean "non-blocking" would also break the project's first law: a plain `.ts` has no compiler, so `fn(args)` is a `Promise<T>` there regardless, and one expression would mean two things by file extension. The auto-await stays a backstop for the untyped/passthrough path (a `T \| Promise<T>` union is deliberately still legal) |
 | `fn.pending()` / `fn.error()` | probes |
 
 ### Components / pages

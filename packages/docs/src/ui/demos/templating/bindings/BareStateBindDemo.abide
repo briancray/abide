@@ -1,9 +1,0 @@
-<script>
-  import { state } from "abide/shared/state"
-
-  // bind:value over a BARE state var — the plain sugar (no hand-written accessor) two-way syncs (#14).
-  let bare = state("direct")
-</script>
-
-<input id="barevalue-input" bind:value={bare} />
-<p>Mirror: <span id="barevalue-out">{bare}</span></p>

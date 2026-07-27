@@ -1,10 +1,15 @@
 # abide — performance philosophy
 
 > How to decide what is worth speeding up, how to prove it, and how to know when to stop.
+> Sibling: `docs/SIMPLIFICATION.md` (removing code without changing behaviour).
 > Specs are authoritative in `docs/spec/*.md`; `CLAUDE.md` carries the short rules this doc explains.
 
 This is a working method, not a wish list. It exists because a sweep that measures the wrong thing
 produces confident, wrong answers — and most of the wrong answers recorded below were mine.
+
+**To run a hunt** — one session, several agents, each on its own territory — read §1–§9 for the method,
+then work from §12. That section carries the assignable territories, the evidence a finding must show
+before it counts, and the report shape. §12 is the operational part; everything before it is why.
 
 ## 1. The unit is a ratio, in the same substrate
 
@@ -188,3 +193,53 @@ longer includes teardown, and `unmount` has no history before the split.
 8. Full gates: `bun test` from `packages/abide`, `bun run typecheck`, `bunx biome check`, and
    `bun run e2e:ci` in `packages/docs` for anything touching emit, runtime or the reactive core.
 9. Record the *mechanism* in a comment at the site — including for anything tried and rejected.
+
+## 12. Running a hunt
+
+A hunt is one session that points several agents at disjoint territories and collects comparable
+findings. The value is in the *contract*, not the fan-out: an agent asked to "find performance
+problems" will find plausible ones, confidently, that do not exist. Three such guesses are recorded in
+§2, and an agent is more prone to them than a person, because a hotspot that *looks* expensive reads
+like a finding.
+
+### Territories
+
+Disjoint, so agents do not collide. Each is a file set plus the question that fits it.
+
+| territory | files | the question |
+|---|---|---|
+| SSR emit | `ui/internal/emitServer.ts` | allocations and microtask ticks per emitted node and per row (§4) |
+| client emit | `ui/internal/emitClient.ts` | per-item allocations; cells and params nothing reads |
+| DOM runtime | `ui/internal/runtime.ts` | DOM nodes per item; work per block helper; teardown cost |
+| reactive core | `shared/internal/reactive.ts` | propagation: wake-ups that should not happen (§5, §6) |
+| memo | `shared/memo.ts` | slot machinery, keying, probe reads, envelope identity (§6) |
+| codec | `shared/internal/codec.ts` | `canonicalKey` on the hot path; encode/decode |
+| server request path | `server/internal/router.ts`, `makeRpc.ts` | per-request work; middleware composition |
+| streams | `shared/internal/replayableStream.ts`, `ui/internal/streamScheduler.ts` | per-chunk cost, buffering, fan-out |
+| channel / socket | `shared/channel.ts`, `shared/internal/channelHub.ts` | publish fan-out, room keying |
+
+Read §9 first. Several of these have a floor that is the framework being itself, and a hunt that
+attacks the floor produces churn.
+
+### What a finding must carry
+
+A report without all five is not a finding. State it as unproven rather than dressing it up.
+
+1. **A number, from the right surface.** DOM claims come from `/platform/bench/client` (§3). Not "this
+   allocates per row" — how many nanoseconds, measured.
+2. **An ablation.** The layer you claim owns the cost, with it removed, showing the number moves (§2).
+3. **An equivalent baseline**, or an explicit note that there is none (§1).
+4. **The ledger** — cost of leaving against cost of fixing, and the verdict that follows (§7).
+5. **What would fail if you are wrong**, and whether anything currently catches it.
+
+### Reporting
+
+Report per territory, in this order: **confirmed wins** (with the five items above), **measured
+non-findings**, then **unexplored** and why.
+
+The middle one is the point. "I ablated the codec's hot path and it is 4% of the request — nothing here"
+is a real result that stops the next session re-treading it, and it is the outcome the §2 table would
+have produced three times over. A hunt that reports only wins is a hunt that invented some.
+
+Do not implement during a hunt. Findings first, ranked by the ledger; implement afterwards, one at a
+time, each through the gates in §11. A branch with six half-verified optimisations is worse than none.
