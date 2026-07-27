@@ -68,13 +68,17 @@ interface SlotState<T> {
     status: Status
     value: T | undefined
     error: unknown
-    refreshing: boolean
     // Set only when status === "stream": the shared replay buffer this slot fans out (§4).
     stream?: ReplayableStream<unknown>
 }
 
 interface Slot<Args, T> {
     args: Args
+    // Own signal, deliberately NOT a field of `state`. A `keepStale` refresh flips this on and back
+    // while the value stays put; carrying it inside the state envelope meant every such flip rebuilt
+    // the envelope and woke everyone reading the VALUE, twice per refresh, to report that a spinner
+    // had come and gone. Separate signals mean a probe wakes for its own axis and no other.
+    refreshing: State<boolean>
     // The full cache-map key (`prefix + canonicalKey(args)`), retained for LRU touch/size accounting.
     key: string
     state: State<SlotState<T>>
@@ -290,7 +294,7 @@ const DEFERRED: unique symbol = Symbol('abide.memo.deferred')
 let memoCounter = 0
 
 function idleState<T>(): SlotState<T> {
-    return { status: 'idle', value: undefined, error: undefined, refreshing: false }
+    return { status: 'idle', value: undefined, error: undefined }
 }
 
 // Do two slot states describe the same observable read? Used to keep a derived value's identity STABLE
@@ -303,7 +307,6 @@ function sameSlotState<T>(a: SlotState<T>, b: SlotState<T>): boolean {
         a.status === b.status &&
         a.value === b.value &&
         a.error === b.error &&
-        a.refreshing === b.refreshing &&
         a.stream === b.stream
     )
 }
@@ -585,6 +588,7 @@ export function memo<Args, T>(
                 args,
                 key: slotKey,
                 state: state(idleState<T>()),
+                refreshing: state(false),
                 inflight: null,
                 loadedAt: 0,
                 generation: 0,
@@ -643,10 +647,12 @@ export function memo<Args, T>(
     // value already held, a ttl re-fill of unchanged data — notified every reader anyway. Same reasoning
     // as `merged`; `value` is compared by identity for the same reason.
     //
-    // NB this does NOT collapse the two wake-ups a `keepStale` refresh sends (`refreshing: true`, then
-    // the settled state): those are genuinely different states. Sparing a VALUE reader from a status
-    // flip needs the read surface split per probe, which is a semantic change, not this one.
+    // Writing a state also SETTLES the slot — every caller but one is a load finishing, a publish, or a
+    // drop. So the refreshing flag clears here by default and the single exception (`startLoad`'s
+    // keepStale branch) raises it immediately after, rather than each of the eight settle points having
+    // to remember to lower it.
     function setState(slot: Slot<Args, T>, next: SlotState<T>): void {
+        slot.refreshing.set(false)
         const current = slot.state.untracked()
         slot.state.set(sameSlotState(current, next) ? current : next)
     }
@@ -664,18 +670,20 @@ export function memo<Args, T>(
 
         const current = slot.state.untracked()
         if (keepStale && current.status === 'value') {
+            // The retained value is UNCHANGED, so `setState` writes nothing and no VALUE reader wakes.
+            // Raising the flag AFTER it is what makes this the one exception to `setState`'s clear —
+            // only the refreshing axis moves, so only what reads that axis is woken.
             setState(slot, {
                 status: 'value',
                 value: current.value,
                 error: undefined,
-                refreshing: true,
             })
+            slot.refreshing.set(true)
         } else {
             setState(slot, {
                 status: 'pending',
                 value: undefined,
                 error: undefined,
-                refreshing: false,
             })
         }
 
@@ -700,7 +708,7 @@ export function memo<Args, T>(
                     }
                     const value = tagged?.kind === 'value' ? (tagged.value as T) : produced
                     slot.loadedAt = Date.now()
-                    setState(slot, { status: 'value', value, error: undefined, refreshing: false })
+                    setState(slot, { status: 'value', value, error: undefined })
                     recordAndEvict(slot, value)
                     return value
                 } catch (caught) {
@@ -710,7 +718,6 @@ export function memo<Args, T>(
                             status: 'error',
                             value: undefined,
                             error: caught,
-                            refreshing: false,
                         })
                     }
                     throw caught
@@ -762,7 +769,6 @@ export function memo<Args, T>(
                         status: 'error',
                         value: undefined,
                         error: caught,
-                        refreshing: false,
                     },
                 }
             }
@@ -780,7 +786,7 @@ export function memo<Args, T>(
             const value = (tagged?.kind === 'value' ? tagged.value : produced) as T
             return {
                 run: runs,
-                state: { status: 'value', value, error: undefined, refreshing: false },
+                state: { status: 'value', value, error: undefined },
             }
         })
         const override = state<{ run: number; state: SlotState<T> } | null>(null)
@@ -937,7 +943,6 @@ export function memo<Args, T>(
             status: 'stream',
             value: undefined,
             error: undefined,
-            refreshing: false,
             stream,
         })
         // Chunks that are ALREADY KNOWN are pushed SYNCHRONOUSLY: a whole array (the mode-A handoff) or a
@@ -1076,7 +1081,7 @@ export function memo<Args, T>(
         } catch (caught) {
             keyedSync = true
             slot.loadedAt = Date.now()
-            setState(slot, { status: 'error', value: undefined, error: caught, refreshing: false })
+            setState(slot, { status: 'error', value: undefined, error: caught })
             throw caught
         }
         const tagged = responseSourceOf(produced)
@@ -1090,7 +1095,7 @@ export function memo<Args, T>(
         keyedSync = true
         const value = (tagged?.kind === 'value' ? tagged.value : produced) as T
         slot.loadedAt = Date.now()
-        setState(slot, { status: 'value', value, error: undefined, refreshing: false })
+        setState(slot, { status: 'value', value, error: undefined })
         return value
     }
 
@@ -1232,7 +1237,7 @@ export function memo<Args, T>(
     c.refreshing = (args: Args): boolean => {
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return false
-        return slot.state().refreshing
+        return slot.refreshing()
     }
 
     c.refresh = (args?: Partial<Args> | Args): void => {
@@ -1297,7 +1302,7 @@ export function memo<Args, T>(
                     : next
             auto.override.set({
                 run: base.run,
-                state: { status: 'value', value, error: undefined, refreshing: false },
+                state: { status: 'value', value, error: undefined },
             })
             log.channel('abide:memo').trace(`publish ${id}`)
             broadcast('publish', args, value)
@@ -1320,7 +1325,7 @@ export function memo<Args, T>(
         } else {
             value = next
         }
-        setState(slot, { status: 'value', value, error: undefined, refreshing: current.refreshing })
+        setState(slot, { status: 'value', value, error: undefined })
         log.channel('abide:memo').trace(`publish ${id}`)
         // Both forms broadcast the resolved VALUE (value-form frame) on a crossRequest slot.
         broadcast('publish', args, value)
@@ -1356,7 +1361,7 @@ export function memo<Args, T>(
             return
         }
         slot.loadedAt = Date.now()
-        setState(slot, { status: 'value', value, error: undefined, refreshing: false })
+        setState(slot, { status: 'value', value, error: undefined })
     }
 
     // The WRITABLE PROJECTION (ADR 0024 §4). `set` IS `publish`, so a local write holds until the next
@@ -1509,7 +1514,7 @@ export function memo<Args, T>(
     function anyRefreshingForTags(): boolean {
         let any = false
         for (const slot of selectSlots(undefined)) {
-            if (slot.state().refreshing) any = true
+            if (slot.refreshing()) any = true
         }
         return any
     }

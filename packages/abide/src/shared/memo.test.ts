@@ -114,6 +114,65 @@ describe('memo — read + load', () => {
 })
 
 describe('memo — refresh / invalidate', () => {
+    // `refreshing` is its own signal, not a field of the state envelope, so a refresh that comes and
+    // goes over unchanged data touches only the axis that actually moved. It used to live inside the
+    // envelope, which meant every flip rebuilt it and woke each VALUE reader twice per refresh — to
+    // report that a spinner had appeared and vanished while the data never changed.
+    test('a refresh over unchanged data wakes refreshing readers, not value readers', async () => {
+        await withScope(async () => {
+            const load = memo(async ({ id }: { id: number }) => `user-${id}`)
+            await load({ id: 1 })
+
+            let valueReads = 0
+            let refreshingReads = 0
+            const stopValue = effect(() => {
+                valueReads++
+                load.peek({ id: 1 })
+            })
+            const stopRefreshing = effect(() => {
+                refreshingReads++
+                load.refreshing({ id: 1 })
+            })
+            await tick()
+            const settledValue = valueReads
+            const settledRefreshing = refreshingReads
+
+            for (let i = 0; i < 3; i++) {
+                load.refresh({ id: 1 })
+                await tick()
+            }
+            // The value never changed, so nothing reading it should have run again.
+            expect(valueReads).toBe(settledValue)
+            // The flag went up and down each time, so its reader should have.
+            expect(refreshingReads).toBeGreaterThan(settledRefreshing)
+            expect(load.refreshing({ id: 1 })).toBe(false)
+            stopValue()
+            stopRefreshing()
+        })
+    })
+
+    test('a refresh that yields a DIFFERENT value still wakes value readers', async () => {
+        await withScope(async () => {
+            let calls = 0
+            const load = memo(async () => `v${++calls}`)
+            await load()
+            const seen: (string | undefined)[] = []
+            let reads = 0
+            const dispose = effect(() => {
+                reads++
+                seen.push(load.peek())
+            })
+            await tick()
+            const settled = reads
+
+            load.refresh()
+            await tick()
+            expect(reads).toBe(settled + 1)
+            expect(seen.at(-1)).toBe('v2')
+            dispose()
+        })
+    })
+
     test('refresh re-calls fn and keeps the stale value visible meanwhile', async () => {
         await withScope(async () => {
             let calls = 0
