@@ -20,9 +20,7 @@ async function sampleIndex(page: Page) {
 test('the card index follows a soft-nav to the destination page', async ({ page }) => {
     await page.goto('/memo')
     await expect(page.locator('h1')).toContainText('memo')
-    await expect
-        .poll(async () => (await sampleIndex(page)).anchoredUnder)
-        .toBe('memo — loaded')
+    await expect.poll(async () => (await sampleIndex(page)).anchoredUnder).toBe('memo — loaded')
 
     await page.locator('aside.sidebar').getByRole('link', { name: 'state — owned' }).click()
     await expect(page).toHaveURL(/\/state$/)

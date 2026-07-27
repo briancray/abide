@@ -49,7 +49,9 @@ test('the returned teardown runs before each re-run, and once on unmount', async
     await expect(log).toHaveText('start 800ms → stop 800ms → start 300ms')
 
     // The timer belongs to the effect, so it is really running.
-    await expect.poll(async () => Number(await page.getByTestId('wtd-ticks').innerText())).toBeGreaterThan(0)
+    await expect
+        .poll(async () => Number(await page.getByTestId('wtd-ticks').innerText()))
+        .toBeGreaterThan(0)
 
     // Unmounting the component disposes its watch — the same function, one last time.
     await page.getByTestId('wtd-toggle').click()
