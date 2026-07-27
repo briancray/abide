@@ -32,10 +32,11 @@ exactly like an inline `{#component Card(props, children)}` but in a SHARED reus
   `Object.create($scope)` + `compose`'s child scope): the component's `state`/`watch`/RPC proxies/
   `route`/`url` are the SAME seeded/recording wrappers the page uses → hydration-seed `state(...)`
   ordinals stay aligned (document order on both sides).
-- **Hydration works byte-for-byte**: the adapter's `mount(parent, childScope, marker)` runs the
+- **Hydration works byte-for-byte**: the adapter's `mount(parent, childScope, anchor)` runs the
   component's own instance setup then `$mount0`, which branches on `$rt.hydrating` and CLAIMS the
-  server nodes bounded by the component's close marker — structurally identical to an inline-component
-  body mount. No new hydration code.
+  server nodes bounded by the component's close ANCHOR — which is both the node to mount before and the
+  end bound, so a site owns one comment, not a separate `<!--Name-->` marker plus a close. Structurally
+  identical to an inline-component body mount. No new hydration code.
 - **Lazy dir-relative resolution** (from the importer's `pageDirs`/`layoutDirs`, already populated) —
   no eager component scan, no `AppConfig` schema change.
 

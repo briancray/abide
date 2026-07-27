@@ -50,13 +50,42 @@ docs Playwright e2e — the real gate; abide `bun test` green ≠ framework work
 
 ## Current model (what changes)
 
-- `ui/internal/emitServer.ts` emits `async render($scope)` returning one buffered `$out`; every read is
-  `await`ed inline; control-flow blocks are nested async IIFEs each returning their own `$out`.
+- `ui/internal/emitServer.ts` emits `async render($scope)` returning one buffered `$out`. Every read
+  auto-awaits inline through a GUARD (`$rt.isThenable($v) ? await $v : $v`) rather than an
+  unconditional `await` — semantics are unchanged (a thenable is still awaited, in the same order),
+  but an already-settled value stops paying a promise wrap and a microtask tick, which an
+  interpolation inside a list pays per row. Control-flow blocks own their own async frame; a
+  stream-free child list, `{#for}` item body, or branch body is written straight into the enclosing
+  accumulator instead (see the invariant below).
 - `server/internal/pages.ts`: `renderLevel` awaits the whole string; `collectSeed` snapshots resolved
   slots into ONE bottom `#__abide-seed` blob; `renderDocument` wraps it.
 - `server/internal/router.ts`: `new Response(htmlString)` for full-doc; `json({html, seed, url})` for
   soft-nav.
 - `ui/navigate.ts`: soft-nav applicator (innerHTML swap → `mountPathname(seed)` → hydrate).
+
+### Emitter invariant — a frame around a streaming participant is LOAD-BEARING
+
+The per-level async IIFE is not free: it costs a promise and a microtask tick per element per render,
+which inside a `{#for}` is per ROW. Collapsing it where it is not needed is a legitimate and large win
+(the `for-list-1000` render was ~4x this alone), so `emitServer.inlinableChildren` decides per level
+whether the children may be written straight into the parent's accumulator.
+
+**It must stay conservative, and here is the mechanism, not just the verdict.** A blanket inline was
+tried and reverted: a `{#await}` / `{#for await}` reached through a collapsed frame stopped seeing the
+per-render stream scope and silently fell back to a fully buffered drain. Nothing threw and the final
+HTML was identical — the page just stopped streaming. So:
+
+- Any streaming participant ANYWHERE in a subtree keeps that whole level's frame.
+- The predicate recurses through the blocks that own their own frame (`if` / `switch` / `try` /
+  sync `for`) — collapsing the level ABOVE them cannot change the frame they run in — which means a
+  streaming block inside a `{:else}` or a `{:case}` arm is reachable and must be caught there too.
+- A component INVOCATION is transparent: whatever it renders runs inside the builder's own frame. Its
+  SLOT children still render in the caller's frame, so those must qualify.
+- `{#for await}` is itself the participant — never collapse a level around one.
+
+This is a correctness constraint on the emitter, and the only thing that can catch a regression is an
+end-to-end assertion that the bytes actually arrived incrementally (`packages/docs/e2e/streaming.spec.ts`).
+A unit test on emitted output cannot see it: the output is the same either way.
 
 ## Staged PRs
 

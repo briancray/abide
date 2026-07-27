@@ -42,7 +42,7 @@ defines the replay-safe primitive and unifies it with the memo.
 An implementer must know the starting point; the spec is honest about the gap.
 
 - **The memo slot is monomorphic.** `SlotState<T> = { status: "idle"|"pending"|"value"|"error", value:
-  T|undefined, error, refreshing }` (`memo.ts:36-45`) inside a `Slot` with a single `inflight:
+  T|undefined, error }` inside a `Slot` with a single `inflight:
   Promise<T>|null` coalescing point and a `loadedAt` stamp (`memo.ts:47-58`). There is **no** open/
   streaming status, **no** per-slot subscriber set, and **no** ref-count. A ReplayableStream needs a new
   slot status — net-new machinery, not a config flip.
@@ -482,8 +482,9 @@ timeout?: number }` (it already knows whether the head resolves to an RPC import
   value path does), the cursor is tagged with its transcript (`shared/internal/streamTranscript.ts`, as
   `tagStreamEncoding` does), and — the actual bug — **`startStream` now pushes a fully-known ARRAY source
   synchronously** instead of draining it at one chunk per microtask, which had left the transcript empty
-  for the entire claim tick. `claimStreamedRegion` brackets each item with the same `<!--for-->` markers
-  the sync `{#for}` claim uses, stops at (and removes) the sentinel so a mid-stream cut claims its prefix,
+  for the entire claim tick. `claimStreamedRegion` closes each item with the same trailing `<!--/for-->`
+  marker the sync `{#for}` claim uses (an item carries no LEADING marker — the reorder's lower bound is
+  derived from the live sibling chain), stops at (and removes) the sentinel so a mid-stream cut claims its prefix,
   and the first drain skips the claimed count — exact, since transcript indices are append-only-stable.
   **Mode B claims too — and it is the case that matters**, since `forAwaitStream` races a 4 ms deadline, so
   mode A only ever covers a stream that finished inside it. `seedStream` takes a `StreamSeed`

@@ -59,8 +59,9 @@ the #11 checker (`Property 'field' does not exist on Promise<T>`) — bind throu
 | `{await rpc()}` | `T` | blocking (SSR value-in-HTML) |
 | `{#await rpc()}{:then v}` | `v: T` | reactive await block |
 
-**Bare and `{await}` differ in TYPE, not in timing.** `emitServer` awaits every interpolation — the
-`interp` and `await` chunks emit the same `await (expr)` — so both land the value in the initial HTML,
+**Bare and `{await}` differ in TYPE, not in timing.** `emitServer` auto-awaits every interpolation — the
+`interp` and `await` chunks emit the same guarded settle (`isThenable($v) ? await $v : $v`), which for a
+promise-returning read is an await either way — so both land the value in the initial HTML,
 and on the client neither blocks (there is no blocking on the client: both write a text node and fill
 it when the read settles). The only runtime difference is the leaf anchor form. What the `await`
 keyword buys is the `T` binding: `{rpc().field}` is a checker error, `{await rpc()}` is not. Anyone
@@ -101,14 +102,20 @@ call-expression result is not a narrowable reference. Field access after a guard
 The blessed blocking form (`{#await}{:then v}`) *is* the bind-and-narrow shape, so the ergonomic path
 and the type-safe path coincide. Optional future sugar: `{#if rpc.peek() as v}` binding-in-condition.
 
-## The one open crux — await-interpolation reactivity
+## The one crux — await-interpolation reactivity (SOLVED, kept for the reasoning)
 
 Today `{fn()}` (peek) re-renders on `invalidate`/`publish` because the peek subscribes. Under this model
 the reactive form `{rpc.peek()}` still subscribes ✓, but the blocking form `{await rpc()}` must ALSO
 re-await when the underlying memo invalidates — otherwise a blocking read goes stale after a mutation.
-So the await-interpolation has to subscribe-and-re-await. **This is the hardest design point and the
-thing to nail before implementing.** (`{rpc.peek()}` reactivity is free; `{await rpc()}` reactivity is
+So the await-interpolation has to subscribe-and-re-await. This was the hardest design point; it SHIPPED
+(the await leaf subscribes to the slot and re-awaits on a change), and the section is retained for the
+reasoning rather than as open work. (`{rpc.peek()}` reactivity is free; `{await rpc()}` reactivity was
 new behavior.)
+
+One consequence worth carrying here, because it is what the reactivity actually means: the re-await
+fires on a change, and an identity-equal re-fill is NOT a change (`rpc-core` §7.4). A `refresh` that
+recomputes the same value re-runs the handler and wakes nobody — correct, and invisible, which is why a
+demo of this form needs a handler whose output genuinely moves.
 
 ## Migration
 
@@ -146,5 +153,5 @@ When this model lands, the guards are simplified/renamed and the checker proves 
 
 ## Deferred / parked
 
-The await-interpolation reactivity mechanism (the crux above); per-route `[name]` `Params` typing
-(#11); narrowing sugar `{#if x as v}`.
+Per-route `[name]` `Params` typing (#11); narrowing sugar `{#if x as v}`. (The await-interpolation
+reactivity mechanism was the crux above and has SHIPPED — it is no longer parked.)

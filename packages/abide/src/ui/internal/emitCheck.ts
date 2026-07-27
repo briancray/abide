@@ -221,8 +221,9 @@ function refExpr(node: { start: number; end: number }, expr: string, e: WalkEmit
 // This is a CONCEPT BOUNDARY, not a typing apology (ADR 0027 D3). There are three read forms and they do
 // different things: `{await fn()}` BLOCKS (the value lands in the initial HTML), `{fn.peek()}` does NOT
 // (reactive `T | undefined`), and `{#await fn()}` branches. A bare `{fn()}` is none of them — it is the
-// AWAITABLE, and `emitServer` awaits every expression slot unconditionally (it is type-blind and cannot
-// tell a promise-returning read from a plain value), so it renders identically to `{await fn()}` while
+// AWAITABLE, and `emitServer` auto-awaits every expression slot — guarded (`isThenable(v) ? await v : v`),
+// but still type-blind, so it cannot tell a promise-returning read from a plain value and a thenable is
+// awaited either way — so it renders identically to `{await fn()}` while
 // typing as `Promise<T>` — the author hits `Property 'x' does not exist on Promise<T>` at the first field
 // access. Rejecting it keeps one spelling per behaviour.
 //

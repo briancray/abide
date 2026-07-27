@@ -927,7 +927,7 @@ the known shortcuts and gaps. Ordered by impact.
     pushes a fully-known ARRAY source synchronously** — it drained even the mode-A handoff through an async
     loop at one chunk per microtask, so the transcript was EMPTY for the whole claim tick. (c) was the actual
     bug; (a)+(b) are the access path. `runtime.claimStreamedRegion` then brackets each item with the same
-    `<!--for-->`/`<!--/for-->` markers the sync `{#for}` claim uses and stops at the `<template id="ab-l:N">`
+    trailing `<!--/for-->` marker the sync `{#for}` claim uses (an item carries no LEADING marker) and stops at the `<template id="ab-l:N">`
     sentinel (removing it), so a region cut off mid-stream claims its prefix; the first drain SKIPS the
     claimed count (transcript indices are stable — the buffer is append-only) and appends the tail.
     **Mode B landed too, and it is the case that MATTERS:** `forAwaitStream` races `ABIDE_SSR_DEADLINE`
