@@ -1,10 +1,12 @@
 // log — isomorphic structured logging (CO2.1/CO2.2). Callable `log(...)` plus level methods
 // `.info` / `.warn` / `.error` / `.trace`, and `.channel(name)` for a namespaced logger.
 //
-// Server: structured lines to stdout (info/trace/log) and stderr (warn/error) — JSON when
-// `ABIDE_LOG_FORMAT=json`, else a compact tab-separated line (level, time, [channel], traceparent,
-// message). Client: plain `console`. The active request's `traceparent` (CO2.3) is auto-correlated
-// into each server line.
+// Server: structured lines to stdout (info/trace/log) and stderr (warn/error) in one of three shapes
+// (`logFormat`) — a COLOURED COLUMN line when stdout is a TTY (a human is reading), else the compact
+// tab-separated line (level, time, [channel], traceparent, message); `ABIDE_LOG_FORMAT` names the two
+// machine formats, `tsv` and `json`. Client: `console`, with the channel badge tinted the same
+// colour the terminal uses. The active request's `traceparent` (CO2.3) is auto-correlated into each
+// server line.
 //
 // CHANNELS + GATING. Every line carries a channel label. The root `log(...)` uses the DEFAULT
 // channel — the app name (`ABIDE_APP_NAME`, else the `__ABIDE_APP_NAME__` global, else "abide") —
@@ -18,6 +20,10 @@
 // participates in an import cycle with the request scope.
 
 import { isBrowser } from './internal/isBrowser.ts'
+import { logChannelColor } from './internal/logChannelColor.ts'
+import { logFormat } from './internal/logFormat.ts'
+import { prettyLogLine } from './internal/prettyLogLine.ts'
+import { readEnv } from './internal/readEnv.ts'
 import { trace } from './trace.ts'
 
 type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'trace'
@@ -32,14 +38,6 @@ export interface ChannelLogger {
 
 export interface Logger extends ChannelLogger {
     channel(name: string): ChannelLogger
-}
-
-// Read a framework env var at call time so tests (and the running process) see live changes.
-function readEnv(name: string): string | undefined {
-    const bunEnv = (globalThis as { Bun?: { env?: Record<string, string | undefined> } }).Bun?.env
-    if (bunEnv !== undefined) return bunEnv[name]
-    const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    return proc?.env?.[name]
 }
 
 // The DEFAULT channel label — the app's own stream. Server boot sets `ABIDE_APP_NAME` from the
@@ -109,16 +107,23 @@ function emit(level: LogLevel, channel: string | undefined, args: unknown[]): vo
         if (console === undefined) return
         const method = console[level] ?? console.log
         if (method === undefined) return
-        method(`[${label}]`, ...args)
+        // `%c` tints the badge with the channel's own colour — the same hash the terminal uses, so a
+        // channel looks the same on both sides. The trailing empty style scopes it to the badge and
+        // leaves the args as real values (objects stay inspectable, not stringified).
+        method(`%c[${label}]%c`, `color:${logChannelColor(label).css}`, '', ...args)
         return
     }
 
-    const time = new Date().toISOString()
+    const now = new Date()
     const traceparent = trace()
     const message = args.map(formatArg).join(' ')
+    const format = logFormat()
 
     let line: string
-    if (readEnv('ABIDE_LOG_FORMAT') === 'json') {
+    if (format === 'pretty') {
+        line = prettyLogLine(level, label, message, traceparent, now)
+    } else if (format === 'json') {
+        const time = now.toISOString()
         const record: {
             level: string
             time: string
@@ -134,7 +139,7 @@ function emit(level: LogLevel, channel: string | undefined, args: unknown[]): vo
         if (traceparent !== undefined) record.traceparent = traceparent
         line = JSON.stringify(record)
     } else {
-        const parts = [level, time, `[${label}]`]
+        const parts = [level, now.toISOString(), `[${label}]`]
         if (traceparent !== undefined) parts.push(traceparent)
         parts.push(message)
         line = parts.join('\t')

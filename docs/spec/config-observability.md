@@ -49,9 +49,21 @@ Scope: boot-time config (`env(schema)`) and the observability surface
 
 1. **`log` = isomorphic structured logging** (`abide/shared`): levels `.info`/`.warn`/`.error`/
    `.trace` + named channels `.channel(name)`. **Server** writes structured lines to
-   stdout/stderr — **JSON when `ABIDE_LOG_FORMAT=json`, else TSV** (`level  time  [channel]
-   traceparent?  message`). **Client** writes to console as `[channel] …` (console-only by
-   default; shipping client logs to the server is parked). Every line carries a **channel label**.
+   stdout/stderr in one of three shapes — **`pretty`** (colour + fixed columns: local
+   `HH:MM:SS.mmm`, level badge, per-channel colour, message, the traceparent shortened
+   to 8 hex of its trace id; a multi-line message dims + indents its continuation lines), **`tsv`**
+   (`level  time  [channel]  traceparent?  message`), **`json`** (one record per line, carrying the
+   full ISO instant and full traceparent). Which one is **not** chosen by name in the common case: it
+   follows **whether stdout is a TTY** — a human at a terminal gets `pretty`, a pipe/file/collector
+   gets `tsv`, with no flag to remember. **`ABIDE_LOG_FORMAT` names only the two MACHINE formats**
+   (`tsv` / `json`) — setting it says "this output is consumed, not read", and there is deliberately
+   no `pretty` value: forcing the human format into a pipe is **`FORCE_COLOR`** and refusing it on a
+   terminal is **`NO_COLOR`** (→ `tsv`, since an uncoloured pretty line is strictly worse than the
+   tab-separated one), both the conventional spellings rather than a third abide-specific name.
+   **Client** writes to console as
+   `[channel] …`, the badge tinted with the same per-channel colour hash the terminal uses
+   (console-only by default; shipping client logs to the server is parked). Every line carries a
+   **channel label**.
 2. **Default channel = the app name; framework channels = `abide:*`.** The un-channeled root
    `log(...)` labels lines with the **app name** — `ABIDE_APP_NAME`, else the project
    `package.json` `name` (seeded at boot by `loadApp`), else `"abide"` — and is **always on** (it

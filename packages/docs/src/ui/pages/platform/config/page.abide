@@ -31,7 +31,7 @@
         <tr><td><code>ABIDE_RPC_TIMEOUT</code></td><td>Default bilateral RPC timeout in ms; a per-RPC <code>timeout</code> overrides it.</td></tr>
         <tr><td><code>ABIDE_SOCKET_TIMEOUT</code></td><td>Socket (WebSocket) idle / connection timeout.</td></tr>
         <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td>Default maximum request body size.</td></tr>
-        <tr><td><code>ABIDE_LOG_FORMAT</code></td><td>Log format — <code>json</code> for structured logs.</td></tr>
+        <tr><td><code>ABIDE_LOG_FORMAT</code></td><td>Machine log format — <code>tsv</code> or <code>json</code>. Unset, the shape follows the TTY: coloured columns for a human, <code>tsv</code> when piped. <code>FORCE_COLOR</code> forces the coloured form, <code>NO_COLOR</code> refuses it.</td></tr>
         <tr><td><code>DEBUG</code></td><td>Enables gated log channels (<code>log.channel(name)</code>).</td></tr>
         <tr><td><code>ABIDE_DEV_SURFACE</code></td><td>Logs each request under <code>abide dev</code>.</td></tr>
         <tr><td><code>ABIDE_ENABLE_INSPECTOR</code></td><td>Enables the <code>/__abide/inspector</code> route (off by default).</td></tr>

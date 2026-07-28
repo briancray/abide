@@ -14,6 +14,10 @@ import { trace } from './trace.ts'
 
 const TRACEPARENT = /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/
 
+// The 256-colour SGR prefix a pretty line paints its channel label with. Built from a string because a
+// raw ESC in a regex literal is a lint error (and invisible in a diff).
+const CHANNEL_COLOR = new RegExp(`${String.fromCharCode(27)}\\[38;5;(\\d+)m(?=abide)`)
+
 // Capture what log writes to stdout for the duration of `run`, restoring the real stream after.
 function captureStdout(run: () => void): string[] {
     const writes: string[] = []
@@ -49,6 +53,8 @@ function captureStderr(run: () => void): string[] {
 afterEach(() => {
     delete Bun.env.DEBUG
     delete Bun.env.ABIDE_LOG_FORMAT
+    delete Bun.env.NO_COLOR
+    delete Bun.env.FORCE_COLOR
     delete Bun.env.ABIDE_APP_NAME
     delete (globalThis as { localStorage?: unknown }).localStorage
 })
@@ -147,6 +153,77 @@ describe('log — format toggles on ABIDE_LOG_FORMAT', () => {
         if (firstWrite === undefined) throw new Error('expected a stdout write')
         expect(firstWrite).toContain('\t')
         expect(() => JSON.parse(firstWrite.trim())).toThrow()
+    })
+
+    test('ABIDE_LOG_FORMAT names a MACHINE format — tsv wins over a forced colour', () => {
+        const writes = captureStdout(() => {
+            Bun.env.ABIDE_LOG_FORMAT = 'tsv'
+            Bun.env.FORCE_COLOR = '1'
+            log.info('hello')
+        })
+        const firstWrite = writes[0]
+        if (firstWrite === undefined) throw new Error('expected a stdout write')
+        expect(firstWrite).toContain('\t')
+        expect(firstWrite).not.toContain('\x1b[')
+    })
+
+    test('FORCE_COLOR writes coloured columns, not tabs', () => {
+        const writes = captureStdout(() => {
+            Bun.env.FORCE_COLOR = '1'
+            Bun.env.DEBUG = 'abide:*'
+            log.channel('abide:rpc').info('hello')
+        })
+        const firstWrite = writes[0]
+        if (firstWrite === undefined) throw new Error('expected a stdout write')
+        expect(firstWrite).not.toContain('\t')
+        expect(firstWrite).toContain('\x1b[') // colour
+        expect(firstWrite).toContain('abide:rpc')
+        expect(firstWrite).toContain('hello')
+        // local wall-clock time, no date
+        expect(firstWrite).toMatch(/\d\d:\d\d:\d\d\.\d\d\d/)
+        expect(firstWrite).not.toContain('T')
+    })
+
+    test('a channel keeps ONE colour across lines, and two channels differ', () => {
+        const writes = captureStdout(() => {
+            Bun.env.FORCE_COLOR = '1'
+            Bun.env.DEBUG = 'abide:*'
+            log.channel('abide:rpc').info('one')
+            log.channel('abide:rpc').info('two')
+            log.channel('abide:ssr').info('three')
+        })
+        const colorOf = (line: string): string => {
+            const match = line.match(CHANNEL_COLOR)
+            if (match === null) throw new Error(`no channel colour in ${JSON.stringify(line)}`)
+            return match[1] as string
+        }
+        expect(colorOf(writes[0] as string)).toBe(colorOf(writes[1] as string))
+        expect(colorOf(writes[2] as string)).not.toBe(colorOf(writes[0] as string))
+    })
+
+    test('a multi-line message indents its continuation lines under the first', () => {
+        const writes = captureStderr(() => {
+            Bun.env.FORCE_COLOR = '1'
+            log.error('boom\n  at somewhere')
+        })
+        const firstWrite = writes[0]
+        if (firstWrite === undefined) throw new Error('expected a stderr write')
+        const lines = firstWrite.trimEnd().split('\n')
+        expect(lines.length).toBe(2)
+        expect(lines[1]).toContain('    ')
+        expect(lines[1]).toContain('at somewhere')
+    })
+
+    test('NO_COLOR falls back to the plain tab-separated line', () => {
+        const writes = captureStdout(() => {
+            Bun.env.NO_COLOR = '1'
+            delete Bun.env.ABIDE_LOG_FORMAT
+            log.info('hello')
+        })
+        const firstWrite = writes[0]
+        if (firstWrite === undefined) throw new Error('expected a stdout write')
+        expect(firstWrite).toContain('\t')
+        expect(firstWrite).not.toContain('\x1b[')
     })
 })
 
