@@ -182,15 +182,21 @@ test('hydrate adopts the server-rendered HTML in place (no duplication)', async 
 // that broke: collecting a 100ms floor of TEARDOWN samples meant paying ~5× that in untimed mounts, so
 // the unmount pass ran 4.7× the mount pass (20.5s of a 35.5s run) and the page appeared to grind to a
 // halt partway through. Asserted as a RATIO so it holds on any machine, fast or slow.
-test('the unmount pass does not outrun the mount pass — the untimed setup stays bounded', async ({ page }) => {
+test('the unmount pass does not outrun the mount pass — the untimed setup stays bounded', async ({
+    page,
+}) => {
     test.setTimeout(180_000)
     await page.goto('/platform/bench/client')
     await page.getByTestId('run').click()
 
     const started = Date.now()
-    await expect(page.getByTestId('mount-row')).toHaveCount(RENDER_SCENARIOS.length, { timeout: 60_000 })
+    await expect(page.getByTestId('mount-row')).toHaveCount(RENDER_SCENARIOS.length, {
+        timeout: 60_000,
+    })
     const mountMs = Date.now() - started
-    await expect(page.getByTestId('unmount-row')).toHaveCount(RENDER_SCENARIOS.length, { timeout: 60_000 })
+    await expect(page.getByTestId('unmount-row')).toHaveCount(RENDER_SCENARIOS.length, {
+        timeout: 60_000,
+    })
     const unmountMs = Date.now() - started - mountMs
 
     expect(mountMs).toBeGreaterThan(0)

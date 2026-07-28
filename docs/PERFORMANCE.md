@@ -40,6 +40,7 @@ Every hypothesis in a sweep is a guess until ablated. The record from one sessio
 | `Object.defineProperty` on component props is the boundary cost | 67 ns — **1.3%** of the row |
 | `keyFor`'s per-item `Object.create` is the reconcile floor | 4 ns/item — **4%** |
 | `list-select` at 530× is a reactive fan-out defect | **96% happy-dom's `classList.toggle`**; effect dispatch was 27 ns, exactly raw observer cost |
+| a docs page's 1.3 ms → 9 ms TTFB tail is GC pauses | **not GC.** Forcing a full collect between renders left the tail unchanged (p99 3.69 → 3.90 ms) and only raised p50 by its own cost. Still unattributed — and the machine is not the cause either: the hand-written 154 KB string build it was compared against is flat at p50 0.02 ms, max 0.38 ms |
 
 Three confident guesses, three wrong. The cost of checking was minutes; the cost of not checking would
 have been a risky refactor sized off a fiction.
@@ -61,6 +62,25 @@ Flat in a real browser. happy-dom was wrong in **both** directions — understat
 overstating large ones. Any claim about DOM-op cost must come from `/platform/bench/client`, which runs
 in the real browser. happy-dom is fine for SSR `render` (string building, no DOM) and for the
 primitives bench (no DOM at all).
+
+**The same trap runs the other way on the request path.** A devtools waterfall's `Time` column for the
+document is not server time, and on localhost it is mostly *not* server time. Measured on the docs home
+page: the server answers in **0.26 ms at p50** (400 samples, `abide dev` and `abide start` within noise
+of each other, max 4.6 ms), while Safari's network panel reported 5.95–14.5 ms across four refreshes of
+that same page. Everything between those two numbers is browser and OS scheduling, and it is where
+nearly all of the observed variance lives — a busy box (language servers, other watchers) moves it far
+more than anything in the render does. Safari also **clamps navigation timing to 1 ms**, so sub-ms
+differences are invisible there by construction.
+
+So before attributing a browser-observed number to the framework, get two things:
+
+- the **phase split**, from `PerformanceResourceTiming` (`responseStart - requestStart` is the server;
+  everything before it is the browser) — not the single `Time` cell
+- a **bare `Bun.serve` returning the identical bytes**, loaded in the *same browser*, as the §1 baseline
+  in that substrate
+
+Skipping the second is how "the framework is slow to first byte" survives: the baseline lands in the
+same range, and the ratio is what you were actually asking about.
 
 ## 4. Three budgets for emitted code
 
@@ -182,9 +202,35 @@ glitch-free notification (~27 ns/observer) are likewise the model working, not o
 |---|---|---|
 | frontend corpus | `cd packages/bench && bun run bench` | SSR `render`; relative mount/unmount/update |
 | primitives | `bun run bench:server` | `state`/`memo`/probes/streams/channel/route |
+| **document transport** | `bun run bench:document` | **request→TTFB→complete→boot**; when a byte ARRIVES |
 | before vs after | `bun run bench:delta` | working tree against a base git ref |
 | SSR render, live | `/platform/bench` | streamed render bench + the O(n) gate |
 | **real browser** | `/platform/bench/client` | **any DOM-op claim** — mount, unmount, hydrate, update |
+
+`bench:document` is §4's three budgets transposed from emitted code onto the request path. Where a
+template is budgeted in allocations, ticks and nodes, a document is budgeted in three timestamps:
+
+- **ttfb** — request → first byte: the shell render, and everything that blocks it
+- **complete** — request → last byte: plus the streamed drain
+- **boot** — request → the byte at which the boot entry's URL is first readable
+
+The third is the one that had no surface, and a defect lived in exactly that gap: the boot `<script>`
+sits in `documentTail`, so the browser could not discover the client bundle until the drain finished —
+128ms instead of 7ms on a page with one slow read, 4494ms instead of 364ms on a heavy one. `render` was
+unchanged, dispatch was unchanged, every runner stayed green, because none of them asks *when a byte
+arrives*. The reported **coupling** (`boot ÷ ttfb`) is the contract: 1.0 means the client download is
+independent of how long the page's reads take, which is what streaming SSR promises and was previously
+honouring for paint but not for hydration.
+
+Two habits this surface needs that the others do not:
+
+- **Report the distribution, not the mean.** The question is usually "why is it *sometimes* slow", and
+  a mean over a long thin tail describes neither mode. It prints p50/p90/p99/max.
+- **Only a streaming shape distinguishes anything** (§8). On a read-free page `ttfb` and `complete`
+  coincide, so its coupling reads 1.0 against both the fixed and the broken implementation. Measured:
+  `doc/streamed-read` reports 8.12× against the defect and 1.00× with it fixed, while `doc/static` and
+  `doc/inline-read` report 1.00× either way. That is why the defect survived — the corpus had no case
+  in which the two implementations could differ.
 
 Every CLI runner takes an **explicit list** instead of the whole suite: `--list` prints its labels,
 then bare patterns select (`bun run bench for-list-1000`, `bun run bench:server memo probe`,
@@ -238,6 +284,7 @@ Disjoint, so agents do not collide. Each is a file set plus the question that fi
 | memo | `shared/memo.ts` | slot machinery, keying, probe reads, envelope identity (§6) |
 | codec | `shared/internal/codec.ts` | `canonicalKey` on the hot path; encode/decode |
 | server request path | `server/internal/router.ts`, `makeRpc.ts` | per-request work; middleware composition |
+| document transport | `server/internal/pages.ts`, `clientBundle.ts` | when each byte arrives; what the head defers (`bench:document`) |
 | streams | `shared/internal/replayableStream.ts`, `ui/internal/streamScheduler.ts` | per-chunk cost, buffering, fan-out |
 | channel / socket | `shared/channel.ts`, `shared/internal/channelHub.ts` | publish fan-out, room keying |
 

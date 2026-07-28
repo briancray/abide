@@ -55,7 +55,7 @@ import {
 } from './internal/reactiveScope.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
-import type { Room } from './internal/room.ts'
+import { type Room, room } from './internal/room.ts'
 import { markSettled } from './internal/settledRead.ts'
 import {
     sharedCacheBounded,
@@ -201,6 +201,12 @@ interface AutoBacking<T> {
     // The run `merged` is currently SERVING. Equal to `fill`'s latest except while a refetch clock is
     // holding a newer fill back, which is exactly when a `publish` override must not stamp the live one.
     currentRun: () => number
+    // Drop a pending gated publication. The gate itself stays closed over `createAutoBacking`, so
+    // before this existed it was reachable from exactly one place — the request-scope disposer — and
+    // `cancelClock` could not see it. That is why `invalidate` cancelled a scheduled revalidation on
+    // the pulled path and not on the auto path, against the stated rule (deferring a discard would
+    // serve known-wrong data), and why `disposeSlot` left a timer holding a disposed computed.
+    cancelGate: () => void
 }
 
 // The refetch clock on a DERIVATION: one gated auto backing's publication window. `admitted` is the
@@ -993,6 +999,10 @@ export function memo<Args, T>(
     // holding its closure and firing a load into a cache entry nothing can reach). Lowering `refreshing`
     // is left to the caller — `dropSlot`/`disposeSlot` both write a state, and `setState` clears it.
     function cancelClock(slot: Slot<Args, T>): void {
+        // BOTH clocks. A slot has one refetch window but two implementations of it — `slot.clock` on
+        // the pulled path, the auto backing's gate on the derivation path — and cancelling only the
+        // first is why an `invalidate` left a scheduled auto publication armed.
+        slot.auto?.cancelGate()
         const clock = slot.clock
         if (clock === undefined || clock.timer === undefined) return
         clearTimeout(clock.timer)
@@ -1198,12 +1208,17 @@ export function memo<Args, T>(
             onScopeDispose(() => {
                 // The gate's timer closes over `fill`, so it has to go first or a pending admission
                 // would fire into a disposed computed at the end of the request.
-                if (gate?.timer !== undefined) clearTimeout(gate.timer)
+                cancelGate()
                 merged.dispose()
                 fill.dispose()
             })
         }
-        return { version, fill, override, merged, filled: () => ranOnce, currentRun }
+        const cancelGate = (): void => {
+            if (gate?.timer === undefined) return
+            clearTimeout(gate.timer)
+            gate.timer = undefined
+        }
+        return { version, fill, override, merged, filled: () => ranOnce, currentRun, cancelGate }
     }
 
     // Decide this slot's fill path, exactly once. Only the value the FIRST run produces distinguishes a
@@ -1735,7 +1750,7 @@ export function memo<Args, T>(
         ...published: [...Room<Args>, next: T | ((current: T | undefined) => T)]
     ): void => {
         const next = published[published.length - 1] as T | ((current: T | undefined) => T)
-        const args = (published.length > 1 ? published[0] : undefined) as Args
+        const args = room<Args>(published, 1)
         const slot = ensureSlot(args)
         resolveMode(slot)
         const auto = slot.auto
@@ -1834,6 +1849,11 @@ export function memo<Args, T>(
         // make `m.state(x)` ambiguous — room key, or initial? An ARGLESS memo has no room, so a lone
         // argument can only be the initial; a KEYED memo always names its room first, so the initial is
         // whatever follows it. `publish`/`watch` never hit this because their payload is mandatory.
+        //
+        // So this is the ONE site that cannot call `room()` (the `Room` type's runtime twin, used by
+        // `publish`/`watch` above and by channel/socket): that helper resolves the ambiguity from the
+        // PAYLOAD COUNT, which here is not fixed. Left spelled out deliberately — folding it in would
+        // need a "how many trailing arguments are there really?" input the call cannot supply.
         const keyed = fn.length > 0
         const slotArgs = (keyed ? args[0] : undefined) as Args
         const hasInitial = args.length > (keyed ? 1 : 0)
@@ -1873,7 +1893,7 @@ export function memo<Args, T>(
         ...watched: [...Room<Args>, handler: (value: T | undefined) => void]
     ): (() => void) => {
         const handler = watched[watched.length - 1] as (value: T | undefined) => void
-        const args = (watched.length > 1 ? watched[0] : undefined) as Args
+        const args = room<Args>(watched, 1)
         const slot = ensureSlot(args)
         resolveMode(slot)
         let first = true

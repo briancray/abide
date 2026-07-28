@@ -26,7 +26,9 @@
 
 import { envMs } from '../../shared/internal/envMs.ts'
 import { isTypedError } from '../../shared/internal/isTypedError.ts'
+import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
 import type { Payload } from '../../shared/internal/responseSource.ts'
+import { type RpcMemoDeclaration, rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import type {
     MutationCallArgs,
     MutationInvokeArgs,
@@ -92,15 +94,11 @@ export interface RpcOptions {
     // BILATERAL: carried to the browser proxy's memo too, so an author who rate-limits revalidation gets
     // it on both sides. That is where it earns most of its keep — a socket broadcast storm calling
     // `fn.refresh()` is a client-side stream of triggers.
-    memo?:
-        | false
-        | {
-              ttl?: number
-              crossRequest?: boolean
-              tags?: string[]
-              throttle?: number
-              debounce?: number
-          }
+    //
+    // The declaration shape is the NORMALIZER's own input type (`shared/internal/rpcMemoPolicy`), not a
+    // structural twin of it — one shape means a field added here is a field the normalizer sees, rather
+    // than one it silently drops on the way to the wire.
+    memo?: false | RpcMemoDeclaration
 }
 
 // An `output` schema, when present, must ACCEPT the handler's resolved return payload — its Standard
@@ -323,28 +321,20 @@ export function makeRead<Args, T>(
 ): Rpc<Args, T> {
     const options = opts ?? {}
 
-    // Only forward set fields — exactOptionalPropertyTypes forbids an explicit undefined.
-    const memoOptions: MemoOptions = {}
-    // `memo: false` on a read = don't retain → ttl:0 (coalesce-only, always revalidate), keeping the
-    // reactive memo surface (a full memo bypass is a mutation-only opt-out, since reads need the surface).
-    if (options.memo === false) {
-        memoOptions.ttl = 0
-    } else {
-        const memoConfig = options.memo
-        if (memoConfig?.ttl !== undefined) memoOptions.ttl = memoConfig.ttl
-        // `crossRequest` opts this read into the process-global cross-request cache (rpc-core §2).
-        // Server-only and fail-closed inside the memo: the handler runs scope-exited and reads require a
-        // live scope. Named for what it does — `state.shared` is a different concept (ADR 0027 D5).
-        if (memoConfig?.crossRequest === true) memoOptions.crossRequest = true
-        // Tags register a crossRequest read for the global `invalidate/refresh({ tags })` selectors
-        // (rpc-core §8). Honored only on a crossRequest memo (server-only registry); inert otherwise.
-        if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
-        // The SWR refetch clock (rpc-core §3): rate-limits this read's explicit revalidation. Setting
-        // both edges is a TypeError from the memo constructor below, which surfaces at module load with
-        // the route's own stack — no second validation needed here.
-        if (memoConfig?.throttle !== undefined) memoOptions.throttle = memoConfig.throttle
-        if (memoConfig?.debounce !== undefined) memoOptions.debounce = memoConfig.debounce
-    }
+    // ONE normalizer decides the policy (`shared/internal/rpcMemoPolicy`) and ONE builder turns it into
+    // memo options — the same pair the wire spec and the browser proxy read, so a read's server memo and
+    // its client memo cannot disagree. `memo: false` on a read = retain nothing → ttl:0 (coalesce-only,
+    // always revalidate) while keeping the reactive surface; the full bare-call bypass is the mutation's
+    // opt-out. `crossRequest` opts into the process-global cache (rpc-core §2; server-only and
+    // fail-closed inside the memo — the handler runs scope-exited). Setting both refetch-clock edges is
+    // a TypeError from the memo constructor below, which surfaces at module load with the route's own
+    // stack, so there is no second validation here.
+    const readPolicy = rpcMemoPolicy(options.memo, true)
+    const memoOptions: MemoOptions = memoOptionsFor(readPolicy)
+    // The SERVER-only half of the policy: which store the slot lives in. `memoOptionsFor` withholds it
+    // by design, because a browser has no request to cross and a `crossRequest` memo fails closed
+    // outside a request scope.
+    if (readPolicy.crossRequest) memoOptions.crossRequest = true
     // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets
     // the actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
     let broadcast: MemoNotify | undefined
@@ -388,19 +378,18 @@ export function makeMutation<Args, R>(
     // and the whole probe surface. It differs only in the DEFAULT policy: ttl:0 (coalesce identical
     // concurrent in-flight calls, retain nothing) where a read retains. `memo: { ttl }` opts a mutation
     // into retention and the surface reflects it. `memo: false` still builds a memo so the surface
-    // exists (probes read an empty slot), but the bare CALL bypasses it for a direct at-least-once run.
-    const memoed = options.memo !== false
-    const memoConfig = options.memo === false ? undefined : options.memo
-    const memoOptions: MemoOptions = { ttl: memoConfig?.ttl ?? 0 }
-    if (memoConfig?.crossRequest === true) memoOptions.crossRequest = true
-    if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
-    // The refetch clock gates REVALIDATION of a retained value, so it only bites on a mutation that
-    // opted into retention (`memo: { ttl }`) — at the default ttl:0 there is no stale value to serve
-    // and every trigger is a cold load. Forwarded regardless: the option pairing is the author's, and
-    // silently dropping it on the verb that happens to default to 0 is the kind of surface asymmetry
-    // this file already carries `ttl` and `tags` across.
-    if (memoConfig?.throttle !== undefined) memoOptions.throttle = memoConfig.throttle
-    if (memoConfig?.debounce !== undefined) memoOptions.debounce = memoConfig.debounce
+    // exists (probes read an empty slot), but the bare CALL bypasses it for a direct at-least-once run —
+    // which is the one place the policy is verb-dependent, so `rpcMemoPolicy` is told which verb it is
+    // and returns `memoed` rather than each side re-reading `options.memo !== false`.
+    //
+    // The refetch clock is forwarded even at ttl:0, where it cannot bite (nothing retained to
+    // revalidate): the option pairing is the author's, and dropping it on the verb that happens to
+    // default to 0 is the surface asymmetry `ttl`/`tags` are already carried across to avoid.
+    const policy = rpcMemoPolicy(options.memo, false)
+    const memoed = policy.memoed
+    const memoOptions: MemoOptions = memoOptionsFor(policy)
+    // Server-only, as in `makeRead` above.
+    if (policy.crossRequest) memoOptions.crossRequest = true
     let broadcast: MemoNotify | undefined
     // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
     // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.

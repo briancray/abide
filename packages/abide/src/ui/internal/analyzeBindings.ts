@@ -41,6 +41,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { Root, Script, TemplateNode } from './ast.ts'
+import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
 import { splitParams } from './splitParams.ts'
 
 const K = SyntaxKind
@@ -848,37 +849,6 @@ function isShadowed(shadows: ShadowedBinding[], name: string, idx: number): bool
 // rewriteCellRefs — the crux
 // ---------------------------------------------------------------------------
 
-// Operators that cannot END (or, when leading a line, cannot START a fresh statement after) an
-// expression: a line break adjacent to one is a CONTINUATION, so JS ASI inserts no semicolon and the
-// RHS keeps going on the next line. Used to keep `rhsExtent` from truncating a multi-line RHS such as
-// `count = a +` ⏎ `  b` mid-expression (which emitted `count.set(a +)` with an orphaned `b`).
-const CONTINUATION_OPERATORS: Set<SyntaxKind> = new Set([
-    K.PlusToken,
-    K.MinusToken,
-    K.AsteriskToken,
-    K.SlashToken,
-    K.PercentToken,
-    K.AsteriskAsteriskToken,
-    K.AmpersandAmpersandToken,
-    K.BarBarToken,
-    K.QuestionQuestionToken,
-    K.AmpersandToken,
-    K.BarToken,
-    K.CaretToken,
-    K.LessThanToken,
-    K.GreaterThanToken,
-    K.LessThanEqualsToken,
-    K.GreaterThanEqualsToken,
-    K.EqualsEqualsToken,
-    K.ExclamationEqualsToken,
-    K.EqualsEqualsEqualsToken,
-    K.ExclamationEqualsEqualsToken,
-    K.DotToken,
-    K.QuestionDotToken,
-    K.EqualsToken,
-    K.EqualsGreaterThanToken,
-])
-
 // Extent of an assignment/compound RHS starting at token `start`; returns the last RHS token index.
 // Stops at a depth-0 comma/semicolon, an enclosing bracket close, or a statement-boundary line break.
 function rhsExtent(tokens: Tok[], start: number): number {
@@ -894,8 +864,8 @@ function rhsExtent(tokens: Tok[], start: number): number {
             if (
                 t.nl &&
                 j > start &&
-                !CONTINUATION_OPERATORS.has(tokenAt(tokens, j - 1).kind) &&
-                !CONTINUATION_OPERATORS.has(kind)
+                !CONTINUATION_OPERATORS.afterPrev.has(tokenAt(tokens, j - 1).kind) &&
+                !CONTINUATION_OPERATORS.atNext.has(kind)
             )
                 return j - 1
         }

@@ -41,7 +41,12 @@ test('Config page lists all built-in env vars', async ({ page }) => {
     await expect(table).toContainText('ABIDE_IDENTITY_SECRET')
     await expect(table).toContainText('ABIDE_MAX_STREAM_BUFFER_SIZE')
     await expect(table).toContainText('ABIDE_RPC_TIMEOUT')
-    await expect(table.locator('tbody tr')).toHaveCount(18)
+    // Two rows were removed as never-implemented: `ABIDE_APP_DIR` (a built-output path is a compile
+    // flag, `--out`, not a runtime env var) and `ABIDE_DEV_SURFACE`. This count is what caught the
+    // page still advertising them, which is the whole reason it is asserted rather than spot-checked.
+    await expect(table).not.toContainText('ABIDE_APP_DIR')
+    await expect(table).not.toContainText('ABIDE_DEV_SURFACE')
+    await expect(table.locator('tbody tr')).toHaveCount(16)
 })
 
 test('soft-nav from CLI to Deploy swaps content without a full reload', async ({ page }) => {

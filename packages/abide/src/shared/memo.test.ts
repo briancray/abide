@@ -1539,4 +1539,50 @@ describe('memo — the SWR refetch clock', () => {
             expect(seen).toEqual(['a', 'local', 'b'])
         })
     })
+
+    // A slot has ONE refetch window and two implementations of it — `slot.clock` on the pulled path,
+    // the auto backing's gate on the derivation path. `cancelClock` reached only the first, because
+    // the gate lived in a closure the slot could not see, so `invalidate`/`disposeSlot` left a timer
+    // armed that outlives the thing it was scheduled for.
+    //
+    // This asserts the WORK, not the value, and it has to: the stale timer reads its source at FIRE
+    // time, so it publishes the same value the invalidate re-run already produced and the identity
+    // cutoff swallows it. A value assertion passes with the bug in place. What is actually wrong is
+    // that a timer holding a disposed computed is still scheduled — so that is what is counted.
+    test('invalidate cancels the scheduled publication on a derivation, not just on the load path', async () => {
+        const realSetTimeout = globalThis.setTimeout
+        const realClearTimeout = globalThis.clearTimeout
+        const live = new Set<unknown>()
+        globalThis.setTimeout = ((handler: () => void, ms?: number): unknown => {
+            const id: unknown = realSetTimeout(() => {
+                live.delete(id)
+                handler()
+            }, ms)
+            live.add(id)
+            return id
+        }) as typeof globalThis.setTimeout
+        globalThis.clearTimeout = ((id: never): void => {
+            live.delete(id)
+            realClearTimeout(id)
+        }) as typeof globalThis.clearTimeout
+        try {
+            await withScope(async () => {
+                const query = state('a')
+                const slow = memo(() => query(), { debounce: 80 })
+                effect(() => {
+                    slow()
+                })
+
+                query.set('b') // arms the trailing admission
+                await tick()
+                expect(live.size).toBe(1)
+
+                slow.invalidate()
+                expect(live.size).toBe(0)
+            })
+        } finally {
+            globalThis.setTimeout = realSetTimeout
+            globalThis.clearTimeout = realClearTimeout
+        }
+    })
 })

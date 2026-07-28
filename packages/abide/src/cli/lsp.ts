@@ -36,6 +36,7 @@ import {
 import { encodeSemanticTokens } from '../ui/internal/encodeSemanticTokens.ts'
 import { parse } from '../ui/internal/parse.ts'
 import { templateSemanticTokens } from '../ui/internal/templateSemanticTokens.ts'
+import { validateTemplate } from '../ui/internal/validateTemplate.ts'
 import { findAbideFiles, offsetToLineColumn, overlayFs, SUPPRESSED_CODES } from './check.ts'
 
 export interface LspServerOptions {
@@ -134,6 +135,14 @@ function lowerProject(dir: string, overrides: Record<string, string>): LoweredPr
                 column: position.column ?? 1,
                 message: error instanceof Error ? error.message : String(error),
             })
+            continue
+        }
+        // The build lane's structural gates (see `validateTemplate`). Reported through the same
+        // channel as a parse error so the editor shows what `abide build` would reject, rather than
+        // going green on a template that cannot be built.
+        const rejected = validateTemplate(root)
+        if (rejected !== undefined) {
+            parseErrors.set(abidePath, { line: 1, column: 1, message: rejected })
             continue
         }
         files[`${abidePath}.d.ts`] = componentDts(source, root)

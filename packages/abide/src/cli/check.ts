@@ -35,6 +35,7 @@ import {
     type Segment,
 } from '../ui/internal/emitCheck.ts'
 import { parse } from '../ui/internal/parse.ts'
+import { validateTemplate } from '../ui/internal/validateTemplate.ts'
 
 // A single mapped diagnostic against a `.abide` file. `line`/`column` are 1-based.
 export interface CheckDiagnostic {
@@ -117,6 +118,14 @@ export async function check(dir: string): Promise<CheckResult> {
                 code: 0,
                 message: parseError instanceof Error ? parseError.message : String(parseError),
             })
+            continue
+        }
+        // The build lane's structural gates, asked here so `abide check` rejects exactly what
+        // `abide build` rejects. Without this the check lane ran off `parse` alone and was silent on
+        // four constructs the build hard-throws on — a green check followed by a failing build.
+        const rejected = validateTemplate(root)
+        if (rejected !== undefined) {
+            diagnostics.push({ file: abidePath, line: 1, column: 1, code: 0, message: rejected })
             continue
         }
         virtualFiles[`${abidePath}.d.ts`] = componentDts(source, root)

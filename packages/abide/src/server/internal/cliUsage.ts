@@ -5,18 +5,15 @@
 // `command` it is that subcommand's flag list; without, the program overview.
 
 import type { CliCommand } from './cliCommands.ts'
+import { RESERVED_CLI_COMMANDS } from './RESERVED_CLI_COMMANDS.ts'
 
-// The reserved subcommands, listed in help alongside the app's own. They WIN over an rpc of the same
-// name — see `RESERVED_CLI_COMMANDS` for why.
-const BUILT_INS: [string, string][] = [
-    ['serve', 'host the app in the foreground (--port <n>)'],
-    ['connect', 'point at a deployment until `disconnect` (<url>; bare = show where)'],
-    ['disconnect', 'forget that target and go back to hosting the app'],
-    ['login', 'remember a credential for the deployment you point at (--token <t>)'],
-    ['logout', 'drop that credential (locally — the token stays valid until it expires)'],
-    ['identity', 'ask the server who it thinks you are'],
-    ['help', 'this help; `help <command>` for one command'],
-]
+// The reserved names, listed in help alongside the app's own — read off the one table rather than
+// restated, so help lists exactly what the dispatcher and the REPL intercept. They WIN over an rpc of
+// the same name; see `RESERVED_CLI_COMMANDS` for why.
+const BUILT_INS: [string, string][] = Object.entries(RESERVED_CLI_COMMANDS).map(([name, entry]) => [
+    name,
+    entry.description,
+])
 
 const OPTIONS: [string, string][] = [
     ['--url <origin>', 'target a deployment for THIS run (over ABIDE_APP_URL, over `connect`)'],
@@ -50,6 +47,10 @@ function flagLine(command: CliCommand): string[] {
             type === 'boolean' ? 'flag' : `<${type}>`,
             field.required ? 'required' : 'optional',
             field.enum === undefined ? undefined : `one of ${field.enum.map(String).join(', ')}`,
+            // Spelled out here rather than compressed into the placeholder: `help` has the width for
+            // a sentence, and this is the column someone reads when they are deciding whether they
+            // need the flag at all.
+            field.default === undefined ? undefined : `default ${String(field.default)}`,
             field.description,
         ]
             .filter((part) => part !== undefined)

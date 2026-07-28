@@ -24,7 +24,9 @@ import {
 import { peekSettled } from '../../shared/internal/settledRead.ts'
 import { streamTranscriptOf } from '../../shared/internal/streamTranscript.ts'
 import { log } from '../../shared/log.ts'
+import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
+import { STREAM_SENTINEL } from './STREAM_SENTINEL.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
 export { closeEffectScope, disposeEffectScope, effect, isThenable, openEffectScope, state, untrack }
@@ -168,15 +170,14 @@ const COMMENT_NODE = 8
 // advances; block/element descent save+reseek it. Emitted client code, under `hydrating`, drives the
 // cursor via these helpers INSTEAD of positional nav; the clone (mount) path never touches it.
 //
-// Comment-anchor conventions (emitted identically by `templatePlan`/`emitServer`):
+// Comment-anchor conventions (emitted identically by `templatePlan`/`emitServer`; the block pair's
+// values come from the shared `BLOCK_ANCHOR`, which is what makes "identically" a fact rather than a
+// promise):
 //   • `<!---->`    (empty data)  — a leaf slot anchor (scalar interp / await / html).
 //   • `<!--[-->`   (data "[")    — a block/component OPEN anchor. A component subtree ALWAYS arrives through
 //                                  a component slot (`<Name/>`, `<slot/>`, `{children()}`), never an
 //                                  interpolation — so a leaf position is always a scalar.
 //   • `<!--]-->`   (data "]")    — the matching CLOSE anchor.
-const BLOCK_OPEN = '['
-const BLOCK_CLOSE = ']'
-
 let hydrateCursor: Node | null = null
 // Set by `forBlock` right before it claims a keyed item so that item's body mount fn bounds its
 // `$roots` by the CURSOR (exact item extent) rather than by an anchor it cannot know up front.
@@ -242,8 +243,8 @@ export function findBlockClose(open: Node | null): Node | null {
     while (node !== null) {
         if (node.nodeType === COMMENT_NODE) {
             const value = node.nodeValue
-            if (value === BLOCK_OPEN) depth++
-            else if (value === BLOCK_CLOSE) {
+            if (value === BLOCK_ANCHOR.open) depth++
+            else if (value === BLOCK_ANCHOR.close) {
                 if (depth === 0) return node
                 depth--
             }
@@ -407,7 +408,7 @@ function claimBlock(
 // (decision 5), the counterpart to `claimElement`'s tag check. No-op off hydration.
 function requireOpen(open: Node | null, where: string): void {
     if (!hydrating) return
-    if (open === null || open.nodeType !== COMMENT_NODE || open.nodeValue !== BLOCK_OPEN) {
+    if (open === null || open.nodeType !== COMMENT_NODE || open.nodeValue !== BLOCK_ANCHOR.open) {
         throw new HydrationMismatch(`${where} open anchor missing`)
     }
 }
@@ -1042,7 +1043,7 @@ function unwrapStreamSlot(parent: Node, open: Node): void {
     const marker = open.nextSibling
     if (marker === null || marker.nodeType !== 8) return
     const id = (marker as Comment).data
-    if (!id.startsWith('ab-p:')) return
+    if (!id.startsWith(STREAM_SENTINEL.pending)) return
     const sentinel = document.getElementById(id)
     parent.removeChild(marker)
     if (sentinel !== null) sentinel.remove()
@@ -1254,6 +1255,9 @@ export function tryBlock(
     // mounts — otherwise the half-rendered body leaks alongside the catch branch (decision: JS-semantics
     // error boundary — the body's side effects are rolled back).
     const boundary = marker.previousSibling
+    // Set when a body throw was recovered under hydration — from there on `:catch`/`:finally` build
+    // FRESH rather than claiming (see the catch block).
+    let recovered = false
     try {
         // A HYDRATION mismatch (wrong tag/anchor) in the body is NOT a user error — `claimBlock` recovers
         // it in place (clear + recreate) and returns normally; only genuine user throws reach the `:catch`.
@@ -1261,15 +1265,27 @@ export function tryBlock(
     } catch (error) {
         for (const d of disposers) d()
         disposers.length = 0
-        while (marker.previousSibling !== null && marker.previousSibling !== boundary)
-            remove(marker.previousSibling)
-        if (catchFn !== null) {
-            disposers.push(catchFn(error)(parent, marker))
+        if (hydrating) {
+            // The server region does NOT hold a partial body paint here — the body threw during SSR too,
+            // so what the server painted is the `:catch` (+ `:finally`) branch. The failed claim consumed
+            // none of it and `boundary` is already its LAST node, so the create-path rollback below would
+            // stop on its first step and remove nothing, leaving the SSR'd catch branch beside the one
+            // mounted next — the block rendered twice. Clear the whole region and rebuild it in CREATE
+            // mode, the same localized recovery `claimBlock` performs for a structural mismatch.
+            clearBetween(open !== null ? open.nextSibling : null, marker)
+            recovered = true
         } else {
-            throw error
+            while (marker.previousSibling !== null && marker.previousSibling !== boundary)
+                remove(marker.previousSibling)
         }
+        if (catchFn === null) throw error
+        const mountCatch = (): Disposer => catchFn(error)(parent, marker)
+        disposers.push(recovered ? inCreateMode(mountCatch) : mountCatch())
     }
-    if (finallyFn !== null) disposers.push(finallyFn(parent, marker))
+    if (finallyFn !== null) {
+        const mountFinally = (): Disposer => finallyFn(parent, marker)
+        disposers.push(recovered ? inCreateMode(mountFinally) : mountFinally())
+    }
     return () => {
         for (const d of disposers) d()
         remove(marker)
@@ -1426,7 +1442,7 @@ function streamSentinelBefore(end: Node | null): Node | null {
     const previous = end === null ? null : end.previousSibling
     if (previous === null || previous.nodeType !== ELEMENT_NODE) return null
     const element = previous as Element
-    if (element.tagName !== 'TEMPLATE' || !element.id.startsWith('ab-l:')) return null
+    if (element.tagName !== 'TEMPLATE' || !element.id.startsWith(STREAM_SENTINEL.list)) return null
     return element
 }
 

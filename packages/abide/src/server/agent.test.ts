@@ -140,7 +140,7 @@ describe('rpcTools', () => {
     test('maps an Rpc to a tool whose run invokes the handler', async () => {
         const add = GET((args: { a: number; b: number }) => args.a + args.b)
 
-        const surface = rpcTools({ add })
+        const surface = rpcTools({ routes: { add } })
         expect(surface).toHaveLength(1)
 
         const tool = surface[0]
@@ -149,5 +149,37 @@ describe('rpcTools', () => {
 
         const result = await tool.run({ a: 2, b: 5 })
         expect(result).toBe(7)
+    })
+
+    // The agent surface IS the MCP tool set (machine-surfaces.md MS2.6), so it owes the same
+    // reachability answer. It did not give one: `rpcTools` re-derived everything from `route.__rpc`
+    // and never read `clients`, so an rpc withheld from every other client surface was still handed
+    // to a model as a callable tool.
+    test('honours clients.mcp: false — a withheld rpc is not in the tool set', () => {
+        const add = GET((args: { a: number; b: number }) => args.a + args.b)
+        const secret = GET(() => 'classified', { clients: { mcp: false } })
+        const nowhere = GET(() => 'nowhere', { clients: false })
+
+        const names = rpcTools({ routes: { add, secret, nowhere } }).map((tool) => tool.name)
+        expect(names).toEqual(['add'])
+    })
+
+    // The doc string and the input schema now come from the registry entry rather than from a second
+    // reading of the same options, so a tool description cannot drift from an MCP one.
+    test('carries the doc string and a raw JSON input schema from the registry', () => {
+        const echo = GET((args: { text: string }) => args.text, {
+            doc: 'Echo the text back.',
+            schemas: {
+                input: { type: 'object', properties: { text: { type: 'string' } } },
+            },
+        })
+
+        const tool = rpcTools({ routes: { echo } })[0]
+        if (tool === undefined) throw new Error('expected a mapped tool')
+        expect(tool.description).toBe('Echo the text back.')
+        expect(tool.inputSchema).toEqual({
+            type: 'object',
+            properties: { text: { type: 'string' } },
+        })
     })
 })

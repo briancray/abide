@@ -136,6 +136,51 @@ async function run(
 }
 
 describe('a compiled binary — the app as a command-line tool', () => {
+    test('completion: a shell script, and a callback that answers from the live schemas', async () => {
+        const dir = await fixtureProject()
+        const runDir = tempPath('cli-completion')
+        await mkdir(runDir, { recursive: true })
+        const executable = join(runDir, 'demoapp')
+        expect(await compile(dir, { out: executable })).toEqual([executable])
+        // Completion must work with no project beside the binary — the same condition every other
+        // one-shot run is held to.
+        await rm(dir, { recursive: true, force: true })
+
+        // The script is DYNAMIC: it delegates to the binary rather than baking names in, so it cannot
+        // go stale when a handler gains a field.
+        const script = await run(executable, ['completion', 'bash'])
+        expect(script.code).toBe(0)
+        expect(script.stdout).toContain('complete -o default -F _demoapp_complete demoapp')
+        expect(script.stdout).toContain('completion --line')
+
+        for (const shell of ['zsh', 'fish']) {
+            const emitted = await run(executable, ['completion', shell])
+            expect(emitted.code).toBe(0)
+            expect(emitted.stdout).toContain('completion --line')
+        }
+
+        // Naming no shell is a usage error, not a silent default — the caller is about to `eval` this.
+        const bare = await run(executable, ['completion'])
+        expect(bare.code).toBe(2)
+        expect(bare.stderr).toContain('bash|zsh|fish')
+
+        // The callback. Command names…
+        const commands = await run(executable, ['completion', '--line', 'gr'])
+        expect(commands.stdout.trim().split('\n')).toEqual(['greet'])
+
+        // …and FLAGS, from the app's own input schema. This is the part a hand-maintained completion
+        // list gets wrong: `--name` exists because `greet` declares it, nowhere else.
+        const flags = await run(executable, ['completion', '--line', 'greet --'])
+        expect(flags.stdout.trim().split('\n')).toContain('--name')
+        // `--args` is on EVERY command, so offering it meant it out-sorted whatever you were actually
+        // reaching for. It still works spelled out; completion just does not volunteer it.
+        expect(flags.stdout.trim().split('\n')).not.toContain('--args')
+
+        // A `clients: { cli: false }` rpc has no subcommand, so it must not be offered either.
+        const hidden = await run(executable, ['completion', '--line', 'hid'])
+        expect(hidden.stdout.trim()).toBe('')
+    }, 30_000)
+
     test('dispatches rpcs as subcommands, self-hosting, with no project on disk', async () => {
         const dir = await fixtureProject()
         const runDir = tempPath('cli-out')

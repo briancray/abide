@@ -18,9 +18,11 @@ import {
 } from '../../shared/internal/decodeStreamResponse.ts'
 import { isTypedError } from '../../shared/internal/isTypedError.ts'
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
+import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
 import { applyTagFrame } from '../../shared/internal/memoTags.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import type {
     MutationCallSurface,
     RpcCallOptions,
@@ -141,25 +143,47 @@ function mutationInit(method: string, args: unknown, sameOrigin: boolean): Reque
 export function clientProxy<Args = unknown, T = unknown>(
     name: string,
     method: string,
+    // The wire spec (`RpcEntry`), which IS the normalized policy plus transport. Every field admits an
+    // explicit `undefined` so a caller can forward the spec straight through — re-deriving a default
+    // here to satisfy `exactOptionalPropertyTypes` is how a fourth copy of the policy grew in
+    // `makeClientImports`.
     opts?: {
-        base?: string
-        crossRequest?: boolean
-        memo?: boolean
-        ttl?: number | null
-        tags?: string[]
-        throttle?: number
-        debounce?: number
-        timeout?: number
+        base?: string | undefined
+        crossRequest?: boolean | undefined
+        memo?: boolean | undefined
+        ttl?: number | null | undefined
+        tags?: string[] | undefined
+        throttle?: number | undefined
+        debounce?: number | undefined
+        timeout?: number | undefined
     },
 ): RpcCallSurface<Args, T> | MutationCallSurface<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
     // Decided once per proxy, not per call: `base` is fixed for the proxy's life.
     const sameOrigin = isSameOrigin(base)
-    // A read OR mutation whose author set `memo: false` bypasses the client memo on the bare call
-    // (direct fetch every time; at-least-once for a mutation), mirroring the server. Default reads and
-    // mutations are memoed.
-    const memoed = opts?.memo !== false
+    // The BROWSER half of the memo policy — normalized by the same function the server memo and the wire
+    // spec go through (`shared/internal/rpcMemoPolicy`), so the two memos are built from one answer
+    // rather than from two ladders that have to be kept in step. They were not in step: a `memo: false`
+    // READ ran at ttl:0 on the server and ttl:Infinity here, because the spec's `ttl: null` fell through
+    // to the memo's own default. `rpcMemoPolicy` is IDEMPOTENT, which is what makes re-normalizing an
+    // already-normalized spec correct; a spec with fields absent (a hand-built proxy) still lands on the
+    // per-verb defaults, in the one place they are written down.
+    const policy = rpcMemoPolicy(
+        opts?.memo === false
+            ? false
+            : {
+                  ttl: opts?.ttl,
+                  crossRequest: opts?.crossRequest,
+                  tags: opts?.tags,
+                  throttle: opts?.throttle,
+                  debounce: opts?.debounce,
+              },
+        read,
+    )
+    // A call whose author opted the bare call out of the memo (a `memo: false` mutation) fetches
+    // directly — at-least-once, no coalescing — mirroring the server.
+    const memoed = policy.memoed
     // The rpc's run deadline, BAKED at build time (ADR 0028 D6/D9). `0` = unbounded. The client half is
     // an independent enforcement of the same number, not the far end of one timer: this clock includes
     // DNS, connect, HTTP/1 connection queueing and body read, none of which the server's sees — so for a
@@ -199,35 +223,29 @@ export function clientProxy<Args = unknown, T = unknown>(
         return (await response.json()) as T
     }
 
-    // `ttl: null`/undefined → the memo default (Infinity, retain until invalidate) — a read's policy. A
-    // mutation's spec carries `ttl: 0` by default (coalesce concurrent, retain nothing); `memo: { ttl }`
-    // carries the author's value so a cached mutation retains on the client too.
-    const ttl = opts?.ttl
     // Deliberately a 1-arg wrapper: the memo classifies a body by `fn.length` (auto-tracked vs
     // args-keyed), so handing it `load`'s 2-arg shape directly would let a transport detail decide a
     // reactivity question.
     const loadForMemo = (args: Args): Promise<T> => load(args)
-    // The client memo carries the deadline too, so a timed-out slot EXPIRES rather than caching its
-    // TimeoutError for the rest of a read's infinite ttl (ADR 0028 D7). The fetch above is already
-    // armed; this is what makes the next read run cold instead of re-rejecting from the slot.
     // Tags reach the CLIENT memo (rpc-core §8): the tag verbs are isomorphic, so a `refresh({ tags })`
     // or `invalidate({ tags })` in the browser selects this proxy's memo and re-runs every live slot —
     // one registration per rpc, since a client proxy is a module singleton with one slot per args-key.
-    const tags = opts?.tags
-    // The SWR refetch clock (rpc-core §3) reaches the CLIENT memo for the same reason `ttl` and `tags`
-    // do — it is bilateral — and this is the half that earns it: a socket broadcast storm calling
-    // `fn.refresh()` is a browser-side stream of triggers, which is exactly what the clock collapses.
-    const memoOptions: MemoOptions = { timeout }
-    if (ttl !== null && ttl !== undefined) memoOptions.ttl = ttl
-    if (tags !== undefined && tags.length > 0) memoOptions.tags = tags
-    if (opts?.throttle !== undefined) memoOptions.throttle = opts.throttle
-    if (opts?.debounce !== undefined) memoOptions.debounce = opts.debounce
+    // The SWR refetch clock (rpc-core §3) reaches it for the same reason — it is bilateral — and this is
+    // the half that earns it: a socket broadcast storm calling `fn.refresh()` is a browser-side stream
+    // of triggers, which is exactly what the clock collapses.
+    const tags = policy.tags
+    // The client memo carries the deadline too, so a timed-out slot EXPIRES rather than caching its
+    // TimeoutError for the rest of a read's infinite ttl (ADR 0028 D7). The fetch above is already
+    // armed; this is what makes the next read run cold instead of re-rejecting from the slot. The
+    // deadline is the ONE memo option that is not the shared policy's: it is transport, not retention.
+    const memoOptions: MemoOptions = memoOptionsFor(policy)
+    memoOptions.timeout = timeout
     const backing = memo<Args, T>(loadForMemo, memoOptions)
 
     // A `crossRequest` route broadcasts cache verbs on its `(rpc,args)` channel (rpc-core §8). On the
     // FIRST read for a given args the browser memo auto-joins that channel and mirrors inbound frames
     // through its own verbs. Dedup by canonicalKey; a per-request route never subscribes. No-op under SSR.
-    const crossRequest = opts?.crossRequest === true
+    const crossRequest = policy.crossRequest
     const subscribed = new Set<string>()
     const ensureSubscribed = (args: Args): void => {
         if (!crossRequest) return
@@ -268,12 +286,14 @@ export function clientProxy<Args = unknown, T = unknown>(
     }
 
     // THE CALL (Promise-read model): a memoed read or mutation routes through the memo (coalesce +
-    // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `memo: false` call
-    // (read OR mutation) bypasses the memo — every call runs (direct fetch; at-least-once for a
-    // mutation), mirroring the server. A FormData mutation body always bypasses (can't be keyed).
+    // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `memo: false`
+    // MUTATION bypasses it — every call runs, at-least-once, no coalescing — while a `memo: false` READ
+    // stays memo-backed at ttl:0, which retains nothing so every call still runs, and which is what the
+    // server does with the same declaration (`policy.memoed`). A FormData mutation body always bypasses
+    // (can't be keyed).
     // A caller's `signal` (ADR 0028 D3) reaches the two paths differently, and the difference is the
     // decision: a memo-BACKED call detaches the waiter only, because the run fills a slot other callers
-    // are coalesced onto; a `memo: false` call has no slot and exactly one consumer, so its signal goes
+    // are coalesced onto; a bypassing call has no slot and exactly one consumer, so its signal goes
     // straight to `fetch` and really cancels the request.
     const rpc = ((args: Args | FormData, options?: RpcCallOptions): Promise<T> => {
         if (!memoed || (!read && typeof FormData !== 'undefined' && args instanceof FormData)) {
@@ -359,19 +379,19 @@ export function makeClientImports(
 ): Record<string, unknown> {
     const imports: Record<string, unknown> = {}
     for (const [name, spec] of Object.entries(specs)) {
-        const proxyOptions: Parameters<typeof clientProxy>[2] = {
+        // Forwarded VERBATIM: the spec is the server's normalized policy, and `clientProxy` runs it back
+        // through the same normalizer. Filling in defaults here (`spec.ttl ?? null`, `spec.memo !==
+        // false`) is what made the browser's policy a second derivation of the server's.
+        imports[name] = clientProxy(name, spec.method, {
             base: base ?? '',
-            crossRequest: spec.crossRequest === true,
-            // Absent → memoed (default); only an explicit `false` opts the call out of the memo.
-            memo: spec.memo !== false,
-            ttl: spec.ttl ?? null,
-            timeout: spec.timeout ?? 0,
-        }
-        // Only when present — `exactOptionalPropertyTypes` rejects an explicit `tags: undefined`.
-        if (spec.tags !== undefined) proxyOptions.tags = spec.tags
-        if (spec.throttle !== undefined) proxyOptions.throttle = spec.throttle
-        if (spec.debounce !== undefined) proxyOptions.debounce = spec.debounce
-        imports[name] = clientProxy(name, spec.method, proxyOptions)
+            crossRequest: spec.crossRequest,
+            memo: spec.memo,
+            ttl: spec.ttl,
+            tags: spec.tags,
+            throttle: spec.throttle,
+            debounce: spec.debounce,
+            timeout: spec.timeout,
+        })
     }
     return imports
 }

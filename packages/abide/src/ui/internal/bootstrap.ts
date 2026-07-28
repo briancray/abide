@@ -35,6 +35,7 @@ import { watch } from '../../shared/watch.ts'
 import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
 import { makeClientImports } from './clientProxy.ts'
 import { HYDRATED_ATTRIBUTE } from './HYDRATED_ATTRIBUTE.ts'
+import { HYDRATION_ELEMENT_ID } from './HYDRATION_ELEMENT_ID.ts'
 import {
     type PageLoader,
     type PageMount,
@@ -46,8 +47,8 @@ import { isHydrating } from './runtime.ts'
 import { makeSeededState } from './seededState.ts'
 import { makeClientSocketImports } from './socketProxy.ts'
 
-const CONTAINER_ID = '__abide-app'
-const SEED_ID = '__abide-seed'
+const CONTAINER_ID = HYDRATION_ELEMENT_ID.container
+const SEED_ID = HYDRATION_ELEMENT_ID.seed
 
 // Read the hydration seed (recorded reads + any props) from the inline `#__abide-seed` script. Empty
 // `{}` when absent or unparseable — a malformed seed degrades to a plain fetch-on-read mount.

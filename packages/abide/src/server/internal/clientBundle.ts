@@ -39,6 +39,7 @@ import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
+import { preloadGraphOf } from './preloadGraphOf.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
 import { staticAssetType } from './staticAssetType.ts'
@@ -68,6 +69,10 @@ export interface ClientBuild {
     // Route pattern → its code-split chunk filename, for `<link rel="modulepreload">` of the matched
     // route's chunk (eliminates the first-load loader→dynamic-import waterfall).
     chunkByPattern: Map<string, string>
+    // What the document head preloads, split into the always-needed boot graph and the per-route one.
+    // Derived from the emitted bytes — see `preloadGraphOf.ts` for why it exists and what it omits.
+    bootChunks: string[]
+    routeChunks: Map<string, string[]>
 }
 
 // One served asset, in every encoding the build produced for it. The identity bytes are `Uint8Array`
@@ -544,7 +549,13 @@ async function build(config: AppConfig): Promise<ClientBuild> {
             const match = names.find((name) => re.test(name))
             if (match !== undefined) chunkByPattern.set(pattern, match)
         }
-        return { entry, cssFile, files, chunkByPattern }
+        return {
+            entry,
+            cssFile,
+            files,
+            chunkByPattern,
+            ...preloadGraphOf(entry, chunkByPattern, files),
+        }
     } finally {
         await rm(buildDir, { recursive: true, force: true }).catch(() => {})
         for (const mod of modules) await unlink(mod.file).catch(() => {})
@@ -680,6 +691,10 @@ export async function loadClientBuild(dir: string): Promise<ClientBuild | undefi
         cssFile: manifest.css ?? undefined,
         files,
         chunkByPattern: new Map(Object.entries(manifest.chunkByPattern)),
+        // Derived here rather than baked into the manifest: the answer is a pure function of bytes this
+        // function has just read, so recomputing it costs one decode per preloaded chunk at startup and
+        // cannot go stale against a manifest written by an older `abide build`.
+        ...preloadGraphOf(manifest.entry, new Map(Object.entries(manifest.chunkByPattern)), files),
     }
 }
 

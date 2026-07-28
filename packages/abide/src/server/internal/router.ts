@@ -25,6 +25,8 @@ import { generateTraceparent } from '../../shared/internal/generateTraceparent.t
 import { IDENTITY_ROUTE } from '../../shared/internal/IDENTITY_ROUTE.ts'
 import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
+import { LOGS_ROUTE } from '../../shared/internal/LOGS_ROUTE.ts'
+import { logFeed } from '../../shared/internal/logFeed.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import { matchRoute } from '../../shared/internal/matchRoute.ts'
 import {
@@ -34,6 +36,7 @@ import {
     publishMemoFrame,
 } from '../../shared/internal/memoChannels.ts'
 import type { MuxDownstream } from '../../shared/internal/muxDownstream.ts'
+import { positiveEnvBytes } from '../../shared/internal/positiveEnvBytes.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
 import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
@@ -78,6 +81,8 @@ import {
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { isProd } from './isProd.ts'
 import { sharedLayoutDepth } from './layouts.ts'
+import { logFeedSettings } from './logFeedSettings.ts'
+import { logsRoute } from './logsRoute.ts'
 import type { Mutation, Rpc, RpcMeta, StreamRead } from './makeRpc.ts'
 import { handleMcp } from './mcp.ts'
 import { compose, type Middleware } from './middleware.ts'
@@ -222,6 +227,16 @@ const NO_CORS: NormalizedCors = {
     headers: '',
     credentials: false,
     maxAge: 0,
+}
+
+// The `Allow` header for a route, derived from the route's DECLARED verb instead of being restated
+// as a literal per call site (there were five independent ones, none agreeing). HEAD rides with GET
+// because the router DERIVES it rather than accepting a declaration (ADR 0027 D6). An unmatched name
+// has no declared verb to report, so it names the full set.
+function allowHeaderFor(route: Route | undefined): string {
+    const meta = route?.__rpc
+    if (meta === undefined) return 'GET, HEAD, POST, PUT, PATCH, DELETE'
+    return meta.read ? `${meta.method}, HEAD` : meta.method
 }
 
 // After dispatch, refresh (or clear) the rolling abide-identity cookie for browser identities.
@@ -671,6 +686,16 @@ async function dispatch(
         return Response.json(identity())
     }
 
+    // The log feed (opt-in; 404 when this deployment did not enable it). Inside the middleware chain
+    // like `/__abide/identity` above — an app that gates its surface gates its logs too, which is the
+    // whole authorization story for this route.
+    if (url.pathname === LOGS_ROUTE) {
+        const method = scope.request.method.toUpperCase()
+        if (method !== 'GET' && method !== 'HEAD')
+            return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD' } })
+        return logsRoute(url, scope.request.signal)
+    }
+
     if (url.pathname === '/__abide/health') {
         // Framework stub (CO2.4): the isomorphic baseline (`reachable`, running abide `version`) plus the
         // server-only lifetime fields. The app's `onHealth` (request-scoped) is merged ON TOP — its fields
@@ -864,17 +889,26 @@ async function dispatch(
                 // Boot from the content-hashed loader entry; link the client stylesheet only when the app
                 // actually bundled CSS (TODO #6/#20). Both URLs are immutable + content-addressed.
                 const build = await clientBuildFor(config)
-                const chunk = build.chunkByPattern.get(match.pattern)
+                const routeChunks = build.routeChunks.get(match.pattern)
                 const body = streamPageDocument(shell, reactiveScope(), config, {
                     devReloadScript: config.devReloadScript,
                     clientHref: `/__abide/chunk/${build.entry}`,
+                    bootHrefs: build.bootChunks.map((name) => `${CHUNK_PREFIX}${name}`),
                     cssHref:
                         build.cssFile !== undefined ? `/__abide/chunk/${build.cssFile}` : undefined,
-                    preloadHref: chunk !== undefined ? `/__abide/chunk/${chunk}` : undefined,
+                    preloadHrefs: routeChunks?.map((name) => `${CHUNK_PREFIX}${name}`),
                 })
                 return new Response(body, {
                     status: 200,
-                    headers: { 'content-type': 'text/html; charset=utf-8' },
+                    headers: {
+                        'content-type': 'text/html; charset=utf-8',
+                        // Same URL as the soft-nav JSONL response above, differing only by the
+                        // `Abide-Nav` request header — so BOTH representations must declare it. Only
+                        // the soft-nav half used to, which left a cache free to serve a page fragment
+                        // to a first load. `Vary: Cookie` (the identity-scoped default) does not key
+                        // these apart; nothing about the cookie differs between them.
+                        vary: 'Abide-Nav',
+                    },
                 })
             } catch (caught) {
                 log.channel('abide:router').error(
@@ -893,6 +927,17 @@ async function dispatch(
     }
 
     const meta = route.__rpc
+    // The declared verb is ENFORCED, not just advertised. `auth.md` §AU8 grounds the whole
+    // SameSite=Lax argument on "mutations are never on GET" — the top-level cross-site GET that Lax
+    // still admits carries the identity cookie and skips the CSRF gate (`csrfReject` exempts reads),
+    // so a mutation reachable over GET is a CSRF hole no matter what the handler was declared as.
+    // HEAD is the one derived verb: it IS GET minus the body (ADR 0027 D6), so it reaches a GET rpc.
+    const requestMethod = scope.request.method.toUpperCase()
+    if (requestMethod !== meta.method && !(requestMethod === 'HEAD' && meta.method === 'GET')) {
+        return error(405, `Method not allowed: ${requestMethod}`, {
+            headers: { allow: allowHeaderFor(route) },
+        })
+    }
     log.channel('abide:rpc').trace(`dispatch ${meta.method} ${scope.route.name}`)
     applyRunDeadlineSignal(scope, meta)
     let args: unknown
@@ -910,16 +955,18 @@ async function dispatch(
                 : decodeQueryArgs(url.searchParams, meta.options.schemas?.input)
     } else {
         // maxBodySize is enforced on the mutation body up front via Content-Length (multipart streams
-        // can lie about length, but a declared oversize is rejected before we buffer it).
-        const maxBodySize = meta.options.maxBodySize
-        if (maxBodySize !== undefined) {
-            const contentLength = scope.request.headers.get('content-length')
-            // A finite, oversized declared length is rejected before buffering. A non-numeric or absent
-            // length (chunked bodies) can't be trusted, so the real guard is the post-buffer check below.
-            const declared = contentLength !== null ? Number(contentLength) : Number.NaN
-            if (Number.isFinite(declared) && declared > maxBodySize) {
-                return error(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
-            }
+        // can lie about length, but a declared oversize is rejected before we buffer it). The per-RPC
+        // option is an OVERRIDE of `ABIDE_MAX_REQUEST_BODY_SIZE` — which was documented in two places
+        // and read nowhere, so an rpc that declared no ceiling buffered an unbounded body. Unset, the
+        // env read yields Infinity, which is the same "no ceiling" this had before, now stated once.
+        const maxBodySize =
+            meta.options.maxBodySize ?? positiveEnvBytes('ABIDE_MAX_REQUEST_BODY_SIZE')
+        const contentLength = scope.request.headers.get('content-length')
+        // A finite, oversized declared length is rejected before buffering. A non-numeric or absent
+        // length (chunked bodies) can't be trusted, so the real guard is the post-buffer check below.
+        const declared = contentLength !== null ? Number(contentLength) : Number.NaN
+        if (Number.isFinite(declared) && declared > maxBodySize) {
+            return error(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
         }
         const contentType = (scope.request.headers.get('content-type') ?? '').toLowerCase()
         if (contentType.startsWith('multipart/form-data')) {
@@ -929,7 +976,7 @@ async function dispatch(
             const body = await scope.request.text()
             // Enforce maxBodySize against the ACTUAL byte count too — a chunked or length-spoofed body
             // slips past the Content-Length check above, so measure what we actually buffered.
-            if (maxBodySize !== undefined && Buffer.byteLength(body) > maxBodySize) {
+            if (Buffer.byteLength(body) > maxBodySize) {
                 return error(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
             }
             args = body.length > 0 ? JSON.parse(body) : {}
@@ -1090,6 +1137,13 @@ export function createApp(config: AppConfig = {}): App {
     // (the router keeps running; createApp is not re-invoked).
     const startedAt = Date.now()
 
+    // The log feed is opt-in and enabled HERE — at bind, not on the first subscribe — because its ring
+    // must already be filling when someone runs `logs` in response to a problem. `shared/log.ts` reads
+    // only a boolean, so the policy (and the env name) lives on this side and a browser bundle carries
+    // neither. `abide run` binds no server and so never enables it: there would be no route to read it.
+    const logFeedConfig = logFeedSettings()
+    if (logFeedConfig.enabled) logFeed.enable(logFeedConfig.capacity)
+
     // §8 broadcast seam (PR2): bind each SHARED read route's transport-free memo `notify` sink to a
     // publish onto its `(rpc,args)` channel. The route NAME is the `config.routes` key — known only
     // here — so createApp is the sole owner of both name and registry; memo/makeRpc stay
@@ -1119,21 +1173,82 @@ export function createApp(config: AppConfig = {}): App {
         async fetch(request, srv): Promise<Response | undefined> {
             const url = new URL(request.url)
 
+            // ── THE REQUEST PIPELINE ────────────────────────────────────────────────────────────
+            // Every response leaves this handler through `exit()`, in this order. The order is
+            // load-bearing and the exhaustiveness is the point: before this was written down, each
+            // route class was inlined at whatever point in the file its author was reading, and four
+            // of them (WS reject, CORS preflight, CSRF reject, first-load document) each acquired a
+            // different subset of the stamping — a `traceparent`-less 403, a preflight with no trace,
+            // a CSRF rejection with no `Access-Control-Allow-Origin` (so the browser reported an
+            // opaque CORS failure instead of the 403 it was handed).
+            //
+            //   1. mint trace          — every non-asset request, before anything can short-circuit
+            //   2. WS upgrade gate     — CSWSH; exits with { trace }
+            //   3. classify route      — routeInfo
+            //   4. resolve identity    — never throws out; a failure defers into scope for onError
+            //   5. build scope
+            //   6. CORS preflight      — exits with { trace, cors }
+            //   7. enter scope ─┐
+            //   8.   CSRF gate  │      — exits with { trace, cors }; NO identity cookie (a rejected
+            //   9.   middleware │        mutation never dispatches, so it earns no rolling cookie)
+            //  10.   dispatch   │
+            //  11.   redirect envelope → identity cookie → CORS → trace   (the full `exit`)
+            //  12.   compression       — before header stamping: it appends Accept-Encoding to Vary
+            //  13.   baseline headers ─┘
+            //
+            // Trace is minted FIRST so stages 2 and 6 — which run before the request scope exists —
+            // can still stamp it. `reactiveScope().traceparent` is unreachable there; the local is not.
+            const incomingTrace = request.headers.get('traceparent')
+            const propagatedTrace =
+                incomingTrace !== null && TRACEPARENT_PATTERN.test(incomingTrace)
+                    ? incomingTrace
+                    : url.pathname.startsWith(CHUNK_PREFIX)
+                      ? undefined
+                      : generateTraceparent()
+
+            // The ONE exit. `identityCookie` and `cors` are the only stages any caller may decline,
+            // and each declines for a stated reason at its call site. Trace is never optional — a
+            // response that carries no traceparent names no span, which is the silent default this
+            // eager mint exists to remove (CO2.3).
+            const exit = async (
+                response: Response,
+                // Both stages are declared `| undefined` rather than optional: every caller states a
+                // verdict on each one, so a new exit path cannot skip a stage by simply not
+                // mentioning it — which is the failure this pipeline exists to make unrepresentable.
+                stages: { scope: RequestScope | undefined; cors: NormalizedCors | undefined },
+            ): Promise<Response> => {
+                if (stages.scope !== undefined) await applyIdentityCookie(stages.scope, response)
+                if (stages.cors !== undefined) applyCors(stages.cors, request, response)
+                if (propagatedTrace !== undefined) {
+                    response.headers.set('traceparent', propagatedTrace)
+                    response.headers.set('traceresponse', propagatedTrace)
+                }
+                // Compression BEFORE header stamping: it appends `Accept-Encoding` to `Vary`, and the
+                // identity-scoped default that follows appends `Cookie` to the same header.
+                return applyResponseHeaders(
+                    await applyResponseCompression(response, request, url.pathname),
+                )
+            }
+
             // Multiplexed socket WS upgrade (sockets.md S3.1). CSWSH-gated before the upgrade. Identity
             // is resolved ONCE here (same cookie/bearer ladder as the HTTP path) and carried on the
             // connection so `@rpc:` cache-channel joins can re-authorize against it per subscribe (§2.3).
             if (url.pathname === '/__abide/sockets') {
                 if (!socketOriginAllowed(request)) {
-                    return applyResponseHeaders(
-                        error(403, 'CSWSH: WebSocket Origin does not match APP_URL.'),
-                    )
+                    return exit(error(403, 'CSWSH: WebSocket Origin does not match APP_URL.'), {
+                        scope: undefined,
+                        cors: undefined,
+                    })
                 }
                 const connData: SocketConnectionData = {
                     request,
                     identity: await resolveIdentity(request),
                 }
                 if (srv.upgrade(request, { data: connData })) return undefined
-                return applyResponseHeaders(error(426, 'Expected a WebSocket upgrade request.'))
+                return exit(error(426, 'Expected a WebSocket upgrade request.'), {
+                    scope: undefined,
+                    cors: undefined,
+                })
             }
             const info = routeInfo(url, request.method.toUpperCase())
             const route: RouteInfo = {
@@ -1143,19 +1258,6 @@ export function createApp(config: AppConfig = {}): App {
                 url,
                 navigating: false,
             }
-            // CO2.3: propagate an incoming, well-formed traceparent so a browser→server(→server) chain
-            // shares one trace id; otherwise MINT one here, eagerly, for every request but a static
-            // asset. Minting eagerly rather than on the first `trace()` call is what makes the trace a
-            // property of the REQUEST instead of a property of whether anyone happened to ask: every
-            // response then carries `traceparent`/`traceresponse`, the client can adopt it on hydrate,
-            // and an untraced request stops being the silent default.
-            const incomingTrace = request.headers.get('traceparent')
-            const propagatedTrace =
-                incomingTrace !== null && TRACEPARENT_PATTERN.test(incomingTrace)
-                    ? incomingTrace
-                    : url.pathname.startsWith(CHUNK_PREFIX)
-                      ? undefined
-                      : generateTraceparent()
             // Identity resolution can throw (a malformed/tampered token that fails to unseal). Degrade
             // to an anonymous principal so the request still gets a scope, and defer the error into the
             // in-scope try below so onError sees it (rather than escaping as a bare 500 before scope).
@@ -1200,12 +1302,16 @@ export function createApp(config: AppConfig = {}): App {
             // CORS preflight: answer an OPTIONS to an RPC before the middleware onion. A crossOrigin-less
             // RPC has no CORS policy, so preflight is simply an unsupported method (405 + Allow).
             if (request.method.toUpperCase() === 'OPTIONS' && info.kind === 'rpc') {
-                return applyResponseHeaders(
+                // `preflightResponse` already stamps the CORS headers for the admitted case, so this
+                // exit declines the `cors` stage rather than stamping twice. The 405 branch has no
+                // policy to stamp. Both still get the trace.
+                return exit(
                     cors !== undefined
                         ? preflightResponse(cors, request)
                         : error(405, 'Method not allowed: OPTIONS', {
-                              headers: { allow: 'GET, HEAD, POST, PUT, PATCH, DELETE' },
+                              headers: { allow: allowHeaderFor(matched) },
                           }),
+                    { scope: undefined, cors: undefined },
                 )
             }
             // One selection for every route class: an rpc uses its route policy, a socket-face request
@@ -1218,57 +1324,45 @@ export function createApp(config: AppConfig = {}): App {
                 dispatch(scope, config, startedAt),
             )
 
-            // Translate a middleware short-circuit redirect into a soft-nav `{ redirect }` envelope (the
-            // raw 3xx would be opaque to a fetch soft-nav), then stamp the identity cookie, CORS, and
-            // trace headers. Runs for BOTH the normal response and an onError response — a throw here
-            // (gap: post-dispatch stamping) routes to onError via the outer catch.
-            const finalize = async (response: Response): Promise<Response> => {
-                if (info.kind === 'nav' && isSoftNav(request) && isRedirectResponse(response)) {
-                    response = json(
-                        { redirect: response.headers.get('location') ?? '', seed: {} },
-                        { headers: { vary: 'Abide-Nav' } },
-                    )
-                }
-                await applyIdentityCookie(scope, response)
-                if (cors !== undefined) applyCors(cors, request, response)
-                const traced = reactiveScope().traceparent
-                if (traced !== undefined) {
-                    response.headers.set('traceparent', traced)
-                    response.headers.set('traceresponse', traced)
-                }
-                return response
-            }
+            // A pre-stage rather than part of `exit`: it REPLACES the response (a raw 3xx is opaque to
+            // a fetch soft-nav) instead of stamping one, and only the nav route class can produce one.
+            const softNavEnvelope = (response: Response): Response =>
+                info.kind === 'nav' && isSoftNav(request) && isRedirectResponse(response)
+                    ? json(
+                          { redirect: response.headers.get('location') ?? '', seed: {} },
+                          { headers: { vary: 'Abide-Nav' } },
+                      )
+                    : response
 
             return runInScope(scope, async () => {
                 // The whole request lifecycle — CSRF gate, dispatch, and post-dispatch stamping — runs
                 // inside one try so ANY throw is routed to onError in request scope (not just a throw
                 // from the middleware/dispatch chain). A deferred identity-resolution failure surfaces
-                // here too. The onError response is itself finalized (stamped); if THAT stamping throws,
-                // the response is returned bare rather than recursing.
-                let response: Response
+                // here too. The onError response exits through the same stages; if THAT throws, the
+                // response leaves with baseline headers only rather than recursing.
                 try {
                     if (scopeError !== undefined) throw scopeError
-                    // AU8 CSRF gate runs before the middleware onion — a rejected mutation never
-                    // dispatches and gets no identity cookie. A crossOrigin-allowed origin is exempt.
+                    // AU8 CSRF gate runs before the middleware onion. A rejected mutation never
+                    // dispatches, so it earns no rolling identity cookie — the `scope` stage is
+                    // declined. It DOES get CORS: without it a browser reports an opaque CORS failure
+                    // instead of surfacing the 403 the server actually sent. A crossOrigin-allowed
+                    // origin is exempt from the gate entirely.
                     const rejected = csrfReject(request, cors)
-                    if (rejected !== undefined) return applyResponseHeaders(rejected)
-                    response = await finalize(await chain())
+                    if (rejected !== undefined)
+                        return await exit(rejected, { scope: undefined, cors })
+                    return await exit(softNavEnvelope(await chain()), { scope, cors })
                 } catch (caught) {
-                    response = await handleUncaught(caught, config)
+                    const response = await handleUncaught(caught, config)
                     try {
-                        response = await finalize(response)
-                    } catch (finalizeError) {
+                        return await exit(softNavEnvelope(response), { scope, cors })
+                    } catch (exitError) {
                         log.channel('abide:router').error(
                             'failed to finalize error response:',
-                            finalizeError,
+                            exitError,
                         )
+                        return applyResponseHeaders(response)
                     }
                 }
-                // Compression BEFORE header stamping: it appends `Accept-Encoding` to `Vary`, and the
-                // identity-scoped default that follows appends `Cookie` to the same header.
-                return applyResponseHeaders(
-                    await applyResponseCompression(response, request, scope.route.url.pathname),
-                )
             }) as Promise<Response>
         },
         websocket: {

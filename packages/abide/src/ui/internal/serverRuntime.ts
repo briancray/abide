@@ -44,8 +44,15 @@ export function openRenderScope(): EffectScope {
 }
 
 // Marks already-safe HTML that must NOT be escaped (a rendered component / the `<slot/>` children).
+// The field is declared and assigned rather than written as a constructor parameter property: this
+// module is reachable from `cli/check.ts`, which runs under NODE in strip-only mode (the tsgo API
+// cannot open its pipe under Bun), and a parameter property is TS syntax with a runtime effect —
+// stripping types cannot express it, so node rejects the whole file.
 export class Raw {
-    constructor(readonly value: string) {}
+    readonly value: string
+    constructor(value: string) {
+        this.value = value
+    }
     toString(): string {
         return this.value
     }

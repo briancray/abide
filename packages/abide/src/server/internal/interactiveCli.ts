@@ -12,22 +12,30 @@
 // cannot do from a command line you have already run, and the stored target is re-READ afterwards
 // rather than threaded through, so the file stays the single answer to "where do calls go".
 //
-// Deliberately unpolished (MS3's parked item is the UX, not the model): no history, no completion, no
-// line editing. It reads lines, so it behaves the same piped as at a terminal.
+// Input goes through `lineReader`, which is the terminal/pipe split: at a terminal you get line
+// editing, history and a ctrl-c that abandons the line; through a pipe it is still newline-framed
+// bytes, so `printf 'greet\n' | app` behaves exactly as it did. No completion yet.
 
+import { colourEnabled } from '../../shared/internal/colourEnabled.ts'
 import { COERCE_FAILED, tryCoerceStringToType } from '../../shared/internal/jsonSchema.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { callCliCommand } from './callCliCommand.ts'
 import type { CliCommand } from './cliCommands.ts'
 import { cliUsage } from './cliUsage.ts'
+import { columnise } from './columnise.ts'
 import type { CommandTarget } from './commandTarget.ts'
+import { completeCliLine } from './completeCliLine.ts'
 import { connectCommand } from './connectCommand.ts'
 import { disconnectCommand } from './disconnectCommand.ts'
 import { identityCommand } from './identityCommand.ts'
+import { type LineReader, lineReader } from './lineReader.ts'
 import { loginCommand } from './loginCommand.ts'
 import { logoutCommand } from './logoutCommand.ts'
+import { logsCommand } from './logsCommand.ts'
 import { parseCliArgs } from './parseCliArgs.ts'
+import { reservedCliCommand } from './reservedCliCommand.ts'
 import { resolveCliTarget } from './resolveCliTarget.ts'
+import { tokenizeCliLine } from './tokenizeCliLine.ts'
 
 export interface InteractiveCliOptions {
     name: string
@@ -47,62 +55,49 @@ export interface InteractiveCliOptions {
     writeError(text: string): void
 }
 
-const PROMPT = '> '
+// Styling is opt-OUT by surface, not by flag: `colourEnabled` follows NO_COLOR / FORCE_COLOR / is-a-
+// terminal, so a piped session (`printf 'greet\n' | app`) emits exactly the bytes it always did and
+// nothing downstream has to strip escapes.
+const STYLE = {
+    reset: '\u001b[0m',
+    dim: '\u001b[2m',
+    bold: '\u001b[1m',
+    cyan: '\u001b[36m',
+    red: '\u001b[31m',
+} as const
 
-// Split a REPL line into argv, honouring quotes so a value with spaces survives (`--name "New York"`).
-// Backslash escaping is deliberately absent — this is a prompt, not a shell.
-function tokenize(line: string): string[] {
-    const tokens: string[] = []
-    let current = ''
-    let quote: string | undefined
-    let started = false
-    for (const character of line) {
-        if (quote !== undefined) {
-            if (character === quote) quote = undefined
-            else current += character
-            continue
-        }
-        if (character === '"' || character === "'") {
-            quote = character
-            started = true
-            continue
-        }
-        if (character === ' ' || character === '\t') {
-            if (started) tokens.push(current)
-            current = ''
-            started = false
-            continue
-        }
-        current += character
-        started = true
-    }
-    if (started) tokens.push(current)
-    return tokens
+interface Paint {
+    dim(text: string): string
+    bold(text: string): string
+    prompt: string
+    error(text: string): string
 }
 
-// Read newline-framed lines off a byte stream. Bun's `prompt()` would be shorter, but it blocks the
-// event loop — and this process may also be hosting the server the next call goes to.
-async function* readLines(input: ReadableStream<Uint8Array>): AsyncGenerator<string> {
-    const decoder = new TextDecoder()
-    let buffered = ''
-    for await (const chunk of input as unknown as AsyncIterable<Uint8Array>) {
-        buffered += decoder.decode(chunk, { stream: true })
-        let newline = buffered.indexOf('\n')
-        while (newline !== -1) {
-            yield buffered.slice(0, newline)
-            buffered = buffered.slice(newline + 1)
-            newline = buffered.indexOf('\n')
+function painter(coloured: boolean): Paint {
+    if (!coloured) {
+        return {
+            dim: (text) => text,
+            bold: (text) => text,
+            prompt: '> ',
+            error: (text) => text,
         }
     }
-    buffered += decoder.decode()
-    if (buffered.length > 0) yield buffered
+    return {
+        dim: (text) => `${STYLE.dim}${text}${STYLE.reset}`,
+        bold: (text) => `${STYLE.bold}${text}${STYLE.reset}`,
+        // The prompt is the one thing on screen that is always in the same place, so colouring it is
+        // what lets you find where the last command's output ended when you scroll back.
+        prompt: `${STYLE.cyan}\u276f${STYLE.reset} `,
+        error: (text) => `${STYLE.red}${text}${STYLE.reset}`,
+    }
 }
 
 // Prompt for one field, returning the typed value — or undefined when the caller pressed enter (an
 // optional field left out entirely, which is not the same as sending null).
 async function promptField(
     options: InteractiveCliOptions,
-    lines: AsyncGenerator<string>,
+    reader: LineReader,
+    paint: Paint,
     command: CliCommand,
     index: number,
 ): Promise<{ value: unknown } | undefined> {
@@ -110,11 +105,37 @@ async function promptField(
     if (field === undefined) return undefined
     const type = field.type ?? 'value'
     const detail = field.required ? 'required' : 'optional'
-    const hint = field.enum === undefined ? '' : ` [${field.enum.map(String).join('|')}]`
-    options.write(`  ${field.name} (${type}, ${detail})${hint}: `)
-    const next = await lines.next()
-    if (next.done === true) return undefined
-    const raw = next.value.trim()
+    const hint = field.enum === undefined ? '' : ` ${field.enum.map(String).join('|')}`
+    // The value you get by pressing enter, in the shell-prompt convention (`read -p "name [dflt]: "`,
+    // `./configure`, `npm init`): parentheses say what the field IS, brackets say what you get for
+    // free. Omitting the flag is what makes the handler's own default apply, so this is not a
+    // decoration — it is the answer to "what happens if I just hit enter".
+    const fallback = field.default === undefined ? '' : ` [${String(field.default)}]`
+    // Not history: an answer to `title:` is a value, not a command, and recalling it at the next
+    // prompt would offer it where a command name belongs.
+    // The NAME carries the weight; the type/required/enum apparatus is dimmed so a column of field
+    // prompts reads as a form rather than as five equally-loud lines.
+    const label = `  ${field.name}${paint.dim(` (${type}, ${detail}${hint})${fallback}`)}: `
+    const answer = await reader.read(label, {
+        history: false,
+        // The field's own closed set, when it has one — the same schema fact the `[a|b]` hint above
+        // is printed from, offered as completion instead of only as prose.
+        complete:
+            field.enum === undefined
+                ? undefined
+                : (typed) => {
+                      const values = field.enum ?? []
+                      return {
+                          candidates: values
+                              .map(String)
+                              .filter((value) => value.startsWith(typed))
+                              .sort(),
+                          partial: typed,
+                      }
+                  },
+    })
+    if (answer === undefined) return undefined
+    const raw = answer.trim()
     if (raw === '') {
         if (field.required) options.writeError(`  ${field.name} is required — sending it empty.\n`)
         return field.required ? { value: '' } : undefined
@@ -138,7 +159,9 @@ async function hostFromPrompt(options: InteractiveCliOptions, tokens: string[]):
     }
     try {
         const url = await options.target.host(port)
-        options.write(`serving ${url} — commands now run against it; ctrl-c or \`exit\` stops it\n`)
+        options.write(
+            `serving ${url} — commands now run against it; \`exit\` (or ctrl-c at an empty prompt) stops it\n`,
+        )
         return CLI_EXIT_CODES.ok
     } catch (caught) {
         options.writeError(`serve: ${caught instanceof Error ? caught.message : String(caught)}\n`)
@@ -150,45 +173,82 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
     const byName = new Map<string, CliCommand>()
     for (const command of options.commands) byName.set(command.name, command)
 
-    options.write(`${options.name} — interactive\n`)
-    options.write(
-        options.commands.length === 0
-            ? 'This app exposes no clients.cli rpcs. `serve` hosts it; `exit` leaves.\n'
-            : `Commands: ${options.commands.map((command) => command.name).join(', ')}\n` +
-                  'Type a command (with or without flags), `serve`, `connect <url>`, `identity`, `help`, or `exit`.\n',
-    )
+    const paint = painter(colourEnabled(options.tty))
+    // `|| 80`, not `?? 80`: a PTY that was never sized reports columns as 0 (expect, some CI
+    // runners), and 0 is not a narrow terminal — it is no answer. `??` let it through and collapsed
+    // the list to one name per line.
+    const width = process.stdout.columns || 80
+
+    options.write(`${paint.bold(options.name)} ${paint.dim('— interactive')}\n`)
+    if (options.commands.length === 0) {
+        options.write(
+            paint.dim('This app exposes no clients.cli rpcs. `serve` hosts it; `exit` leaves.\n'),
+        )
+    } else {
+        // Columns, not a comma-separated wall: 59 names on one line is the list without being
+        // readable, and it pushed the line that says what to DO off a short terminal.
+        for (const line of columnise(
+            options.commands.map((command) => command.name),
+            width,
+        )) {
+            options.write(`${line}\n`)
+        }
+        // Only advertise what this surface actually does: a pipe has no TAB and no cursor, and under
+        // NO_COLOR there is no dimmed hint to accept. Naming a key that does nothing here is worse
+        // than naming none.
+        const coloured = colourEnabled(options.tty)
+        const keys = [
+            options.tty ? 'TAB completes' : undefined,
+            options.tty && coloured ? '\u2192 accepts the hint' : undefined,
+        ].filter((hint) => hint !== undefined)
+        const reserved = '`help`, `serve`, `connect <url>`, `identity`, `logs`, `exit`'
+        options.write(
+            paint.dim(
+                `\n${options.commands.length} commands${keys.length === 0 ? '' : ` · ${keys.join(', ')}`} · ${reserved}\n`,
+            ),
+        )
+    }
 
     // Both are re-resolved after a `connect`/`disconnect`, so a session that re-points itself keeps
     // calling the right place with the right credential.
     let token = options.token
-    const lines = readLines(options.input)
+    const reader = lineReader({
+        input: options.input,
+        tty: options.tty,
+        write: options.write,
+    })
     // The exit code of the LAST command run, so a piped script (`printf 'greet\n' | app`) still reports
     // failure. A session that runs nothing exits 0.
     let lastCode: number = CLI_EXIT_CODES.ok
     let sawInput = false
 
-    options.write(PROMPT)
-    for await (const line of lines) {
+    for (;;) {
+        const line = await reader.read(paint.prompt, {
+            complete: (typed) =>
+                completeCliLine({ line: typed, commands: options.commands, surface: 'prompt' }),
+        })
+        if (line === undefined) break
         sawInput = true
-        const tokens = tokenize(line.trim())
+        const tokens = tokenizeCliLine(line.trim())
         const head = tokens[0]
         if (head === undefined) {
-            options.write(PROMPT)
             continue
         }
-        if (head === 'exit' || head === 'quit') return lastCode
-        if (head === 'help' || head === '--help' || head === '-h') {
+        // The prompt intercepts the ONE reserved list (`RESERVED_CLI_COMMANDS`) — including the
+        // prompt-only `exit`/`quit`, which is why they are in it: a name that ends the session shadows
+        // an rpc of that name just as `serve` does, and the author deserves the same warning.
+        const reserved = reservedCliCommand(head, 'prompt')
+        if (reserved === 'exit' || reserved === 'quit') break
+        if (reserved === 'help' || head === '--help' || head === '-h') {
             const target = tokens[1] === undefined ? undefined : byName.get(tokens[1])
             options.write(`${cliUsage(options.name, options.commands, target)}\n`)
-            options.write(PROMPT)
             continue
         }
-        if (head === 'serve') {
+        if (reserved === 'serve') {
             lastCode = await hostFromPrompt(options, tokens)
-            options.write(PROMPT)
             continue
         }
-        if (head === 'identity') {
+        if (reserved === 'identity') {
             lastCode = await identityCommand({
                 origin: await options.target.origin(),
                 token,
@@ -196,13 +256,34 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
                 write: options.write,
                 writeError: options.writeError,
             })
-            options.write(PROMPT)
             continue
         }
-        if (head === 'login' || head === 'logout') {
+        if (reserved === 'logs') {
+            // A tail owns the terminal until it is stopped, so ctrl-c must DETACH rather than leave
+            // the session — the one reserved command that needs its own interrupt.
+            const feed = new AbortController()
+            const release = reader.interceptInterrupt(() => {
+                options.write('^C\n')
+                feed.abort()
+            })
+            try {
+                lastCode = await logsCommand({
+                    origin: await options.target.origin(),
+                    token,
+                    argv: tokens.slice(1),
+                    write: options.write,
+                    writeError: options.writeError,
+                    signal: feed.signal,
+                })
+            } finally {
+                release()
+            }
+            continue
+        }
+        if (reserved === 'login' || reserved === 'logout') {
             const at = options.target.remote()
             lastCode =
-                head === 'login'
+                reserved === 'login'
                     ? await loginCommand({
                           appName: options.name,
                           origin: at,
@@ -223,12 +304,11 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
                     token: options.flags.token,
                 })
             ).token
-            options.write(PROMPT)
             continue
         }
-        if (head === 'connect' || head === 'disconnect') {
+        if (reserved === 'connect' || reserved === 'disconnect') {
             lastCode =
-                head === 'connect'
+                reserved === 'connect'
                     ? await connectCommand({
                           appName: options.name,
                           argv: tokens.slice(1),
@@ -252,15 +332,15 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
                     `note: calls go to ${resolved.remote ?? 'the app hosted here'} — --url / ABIDE_APP_URL outranks the stored target.\n`,
                 )
             }
-            options.write(PROMPT)
             continue
         }
 
         const command = byName.get(head)
         if (command === undefined) {
-            options.writeError(`unknown command "${head}" — type \`help\` for the list.\n`)
+            options.writeError(
+                paint.error(`unknown command "${head}"`) + ' — type `help` for the list.\n',
+            )
             lastCode = CLI_EXIT_CODES.usage
-            options.write(PROMPT)
             continue
         }
 
@@ -268,9 +348,8 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
         if (tokens.length > 1) {
             const parsed = parseCliArgs(command, tokens.slice(1))
             if (parsed.errors.length > 0) {
-                for (const message of parsed.errors) options.writeError(`${message}\n`)
+                for (const message of parsed.errors) options.writeError(`${paint.error(message)}\n`)
                 lastCode = CLI_EXIT_CODES.usage
-                options.write(PROMPT)
                 continue
             }
             args = parsed.args
@@ -278,7 +357,7 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
             // Bare command name: fill it in from the schema. This is the interactive mode's whole point.
             for (let index = 0; index < command.fields.length; index++) {
                 const field = command.fields[index]
-                const answered = await promptField(options, lines, command, index)
+                const answered = await promptField(options, reader, paint, command, index)
                 if (answered !== undefined && field !== undefined) args[field.name] = answered.value
             }
         }
@@ -294,8 +373,8 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
             write: options.write,
             writeError: options.writeError,
         })
-        options.write(PROMPT)
     }
+    reader.close()
 
     // Stdin closed without ever offering a line, and nobody is typing: this is a process started with
     // no arguments and no console — a container running the binary as its entrypoint. Interactive mode

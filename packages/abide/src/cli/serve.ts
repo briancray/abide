@@ -17,10 +17,10 @@
 
 import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
+import { bootApp } from '../server/internal/bootApp.ts'
 import { type ClientBuild, invalidateClientBundle } from '../server/internal/clientBundle.ts'
 import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
-import { type App, createApp } from '../server/internal/router.ts'
 import { socket } from '../server/socket.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { log } from '../shared/log.ts'
@@ -149,24 +149,9 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
         config.devReloadScript = DEV_RELOAD_SNIPPET
     }
 
-    // onStart is a WRAPPER around the real boot (CL2): it receives a `start()` thunk, may run setup
-    // BEFORE it, and boots by calling (typically returning) it. The socket binds only inside `start()`
-    // (createApp), so no request is accepted until setup completes — closing the old "listening before
-    // onStart" race. Pre-compile every page/layout inside the boot too, so the first request to each
-    // route hits a warm `SERVER_MODULE_CACHE` instead of racing the on-demand AOT compile. Returning
-    // WITHOUT calling `start()` is a deliberate breakout — the app never boots and serve() throws.
-    let app: App | undefined
-    const start = async (): Promise<void> => {
-        if (app !== undefined) return
-        app = createApp(config)
-        await warmPages(config)
-    }
-    if (config.onStart !== undefined) await config.onStart(start)
-    else await start()
-    if (app === undefined) {
-        throw new Error('abide: onStart returned without calling start() — the app did not boot.')
-    }
-    const booted = app
+    // The onStart/onStop wrapper lifecycle — including the page warm and the teardown backstop — is
+    // `bootApp`, shared with `createTestApp` so a test boots the app the same way production does.
+    const booted = await bootApp(config)
 
     let watcher: FSWatcher | undefined
     if (reloadSocket !== undefined) {
@@ -174,28 +159,10 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
     }
 
     return {
-        url: booted.origin,
+        url: booted.app.origin,
         async stop(): Promise<void> {
             watcher?.close()
-            // onStop mirrors onStart: a `stop()` thunk it may wrap (e.g. drain in-flight work first).
-            // Unlike boot, teardown MUST complete — if the hook returns (or throws) without calling
-            // stop(), serve() calls it as a backstop so the server never strands as a zombie. A hook
-            // that throws still gets the backstop, then the original error is re-thrown for the caller.
-            let stopped = false
-            const stop = async (): Promise<void> => {
-                if (stopped) return
-                stopped = true
-                await booted.stop()
-            }
-            if (config.onStop !== undefined) {
-                try {
-                    await config.onStop(stop)
-                } finally {
-                    if (!stopped) await stop()
-                }
-            } else {
-                await stop()
-            }
+            await booted.stop()
         },
     }
 }

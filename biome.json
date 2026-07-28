@@ -52,6 +52,32 @@
     },
     "overrides": [
         {
+            "includes": ["packages/abide/src/**/*.ts", "!packages/abide/src/**/*.test.ts"],
+            "linter": {
+                "rules": {
+                    "suspicious": {
+                        "noConsole": {
+                            "level": "error",
+                            "options": {}
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "includes": [
+                "packages/abide/src/shared/log.ts",
+                "packages/abide/src/cli/main.ts"
+            ],
+            "linter": {
+                "rules": {
+                    "suspicious": {
+                        "noConsole": "off"
+                    }
+                }
+            }
+        },
+        {
             "includes": ["packages/abide/src/shared/**", "!packages/abide/src/shared/**/*.test.ts"],
             "linter": {
                 "rules": {

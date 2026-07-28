@@ -37,14 +37,18 @@ import { type CliCommand, cliCommands } from './cliCommands.ts'
 import { cliUsage } from './cliUsage.ts'
 import { type CommandTarget, commandTarget } from './commandTarget.ts'
 import { type CompiledApp, compiledAppConfig } from './compiledAppConfig.ts'
+import { completeCliLine } from './completeCliLine.ts'
+import { COMPLETION_SHELLS, type CompletionShell, completionScript } from './completionScript.ts'
 import { connectCommand } from './connectCommand.ts'
 import { disconnectCommand } from './disconnectCommand.ts'
 import { identityCommand } from './identityCommand.ts'
 import { interactiveCli } from './interactiveCli.ts'
 import { loginCommand } from './loginCommand.ts'
 import { logoutCommand } from './logoutCommand.ts'
+import { logsCommand } from './logsCommand.ts'
 import { normalizeOrigin } from './normalizeOrigin.ts'
 import { parseCliArgs } from './parseCliArgs.ts'
+import { reservedCliCommand } from './reservedCliCommand.ts'
 import { resolveCliTarget } from './resolveCliTarget.ts'
 import { serveCompiled } from './serveCompiled.ts'
 
@@ -114,6 +118,9 @@ export async function runCompiledApp(app: CompiledApp): Promise<void> {
     for (const command of commands) byName.set(command.name, command)
 
     const head = globals.rest[0]
+    // Branch on the ONE reserved list rather than on literals — see `RESERVED_CLI_COMMANDS`. A
+    // prompt-only name (`exit`) classifies as undefined here and falls through to the rpc table.
+    const reserved = reservedCliCommand(head, 'command')
 
     // `--help` reaches the same text from either side of the subcommand (`app --help greet` and
     // `app greet --help`), so asking for help never accidentally RUNS the command it asked about.
@@ -124,14 +131,44 @@ export async function runCompiledApp(app: CompiledApp): Promise<void> {
         return
     }
 
-    if (head === 'help') {
+    // `completion` wears two hats, and deliberately: `--line` is the CALLBACK the generated script
+    // invokes on every TAB, so keeping it here rather than under a second reserved name costs the app
+    // one shadowed rpc name instead of two. Both exit before anything boots — completing a command
+    // must never run the app's `onStart`.
+    if (reserved === 'completion') {
+        const lineFlag = globals.rest.indexOf('--line')
+        if (lineFlag !== -1) {
+            const { candidates } = completeCliLine({
+                line: globals.rest[lineFlag + 1] ?? '',
+                commands,
+                surface: 'command',
+            })
+            if (candidates.length > 0) write(`${candidates.join('\n')}\n`)
+            return
+        }
+        const requested = globals.rest[1]
+        const shell = COMPLETION_SHELLS.includes(requested as CompletionShell)
+            ? (requested as CompletionShell)
+            : undefined
+        if (shell === undefined) {
+            writeError(
+                `${app.name} completion — usage: ${app.name} completion <${COMPLETION_SHELLS.join('|')}>\n`,
+            )
+            process.exitCode = CLI_EXIT_CODES.usage
+            return
+        }
+        write(completionScript(shell, app.name))
+        return
+    }
+
+    if (reserved === 'help') {
         const target = globals.rest[1] === undefined ? undefined : byName.get(globals.rest[1])
         write(`${cliUsage(app.name, commands, target)}\n`)
         return
     }
 
     // Re-pointing the binary, or changing who it is, touches a file and nothing else — never the app.
-    if (head === 'connect') {
+    if (reserved === 'connect') {
         process.exit(
             await connectCommand({
                 appName: app.name,
@@ -141,17 +178,17 @@ export async function runCompiledApp(app: CompiledApp): Promise<void> {
             }),
         )
     }
-    if (head === 'disconnect') {
+    if (reserved === 'disconnect') {
         process.exit(await disconnectCommand({ appName: app.name, write }))
     }
-    if (head === 'login' || head === 'logout') {
+    if (reserved === 'login' || reserved === 'logout') {
         const resolvedFor = await resolveCliTarget({
             appName: app.name,
             url: globals.url,
             token: globals.token,
         })
         process.exit(
-            head === 'login'
+            reserved === 'login'
                 ? await loginCommand({
                       appName: app.name,
                       origin: resolvedFor.remote,
@@ -171,8 +208,8 @@ export async function runCompiledApp(app: CompiledApp): Promise<void> {
     // Host it. Long-lived: this branch must NOT exit when the function returns, and it goes through
     // `serveCompiled` so the foreground server is the same one `abide start` runs — port resolution,
     // lifecycle wrappers, warm pages and shutdown handling included.
-    if (head === 'serve') {
-        await serveCompiled(app)
+    if (reserved === 'serve') {
+        await serveCompiled(app, config, write)
         return
     }
 
@@ -188,11 +225,22 @@ export async function runCompiledApp(app: CompiledApp): Promise<void> {
 
     let code: number = CLI_EXIT_CODES.ok
     try {
-        if (head === 'identity') {
+        if (reserved === 'identity') {
             code = await identityCommand({
                 origin: await target.origin(),
                 token: resolved.token,
                 pretty: globals.pretty,
+                write,
+                writeError,
+            })
+        } else if (reserved === 'logs') {
+            // `target.origin()` boots the embedded server when nothing is connected, so a bare `logs`
+            // tails THIS binary's own app — which is a real (if quiet) thing to do, and keeps the
+            // command meaning one thing whether or not a deployment is named.
+            code = await logsCommand({
+                origin: await target.origin(),
+                token: resolved.token,
+                argv: globals.rest.slice(1),
                 write,
                 writeError,
             })

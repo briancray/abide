@@ -21,10 +21,15 @@ import { fileURLToPath } from 'node:url'
 import type { Node } from 'typescript/unstable/ast'
 import {
     isArrowFunction,
+    isBindingElement,
     isCallExpression,
     isExportAssignment,
     isFunctionDeclaration,
     isFunctionExpression,
+    isIdentifier,
+    isNumericLiteral,
+    isObjectBindingPattern,
+    isStringLiteral,
     isVariableDeclaration,
 } from 'typescript/unstable/ast/is'
 import type {
@@ -129,20 +134,30 @@ function deriveExportFromProject(
         warnings.push(`deriveSchema: export "${exportName}" not found in ${filePath}`)
         return result
     }
-    const signature = findHandlerSignature(exported, checker, project)
-    if (signature === undefined) {
+    const handler = findHandlerSignature(exported, checker, project)
+    if (handler === undefined) {
         warnings.push(
             `deriveSchema: export "${exportName}" is not callable — cannot derive a schema`,
         )
         return result
     }
 
+    const { signature, node: handlerNode } = handler
     const parameters = signature.getParameters()
     const firstParameter = parameters[0]
     if (firstParameter !== undefined) {
         const inputType = checker.getTypeOfSymbol(firstParameter)
         if (inputType !== undefined) {
-            result.input = typeToSchema(inputType, checker, warnings, new Set<number>(), 0, '')
+            const input = typeToSchema(inputType, checker, warnings, new Set<number>(), 0, '')
+            const defaults = destructuringDefaults(handlerNode)
+            const properties = input.properties
+            if (properties !== undefined) {
+                for (const [field, value] of Object.entries(defaults)) {
+                    const property = properties[field]
+                    if (property !== undefined) property.default = value
+                }
+            }
+            result.input = input
         }
     }
 
@@ -314,19 +329,73 @@ async function deriveBatchViaNodeSubprocess(
 
 // The exported binding may be the function itself (`export const fn = (a) => ...`), a wrapped handler
 // (`export const fn = GET((a) => ...)`, incl. `export default GET(...)`), or a function declaration.
+// A destructuring DEFAULT in the handler's parameter — `GET(({ message = "hello" }) => …)` — read off
+// the declaration and written into the schema as `default`.
+//
+// The type alone cannot carry it. `message = "hello"` widens to `string`, and the only thing the
+// inferred type records is that the property became OPTIONAL; the value itself lives in the AST and
+// was being dropped. So the surfaces that describe an rpc — OpenAPI, MCP, `help`, the CLI prompt —
+// all said "optional" and none of them could say what you get by omitting it, which is the question
+// anyone actually has at that point.
+//
+// Literals only, and deliberately: a default that is a call or a reference (`= Date.now()`, `= FOO`)
+// has no value at derivation time, and inventing one would be worse than staying silent. `-1` is a
+// prefix-minus over a numeric literal, which is why it is spelled out rather than matched as one.
+function literalDefault(node: Node): unknown {
+    if (isStringLiteral(node)) return node.text
+    if (isNumericLiteral(node)) return Number(node.text)
+    if (isIdentifier(node)) {
+        if (node.text === 'true') return true
+        if (node.text === 'false') return false
+        if (node.text === 'undefined') return undefined
+    }
+    // `true`/`false`/`null` arrive as keyword tokens rather than identifiers in some builds; fall back
+    // to the source text, which is exact for these three.
+    const text = node.getText?.()
+    if (text === 'true') return true
+    if (text === 'false') return false
+    if (text === 'null') return null
+    return undefined
+}
+
+function destructuringDefaults(handlerNode: Node | undefined): Record<string, unknown> {
+    const defaults: Record<string, unknown> = {}
+    if (handlerNode === undefined) return defaults
+    const parameter = (handlerNode as { parameters?: { name?: Node | undefined }[] })
+        .parameters?.[0]
+    const name = parameter?.name
+    if (name === undefined) return defaults
+    if (!isObjectBindingPattern(name)) return defaults
+    for (const element of name.elements) {
+        if (!isBindingElement(element)) continue
+        const initializer = element.initializer
+        if (initializer === undefined) continue
+        const field = element.name
+        if (field === undefined) continue
+        // A nested pattern (`{ a: { b } }`) has no single name to key a default on — skipped.
+        if (!isIdentifier(field)) continue
+        const value = literalDefault(initializer)
+        if (value !== undefined) defaults[field.text] = value
+    }
+    return defaults
+}
+
 // Walk the value declaration to the innermost function-like node and take ITS call signature, so
 // wrappers don't hide the real shape.
+// Returns the function NODE alongside the signature: the signature carries the parameter's TYPE, and
+// a destructuring default is not in the type — it is an initializer in the declaration's binding
+// pattern, reachable only from the node.
 function findHandlerSignature(
     symbol: TSSymbol,
     checker: Checker,
     project: Project,
-): Signature | undefined {
+): { signature: Signature; node: Node | undefined } | undefined {
     const declaration = symbol.valueDeclaration?.resolve(project)
     if (declaration !== undefined) {
         const functionNode = findFunctionNode(declaration)
         if (functionNode !== undefined) {
             const signature = checker.getSignatureFromDeclaration(functionNode)
-            if (signature !== undefined) return signature
+            if (signature !== undefined) return { signature, node: functionNode }
         }
     }
     // Fallback: read call signatures off the binding's type (covers exports whose value declaration we
@@ -335,7 +404,7 @@ function findHandlerSignature(
     if (type !== undefined) {
         const signatures = checker.getSignaturesOfType(type, SignatureKind.Call)
         const firstSignature = signatures[0]
-        if (firstSignature !== undefined) return firstSignature
+        if (firstSignature !== undefined) return { signature: firstSignature, node: undefined }
     }
     return undefined
 }

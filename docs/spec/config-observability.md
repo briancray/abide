@@ -77,7 +77,37 @@ Scope: boot-time config (`env(schema)`) and the observability surface
    - **Level policy (one rule):** `error` **always emits**, bypassing gating, so operational
      failures surface even on a silent channel. `warn`/`info`/`trace` emit **only** when their
      channel is named (the default app channel counts as always-named → always on).
-3. **`trace()` = W3C Trace Context (`traceparent`).** Each server request gets/propagates a
+3. **The REMOTE log feed = `GET /__abide/logs` + the `logs` subcommand.** A process may fan its log
+   records out to subscribers as SSE, so a compiled binary can tail a deployment:
+   `./app --url https://… logs`.
+   - **Off unless opted in** (`ABIDE_LOGS`; ring size `ABIDE_LOG_BUFFER`, default 500 records).
+     Every other generated route under `/__abide/` discloses something the caller could already
+     reach; this one discloses whatever the app logged, **including lines written on behalf of other
+     users**, so it cannot be on by default and stay honest. It is served **inside the middleware
+     chain**, so authorization is the app's own middleware — the same answer abide gives everywhere
+     else. It is deliberately **NOT on the WS mux**: a reserved `@log:` channel beside `@rpc:`/
+     `@tag:` would be tidier, but the mux is reachable from the client bundle, and a log feed a
+     browser can join turns any XSS into whole-server log exfiltration.
+   - **The fan-out happens BEFORE the `DEBUG` gate.** A channel that stdout suppresses still reaches
+     a subscriber, so `logs --debug abide:rpc` can light a framework channel on a **live** deployment
+     that was booted without it — the thing that makes a remote feed worth having. With the feed off
+     (the default) the emit path pays one property load and is unchanged.
+   - **Records are structured on the wire and rendered by the READER**, through the same
+     `formatLogLine` the server uses for its own stdout — so a remote tail at a terminal is identical
+     to reading that server's console, and through a pipe degrades to the same `tsv`. `ABIDE_LOG_FORMAT`
+     / `NO_COLOR` / the TTY govern it exactly as they do locally; `warn`/`error` go to the reader's
+     stderr, everything else to stdout.
+   - **Filters are applied server-side**: `--tail <n>` (backlog before live), `--level <l>` (a
+     severity FLOOR), `--debug <pattern>` (the **same** `DEBUG` grammar), `--trace <id>` (a trace-id
+     PREFIX, so the 8 hex the pretty line prints is paste-able), `--no-follow` (history, then EOF).
+   - **Backlog buffers unconditionally once enabled**, not only while someone is subscribed: you run
+     `logs` *after* noticing a problem, and a feed that starts empty at connect has discarded the
+     only lines you wanted.
+   - **Losses are reported, never silent.** A subscriber that cannot keep up is bounded
+     (`MAX_QUEUE`) and receives a synthetic `abide:logs` record naming how many lines it missed.
+   - **One process.** Behind a load balancer this is whichever instance the request landed on — the
+     same limitation `memo({ crossRequest })` has.
+4. **`trace()` = W3C Trace Context (`traceparent`).** Each server request gets/propagates a
    traceparent; **RPC calls carry it**, so a browser→server(→server) chain shares one trace id.
    **Auto-correlated into log lines.** `trace()` returns the current traceparent or `undefined`.
    The response echoes both `traceparent` and **`traceresponse`** (W3C Trace Context Level 2, the
@@ -115,7 +145,7 @@ Scope: boot-time config (`env(schema)`) and the observability surface
      into a preflighted one — an extra round trip per read — and W3C's own privacy guidance is not to
      hand trace context to a receiver you don't control. A cross-origin caller that *wants* to carry
      one still can: `traceparent` is in the default CORS allowed-headers list.
-4. **`onHealth()` = app-defined health hook (a `src/app.ts` export), merged into `/__abide/health`**
+5. **`onHealth()` = app-defined health hook (a `src/app.ts` export), merged into `/__abide/health`**
    over the framework stub `{ reachable, version, startedAt, uptime }` (app fields win). It is
    **request-scoped** (reads `identity()`/`context()`), and `reachable: false` or a throw answers
    **503** (carrying `Retry-After: 30` so a probe backs off instead of hammering an unhealthy app).
@@ -123,10 +153,10 @@ Scope: boot-time config (`env(schema)`) and the observability surface
    `health()` (from `abide/shared/health`) is **async**: on the server it resolves the baseline
    `{ reachable, version }` in-proc (the route composes its stub from it); on the client `await
    health()` fetches `/__abide/health`, yielding the full merged document.
-5. **Connectivity probes:** `online()` = a **reactive** boolean (navigator.onLine + last-known
+6. **Connectivity probes:** `online()` = a **reactive** boolean (navigator.onLine + last-known
    reachability) for driving offline UI; `reachable(host)` = an `await`ed actual reachability
    check.
-6. **`/__abide/inspector` = operator inspector, gated OFF by default** — injected + routed only
+7. **`/__abide/inspector` = operator inspector, gated OFF by default** — injected + routed only
    when `ABIDE_ENABLE_INSPECTOR=true` (it exposes internals, so closed unless opted in);
    `ABIDE_INSPECT` adds debug instrumentation.
 

@@ -40,7 +40,10 @@ test('a soft-nav to a page with no cards leaves no stale index', async ({ page }
 
     // The RPC hub is prose and links only — no `.sample` cards at all — so the correct result is NO
     // index block, the case an early return used to skip, stranding the previous page's list.
-    await page.locator('aside.sidebar').getByRole('link', { name: 'rpc = memo + transport' }).click()
+    await page
+        .locator('aside.sidebar')
+        .getByRole('link', { name: 'rpc = memo + transport' })
+        .click()
     await expect(page).toHaveURL(/\/rpc$/)
     await expect.poll(async () => (await sampleIndex(page)).blocks).toBe(0)
 })

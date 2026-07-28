@@ -98,14 +98,15 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
    (§8) — they are not keyed per-slot and require no channel join.
 4. **Watch:** client-source change → incremental client rebuild → signal reload; **server-source
    change → restart the server process** (or reload the changed module) → signal reload.
-   `ABIDE_DEV_SURFACE=1` logs requests under dev.
 5. **CSS/Tailwind:** scoped `<style>` compiles into the client build (hashed selectors, C9.1);
    **Tailwind processed only if configured** (optional, C9.1); CSS output lands in
    `dist/_app/<hash>/`.
 
 ## BP3. Production serving (implied)
 
-- **`abide start`** runs the built `dist/` (or `ABIDE_APP_DIR` override, default `dist/_app`).
+- **`abide start`** runs the built `dist/` (client assets under `dist/_app/<hash>/`). The output
+  PATH is a build-time choice, not a runtime one — `abide compile --out` names it; there is no env
+  override, and the `ABIDE_APP_DIR` one this line used to promise was never implemented.
 - Static assets from `dist/_app/<hash>/` served **immutable, long-cache** (content-addressed).
 - `APP_URL` sets the public app URL → mount base; `PORT` the listen port (existing `ABIDE_*`
   vars).

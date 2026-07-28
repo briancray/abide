@@ -24,6 +24,7 @@ import type {
     StreamHandleRecord,
 } from './renderState.ts'
 import { renderState } from './renderState.ts'
+import { STREAM_SENTINEL } from './STREAM_SENTINEL.ts'
 
 // The race sentinel the deadline resolves to. Identity-compared, so it can never collide with a read
 // value (a read resolving to this exact symbol is impossible — it is module-private).
@@ -151,7 +152,8 @@ export async function awaitStream(config: AwaitStreamConfig): Promise<string> {
     // rules), so this pair brackets correctly in any parent. The `<template>` carries the id (the patch
     // script's O(1) `getElementById` handle); the comment marks where the fallback region starts.
     // Hydration removes both sentinels (PR3, `runtime.unwrapStreamSlot`).
-    return `<!--ab-p:${id}-->${await config.pending()}<template id="ab-p:${id}"></template>`
+    const pendingId = `${STREAM_SENTINEL.pending}${id}`
+    return `<!--${pendingId}-->${await config.pending()}<template id="${pendingId}"></template>`
 }
 
 // Resolve a `{#for await}` source expression to an async iterator (awaiting a promise-of-iterable, and
@@ -280,7 +282,7 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
             // Completed inline (mode A): tag the paint with the id'd sentinel the client can match, and seed
             // the whole decoded transcript so hydration re-mounts from `values` with zero network.
             const id = scope.nextId++
-            const listId = `ab-l:${id}`
+            const listId = `${STREAM_SENTINEL.list}${id}`
             scope.streamHandles.push({
                 name: config.rpcName ?? null,
                 args: await resolveArgs(config),
@@ -296,7 +298,7 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
 
     // Past the deadline with the source still yielding → stream the remainder as append patches.
     const id = scope.nextId++
-    const listId = `ab-l:${id}`
+    const listId = `${STREAM_SENTINEL.list}${id}`
     const startIndex = index
     const inFlight = pending // the in-flight `next()` the deadline raced — the streamer resumes from it.
 
@@ -374,9 +376,9 @@ export function documentPatch(patch: Patch): string {
         return (
             `<template data-ab-patch="${patch.id}">${patch.html}</template>` +
             `<script>window.$abidePatch=window.$abidePatch||function(n){` +
-            `var t=document.querySelector('template[data-ab-patch="'+n+'"]'),s=document.getElementById('ab-p:'+n);` +
+            `var t=document.querySelector('template[data-ab-patch="'+n+'"]'),s=document.getElementById('${STREAM_SENTINEL.pending}'+n);` +
             `if(!t||!s)return;var p=s.parentNode,d=[],x=s.previousSibling,f=0;` +
-            `while(x){if(x.nodeType===8&&x.data==='ab-p:'+n){f=1;break;}d.push(x);x=x.previousSibling;}` +
+            `while(x){if(x.nodeType===8&&x.data==='${STREAM_SENTINEL.pending}'+n){f=1;break;}d.push(x);x=x.previousSibling;}` +
             `if(f)for(var i=0;i<d.length;i++)p.removeChild(d[i]);` +
             `p.insertBefore(t.content,s);t.remove();` +
             `};$abidePatch(${patch.id})</script>`
@@ -386,7 +388,7 @@ export function documentPatch(patch: Patch): string {
         return (
             `<template data-ab-append="${patch.id}">${patch.html}</template>` +
             `<script>window.$abideAppend=window.$abideAppend||function(n){` +
-            `var t=document.querySelector('template[data-ab-append="'+n+'"]'),l=document.getElementById('ab-l:'+n);` +
+            `var t=document.querySelector('template[data-ab-append="'+n+'"]'),l=document.getElementById('${STREAM_SENTINEL.list}'+n);` +
             `if(t&&l&&l.parentNode){l.parentNode.insertBefore(t.content,l);t.remove();}` +
             `};$abideAppend(${patch.id})</script>`
         )

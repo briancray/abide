@@ -25,6 +25,10 @@ export interface CliCommandField {
     required: boolean
     description?: string
     enum?: unknown[]
+    // What the handler uses when the flag is omitted — a schema `default`, which for a type-derived
+    // handler is its destructuring default (`({ message = 'hello' })`). Absent when none is declared;
+    // `undefined` needs no separate flag because JSON Schema cannot express it as a value.
+    default?: unknown
 }
 
 export interface CliCommand {
@@ -49,6 +53,7 @@ function fieldsOf(schema: JSONSchema | undefined): CliCommandField[] {
             type: singleType(property.type),
             required: required.has(name),
         }
+        if (property.default !== undefined) field.default = property.default
         if (typeof property.description === 'string') field.description = property.description
         if (Array.isArray(property.enum)) field.enum = property.enum
         fields.push(field)
@@ -69,10 +74,16 @@ export function cliCommands(config: AppConfig): CliCommand[] {
         }
         if (rpc.doc !== undefined) command.doc = rpc.doc
         // A shadowed rpc is still projected (it shows in help, and the REPL can describe it) — it just
-        // cannot be REACHED by that name, so say so rather than leaving the author to discover it.
-        if ((RESERVED_CLI_COMMANDS as readonly string[]).includes(rpc.name)) {
+        // cannot be REACHED by that name, so say so rather than leaving the author to discover it. A
+        // prompt-only name (`exit`/`quit`) shadows LESS: the rpc still runs as `app exit`.
+        if (Object.hasOwn(RESERVED_CLI_COMMANDS, rpc.name)) {
+            const reserved = RESERVED_CLI_COMMANDS[rpc.name as keyof typeof RESERVED_CLI_COMMANDS]
+            const reach =
+                reserved.where === 'prompt'
+                    ? 'cannot be called from the interactive prompt (it is still callable as a subcommand)'
+                    : 'cannot be called from the command line'
             log.channel('abide:cli').warn(
-                `rpc "${rpc.name}" is shadowed by the built-in \`${rpc.name}\` subcommand and cannot be called from the command line. Rename it, or set clients.cli: false to drop it from this surface.`,
+                `rpc "${rpc.name}" is shadowed by the built-in \`${rpc.name}\` command and ${reach}. Rename it, or set clients.cli: false to drop it from this surface.`,
             )
         }
         commands.push(command)

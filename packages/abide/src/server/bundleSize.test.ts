@@ -96,8 +96,23 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // branch in `merged`, ~4.7 KB of unminified source measured by extracting the added regions, mostly
     // comment bytes only this dev build counts. So the 123→128 headroom is the two together, not
     // `identity()` alone; splitting them matters for whoever measures the next bump.
+    // 128→134 KB is the hydration WIRE-FORMAT extraction (measured at 129.5 KB): the block anchor,
+    // the `ab-p:`/`ab-l:` stream sentinels, the `__abide-app`/`__abide-seed` element ids and the seed
+    // site-path grammar each became a named constant module instead of a literal repeated across
+    // files — 5.2 KB of source, of which the CONSTANTS are a few dozen bytes and the rest is the
+    // WHY comment on each. Also not waste, and the clearest case yet of what the note above warns
+    // about: every one of those files minifies to almost nothing, and the same duplication they
+    // removed is what silently corrupts hydration when a copy drifts. A smaller share is doc-comment
+    // repair on `shared/{invalidate,refresh}.ts`, which had been describing tags as server-only ever
+    // since they became isomorphic (~0.7 KB).
+    //
+    // The ceiling is raised rather than the comments trimmed, deliberately: this bound is a
+    // heavy-item tripwire (does a TypeScript compiler / a server-only subsystem reach the client?),
+    // not a shipping budget — the assertions above are the real guard, and production is minified.
+    // Squeezing under it by deleting the reasoning would trade the thing that has repeatedly caught
+    // real bugs in this codebase for a number that measures nothing anyone ships.
     const bytes = Buffer.byteLength(body, 'utf8')
-    expect(bytes).toBeLessThan(128_000)
+    expect(bytes).toBeLessThan(134_000)
 
     // Still a real bundle that boots the app and carries the AOT client mount runtime path.
     expect(body).toContain('bootstrapPage')

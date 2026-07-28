@@ -35,6 +35,7 @@ import type { RouteInfo } from '../shared/internal/routeInfo.ts'
 import { bootstrapPage, buildPageScope } from './internal/bootstrap.ts'
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
 import { HYDRATED_ATTRIBUTE } from './internal/HYDRATED_ATTRIBUTE.ts'
+import { HYDRATION_ELEMENT_ID } from './internal/HYDRATION_ELEMENT_ID.ts'
 import {
     loadPageEntry,
     pageBase,
@@ -42,8 +43,9 @@ import {
     pageSocketSpecs,
     pageSpecs,
 } from './internal/pageRegistry.ts'
+import { STREAM_SENTINEL } from './internal/STREAM_SENTINEL.ts'
 
-const CONTAINER_ID = '__abide-app'
+const CONTAINER_ID = HYDRATION_ELEMENT_ID.container
 
 export interface NavigateOptions {
     // Replace the current history entry instead of pushing a new one.
@@ -199,7 +201,7 @@ export function applyPatchFrame(frame: Record<string, unknown>): boolean {
     const id = frame.id
     if (frame.kind === 'fill') {
         if (typeof id === 'number' && typeof frame.html === 'string') {
-            const sentinel = document.getElementById(`ab-p:${id}`)
+            const sentinel = document.getElementById(`${STREAM_SENTINEL.pending}${id}`)
             const parent = sentinel?.parentNode
             if (sentinel != null && parent != null) {
                 // Clear the pending fallback — the run of nodes back to the opening `<!--ab-p:N-->`
@@ -212,7 +214,10 @@ export function applyPatchFrame(frame: Record<string, unknown>): boolean {
                     node !== null;
                     node = node.previousSibling
                 ) {
-                    if (node.nodeType === 8 && (node as Comment).data === `ab-p:${id}`) {
+                    if (
+                        node.nodeType === 8 &&
+                        (node as Comment).data === `${STREAM_SENTINEL.pending}${id}`
+                    ) {
                         found = true
                         break
                     }
@@ -229,7 +234,7 @@ export function applyPatchFrame(frame: Record<string, unknown>): boolean {
     if (frame.kind === 'append') {
         if (typeof id === 'number' && typeof frame.html === 'string') {
             // Insert BEFORE the list's trailing `<template>` sentinel — document order is item order.
-            const sentinel = document.getElementById(`ab-l:${id}`)
+            const sentinel = document.getElementById(`${STREAM_SENTINEL.list}${id}`)
             const parent = sentinel?.parentNode
             if (sentinel != null && parent != null) {
                 const template = document.createElement('template')

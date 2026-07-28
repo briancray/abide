@@ -1,7 +1,7 @@
 # abide — CLI Conveniences & App Lifecycle (Spec, Slice 9)
 
 Status: draft, derived from design interview 2026-07-17.
-Scope: `abide scaffold` / `run` / `init-agent`, and the `src/app.ts` process-lifecycle hooks.
+Scope: `abide scaffold` / `run`, and the `src/app.ts` process-lifecycle hooks.
 Thin/mechanical. The request/nav middleware chain is specced in C6-nav/S5; this covers only what's
 left. Builds on §2 (ambient context), CO1/CO2, machine-surfaces.md.
 
@@ -22,7 +22,7 @@ left. Builds on §2 (ambient context), CO1/CO2, machine-surfaces.md.
    - `src/app.ts` — an `AppModule` (lifecycle hooks) exporting an empty `middleware` array
      (passthrough `next => next()`);
    - `package.json` (dep on `abide`; scripts dev/build/start), `tsconfig.json` (TS7), and the
-     `CLAUDE.md` agent pointer (via `init-agent`).
+     `CLAUDE.md` agent pointer.
 3. **Non-interactive by default** — `<name>` is the arg, flags control the rest; no wizard.
 4. **Single default starter, no `--template` variant matrix** — one good starting point, small
    surface.
@@ -83,11 +83,6 @@ checks read the isomorphic `route()` → `{ kind, name, params, url }`.
 **Under `abide run`:** `onStart`/`onStop` **run** (the script needs the booted runtime); the
 **middleware chain does not** (no requests). So `run` = boot lifecycle without the request path.
 
-## CL4. `abide init-agent`
-
-- **(Re)writes the `CLAUDE.md` agent pointer** — regenerates the file orienting AI agents to
-  abide's conventions/APIs. Idempotent refresh. Trivial.
-
 ---
 
 ## Deferred / parked (rule before implementation)
@@ -95,3 +90,6 @@ checks read the isomorphic `route()` → `{ kind, name, params, url }`.
 - **`--template` variants** (CL1.4 is single-default) — if ever wanted.
 - **Scaffold prompts / interactive mode** (CL1.3 is non-interactive).
 - **Cron/scheduling** beyond ad-hoc `abide run` — not in scope.
+- **`abide init-agent`** (once CL4) — WITHDRAWN. It was specced as regenerating `CLAUDE.md` from
+  the reference source, but no such generator exists: `CLAUDE.md` is written by hand alongside the
+  specs, and a command whose whole job is to regenerate it would have to be that generator first.

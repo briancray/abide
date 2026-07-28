@@ -1,5 +1,8 @@
-// serve() drives the onStart(start)/onStop(stop) WRAPPER lifecycle (CL2): setup runs before the
-// socket binds, boot is a breakout if start() is never called, and teardown is backstopped.
+// The onStart(start)/onStop(stop) WRAPPER lifecycle (CL2), asserted against BOTH surfaces that boot an
+// app: `serve()` (abide dev/start/scaffold, a compiled binary's serve, the CLI's ephemeral host) and
+// `createTestApp` in discovery mode. CL3 says "same contract under createTestApp" — since both now
+// drive `bootApp`, that sentence is a test rather than a promise, and the four contracts (wrap order,
+// breakout, backstop, throw-then-backstop) plus the page warm are asserted once per surface.
 //
 // The lifecycle app.ts is dynamic-imported by loadApp INTO THIS PROCESS, so it shares `globalThis` —
 // hooks record their ordering onto `globalThis.__abideLife`, which the test reads back directly. Each
@@ -10,6 +13,8 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadApp } from '../server/internal/loadApp.ts'
+import { createTestApp } from '../test/createTestApp.ts'
+import { loadEmittedServer } from '../ui/internal/emit.ts'
 import { type ServeResult, serve } from './serve.ts'
 
 const running: ServeResult[] = []
@@ -21,9 +26,10 @@ function tempPath(): string {
     return dir
 }
 
-async function project(appTs: string): Promise<string> {
+async function project(appTs: string, page?: string): Promise<string> {
     const dir = tempPath()
     await Bun.write(join(dir, 'src/app.ts'), appTs)
+    if (page !== undefined) await Bun.write(join(dir, 'src/ui/pages/page.abide'), page)
     return dir
 }
 
@@ -54,47 +60,83 @@ export async function onStop(stop) {
 }
 `
 
-describe('serve — onStart/onStop wrappers', () => {
-    test('setup wraps the boot and teardown wraps the stop, in order', async () => {
-        const app = await serve(await project(WRAP_APP), { port: 0 })
-        // By the time serve() resolves, onStart has wrapped a completed boot.
-        expect(events()).toEqual(['start:before', 'start:after'])
-        expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
+// The two surfaces, reduced to the one shape the contracts are about: boot a project dir, get a URL
+// and a stop. Anything a surface adds on top (a dev watcher, an rpc proxy) is out of scope here.
+interface Booted {
+    url: string
+    stop(): Promise<void>
+}
 
-        await app.stop()
-        expect(events()).toEqual(['start:before', 'start:after', 'stop:before', 'stop:after'])
-        // The socket is really closed.
-        await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
-    })
+const SURFACES: [string, (dir: string) => Promise<Booted>][] = [
+    ['serve', (dir) => serve(dir, { port: 0 })],
+    [
+        'createTestApp',
+        async (dir) => {
+            const app = await createTestApp({ dir })
+            return { url: app.origin, stop: (): Promise<void> => app.stop() }
+        },
+    ],
+]
 
-    test('onStart returning without calling start() is a breakout — serve() throws', async () => {
-        const dir = await project(`export function onStart() { /* never boots */ }`)
-        await expect(serve(dir, {})).rejects.toThrow(/did not boot/)
-    })
+for (const [surface, boot] of SURFACES) {
+    describe(`${surface} — onStart/onStop wrappers`, () => {
+        test('setup wraps the boot and teardown wraps the stop, in order', async () => {
+            const app = await boot(await project(WRAP_APP))
+            // By the time boot resolves, onStart has wrapped a completed boot.
+            expect(events()).toEqual(['start:before', 'start:after'])
+            expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
 
-    test('onStop that forgets stop() is backstopped — the server is still torn down', async () => {
-        const app = await serve(
-            await project(`export function onStop() { /* forgets stop() */ }`),
-            { port: 0 },
-        )
-        running.push(app)
-        expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
-        await app.stop()
-        await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
-    })
+            await app.stop()
+            expect(events()).toEqual(['start:before', 'start:after', 'stop:before', 'stop:after'])
+            // The socket is really closed.
+            await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
+        })
 
-    test('onStop that throws before stop() is still backstopped — teardown completes, error re-thrown', async () => {
-        const app = await serve(
-            await project(`export function onStop() { throw new Error('teardown boom') }`),
-            { port: 0 },
-        )
-        expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
-        // The hook's throw surfaces to the caller...
-        await expect(app.stop()).rejects.toThrow(/teardown boom/)
-        // ...but the backstop still tore the server down.
-        await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
+        test('onStart returning without calling start() is a breakout — boot throws', async () => {
+            const dir = await project(`export function onStart() { /* never boots */ }`)
+            await expect(boot(dir)).rejects.toThrow(/did not boot/)
+        })
+
+        test('onStop that forgets stop() is backstopped — the server is still torn down', async () => {
+            const app = await boot(
+                await project(`export function onStop() { /* forgets stop() */ }`),
+            )
+            expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
+            await app.stop()
+            await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
+        })
+
+        test('onStop that throws before stop() is still backstopped — teardown completes, error re-thrown', async () => {
+            const app = await boot(
+                await project(`export function onStop() { throw new Error('teardown boom') }`),
+            )
+            expect((await fetch(`${app.url}/__abide/health`)).status).toBe(200)
+            // The hook's throw surfaces to the caller...
+            await expect(app.stop()).rejects.toThrow(/teardown boom/)
+            // ...but the backstop still tore the server down.
+            await expect(fetch(`${app.url}/__abide/health`)).rejects.toThrow()
+        })
+
+        // The warm is part of the lifecycle, not of serve(): a harness that skipped it would exercise
+        // the cold AOT-compile-on-first-render path production never takes. The marker keeps this
+        // surface's page source unique, so the module cache starts cold for it either way.
+        test('boot warms every page — the first render hits a warm module cache', async () => {
+            const source = `<p>warm-${surface}-4b17</p>`
+            const dir = await project(WRAP_APP, source)
+            const app = await boot(dir)
+            running.push(app)
+
+            const loaded = await loadApp(dir)
+            const page = loaded.pages?.['/']
+            const pageDir = loaded.pageDirs?.['/']
+            expect(page).toBe(source)
+            // A warmed source resolves SYNCHRONOUSLY: `Bun.peek` returns the settled module, not the
+            // promise. A cold compile would still be pending here.
+            const pending = loadEmittedServer(page as string, pageDir)
+            expect(Bun.peek(pending)).not.toBe(pending)
+        })
     })
-})
+}
 
 // Regression: onHealth/onError ride on AppConfig, so loadApp must CAPTURE them from src/app.ts (they
 // were added to the router before the loader learned to read them — a createApp-direct test can't

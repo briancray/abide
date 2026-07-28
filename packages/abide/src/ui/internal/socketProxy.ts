@@ -12,6 +12,7 @@
 import { ChannelHub } from '../../shared/internal/channelHub.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import { state } from '../../shared/internal/reactive.ts'
+import { room } from '../../shared/internal/room.ts'
 import type { SocketSurface, SocketSurfaceMembers } from '../../shared/internal/socketSurface.ts'
 import { muxPublish, muxSubscribe } from './mux.ts'
 
@@ -186,11 +187,10 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): ErasedSo
         }
         return room
     }
-    // A probe call's room key: void → undefined (0 room args), roomed → the sole room arg.
-    const roomArg = (r: unknown[]): unknown => (r.length > 0 ? r[0] : undefined)
-
-    const proxy = ((...room: unknown[]): AsyncIterable<unknown> => ({
-        [Symbol.asyncIterator]: (): AsyncIterator<unknown> => roomFor(roomArg(room)).iterate(),
+    // The room key is `room()` — the `Room` type's runtime twin, shared with `server/socket.ts` so the
+    // two halves of the isomorphic surface cannot disagree about where the room sits in a call.
+    const proxy = ((...r: unknown[]): AsyncIterable<unknown> => ({
+        [Symbol.asyncIterator]: (): AsyncIterator<unknown> => roomFor(room(r)).iterate(),
     })) as Record<string, unknown> & ((...room: unknown[]) => AsyncIterable<unknown>)
 
     // Direct iteration (`for await m of socket`) subscribes the DEFAULT (void) room.
@@ -198,21 +198,19 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): ErasedSo
         () => roomFor(undefined).iterate()
     // publish(...): void → `[message]`; roomed → `[room, message]`. The message is always last.
     proxy.publish = (...args: unknown[]): void => {
-        const message = args[args.length - 1]
-        const room = args.length > 1 ? args[0] : undefined
-        roomFor(room).publish(message)
+        roomFor(room(args, 1)).publish(args[args.length - 1])
     }
     // Assigned as ONE typed object rather than member-by-member onto an untyped bag. `Omit`-derived, so
     // a probe added to `SocketSurface` appears here as a missing property and this stops compiling —
     // which is the only reason the surface type is worth having.
     const members: SocketSurfaceMembers<unknown, unknown> = {
         publish: proxy.publish as ErasedSocketSurface['publish'],
-        peek: (...r: unknown[]): unknown => roomFor(roomArg(r)).peek(),
-        chunks: (...r: unknown[]): unknown[] => roomFor(roomArg(r)).chunks(),
-        pending: (...r: unknown[]): boolean => roomFor(roomArg(r)).pending(),
-        refreshing: (...r: unknown[]): boolean => roomFor(roomArg(r)).refreshing(),
-        done: (...r: unknown[]): boolean => roomFor(roomArg(r)).done(),
-        error: (...r: unknown[]): unknown => roomFor(roomArg(r)).error(),
+        peek: (...r: unknown[]): unknown => roomFor(room(r)).peek(),
+        chunks: (...r: unknown[]): unknown[] => roomFor(room(r)).chunks(),
+        pending: (...r: unknown[]): boolean => roomFor(room(r)).pending(),
+        refreshing: (...r: unknown[]): boolean => roomFor(room(r)).refreshing(),
+        done: (...r: unknown[]): boolean => roomFor(room(r)).done(),
+        error: (...r: unknown[]): unknown => roomFor(room(r)).error(),
     }
     Object.assign(proxy, members)
     return proxy as unknown as ErasedSocketSurface

@@ -35,10 +35,26 @@ shared runtime) instead of the whole app. Supersedes the "single non-minified bu
    before the previous mount is disposed, so the dispose→hydrate window stays synchronous (no blank gap).
    A resident chunk resolves in a microtask (first load + same-route param nav are effectively sync). A
    chunk-load failure returns false → the caller falls back to a full document load.
-7. **`modulepreload` the current route's chunk (no first-load waterfall).** The build maps each pattern →
-   its chunk filename (via the chain's unique index-prefixed slug); the SSR document emits
-   `<link rel="modulepreload" href="/__abide/chunk/<chunk>">` for the matched route, so the browser
-   fetches the page chunk in parallel with the loader instead of after it.
+7. **`modulepreload` the whole STATIC boot graph (no first-load waterfall).** The build maps each pattern
+   → its chunk filename (via the chain's unique index-prefixed slug), and `preloadGraphOf` walks the
+   emitted bytes for static `import`/`from` specifiers to produce two lists: `bootChunks` (the loader
+   entry + its transitive static imports) and `routeChunks` (each pattern's chunk + its transitive static
+   imports, minus the boot set). The SSR document emits a `<link rel="modulepreload">` per entry of both,
+   entry-first, so the browser fetches the entire boot graph in parallel with the shell.
+
+   This is `<head>`, not the tail, and that placement is the point: the executing
+   `<script type="module">` must stay last (it cannot run before the hydration seed is parsed), so
+   without these links the browser does not DISCOVER the client bundle until `responseEnd` — after every
+   streamed read has drained. Measured on the docs app before the fix: boot download began at 4494ms on
+   a page whose `responseStart` was 364ms. After: the whole graph is downloaded by 392ms while the
+   document streams on until 4566ms.
+
+   Every chunk is named INDIVIDUALLY because following a preloaded module's own static imports is
+   explicitly optional in the HTML spec and Safari declines — preloading only the entry moves the
+   waterfall down one level (entry at 140ms, its 47KB dependency still at 4800ms) rather than removing
+   it. Only static edges are followed: the dynamic ones are other routes' chunks, and preloading those
+   would fetch every route's code on every page. Guarded by `server/bootPreload.test.ts` (the preloaded
+   set must be CLOSED under static imports) and measured by `bun run bench:document`.
 8. **Soft-nav primes early.** `softLoad` kicks `loadPageEntry(targetPattern)` up front so the chunk
    import overlaps the fetch + frame stream, then awaits it right before hydrate.
 

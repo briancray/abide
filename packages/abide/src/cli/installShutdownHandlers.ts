@@ -10,6 +10,7 @@
 // the test suite boots repeatedly, and per-boot exit handlers there would be wrong. The callers are
 // the ones that OWN the process: `abide dev`/`start`/`scaffold`, and a compiled binary's boot.
 
+import { log } from '../shared/log.ts'
 import type { ServeResult } from './serve.ts'
 
 // Grace window for onStop teardown during shutdown before the process is force-exited — a buggy hook
@@ -17,26 +18,32 @@ import type { ServeResult } from './serve.ts'
 const SHUTDOWN_TEARDOWN_DEADLINE_MS = 5000
 
 export function installShutdownHandlers(running: ServeResult): void {
+    // On the framework's own channel rather than bare `console`, so shutdown lines carry the same
+    // level/time/traceparent shape as everything else and honour ABIDE_LOG_FORMAT / NO_COLOR. The
+    // routine "tearing down" notice is gated with the rest of `abide:cli`; the three FAILURE lines
+    // below are `error`, which bypasses gating — so a stalled or throwing teardown still surfaces on
+    // a silent channel, which is the case that actually needs saying.
+    const shutdownLog = log.channel('abide:cli')
     let shuttingDown = false
     const shutdown = async (reason: string, exitCode: number, cause?: unknown): Promise<void> => {
         if (shuttingDown) return
         shuttingDown = true
         if (cause !== undefined) {
-            console.error(`abide: ${reason} — running onStop teardown before exit:`, cause)
+            shutdownLog.error(`${reason} — running onStop teardown before exit:`, cause)
         } else {
-            console.info(`abide: ${reason} — running onStop teardown before exit.`)
+            shutdownLog.info(`${reason} — running onStop teardown before exit.`)
         }
         // Force-exit if teardown stalls (a hanging onStop) so shutdown never hangs. Unref'd so the timer
         // itself never keeps the process alive. A timed-out teardown is abnormal, so it always exits 1.
         const deadline = setTimeout(() => {
-            console.error('abide: onStop teardown timed out during shutdown — forcing exit.')
+            shutdownLog.error('onStop teardown timed out during shutdown — forcing exit.')
             process.exit(1)
         }, SHUTDOWN_TEARDOWN_DEADLINE_MS)
         deadline.unref?.()
         try {
             await running.stop()
         } catch (stopError) {
-            console.error('abide: onStop teardown itself failed during shutdown:', stopError)
+            shutdownLog.error('onStop teardown itself failed during shutdown:', stopError)
             process.exit(1)
         }
         process.exit(exitCode)

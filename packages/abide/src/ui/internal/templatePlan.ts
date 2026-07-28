@@ -17,8 +17,13 @@
 import type { BindingAnalysis, NestedScript } from './analyzeBindings.ts'
 import { type CellBindings, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
+import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 import { escapeHtml } from './serverRuntime.ts'
+
+// The clone skeleton's placeholder for one block/component: the paired anchors with an EMPTY body. The
+// server paints content between them; the claim walk reconciles the two by depth-counting the pair.
+const BLOCK_SKELETON = `<!--${BLOCK_ANCHOR.open}--><!--${BLOCK_ANCHOR.close}-->`
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -638,7 +643,7 @@ function walkLevelNodes(
     // zero-prop, no-body COMPONENT invocation of a `children` component (resolved off `$scope.children`),
     // reusing the component emit + `$rt.component` runtime path (paired anchors + claimBlock hydration).
     const pushChildrenSlot = (): void => {
-        skeleton += '<!--[--><!--]-->'
+        skeleton += BLOCK_SKELETON
         const emptyBody = subLevel([])
         slots.push({
             kind: 'component',
@@ -778,7 +783,7 @@ function walkLevelNodes(
                 break
             }
             case 'Component': {
-                skeleton += '<!--[--><!--]-->'
+                skeleton += BLOCK_SKELETON
                 const attrPlans = node.attributes.map((attr) => planAttribute(ctx, attr))
                 // A top-level `{#component Name()}` inside `<Foo>…</Foo>` is forwarded to Foo as its `Name`
                 // prop. Emit each as a caller-level component def (so it closes over the CALLER's scope) and
@@ -842,7 +847,7 @@ function walkLevelNodes(
                 break
             }
             case 'IfBlock': {
-                skeleton += '<!--[--><!--]-->'
+                skeleton += BLOCK_SKELETON
                 const branches = node.branches.map((b) => {
                     const sub = subLevel(b.children)
                     return {
@@ -869,7 +874,7 @@ function walkLevelNodes(
                 break
             }
             case 'ForBlock': {
-                skeleton += '<!--[--><!--]-->'
+                skeleton += BLOCK_SKELETON
                 const bodySub = subLevel(node.children)
                 const catchNode = node.catch
                 const catchSub = catchNode ? subLevel(catchNode.children) : null
@@ -912,7 +917,7 @@ function walkLevelNodes(
                 break
             }
             case 'AwaitBlock': {
-                skeleton += '<!--[--><!--]-->'
+                skeleton += BLOCK_SKELETON
                 const expr = rewriteExpr(ctx, node.expression)
                 const pendingSub = subLevel(node.pending)
                 const thenNode = node.then
@@ -958,7 +963,7 @@ function walkLevelNodes(
                 break
             }
             case 'SwitchBlock': {
-                skeleton += '<!--[--><!--]-->'
+                skeleton += BLOCK_SKELETON
                 const discriminant = rewriteExpr(ctx, node.discriminant)
                 const leadingSub = subLevel(node.leading)
                 const cases = node.cases.map((c) => {
@@ -984,7 +989,7 @@ function walkLevelNodes(
                 break
             }
             case 'TryBlock': {
-                skeleton += '<!--[--><!--]-->'
+                skeleton += BLOCK_SKELETON
                 const bodySub = subLevel(node.children)
                 const catchNode = node.catch
                 const catchSub = catchNode ? subLevel(catchNode.children) : null

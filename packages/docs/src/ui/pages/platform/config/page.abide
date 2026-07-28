@@ -20,7 +20,6 @@
       <tbody>
         <tr><td><code>PORT</code></td><td>Listen port (default: ephemeral).</td></tr>
         <tr><td><code>APP_URL</code></td><td>Public app URL → the mount base, and the allowed Origin for the CSRF check.</td></tr>
-        <tr><td><code>ABIDE_APP_DIR</code></td><td>Override the built app directory served in production.</td></tr>
         <tr><td><code>ABIDE_DATA_DIR</code></td><td>Per-user data directory (backs <code>appDataDir()</code>).</td></tr>
         <tr><td><code>ABIDE_IDENTITY_SECRET</code></td><td><strong>Required in production.</strong> Seals the <code>abide-identity</code> cookie + tokens so authenticated <code>identity.set()</code> survives restarts and is stable across instances.</td></tr>
         <tr><td><code>ABIDE_IDENTITY_TTL</code></td><td>Identity cookie/token TTL in ms (default 30 days, rolling).</td></tr>
@@ -33,7 +32,6 @@
         <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td>Default maximum request body size.</td></tr>
         <tr><td><code>ABIDE_LOG_FORMAT</code></td><td>Machine log format — <code>tsv</code> or <code>json</code>. Unset, the shape follows the TTY: coloured columns for a human, <code>tsv</code> when piped. <code>FORCE_COLOR</code> forces the coloured form, <code>NO_COLOR</code> refuses it.</td></tr>
         <tr><td><code>DEBUG</code></td><td>Enables gated log channels (<code>log.channel(name)</code>).</td></tr>
-        <tr><td><code>ABIDE_DEV_SURFACE</code></td><td>Logs each request under <code>abide dev</code>.</td></tr>
         <tr><td><code>ABIDE_ENABLE_INSPECTOR</code></td><td>Enables the <code>/__abide/inspector</code> route (off by default).</td></tr>
         <tr><td><code>ABIDE_INSPECT</code></td><td>Enables debug instrumentation.</td></tr>
       </tbody>

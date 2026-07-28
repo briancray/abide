@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { GET } from '../../server/GET.ts'
 import type { Mutation, Rpc } from '../../server/internal/makeRpc.ts'
+import { buildRegistry } from '../../server/internal/registry.ts'
 import type { Route } from '../../server/internal/router.ts'
 import { POST } from '../../server/POST.ts'
 import { clearTagRegistry } from '../../shared/internal/memoTags.ts'
@@ -50,7 +51,7 @@ test('read proxy coalesces/caches repeated loads (handler runs once)', async () 
     expect(calls).toBe(1)
 })
 
-test('a memo:false read bypasses the client memo — every bare call re-fetches', async () => {
+test('a memo:false read retains nothing — every bare call re-fetches', async () => {
     let calls = 0
     const app = await boot({
         tick: GET(() => ++calls, { memo: false }),
@@ -65,6 +66,48 @@ test('a memo:false read bypasses the client memo — every bare call re-fetches'
     expect(await tick({})).toBe(2)
     expect(await tick({})).toBe(3)
     expect(calls).toBe(3)
+})
+
+// CLIENT/SERVER PARITY for `memo: false` (ADR 0027's thesis applied to the memo-option forwarding).
+// The bare call was never the whole story: `peek`/`pending`/`watch` route through the BACKING memo on
+// both sides, and the two backings were built by two independent derivations of one option. They
+// disagreed — the server ran a `memo: false` read at `ttl: 0` while the wire shipped `ttl: null`
+// (Infinity) and the browser memo cached it FOREVER. A correctness test over values could not see it;
+// the observable is the WORK, so this counts handler runs on both sides of the same rpc.
+test('a memo:false read has the same peek policy on the server and in the browser', async () => {
+    let calls = 0
+    const routes = {
+        tick: GET((args: { id: number }) => ({ id: args.id, run: ++calls }), { memo: false }),
+    }
+    const app = await boot(routes)
+
+    // SERVER: `peek` subscribes and kicks a load; nothing is retained, so the second peek loads again.
+    routes.tick.peek({ id: 1 })
+    await until(() => calls === 1)
+    routes.tick.peek({ id: 1 })
+    await until(() => calls === 2)
+    const serverRuns = calls
+
+    // The wire spec the client bundle actually ships for this rpc. `ttl: 0`, not `null` — the whole
+    // divergence was this one field, and `memo` stays true because a READ still routes through the
+    // memo at ttl:0 (only a `memo: false` MUTATION bypasses the bare call, on both sides).
+    const spec = buildRegistry({ routes }).rpcs[0]
+    if (spec === undefined) throw new Error('expected a registry entry')
+    expect(spec.ttl).toBe(0)
+    expect(spec.memo).toBe(true)
+
+    // BROWSER: the same two peeks over the same spec must do the same work.
+    calls = 0
+    const proxy = makeClientImports({ tick: spec }, app.origin).tick as Rpc<
+        { id: number },
+        { id: number; run: number }
+    >
+    proxy.peek({ id: 1 })
+    await until(() => calls === 1)
+    proxy.peek({ id: 1 })
+    await until(() => calls === 2)
+
+    expect(calls).toBe(serverRuns)
 })
 
 test('invalidate forces a re-fetch', async () => {

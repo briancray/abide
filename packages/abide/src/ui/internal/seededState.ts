@@ -2,7 +2,8 @@
 //
 // SITE-KEYED buckets. The SSR render records each `state(initial)` initial into the hydration seed,
 // grouped per component instance and keyed by that instance's SITE PATH (`pages.makeRecordingState`).
-// A site path is built from two segments:
+// A site path is built from two segments, joined by the shared `SITE_PATH` grammar (both ends of the
+// record/replay pair call it, so the separators cannot drift):
 //   • `/<siteId>` — a `<Component/>` invocation. `siteId` is assigned in `templatePlan` and read by BOTH
 //                   emitters, so it names the same invocation on both sides. Opens a NEW bucket.
 //   • `#<index>`  — one `{#for}` iteration. Opens a NEW bucket, so a branch-local `<script>` in the loop
@@ -28,6 +29,7 @@ import { decode } from '../../shared/internal/codec.ts'
 import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
 import type { State, StateFactory } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
+import { SITE_PATH } from './SITE_PATH.ts'
 
 // `seed.states` is the rich-codec `encode(...)` string of the whole site-keyed bucket map (a non-RPC
 // hydrated value — see pages.ts). Decode it back to the buckets the ordinal replay reads. A malformed/
@@ -76,15 +78,15 @@ export function makeSeededState(
         return Object.assign(local, {
             shared: state.shared,
             forSite(siteId: number): StateFactory {
-                const next = `${sitePath}/${siteId}`
+                const next = SITE_PATH.forSite(sitePath, siteId)
                 return at(next, next)
             },
             forItem(index: number): StateFactory {
-                const next = `${sitePath}#${index}`
+                const next = SITE_PATH.forItem(sitePath, index)
                 return at(next, next)
             },
         }) as StateFactory
     }
 
-    return at('', '') // the page/root bucket
+    return at(SITE_PATH.root, SITE_PATH.root) // the page/root bucket
 }

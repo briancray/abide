@@ -8,16 +8,71 @@
 //
 // `connect`/`disconnect` are reserved for the same reason once removed: they are how you change what
 // the binary points AT, and a binary you cannot re-target is as stuck as one you cannot host. So are
-// `login`/`logout`/`identity`, which are the same argument for WHO rather than WHERE.
+// `login`/`logout`/`identity`, which are the same argument for WHO rather than WHERE — and `logs`,
+// which is WHAT IT IS DOING. Those four are the binary's operational vocabulary about a deployment
+// rather than calls into the app, and an author who shadows one loses the ability to ask a question
+// about the thing they are shadowing it with. Unlike `serve`, none of them is un-substitutable (an
+// operator can curl `/__abide/logs`), so the argument here is consistency of vocabulary, not rescue:
+// `identity` sets the precedent, and a reserved list you have to memorise exceptions to is worse than
+// one shadowed rpc.
 //
-// Named once because four places have to agree: the dispatcher, the REPL, the generated help, and the
-// projection that warns an author their rpc is shadowed.
-export const RESERVED_CLI_COMMANDS = [
-    'serve',
-    'help',
-    'connect',
-    'disconnect',
-    'login',
-    'logout',
-    'identity',
-] as const
+// This is the ONE list, because four places have to agree: the dispatcher (`runCompiledApp`), the REPL
+// (`interactiveCli`), the generated help (`cliUsage`) and the projection that warns an author their
+// rpc is shadowed (`cliCommands`). The first two reach it through `reservedCliCommand`, so a name they
+// intercept that is not here is a compile error; the other two read the table directly, so a name
+// added here shows up in help and in the warning with no second edit.
+//
+// `where` is the difference between the two surfaces, not decoration: `exit`/`quit` end a SESSION, so
+// they mean nothing on a command line and an rpc named `exit` stays callable as `app exit` — it is
+// only unreachable from the prompt. The shadow warning says which of the two it is.
+export const RESERVED_CLI_COMMANDS = {
+    serve: {
+        where: 'both',
+        description: 'host the app in the foreground (--port <n>)',
+    },
+    connect: {
+        where: 'both',
+        description: 'point at a deployment until `disconnect` (<url>; bare = show where)',
+    },
+    disconnect: {
+        where: 'both',
+        description: 'forget that target and go back to hosting the app',
+    },
+    login: {
+        where: 'both',
+        description: 'remember a credential for the deployment you point at (--token <t>)',
+    },
+    logout: {
+        where: 'both',
+        description: 'drop that credential (locally — the token stays valid until it expires)',
+    },
+    identity: {
+        where: 'both',
+        description: 'ask the server who it thinks you are',
+    },
+    logs: {
+        where: 'both',
+        description:
+            'stream logs from the deployment (--tail <n> --level <l> --debug <pat> --trace <id> --no-follow)',
+    },
+    help: {
+        where: 'both',
+        description: 'this help; `help <command>` for one command',
+    },
+    completion: {
+        where: 'both',
+        description: 'print the shell completion script (bash|zsh|fish)',
+    },
+    exit: {
+        where: 'prompt',
+        description: 'leave the interactive session (interactive only)',
+    },
+    quit: {
+        where: 'prompt',
+        description: 'leave the interactive session — alias of `exit` (interactive only)',
+    },
+} as const satisfies Record<string, { where: 'both' | 'prompt'; description: string }>
+
+// A name the binary keeps for itself. `'both'` names are intercepted on the command line AND at the
+// prompt; `'prompt'` names only at the prompt.
+export type ReservedCliCommand = keyof typeof RESERVED_CLI_COMMANDS

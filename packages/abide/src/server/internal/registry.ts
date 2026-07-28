@@ -10,6 +10,7 @@
 // step attaches later. Surfaces treat a missing schema permissively.
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
+import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { clientPublishAllowed } from '../socket.ts'
@@ -40,12 +41,15 @@ export interface RpcEntry {
     // Opt-in server cross-request cache (rpc-core §2). Surfaced so the client bundle can flag the read
     // proxy: a crossRequest read auto-subscribes to its broadcast channel (shared-cache-plan §2.5).
     crossRequest: boolean
-    // Whether the route routes through a memo (`memo !== false`). The client proxy mirrors it: `false`
-    // means the bare call bypasses the client memo (direct fetch, at-least-once) — matters for mutations.
+    // Whether the bare CALL routes through the memo. The client proxy mirrors it: `false` means the call
+    // bypasses the client memo (direct fetch, at-least-once). It is NOT simply `memo !== false` — under
+    // `memo: false` a MUTATION bypasses while a READ still routes through at ttl:0, which is what the
+    // server does, so the flag carries the normalizer's verb-aware answer (`rpcMemoPolicy`).
     memo: boolean
     // Retained-value TTL the client memo should use (ms). `null` = Infinity (retain until invalidate) —
-    // a read's default; a mutation defaults to `0` (coalesce concurrent, retain nothing). Symmetry: an
-    // author who sets `memo: { ttl }` gets that retention on both sides.
+    // a read's default; a mutation defaults to `0` (coalesce concurrent, retain nothing), as does
+    // `memo: false` on either verb. Symmetry: an author who sets `memo: { ttl }` gets that retention on
+    // both sides, and one who sets `memo: false` gets NO retention on both sides.
     ttl: number | null
     // Cache tags (rpc-core §8). Carried to the client for the same reason `ttl` is: the tag verbs are
     // isomorphic, so a `refresh({ tags })`/`invalidate({ tags })` in the browser has to be able to
@@ -142,25 +146,26 @@ function rpcEntry(name: string, route: Route): RpcEntry {
     const options = meta.options
     const schemas = options.schemas
 
-    // TTL default mirrors the runtime: a read retains (∞ → null), a mutation coalesces-only (0).
-    const memoOpt = options.memo === false ? undefined : options.memo
-    const memoed = options.memo !== false
-    const ttl = memoOpt?.ttl ?? (meta.read ? null : 0)
+    // The memo half of the entry is the normalized POLICY verbatim (`shared/internal/rpcMemoPolicy`) —
+    // the same call `makeRpc` makes to build the server memo, so the wire carries the server's answer
+    // instead of a second derivation of it. It used to be a second derivation, and it disagreed: a
+    // `memo: false` READ shipped `ttl: null` (Infinity) while the server ran that read at `ttl: 0`.
+    const policy = rpcMemoPolicy(options.memo, meta.read)
 
     const entry: RpcEntry = {
         name,
         method: meta.method,
         read: meta.read,
-        crossRequest: memoOpt?.crossRequest === true,
-        memo: memoed,
-        ttl,
+        crossRequest: policy.crossRequest,
+        memo: policy.memoed,
+        ttl: policy.ttl,
         timeout: meta.timeout,
         clients: resolveClients(options.clients, `rpc "${name}"`),
     }
 
-    if (memoOpt?.tags !== undefined && memoOpt.tags.length > 0) entry.tags = memoOpt.tags
-    if (memoOpt?.throttle !== undefined) entry.throttle = memoOpt.throttle
-    if (memoOpt?.debounce !== undefined) entry.debounce = memoOpt.debounce
+    if (policy.tags !== undefined) entry.tags = policy.tags
+    if (policy.throttle !== undefined) entry.throttle = policy.throttle
+    if (policy.debounce !== undefined) entry.debounce = policy.debounce
 
     const inputSchema = jsonSchemaOf(schemas?.input)
     if (inputSchema !== undefined) entry.inputSchema = inputSchema

@@ -7,6 +7,7 @@
 
 import type { ChunkAsset, ClientBuild } from './clientBundle.ts'
 import type { CompiledApp } from './compiledAppConfig.ts'
+import { preloadGraphOf } from './preloadGraphOf.ts'
 
 export async function embeddedClientBuild(app: CompiledApp): Promise<ClientBuild> {
     const files = new Map<string, ChunkAsset>()
@@ -22,5 +23,13 @@ export async function embeddedClientBuild(app: CompiledApp): Promise<ClientBuild
         cssFile: app.client.css ?? undefined,
         files,
         chunkByPattern: new Map(Object.entries(app.client.chunkByPattern)),
+        // Derived from the embedded bytes for the same reason the `dist/` loader derives it: the preload
+        // graph is a property of the chunks themselves, so a binary and a `dist/` serve identical head
+        // preloads without the compile step having to record anything extra.
+        ...preloadGraphOf(
+            app.client.entry,
+            new Map(Object.entries(app.client.chunkByPattern)),
+            files,
+        ),
     }
 }

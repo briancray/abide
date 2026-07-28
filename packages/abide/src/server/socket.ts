@@ -14,7 +14,7 @@
 // is single-process (S3.3) — tail buffer + fanout live in one server process.
 
 import { type ChannelOptions, channel } from '../shared/channel.ts'
-import type { Room } from '../shared/internal/room.ts'
+import { type Room, room } from '../shared/internal/room.ts'
 import type { SocketSurface } from '../shared/internal/socketSurface.ts'
 import { DROP } from './DROP.ts'
 import type { Middleware } from './internal/middleware.ts'
@@ -89,12 +89,10 @@ export function socket<T, Args = void>(options: SocketOptions<T> = {}): Socket<T
     // socket has no option vocabulary of its own. `Args = void` → one hub under the void key (today's
     // single-topic socket); a non-void `Args` gives per-room hubs, created lazily.
     const ch = channel<T, Args>(options.channel ?? {})
-    // The room key for a probe/publish call: void → `undefined` (0 room args), roomed → the sole room arg.
-    const room = (args: unknown[]): Args =>
-        args.length > 0 ? (args[0] as Args) : (undefined as Args)
 
-    const sock = ((...room: Room<Args>): AsyncIterable<T> =>
-        ch(room.length > 0 ? (room[0] as Args) : (undefined as Args))) as Socket<T, Args>
+    // The room key comes from `room()` — the `Room` type's runtime twin — at every site below, so the
+    // "is that first argument a room or the payload?" rule is not re-derived per verb.
+    const sock = ((...r: Room<Args>): AsyncIterable<T> => ch(room<Args>(r))) as Socket<T, Args>
 
     // Direct iteration (`for await m of socket`) subscribes the DEFAULT (void) room.
     sock[Symbol.asyncIterator] = (): AsyncIterator<T> => ch[Symbol.asyncIterator]()
@@ -109,17 +107,15 @@ export function socket<T, Args = void>(options: SocketOptions<T> = {}): Socket<T
     // pending on — probe liveness follows the TRANSPORT, which is why the browser proxy's versions are
     // reactive and these are not. Same surface, honest per side.
     sock.publish = (...args: [...Room<Args>, message: T]): void => {
-        const message = args[args.length - 1] as T
-        const roomArgs = args.length > 1 ? (args[0] as Args) : (undefined as Args)
-        ch.publish(roomArgs, message)
+        ch.publish(room<Args>(args, 1), args[args.length - 1] as T)
     }
-    sock.peek = (...r: Room<Args>): T | undefined => ch.peek(room(r))
+    sock.peek = (...r: Room<Args>): T | undefined => ch.peek(room<Args>(r))
     // Server chunks() = the in-window tail (what an SSR render paints / a fresh subscriber replays).
-    sock.chunks = (...r: Room<Args>): T[] | undefined => ch.chunks(room(r))
-    sock.pending = (...r: Room<Args>): boolean => ch.pending(room(r))
-    sock.refreshing = (...r: Room<Args>): boolean => ch.refreshing(room(r))
-    sock.done = (...r: Room<Args>): boolean => ch.done(room(r))
-    sock.error = (...r: Room<Args>): unknown | undefined => ch.error(room(r))
+    sock.chunks = (...r: Room<Args>): T[] | undefined => ch.chunks(room<Args>(r))
+    sock.pending = (...r: Room<Args>): boolean => ch.pending(room<Args>(r))
+    sock.refreshing = (...r: Room<Args>): boolean => ch.refreshing(room<Args>(r))
+    sock.done = (...r: Room<Args>): boolean => ch.done(room<Args>(r))
+    sock.error = (...r: Room<Args>): unknown | undefined => ch.error(room<Args>(r))
     ;(sock as { __socket: SocketInternals<T, Args> }).__socket = {
         options,
         // Client-publish mediation lives HERE (the channel is pure pub/sub). `clientPublish === true` =

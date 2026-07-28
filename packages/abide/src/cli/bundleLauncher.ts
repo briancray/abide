@@ -14,7 +14,14 @@
 // box (no `DISPLAY`).
 //
 // The declarative `BundleWindow` (title/size/menu) is embedded as a JSON literal so the artifact is
-// self-contained — no import back into abide internals.
+// self-contained — no import back into abide INTERNALS. It does import `abide/shared/log`, which is
+// public API and no new dependency: the launcher already spawns `abide start`, so an abide install is
+// a hard prerequisite either way. That replaces four hand-written `[abide:bundle]` prefixes with the
+// real channel, which is DEBUG-gated like every other framework channel — so a launcher that opens no
+// window explains itself under `DEBUG=abide:bundle` instead of narrating every successful run.
+//
+// NB: these lines live inside a template literal, so the `noConsole` lint that guards the rest of the
+// package cannot see them. Nothing but this comment keeps a future edit from reaching for `console`.
 
 import type { BundleWindow } from '../bundle/BundleWindow.ts'
 
@@ -25,6 +32,9 @@ export function bundleLauncher(window: BundleWindow): string {
 // opens a system webview binary if one is on PATH, else the default system browser. A real embedded
 // native webview needs a platform-native shell dependency abide does not bundle (parked, BU1.2).
 
+import { log } from "abide/shared/log";
+
+const bundleLog = log.channel("abide:bundle");
 const WINDOW = ${windowJson};
 const PORT = Number(Bun.env.PORT ?? "4321");
 const REMOTE_URL = Bun.env.ABIDE_APP_URL;
@@ -49,12 +59,12 @@ function shouldOpenWindow() {
 // Best-effort: spawn a webview binary if present, else hand the URL to the system browser.
 function openWindow(url) {
   if (!shouldOpenWindow()) {
-    console.info("[abide:bundle] window-open skipped (headless/CI); app at", url);
+    bundleLog.info("window-open skipped (headless/CI); app at", url);
     return;
   }
   const webview = probeWebview();
   if (webview) {
-    console.info("[abide:bundle] opening system webview:", webview, "->", url);
+    bundleLog.info("opening system webview:", webview, "->", url);
     Bun.spawn([webview, url], { stdio: ["inherit", "inherit", "inherit"] });
     return;
   }
@@ -62,12 +72,12 @@ function openWindow(url) {
     process.platform === "darwin" ? ["open", url]
     : process.platform === "win32" ? ["cmd", "/c", "start", "", url]
     : ["xdg-open", url];
-  console.info("[abide:bundle] no native webview found — falling back to system browser:", url);
+  bundleLog.info("no native webview found — falling back to system browser:", url);
   Bun.spawn(opener, { stdio: ["inherit", "inherit", "inherit"] });
 }
 
 async function main() {
-  console.info(\`[abide:bundle] "\${WINDOW.title ?? "abide"}" (\${WINDOW.width ?? 1024}x\${WINDOW.height ?? 768})\`);
+  bundleLog.info(\`"\${WINDOW.title ?? "abide"}" (\${WINDOW.width ?? 1024}x\${WINDOW.height ?? 768})\`);
   let server;
   if (!REMOTE_URL) {
     // Self-host: boot the embedded app server with the bundle marker set.

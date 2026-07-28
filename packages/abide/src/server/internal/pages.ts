@@ -33,7 +33,9 @@ import { trace } from '../../shared/trace.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
+import { HYDRATION_ELEMENT_ID } from '../../ui/internal/HYDRATION_ELEMENT_ID.ts'
 import { closeRenderState, openRenderState, renderState } from '../../ui/internal/renderState.ts'
+import { SITE_PATH } from '../../ui/internal/SITE_PATH.ts'
 import { escapeHtml, Raw } from '../../ui/internal/serverRuntime.ts'
 import {
     createRenderStream,
@@ -97,11 +99,9 @@ function pageImports(
 // item index — so a component instance is named by WHERE IT IS, not by WHEN IT MOUNTED. That distinction is
 // the whole point: a `{#for await}` region is re-created asynchronously on the client, so a mount-order
 // counter assigned every component after such a block a different id on each side and it silently replayed
-// the WRONG bucket. Two path segments:
-//   • `/<siteId>` — a `<Component/>` invocation (opens a NEW bucket; its `state()` calls are ordinal within).
-//   • `#<index>`  — one `{#for}` iteration (opens a NEW bucket, so a branch-local `<script>` in the body
-//                   records per ITEM; keeping the enclosing bucket was safe only while a loop body could
-//                   hold no `state()` calls of its own — see `seededState.ts`).
+// the WRONG bucket. The two path segments (`/<siteId>` for a `<Component/>` invocation, `#<index>` for a
+// `{#for}` iteration) are spelled by `SITE_PATH` — the same module the client replayer joins with, so the
+// two ends of this wire format cannot drift apart.
 // The page + its layouts share the ROOT bucket (`""`) — `renderLevel` hands every level the same recorder
 // and `compose.childComponent` is not an adapter, so composition never opens one. See §5 / decision 10.
 // Inside a page render `openRenderState()` has always run, so an absent state is a framework bug, not
@@ -128,16 +128,16 @@ function makeRecordingState(): StateFactory {
         return Object.assign(rec, {
             shared: state.shared,
             forSite(siteId: number): StateFactory {
-                const next = `${sitePath}/${siteId}`
+                const next = SITE_PATH.forSite(sitePath, siteId)
                 return at(next, next)
             },
             forItem(index: number): StateFactory {
-                const next = `${sitePath}#${index}`
+                const next = SITE_PATH.forItem(sitePath, index)
                 return at(next, next)
             },
         }) as StateFactory
     }
-    return at('', '') // the page/root bucket
+    return at(SITE_PATH.root, SITE_PATH.root) // the page/root bucket
 }
 
 // Render one composed level (a layout or the page) to its inner SSR HTML. When a deeper level exists,
@@ -349,12 +349,18 @@ export interface RenderDocumentOptions {
     // TODO #6: the content-hashed loader entry URL the document boots from (`/__abide/chunk/<loader>-
     // <hash>.js`). Absent only for the byte-identity oracle / hand-built callers that don't boot a client.
     clientHref?: string | undefined
+    // The boot module graph to `<link rel="modulepreload">` in `<head>`: the loader entry followed by its
+    // transitive static imports (`ClientBuild.bootChunks`). Distinct from `clientHref`, which is the ONE
+    // url the tail's `<script>` executes — these are the urls whose DOWNLOAD must not wait for the tail.
+    bootHrefs?: string[] | undefined
     // TODO #6/#20: the content-hashed client stylesheet URL to link in `<head>`. Set only when the app
     // actually bundled CSS, so CSS-free apps emit no `<link>`.
     cssHref?: string | undefined
-    // TODO #6: the matched route's code-split chunk URL to `<link rel="modulepreload">` — so the browser
-    // fetches it in parallel with the loader (no first-load waterfall). Absent for the byte-oracle callers.
-    preloadHref?: string | undefined
+    // TODO #6: the matched route's code-split chunk AND its transitive static imports
+    // (`ClientBuild.routeChunks`), to `<link rel="modulepreload">` — so the browser fetches them in
+    // parallel with the loader instead of discovering them when the route's dynamic import resolves.
+    // Absent for the byte-oracle callers.
+    preloadHrefs?: string[] | undefined
 }
 
 // Serialise the seed for embedding in a `<script type="application/json">`. `<` is escaped to its
@@ -373,13 +379,35 @@ export function documentHead(opts?: RenderDocumentOptions): string {
     const title = escapeHtml(opts?.title ?? 'abide')
     const stylesheet =
         opts?.cssHref !== undefined ? `<link rel="stylesheet" href="${opts.cssHref}">` : ''
-    const preload =
-        opts?.preloadHref !== undefined
-            ? `<link rel="modulepreload" href="${opts.preloadHref}">`
-            : ''
+    // The boot entry is PRELOADED here even though its `<script>` tag stays in the tail. The tag has to
+    // be last — it must not run before the seed element is parsed — but that meant the browser did not
+    // DISCOVER the entry until `responseEnd`, so the client bundle's download was serialised behind the
+    // whole streamed drain. Measured on the docs app: boot download began at 128ms on a page whose
+    // `responseStart` was 7ms, and at 4494ms on one whose `responseStart` was 364ms. The head flushes
+    // before the shell and is seed-independent, so preloading here decouples "when the client starts
+    // downloading" from "how long this page's reads take" — which is the whole promise of streaming SSR,
+    // previously honoured for paint but not for hydration.
+    //
+    // This is a preload, NOT a moved script: fetch is scheduled early, execution order is untouched.
+    // Emitted BEFORE the route chunk because the entry is that chunk's IMPORTER — preloading the child
+    // while its parent waited for the tail is what left the route chunk sitting idle (measured: route
+    // chunk complete at 14ms, then unused until 128ms).
+    //
+    // Every chunk is named individually, on BOTH lists. A browser MAY follow a preloaded module's own
+    // static imports, but the HTML spec leaves that optional and Safari declines — so preloading just
+    // the entry moves the waterfall down one level rather than removing it (measured: entry at 140ms,
+    // its 47KB static dependency still at 4800ms). The same holds one level further out: the route
+    // chunk's own static imports were the last two left stranded until `preloadHrefs` became its whole
+    // graph. What stays unpreloaded is the DYNAMIC graph — every other route's code.
+    let bootPreload = ''
+    for (const href of opts?.bootHrefs ?? [])
+        bootPreload += `<link rel="modulepreload" href="${href}">`
+    let preload = ''
+    for (const href of opts?.preloadHrefs ?? [])
+        preload += `<link rel="modulepreload" href="${href}">`
     return (
-        `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${stylesheet}${preload}</head>` +
-        `<body><div id="__abide-app">`
+        `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${stylesheet}${bootPreload}${preload}</head>` +
+        `<body><div id="${HYDRATION_ELEMENT_ID.container}">`
     )
 }
 
@@ -397,7 +425,7 @@ export function documentTail(
             : ''
     return (
         `</div>` +
-        `<script type="application/json" id="__abide-seed">${serialiseSeed(seed)}</script>` +
+        `<script type="application/json" id="${HYDRATION_ELEMENT_ID.seed}">${serialiseSeed(seed)}</script>` +
         `${clientScript}${devReload}</body></html>`
     )
 }

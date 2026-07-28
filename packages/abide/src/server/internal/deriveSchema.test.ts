@@ -6,6 +6,9 @@ import { deriveSchema, deriveSchemas } from './deriveSchema.ts'
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/handlers.ts', import.meta.url))
 const DEFAULT_FIXTURE = fileURLToPath(new URL('./__fixtures__/defaultRpc.ts', import.meta.url))
 const OUTPUTS_FIXTURE = fileURLToPath(new URL('./__fixtures__/outputs.ts', import.meta.url))
+const DEFAULTS_FIXTURE = fileURLToPath(
+    new URL('./__fixtures__/destructuringDefaults.ts', import.meta.url),
+)
 
 describe('deriveSchema', () => {
     test('derives input/output for a wrapped async handler with mixed field shapes', () => {
@@ -127,10 +130,11 @@ describe('deriveSchema', () => {
         expect(input.type).toBe('object')
         const props = input.properties
         if (props === undefined) throw new Error('expected input properties')
-        expect(props.message).toEqual({ type: 'string' })
-        expect(props.count).toEqual({ type: 'number' })
+        // The default itself now rides along — see the `destructuring defaults` block below for why.
+        expect(props.message).toEqual({ type: 'string', default: 'hello' })
+        expect(props.count).toEqual({ type: 'number', default: 0 })
         // `boolean` is modeled as the `false | true` union → enum of both literals.
-        expect(props.flag).toEqual({ enum: [false, true] })
+        expect(props.flag).toEqual({ enum: [false, true], default: false })
         // Every field has a default → all optional → no `required`.
         expect(input.required).toBeUndefined()
     })
@@ -142,7 +146,7 @@ describe('deriveSchema', () => {
         // ...while the defaulted sibling still derives cleanly.
         const props = input?.properties
         if (props === undefined) throw new Error('expected input properties')
-        expect(props.count).toEqual({ type: 'number' })
+        expect(props.count).toEqual({ type: 'number', default: 0 })
         expect(props.id).toEqual({})
     })
 
@@ -155,7 +159,10 @@ describe('deriveSchema', () => {
     test('unwraps `export default GET(...)` to the handler arg (not the Rpc parameter tuple)', () => {
         const { input, output, warnings } = deriveSchema(DEFAULT_FIXTURE, 'default')
         // The single arg object — NOT an array/tuple (the pre-fix bug read the Rpc callable's params).
-        expect(input).toEqual({ type: 'object', properties: { key: { type: 'string' } } })
+        expect(input).toEqual({
+            type: 'object',
+            properties: { key: { type: 'string', default: 'alpha' } },
+        })
         expect(output).toEqual({
             type: 'object',
             properties: { key: { type: 'string' }, runs: { type: 'number' } },
@@ -216,7 +223,7 @@ describe('deriveSchemas (batch)', () => {
         })
         expect(map.counter?.input).toEqual({
             type: 'object',
-            properties: { key: { type: 'string' } },
+            properties: { key: { type: 'string', default: 'alpha' } },
         })
         // A zero-arg handler contributes an entry with no input schema (not an error).
         expect(map.zero?.input).toBeUndefined()
@@ -224,5 +231,46 @@ describe('deriveSchemas (batch)', () => {
 
     test('an empty entry list derives nothing without spawning a session', async () => {
         expect(await deriveSchemas([])).toEqual({})
+    })
+})
+
+describe('destructuring defaults', () => {
+    // The type cannot carry these: `message = 'hello'` widens to `string`, and all the inferred type
+    // records is that the property became OPTIONAL. The value lives in the AST and was being dropped,
+    // so every surface that describes an rpc said "optional" and none could say what omitting it
+    // gives you.
+    const properties = (): Record<string, JSONSchema> => {
+        const { input } = deriveSchema(DEFAULTS_FIXTURE, 'withDefaults')
+        const props = input?.properties
+        if (props === undefined) throw new Error('expected input properties')
+        return props
+    }
+
+    test('a string, number and boolean default reach the schema', () => {
+        const props = properties()
+        expect(props.message?.default).toBe('hello')
+        expect(props.limit?.default).toBe(10)
+        expect(props.loud?.default).toBe(true)
+    })
+
+    test('a `false` default survives — it is a value, not an absence', () => {
+        // The obvious bug: a falsy default dropped by a truthiness check, so `--quiet` would claim no
+        // default while defaulting to false.
+        expect(properties().quiet?.default).toBe(false)
+    })
+
+    test('a field with no default declares none', () => {
+        expect(properties().plain?.default).toBeUndefined()
+        expect(properties().plain).toEqual({ type: 'string' })
+    })
+
+    test('a NON-literal default is declined rather than invented', () => {
+        // `= Date.now()` has no value at derivation time. Emitting one would be worse than silence.
+        expect(properties().stamped?.default).toBeUndefined()
+    })
+
+    test('the type is still derived alongside the default', () => {
+        expect(properties().message?.type).toBe('string')
+        expect(properties().limit?.type).toBe('number')
     })
 })

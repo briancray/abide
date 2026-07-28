@@ -85,6 +85,33 @@ describe('rewriteCellRefs assignment', () => {
     test('assignment RHS spanning a ternary', () => {
         expect(rewriteCellRefs('n = a ? b : c', CELLS('n'))).toBe('n.set( a ? b : c)')
     })
+
+    // `rhsExtent`'s continuation set used to be a private copy that had drifted from the check
+    // lane's: it knew `+` and `.` but not `? :`, `as`, `instanceof`, `in`, or template middles. Each
+    // of these truncated at the line break and emitted `n.set( <head>)` followed by an orphaned tail
+    // — which is not a syntax error, so nothing downstream complained: the cell was silently set to
+    // the head and the tail evaluated against the discarded result. Both lanes now read one set.
+    describe('a multi-line RHS is not severed at the line break', () => {
+        const spans: Array<[string, string]> = [
+            ['a ternary', 'n = cond\n  ? a\n  : b'],
+            ['an `as` cast', 'n = x\n  as number'],
+            ['an `instanceof`', 'n = a\n  instanceof B'],
+            ['an `in`', 'n = a\n  in b'],
+            ['a binary operator', 'n = a +\n  b'],
+            ['a member chain', 'n = a\n  .b()'],
+        ]
+        for (const [what, source] of spans) {
+            test(what, () => {
+                expect(rewriteCellRefs(source, CELLS('n'))).toBe(
+                    `n.set( ${source.slice('n = '.length)})`,
+                )
+            })
+        }
+
+        test('but a genuine statement boundary still ends the RHS', () => {
+            expect(rewriteCellRefs('n = 1\nm = 2', CELLS('n', 'm'))).toBe('n.set( 1)\nm.set( 2)')
+        })
+    })
 })
 
 // ---------------------------------------------------------------------------

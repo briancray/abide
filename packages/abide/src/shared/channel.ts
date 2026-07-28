@@ -21,7 +21,7 @@ import { ChannelHub, type ChannelHubOptions } from './internal/channelHub.ts'
 import { canonicalKey } from './internal/codec.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import { reactiveScope } from './internal/reactiveScope.ts'
-import type { Room } from './internal/room.ts'
+import { type Room, room } from './internal/room.ts'
 
 export interface ChannelOptions {
     // Replay depth for a late joiner (per room). Default 0.
@@ -81,9 +81,7 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
     // The MESSAGE is always last; the room is what precedes it. Void → `[message]`, roomed →
     // `[room, message]` (an explicit `(undefined, message)` on a void channel unpacks identically).
     ch.publish = ((...args: [...Room<Args>, message: T]): void => {
-        const message = args[args.length - 1] as T
-        const roomArgs = args.length > 1 ? (args[0] as Args) : (undefined as Args)
-        hubFor(roomArgs).publish(message)
+        hubFor(room<Args>(args, 1)).publish(args[args.length - 1] as T)
     }) as Channel<T, Args>['publish']
     ch.peek = (args: Args): T | undefined => hubFor(args).peekLatest()
     ch.chunks = (args: Args): T[] | undefined => hubFor(args).tailSnapshot()
@@ -113,9 +111,8 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
         ...watched: [...Room<Args>, handler: (value: T | undefined) => void]
     ): (() => void) => {
         const handler = watched[watched.length - 1] as (value: T | undefined) => void
-        const args = (watched.length > 1 ? watched[0] : undefined) as Args
         // Live-only (no replay): fire the handler per message on this room.
-        const iterator = hubFor(args).subscribe(false)
+        const iterator = hubFor(room<Args>(watched, 1)).subscribe(false)
         let disposed = false
         void (async () => {
             try {

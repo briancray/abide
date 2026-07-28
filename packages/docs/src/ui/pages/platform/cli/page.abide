@@ -47,6 +47,15 @@
   <aside class="aside">
     <p><code>run</code> executes a one-off script under the abide runtime — no HTTP server, but the app's <code>onStart</code>/<code>onStop</code> lifecycle hooks fire, so migrations and seeds get the same environment as the server.</p>
   </aside>
+  <Panel id="tab-completion" title="Tab completion">
+    <pre class="code" data-lang="bash"><code># inside the binary's REPL, TAB already completes — nothing to install
+  eval "$(./myapp completion bash)"     # bash
+  eval "$(./myapp completion zsh)"      # zsh
+  ./myapp completion fish | source      # fish</code></pre>
+  </Panel>
+  <aside class="aside">
+    <p>As you type at the prompt, dim ghost text appears inline: the best match where you are completing one, and once you have named a command, its whole signature — <code>--name &lt;string&gt; --loud</code>, with a boolean carrying no placeholder and an enum showing its set. Press <code>&rarr;</code> (or <code>ctrl-e</code>) at the end of the line to accept the flag itself, or keep typing to ignore it; it is never part of the line you submit, and it is suppressed under <code>NO_COLOR</code>. TAB completes command names, the reserved built-ins, a command's <code>--flags</code>, and a field's <code>enum</code> values — all read from your input schemas, so there is no completion list to maintain beside your handlers. The generated shell script does not bake those names in: it calls <code>myapp completion --line "&lt;line&gt;"</code> on every TAB, which is the same call the REPL makes, so the shell and the prompt can never offer different candidates and neither goes stale when a handler gains a field. Completing a command boots nothing.</p>
+  </aside>
   <Panel id="package-a-standalone-binary" title="Package a standalone binary">
     <pre class="code" data-lang="bash"><code>abide compile --target bun-linux-x64 --out ./server
   abide compile --platforms bun-linux-x64,bun-darwin-arm64

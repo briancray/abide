@@ -1,17 +1,24 @@
-// main(argv) — the `abide` CLI subcommand dispatcher (M-CLI / CL1 / BP1-3).
+// main(argv, options) — the `abide` CLI subcommand dispatcher (M-CLI / CL1 / BP1-3).
 //
 // Commands: `dev` (watched serve + live-reload), `build` (content-addressed client bundle into
 // dist/_app/<hash>/), `start` (serve the loaded app, no watch), `scaffold <name>` (write a minimal
 // starter project, then `git init` + `bun install` + `abide dev`, each skippable via
-// `--no-git`/`--no-install`/`--no-dev`). Anything else prints usage.
+// `--no-git`/`--no-install`/`--no-dev`). A bare `abide` (or `-h`) prints usage; anything else is a
+// usage ERROR — it goes to stderr and exits `CLI_EXIT_CODES.usage`, because a mistyped command that
+// exits 0 tells a CI script the build succeeded.
+//
+// `options` exists so the dispatcher is callable from a test rather than only from a shell: `cwd`
+// points it at a temp project and `write`/`writeError` capture what it printed. Defaults reproduce the
+// shell behaviour exactly (`process.cwd()` + console), so `bin.ts` passes nothing.
 //
 // `dev`/`start` return the running `ServeResult` (the process stays alive on Bun.serve's handles);
 // `build`/`scaffold` return undefined after their one-shot work.
 
 import { mkdir, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { BundleWindow } from '../bundle/BundleWindow.ts'
+import { CLI_EXIT_CODES } from '../server/internal/CLI_EXIT_CODES.ts'
 import {
     buildClient,
     type ClientBuild,
@@ -22,9 +29,13 @@ import { loadApp, writeBakedSchemas } from '../server/internal/loadApp.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { check } from './check.ts'
 import { compile } from './compile.ts'
+import { firstPositional } from './firstPositional.ts'
+import { flagAbsent } from './flagAbsent.ts'
+import { flagValue } from './flagValue.ts'
 import { installShutdownHandlers } from './installShutdownHandlers.ts'
 import { lspServer } from './lsp.ts'
 import { parsePort } from './parsePort.ts'
+import { run } from './run.ts'
 import { type ServeResult, serve } from './serve.ts'
 
 const USAGE = `abide — isomorphic type-safe framework
@@ -34,6 +45,7 @@ Usage:
   abide build                 build the content-addressed client bundle into dist/_app/<hash>/
   abide start [--port <n>]    serve the app (no watch)
   abide scaffold <name>       create a starter project, then git init + install + dev
+  abide run <file> [args…]    run a script under the abide runtime (no HTTP; onStart/onStop run)
   abide check                 type-check .abide script bodies (best-effort, via TS7)
   abide lsp                   run the .abide language server over stdio (diagnostics)
   abide compile               build the standalone executable (app + assets embedded)
@@ -53,48 +65,31 @@ Options:
   --no-dev                    scaffold: skip starting the dev server
   -h, --help                  show this help`
 
-// The first positional (non-flag) argument, skipping the value consumed by `--port`. Used by
-// `scaffold` to read the project <name> even when it follows `--port <n>`.
-function firstPositional(argv: string[]): string | undefined {
-    for (let i = 0; i < argv.length; i++) {
-        const arg = argv[i]
-        if (arg === undefined) continue
-        if (arg === '--port') {
-            i++ // skip the port value
-            continue
-        }
-        if (!arg.startsWith('-')) return arg
-    }
-    return undefined
-}
-
-// The value of a `--flag <value>` option, or undefined when the flag is absent or trails nothing. A
-// following flag is not a value (`--target --out x` yields undefined for `--target`).
-function flagValue(argv: string[], flag: string): string | undefined {
-    const index = argv.indexOf(flag)
-    if (index === -1) return undefined
-    const raw = argv[index + 1]
-    if (raw === undefined || raw.startsWith('-')) return undefined
-    return raw
-}
-
-// True unless the given boolean flag is present in argv (e.g. `--no-install`).
-function flagAbsent(argv: string[], flag: string): boolean {
-    return !argv.includes(flag)
+// Where the dispatcher reads its project from and writes its output to. Injectable so a test drives
+// `main` in-process; the defaults are the shell's.
+export interface MainOptions {
+    cwd?: string | undefined
+    write?: ((line: string) => void) | undefined
+    writeError?: ((line: string) => void) | undefined
 }
 
 // Run a command to completion in `cwd`, inheriting stdio so its output is visible. Returns whether
 // it exited 0; a missing binary or spawn failure is caught and reported rather than thrown.
-async function runStep(command: string[], cwd: string): Promise<boolean> {
+async function runStep(
+    command: string[],
+    cwd: string,
+    writeError: (line: string) => void,
+): Promise<boolean> {
     try {
         const proc = Bun.spawn(command, { cwd, stdio: ['inherit', 'inherit', 'inherit'] })
         const code = await proc.exited
-        if (code !== 0) console.error(`abide scaffold: \`${command.join(' ')}\` exited ${code}`)
+        if (code !== 0) writeError(`abide scaffold: \`${command.join(' ')}\` exited ${code}`)
         return code === 0
     } catch (caught) {
-        console.error(
-            `abide scaffold: \`${command.join(' ')}\` failed:`,
-            caught instanceof Error ? caught.message : String(caught),
+        writeError(
+            `abide scaffold: \`${command.join(' ')}\` failed: ${
+                caught instanceof Error ? caught.message : String(caught)
+            }`,
         )
         return false
     }
@@ -261,15 +256,20 @@ async function forwardLsp(cwd: string): Promise<void> {
     await Promise.allSettled([pumpIn, pumpOut])
 }
 
-export async function main(argv: string[]): Promise<ServeResult | undefined> {
+export async function main(
+    argv: string[],
+    options: MainOptions = {},
+): Promise<ServeResult | undefined> {
     const command = argv[0]
     const rest = argv.slice(1)
-    const cwd = process.cwd()
+    const cwd = options.cwd ?? process.cwd()
+    const write = options.write ?? ((line: string): void => console.info(line))
+    const writeError = options.writeError ?? ((line: string): void => console.error(line))
 
     if (command === 'dev') {
         const running = await serve(cwd, { dev: true, port: parsePort(rest) })
         installShutdownHandlers(running)
-        console.info(`abide dev — ${running.url}`)
+        write(`abide dev — ${running.url}`)
         return running
     }
 
@@ -279,31 +279,55 @@ export async function main(argv: string[]): Promise<ServeResult | undefined> {
         const clientBuild = await ensureClientBuild(cwd)
         const running = await serve(cwd, { dev: false, port: parsePort(rest), clientBuild })
         installShutdownHandlers(running)
-        console.info(`abide start — ${running.url}`)
+        write(`abide start — ${running.url}`)
         return running
+    }
+
+    // CL2. Everything the app needs is loaded (config/env validated, rpc + socket modules imported,
+    // lifecycle hooks run) and nothing is served — for migrations, cron tasks, one-off maintenance.
+    if (command === 'run') {
+        const file = rest[0]
+        if (file === undefined) {
+            writeError('abide run — usage: abide run <file> [args…]')
+            process.exitCode = CLI_EXIT_CODES.usage
+            return undefined
+        }
+        const target = isAbsolute(file) ? file : join(cwd, file)
+        if (!(await Bun.file(target).exists())) {
+            writeError(`abide run — no such file: ${file}`)
+            process.exitCode = CLI_EXIT_CODES.usage
+            return undefined
+        }
+        // Everything after the file is the SCRIPT's, not abide's — including anything that looks like
+        // an abide flag. `abide run migrate.ts --port 5` passes `--port 5` to the migration. A throw
+        // from the script itself propagates with its stack rather than becoming an exit code: for a
+        // failed migration the stack IS the report.
+        await run(cwd, target, rest.slice(1))
+        return undefined
     }
 
     if (command === 'build') {
         const outDir = await build(cwd)
-        console.info(`abide build — ${outDir}`)
+        write(`abide build — ${outDir}`)
         return undefined
     }
 
     if (command === 'check') {
         const result = await check(cwd)
         if (result.ok) {
-            console.info('abide check — no type errors in .abide script bodies')
+            write('abide check — no type errors in .abide script bodies')
             return undefined
         }
         for (const diagnostic of result.diagnostics) {
-            console.error(
+            writeError(
                 `${diagnostic.file}:${diagnostic.line}:${diagnostic.column} — TS${diagnostic.code}: ${diagnostic.message}`,
             )
         }
-        console.error(
+        writeError(
             `\nabide check — ${result.diagnostics.length} error${result.diagnostics.length === 1 ? '' : 's'}`,
         )
-        process.exitCode = 1
+        // A type error is a real failure, not a wrong command line — `failed`, not `usage`.
+        process.exitCode = CLI_EXIT_CODES.failed
         return undefined
     }
 
@@ -335,41 +359,41 @@ export async function main(argv: string[]): Promise<ServeResult | undefined> {
             out: flagValue(rest, '--out'),
             platforms,
         })
-        for (const outfile of built) console.info(`abide compile — ${outfile}`)
+        for (const outfile of built) write(`abide compile — ${outfile}`)
         return undefined
     }
 
     if (command === 'bundle') {
         const outDir = await bundle(cwd)
-        console.info(`abide bundle — ${outDir}`)
-        console.info(`  run: bun ${join(outDir, 'launch.ts')}`)
-        console.info(
-            `  note: native windowing is best-effort (system webview binary or default browser)`,
-        )
+        write(`abide bundle — ${outDir}`)
+        write(`  run: bun ${join(outDir, 'launch.ts')}`)
+        write(`  note: native windowing is best-effort (system webview binary or default browser)`)
         return undefined
     }
 
     if (command === 'scaffold') {
         const name = firstPositional(rest)
         if (name === undefined || name.length === 0) {
-            console.error('abide scaffold: missing project <name>.\n')
-            console.info(USAGE)
+            // A missing <name> is a wrong command line, not a request for help: stderr + `usage`.
+            writeError('abide scaffold: missing project <name>.\n')
+            writeError(USAGE)
+            process.exitCode = CLI_EXIT_CODES.usage
             return undefined
         }
         const root = await scaffold(cwd, name)
-        console.info(`abide scaffold — created ${root}`)
+        write(`abide scaffold — created ${root}`)
 
-        if (flagAbsent(rest, '--no-git')) await runStep(['git', 'init'], root)
+        if (flagAbsent(rest, '--no-git')) await runStep(['git', 'init'], root, writeError)
         if (flagAbsent(rest, '--no-install')) {
-            const installed = await runStep(['bun', 'install'], root)
+            const installed = await runStep(['bun', 'install'], root, writeError)
             if (!installed) {
                 // Booting the dev server against an app whose deps (including abide) never installed
                 // fails deep in module resolution with a confusing stack — stop cleanly and signal failure.
-                console.error(
+                writeError(
                     'abide scaffold: `bun install` failed — skipping the dev server. Fix the install, then run `bun run dev`.',
                 )
-                process.exitCode = 1
-                console.info(`  cd ${name} && bun install && bun run dev`)
+                process.exitCode = CLI_EXIT_CODES.failed
+                write(`  cd ${name} && bun install && bun run dev`)
                 return undefined
             }
         }
@@ -377,14 +401,22 @@ export async function main(argv: string[]): Promise<ServeResult | undefined> {
         if (flagAbsent(rest, '--no-dev')) {
             const running = await serve(root, { dev: true, port: parsePort(rest) })
             installShutdownHandlers(running)
-            console.info(`abide dev — ${running.url}`)
+            write(`abide dev — ${running.url}`)
             return running
         }
 
-        console.info(`  cd ${name} && bun run dev`)
+        write(`  cd ${name} && bun run dev`)
         return undefined
     }
 
-    console.info(USAGE)
+    // Asking for help is a success; getting the command wrong is not. They used to share this branch
+    // and both exit 0 — so `abide biuld` in a CI script printed the usage text and reported success.
+    if (command === undefined || command === '-h' || command === '--help') {
+        write(USAGE)
+        return undefined
+    }
+    writeError(`abide: unknown command "${command}".\n`)
+    writeError(USAGE)
+    process.exitCode = CLI_EXIT_CODES.usage
     return undefined
 }

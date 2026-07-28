@@ -19,10 +19,12 @@
 // `trace` is referenced only inside the emit path (never at module load) so this module never
 // participates in an import cycle with the request scope.
 
+import { debugPatternMatches } from './internal/debugPatternMatches.ts'
+import { formatLogLine } from './internal/formatLogLine.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { logChannelColor } from './internal/logChannelColor.ts'
+import { logFeed } from './internal/logFeed.ts'
 import { logFormat } from './internal/logFormat.ts'
-import { prettyLogLine } from './internal/prettyLogLine.ts'
 import { readEnv } from './internal/readEnv.ts'
 import { trace } from './trace.ts'
 
@@ -67,18 +69,12 @@ function debugSpec(): string | undefined {
 
 // The debug-npm gate: a channel emits when DEBUG names it (exact), when DEBUG is `*`, or when a
 // listed pattern ends in `*` and prefixes the channel name (e.g. `abide:*` lights `abide:memo`).
+// The grammar itself lives in `debugPatternMatches` because a remote `logs` subscriber filters with
+// the same spelling.
 function channelEnabled(channel: string): boolean {
     const debug = debugSpec()
-    if (debug === undefined || debug.length === 0) return false
-    const patterns = debug.split(',')
-    for (const raw of patterns) {
-        const pattern = raw.trim()
-        if (pattern.length === 0) continue
-        if (pattern === '*') return true
-        if (pattern === channel) return true
-        if (pattern.endsWith('*') && channel.startsWith(pattern.slice(0, -1))) return true
-    }
-    return false
+    if (debug === undefined) return false
+    return debugPatternMatches(debug, channel)
 }
 
 function formatArg(arg: unknown): string {
@@ -94,11 +90,19 @@ function formatArg(arg: unknown): string {
 function emit(level: LogLevel, channel: string | undefined, args: unknown[]): void {
     // A named channel is gated by the debug spec; `error` bypasses gating so failures always
     // surface. The default channel (undefined) is the app's own stream and always emits.
-    if (channel !== undefined && level !== 'error' && !channelEnabled(channel)) return
+    const toStdout = channel === undefined || level === 'error' || channelEnabled(channel)
+
+    // THE GATE IS NOT THE FAN-OUT. A gated line is still offered to the log feed, so `logs --debug
+    // abide:rpc` can light a framework channel on a LIVE deployment that was booted without it — the
+    // thing that makes a remote feed worth having at all. The cost is that a gated line now builds its
+    // message string when the feed is on; with the feed off (the default) this is one property load
+    // and the early return below is exactly today's behaviour.
+    if (!toStdout && !logFeed.enabled) return
 
     const label = channel ?? defaultChannel()
 
     if (isBrowser) {
+        if (!toStdout) return
         const console = (
             globalThis as unknown as {
                 console?: Record<string, ((...a: unknown[]) => void) | undefined>
@@ -117,33 +121,15 @@ function emit(level: LogLevel, channel: string | undefined, args: unknown[]): vo
     const now = new Date()
     const traceparent = trace()
     const message = args.map(formatArg).join(' ')
-    const format = logFormat()
 
-    let line: string
-    if (format === 'pretty') {
-        line = prettyLogLine(level, label, message, traceparent, now)
-    } else if (format === 'json') {
-        const time = now.toISOString()
-        const record: {
-            level: string
-            time: string
-            channel: string
-            traceparent?: string
-            message: string
-        } = {
-            level,
-            time,
-            channel: label,
-            message,
-        }
-        if (traceparent !== undefined) record.traceparent = traceparent
-        line = JSON.stringify(record)
-    } else {
-        const parts = [level, now.toISOString(), `[${label}]`]
-        if (traceparent !== undefined) parts.push(traceparent)
-        parts.push(message)
-        line = parts.join('\t')
-    }
+    // The STRUCTURED record goes to the feed, never a formatted line: the subscriber's own terminal
+    // decides the shape, so a remote tail renders through the same `prettyLogLine` this process would
+    // have used and looks identical to reading the server's stdout.
+    logFeed.publish(level, label, message, traceparent, now)
+
+    if (!toStdout) return
+
+    const line = formatLogLine(level, label, message, traceparent, now, logFormat())
 
     const stream = level === 'warn' || level === 'error' ? process.stderr : process.stdout
     stream.write(`${line}\n`)

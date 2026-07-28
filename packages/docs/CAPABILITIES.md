@@ -16,10 +16,10 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 
 ## Coverage summary (verify phase)
 
-- **Total capabilities in this manifest: 164** (119 browser-facing PW/PW+RT, 43 runtime-only RT, 2 `unit`).
-  By status: **126 `[x]`, 7 `[~]`, 33 `[ ]`** — i.e. ~76% covered, and the manifest deliberately lists
+- **Total capabilities in this manifest: 168** (119 browser-facing PW/PW+RT, 47 runtime-only RT, 2 `unit`).
+  By status: **129 `[x]`, 7 `[~]`, 32 `[ ]`** — i.e. ~77% covered, and the manifest deliberately lists
   capabilities it does *not* yet cover, so a `[ ]` is a known gap rather than an oversight.
-- **Playwright suite: 25 spec files, 174 tests — ALL PASSING.** They drive the real docs app
+- **Playwright suite: 25 spec files, 175 tests — ALL PASSING.** They drive the real docs app
   (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
   binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, raw SSR-emitter bytes,
   and machine surfaces fetched from the browser.
@@ -358,7 +358,6 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | `abide run <file>` | RT | [ ] |
 | `abide compile` / `abide cli` / `abide bundle` | RT | [ ] |
 | `abide check` / `abide lsp` | RT | [ ] |
-| `abide init-agent` | RT | [ ] |
 | Desktop bundle (`BundleWindow`/`BundleMenu`/`onMenu`) | RT | [ ] |
 
 ## 16. Testing harness

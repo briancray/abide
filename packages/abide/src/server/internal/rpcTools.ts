@@ -1,45 +1,45 @@
-// rpcTools — project a set of app RPCs into an `AgentSurface` (agent.md AG1.4 / AG2.2). Each RPC
-// becomes an `AgentTool`: the name is the route name, the `inputSchema` is the RPC's declared input
-// schema (MS2 tool schema, when it is a raw JSON Schema), and `run` calls the RPC in-process so the
-// call flows through the same handler (and, for reads, the same memo) as any request.
+// rpcTools — project an app's RPCs into an `AgentSurface` (agent.md AG1.4 / AG2.2). Each RPC becomes
+// an `AgentTool`: the name is the route name, the `inputSchema` is the registry's resolved input
+// schema (MS1.3 — a raw JSON Schema as-is, a Standard Schema left off until a build step derives one),
+// and `run` calls the RPC in-process so the call flows through the same handler (and, for reads, the
+// same memo) as any request.
 //
-// This is the mapping the app-config default surface is built from (all `clients.mcp` RPCs); it is
-// kept separate from agent() so the loop stays usable without any app config.
+// This is the mapping the app-config default surface is built from — ALL `clients.mcp` RPCs (MS2.6),
+// which is why it reads `buildRegistry` rather than the raw routes. It used to walk `route.__rpc`
+// itself, with its own schema test and its own doc-string extraction, and the cost was exactly what
+// ADR 0027 D9 predicts of a surface that re-derives instead of reading the normalizer: it never
+// consulted `clients` at all, so `clients: { mcp: false }` (and `clients: false`) were honoured on
+// OpenAPI, MCP, the CLI, the client bundle and channel-tag auth, and silently IGNORED here — the one
+// surface where the caller is a model choosing what to invoke.
+//
+// It is kept separate from `agent()` so the loop stays usable with no app config at all.
 
-import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import type { AgentSurface, AgentTool } from './agentTypes.ts'
 import type { Mutation, Rpc } from './makeRpc.ts'
-import type { Route } from './router.ts'
+import { buildRegistry } from './registry.ts'
+import type { AppConfig } from './router.ts'
 
-// A value already IS a JSONSchema if it's an object without a Standard Schema marker. Standard
-// Schemas are left off (their JSON Schema needs a build-time derivation step, MS1.3).
-function asJsonSchema(schema: unknown): JSONSchema | undefined {
-    if (typeof schema !== 'object' || schema === null) return undefined
-    if ('~standard' in schema) return undefined
-    return schema as JSONSchema
-}
-
-function toTool(name: string, route: Route): AgentTool {
-    const meta = route.__rpc
-    const tool: AgentTool = {
-        name,
-        // Reads go through the memo (load resolves the cached/coalesced value); mutations call directly.
-        run: (args: unknown): Promise<unknown> =>
-            meta.read
-                ? (route as Rpc<unknown, unknown>)(args)
-                : (route as Mutation<unknown, unknown>)(args),
-    }
-    if (typeof meta.options.doc === 'string' && meta.options.doc.length > 0)
-        tool.description = meta.options.doc
-    const inputSchema = asJsonSchema(meta.options.schemas?.input)
-    if (inputSchema !== undefined) tool.inputSchema = inputSchema
-    return tool
-}
-
-export function rpcTools(rpcs: Record<string, Route>): AgentSurface {
+export function rpcTools(config: AppConfig): AgentSurface {
+    const routes = config.routes ?? {}
     const surface: AgentSurface = []
-    for (const [name, rpc] of Object.entries(rpcs)) {
-        surface.push(toTool(name, rpc))
+    for (const entry of buildRegistry(config).rpcs) {
+        // Reachability, not authorization (CLAUDE.md): an rpc withheld from the MCP surface is withheld
+        // from the agent's tool set, which IS the MCP tool set by definition (MS2.6). Its middleware
+        // still runs on every call that does happen.
+        if (entry.clients.mcp === false) continue
+        const route = routes[entry.name]
+        if (route === undefined) continue
+        const tool: AgentTool = {
+            name: entry.name,
+            // Reads go through the memo (load resolves the cached/coalesced value); mutations call directly.
+            run: (args: unknown): Promise<unknown> =>
+                entry.read
+                    ? (route as unknown as Rpc<unknown, unknown>)(args)
+                    : (route as unknown as Mutation<unknown, unknown>)(args),
+        }
+        if (entry.doc !== undefined) tool.description = entry.doc
+        if (entry.inputSchema !== undefined) tool.inputSchema = entry.inputSchema
+        surface.push(tool)
     }
     return surface
 }

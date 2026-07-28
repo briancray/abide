@@ -7,6 +7,7 @@
 
 import type { BindingAnalysis, ScriptInfo } from './analyzeBindings.ts'
 import { reconstructImport } from './analyzeBindings.ts'
+import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { bindPattern } from './bindPattern.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
@@ -405,7 +406,8 @@ function genComponent(
 
 // Block/component kinds are wrapped in the paired `<!--[-->…<!--]-->` anchors emitted by the client
 // skeleton (templatePlan: `<!--[--><!--]-->` per block/component). Leaves carry a trailing `<!---->`
-// inside their own case. Anchors match the client by construction — both sides read the SAME plan.
+// inside their own case. Anchors match the client by construction — both sides read the SAME plan, and
+// both spell the markers from `BLOCK_ANCHOR` (asserted end-to-end by `planParity.test.ts`).
 function genChunk(analysis: BindingAnalysis, chunk: ServerChunk): string {
     const code = genChunkRaw(analysis, chunk)
     switch (chunk.kind) {
@@ -415,7 +417,7 @@ function genChunk(analysis: BindingAnalysis, chunk: ServerChunk): string {
         case 'awaitBlock':
         case 'switch':
         case 'try':
-            return `  $out += "<!--[-->";\n${code}  $out += "<!--]-->";\n`
+            return `  $out += "<!--${BLOCK_ANCHOR.open}-->";\n${code}  $out += "<!--${BLOCK_ANCHOR.close}-->";\n`
         default:
             return code
     }

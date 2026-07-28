@@ -24,6 +24,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
+import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
 import { skipTypeArguments } from './skipTypeArguments.ts'
 
 // A verbatim span of the generated file: [genStart, genEnd) maps to original offset `origStart`.
@@ -589,70 +590,6 @@ const CLOSE = new Set<SyntaxKind>([
     SyntaxKind.CloseBraceToken,
 ])
 
-// JS never applies ASI around these: a declarator initializer spanning lines (`let x = a\n  .b()`,
-// `let t = c\n  ? x\n  : y`, `let s = a +\n  b`) is ONE statement, not a `let` followed by an orphaned
-// tail. A depth-0 line break ends the initializer only when NEITHER the token before it nor the token
-// after it is a continuation — otherwise the scanner would sever a valid expression and emit code that
-// is a SYNTAX error in TS but not in `.abide` (a false positive). Binary/relational/logical operators,
-// `.`/`?.`, ternary `?`/`:`, assignment, `=>`, template continuations, and `in`/`instanceof`/`as`/
-// `satisfies` all bind their two sides across a line break in both roles. A leading `(`/`[` (call /
-// index continuation) and the prefix keywords `new`/`typeof`/`void`/`await`/`yield`/`delete`/`keyof`
-// only continue in one role, so they live in the direction-specific sets below.
-const CONTINUATION_OPERATORS = new Set<SyntaxKind>([
-    SyntaxKind.DotToken,
-    SyntaxKind.QuestionDotToken,
-    SyntaxKind.QuestionToken,
-    SyntaxKind.ColonToken,
-    SyntaxKind.CommaToken,
-    SyntaxKind.PlusToken,
-    SyntaxKind.MinusToken,
-    SyntaxKind.AsteriskToken,
-    SyntaxKind.AsteriskAsteriskToken,
-    SyntaxKind.SlashToken,
-    SyntaxKind.PercentToken,
-    SyntaxKind.AmpersandAmpersandToken,
-    SyntaxKind.BarBarToken,
-    SyntaxKind.QuestionQuestionToken,
-    SyntaxKind.LessThanToken,
-    SyntaxKind.GreaterThanToken,
-    SyntaxKind.LessThanEqualsToken,
-    SyntaxKind.GreaterThanEqualsToken,
-    SyntaxKind.EqualsEqualsToken,
-    SyntaxKind.ExclamationEqualsToken,
-    SyntaxKind.EqualsEqualsEqualsToken,
-    SyntaxKind.ExclamationEqualsEqualsToken,
-    SyntaxKind.AmpersandToken,
-    SyntaxKind.BarToken,
-    SyntaxKind.CaretToken,
-    SyntaxKind.EqualsToken,
-    SyntaxKind.EqualsGreaterThanToken,
-    SyntaxKind.InKeyword,
-    SyntaxKind.InstanceOfKeyword,
-    SyntaxKind.AsKeyword,
-    SyntaxKind.SatisfiesKeyword,
-    SyntaxKind.TemplateMiddle,
-    SyntaxKind.TemplateTail,
-])
-// A line whose PREVIOUS token is one of these has a dangling operand that the next line supplies.
-const CONTINUES_AFTER_PREV = new Set<SyntaxKind>([
-    ...CONTINUATION_OPERATORS,
-    SyntaxKind.NewKeyword,
-    SyntaxKind.TypeOfKeyword,
-    SyntaxKind.VoidKeyword,
-    SyntaxKind.AwaitKeyword,
-    SyntaxKind.YieldKeyword,
-    SyntaxKind.DeleteKeyword,
-    SyntaxKind.KeyOfKeyword,
-])
-// A line whose NEXT token is one of these continues the previous line (a call / index / member /
-// operator tail). Statements never begin with these, so treating them as continuation can't swallow a
-// genuinely separate statement.
-const CONTINUES_AT_NEXT = new Set<SyntaxKind>([
-    ...CONTINUATION_OPERATORS,
-    SyntaxKind.OpenParenToken,
-    SyntaxKind.OpenBracketToken,
-])
-
 function emitScript(
     source: string,
     script: Script,
@@ -707,8 +644,8 @@ function emitScript(
             if (
                 localDepth === 0 &&
                 scanner.hasPrecedingLineBreak() &&
-                !CONTINUES_AFTER_PREV.has(prevToken) &&
-                !CONTINUES_AT_NEXT.has(token)
+                !CONTINUATION_OPERATORS.afterPrev.has(prevToken) &&
+                !CONTINUATION_OPERATORS.atNext.has(token)
             )
                 return { rawEnd: prevEnd, end: prevEnd }
             if (localDepth === 0 && token === SyntaxKind.SemicolonToken)

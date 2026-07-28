@@ -18,6 +18,7 @@
 // request, exercising the real per-user-token rung of the identity ladder (AU9). The rpc proxy
 // sends Content-Type: application/json on mutations so they satisfy the CSRF gate (AU8).
 
+import { bootApp } from '../server/internal/bootApp.ts'
 import { loadApp } from '../server/internal/loadApp.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
 import type { Principal } from '../server/internal/requestScope.ts'
@@ -307,42 +308,11 @@ export async function createTestApp(config: TestAppConfig = {}): Promise<TestApp
         return bind(app, config.routes ?? {}, undefined, () => app.stop())
     }
 
-    // DISCOVERY mode — load the whole project at `dir` and boot it through its lifecycle.
+    // DISCOVERY mode — load the whole project at `dir` and boot it through THE lifecycle: `bootApp` is
+    // the same module `serve()` drives, so a discovery test gets the wrapper order, the breakout, the
+    // warm pages and the teardown backstop production gets, rather than a second copy of them.
     const loaded = await loadApp(config.dir ?? process.cwd())
-    const runLifecycle = config.lifecycle !== false
+    const booted = await bootApp(loaded, { lifecycle: config.lifecycle })
 
-    // Mirror serve.ts: `createApp` binds the server inside the `start` thunk so `onStart` can do setup
-    // BEFORE anything listens; returning without calling `start()` is a breakout (the app never boots).
-    let app: App | undefined
-    const start = async (): Promise<void> => {
-        if (app === undefined) app = createApp(loaded)
-    }
-    if (runLifecycle && loaded.onStart !== undefined) await loaded.onStart(start)
-    else await start()
-    if (app === undefined) {
-        throw new Error('abide: onStart returned without calling start() — the app did not boot.')
-    }
-    const booted = app
-
-    // Teardown mirrors onStart: `onStop` wraps the real `stop()`, and it always completes (backstop).
-    let stopped = false
-    const rawStop = async (): Promise<void> => {
-        if (stopped) return
-        stopped = true
-        await booted.stop()
-    }
-    const stop =
-        runLifecycle && loaded.onStop !== undefined
-            ? async (): Promise<void> => {
-                  // A hook that throws (or returns without calling stop()) still gets the backstop,
-                  // so teardown always completes; the original error is re-thrown for the caller.
-                  try {
-                      await loaded.onStop?.(rawStop)
-                  } finally {
-                      if (!stopped) await rawStop()
-                  }
-              }
-            : rawStop
-
-    return bind(booted, loaded.routes ?? {}, undefined, stop)
+    return bind(booted.app, loaded.routes ?? {}, undefined, () => booted.stop())
 }

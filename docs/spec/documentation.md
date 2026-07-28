@@ -3,7 +3,7 @@
 Status: draft, derived from design interview 2026-07-17.
 Scope: how **abide itself** is documented for developers (and coding agents) — sources, sync,
 structure. Not a runtime "app self-documents" feature (that's OpenAPI + MCP, machine-surfaces.md).
-Builds on MS1.2 (TSDoc→generation), CL4 (`init-agent`), C10 (`abide check`).
+Builds on MS1.2 (TSDoc→generation), C10 (`abide check`).
 
 Through-line: **generate from the source of truth so docs can't drift; hand-write only what
 generation can't produce.**
@@ -22,11 +22,12 @@ generation can't produce.**
 3. **`docs/spec/*` (these twelve specs) are the *design* record, distinct from user docs.** They
    are internally-facing "why/how-decided"; user docs are externally-facing "how-to-use." Specs
    **seed** the conceptual guides but do **not** become the public docs.
-4. **The AI-agent pointer (`CLAUDE.md` via `abide init-agent`, CL4) is a first-class doc
-   surface** — machine-readable orientation for coding agents (conventions, file layout, the
-   public API table). **Generated/refreshed from the same reference source** so it stays current;
-   not hand-edited — drift is corrected by regenerating against the current design, never by
-   hand-patching.
+4. **The AI-agent pointer (`CLAUDE.md`) is a first-class doc surface** — machine-readable
+   orientation for coding agents (conventions, file layout, the public API table). It is
+   HAND-MAINTAINED alongside the specs. This item once said the opposite — generated from the
+   reference source, never hand-edited, refreshed by `abide init-agent` (CL4) — which described a
+   generator that was never built, so the file it governs drifted with nothing to correct it. Drift
+   is corrected by editing it against the current design, and `/audit` is what catches it.
 5. **Examples are tested code** — recipes/examples are real, compiled, `bun test`-verified
    projects (or snippets checked by `abide check`, C10), so they can't rot.
 6. **Docs are versioned** to track framework releases (versioned docs site).
