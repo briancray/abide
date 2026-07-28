@@ -26,7 +26,9 @@ test('Deploy page shows both Docker options under the deploy tag', async ({ page
     // Both container shapes: `abide start` and the `abide compile` standalone binary, tagged `deploy`.
     await expect(page.locator('main.page')).toContainText('docker build -t deploy')
     await expect(page.locator('main.page')).toContainText('bun run abide compile')
-    await expect(page.locator('main.page')).toContainText('ENTRYPOINT ["server"]')
+    // `serve` is spelled out: the binary's DEFAULT is the interactive command surface, so an
+    // entrypoint that omits it would start a REPL with no console instead of a server.
+    await expect(page.locator('main.page')).toContainText('ENTRYPOINT ["server", "serve"]')
     // The full env list moved to the Config page — not duplicated here.
     await expect(page.locator('main.page')).not.toContainText('ABIDE_MAX_STREAM_BUFFER_SIZE')
 })

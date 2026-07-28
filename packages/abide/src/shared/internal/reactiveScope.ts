@@ -30,21 +30,33 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { isBrowser } from './isBrowser.ts'
 // Type-only (erased): the effect-owner scope reactive.ts pushes onto this scope. Runtime direction
 // stays one-way — reactive.ts imports `reactiveScope` from here, never the reverse.
+import type { Principal } from './principal.ts'
 import type { EffectScope } from './reactive.ts'
 import type { RouteInfo } from './routeInfo.ts'
 
 export interface ReactiveScope {
     slots: Map<string, unknown>
-    // ADR 0026. The three per-request facts `shared/` needs, which used to be reached by importing UP
-    // into `server/internal/requestScope.ts`. All three have EXACTLY this scope’s lifetime, which is the
-    // admission rule for living here; `RequestScope`'s five Bun/HTTP fields (request, cookies,
-    // identity, bag, server) have the same lifetime but no shared reader, so they stay in `server/`.
+    // ADR 0026. The per-request facts `shared/` needs, which used to be reached by importing UP into
+    // `server/internal/requestScope.ts`. Each has EXACTLY this scope’s lifetime, which is the admission
+    // rule for living here; `RequestScope`'s remaining Bun/HTTP fields (request, cookies, bag, server)
+    // have the same lifetime but no shared reader, so they stay in `server/`.
+    //
+    // `identity` was one of those until it gained a shared reader: `shared/identity.ts` is isomorphic,
+    // so the principal moved here by the same rule that admitted `route`.
     //
     // `requestScoped` is set ONLY by `runInScope`, so it is structurally false on the client and in the
     // server default scope — which is why the memo's shared-slot branches no longer need an
     // `isBrowser` guard alongside it.
     requestScoped?: boolean | undefined
     route?: RouteInfo | undefined
+    // WHO this unit of work is acting as (auth.md AU3). On the server the router resolves it before any
+    // handler runs; on the client the tab's holder answers instead, so this stays undefined there.
+    identity?: Principal | undefined
+    // Applies a login (`Partial<Principal>`) or a logout (`undefined`) to the request that owns this
+    // scope, re-sealing the identity cookie. INSTALLED BY THE SERVER's request scope and absent
+    // everywhere else — which is what makes `identity.set()` in a browser a loud, specific error
+    // rather than a silent no-op: a client cannot seal a cookie it is not allowed to read.
+    identityWrite?: ((next: Partial<Principal> | undefined) => void) | undefined
     // W3C Trace Context (CO2.3). Seeded by the router from an incoming `traceparent` header, else
     // generated lazily by the first `trace()` call and cached here for the request's lifetime. The
     // router's `finalize` reads it back from here to stamp `traceparent`/`traceresponse`.

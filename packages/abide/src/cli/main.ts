@@ -21,7 +21,10 @@ import {
 import { loadApp, writeBakedSchemas } from '../server/internal/loadApp.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { check } from './check.ts'
+import { compile } from './compile.ts'
+import { installShutdownHandlers } from './installShutdownHandlers.ts'
 import { lspServer } from './lsp.ts'
+import { parsePort } from './parsePort.ts'
 import { type ServeResult, serve } from './serve.ts'
 
 const USAGE = `abide — isomorphic type-safe framework
@@ -33,26 +36,22 @@ Usage:
   abide scaffold <name>       create a starter project, then git init + install + dev
   abide check                 type-check .abide script bodies (best-effort, via TS7)
   abide lsp                   run the .abide language server over stdio (diagnostics)
+  abide compile               build the standalone executable (app + assets embedded)
   abide bundle                build the desktop launcher into dist/bundle/ (host platform)
+
+The executable IS the app: run it bare for the interactive REPL, with an rpc name to call that
+rpc, or "serve" to host it.
 
 Options:
   --port <n>                  listen port (default: PORT env or 3000; dev hops to the next open port)
+  --target <triple>           compile: bun target (e.g. bun-linux-x64; default: host)
+  --out <path>                compile: output executable path (default: dist/<app name>);
+                              with --platforms it is the output DIRECTORY
+  --platforms [a,b]           compile: cross-compile one binary per target (bare = the default set)
   --no-git                    scaffold: skip git init
   --no-install                scaffold: skip bun install
   --no-dev                    scaffold: skip starting the dev server
   -h, --help                  show this help`
-
-// Pull `--port <n>` out of an argv tail; returns the parsed port or undefined. Validates the same
-// range as the env-var path (integer, 0..65535) so an invalid `--port` fails cleanly instead of
-// flowing a garbage value into Bun.serve/findOpenPort.
-function parsePort(argv: string[]): number | undefined {
-    const index = argv.indexOf('--port')
-    if (index === -1) return undefined
-    const raw = argv[index + 1]
-    if (raw === undefined) return undefined
-    const port = Number(raw)
-    return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : undefined
-}
 
 // The first positional (non-flag) argument, skipping the value consumed by `--port`. Used by
 // `scaffold` to read the project <name> even when it follows `--port <n>`.
@@ -67,6 +66,16 @@ function firstPositional(argv: string[]): string | undefined {
         if (!arg.startsWith('-')) return arg
     }
     return undefined
+}
+
+// The value of a `--flag <value>` option, or undefined when the flag is absent or trails nothing. A
+// following flag is not a value (`--target --out x` yields undefined for `--target`).
+function flagValue(argv: string[], flag: string): string | undefined {
+    const index = argv.indexOf(flag)
+    if (index === -1) return undefined
+    const raw = argv[index + 1]
+    if (raw === undefined || raw.startsWith('-')) return undefined
+    return raw
 }
 
 // True unless the given boolean flag is present in argv (e.g. `--no-install`).
@@ -252,50 +261,6 @@ async function forwardLsp(cwd: string): Promise<void> {
     await Promise.allSettled([pumpIn, pumpOut])
 }
 
-// Grace window for onStop teardown during shutdown before the process is force-exited — a buggy hook
-// that never resolves must not turn a crash or a Ctrl-C into a hang.
-const SHUTDOWN_TEARDOWN_DEADLINE_MS = 5000
-
-// Process-level shutdown handling for the long-lived dev/start server. Two triggers route through one
-// path so the app's `onStop` teardown (drain + close) always runs before exit instead of stranding
-// in-flight work:
-//   - a crash (uncaughtException / unhandledRejection) → teardown, then exit 1;
-//   - a signal (SIGINT / SIGTERM, e.g. Ctrl-C or a container stop) → graceful teardown, then exit 0.
-// `running.stop()` drives onStop and its teardown backstop. Installed once per boot; a second trigger
-// DURING teardown falls through the re-entrancy guard so the pending exit still fires, and a stalled
-// teardown is force-exited by the deadline. Not wired into serve() itself — that's a library entry the
-// test suite boots repeatedly, and per-boot exit handlers there would be wrong.
-function installShutdownHandlers(running: ServeResult): void {
-    let shuttingDown = false
-    const shutdown = async (reason: string, exitCode: number, cause?: unknown): Promise<void> => {
-        if (shuttingDown) return
-        shuttingDown = true
-        if (cause !== undefined) {
-            console.error(`abide: ${reason} — running onStop teardown before exit:`, cause)
-        } else {
-            console.info(`abide: ${reason} — running onStop teardown before exit.`)
-        }
-        // Force-exit if teardown stalls (a hanging onStop) so shutdown never hangs. Unref'd so the timer
-        // itself never keeps the process alive. A timed-out teardown is abnormal, so it always exits 1.
-        const deadline = setTimeout(() => {
-            console.error('abide: onStop teardown timed out during shutdown — forcing exit.')
-            process.exit(1)
-        }, SHUTDOWN_TEARDOWN_DEADLINE_MS)
-        deadline.unref?.()
-        try {
-            await running.stop()
-        } catch (stopError) {
-            console.error('abide: onStop teardown itself failed during shutdown:', stopError)
-            process.exit(1)
-        }
-        process.exit(exitCode)
-    }
-    process.on('uncaughtException', (error) => void shutdown('uncaught exception', 1, error))
-    process.on('unhandledRejection', (reason) => void shutdown('unhandled rejection', 1, reason))
-    process.on('SIGINT', () => void shutdown('SIGINT', 0))
-    process.on('SIGTERM', () => void shutdown('SIGTERM', 0))
-}
-
 export async function main(argv: string[]): Promise<ServeResult | undefined> {
     const command = argv[0]
     const rest = argv.slice(1)
@@ -355,6 +320,22 @@ export async function main(argv: string[]): Promise<ServeResult | undefined> {
         } else {
             await forwardLsp(cwd)
         }
+        return undefined
+    }
+
+    // ONE build. The executable it produces serves (`serve`), dispatches rpcs as subcommands, and
+    // runs interactive — chosen when it RUNS, so there is nothing to pick here.
+    if (command === 'compile') {
+        // `--platforms` with no value (or a trailing flag after it) means the default release set.
+        const platforms = rest.includes('--platforms')
+            ? (flagValue(rest, '--platforms')?.split(',').filter(Boolean) ?? [])
+            : undefined
+        const built = await compile(cwd, {
+            target: flagValue(rest, '--target'),
+            out: flagValue(rest, '--out'),
+            platforms,
+        })
+        for (const outfile of built) console.info(`abide compile — ${outfile}`)
         return undefined
     }
 

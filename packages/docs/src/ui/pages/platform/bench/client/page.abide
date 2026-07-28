@@ -381,11 +381,11 @@
       <thead>
         <tr class="border-b border-slate-300 text-left">
           <th class="py-1.5 pr-4">scenario</th>
-          <th class="py-1.5 pr-4 text-right">mount (ns/op)</th>
-          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-          <th class="py-1.5 pr-4 text-right">×</th>
-          <th class="py-1.5 pr-4 text-right">ns/row</th>
-          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">mount (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">×</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">ns/row</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">iters</th>
           <th class="py-1.5">hand-written as</th>
         </tr>
       </thead>
@@ -396,11 +396,11 @@
         {#for row of mountRows by row.name}
           <tr class="border-b border-slate-100" data-testid="mount-row">
             <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-400">{row.iters}</td>
             <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
           </tr>
         {/for}
@@ -422,11 +422,11 @@
       <thead>
         <tr class="border-b border-slate-300 text-left">
           <th class="py-1.5 pr-4">scenario</th>
-          <th class="py-1.5 pr-4 text-right">unmount (ns/op)</th>
-          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-          <th class="py-1.5 pr-4 text-right">×</th>
-          <th class="py-1.5 pr-4 text-right">ns/row</th>
-          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">unmount (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">×</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">ns/row</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">iters</th>
           <th class="py-1.5">hand-written as</th>
         </tr>
       </thead>
@@ -437,11 +437,11 @@
         {#for row of unmountRows by row.name}
           <tr class="border-b border-slate-100" data-testid="unmount-row">
             <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-400">{row.iters}</td>
             <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
           </tr>
         {/for}
@@ -464,9 +464,9 @@
       <thead>
         <tr class="border-b border-slate-300 text-left">
           <th class="py-1.5 pr-4">scenario</th>
-          <th class="py-1.5 pr-4 text-right">hydrate (ns/op)</th>
-          <th class="py-1.5 pr-4 text-right">ns/row</th>
-          <th class="py-1.5 text-right">iters</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">hydrate (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">ns/row</th>
+          <th class="py-1.5 text-right whitespace-nowrap">iters</th>
         </tr>
       </thead>
       <tbody>
@@ -476,9 +476,9 @@
         {#for row of hydrateRows by row.name}
           <tr class="border-b border-slate-100" data-testid="hydrate-row">
             <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-            <td class="py-1.5 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 text-right whitespace-nowrap font-mono text-slate-400">{row.iters}</td>
           </tr>
         {/for}
       </tbody>
@@ -499,10 +499,10 @@
       <thead>
         <tr class="border-b border-slate-300 text-left">
           <th class="py-1.5 pr-4">scenario</th>
-          <th class="py-1.5 pr-4 text-right">update (ns/op)</th>
-          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-          <th class="py-1.5 pr-4 text-right">×</th>
-          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">update (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">×</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">iters</th>
           <th class="py-1.5">hand-written as</th>
         </tr>
       </thead>
@@ -513,10 +513,10 @@
         {#for row of updateRows by row.name}
           <tr class="border-b border-slate-100" data-testid="update-row">
             <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-400">{row.iters}</td>
             <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? "—" : row.vanillaNote}</td>
           </tr>
         {/for}

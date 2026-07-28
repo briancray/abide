@@ -49,14 +49,32 @@
   </aside>
   <Panel id="package-a-standalone-binary" title="Package a standalone binary">
     <pre class="code" data-lang="bash"><code>abide compile --target bun-linux-x64 --out ./server
-  # one standalone executable — embeds the app + client assets, self-serves
-  
-  abide cli --platforms bun-linux-x64,bun-darwin-arm64
-  # a dual-mode binary: self-hosts, or targets a remote app via ABIDE_APP_URL
+  abide compile --platforms bun-linux-x64,bun-darwin-arm64
+  # ONE executable: it hosts the app, dispatches your rpcs as subcommands,
+  # and runs interactive — you pick when you RUN it, not when you build it
   
   abide bundle         # desktop launcher (host platform; embeds assets)</code></pre>
   </Panel>
   <aside class="aside">
-    <p><code>compile</code> emits a single self-contained server executable (app + client assets embedded, no external <code>dist/</code>). <code>cli</code> emits a dual-mode binary that either self-hosts or targets a remote app URL. <code>bundle</code> builds a desktop launcher.</p>
+    <p><code>compile</code> emits a single self-contained executable (app + client assets embedded, no external <code>dist/</code>) — hosting it takes <code>--port</code> and <code>PORT</code> like <code>abide start</code>, and defaults its output to <code>dist/&lt;app name&gt;</code>. Everything the server would otherwise look up at runtime is resolved at build time: your rpc/socket/<code>app.ts</code> modules become static imports, and every page, layout and component is compiled to its server module ahead of time. The one thing a binary cannot carry is your SOURCE — a module that reads paths off <code>import.meta.dir</code> won't find them. There is no separate CLI build — the same executable is your command-line tool. <code>--platforms</code> cross-compiles a release set for the price of one client build. <code>bundle</code> builds a desktop launcher.</p>
+  </aside>
+  <Panel id="your-app-as-a-command" title="Your app as a command">
+    <pre class="code" data-lang="bash"><code>./myapp                        # interactive, schema-driven prompts (the default)
+  ./myapp hello --who cli        # one rpc → JSON on stdout
+  ./myapp help hello             # flags, typed from the input schema
+  ./myapp serve --port 8080      # host the app in the foreground
+  &gt; serve --port 8080            # …or from inside a session
+
+  ./myapp connect https://app.example.com --token $TOKEN
+  ./myapp hello --who remote     # …every later run goes there
+  ./myapp disconnect             # …until you hand the app back
+
+  ./myapp --url https://staging.example.com hello   # one run, somewhere else</code></pre>
+  </Panel>
+  <aside class="aside">
+    <p>The executable IS your app. Every rpc reachable by <code>clients.cli</code> becomes a subcommand, and its input schema becomes the flags — so <code>--n 5</code> on an <code>integer</code> field arrives as the number <code>5</code>, and <code>--help</code> knows the types without asking a server. Results are JSON on stdout (pretty at a terminal, compact through a pipe), a streaming handler is line-streamed as it arrives, and failures are a JSON object on stderr plus an exit code that names the failure class — <code>2</code> for a bad command line, <code>3</code> for a 422, <code>4</code> for 401/403, <code>7</code> for a 5xx.</p>
+    <p>Where a call lands is a four-rung ladder: <code>--url</code> for this run, then <code>ABIDE_APP_URL</code> for this environment, then whatever <code>connect</code> stored for this user, and otherwise the app itself. Flag over environment over stored file, so <code>ABIDE_APP_URL=… ./myapp</code> beats a connected binary without disconnecting it first. <code>connect</code> keeps its target in your per-user data directory (mode <code>0600</code> — it may hold a bearer), which is why it survives between runs and follows you between directories; bare <code>connect</code> tells you where you are pointed, and both commands work from the prompt too.</p>
+    <p>With nothing pointing it anywhere, it hosts its OWN copy of the app on a loopback port and calls that — offline, self-sufficient, and over real HTTP, so your middleware, identity, validation and caching behave exactly as they do in production. Hosting is lazy: printing help or mistyping a command never runs your <code>onStart</code>. With a URL it calls that deployment instead, authenticating with <code>--token</code> / <code>ABIDE_APP_TOKEN</code>; the embedded app still supplies the command table, so the CLI knows every flag even when the deployment is unreachable.</p>
+    <p>Because the command surface is the DEFAULT, a deployment has to say <code>serve</code> — an entrypoint that omits it starts an interactive session with no console, which the binary reports as an error rather than exiting quietly. <code>serve</code> and <code>help</code> are reserved: they win over an rpc of the same name, since hosting has no second door.</p>
   </aside>
 </main>

@@ -17,24 +17,26 @@ interface TailEntry<T> {
 }
 
 // The hub's own config — deliberately NOT a socket's options, so the pub/sub core carries no transport
-// vocabulary. `channel`'s public `maxAge` maps onto `ttl` here.
+// vocabulary. `maxAge` is the SAME word `channel` exposes: this window ages individual MESSAGES, which
+// is why it is not called `ttl` anywhere in the stack — a `ttl` elsewhere in abide is a memo's per-SLOT
+// retention, and one name meaning two things is what the socket rename set out to end.
 export interface ChannelHubOptions {
     tail?: number
-    ttl?: number
+    maxAge?: number
 }
 
 export class ChannelHub<T> {
     private readonly tailSize: number
-    private readonly ttl: number
+    private readonly maxAge: number
     private readonly tail: TailEntry<T>[] = []
     private readonly subscribers = new Set<Subscriber<T>>()
     // The most-recently-published message, retained INDEPENDENT of `tail` size so a `tail: 0` channel
-    // still has a `peek()` (client-sockets.md CS4.2). `ttl`-windowed on read.
+    // still has a `peek()` (client-sockets.md CS4.2). `maxAge`-windowed on read.
     private last: TailEntry<T> | undefined
 
     constructor(options: ChannelHubOptions) {
         this.tailSize = options.tail ?? 0
-        this.ttl = options.ttl ?? Infinity
+        this.maxAge = options.maxAge ?? Infinity
     }
 
     // Publish — append to the tail buffer and fan out. The mediator, if any, ran in the socket layer above (S1.3).
@@ -63,23 +65,23 @@ export class ChannelHub<T> {
         this.last = undefined
     }
 
-    // The `ttl`-windowed latest message — backs the isomorphic `peek()` (CS4.2). `undefined` before
-    // the first publish or once the last message ages past `ttl` (matches what a fresh subscriber
-    // would replay). `ttl: Infinity` (the default) → sticky.
+    // The `maxAge`-windowed latest message — backs the isomorphic `peek()` (CS4.2). `undefined` before
+    // the first publish or once the last message ages past `maxAge` (matches what a fresh subscriber
+    // would replay). `maxAge: Infinity` (the default) → sticky.
     peekLatest(): T | undefined {
         const last = this.last
         if (last === undefined) return undefined
-        if (Date.now() - last.time > this.ttl) return undefined
+        if (Date.now() - last.time > this.maxAge) return undefined
         return last.message
     }
 
-    // A one-shot snapshot of the in-window tail (last-N within ttl, S2) — the MCP tail tool's
+    // A one-shot snapshot of the in-window tail (last-N within maxAge, S2) — the MCP tail tool's
     // request/response view (MS2.2). Ordered oldest→newest, same window a fresh subscriber replays.
     tailSnapshot(): T[] {
         const now = Date.now()
         const messages: T[] = []
         for (const entry of this.tail) {
-            if (now - entry.time <= this.ttl) messages.push(entry.message)
+            if (now - entry.time <= this.maxAge) messages.push(entry.message)
         }
         return messages
     }
@@ -116,7 +118,7 @@ export class ChannelHub<T> {
         if (replay) {
             const now = Date.now()
             for (const entry of this.tail) {
-                if (now - entry.time <= this.ttl) subscriber.push(entry.message)
+                if (now - entry.time <= this.maxAge) subscriber.push(entry.message)
             }
         }
         this.subscribers.add(subscriber)

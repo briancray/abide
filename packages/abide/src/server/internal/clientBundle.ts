@@ -113,9 +113,12 @@ function rpcSpecs(
     {
         method: string
         read: boolean
-        shared: boolean
+        crossRequest: boolean
         memo: boolean
         ttl: number | null
+        tags?: string[]
+        throttle?: number
+        debounce?: number
         timeout: number
     }
 > {
@@ -124,9 +127,12 @@ function rpcSpecs(
         {
             method: string
             read: boolean
-            shared: boolean
+            crossRequest: boolean
             memo: boolean
             ttl: number | null
+            tags?: string[]
+            throttle?: number
+            debounce?: number
             timeout: number
         }
     > = {}
@@ -137,14 +143,20 @@ function rpcSpecs(
                 `abide: rpc "${entry.name}" is imported into a UI page but is not browser-reachable (clients.browser: false). Remove the import or expose the rpc to the browser.`,
             )
         }
-        specs[entry.name] = {
+        const spec = {
             method: entry.method,
             read: entry.read,
-            shared: entry.shared,
+            crossRequest: entry.crossRequest,
             memo: entry.memo,
             ttl: entry.ttl,
             timeout: entry.timeout,
-        }
+        } as (typeof specs)[string]
+        // Only when declared — an empty array in every spec would bloat the bundle for the common case.
+        if (entry.tags !== undefined) spec.tags = entry.tags
+        // Same rule for the refetch clock: absent on the overwhelming majority of routes.
+        if (entry.throttle !== undefined) spec.throttle = entry.throttle
+        if (entry.debounce !== undefined) spec.debounce = entry.debounce
+        specs[entry.name] = spec
     }
     return specs
 }
@@ -152,12 +164,13 @@ function rpcSpecs(
 // The socket specs the client proxies need (client-sockets.md CS7). TREE-SHAKING: only sockets some
 // page IMPORTS reach the bundle. REACHABILITY (CS6.1): importing a `clients.browser: false` socket into
 // a UI script is a BUILD ERROR — it has no browser proxy, so a bare `$scope` read would be `undefined`
-// at mount; failing loudly at build time is the contract. `ttl: Infinity` (sticky) serialises to `null`.
+// at mount; failing loudly at build time is the contract. `maxAge: Infinity` (sticky) serialises to `null`.
 function socketSpecs(
     config: AppConfig,
     importedNames: Set<string>,
-): Record<string, { clientPublish: boolean; tail: number; ttl: number | null }> {
-    const specs: Record<string, { clientPublish: boolean; tail: number; ttl: number | null }> = {}
+): Record<string, { clientPublish: boolean; tail: number; maxAge: number | null }> {
+    const specs: Record<string, { clientPublish: boolean; tail: number; maxAge: number | null }> =
+        {}
     for (const entry of buildRegistry(config).sockets) {
         if (!importedNames.has(entry.name)) continue
         if (entry.clients.browser === false) {
@@ -168,7 +181,7 @@ function socketSpecs(
         specs[entry.name] = {
             clientPublish: entry.clientPublish,
             tail: entry.tail,
-            ttl: Number.isFinite(entry.ttl) ? entry.ttl : null,
+            maxAge: Number.isFinite(entry.maxAge) ? entry.maxAge : null,
         }
     }
     return specs

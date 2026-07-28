@@ -58,7 +58,11 @@ manifests; every surface derives from the same RPC + socket metadata.
    built-in tools (bash/file/web) stay **off by default**; app-RPC tools are auto-run and subject
    to whatever authz your middleware enforces.
 
-## MS3. CLI projection (`abide cli`)
+## MS3. CLI projection (the compiled binary) — **BUILT** (except MS3.5 distribution)
+
+> Naming note: this section says `abide cli` throughout because that is what the design called the
+> binary. There is no such COMMAND — `abide compile` builds it (see "Relationship to `abide compile`"
+> below), and the command surface is what the executable does by default.
 
 1. **Dual-mode, standalone binary that EMBEDS the full app** (Bun-compiled; the CLAUDE.md word
    "thin" is superseded):
@@ -70,24 +74,96 @@ manifests; every surface derives from the same RPC + socket metadata.
 2. **Command mapping:** each `clients.cli` RPC → a subcommand; the args object's JSON Schema →
    flags (`--field`, required/optional/types/`--help` from schema + doc-comment); streaming RPC →
    line-streamed stdout.
-3. **Auth:** reaches its server via `ABIDE_APP_URL` and, if the app's middleware requires it,
+3. **Auth:** reaches its server via `connect` / `ABIDE_APP_URL` / `--url` and, if the app's middleware requires it,
    authenticates with a bearer token that resolves `identity()` through the same middleware chain
    — uniform with all surfaces. abide imposes no auth of its own; `clients.cli` is reachability
    only (DX8).
 4. **Output convention:** JSON by default (pipeable); errors → stderr + non-zero exit; typed
    errors (§9) → structured stderr shape + distinct exit codes.
 5. **Distribution is per-user.** `/__abide/cli` serves an install script + per-platform tarballs
-   (`abide cli --platforms` cross-compiles). When an **authenticated user** fetches it, the
+   (`abide compile --platforms` cross-compiles). When an **authenticated user** fetches it, the
    delivered artifact is provisioned with a **bearer token bound to that user** (in the binary's
    config/companion, not the cookie), so the installed CLI authenticates *as them* via the
    middleware chain. Users install the CLI **from the running server**, ready-to-use as themselves.
 
-### Relationship to `abide compile`
+### Relationship to `abide compile` — RESOLVED: they are the same thing
 
-- **`abide compile` = server-only executable** — boots and serves, no subcommands/interactive.
-- **`abide cli` = the superset** — embeds the app *and* adds subcommands + interactive +
-  remote-client mode. `compile` is "run the server as a binary"; `cli` is "the app as a
-  command-line/interactive tool that can also self-host or target remote."
+The spec drew these as two artifacts (a server-only executable and its command-shaped superset).
+Built, that distinction did not survive contact: the whole command surface costs **16 KB in a 67 MB
+binary** (measured on the docs app), and a server that cannot be asked a question is a strictly worse
+server. So there is ONE build and ONE runtime (`runCompiledApp`), under ONE command: `abide compile`. An
+`abide cli` command existed briefly as a second name for the identical build and was removed — two
+spellings of one action is ceremony, and the name that survives is the one that describes what the
+step DOES.
+
+What the executable does is decided at RUN time:
+
+| invocation | behaviour |
+| --- | --- |
+| `./app` | interactive REPL — **the default** |
+| `./app <rpc> [flags]` | that rpc, JSON to stdout |
+| `./app serve [--port n]` | host the app in the foreground |
+| `./app connect <url>` | remember that deployment until `disconnect` (also at the prompt) |
+| `./app disconnect` | forget it and go back to hosting |
+| `./app login --token <t>` | remember WHO you are there · `logout` drops it |
+| `./app identity` | ask the server who it thinks you are (`/__abide/identity`) |
+| `serve [--port n]` at the prompt | host it mid-session; commands keep running against it |
+
+### As built (MS3.1-3.4)
+
+One staging step (`stageCompileEntry`) writes one generated entry, which calls `runCompiledApp`.
+Staging once is what makes `--platforms` cheap: the client build, the AOT-emitted pages and the baked
+schema map are target-independent, so a five-platform release pays for them once and only re-runs the
+Bun linker per target.
+
+Five decisions the design left open, resolved by the implementation:
+
+1. **Self-hosted mode calls its embedded server over LOOPBACK HTTP, not in-process, and hosts
+   LAZILY.** The route callables are right there and calling them directly would be faster — and
+   would answer a different question. Going over the wire means middleware, identity, the CSRF gate, schema validation, the
+   memo and the run deadline all behave exactly as they do for a deployed request, so the CLI is a
+   third client of the same face rather than a second implementation of it. `serve()` on port `0`,
+   stopped when the command ends — and nothing binds until a call actually needs it, so `--help`, a
+   mistyped command, or a session that only reads help never runs the app's `onStart` (`commandTarget`).
+2. **Remote mode still reads the command table from the EMBEDDED app.** The URL says where the call
+   lands, not what the app is — so `--help`, flag types and validation work with the deployment
+   unreachable, and a binary never has to interrogate a server to know how to talk to it.
+   **The target is a four-rung ladder** (`resolveCliTarget`), url and token resolved independently:
+   `--url`/`--token` (this run) → `ABIDE_APP_URL`/`ABIDE_APP_TOKEN` (this environment) → a stored
+   `connect`/`login` (this user, `appDataDir()`, `0600` because it holds bearers) → host it ourselves.
+   Flag over env over file is the conventional CLI order and the reason `ABIDE_APP_URL=… ./app` can
+   beat a connected binary without disconnecting first; the REPL re-resolves the whole ladder after a
+   `connect`/`disconnect` and SAYS where calls go when the file it just wrote is outranked. Storage is
+   per-USER rather than per-directory: the binary is installed once and run from anywhere, so a
+   cwd-relative dotfile would forget the target the moment you changed directory.
+   **WHERE and WHO are separate commands** (`connect`/`disconnect` vs `login`/`logout`) because a
+   credential belongs to an ORIGIN — a sealed identity issued by one deployment is meaningless, and
+   must not be sent, to another. Credentials are keyed by origin, which is not bookkeeping: when they
+   were stored beside the URL, `connect` needed a hand-written rule about when a re-connect keeps the
+   token, and keying them correctly deleted the rule. `identity` is named for the framework's own
+   word, not `whoami` — `identity()` in a handler, `identity()` in a component, `identity` at the
+   command line is one concept with one name (a second spelling would be a second concept).
+3. **`serve`, `help`, `connect` and `disconnect` are RESERVED and win over an app rpc of the same
+   name** (`RESERVED_CLI_COMMANDS`). The first cut had it the other way — the command namespace belongs to
+   the app — and hosting was reachable either way through a `--serve` flag. Dropping that flag settled
+   it: with no escape spelling left, an app exporting a `serve` rpc would compile to a binary nobody
+   could host, and unlike the rpc (still reachable over HTTP, MCP and the browser) hosting has no
+   second door. `connect`/`disconnect` are reserved for the same reason: a binary you cannot re-target
+   is as stuck as one you cannot host. A shadowed rpc is still projected into help and warns on `abide:cli`.
+   **Global options (`--url`, `--token`, `--pretty`/`--compact`, `-h`) are read only BEFORE the
+   subcommand** — after it every flag belongs to the rpc, so a handler may still own a `url` or
+   `token` field.
+4. **The command surface is the DEFAULT, and the empty case is LOUD.** A bare run opens the REPL,
+   which means a container running the binary as its entrypoint with no console would read EOF and
+   "succeed" instantly — a clean exit an orchestrator restart-loops on in silence. So a bare run with
+   no TTY that never receives a single line of stdin exits `2` naming `serve`. Deployments spell the
+   subcommand (`ENTRYPOINT ["server", "serve"]`); this is the cost of giving the zero-arg slot to the
+   command surface, paid once, visibly.
+5. **Exit codes name the failure CLASS, not the status** (`CLI_EXIT_CODES`): `1` unreachable · `2`
+   usage (nothing was sent) · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx.
+   App-defined typed errors deliberately get no codes of their own — their names are the app's
+   vocabulary, not abide's, and a per-name code would mean different things in two apps. The name and
+   `data` reach stderr in the structured payload, which is where a script should branch.
 
 ## MS4. OpenAPI projection (`/openapi.json`)
 
@@ -128,4 +204,10 @@ shared secret.** This is a real change to `docs/spec/auth.md` AU6:
 - **OpenAPI documentation of the socket HTTP face and streaming (`jsonl`/`sse`) endpoints** —
   MS4 covers RPC operations; streaming/socket HTTP faces in OpenAPI not yet specced.
 - **CLI interactive-mode UX details** (history, completion, output formatting) — MS3.1 fixes the
-  model, not the polish.
+  model, not the polish. As built the REPL reads lines (so it behaves the same piped as at a
+  terminal) and has no history, completion or line editing.
+- **Per-user CLI distribution (MS3.5) — NOT built.** `abide compile --platforms` cross-compiles the
+  artifacts, but `/__abide/cli` (install script + per-platform tarballs, provisioned with a bearer
+  token bound to the fetching user) is a serving surface with its own auth story (AU9 sealed
+  tokens), not part of the command. The binary already accepts such a token via `--token` /
+  `ABIDE_APP_TOKEN`, so the missing half is issuance + delivery.

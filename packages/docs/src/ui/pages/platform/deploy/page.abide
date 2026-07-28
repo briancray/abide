@@ -44,10 +44,10 @@
   </Panel>
   <Panel id="standalone-binary" title="Standalone binary">
     <pre class="code" data-lang="bash"><code>abide compile --target bun-linux-x64 --out ./server
-  ./server                       # runs anywhere — app + assets embedded, no dist/</code></pre>
+  ./server serve                 # runs anywhere — app + assets embedded, no dist/</code></pre>
   </Panel>
   <aside class="aside">
-    <p>For deploys without a Bun runtime on the host, <code>abide compile</code> emits a single executable with the app and client assets embedded — no external <code>dist/</code>, nothing to install.</p>
+    <p>For deploys without a Bun runtime on the host, <code>abide compile</code> emits a single executable with the app and client assets embedded — no external <code>dist/</code>, nothing to install. The <code>serve</code> subcommand is what hosts it — the same executable also dispatches your rpcs as subcommands and opens an interactive session, so spell it in an entrypoint. It takes <code>--port</code> and <code>PORT</code> like <code>abide start</code>, and shuts down through <code>onStop</code> on <code>SIGTERM</code>. The trade is that the binary carries no source tree: a module that reads or resolves its own files at runtime (via <code>import.meta.dir</code>) has nothing to find, so do that work on first call rather than at import.</p>
   </aside>
   <Panel id="container" title="Container">
     <pre class="code" data-lang="bash"><code>docker build -t deploy .
@@ -84,7 +84,7 @@
   ENV PORT=8080
   ENV ABIDE_IDENTITY_SECRET=change-me
   EXPOSE 8080
-  ENTRYPOINT ["server"]</code></pre>
+  ENTRYPOINT ["server", "serve"]</code></pre>
   </Panel>
   <aside class="aside">
     <p>Compile one self-contained executable — it embeds Bun, the app, and the client assets — and drop it into a minimal base image. No Bun, no <code>dist/</code>, nothing else in the runtime layer.</p>

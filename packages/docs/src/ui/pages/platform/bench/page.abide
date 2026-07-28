@@ -37,11 +37,11 @@
       <thead>
         <tr class="border-b border-slate-300 text-left">
           <th class="py-1.5 pr-4">scenario</th>
-          <th class="py-1.5 pr-4 text-right">render (ns/op)</th>
-          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-          <th class="py-1.5 pr-4 text-right">×</th>
-          <th class="py-1.5 pr-4 text-right">ns/row</th>
-          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">render (ns/op)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">×</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">ns/row</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">iters</th>
           <th class="py-1.5">hand-written as</th>
         </tr>
       </thead>
@@ -49,11 +49,11 @@
         {#for await row of benchFrontend()}
           <tr class="border-b border-slate-100" data-testid="bench-row">
             <td class="py-1.5 pr-4 font-mono">{row.name}</td>
-            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-400" data-testid="bench-iters">{row.iters}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.nsPerRow === null ? "—" : fmtNs(row.nsPerRow)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-400" data-testid="bench-iters">{row.iters}</td>
             <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote ?? "—"}</td>
           </tr>
         {:catch}

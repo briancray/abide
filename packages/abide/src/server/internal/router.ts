@@ -20,7 +20,9 @@
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
 import { health } from '../../shared/health.ts'
+import { identity } from '../../shared/identity.ts'
 import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
+import { IDENTITY_ROUTE } from '../../shared/internal/IDENTITY_ROUTE.ts'
 import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
@@ -59,7 +61,9 @@ import {
 import {
     authorizeChannelJoin,
     authorizeSocketJoin,
+    authorizeTagJoin,
     isMemoChannel,
+    isTagChannel,
     type SocketConnectionData,
 } from './channelAuth.ts'
 import { type ClientBuild, clientBuildFor } from './clientBundle.ts'
@@ -295,6 +299,11 @@ export interface AppConfig {
     // that same directory). Absent for hand-built configs — those have no project on disk, so both
     // features simply stay off rather than guessing a cwd.
     dir?: string
+    // BP1.7: `src/ui/public/**` EMBEDDED in a `abide compile` executable — request path (`/favicon.ico`)
+    // → the path Bun's asset embedding gave the file inside the binary. Set only by a compiled binary,
+    // where `dir` names a source tree that isn't on the machine; when present it REPLACES the
+    // filesystem lookup (a standalone binary answers only for what it carries).
+    publicFiles?: Record<string, string>
     routes?: Record<string, Route>
     middleware?: Middleware[]
     sockets?: Record<string, ErasedSocket>
@@ -418,6 +427,14 @@ function wsSubscribe(
         void subscribeMemoChannel(ws, connection, name, args, config)
         return
     }
+    // `@tag:` cache-tag channel. Same silent-deny class as `@rpc:` (a missed frame self-heals on the
+    // next read), but authorized by DECLARATION rather than by re-running a read gate — the frame
+    // carries a verb and no payload, so there are no per-args rows to authorize. See `authorizeTagJoin`.
+    if (isTagChannel(name)) {
+        if (connection.subscriptions.has(name)) return
+        subscribeTagChannel(ws, connection, name, config)
+        return
+    }
     void subscribeUserSocket(ws, connection, name, args, replay, sockets, config)
 }
 
@@ -496,6 +513,25 @@ async function subscribeMemoChannel(
     const iterator = memoChannelHub(name).subscribe()
     connection.subscriptions.set(name, iterator)
     log.channel('abide:socket').trace(`cache-channel join: ${name}`)
+    void pumpSocketToWs(ws, connection, name, name, undefined, iterator)
+}
+
+// Join an `@tag:` cache-tag channel. Synchronous — the declaration gate is a registry lookup, with no
+// middleware chain to await, so there is no across-the-await re-check to make.
+function subscribeTagChannel(
+    ws: Bun.ServerWebSocket<SocketConnectionData>,
+    connection: SocketConnection,
+    name: string,
+    config: AppConfig,
+): void {
+    if (!authorizeTagJoin(name, config)) {
+        log.channel('abide:socket').trace(`tag-channel join denied: ${name}`)
+        return
+    }
+    if (ws.readyState !== 1) return
+    const iterator = memoChannelHub(name).subscribe()
+    connection.subscriptions.set(name, iterator)
+    log.channel('abide:socket').trace(`tag-channel join: ${name}`)
     void pumpSocketToWs(ws, connection, name, name, undefined, iterator)
 }
 
@@ -626,6 +662,15 @@ async function dispatch(
     const routes = config.routes ?? {}
     const url = scope.route.url
 
+    // AU3 / the isomorphic `identity()`: the caller's OWN resolved principal — what the ladder already
+    // decided this request is, handed back verbatim. It discloses nothing they do not hold (their next
+    // request IS this identity), which is what makes it safe to answer without ceremony; a browser's
+    // `identity.refresh()` and a compiled binary's `identity` subcommand both read it. Inside the
+    // middleware chain like every other route, so an app that gates its surface gates this too.
+    if (url.pathname === IDENTITY_ROUTE) {
+        return Response.json(identity())
+    }
+
     if (url.pathname === '/__abide/health') {
         // Framework stub (CO2.4): the isomorphic baseline (`reachable`, running abide `version`) plus the
         // server-only lifetime fields. The app's `onHealth` (request-scoped) is merged ON TOP — its fields
@@ -732,8 +777,16 @@ async function dispatch(
     // The `looksLikeFile` guard is SYNCHRONOUS and runs first on purpose: without it every request —
     // every RPC, every page nav — would allocate a promise and take a microtask tick to `await` a lookup
     // that answers "no" for anything without a file extension. A public asset always has one.
-    if (config.dir !== undefined && looksLikeFile(url.pathname)) {
-        const publicResponse = await servePublicFile(config.dir, url.pathname, scope.request)
+    if (
+        (config.dir !== undefined || config.publicFiles !== undefined) &&
+        looksLikeFile(url.pathname)
+    ) {
+        const publicResponse = await servePublicFile(
+            config.dir,
+            url.pathname,
+            scope.request,
+            config.publicFiles,
+        )
         if (publicResponse !== undefined) return publicResponse
     }
 

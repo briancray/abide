@@ -56,9 +56,10 @@ test('the client bundle ships SOCKET_SPECS for an imported browser-reachable soc
     const entry = build.files.get(build.entry)
     const loader = entry === undefined ? '' : new TextDecoder().decode(entry.identity)
     expect(loader).toContain('SOCKET_SPECS')
-    // The spec carries the client-relevant retention/publish knobs (ttl Infinity → null). Bun
-    // reformats the emitted JSON literal, so match whitespace-insensitively.
-    expect(loader.replace(/\s/g, '')).toContain('chat:{clientPublish:true,tail:4,ttl:null}')
+    // The spec carries the client-relevant retention/publish knobs under the CHANNEL's own names
+    // (`maxAge` Infinity → null — the wire never spells this `ttl`, which is a memo's per-slot
+    // retention). Bun reformats the emitted JSON literal, so match whitespace-insensitively.
+    expect(loader.replace(/\s/g, '')).toContain('chat:{clientPublish:true,tail:4,maxAge:null}')
 })
 
 test('importing a non-browser-reachable socket into a UI page is a build error (CS6)', async () => {

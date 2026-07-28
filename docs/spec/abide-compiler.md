@@ -382,7 +382,7 @@ bespoke checker.
 - **`src/app.ts`** beyond the per-request middleware chain (lifecycle hooks `onStart`/`onStop`/
   `onHealth`/`onError`, etc.) — only the request/nav middleware chain (`export const middleware =
   [...]`, FD1) is specced here (C6-nav).
-- **Full socket API** (`tail`/`ttl`/`clientPublish`/`schema`/`clients`) — the multiplexer is
+- **Full socket API** (`tail`/`maxAge`/`clientPublish`/`schema`/`clients`) — the multiplexer is
   the §8 broadcast channel; its authoring surface is a later slice.
 - **`abide check`/`lsp` completion/hover/refactor UX depth** (C10 fixes the model — TS-service-
   backed diagnostics/completion/hover/go-to-def; polish and refactorings are unspecified).

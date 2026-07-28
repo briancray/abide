@@ -6,13 +6,13 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { context } from '../../server/context.ts'
 import { cookies } from '../../server/cookies.ts'
-import { identity } from '../../server/identity.ts'
 import {
     anonymousPrincipal,
     type RequestScope,
     runInScope,
 } from '../../server/internal/requestScope.ts'
 import { request } from '../../server/request.ts'
+import { identity } from '../identity.ts'
 import { memo } from '../memo.ts'
 import { sharedStore } from './sharedCache.ts'
 
@@ -69,6 +69,55 @@ describe('shared store — cross-request memoization', () => {
         expect(first).toBe(10)
         expect(second).toBe(10)
         expect(calls).toBe(1) // second request served from the cross-request store
+    })
+
+    // `crossRequest` no longer forces the classic promise path: a SYNCHRONOUS body keyed by its args is
+    // pure over them — precisely the condition the shared store already requires — so it stores its slot
+    // there while its read stays `T`. The store is an in-memory Map, so a hit is synchronous too.
+    test('a KEYED SYNC handler shares one run across requests and still reads as T', () => {
+        let calls = 0
+        const c = memo(
+            ({ n }: { n: number }) => {
+                calls++
+                return n * 2
+            },
+            { crossRequest: true },
+        )
+
+        const first = runInScope(
+            makeScope({ identity: { id: 'user-A', authenticated: true } }),
+            () => c({ n: 5 }),
+        )
+        const second = runInScope(
+            makeScope({ identity: { id: 'user-B', authenticated: true } }),
+            () => c({ n: 5 }),
+        )
+
+        expect(first).toBe(10)
+        expect(first).not.toBeInstanceOf(Promise)
+        expect(second).toBe(10)
+        expect(calls).toBe(1)
+    })
+
+    // The auto-tracked path reaches the shared store through the same `slots()` routing. Its backing
+    // computed rides the slot, so it must NOT be torn down when the request that built it ends —
+    // the next request would otherwise find a live slot holding a disposed computed.
+    test('an ARGLESS auto-tracked crossRequest memo survives the request that built it', () => {
+        let calls = 0
+        const c = memo(
+            () => {
+                calls++
+                return 21 * 2
+            },
+            { crossRequest: true },
+        )
+
+        const first = runInScope(makeScope(), () => c())
+        const second = runInScope(makeScope(), () => c())
+
+        expect(first).toBe(42)
+        expect(second).toBe(42)
+        expect(calls).toBe(1)
     })
 })
 

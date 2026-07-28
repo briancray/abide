@@ -697,12 +697,53 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
         })
     })
 
-    test('a naming ttl or shared opts back onto the classic pulled path', async () => {
+    // `ttl` no longer opts a derivation off the auto-tracked path — retention and fill path are
+    // orthogonal. `ttl: 0` stales every stamp as it is written, so each read re-runs the body.
+    test('ttl: 0 re-runs the derivation on every read', async () => {
         await withScope(async () => {
             let runs = 0
             const ticker = memo(() => ++runs, { ttl: 0 })
             expect(await ticker(undefined as never)).toBe(1)
             expect(await ticker(undefined as never)).toBe(2)
+        })
+    })
+
+    // The read must stay SYNCHRONOUS under a ttl. Handing back a promise here is the failure ADR 0024 §3
+    // exists to prevent (it blanks the SSR text and refills a microtask later) — and `toBe(1)` would pass
+    // on a promise if it were awaited, so the shape is asserted directly.
+    test('a ttl keeps the derivation on the sync path (read is T, not a promise)', () => {
+        withScope(() => {
+            let runs = 0
+            const ticker = memo(() => ++runs, { ttl: 10_000 })
+            const first = ticker()
+            expect(first).toBe(1)
+            expect(first).not.toBeInstanceOf(Promise)
+            expect(ticker()).toBe(1) // inside the window: retained, not re-run
+            expect(runs).toBe(1)
+        })
+    })
+
+    test('a ttl expires the derivation even though no dependency changed', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const ticker = memo(() => ++runs, { ttl: 15 })
+            expect(ticker()).toBe(1)
+            expect(ticker()).toBe(1)
+            await delay(25)
+            expect(ticker()).toBe(2) // window elapsed, body re-ran on the next pull
+        })
+    })
+
+    test('a KEYED sync memo honors ttl per slot', async () => {
+        await withScope(async () => {
+            const runs: Record<'a' | 'b', number> = { a: 0, b: 0 }
+            const sized = memo(({ k }: { k: 'a' | 'b' }) => ++runs[k], { ttl: 15 })
+            expect(sized({ k: 'a' })).toBe(1)
+            expect(sized({ k: 'b' })).toBe(1)
+            expect(sized({ k: 'a' })).toBe(1) // retained
+            await delay(25)
+            expect(sized({ k: 'a' })).toBe(2)
+            expect(runs.b).toBe(1) // 'b' expired too, but nothing pulled it
         })
     })
 
@@ -1193,6 +1234,309 @@ describe('memo.state — the writable projection (ADR 0027 D7)', () => {
             expect(cell.untracked()).toBe(-5)
             expect(await loaded()).toBe(7)
             expect(cell.untracked()).toBe(7)
+        })
+    })
+})
+
+// The SWR refetch clock (`MemoOptions.throttle` / `debounce`). Every assertion here counts BODY RUNS,
+// not values: the contract is "does less work", and a wrong implementation that fires three loads
+// instead of one still resolves to the right number.
+describe('memo — the SWR refetch clock', () => {
+    test('throttle fires on the leading edge and coalesces the window into ONE trailing load', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(
+                async ({ id }: { id: number }) => {
+                    runs++
+                    return id * runs
+                },
+                { throttle: 80 },
+            )
+            await load({ id: 1 })
+            expect(runs).toBe(1)
+
+            load.refresh({ id: 1 }) // leading edge — runs at once
+            await tick()
+            expect(runs).toBe(2)
+
+            load.refresh({ id: 1 }) // all three land inside the window...
+            load.refresh({ id: 1 })
+            load.refresh({ id: 1 })
+            await tick()
+            expect(runs).toBe(2) // ...and none of them has fired yet
+
+            await delay(140)
+            expect(runs).toBe(3) // they were ONE trailing load, not three
+        })
+    })
+
+    test('debounce fires once after the window goes quiet, and every trigger restarts it', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(
+                async ({ id }: { id: number }) => {
+                    runs++
+                    return id * runs
+                },
+                { debounce: 80 },
+            )
+            await load({ id: 1 })
+            expect(runs).toBe(1)
+
+            load.refresh({ id: 1 })
+            await delay(40)
+            expect(runs).toBe(1) // nothing on the leading edge — this is the trailing form
+
+            load.refresh({ id: 1 }) // restarts the window
+            await delay(40)
+            expect(runs).toBe(1) // 80ms since the FIRST trigger, but never 80ms of quiet
+
+            await delay(140)
+            expect(runs).toBe(2)
+        })
+    })
+
+    test('a cold load is never deferred — there is no stale value to serve', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(
+                async ({ id }: { id: number }) => {
+                    runs++
+                    return id * runs
+                },
+                { debounce: 80 },
+            )
+            expect(await load({ id: 1 })).toBe(1)
+            expect(runs).toBe(1)
+        })
+    })
+
+    test('the retained value is served while a deferred revalidation waits, with refreshing up', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(
+                async ({ id }: { id: number }) => {
+                    runs++
+                    return id * runs * 10
+                },
+                { throttle: 80 },
+            )
+            expect(await load({ id: 1 })).toBe(10)
+
+            load.refresh({ id: 1 }) // leading edge
+            await tick()
+            expect(await load({ id: 1 })).toBe(20)
+
+            load.refresh({ id: 1 }) // deferred into the window
+            expect(load.refreshing({ id: 1 })).toBe(true)
+            expect(load.peek({ id: 1 })).toBe(20) // stale value still served...
+            expect(await load({ id: 1 })).toBe(20) // ...and the awaited read does not block on it
+
+            await delay(140)
+            expect(load.peek({ id: 1 })).toBe(30)
+            expect(load.refreshing({ id: 1 })).toBe(false)
+        })
+    })
+
+    // A scheduled revalidation of a value that has since been declared WRONG must not land later — the
+    // drop already arranges a lazy reload, and firing the deferred one would re-run the body twice.
+    test('invalidate cancels a scheduled revalidation', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(
+                async ({ id }: { id: number }) => {
+                    runs++
+                    return id * runs
+                },
+                { throttle: 80 },
+            )
+            await load({ id: 1 })
+            load.refresh({ id: 1 }) // leading edge
+            await tick()
+            expect(runs).toBe(2)
+
+            load.refresh({ id: 1 }) // deferred
+            load.invalidate({ id: 1 })
+            await delay(140)
+            expect(runs).toBe(2)
+        })
+    })
+
+    // Each slot is an independent refetch, so each gets its own window.
+    test('the window is per SLOT, not per memo', async () => {
+        await withScope(async () => {
+            const runs: Record<number, number> = { 1: 0, 2: 0 }
+            const load = memo(
+                async ({ id }: { id: number }) => {
+                    runs[id] = (runs[id] ?? 0) + 1
+                    return id
+                },
+                { throttle: 80 },
+            )
+            await load({ id: 1 })
+            await load({ id: 2 })
+            load.refresh() // both slots, both on their own leading edge
+            await tick()
+            expect(runs).toEqual({ 1: 2, 2: 2 })
+        })
+    })
+
+    test('throttle and debounce together are a loud construction error', () => {
+        expect(() =>
+            memo(async ({ id }: { id: number }) => id, { throttle: 10, debounce: 10 }),
+        ).toThrow(/two EDGES of one refetch clock/)
+    })
+
+    // A window nothing can leave would turn every refresh into a silent no-op — the exact failure the
+    // option exists to prevent. It reads as "no clock" instead.
+    test('an infinite window reads as NO clock', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(
+                async ({ id }: { id: number }) => {
+                    runs++
+                    return id * runs
+                },
+                { throttle: Number.POSITIVE_INFINITY },
+            )
+            await load({ id: 1 })
+            load.refresh({ id: 1 })
+            await tick()
+            expect(runs).toBe(2)
+        })
+    })
+
+    // Regression guard for the default path: a memo with no clock must reach `startLoad` unchanged.
+    test('with no clock a refresh still loads immediately and coalesces onto the in-flight run', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(async ({ id }: { id: number }) => {
+                runs++
+                return id * runs
+            })
+            await load({ id: 1 })
+            load.refresh({ id: 1 })
+            load.refresh({ id: 1 })
+            await tick()
+            expect(runs).toBe(2)
+        })
+    })
+
+    // On a DERIVATION the clock gates PUBLICATION, not the body: a derivation's dependency set is only
+    // knowable by running it, so the body still runs per change — what the window withholds is the
+    // result. This is the whole point of the feature for a typeahead: `q` moves per keystroke, but the
+    // value handed downstream (and therefore the args of any read keyed on it) moves once per pause.
+    test('a debounced derivation publishes once after quiet while its input keeps moving', async () => {
+        await withScope(async () => {
+            const query = state('')
+            const slow = memo(() => query(), { debounce: 80 })
+            // Something must be observing for a pull-driven gate to notice a change, exactly as for any
+            // lazy derived value.
+            const seen: string[] = []
+            effect(() => {
+                seen.push(slow())
+            })
+            expect(seen).toEqual([''])
+
+            query.set('a')
+            query.set('ab')
+            query.set('abc')
+            await tick()
+            expect(seen).toEqual(['']) // still withheld — the window has not gone quiet
+
+            await delay(140)
+            // ONE publication, and it is the NEWEST input, not the one that opened the window.
+            expect(seen).toEqual(['', 'abc'])
+        })
+    })
+
+    // The reason the gate reads its source at FIRE time rather than capturing it when armed.
+    test('a throttled derivation publishes on the leading edge, then the newest value once', async () => {
+        await withScope(async () => {
+            const query = state('')
+            const slow = memo(() => query(), { throttle: 80 })
+            const seen: string[] = []
+            effect(() => {
+                seen.push(slow())
+            })
+
+            query.set('a') // leading edge — the first real change publishes at once
+            await tick()
+            expect(seen).toEqual(['', 'a'])
+
+            query.set('ab') // inside the window
+            query.set('abc')
+            await tick()
+            expect(seen).toEqual(['', 'a'])
+
+            await delay(140)
+            expect(seen).toEqual(['', 'a', 'abc'])
+        })
+    })
+
+    // The typeahead case end to end: the read is keyed on the debounced value, so a changing `q` no
+    // longer means a request per keystroke.
+    test('a read keyed on a debounced derivation runs once per pause, not per keystroke', async () => {
+        await withScope(async () => {
+            let calls = 0
+            const query = state('')
+            const slow = memo(() => query(), { debounce: 80 })
+            const getQuery = memo(async ({ q }: { q: string }) => {
+                calls++
+                return q.length
+            })
+
+            // The bare call subscribes its caller, so this effect also re-runs when the read settles —
+            // which is why the assertions below count HANDLER CALLS rather than effect runs.
+            effect(() => {
+                void getQuery({ q: slow() })
+            })
+            await tick()
+            expect(calls).toBe(1) // the initial q === ''
+
+            for (const next of ['a', 'ab', 'abc', 'abcd']) query.set(next)
+            await tick()
+            expect(calls).toBe(1) // four keystrokes, no new request
+
+            await delay(140)
+            await tick()
+            expect(calls).toBe(2) // one request, for the settled query
+            expect(await getQuery({ q: 'abcd' })).toBe(4) // and it is the settled query that ran
+        })
+    })
+
+    // A derivation with nothing yet to show is the auto-path twin of a cold load.
+    test('the FIRST publication of a derivation is never deferred', async () => {
+        await withScope(async () => {
+            const query = state('seed')
+            const slow = memo(() => query(), { debounce: 80 })
+            expect(slow()).toBe('seed')
+        })
+    })
+
+    // `publish` stamps the run `merged` is serving. Stamped against the LIVE fill instead, an override
+    // written while the gate holds a newer fill back would land already-superseded and vanish.
+    test('a publish during a held-back window is not superseded by the fill it never saw', async () => {
+        await withScope(async () => {
+            const query = state('a')
+            const slow = memo(() => query(), { debounce: 80 })
+            const seen: string[] = []
+            effect(() => {
+                seen.push(slow())
+            })
+            expect(seen).toEqual(['a'])
+
+            query.set('b') // withheld
+            await tick()
+            expect(seen).toEqual(['a'])
+
+            slow.publish('local') // a provisional local write over the served value
+            await tick()
+            expect(seen).toEqual(['a', 'local'])
+
+            // The re-fill supersedes it, as `publish` on a derivation always does.
+            await delay(140)
+            expect(seen).toEqual(['a', 'local', 'b'])
         })
     })
 })

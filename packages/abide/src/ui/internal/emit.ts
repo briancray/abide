@@ -79,6 +79,22 @@ const MODULE_CACHE = new Map<string, Promise<EmittedModule>>()
 
 const INTERNAL_DIR = import.meta.dir
 
+// Inside a `bun build --compile` binary abide's own directory is the read-only virtual filesystem
+// (`/$bunfs/root`, `B:\~BUN\root` on Windows), so the SSR temp-module dance cannot run there — and its
+// failure would otherwise surface as a bare ENOENT naming a path nobody wrote. A compiled binary is
+// supposed to carry every page's server module as a pre-emitted static import (`emitServerTree`), so a
+// miss means the compile step and the render disagree about a source: say that, and say which page.
+const IN_COMPILED_BINARY = INTERNAL_DIR.startsWith('/$bunfs') || INTERNAL_DIR.includes('~BUN')
+
+function refuseRuntimeEmitInBinary(source: string, dir: string | undefined): void {
+    if (!IN_COMPILED_BINARY) return
+    throw new Error(
+        `abide: this compiled binary has no pre-emitted server module for ${dir ?? '<unknown dir>'} ` +
+            `(${source.slice(0, 80).replace(/\s+/g, ' ')}…) and cannot compile .abide at runtime. ` +
+            `Rebuild the executable with \`abide compile\`.`,
+    )
+}
+
 // An ordinary import passes through as a REAL import only if it can actually be resolved from where the
 // source lives. `sourceDir` is what makes that decidable — and it is absent for source-only callers (the
 // hermetic test harness, LSP snippets, `emitModuleSource(source)` in tests), where nothing is on disk to
@@ -149,7 +165,7 @@ export function loadEmittedServer(
     resolve?: ComponentResolver,
 ): Promise<EmittedServerModule> {
     if (resolve !== undefined) return instantiateServer(source, dir, resolve)
-    const key = `${dir ?? ''} ${source}`
+    const key = serverModuleKey(source, dir)
     const existing = SERVER_MODULE_CACHE.get(key)
     if (existing !== undefined) return existing
     const promise = instantiateServer(source, dir)
@@ -157,12 +173,42 @@ export function loadEmittedServer(
     return promise
 }
 
+function serverModuleKey(source: string, dir: string | undefined): string {
+    return `${dir ?? ''} ${source}`
+}
+
+// Seed the cache with a module emitted AHEAD of time (`abide compile`): the standalone binary carries
+// each page's server module as a static import, so `loadEmittedServer` must find it rather than try to
+// compile the `.abide` again — inside the binary there is no source tree to read and no writable
+// directory to emit into. Keyed identically to a runtime compile, so `renderPage`/`warmPages` are
+// unchanged and simply hit a warm cache.
+export function registerEmittedServer(
+    source: string,
+    dir: string,
+    module: EmittedServerModule,
+): void {
+    SERVER_MODULE_CACHE.set(serverModuleKey(source, dir), Promise.resolve(module))
+}
+
+// WHERE a tree of emitted modules is written and how each file is named. Two callers, two answers:
+// the SSR path writes throwaway siblings inside abide's own internal dir (so the runtime import
+// becomes a relative sibling and the name only has to be unique for this process), while `abide
+// compile` writes a durable tree into the app's build dir that Bun then bundles (so the runtime stays
+// the `abide/...` package specifier the app resolves, and the name must be stable — the same source
+// must produce the same file on every build for a reproducible binary).
+interface EmitTarget {
+    outDir: string
+    // True for the SSR temp path: the emitted module sits beside `runtime.ts`/`serverRuntime.ts`.
+    siblingRuntime: boolean
+    name(key: string, side: 'client' | 'server'): string
+}
+
 // Emit one side (`client`/`server`) of `source` — plus, recursively, every `.abide` component it
-// imports — to sibling temp modules, rewriting the runtime specifier and each component-import
-// specifier to the corresponding temp file (same string-replace technique as
-// `clientBundle.resolveCssImports`). `written` dedups by source (component-imports-component + diamond
-// imports share one temp module) AND guards import cycles (registered before recursing). Returns the
-// emitted module's sibling basename; `files` accumulates every written path for cleanup.
+// imports — into `target`, rewriting the runtime specifier and each component-import specifier to the
+// corresponding emitted file (same string-replace technique as `clientBundle.resolveCssImports`).
+// `written` dedups by source (component-imports-component + diamond imports share one module) AND
+// guards import cycles (registered before recursing). Returns the emitted module's basename; `files`
+// accumulates every written path (the SSR path cleans them up).
 async function emitTree(
     source: string,
     dir: string | undefined,
@@ -170,6 +216,7 @@ async function emitTree(
     resolve: TreeResolver | undefined,
     written: Map<string, string>,
     files: string[],
+    target: EmitTarget,
 ): Promise<string> {
     // Dedup + cycle guard by `dir + source` — the same file (identical source AND dir) shares one temp
     // module; a component-imports-component cycle re-enters with the same key and short-circuits.
@@ -178,14 +225,17 @@ async function emitTree(
     if (cached !== undefined) return cached
 
     const emitted = emitModuleSource(source, dir)
-    const runtimeFrom =
-        side === 'client' ? '"abide/ui/internal/runtime"' : '"abide/ui/internal/serverRuntime"'
-    const runtimeTo = side === 'client' ? '"./runtime.ts"' : '"./serverRuntime.ts"'
-    let src = (side === 'client' ? emitted.client : emitted.server).replace(runtimeFrom, runtimeTo)
+    let src = side === 'client' ? emitted.client : emitted.server
+    if (target.siblingRuntime) {
+        const runtimeFrom =
+            side === 'client' ? '"abide/ui/internal/runtime"' : '"abide/ui/internal/serverRuntime"'
+        const runtimeTo = side === 'client' ? '"./runtime.ts"' : '"./serverRuntime.ts"'
+        src = src.replace(runtimeFrom, runtimeTo)
+    }
 
-    // The compiled module is written into abide's own internal dir, not next to the `.abide`, so an
-    // ordinary import ("./util.ts", "@scope/pkg", "$shared/x") would resolve against the wrong base.
-    // Rewrite each to an absolute path resolved from the SOURCE's dir before it is written.
+    // The compiled module is written elsewhere than next to the `.abide`, so an ordinary import
+    // ("./util.ts", "@scope/pkg", "$shared/x") would resolve against the wrong base. Rewrite each to an
+    // absolute path resolved from the SOURCE's dir before it is written.
     for (const binding of emitted.analysis.moduleImports) {
         const absolute = resolvePassThroughImport(binding.specifier, dir)
         src = src.replaceAll(
@@ -194,8 +244,7 @@ async function emitTree(
         )
     }
 
-    const id = `${process.pid}-${Date.now()}-${counter++}`
-    const basename = `.emit-${id}.${side}.ts`
+    const basename = target.name(key, side)
     written.set(key, basename) // register before recursion (cycle guard)
 
     for (const componentImport of emitted.analysis.componentImports) {
@@ -205,17 +254,76 @@ async function emitTree(
             )
         }
         const child = await resolve(componentImport.specifier, componentImport.local, dir)
-        const childBasename = await emitTree(child.source, child.dir, side, resolve, written, files)
+        const childBasename = await emitTree(
+            child.source,
+            child.dir,
+            side,
+            resolve,
+            written,
+            files,
+            target,
+        )
         src = src.replaceAll(
             `from ${JSON.stringify(componentImport.specifier)}`,
             `from ${JSON.stringify(`./${childBasename}`)}`,
         )
     }
 
-    const file = `${INTERNAL_DIR}/${basename}`
+    const file = `${target.outDir}/${basename}`
     await Bun.write(file, src)
     files.push(file)
     return basename
+}
+
+// The SSR path's target: throwaway siblings inside abide's internal dir, unique per process.
+function temporaryTarget(): EmitTarget {
+    return {
+        outDir: INTERNAL_DIR,
+        siblingRuntime: true,
+        name: (_key, side) => `.emit-${process.pid}-${Date.now()}-${counter++}.${side}.ts`,
+    }
+}
+
+// One page/layout/component's AOT-emitted server module, as `abide compile` wrote it.
+export interface EmittedServerFile {
+    source: string
+    dir: string
+    // Absolute path of the emitted `.ts` module (its `render` is the same one SSR would have built).
+    file: string
+}
+
+// AOT: emit the server module tree for every entry into `outDir` and return where each landed
+// (BP1.6). This is what makes a standalone binary possible at all — the SSR path compiles a `.abide`
+// by writing a temp module next to abide's runtime and importing it, and a compiled binary can do
+// neither (its own directory is the read-only `/$bunfs/root`, and the app's source is not on the
+// deploy machine). Emitting the identical modules at build time turns that runtime step into ordinary
+// static imports the bundler can follow. Names are content-derived, so the same source always yields
+// the same file and the build is reproducible.
+export async function emitServerTree(
+    entries: { source: string; dir: string }[],
+    outDir: string,
+): Promise<EmittedServerFile[]> {
+    const written = new Map<string, string>()
+    const files: string[] = []
+    const target: EmitTarget = {
+        outDir,
+        siblingRuntime: false,
+        name: (key) => `abide-${Bun.hash(key).toString(36)}.server.ts`,
+    }
+    const emitted: EmittedServerFile[] = []
+    for (const entry of entries) {
+        const basename = await emitTree(
+            entry.source,
+            entry.dir,
+            'server',
+            filesystemResolver,
+            written,
+            files,
+            target,
+        )
+        emitted.push({ source: entry.source, dir: entry.dir, file: `${outDir}/${basename}` })
+    }
+    return emitted
 }
 
 async function instantiateServer(
@@ -223,9 +331,19 @@ async function instantiateServer(
     dir?: string,
     resolve?: ComponentResolver,
 ): Promise<EmittedServerModule> {
+    refuseRuntimeEmitInBinary(source, dir)
     const files: string[] = []
     const treeResolve = resolve !== undefined ? harnessResolver(resolve) : filesystemResolver
-    const serverBasename = await emitTree(source, dir, 'server', treeResolve, new Map(), files)
+    const target = temporaryTarget()
+    const serverBasename = await emitTree(
+        source,
+        dir,
+        'server',
+        treeResolve,
+        new Map(),
+        files,
+        target,
+    )
     try {
         const serverMod = (await import(
             pathToFileURL(`${INTERNAL_DIR}/${serverBasename}`).href
@@ -241,6 +359,7 @@ async function instantiateServer(
 async function instantiate(source: string, resolve?: ComponentResolver): Promise<EmittedModule> {
     const files: string[] = []
     const treeResolve = resolve !== undefined ? harnessResolver(resolve) : undefined
+    const target = temporaryTarget()
     const clientBasename = await emitTree(
         source,
         undefined,
@@ -248,6 +367,7 @@ async function instantiate(source: string, resolve?: ComponentResolver): Promise
         treeResolve,
         new Map(),
         files,
+        target,
     )
     const serverBasename = await emitTree(
         source,
@@ -256,6 +376,7 @@ async function instantiate(source: string, resolve?: ComponentResolver): Promise
         treeResolve,
         new Map(),
         files,
+        target,
     )
     try {
         const clientMod = (await import(

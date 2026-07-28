@@ -34,7 +34,15 @@ export type PageLoader = () => Promise<{ default: PageEntry }>
 
 export type RpcSpecs = Record<
     string,
-    { method: string; read: boolean; shared?: boolean; memo?: boolean; ttl?: number | null }
+    {
+        method: string
+        read: boolean
+        crossRequest?: boolean
+        memo?: boolean
+        ttl?: number | null
+        tags?: string[]
+        timeout?: number
+    }
 >
 
 export type SocketSpecs = Record<string, SocketSpec>

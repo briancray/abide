@@ -18,6 +18,7 @@ import {
 } from '../../shared/internal/decodeStreamResponse.ts'
 import { isTypedError } from '../../shared/internal/isTypedError.ts'
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
+import { applyTagFrame } from '../../shared/internal/memoTags.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import type {
@@ -26,9 +27,9 @@ import type {
     RpcCallSurface,
 } from '../../shared/internal/rpcSurface.ts'
 import { withAbort } from '../../shared/internal/withAbort.ts'
-import { memo } from '../../shared/memo.ts'
+import { type MemoOptions, memo } from '../../shared/memo.ts'
 import { applyMemoFrame } from './applyMemoFrame.ts'
-import { subscribeMemoChannel } from './mux.ts'
+import { subscribeMemoChannel, subscribeTagChannel } from './mux.ts'
 
 // An HttpError-like carrier for a non-2xx RPC response. Mirrors the `abide/shared/HttpError`
 // shape (status/statusText/kind?/data?) so client code can narrow on it without importing the
@@ -142,9 +143,12 @@ export function clientProxy<Args = unknown, T = unknown>(
     method: string,
     opts?: {
         base?: string
-        shared?: boolean
+        crossRequest?: boolean
         memo?: boolean
         ttl?: number | null
+        tags?: string[]
+        throttle?: number
+        debounce?: number
         timeout?: number
     },
 ): RpcCallSurface<Args, T> | MutationCallSurface<Args, T> {
@@ -206,18 +210,27 @@ export function clientProxy<Args = unknown, T = unknown>(
     // The client memo carries the deadline too, so a timed-out slot EXPIRES rather than caching its
     // TimeoutError for the rest of a read's infinite ttl (ADR 0028 D7). The fetch above is already
     // armed; this is what makes the next read run cold instead of re-rejecting from the slot.
-    const backing =
-        ttl === null || ttl === undefined
-            ? memo<Args, T>(loadForMemo, { timeout })
-            : memo<Args, T>(loadForMemo, { ttl, timeout })
+    // Tags reach the CLIENT memo (rpc-core §8): the tag verbs are isomorphic, so a `refresh({ tags })`
+    // or `invalidate({ tags })` in the browser selects this proxy's memo and re-runs every live slot —
+    // one registration per rpc, since a client proxy is a module singleton with one slot per args-key.
+    const tags = opts?.tags
+    // The SWR refetch clock (rpc-core §3) reaches the CLIENT memo for the same reason `ttl` and `tags`
+    // do — it is bilateral — and this is the half that earns it: a socket broadcast storm calling
+    // `fn.refresh()` is a browser-side stream of triggers, which is exactly what the clock collapses.
+    const memoOptions: MemoOptions = { timeout }
+    if (ttl !== null && ttl !== undefined) memoOptions.ttl = ttl
+    if (tags !== undefined && tags.length > 0) memoOptions.tags = tags
+    if (opts?.throttle !== undefined) memoOptions.throttle = opts.throttle
+    if (opts?.debounce !== undefined) memoOptions.debounce = opts.debounce
+    const backing = memo<Args, T>(loadForMemo, memoOptions)
 
-    // A `shared` route broadcasts cache verbs on its `(rpc,args)` channel (rpc-core §8). On the FIRST
-    // read for a given args the browser memo auto-joins that channel and mirrors inbound frames through
-    // its own verbs. Dedup by canonicalKey; a non-shared route never subscribes. No-op under SSR.
-    const shared = opts?.shared === true
+    // A `crossRequest` route broadcasts cache verbs on its `(rpc,args)` channel (rpc-core §8). On the
+    // FIRST read for a given args the browser memo auto-joins that channel and mirrors inbound frames
+    // through its own verbs. Dedup by canonicalKey; a per-request route never subscribes. No-op under SSR.
+    const crossRequest = opts?.crossRequest === true
     const subscribed = new Set<string>()
     const ensureSubscribed = (args: Args): void => {
-        if (!shared) return
+        if (!crossRequest) return
         const key = canonicalKey(args)
         if (subscribed.has(key)) return
         subscribed.add(key)
@@ -227,6 +240,31 @@ export function clientProxy<Args = unknown, T = unknown>(
             (frame) => applyMemoFrame(backing, args, frame),
             base,
         )
+    }
+
+    // A TAGGED route additionally joins one `@tag:<tag>` channel per declared tag, so a server-side
+    // `refresh/invalidate({ tags })` reaches this browser. This is what makes the tag verbs work for a
+    // read that is NOT `crossRequest`: the `@rpc:` channel above is per-`(rpc,args)` and only a
+    // crossRequest route has one, whereas a tag frame is addressed to the tag itself.
+    //
+    // Joined once per proxy on first read (not per args) — a tag is not keyed. `muxSubscribe` dedups on
+    // the channel name, so several proxies sharing a tag still open exactly one subscription. The
+    // inbound frame drives the LOCAL registry, which reaches every memo carrying the tag, this one
+    // included; `applyTagFrame` deliberately does not re-publish.
+    let tagsJoined = false
+    const ensureTagsSubscribed = (): void => {
+        if (tagsJoined || tags === undefined || tags.length === 0) return
+        tagsJoined = true
+        for (const tag of tags) {
+            subscribeTagChannel(
+                tag,
+                (frame) => {
+                    if (frame.verb === 'publish') return // a tag channel carries no value
+                    applyTagFrame(tag, frame.verb)
+                },
+                base,
+            )
+        }
     }
 
     // THE CALL (Promise-read model): a memoed read or mutation routes through the memo (coalesce +
@@ -242,10 +280,12 @@ export function clientProxy<Args = unknown, T = unknown>(
             return load(args, options?.signal)
         }
         ensureSubscribed(args as Args)
+        ensureTagsSubscribed()
         return withAbort(backing(args as Args), options?.signal)
     }) as unknown as RpcCallSurface<Args, T>
     rpc.peek = (args: Args): T | undefined => {
         ensureSubscribed(args)
+        ensureTagsSubscribed()
         return backing.peek(args)
     }
     rpc.pending = (args: Args): boolean => backing.pending(args)
@@ -306,9 +346,12 @@ export function makeClientImports(
         {
             method: string
             read: boolean
-            shared?: boolean
+            crossRequest?: boolean
             memo?: boolean
             ttl?: number | null
+            tags?: string[]
+            throttle?: number
+            debounce?: number
             timeout?: number
         }
     >,
@@ -316,14 +359,19 @@ export function makeClientImports(
 ): Record<string, unknown> {
     const imports: Record<string, unknown> = {}
     for (const [name, spec] of Object.entries(specs)) {
-        imports[name] = clientProxy(name, spec.method, {
+        const proxyOptions: Parameters<typeof clientProxy>[2] = {
             base: base ?? '',
-            shared: spec.shared === true,
+            crossRequest: spec.crossRequest === true,
             // Absent → memoed (default); only an explicit `false` opts the call out of the memo.
             memo: spec.memo !== false,
             ttl: spec.ttl ?? null,
             timeout: spec.timeout ?? 0,
-        })
+        }
+        // Only when present — `exactOptionalPropertyTypes` rejects an explicit `tags: undefined`.
+        if (spec.tags !== undefined) proxyOptions.tags = spec.tags
+        if (spec.throttle !== undefined) proxyOptions.throttle = spec.throttle
+        if (spec.debounce !== undefined) proxyOptions.debounce = spec.debounce
+        imports[name] = clientProxy(name, spec.method, proxyOptions)
     }
     return imports
 }

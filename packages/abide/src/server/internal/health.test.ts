@@ -2,7 +2,7 @@
 // fail-closed, request scope).
 
 import { describe, expect, test } from 'bun:test'
-import { identity } from '../identity.ts'
+import { identity } from '../../shared/identity.ts'
 import { createApp } from './router.ts'
 
 async function fetchHealth(config: Parameters<typeof createApp>[0]): Promise<Response> {

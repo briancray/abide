@@ -76,6 +76,40 @@ Opt-in deliberately crosses requests, so the auth-free property is made *structu
   for per-request use) or an explicit `key` opt (§6).
 - **TTL** = `ttl: <ms>` option **everywhere**, default **∞** (entries are retained until
   explicitly `invalidate`/`refresh`; SWR-style retained-value store, not time-expiry).
+- **Refetch clock** = `throttle: <ms>` **or** `debounce: <ms>` (never both — a memo carrying both is a
+  construction-time `TypeError`; they are the two edges of one clock). Rate-limits **explicit
+  revalidation** of a slot that already holds a value — `fn.refresh()`, a tag `refresh({ tags })`, a
+  broadcast-driven refresh. `throttle` fires on the **leading edge** then coalesces every trigger inside
+  the window into **one** trailing load; `debounce` fires **after quiet**, each trigger restarting the
+  window. The window is **per slot** (50 keyed slots = 50 independent refetches) and its origin is the
+  last load *this clock* started, so a `refresh()` shortly after a cold load still fires on the leading
+  edge.
+  - **What it does not gate**, each deliberately: a **cold** load (no stale value to serve, so
+    deferring only delays first paint); **`invalidate`** (a discard deferred serves known-wrong data,
+    and it cancels any scheduled revalidation instead); and the **`ttl`-expiry re-fill** on the read
+    path, which is already a leading-edge rate limit on the same slot — `ttl` bounds how long a value
+    is served, the clock bounds how fast a trigger stream may fire loads, and stacking them would put
+    two windows in series over one refetch.
+  - **During the window** the retained value keeps being served (`await fn()` does **not** block on the
+    deferred load) and `refreshing()` is **true**: a revalidation is genuinely outstanding, it just has
+    not started.
+  - **On an AUTO-TRACKED memo** (argless + synchronous body) the same clock gates what the derivation
+    **publishes**: `memo(() => q(), { debounce: 300 })` keeps serving the admitted value while `q`
+    moves, and publishes the newest once the window closes. It does NOT gate how often the body runs —
+    a derivation's dependency set is only knowable by running it, so learning that an input moved means
+    running it. That is the right split for the case it exists for: the derivation is trivial and the
+    expensive work is downstream, seeing only admitted values. The first publication is never deferred
+    (the twin of a cold load), and the first real CHANGE still fires on throttle's leading edge.
+  - **This is how a read whose ARGS keep changing is rate-limited.** The load-path clock is per slot, so
+    `getQuery({ q })` with a moving `q` is a new slot and a cold load every time — three keystrokes are
+    three requests no matter what `throttle` says. Debounce the INPUT instead and the read is keyed on a
+    value that moves once per pause: `getQuery({ q: slow() })`. Gating the load side across args-keys
+    was considered and rejected — a new key has no value to serve, so the read would have to block, and
+    throttle would need a "last args wins" rule plus keep-previous-value to avoid a blank UI.
+  - **Cost:** a clocked derivation's gate is armed from `merged`'s own pull, so it needs an observer to
+    notice a change — the same laziness every derived value has. Nothing is armed from an `effect`,
+    deliberately: `effect()` hands its disposer to the innermost open effect scope, so a module-level
+    memo first read inside a component `<script>` would lose its clock when that component unmounted.
 - **Eviction bounds:**
   - Client per-session cache: ∞, no eviction. Self-limited (dies on tab close). Accepted.
   - Server per-request cache: ∞ is moot (dies with request).
@@ -516,7 +550,7 @@ pages — nothing is reserved outside `/__abide/*`.
 ## RPC options (consolidated)
 
 `{ schemas: { input?, output?, files? }, clients: { browser?, mcp?, cli? },
-crossOrigin?, maxBodySize?, timeout?, memo: { ttl?, crossRequest?, tags?, … } }`
+crossOrigin?, maxBodySize?, timeout?, memo: { ttl?, crossRequest?, tags?, throttle?, debounce?, … } }`
 (+ `stream` is not a flag — any handler may return a stream by returning `jsonl`/`sse`.)
 
 ---
@@ -526,7 +560,7 @@ crossOrigin?, maxBodySize?, timeout?, memo: { ttl?, crossRequest?, tags?, … } 
 - **Byte-measuring wrapped third-party values** for the shared-cache ceiling (§2.4).
 - **`.abide` template compiler** — second essential slice; only its reactivity substrate
   (§7) is shared and specced here.
-- **Full socket API** (`tail`, `ttl`, `clientPublish`, `schema`, `clients`) — the socket
+- **Full socket API** (`tail`, `maxAge`, `clientPublish`, `schema`, `clients`) — the socket
   multiplexer is used as the broadcast channel (§8) but its full surface is a later slice.
 - **`src/app.ts` AppModule hooks**, `env(schema)` boot config, observability
   (`health`/`online`/`reachable`/`log`/`trace`), desktop `bundle`, `abide compile/cli`

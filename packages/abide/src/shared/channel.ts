@@ -52,10 +52,10 @@ function inRender(): boolean {
 
 export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T, Args> {
     // Built once (same for every room). Only set present keys — exactOptionalPropertyTypes rejects
-    // `{ tail: undefined }` against `tail?: number`. `maxAge` is the channel's name for the hub's `ttl`.
+    // `{ tail: undefined }` against `tail?: number`.
     const hubOptions: ChannelHubOptions = {}
     if (options.tail !== undefined) hubOptions.tail = options.tail
-    if (options.maxAge !== undefined) hubOptions.ttl = options.maxAge
+    if (options.maxAge !== undefined) hubOptions.maxAge = options.maxAge
 
     // One ChannelHub per room, keyed by canonicalKey(args). `Args = void` → a single hub under the void key.
     const hubs = new Map<string, ChannelHub<T>>()

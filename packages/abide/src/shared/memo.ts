@@ -37,7 +37,15 @@ import { isThenable } from './internal/isThenable.ts'
 import { isTimeoutError } from './internal/isTimeoutError.ts'
 import { registerTaggedMemo } from './internal/memoTags.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
-import { type Computed, computed, effect, type State, state, untrack } from './internal/reactive.ts'
+import {
+    type Computed,
+    computed,
+    effect,
+    onEffectScopeDispose,
+    type State,
+    state,
+    untrack,
+} from './internal/reactive.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import {
     exitScope,
@@ -139,8 +147,13 @@ interface Slot<Args, T> {
     streamTick?: State<number>
     // AUTO-TRACKED backing (ADR 0024 §1-3), installed only once the first run of an argless `fn` has
     // proved it produces a plain value synchronously. While it is set, this slot's whole state machine
-    // lives in the computed graph below and `state`/`inflight`/`loadedAt` go unused.
+    // lives in the computed graph below and `state`/`inflight` go unused — `loadedAt` is still stamped,
+    // because a `ttl` expires an auto slot exactly as it expires a pulled one.
     auto?: AutoBacking<T>
+    // The last auto state byte-accounted against a bounded store. `merged` hands back the SAME object
+    // when nothing observably changed, so comparing identity keeps `measureBytes` off the read path and
+    // charges the ceiling only on a real re-fill.
+    autoRecorded?: SlotState<T>
     // True once the fill mode has been decided for this slot, so `fn` is classified exactly once.
     modeResolved?: boolean
     // SETTLED BUT IMMEDIATELY EXPIRED — how a timed-out run is retained (ADR 0028 D7). `fn.error()` reads
@@ -150,6 +163,19 @@ interface Slot<Args, T> {
     // and vanish, and a `loadedAt` stamp cannot express it: `isExpired` short-circuits on `ttl ===
     // Infinity` before consulting the clock, and `Infinity` is exactly a read's default ttl.
     expired: boolean
+    // The SWR refetch clock's per-slot window (`MemoOptions.throttle`/`debounce`). Allocated lazily on
+    // the first gated trigger, so a memo with no clock configured — every memo today — carries one
+    // undefined field and never builds this.
+    clock?: RefetchClock
+}
+
+// One slot's refetch window. `timer` non-undefined means a deferred load is ALREADY scheduled, which is
+// what makes throttle coalesce (a further trigger sees it and returns) and debounce restart (it clears
+// and re-arms). `lastRunAt` is the leading edge: the ms epoch of the last load this clock started, so
+// the throttle window is measured from a load that a TRIGGER caused rather than from any load at all.
+interface RefetchClock {
+    timer: ReturnType<typeof setTimeout> | undefined
+    lastRunAt: number
 }
 
 // One run of an AUTO-TRACKED fill. `run` counts fills of this slot. `deferred` carries the produced value
@@ -172,6 +198,24 @@ interface AutoBacking<T> {
     merged: Computed<SlotState<T>>
     // Whether a fill has run, so `snapshot()` reports a filled slot without forcing a cold one to run.
     filled: () => boolean
+    // The run `merged` is currently SERVING. Equal to `fill`'s latest except while a refetch clock is
+    // holding a newer fill back, which is exactly when a `publish` override must not stamp the live one.
+    currentRun: () => number
+}
+
+// The refetch clock on a DERIVATION: one gated auto backing's publication window. `admitted` is the
+// fill `merged` serves; `null` until the first pull, which publishes immediately (a derivation with
+// nothing yet to show is the auto-path twin of a cold load).
+//
+// Structurally close to `RefetchClock` but deliberately not shared with it: that one gates a CALL and
+// holds nothing, this one gates a PUBLICATION and holds the value being withheld. Merging them would
+// mean one shape where half the fields are dead on each path.
+interface AutoGate<T> {
+    tick: State<number>
+    admitted: AutoFill<T> | null
+    timer: ReturnType<typeof setTimeout> | undefined
+    lastRunAt: number
+    source: Computed<AutoFill<T>> | undefined
 }
 
 // SERVER-ONLY broadcast sink (rpc-core §8, PR2). A crossRequest memo calls this when a verb changes a
@@ -218,6 +262,38 @@ export interface MemoOptions {
     // 5-minute `ABIDE_RPC_TIMEOUT` ceiling is an RPC policy, resolved in `makeRpc`, not a property of
     // memoization. A derivation that reads three cells has no run to bound.
     timeout?: number
+    // The SWR REFETCH CLOCK, leading-edge. Rate-limits explicit REVALIDATION of a slot that already
+    // holds a value — `fn.refresh()`, a tag `refresh({ tags })`, a broadcast-driven refresh. The first
+    // trigger runs the load immediately; every trigger arriving within `throttle` ms of it is COALESCED
+    // into ONE trailing load fired at the end of the window. In ms; absent/0 = no clock.
+    //
+    // What it does NOT gate, and why each is deliberate: a COLD load (there is no stale value to serve,
+    // so deferring it only delays first paint); `invalidate()` (it means "this is wrong, discard it" —
+    // deferring a discard serves known-wrong data, and the reload it schedules is lazy anyway); and the
+    // `ttl`-expiry re-fill on the read path, which is ALREADY a leading-edge rate limit on exactly that
+    // slot. The two clocks measure different streams — `ttl` bounds how long a value is served, this
+    // bounds how fast a stream of triggers may fire loads — and stacking them would put two windows in
+    // series over one refetch with no rule for which wins.
+    //
+    // The window's origin is the last load THIS CLOCK started, not the last load of any kind: a cold read
+    // is not a trigger, so a `refresh()` landing 10ms after the initial load still fires on the leading
+    // edge. The clock is PER SLOT — `refresh()` across 50 keyed slots gives 50 independent windows,
+    // because they are 50 independent refetches.
+    //
+    // During a deferred window `refreshing()` is TRUE and the retained value keeps being served: a
+    // revalidation is genuinely outstanding, it just has not started, and a spinner that stayed dark
+    // until the trailing edge would read as a dropped click.
+    throttle?: number
+    // The SAME SWR refetch clock, trailing-edge: fire after quiet. Every trigger RESTARTS the window, so
+    // the load runs `debounce` ms after the LAST trigger. Identical in every other respect to `throttle`
+    // — same trigger set, same per-slot window, same stale-serving and `refreshing()` behaviour.
+    //
+    // Set `throttle` OR `debounce`, never both: they are two edges of one clock, and a memo carrying both
+    // is a loud construction-time TypeError rather than a silent precedence rule. Not enforced in the
+    // type (an exclusive union would infect every `MemoOptions` build site, several of which assign
+    // fields incrementally) — the throw is the enforcement, matching this file's other construction
+    // guards.
+    debounce?: number
     // INTERNAL (set by `makeRpc`, never by an author): this memo wraps a LOADER — an rpc handler —
     // rather than a derivation. An async body is the expected shape for a loader, so the auto-tracking
     // diagnostic (ADR 0027 D8) does not apply and would fire on every zero-arg rpc as pure noise.
@@ -226,11 +302,12 @@ export interface MemoOptions {
     loader?: boolean
 }
 
-// Options an AUTO-TRACKED memo may carry (ADR 0024 §1-3). `ttl` and `crossRequest` are retention policies
-// for a PULLED value; a synchronous derivation has nothing to retain and no cross-request identity, so
-// naming either one is what opts a memo back onto the classic promise path — the type and the runtime
-// classifier agree on that (see the overloads on `memo`).
-export type SyncMemoOptions = Omit<MemoOptions, 'ttl' | 'crossRequest'>
+// A synchronous memo carries the SAME options as a loading one. `ttl`/`crossRequest` were once omitted
+// here AND used as the fill-path classifier, which conflated two orthogonal questions: a sync body says
+// how the value is PRODUCED, `ttl`/`crossRequest` say how long it is KEPT and in which store. Both have
+// an answer for a derivation — "recompute at most every N ms", "keep it in the process-global store" —
+// so the path is now decided only by `fn.length` and by what the first run returns.
+export type SyncMemoOptions = MemoOptions
 
 // A `memo` is the SCOPED / LOSSLESS / PULL implementation of the shared `ReactiveReadSurface` (the
 // probe/verb vocabulary — peek/pending/refreshing/error/chunks/done/refresh/invalidate/publish/watch,
@@ -377,6 +454,14 @@ function streamBufferCap(): number {
     return positiveEnvBytes('ABIDE_MAX_STREAM_BUFFER_SIZE')
 }
 
+// Normalize a `throttle`/`debounce` option to a usable window. 0 means "no clock", and so do the two
+// values that would otherwise arm a timer no trigger can ever escape: `Infinity` (a window that never
+// ends would turn every `refresh()` into a silent no-op) and a negative. NaN falls out the same way.
+function clockWindow(ms: number | undefined): number {
+    if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return 0
+    return ms
+}
+
 // Byte measure for LRU accounting: the settled value's JSON length. Unrepresentable values
 // (circular / functions) fall back to 0 rather than throwing on a happy-path settle.
 function measureBytes(value: unknown): number {
@@ -520,19 +605,39 @@ export function memo<Args, T>(
     // 0 = unbounded (ADR 0028 D9's declared opt-out and a plain derivation's default alike), which is
     // what `withDeadline` and the stream watchdog both read as "arm nothing".
     const timeoutMs = opts?.timeout ?? 0
+    // The SWR refetch clock. Normalized to a non-negative finite number so an `Infinity` (which would
+    // arm a timer that never fires, silently killing every revalidation) or a negative reads as "no
+    // clock" rather than as a window nothing can leave.
+    const throttleMs = clockWindow(opts?.throttle)
+    const debounceMs = clockWindow(opts?.debounce)
+    if (throttleMs > 0 && debounceMs > 0) {
+        throw new TypeError(
+            'memo: `throttle` and `debounce` are the two EDGES of one refetch clock — set one, not ' +
+                'both. `throttle` fires on the leading edge then coalesces the window; `debounce` ' +
+                'fires after the window goes quiet.',
+        )
+    }
+    // One number for the read path: which edge is active is a separate boolean, so the hot guard
+    // (`clockMs === 0`) is a single compare on every memo that configured no clock at all.
+    const clockMs = throttleMs > 0 ? throttleMs : debounceMs
+    const clockIsDebounce = debounceMs > 0
     const id = opts?.key ?? `memo#${++memoCounter}`
     // `crossRequest` is server-only; on the client it is inert (falls through to the client cache).
     const crossRequest = opts?.crossRequest === true && !isBrowser
     const notify = opts?.notify
-    // Tags are honored only on a crossRequest (server) memo — the tag registry is a server concept.
-    const tags = crossRequest ? (opts?.tags ?? []) : []
+    // Tags are ISOMORPHIC. They were once dropped unless `crossRequest`, which — since `crossRequest` is
+    // forced false in a browser one line above — meant a client memo could never carry one: `tags` went in
+    // and nothing came out, and the `refresh({ tags })` that was supposed to act on them matched an empty
+    // registry in silence. Nothing in a tag verb is server machinery (`memoTags.ts`), so the gate was
+    // describing where `crossRequest` runs, not where tags can.
+    const tags = opts?.tags ?? []
 
-    // Could this memo take the AUTO-TRACKED path (ADR 0024 §1-2)? Only an argless `fn` declares no inputs,
-    // and only a memo with no retention policy has nothing to retain: an explicit `ttl` (including the
-    // `ttl: 0` a `memo: false` read compiles to) or `crossRequest: true` keeps the classic pulled machinery,
-    // which is also what the `SyncMemoOptions` overload encodes so types and runtime cannot disagree.
+    // Could this memo take the AUTO-TRACKED path (ADR 0024 §1-2)? Only an argless `fn` declares no inputs.
+    // Retention no longer disqualifies it: `ttl` expires an auto slot exactly as it expires a pulled one
+    // (the read below consults `isExpired` and re-fills), and `crossRequest` only chooses which store the
+    // slot lives in — `slots()` already routes that, and the backing rides the slot.
     // Whether it ACTUALLY takes it is decided by the first run — see `resolveMode`.
-    const autoEligible = fn.length === 0 && ttl === Infinity && !crossRequest
+    const autoEligible = fn.length === 0
 
     // ADR 0027 D8 — the auto-tracking diagnostic.
     //
@@ -563,7 +668,10 @@ export function memo<Args, T>(
     // ADR 0024 §3). It does NOT get the auto-tracked backing: its args are the whole dependency set, so the
     // body runs untracked and the value lives in the ordinary slot state machine, which is what keeps a
     // hydration `seed`, a `publish`, and `invalidate` authoritative over it.
-    const keyedSyncEligible = fn.length > 0 && ttl === Infinity && !crossRequest
+    // `ttl`/`crossRequest` are no bar here either — and this path needed nothing new to honor them:
+    // `readKeyedSync` already gates its short-circuit on `isExpired` and stamps `loadedAt`, and the slot
+    // it reads already comes from `slots()`, which is the shared store when `crossRequest`.
+    const keyedSyncEligible = fn.length > 0
     // Undecided until the first run proves it, exactly like `resolveMode`.
     let keyedSync: boolean | undefined
     if (fn.length === 0 && declaresParameters(fn)) {
@@ -601,6 +709,20 @@ export function memo<Args, T>(
         if (isBrowser) return undefined
         if (cache === sharedStore() || cache === serverDefaultScope()?.slots) return cache
         return undefined
+    }
+
+    // Run `fn` for the KEYED SYNC path — untracked (its args are the whole dependency set) and, when the
+    // value is destined for the shared store, scope-exited. The other two paths carry the same rule at
+    // their own call sites, because each needs a different half of it: the classic path wraps a promise
+    // (`exitScope(runLoad)`), and the auto backing must stay tracked, so it exits the scope alone.
+    //
+    // Fail-closed checkpoint (a) is not a property of the ASYNC path, it is a property of `crossRequest`:
+    // a handler whose value outlives the request must not be able to read that request's ambients, or the
+    // first caller's identity is what every later caller gets served. Both sync paths reach the shared
+    // store now, so both owe the same isolation.
+    function runBody<R>(call: () => R): R {
+        if (!crossRequest) return untrack(call)
+        return exitScope(() => untrack(call))
     }
 
     // Fail-closed checkpoint (b), rpc-core §2: a crossRequest read must run inside an active request scope
@@ -806,6 +928,128 @@ export function memo<Args, T>(
         return promise
     }
 
+    // ---- The SWR refetch clock (`MemoOptions.throttle` / `debounce`) -----------------------------
+    // Gates the EXPLICIT revalidation of a slot — `refresh`, tag-refresh — and nothing else. A cold load,
+    // an `invalidate`, and the ttl-expiry re-fill all reach `startLoad` directly, for the reasons the
+    // option docs give. With no clock configured this is one compare and a tail call.
+
+    // A trigger arrived. Run the load now, or schedule it and let the retained value keep being served.
+    function scheduleRefresh(slot: Slot<Args, T>): void {
+        if (clockMs === 0) {
+            startLoad(slot, true)
+            return
+        }
+        let clock = slot.clock
+        if (clock === undefined) {
+            clock = { timer: undefined, lastRunAt: 0 }
+            slot.clock = clock
+        }
+        if (clockIsDebounce) {
+            // Fire after quiet: every trigger restarts the window.
+            if (clock.timer !== undefined) clearTimeout(clock.timer)
+            armRefreshing(slot)
+            clock.timer = deferFire(slot, clockMs)
+            return
+        }
+        // Throttle. A timer already armed IS the coalesced trailing fire — a further trigger inside the
+        // window is exactly what it represents, so it returns rather than arming a second one.
+        if (clock.timer !== undefined) return
+        const now = Date.now()
+        const since = now - clock.lastRunAt
+        if (since >= clockMs) {
+            clock.lastRunAt = now
+            startLoad(slot, true)
+            return
+        }
+        armRefreshing(slot)
+        clock.timer = deferFire(slot, clockMs - since)
+    }
+
+    function deferFire(slot: Slot<Args, T>, ms: number): ReturnType<typeof setTimeout> {
+        const timer = setTimeout(() => {
+            const clock = slot.clock
+            if (clock === undefined) return // cancelled out from under us (invalidate / dispose)
+            clock.timer = undefined
+            clock.lastRunAt = Date.now()
+            startLoad(slot, true)
+        }, ms)
+        // A deferred revalidation must not by itself hold the process open — the same reasoning as the
+        // stream watchdog, and the same isomorphic guard (browser `setTimeout` returns a number).
+        timer.unref?.()
+        return timer
+    }
+
+    // Raise the refreshing axis for a revalidation that is outstanding but has not STARTED. Only over a
+    // retained value, mirroring `startLoad`'s keepStale branch: with nothing to serve there is no stale
+    // read to mark as refreshing. An equal set is a no-op in the cell, so re-triggering inside a debounce
+    // window wakes nobody.
+    function armRefreshing(slot: Slot<Args, T>): void {
+        if (slot.state.untracked().status === 'value') slot.refreshing.set(true)
+    }
+
+    // Drop a scheduled revalidation. Called wherever the slot stops being the thing that was scheduled:
+    // `invalidate` (the value is now known-wrong, so revalidating it eagerly is worse than the lazy
+    // reload the drop already arranges) and `disposeSlot` (the timer would otherwise outlive the slot,
+    // holding its closure and firing a load into a cache entry nothing can reach). Lowering `refreshing`
+    // is left to the caller — `dropSlot`/`disposeSlot` both write a state, and `setState` clears it.
+    function cancelClock(slot: Slot<Args, T>): void {
+        const clock = slot.clock
+        if (clock === undefined || clock.timer === undefined) return
+        clearTimeout(clock.timer)
+        clock.timer = undefined
+    }
+
+    // ---- The same clock, on the AUTO-TRACKED (derivation) path -----------------------------------
+    // Gates what the derivation PUBLISHES. It cannot gate how often the body RUNS: a derivation's
+    // dependency set is only knowable by running it, so learning that an input moved means running it.
+    // For the case this exists for that is the right split — `memo(() => q(), { debounce: 300 })` is
+    // trivial to run, and the expensive work downstream sees only admitted values.
+
+    function createAutoGate(): AutoGate<T> {
+        return { tick: state(0), admitted: null, timer: undefined, lastRunAt: 0, source: undefined }
+    }
+
+    // May a moved fill be published immediately? Called from inside `merged`, so a `true` is honoured by
+    // a plain field write — no state write happens during a computation. Debounce is never leading-edge
+    // by definition; throttle is, once the window since the last admission has elapsed. The FIRST
+    // publication does not stamp `lastRunAt`, so the first real change still fires on the leading edge —
+    // the same rule the loading path follows, where a cold load is not a trigger.
+    function autoAdmitsNow(gate: AutoGate<T>): boolean {
+        if (clockIsDebounce || gate.timer !== undefined) return false
+        const now = Date.now()
+        if (now - gate.lastRunAt < clockMs) return false
+        gate.lastRunAt = now
+        return true
+    }
+
+    function armAutoAdmit(gate: AutoGate<T>): void {
+        if (clockIsDebounce) {
+            if (gate.timer !== undefined) clearTimeout(gate.timer)
+            gate.timer = deferAdmit(gate, clockMs)
+            return
+        }
+        if (gate.timer !== undefined) return // already coalescing into the pending trailing admission
+        const remaining = clockMs - (Date.now() - gate.lastRunAt)
+        gate.timer = deferAdmit(gate, remaining > 0 ? remaining : clockMs)
+    }
+
+    function deferAdmit(gate: AutoGate<T>, ms: number): ReturnType<typeof setTimeout> {
+        const timer = setTimeout(() => {
+            gate.timer = undefined
+            gate.lastRunAt = Date.now()
+            const source = gate.source
+            if (source === undefined) return
+            // Read the fill at FIRE time, not at arm time: several changes may land inside one window
+            // and the NEWEST is what should be published. `untracked()` recomputes a dirty computed, so
+            // this is genuinely the latest — and `merged`'s next `fill()` returns that same cached
+            // object, so the identity compare there sees no move and the gate does not re-arm.
+            gate.admitted = source.untracked()
+            gate.tick.set(gate.tick.untracked() + 1)
+        }, ms)
+        timer.unref?.()
+        return timer
+    }
+
     // On settle, record the value's JSON byte size and evict LRU entries over the ceiling — but only
     // for the two bounded server stores (shared + default scope). No-op when unbounded.
     function recordAndEvict(slot: Slot<Args, T>, value: T): void {
@@ -813,6 +1057,16 @@ export function memo<Args, T>(
         if (store === undefined) return
         sharedCacheRecordSize(store, slot.key, measureBytes(value))
         sharedCacheEvictIfNeeded(store)
+    }
+
+    // Byte-account an AUTO slot's value against the shared ceiling. A `crossRequest` auto slot lives in
+    // the same bounded store as a pulled one, so it has to be charged the same way or a whole class of
+    // entries would sit in the store invisible to `ABIDE_MAX_SHARED_CACHE_SIZE` and never be evicted.
+    // Guarded on state IDENTITY so the common re-read costs a pointer compare, not a `JSON.stringify`.
+    function recordAuto(slot: Slot<Args, T>, state: SlotState<T>): void {
+        if (state.status !== 'value' || slot.autoRecorded === state) return
+        slot.autoRecorded = state
+        recordAndEvict(slot, state.value as T)
     }
 
     // ---- AUTO-TRACKED fill (ADR 0024 §1-3) -------------------------------------------------------
@@ -831,7 +1085,11 @@ export function memo<Args, T>(
             ranOnce = true
             let produced: Promise<T> | T
             try {
-                produced = fn(slot.args)
+                // Same fail-closed isolation as the other two paths, but NOT via `runBody`: this body must
+                // stay TRACKED, since reading it is how the memo learns its inputs. `exitScope` clears the
+                // AsyncLocalStorage request scope only — reactive tracking is a separate stack — so the
+                // ambients throw while the dependency edges are still recorded.
+                produced = crossRequest ? exitScope(() => fn(slot.args)) : fn(slot.args)
             } catch (caught) {
                 return {
                     run: runs,
@@ -873,9 +1131,41 @@ export function memo<Args, T>(
         // Hand back the previous state object when nothing observable changed. This is applied to
         // `merged`'s OUTPUT rather than to `fill` on purpose: `fill`'s per-run `run` stamp is what
         // supersedes a stale `publish` override below, so it has to keep advancing.
+        // The refetch clock on a DERIVATION (rpc-core §3). It gates what the derivation PUBLISHES, not
+        // how often its body runs: learning that a dependency moved means running the body, since a
+        // derivation's dependency set is only knowable by running it. That is the right split for the
+        // case this exists for — `memo(() => q(), { debounce: 300 })` feeding `getQuery({ q: slow() })`
+        // — where the derivation is trivial and the EXPENSIVE thing is downstream, seeing only admitted
+        // values.
+        //
+        // Pull-based, deliberately. Scheduling from an `effect` would have been simpler to read, but
+        // `effect()` hands its disposer to the innermost open effect scope — so a module-level memo
+        // first read inside a component's `<script>` would have its clock torn down when that component
+        // unmounted, killing the gate for every other reader. `merged` already re-runs on a dependency
+        // change (it subscribes to `fill`), so the arming rides that pull and no detached-effect escape
+        // hatch is needed.
+        const gate = clockMs === 0 ? undefined : createAutoGate()
         let previous: SlotState<T> | null = null
         const merged = computed<SlotState<T>>(() => {
-            const base = fill()
+            const live = fill()
+            let base = live
+            if (gate !== undefined) {
+                gate.tick() // subscribe: an admission wakes this computed
+                if (gate.admitted === null) {
+                    // The FIRST fill publishes immediately — the same rule as a cold load on the loading
+                    // path. There is nothing to serve while it waits, so delaying it only blanks the read.
+                    gate.admitted = live
+                } else if (live !== gate.admitted) {
+                    // A dependency (or a refresh/invalidate bumping `version`) moved the fill past what
+                    // is published. Throttle's LEADING EDGE publishes it right here — we are inside
+                    // `merged`'s own run, so admitting is a plain field write and needs no wake-up,
+                    // which is what keeps a state write out of a computation. Otherwise arm the window
+                    // and keep serving the admitted value until it fires.
+                    if (autoAdmitsNow(gate)) gate.admitted = live
+                    else armAutoAdmit(gate)
+                }
+                base = gate.admitted
+            }
             const next =
                 'deferred' in base
                     ? idleState<T>()
@@ -889,16 +1179,31 @@ export function memo<Args, T>(
             previous = next
             return next
         })
+        // `publish` must stamp the run `merged` is actually serving, not the one `fill` has reached — on
+        // a gated backing those differ for the length of a window, and stamping the live run would make
+        // every override inside one land already-superseded.
+        const currentRun = (): number => {
+            if (gate?.admitted != null) return gate.admitted.run
+            return fill.untracked().run
+        }
+        if (gate !== undefined) gate.source = fill
         // A PER-REQUEST slot's backing must not outlive the request: its `fill` subscribes to whatever the
         // body read, which is often a MODULE-level `state` that lives for the whole process. The slots of a
         // long-lived context (client singleton / server default) are long-lived too, so they register nothing.
-        if (reactiveScope().requestScoped === true) {
+        //
+        // A `crossRequest` slot is long-lived in the same way even though it is BUILT inside a request: it
+        // lives in `sharedStore()`, so disposing its backing at request end would leave the next request
+        // holding a slot whose `auto` is a dead computed that can never re-fill.
+        if (reactiveScope().requestScoped === true && !crossRequest) {
             onScopeDispose(() => {
+                // The gate's timer closes over `fill`, so it has to go first or a pending admission
+                // would fire into a disposed computed at the end of the request.
+                if (gate?.timer !== undefined) clearTimeout(gate.timer)
                 merged.dispose()
                 fill.dispose()
             })
         }
-        return { version, fill, override, merged, filled: () => ranOnce }
+        return { version, fill, override, merged, filled: () => ranOnce, currentRun }
     }
 
     // Decide this slot's fill path, exactly once. Only the value the FIRST run produces distinguishes a
@@ -919,12 +1224,30 @@ export function memo<Args, T>(
             })
             return
         }
+        // Starts the `ttl` clock (`autoExpire`). Stamped here rather than inside the backing so the auto
+        // and pulled paths keep ONE retention stamp per slot.
+        slot.loadedAt = Date.now()
         slot.auto = backing
     }
 
     // The auto slot's live state — reactive (subscribes the caller to the memo's declared inputs).
     function autoState(auto: AutoBacking<T>): SlotState<T> {
         return auto.merged()
+    }
+
+    // `ttl` on an AUTO-TRACKED slot: re-run the derivation once the window elapses even though no tracked
+    // dependency changed — the escape hatch for a body that reads something the graph cannot see (a clock,
+    // a mutable global, an external store). `isExpired` cannot answer for this path: it reads `slot.state`,
+    // which stays idle while the value lives in the backing computed, so the stamp is compared here.
+    //
+    // Guarded on `ttl !== Infinity` FIRST so the default derivation — every `memo(() => …)` with no
+    // retention named — pays one number compare and never reads the clock on its hottest path.
+    function autoExpire(slot: Slot<Args, T>, auto: AutoBacking<T>): void {
+        if (ttl === Infinity || !auto.filled()) return
+        const now = Date.now()
+        if (now - slot.loadedAt < ttl) return
+        slot.loadedAt = now
+        autoRefill(auto, false)
     }
 
     // Force the next pull to re-run `fn` even though no dependency changed (the auto analog of dropping a
@@ -939,6 +1262,7 @@ export function memo<Args, T>(
     // KEEPS the slot so existing subscriptions stay live). Used for stream dispose-on-drain (§2): a
     // settled ttl:0 stream, or a stream every consumer abandoned, is gone and the next read is a cold run.
     function disposeSlot(slot: Slot<Args, T>): void {
+        cancelClock(slot)
         slot.generation++
         slot.inflight = null
         const cache = slots()
@@ -1187,7 +1511,7 @@ export function memo<Args, T>(
 
         let produced: Promise<T> | T
         try {
-            produced = untrack(() => fn(slot.args))
+            produced = runBody(() => fn(slot.args))
         } catch (caught) {
             keyedSync = true
             slot.loadedAt = Date.now()
@@ -1245,11 +1569,17 @@ export function memo<Args, T>(
     const c = ((args: Args) => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        // A backing that THIS read created is already fresh. Expiring it would run the body twice for one
+        // read, because `resolveMode`'s classifying probe is itself a fill and `ttl: 0` stales every stamp
+        // the instant it is written.
+        const hadAuto = slot.auto !== undefined
         resolveMode(slot)
         touchOnRead(slot)
         const auto = slot.auto
         if (auto !== undefined) {
+            if (hadAuto) autoExpire(slot, auto)
             const state = autoState(auto)
+            recordAuto(slot, state)
             if (state.status === 'error') throw state.error
             return state.value as T
         }
@@ -1268,10 +1598,18 @@ export function memo<Args, T>(
     c.peek = (args: Args): T | undefined => {
         guardSharedRead()
         const slot = ensureSlot(args)
+        // Expire on the same terms as the bare read. `peek` already kicks a load on a cold pulled slot,
+        // so serving a value the ttl has retired would make the two reads disagree about the same slot.
+        const hadAuto = slot.auto !== undefined
         resolveMode(slot)
         touchOnRead(slot)
         const auto = slot.auto
-        if (auto !== undefined) return autoState(auto).value
+        if (auto !== undefined) {
+            if (hadAuto) autoExpire(slot, auto)
+            const state = autoState(auto)
+            recordAuto(slot, state)
+            return state.value
+        }
         if (slot.state.untracked().status === 'stream') {
             return readStreamReactive(slot, (chunks) =>
                 chunks.length > 0 ? chunks[chunks.length - 1] : undefined,
@@ -1356,7 +1694,7 @@ export function memo<Args, T>(
         for (const slot of slots) {
             const auto = slot.auto
             if (auto !== undefined) autoRefill(auto, true)
-            else startLoad(slot, true)
+            else scheduleRefresh(slot)
         }
         broadcast('refresh', args)
     }
@@ -1365,6 +1703,7 @@ export function memo<Args, T>(
     // clear coalescing, and notify subscribers by resetting the (retained) state to idle -> lazy
     // reload on next read. The slot stays in the map so existing subscriptions stay live.
     function dropSlot(slot: Slot<Args, T>): void {
+        cancelClock(slot)
         const auto = slot.auto
         if (auto !== undefined) {
             autoRefill(auto, false) // lazy: re-runs `fn` on the next pull
@@ -1402,16 +1741,17 @@ export function memo<Args, T>(
         const auto = slot.auto
         if (auto !== undefined) {
             // The auto-tracked write (ADR 0024 §4): stamp the run being overridden, so the next re-fill of
-            // any declared input drops it. `fill.peek()` pulls a stale fill first, so the updater form and
-            // the stamp both see the CURRENT run.
-            const base = auto.fill.untracked()
+            // any declared input drops it. `currentRun()` is the run `merged` is SERVING — which, while a
+            // refetch clock holds a newer fill back, is not the one `fill` has reached; stamping the live
+            // run there would make the override land already-superseded and the write would vanish.
+            const run = auto.currentRun()
             const current = untrack(() => autoState(auto))
             const value =
                 typeof next === 'function'
                     ? untrack(() => (next as (current: T | undefined) => T)(current.value))
                     : next
             auto.override.set({
-                run: base.run,
+                run,
                 state: { status: 'value', value, error: undefined },
             })
             log.channel('abide:memo').trace(`publish ${id}`)
@@ -1611,7 +1951,7 @@ export function memo<Args, T>(
     }
     function refreshForTags(): void {
         for (const slot of selectSlots(undefined)) {
-            startLoad(slot, true)
+            scheduleRefresh(slot)
             broadcast('refresh', slot.args)
         }
     }
@@ -1630,14 +1970,22 @@ export function memo<Args, T>(
         return any
     }
 
-    if (crossRequest && tags.length > 0) {
-        registerTaggedMemo({
+    if (tags.length > 0) {
+        const unregister = registerTaggedMemo({
             tags,
             invalidate: invalidateForTags,
             refresh: refreshForTags,
             pending: anyPendingForTags,
             refreshing: anyRefreshingForTags,
         })
+        // Registration lifetime follows whatever OWNS this memo, which is the thing that changed when
+        // tags stopped being `crossRequest`-only. A module-level memo — every rpc client proxy, every
+        // crossRequest server memo — is in neither scope and stays registered for the process, which is
+        // exactly as long as it lives. A memo built inside a component `<script>` or a request is torn
+        // down with it, so its closures over the slot map never accumulate in the process-global Map.
+        if (!onEffectScopeDispose(unregister) && reactiveScope().requestScoped === true) {
+            onScopeDispose(unregister)
+        }
     }
 
     return c

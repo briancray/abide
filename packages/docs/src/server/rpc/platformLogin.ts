@@ -1,5 +1,5 @@
 // #demo platformLogin
-import { identity } from 'abide/server/identity'
+import { identity } from 'abide/shared/identity'
 import { POST } from 'abide/server/POST'
 
 // A login mutation: `identity.set()` promotes the request principal to authenticated and marks the

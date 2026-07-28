@@ -84,8 +84,9 @@ test('a state-free page adds no `states` key (the seed carries only the request 
     const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
     const html = await (await app.fetch('/')).text()
-    // `trace` (CO2.3) is on every seed; `states` must still be absent, not an empty bucket map.
-    expect(Object.keys(readSeedFromDocument(html))).toEqual(['trace'])
+    // `trace` (CO2.3) + `identity` (AU3) are on every seed; `states` must still be absent, not an
+    // empty bucket map.
+    expect(Object.keys(readSeedFromDocument(html)).sort()).toEqual(['identity', 'trace'])
 
     await app.stop()
 })

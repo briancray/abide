@@ -15,6 +15,8 @@ test('identity(): login promotes the principal and it persists across reads', as
     await page.goto('/platform/identity')
     // Starts anonymous.
     await expect(page.locator('#identity-auth')).toHaveText('anonymous')
+    // `identity()` called straight from the component — no rpc — agrees with the server's own read.
+    await expect(page.locator('#identity-client-auth')).toHaveText('anonymous')
 
     await page.locator('#name-input').fill('Grace Hopper')
     await page.locator('#login-btn').click()
@@ -22,6 +24,9 @@ test('identity(): login promotes the principal and it persists across reads', as
     // After identity.set() + a fresh authenticated read (cookie persisted), the page reflects it.
     await expect(page.locator('#identity-auth')).toHaveText('authenticated')
     await expect(page.locator('#identity-name')).toHaveText('Grace Hopper')
+    // The isomorphic accessor followed the login: `identity.refresh()` re-asked the server and woke
+    // every reader, which is the only way a browser can learn what an HttpOnly cookie made it.
+    await expect(page.locator('#identity-client-auth')).toHaveText('authenticated')
 
     // Logout reverts to anonymous.
     await page.locator('#logout-btn').click()

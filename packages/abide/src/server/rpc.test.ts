@@ -242,6 +242,40 @@ describe('__rpc router metadata', () => {
         expect(DELETE(noop).__rpc.read).toBe(false)
     })
 
+    // The SWR refetch clock (rpc-core §3) reaching the server memo through the rpc option bag. Triggers
+    // are SPREAD, not burst: back-to-back refreshes coalesce onto one in-flight load with no clock at
+    // all, so only spacing them past a settle makes the count distinguish the two implementations.
+    test('a read declaring memo: { throttle } collapses spread-out refreshes into one refetch', async () => {
+        let calls = 0
+        const get = GET(
+            async (n: number) => {
+                calls++
+                return n * 10
+            },
+            { memo: { throttle: 300 } },
+        )
+        await runInScope(makeScope(), async () => {
+            expect(await get(5)).toBe(50)
+            expect(calls).toBe(1)
+
+            get.refresh(5) // leading edge — runs at once
+            expect(await get(5)).toBe(50)
+            expect(calls).toBe(2)
+
+            for (let index = 0; index < 3; index++) {
+                get.refresh(5)
+                await new Promise((resolve) => setTimeout(resolve, 40))
+            }
+            // Un-throttled these would be three more runs (calls === 5).
+            expect(calls).toBe(2)
+            // The retained value is served throughout — the read never blocks on the deferred load.
+            expect(get.peek(5)).toBe(50)
+
+            await new Promise((resolve) => setTimeout(resolve, 300))
+            expect(calls).toBe(3)
+        })
+    })
+
     test('__rpc carries the original handler and the passed options', () => {
         const handler = (n: number) => n
         const options = { timeout: 1000, memo: { ttl: 50 } }

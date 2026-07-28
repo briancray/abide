@@ -17,11 +17,12 @@
 
 import { ChannelHub } from './channelHub.ts'
 import { memoChannelName, RPC_CHANNEL_PREFIX } from './memoChannelName.ts'
+import { TAG_CHANNEL_PREFIX, tagChannelName } from './tagChannelName.ts'
 
-// Re-exported from the client-safe module so existing server importers keep importing it from here.
-// The name must be IDENTICAL on server and client (the browser mux computes it too), so it lives in
+// Re-exported from the client-safe modules so existing server importers keep importing them from here.
+// A name must be IDENTICAL on server and client (the browser mux computes both), so each lives in
 // `shared/` where both sides can reach it without pulling server transport into the client bundle.
-export { memoChannelName, RPC_CHANNEL_PREFIX }
+export { memoChannelName, RPC_CHANNEL_PREFIX, TAG_CHANNEL_PREFIX, tagChannelName }
 
 // One broadcast frame on a `(rpc,args)` channel. `value` is present ONLY for value-form `publish`
 // (an updater-form publish on a shared slot resolves server-side and broadcasts its RESULT here).
@@ -30,18 +31,8 @@ export interface MemoFrame {
     value?: unknown
 }
 
-const TAG_CHANNEL_PREFIX = '@tag:'
-
 // Lazy per-channel hubs. A channel exists only once something subscribes (or publishes) to it.
 const channels = new Map<string, ChannelHub<MemoFrame>>()
-
-// Deterministic channel name for a cache TAG (rpc-core §8, shared-cache-plan §2.4). A global
-// `invalidate/refresh({ tags })` publishes one frame here per listed tag so a client subscribed at
-// the tag level (bare-tag subscription is deferred, but the substrate is complete) mirrors it.
-// Reserved `@tag:` prefix keeps it distinct from both `@rpc:` channels and bare user-socket names.
-export function tagChannelName(tag: string): string {
-    return TAG_CHANNEL_PREFIX + tag
-}
 
 // Get-or-create the hub for a channel. Tests (and PR3's WS join path) subscribe through this.
 export function memoChannelHub(name: string): ChannelHub<MemoFrame> {

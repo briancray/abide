@@ -17,8 +17,10 @@
 
 import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannels.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { TAG_CHANNEL_PREFIX } from '../../shared/internal/tagChannelName.ts'
 import type { Socket } from '../socket.ts'
 import { compose, type Middleware } from './middleware.ts'
+import { buildRegistry } from './registry.ts'
 import { type Principal, type RequestScope, type RouteKind, runInScope } from './requestScope.ts'
 import type { AppConfig } from './router.ts'
 
@@ -41,6 +43,37 @@ const AUTHORIZED_SENTINEL = new Response(null, { status: 200 })
 // path in the router.
 export function isMemoChannel(name: string): boolean {
     return name.startsWith(RPC_CHANNEL_PREFIX)
+}
+
+// True for a reserved cache-TAG channel name (`@tag:<tag>`).
+export function isTagChannel(name: string): boolean {
+    return name.startsWith(TAG_CHANNEL_PREFIX)
+}
+
+// Decide whether a connection may join `@tag:<tag>`.
+//
+// The gate is DECLARATION, not per-identity authorization, and that is a deliberate choice about what
+// this channel can actually leak. Unlike an `@rpc:` frame — which carries a value-form `publish`
+// payload and therefore needs the full re-run of the rpc's read gate for the presented args — a tag
+// frame carries ONLY a verb (`memoTags.ts` publishes `{ verb }` and nothing else). A subscriber learns
+// "something tagged X was invalidated", then re-reads through the ordinary HTTP path, where its own
+// identity is enforced exactly as always. So a join grants no data a client could not already fetch.
+//
+// What the gate DOES stop is probing: a tag must be declared by at least one browser-reachable READ
+// rpc, so a client cannot fish for the existence or timing of a server-internal tag it was never meant
+// to see. What it does NOT stop is one authenticated client learning the CHANGE TIMING of a tag
+// declared on a read it is not itself permitted to fetch. If a tag name or its edit rhythm is itself
+// sensitive, do not put it on a browser-reachable read.
+export function authorizeTagJoin(channelName: string, config: AppConfig): boolean {
+    if (!channelName.startsWith(TAG_CHANNEL_PREFIX)) return false
+    const tag = channelName.slice(TAG_CHANNEL_PREFIX.length)
+    if (tag === '') return false
+    for (const entry of buildRegistry(config).rpcs) {
+        if (!entry.read) continue
+        if (entry.clients.browser === false) continue
+        if (entry.tags?.includes(tag) === true) return true
+    }
+    return false
 }
 
 // Extract the rpc name from `@rpc:<rpc>:<canonicalKey>`. Returns undefined when the name is not a

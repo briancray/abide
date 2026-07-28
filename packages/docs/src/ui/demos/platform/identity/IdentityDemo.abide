@@ -1,21 +1,28 @@
 <script>
+  import { identity } from "abide/shared/identity"
   import { state } from "abide/shared/state"
   import platformIdentity from "$server/rpc/platformIdentity"
   import platformLogin from "$server/rpc/platformLogin"
   import platformLogout from "$server/rpc/platformLogout"
 
-  // The request principal in one loop. `platformIdentity()` reads `identity()` — never null, anonymous
-  // by default. `login()` runs a mutation that calls `identity.set()` server-side; refreshing the read
-  // then re-reads over a fresh request carrying the sealed `abide-identity` cookie, proving the
-  // authenticated principal persisted. `logout()` clears it back to anonymous.
+  // The request principal in one loop, read TWO ways. `identity()` right here is the isomorphic
+  // accessor — the same import a handler uses, answering in the browser with the principal the server
+  // resolved for this page (seeded at hydration, reactive). `platformIdentity()` is an rpc that calls
+  // the same `identity()` server-side, which is what proves the two agree.
+  //
+  // `login()` runs a mutation that calls `identity.set()` server-side. A browser cannot seal a cookie,
+  // so it cannot promote itself — after the mutation, `identity.refresh()` re-asks the server who we
+  // are now, and every reader of `identity()` wakes.
   let name = state("Ada Lovelace")
   let busy = state(false)
 
   async function login() {
     busy = true
     await platformLogin({ name })
-    // Re-read identity over a fresh request that now carries the sealed cookie.
+    // Re-read identity over a fresh request that now carries the sealed cookie …
     platformIdentity.refresh()
+    // … and re-ask for the client-side one, which the HttpOnly cookie makes unknowable otherwise.
+    await identity.refresh()
     busy = false
   }
 
@@ -23,9 +30,15 @@
     busy = true
     await platformLogout()
     platformIdentity.refresh()
+    await identity.refresh()
     busy = false
   }
 </script>
+
+<p id="identity-client">
+  in the browser, no rpc: <strong id="identity-client-auth">{identity().authenticated ? "authenticated" : "anonymous"}</strong>
+  · id <code id="identity-client-id">{identity().id}</code>
+</p>
 
 {#await platformIdentity()}
   <p id="identity-block">reading…</p>

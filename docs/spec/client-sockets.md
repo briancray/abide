@@ -25,7 +25,7 @@ adds no durability the server never had.
    ```ts
    interface Socket<T> extends AsyncIterable<T> {
      publish(message: T): void          // fire-and-forget, void, both sides (S1.3, CS3)
-     peek(): T | undefined              // ACTIVE · reactive latest, ttl-windowed (CS4.2)
+     peek(): T | undefined              // ACTIVE · reactive latest, maxAge-windowed (CS4.2)
      chunks(): T[] | undefined          // ACTIVE · messages seen this session, capped (CS4.3)
      pending(): boolean                 // STATUS · connecting, never yet subscribed (CS4.1)
      refreshing(): boolean              // STATUS · dropped, reconnecting (CS4.1, CS2.4)
@@ -120,11 +120,11 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
      `done()===true` — correct, nobody is subscribed.
    - `error()` is **terminal-only** (CS2.4): transient drops are `refreshing()`, not `error()`.
      Clean three-way split — `refreshing` = recoverable, `error` = gave up, `done` = intentional.
-2. **`peek(): T | undefined` — reactive latest, `ttl`-windowed.** Server: the hub's `last`
+2. **`peek(): T | undefined` — reactive latest, `maxAge`-windowed.** Server: the hub's `last`
    `{message,time}` slot (updated on every publish, **independent of `tail`** so a `tail:0` socket
-   still has a `peek`), returning `undefined` once `now - time > ttl`. Client: the last received
-   message, windowed **lazily** on read against the shipped `ttl` (CS7) — no timer; a static view
-   may show a stale value until the next reactive tick. `ttl:∞` (default) → sticky.
+   still has a `peek`), returning `undefined` once `now - time > maxAge`. Client: the last received
+   message, windowed **lazily** on read against the shipped `maxAge` (CS7) — no timer; a static view
+   may show a stale value until the next reactive tick. `maxAge:∞` (default) → sticky.
 3. **`chunks(): T[] | undefined` — this session's messages, capped.** Everything received while
    subscribed, **capped at the socket's `tail` size** (or `1024` when `tail` is `0`/unset),
    drop-oldest — the same bound as the FIFO everywhere else (S2.4). A UI needing true full history
@@ -172,14 +172,14 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
 
 ## CS7. `socketSpecs` & build wiring (C-ref clientBundle / bootstrap)
 
-1. **`socketSpecs[name] = { clientPublish, validate, tail, ttl }`**, emitted alongside `rpcSpecs`
+1. **`socketSpecs[name] = { clientPublish, validate, tail, maxAge }`**, emitted alongside `rpcSpecs`
    for every browser-reachable socket (CS6.1). `bootstrapPage` receives it; `makeClientSocketImports`
    builds the proxies.
    - `clientPublish` — synchronous-throw gate for `.publish()` (CS3.4).
    - `validate` — when `true`, the bundle **also** ships the schema's validator (same plumbing as
      RPC `clients.browser.validate`); when `false`, nothing schema-related ships.
    - `tail` — sizes the `chunks()` cap (CS4.3).
-   - `ttl` — the `peek()` lazy window (CS4.2).
+   - `maxAge` — the `peek()` lazy window (CS4.2).
 2. **Emit swap.** `server/sockets/*` import locals are rewritten to read the proxy off `$scope`,
    parallel to the RPC local rewrite; a non-reachable socket import is the CS6.1 build error.
 
@@ -204,7 +204,7 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
   the RPC-stream mode-A/B handoff) so an SSR-painted socket region joins `replay:false`. Until then a
   template `{#for await}` over a socket leans on keyed reconciliation to avoid double-rendering the tail.
 - **Client-side `validate` (CS6)** — NOT in the initial slice. `socketSpecs` ships
-  `{ clientPublish, tail, ttl }`; the server `schema`/`handler` is the sole validator. Re-add the
+  `{ clientPublish, tail, maxAge }`; the server `schema`/`handler` is the sole validator. Re-add the
   opt-in `clients.browser.validate` (ship the validator, synchronous throw on a locally-malformed
   publish) as a follow-up.
 - **Refcounted unsub (CS3.1)** — the initial slice opens the mux subscription on the first ACTIVE read
@@ -218,7 +218,7 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
 - **Local tail replay for late in-tab consumers** (CS3.2) — deliberately not done; late = live-only.
 - **`canSubscribe` / topic-level subscribe authz** (CS6.2) — parked with S4.
 - **Cross-tab subscription sharing** (leader tab holds one WS) — parked; per-tab is the model.
-- **Reactive `ttl`-timer for `peek()`** (push `undefined` exactly at expiry) — parked in favor of
+- **Reactive `maxAge`-timer for `peek()`** (push `undefined` exactly at expiry) — parked in favor of
   the lazy on-read window (CS4.2); revisit only if a UI needs precise idle-expiry.
 
 ## Implementation surface (files)

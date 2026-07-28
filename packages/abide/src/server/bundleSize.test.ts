@@ -81,9 +81,23 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // `isBrowser` check the bundler cannot fold (same class of waste as TODO #3, ~300 B minified). This bundle
     // is built with `dev: true`, so it is NOT minified and source comments count toward the number — a
     // production build strips them, which is why the bound tracks the heavy-item guard above rather than a
-    // real shipping budget.
+    // real shipping budget. 118→123 KB is isomorphic cache TAGS (~4 KB unminified, measured at 121.9 KB):
+    // the tag registry's unregister, the memo's scope-owned teardown, `applyTagFrame`, `tagChannelName`,
+    // and the `@tag:` channel join in the proxy + mux. Unlike the two entries above this is NOT waste — a
+    // client-side `refresh/invalidate({ tags })` is the feature, so the registry and the join belong in the
+    // browser. Some of the delta is comment bytes only this dev build counts; that split is not measured,
+    // so do not read the number as shipped code. 123→128 KB is the isomorphic `identity()` (~3.8 KB
+    // unminified, measured at 125.7 KB): the accessor, the tab's reactive holder, `adoptIdentity`, and
+    // the seed field's plumbing. Also NOT waste — a component reading `identity()` in the browser is the
+    // feature, and the alternative (thread the principal down as a prop from every page) costs more
+    // bytes in app code than it saves in framework code. That 125.7 KB reading ALSO carries a second,
+    // concurrent addition the entry above does not name: the SWR refetch clock on the derivation path
+    // (`memo(() => q(), { debounce })`, rpc-core §3) — the auto gate, its admit clock, and the gating
+    // branch in `merged`, ~4.7 KB of unminified source measured by extracting the added regions, mostly
+    // comment bytes only this dev build counts. So the 123→128 headroom is the two together, not
+    // `identity()` alone; splitting them matters for whoever measures the next bump.
     const bytes = Buffer.byteLength(body, 'utf8')
-    expect(bytes).toBeLessThan(118_000)
+    expect(bytes).toBeLessThan(128_000)
 
     // Still a real bundle that boots the app and carries the AOT client mount runtime path.
     expect(body).toContain('bootstrapPage')

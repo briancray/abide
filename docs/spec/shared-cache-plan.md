@@ -88,7 +88,12 @@ RAW args: `{t:"sub", name:"@rpc:profile:<key>", args:{id:"B"}}`, and the server 
 for Y). The auth run uses the verified args.
 
 ### 2.4 Tags / 2.5 Client
-Tags: `@tag:<t>` channels; global `invalidate/refresh({tags})` broadcasts per tag. Client: one lazy
+Tags: `@tag:<t>` channels; global `invalidate/refresh({tags})` broadcasts per tag. Tags are
+**isomorphic** — they were once dropped unless `crossRequest`, which made them dead in the browser
+(a client memo is never `crossRequest`), so `tags` now flow through the client spec alongside `ttl`
+and the browser memo registers in the same registry; a client-side `refresh/invalidate({tags})`
+selects it with no server round trip. Registration is disposable (it follows the owning scope), which
+is what a per-component tagged memo needs to not pin itself in the process-global registry. Client: one lazy
 mux WS/tab; `shared` flag flows from `__rpc.options.cache.shared` into `makeClientImports` specs;
 first read auto-subscribes `{t:"sub", name, args}`; inbound frame → the SAME local memo verb
 (`invalidate`→lazy reload, `refresh`→eager, value-`publish`→`publish(args,value)`). No new client cache
@@ -112,8 +117,15 @@ throws; LRU eviction.
 ## 4. Deferred / parked
 Horizontal-scaling backplane (single-process only, sockets S3.3 — the channel-hub registry is the
 Redis-adapter seam); `canSubscribe` predicate (sockets S4); rich-value byte-measuring (§2.4 PARKED,
-RPC values JSON-measured); client bare-tag-channel subscription; explicit subscribe opt-out;
+RPC values JSON-measured); explicit subscribe opt-out;
 updater-form-over-the-wire (closures can't serialize).
+
+**No longer deferred:** client bare-tag-channel subscription is BUILT — a tagged client proxy joins
+`@tag:<tag>` on first read and mirrors the frame via `applyTagFrame`. Its join gate is DECLARATION
+(`channelAuth.authorizeTagJoin`: the tag must be declared by at least one browser-reachable read),
+not the per-args middleware re-run an `@rpc:` join gets, because a tag frame carries a verb and no
+payload — the subscriber re-reads over HTTP, where its own identity is enforced as always. The
+residual exposure is change-TIMING of a tag declared on a read the client may not itself fetch.
 
 ## Critical files
 `shared/memo.ts` · `server/internal/router.ts` · `server/internal/makeRpc.ts` · `scope.ts` ·

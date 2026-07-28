@@ -3,6 +3,9 @@ import { GET } from '../../server/GET.ts'
 import type { Mutation, Rpc } from '../../server/internal/makeRpc.ts'
 import type { Route } from '../../server/internal/router.ts'
 import { POST } from '../../server/POST.ts'
+import { clearTagRegistry } from '../../shared/internal/memoTags.ts'
+import { invalidate } from '../../shared/invalidate.ts'
+import { refresh } from '../../shared/refresh.ts'
 import { createTestApp, type TestApp } from '../../test/createTestApp.ts'
 import { clientProxy, makeClientImports } from './clientProxy.ts'
 
@@ -133,4 +136,101 @@ test('makeClientImports builds a name -> proxy map', () => {
     // Both proxies carry the identical reactive surface — full read/mutation symmetry.
     expect(typeof (imports.bump as Rpc<unknown, unknown>).refresh).toBe('function')
     expect(typeof (imports.bump as Rpc<unknown, unknown>).peek).toBe('function')
+})
+
+// The client half of isomorphic cache tags. A browser memo is never `crossRequest`, so until tags were
+// carried across the spec hops (registry → clientBundle → makeClientImports → clientProxy) a
+// `refresh({ tags })`/`invalidate({ tags })` in the browser matched an empty registry and did nothing.
+test('a tagged read proxy is reachable by invalidate({ tags })', async () => {
+    let calls = 0
+    const app = await boot({
+        counted: GET(() => {
+            calls++
+            return { calls }
+        }),
+    })
+    const counted = clientProxy<undefined, { calls: number }>('counted', 'GET', {
+        base: app.origin,
+        tags: ['widgets'],
+    }) as Rpc<undefined, { calls: number }>
+
+    expect((await counted(undefined)).calls).toBe(1)
+    expect((await counted(undefined)).calls).toBe(1) // memoized client-side
+
+    invalidate({ tags: ['widgets'] })
+    expect((await counted(undefined)).calls).toBe(2) // the tag verb reached the CLIENT memo
+    clearTagRegistry()
+})
+
+test('makeClientImports threads tags from the spec into the proxy memo', async () => {
+    let calls = 0
+    const app = await boot({
+        tagged: GET(() => {
+            calls++
+            return { calls }
+        }),
+    })
+    const imports = makeClientImports(
+        { tagged: { method: 'GET', read: true, tags: ['fromSpec'] } },
+        app.origin,
+    )
+    const tagged = imports.tagged as Rpc<undefined, { calls: number }>
+
+    expect((await tagged(undefined)).calls).toBe(1)
+    refresh({ tags: ['fromSpec'] })
+    // Polled, not slept: `refresh` is eager but the re-run is a real HTTP round trip, and a fixed
+    // sleep sized on an idle machine is what makes a parallel suite flaky.
+    await until(() => calls === 2)
+    expect(calls).toBe(2)
+    clearTagRegistry()
+})
+
+// Wait for a condition instead of sleeping a guessed interval — the suite runs in parallel, so a
+// fixed sleep sized on an idle machine turns into an intermittent failure under load.
+async function until(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    while (!condition()) {
+        if (Date.now() > deadline) throw new Error('until: condition not met before the deadline')
+        await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+}
+
+// The client half of the SWR refetch clock (rpc-core §3). The browser is where a refresh storm actually
+// happens — a socket broadcast calling `fn.refresh()` per frame — so the clock has to survive the spec
+// hops (registry → clientBundle → makeClientImports → clientProxy) or it rate-limits only the server.
+//
+// The triggers are SPREAD rather than fired back-to-back on purpose: three instant refreshes coalesce
+// onto one in-flight load even with NO clock at all, so a burst cannot tell the two implementations
+// apart. Spaced past a loopback round trip, each one would fire its own refetch — which is what makes
+// the `calls` count below evidence rather than coincidence.
+test('a throttled read proxy collapses spread-out refreshes into one refetch', async () => {
+    let calls = 0
+    const app = await boot({
+        counted: GET(() => {
+            calls++
+            return { calls }
+        }),
+    })
+    const imports = makeClientImports(
+        { counted: { method: 'GET', read: true, throttle: 300 } },
+        app.origin,
+    )
+    const counted = imports.counted as Rpc<undefined, { calls: number }>
+
+    expect((await counted(undefined)).calls).toBe(1)
+
+    counted.refresh() // leading edge — fires at once
+    await until(() => calls === 2)
+
+    for (let index = 0; index < 3; index++) {
+        counted.refresh()
+        await new Promise((resolve) => setTimeout(resolve, 40))
+    }
+    // Un-throttled these would be three separate refetches (calls === 5). Throttled, they are ONE
+    // trailing load that has not fired yet.
+    expect(calls).toBe(2)
+
+    await until(() => calls === 3)
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    expect(calls).toBe(3) // exactly one trailing refetch, not three
 })

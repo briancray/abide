@@ -12,6 +12,7 @@
     "dev": "abide dev",
     "build": "abide build",
     "start": "abide start",
+    "compile": "bun scripts/embedSources.ts && abide compile",
     "e2e": "playwright test --project=chromium",
     "e2e:ci": "playwright test --project=chromium --retries=1",
     "e2e:perf": "playwright test --project=perf --workers=1",

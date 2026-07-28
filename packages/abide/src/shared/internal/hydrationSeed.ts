@@ -5,6 +5,8 @@
 // floor for them: the server WRITES the seed (`server/internal/pages.ts`), the client READS it
 // (`ui/internal/bootstrap.ts`, `seededState.ts`, `navigate.ts`), and neither owns it.
 
+import type { Principal } from './principal.ts'
+
 // One recorded SSR read for the hydration seed: the RPC route name, the args it was called with, and
 // the (output-shaped) value it resolved to.
 export interface SeedRead {
@@ -44,4 +46,13 @@ export interface HydrationSeed {
     // headers are not readable from JS — the `traceresponse` header the same response carries is only
     // reachable to a `fetch` caller (which is how a param/query nav, seedless by design, picks it up).
     trace?: string
+    // AU3 / the isomorphic `identity()`: the principal the SERVER resolved for the request that rendered
+    // this page, so the browser can answer `identity()` without a round trip and without reading the
+    // HttpOnly cookie (it cannot). Plain JSON rather than the rich codec — a principal round-trips
+    // through the sealed cookie as JSON already, so anything richer would not have survived to get here.
+    //
+    // This makes a rendered document identity-bearing, which is exactly what the router's default
+    // `Cache-Control: private, no-cache` + `Vary: Cookie` on documents already assumes; a page that
+    // opts into `public` caching is warned about on the cookie path for the same reason.
+    identity?: Principal
 }

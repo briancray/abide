@@ -6,6 +6,7 @@
     "dev": "abide dev",
     "build": "abide build",
     "start": "abide start",
+    "compile": "abide compile",
     "typecheck": "tsc --noEmit",
     "abide-check": "abide check .",
     "e2e": "playwright test",

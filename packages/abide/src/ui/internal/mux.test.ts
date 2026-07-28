@@ -2,9 +2,9 @@
 // §2.5). Three layers of coverage:
 //   1. applyMemoFrame — the focused "given an inbound MemoFrame, drive the right local memo verb
 //      with the right args" unit (this IS the handler the client proxy registers on the mux).
-//   2. clientProxy auto-subscribe — a `shared` read joins its `@rpc:` channel with the RAW args,
-//      dedups per args, and a NON-shared read never subscribes (fake WS, no real network/server).
-//   3. End-to-end delivery — the real router broadcasts a `shared` publish to an AUTHORIZED WS
+//   2. clientProxy auto-subscribe — a `crossRequest` read joins its `@rpc:` channel with the RAW args,
+//      dedups per args, and a per-request read never subscribes (fake WS, no real network/server).
+//   3. End-to-end delivery — the real router broadcasts a `crossRequest` publish to an AUTHORIZED WS
 //      subscriber (the same frame protocol the mux speaks); the frame drives applyMemoFrame into a
 //      real client memo, mirroring the server value locally.
 
@@ -13,6 +13,10 @@ import { GET } from '../../server/GET.ts'
 import type { Rpc } from '../../server/internal/makeRpc.ts'
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import type { MemoFrame } from '../../shared/internal/memoChannels.ts'
+import { memoChannelHub } from '../../shared/internal/memoChannels.ts'
+import { applyTagFrame, clearTagRegistry } from '../../shared/internal/memoTags.ts'
+import { tagChannelName } from '../../shared/internal/tagChannelName.ts'
+import { invalidate } from '../../shared/invalidate.ts'
 import { memo } from '../../shared/memo.ts'
 import { createTestApp, type TestApp } from '../../test/createTestApp.ts'
 import { applyMemoFrame } from './applyMemoFrame.ts'
@@ -68,13 +72,13 @@ test('subscribeMemoChannel is a no-op under SSR (no window)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 3. clientProxy auto-subscribe: shared joins (raw args + dedup); non-shared never subscribes.
+// 3. clientProxy auto-subscribe: crossRequest joins (raw args + dedup); per-request never subscribes.
 //    Fully synchronous with a fake browser env + fake WebSocket + stubbed fetch — NO real network
 //    and NO server runs while `window` is set, so the shared-process side-detection is never
 //    exercised by server code. Globals restored (and the mux socket reset) before the test returns.
 // ---------------------------------------------------------------------------
 
-test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared does not', () => {
+test('crossRequest read subscribes to its @rpc channel (raw args, dedup); per-request does not', () => {
     const sent: string[] = []
     const closers: (() => void)[] = []
     class FakeWebSocket {
@@ -104,24 +108,23 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
         )
 
     try {
-        const shared = clientProxy<{ id: string }, unknown>('prof', 'GET', { shared: true }) as Rpc<
-            { id: string },
-            unknown
-        >
+        const crossRequest = clientProxy<{ id: string }, unknown>('prof', 'GET', {
+            crossRequest: true,
+        }) as Rpc<{ id: string }, unknown>
         const plain = clientProxy<{ id: string }, unknown>('plain', 'GET', {
-            shared: false,
+            crossRequest: false,
         }) as Rpc<{ id: string }, unknown>
 
         // Reactive reads: ensureSubscribe fires synchronously (before the async fetch settles).
-        shared({ id: 'A' }) // shared → subscribe channel A
-        shared({ id: 'A' }) // same args → dedup, no second subscribe
-        shared({ id: 'B' }) // different args → subscribe channel B
-        plain({ id: 'A' }) // non-shared → never subscribes
+        crossRequest({ id: 'A' }) // crossRequest → subscribe channel A
+        crossRequest({ id: 'A' }) // same args → dedup, no second subscribe
+        crossRequest({ id: 'B' }) // different args → subscribe channel B
+        plain({ id: 'A' }) // per-request → never subscribes
 
         const frames = sent.map(
             (raw) => JSON.parse(raw) as { t: string; name: string; args: unknown },
         )
-        // Exactly two subscribes (A once + B once); the duplicate A and the non-shared read added none.
+        // Exactly two subscribes (A once + B once); the duplicate A and the per-request read added none.
         expect(frames.length).toBe(2)
         expect(frames[0]).toEqual({
             t: 'sub',
@@ -133,7 +136,7 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
             name: memoChannelName('prof', { id: 'B' }),
             args: { id: 'B' },
         })
-        // Never an @rpc:plain channel — a non-shared read does not subscribe.
+        // Never an @rpc:plain channel — a per-request read does not subscribe.
         expect(frames.some((frame) => frame.name.startsWith('@rpc:plain:'))).toBe(false)
     } finally {
         for (const close of closers) close() // reset the mux socket singleton (fires its close listener)
@@ -149,7 +152,7 @@ test('shared read subscribes to its @rpc channel (raw args, dedup); non-shared d
 // 4. End-to-end: real server broadcast → authorized WS subscriber → applyMemoFrame mirrors locally.
 // ---------------------------------------------------------------------------
 
-test('server shared-publish broadcast reaches an authorized subscriber and applies to a local memo', async () => {
+test('server crossRequest-publish broadcast reaches an authorized subscriber and applies to a local memo', async () => {
     const prof = GET(({ id }: { id: string }) => ({ id, secret: `secret-${id}` }), {
         memo: { crossRequest: true },
     })
@@ -179,4 +182,80 @@ test('server shared-publish broadcast reaches an authorized subscriber and appli
     expect(clientMemo.peek(args)).toEqual(value)
 
     socket.close()
+})
+
+// 4. `@tag:` channel — the tag-level broadcast that reaches a browser for a read that is NOT
+//    crossRequest. Its `@rpc:` channel is per-(rpc,args) and only a crossRequest route has one, so a
+//    plain tagged read had no way to hear a server-side refresh/invalidate({tags}) before this.
+test('a server invalidate({ tags }) reaches a subscriber on the @tag: channel', async () => {
+    const widgets = GET(() => ({ ok: true }), { memo: { tags: ['widgets'] } })
+    running = await createTestApp({ routes: { widgets } })
+
+    const socket = running.socket()
+    const stream = socket.subscribe<MemoFrame>(tagChannelName('widgets'))
+    await socket.ready()
+    await delay(80) // let the join complete before publishing
+
+    invalidate({ tags: ['widgets'] })
+
+    const iterator = stream[Symbol.asyncIterator]()
+    const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 5000))
+    const frame = await Promise.race([iterator.next().then((r) => r.value), timeout])
+    expect(frame).toEqual({ verb: 'invalidate' })
+
+    socket.close()
+    clearTagRegistry()
+})
+
+// The declaration gate (`authorizeTagJoin`): a tag no browser-reachable read declares is not joinable,
+// so a client cannot fish for the existence or the change-timing of a server-internal tag. Silent-deny,
+// same class as an `@rpc:` refusal — the client learns nothing about why.
+test('a tag no browser-reachable read declares is not joinable', async () => {
+    const widgets = GET(() => ({ ok: true }), { memo: { tags: ['widgets'] } })
+    const internal = GET(() => ({ ok: true }), {
+        memo: { tags: ['internal'] },
+        clients: { browser: false },
+    })
+    running = await createTestApp({ routes: { widgets, internal } })
+
+    const socket = running.socket()
+    const stream = socket.subscribe<MemoFrame>(tagChannelName('internal'))
+    await socket.ready()
+    await delay(80)
+
+    invalidate({ tags: ['internal'] })
+
+    const iterator = stream[Symbol.asyncIterator]()
+    const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 300))
+    const frame = await Promise.race([iterator.next().then((r) => r.value), timeout])
+    expect(frame).toBe('timeout') // denied — no frame ever arrives
+
+    socket.close()
+    clearTagRegistry()
+})
+
+// The inbound half: a received frame drives every LOCAL memo carrying the tag, and does NOT echo back
+// onto the channel (which is why it is `applyTagFrame` and not `invalidateTags`).
+test('applyTagFrame drives local memos carrying the tag without re-publishing', async () => {
+    let calls = 0
+    const tagged = memo(
+        async () => {
+            calls++
+            return calls
+        },
+        { tags: ['local'] },
+    )
+    expect(await tagged()).toBe(1)
+
+    const hub = memoChannelHub(tagChannelName('local'))
+    const echo = hub.subscribe()
+
+    applyTagFrame('local', 'invalidate')
+    expect(await tagged()).toBe(2) // the local memo re-ran
+
+    const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 100))
+    const echoed = await Promise.race([echo.next().then((r) => r.value), timeout])
+    expect(echoed).toBe('timeout') // no frame was published back onto the tag channel
+
+    clearTagRegistry()
 })

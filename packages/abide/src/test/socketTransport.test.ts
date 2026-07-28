@@ -5,9 +5,9 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { error } from '../server/error.ts'
-import { identity } from '../server/identity.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
 import { socket } from '../server/socket.ts'
+import { identity } from '../shared/identity.ts'
 import { route } from '../shared/route.ts'
 import { createTestApp, type SocketClient, type TestApp } from './createTestApp.ts'
 

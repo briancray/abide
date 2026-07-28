@@ -17,7 +17,7 @@ async function collect<T>(source: AsyncIterable<T>, count: number): Promise<T[]>
     return received
 }
 
-describe('socket — replay (tail / ttl)', () => {
+describe('socket — replay (tail / maxAge)', () => {
     test('tail:0 — a later subscriber does NOT see an earlier publish', async () => {
         const sock = socket<number>()
         sock.publish(1)
@@ -40,10 +40,10 @@ describe('socket — replay (tail / ttl)', () => {
         expect(replayed).toEqual([2, 3, 4])
     })
 
-    test('ttl — tail entries older than ttl are not replayed', async () => {
+    test('maxAge — tail entries older than maxAge are not replayed', async () => {
         const sock = socket<number>({ channel: { tail: 5, maxAge: 20 } })
         sock.publish(1)
-        await delay(40) // 1 ages past ttl
+        await delay(40) // 1 ages past maxAge
         sock.publish(2)
 
         const replayed = await collect(sock, 1)

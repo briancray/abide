@@ -1,7 +1,8 @@
-import { resolve, sep } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
 import { error } from 'abide/server/error'
 import { GET } from 'abide/server/GET'
 import { codeBlock } from '$ui/lib/codeBlock'
+import EMBEDDED_SOURCES from '../EMBEDDED_SOURCES.json'
 
 // Reads a docs source file and extracts the region between demo markers, so a docs page can show the
 // REAL demonstrated code (DRY — the snippet is the running source, never a hand-copied duplicate).
@@ -15,6 +16,19 @@ import { codeBlock } from '$ui/lib/codeBlock'
 
 const DOCS_ROOT = resolve(import.meta.dir, '../../..')
 const SRC_DIR = resolve(DOCS_ROOT, 'src')
+
+// Read the demonstrated file. On disk normally — so a running `abide dev`/`start` always shows the
+// CURRENT source, which is the whole point of reading it rather than copying it. Inside an `abide
+// compile` binary there is no disk to read (`import.meta.dir` is `/$bunfs/root`, and the project was
+// never copied to the deploy machine), so fall back to the map `scripts/embedSources.ts` baked in at
+// compile time. `undefined` = neither has it, which the caller reports as a 404 rather than a 500.
+const EMBEDDED: Record<string, string> = EMBEDDED_SOURCES
+
+async function readSource(target: string): Promise<string | undefined> {
+    const file = Bun.file(target)
+    if (await file.exists()) return await file.text()
+    return EMBEDDED[relative(DOCS_ROOT, target)]
+}
 
 function langForFile(file: string): string {
     if (file.endsWith('.abide')) return 'abide'
@@ -45,7 +59,8 @@ export default GET(async ({ file, marker }: { file: string; marker?: string }) =
     if (target !== SRC_DIR && !target.startsWith(SRC_DIR + sep)) {
         return error(400, 'file must resolve under src/')
     }
-    const source = await Bun.file(target).text()
+    const source = await readSource(target)
+    if (source === undefined) return error(404, `no such source file: ${file}`)
     const lang = langForFile(file)
 
     // No marker → return the WHOLE file (used for server RPC/socket source: the file IS the sample).

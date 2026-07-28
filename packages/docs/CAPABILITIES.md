@@ -299,7 +299,8 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 ## 11. Auth / request scope (server ambient accessors)
 | Capability | Kind | Status |
 | --- | --- | --- |
-| `identity()` → principal; `.set(p)` / `.clear()` | PW+RT | [x] (platform/identity login/logout + e2e/platform.spec) |
+| `identity()` → principal; `.set(p)` / `.clear()` / `.refresh()`; ISOMORPHIC (same import in a handler and a component) | PW+RT | [x] (platform/identity: `#identity-client-auth` is `identity()` called straight from the component — no rpc — and follows a login through `identity.refresh()`; e2e/platform.spec asserts both lines) |
+| `/__abide/identity` — the caller's own resolved principal | PW+RT | [x] (abide `shared/identity.test.ts`; the CLI's `identity` subcommand reads it) |
 | `cookies()` → `Bun.CookieMap` | PW+RT | [x] (platform/scope reads browser cookie via platformScope RPC) |
 | `request()` → `Request` | RT | [ ] |
 | `server()` → Bun.serve instance | RT | [ ] |

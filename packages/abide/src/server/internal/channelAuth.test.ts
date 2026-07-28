@@ -6,11 +6,11 @@
 // live WS mux with the extended `socketClient` (which sends `args` and a sealed Bearer identity).
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { identity } from '../../shared/identity.ts'
 import { memoChannelName } from '../../shared/internal/memoChannels.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { createTestApp, type SocketClient, type TestApp } from '../../test/createTestApp.ts'
 import { error } from '../error.ts'
-import { identity } from '../identity.ts'
 import { request } from '../request.ts'
 import { makeRead, type Rpc } from './makeRpc.ts'
 import type { Middleware } from './middleware.ts'

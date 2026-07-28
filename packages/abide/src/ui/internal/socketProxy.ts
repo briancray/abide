@@ -16,12 +16,12 @@ import type { SocketSurface, SocketSurfaceMembers } from '../../shared/internal/
 import { muxPublish, muxSubscribe } from './mux.ts'
 
 // The per-socket spec shipped in the client bundle (client-sockets.md CS7). `tail` sizes the
-// `chunks()` cap; `ttl` windows `peek()`; `clientPublish` gates `.publish()`.
+// `chunks()` cap; `maxAge` windows `peek()`; `clientPublish` gates `.publish()`.
 export interface SocketSpec {
     clientPublish: boolean
     tail: number
     // Milliseconds, or `null` for Infinity/sticky (JSON can't carry Infinity, so it serialises to null).
-    ttl: number | null
+    maxAge: number | null
 }
 
 // The reactive lifecycle state (CS4.1). `idle` = never subscribed / torn down (→ `done()`).
@@ -43,7 +43,7 @@ interface RoomProxy {
 
 function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: string): RoomProxy {
     // The pub/sub MECHANICS are the shared hub's, not a second copy: the bounded tail ring, the
-    // ttl-windowed latest, and the per-cursor FIFO fan-out all live in `ChannelHub`, which sits in
+    // maxAge-windowed latest, and the per-cursor FIFO fan-out all live in `ChannelHub`, which sits in
     // `shared/` precisely so one hub backs a channel on both sides. Re-deriving them here is how the
     // two came to disagree — this room used to size its per-cursor FIFO from `spec.tail`, fusing
     // replay depth with delivery capacity, so a `tail: 4` socket dropped a burst of 10 in the browser
@@ -52,7 +52,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
     const hub = new ChannelHub<unknown>({
         tail: spec.tail,
         // JSON cannot carry Infinity, so the wire spells sticky as `null`.
-        ttl: spec.ttl ?? Infinity,
+        maxAge: spec.maxAge ?? Infinity,
     })
     const status = state<Status>('idle')
     // What this proxy genuinely ADDS over the hub: reactivity. The hub's retained state is plain BY
@@ -117,7 +117,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
         },
         // ACTIVE probes — drive the subscription. Each reads `revision` FIRST so the caller subscribes
         // to the room even when the hub currently has nothing to hand back; the hub then applies the
-        // same ttl window (`peekLatest`) and tail bound (`tailSnapshot`) the server applies, lazily on
+        // same maxAge window (`peekLatest`) and tail bound (`tailSnapshot`) the server applies, lazily on
         // read (CS4.2) — no timer, so a static view may hold a stale value until the next reactive tick.
         peek(): unknown {
             ensureSubscribed()

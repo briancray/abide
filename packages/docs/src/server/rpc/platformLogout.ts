@@ -1,5 +1,5 @@
 // #demo platformLogout
-import { identity } from 'abide/server/identity'
+import { identity } from 'abide/shared/identity'
 import { POST } from 'abide/server/POST'
 
 // The inverse of login: `identity.clear()` reverts to a fresh anonymous principal and marks the

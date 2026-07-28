@@ -13,6 +13,7 @@ import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import type { MemoFrame } from '../../shared/internal/memoChannels.ts'
 import { parseMuxFrame } from '../../shared/internal/parseMuxFrame.ts'
 import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
+import { tagChannelName } from '../../shared/internal/tagChannelName.ts'
 
 // Reconnect backoff bounds (CS2.4). Doubles from MIN to MAX, reset on a clean open.
 const RECONNECT_MIN_MS = 500
@@ -209,6 +210,29 @@ export function subscribeMemoChannel(
         {
             name: channelName,
             args,
+            replay: true,
+            onMessage: (payload) => apply(payload as MemoFrame),
+            onAck: undefined,
+            onError: undefined,
+            onReconnecting: undefined,
+        },
+        mountBase,
+    )
+}
+
+// Join the `@tag:<tag>` cache-tag channel, applying each inbound `MemoFrame` via `apply`. Same
+// silent-deny adapter as the cache channel above; argless, so `muxSubscribe`'s dedup key is the
+// channel name itself and several proxies sharing a tag join it exactly once.
+export function subscribeTagChannel(
+    tag: string,
+    apply: (frame: MemoFrame) => void,
+    mountBase?: string,
+): void {
+    muxSubscribe(
+        tagChannelName(tag),
+        {
+            name: tagChannelName(tag),
+            args: undefined,
             replay: true,
             onMessage: (payload) => apply(payload as MemoFrame),
             onAck: undefined,

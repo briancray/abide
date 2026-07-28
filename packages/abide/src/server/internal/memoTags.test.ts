@@ -10,9 +10,11 @@ import {
     publishMemoFrame,
     tagChannelName,
 } from '../../shared/internal/memoChannels.ts'
-import { clearTagRegistry } from '../../shared/internal/memoTags.ts'
+import { clearTagRegistry, taggedMemoCount } from '../../shared/internal/memoTags.ts'
+import { disposeScope } from '../../shared/internal/reactiveScope.ts'
 import { sharedStore } from '../../shared/internal/sharedCache.ts'
 import { invalidate } from '../../shared/invalidate.ts'
+import { memo } from '../../shared/memo.ts'
 import { pending } from '../../shared/pending.ts'
 import { refresh } from '../../shared/refresh.ts'
 import { refreshing } from '../../shared/refreshing.ts'
@@ -38,6 +40,16 @@ function bindLikeCreateApp<Args, T>(route: Rpc<Args, T>, name: string): void {
         const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
         publishMemoFrame(memoChannelName(name, args), frame)
     })
+}
+
+// Wait for a condition rather than sleeping a guessed interval — the suite runs in parallel, so a
+// fixed sleep sized on an idle machine becomes an intermittent failure under load.
+async function until(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    while (!condition()) {
+        if (Date.now() > deadline) throw new Error('until: condition not met before the deadline')
+        await new Promise((resolve) => setTimeout(resolve, 5))
+    }
 }
 
 const TIMEOUT = Symbol('timeout')
@@ -246,5 +258,120 @@ describe('cache tags — local reactive probes', () => {
         expect(refreshing({ tags: ['user'] })).toBe(true)
         await new Promise((r) => setTimeout(r, 30))
         expect(refreshing({ tags: ['user'] })).toBe(false)
+    })
+})
+
+// Tags used to be discarded off `crossRequest` (`memo.ts`), which made them dead in the browser: a
+// client memo is never `crossRequest`, so `refresh({ tags })` there matched an empty registry and did
+// nothing at all. These exercise the plain (non-crossRequest) memo — the ONLY kind a browser builds.
+describe('cache tags — isomorphic (no crossRequest)', () => {
+    test('invalidate({ tags }) drops a plain memo’s slots; the next read re-runs', async () => {
+        let calls = 0
+        const read = makeRead(
+            'GET',
+            async ({ id }: { id: number }) => {
+                calls++
+                return { id }
+            },
+            { memo: { tags: ['plain'] } },
+        )
+
+        await runInScope(makeScope('plainRead'), async () => {
+            await read({ id: 1 })
+            expect(calls).toBe(1)
+            await read({ id: 1 })
+            expect(calls).toBe(1) // memoized
+
+            invalidate({ tags: ['plain'] })
+            await read({ id: 1 })
+            expect(calls).toBe(2)
+        })
+    })
+
+    test('refresh({ tags }) eagerly re-runs a plain memo without a request scope', async () => {
+        let calls = 0
+        const derived = memo(
+            async () => {
+                calls++
+                return calls
+            },
+            { tags: ['bare'] },
+        )
+
+        expect(await derived()).toBe(1)
+        refresh({ tags: ['bare'] })
+        await until(() => calls === 2)
+        expect(calls).toBe(2) // eager, no scope needed — nothing here is server machinery
+    })
+
+    test('a tag verb reaches every memo carrying the tag, crossRequest or not', async () => {
+        let plainCalls = 0
+        const plain = memo(
+            async () => {
+                plainCalls++
+                return plainCalls
+            },
+            { tags: ['mixed'] },
+        )
+        let sharedCalls = 0
+        const shared = makeRead(
+            'GET',
+            async ({ id }: { id: number }) => {
+                sharedCalls++
+                return { id }
+            },
+            { memo: { crossRequest: true, tags: ['mixed'] } },
+        )
+        bindLikeCreateApp(shared, 'mixedRead')
+
+        await plain()
+        await runInScope(makeScope('mixedRead'), () => shared({ id: 1 }))
+        expect(plainCalls).toBe(1)
+        expect(sharedCalls).toBe(1)
+
+        refresh({ tags: ['mixed'] })
+        await until(() => plainCalls === 2 && sharedCalls === 2)
+        expect(plainCalls).toBe(2)
+        expect(sharedCalls).toBe(2)
+    })
+})
+
+// The registry is process-global with no eviction, so registration had to become disposable before the
+// `crossRequest` gate could come off: a tagged memo built per component instance would otherwise pin
+// itself (and closures over its whole slot map) forever.
+describe('cache tags — registration lifetime', () => {
+    // Asserted against the REGISTRY, not against re-runs: a disposed memo's slots die with its scope
+    // regardless, so "refresh() no longer re-runs it" passes even with the unregister deleted. The
+    // registry entry is the thing that would actually accumulate.
+    test('a memo built inside a request scope unregisters when the scope disposes', async () => {
+        const scope = makeScope('scoped')
+        await runInScope(scope, async () => {
+            const scoped = memo(async () => 1, { tags: ['scoped'] })
+            await scoped()
+            expect(taggedMemoCount('scoped')).toBe(1)
+        })
+
+        disposeScope(scope)
+        expect(taggedMemoCount('scoped')).toBe(0)
+    })
+
+    test('repeated scoped construction does not accumulate registrations', async () => {
+        for (let i = 0; i < 5; i++) {
+            const scope = makeScope('churn')
+            await runInScope(scope, async () => {
+                const scoped = memo(async () => i, { tags: ['churn'] })
+                await scoped()
+            })
+            disposeScope(scope)
+        }
+        expect(taggedMemoCount('churn')).toBe(0)
+    })
+
+    // The counterpart: a module-level memo (every rpc client proxy, every crossRequest server memo) is
+    // owned by nothing that disposes, so it stays registered for as long as it exists.
+    test('a memo built outside any scope stays registered', async () => {
+        const forever = memo(async () => 1, { tags: ['forever'] })
+        await forever()
+        expect(taggedMemoCount('forever')).toBe(1)
     })
 })

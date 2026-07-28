@@ -76,6 +76,12 @@ export interface ServeOptions {
     // A pre-built client loaded from `dist` (production `abide start`). When set, the router serves it
     // as-is and never runs Bun.build at request time. Absent → the client is built in-memory on first use.
     clientBuild?: ClientBuild | undefined
+    // An app config assembled WITHOUT scanning the filesystem — what a `abide compile` binary boots
+    // from, where the project's modules are static imports baked into the executable and `dir` names a
+    // source tree that isn't on the machine. Everything after loading (port resolution, the onStart /
+    // onStop wrappers, warm pages, stop) is identical, which is the point: one boot path, two ways of
+    // getting the config.
+    app?: LoadedApp | undefined
 }
 
 export interface ServeResult {
@@ -127,7 +133,7 @@ function isAddressInUse(caught: unknown): boolean {
 }
 
 export async function serve(dir: string, opts: ServeOptions = {}): Promise<ServeResult> {
-    const config: LoadedApp = await loadApp(dir)
+    const config: LoadedApp = opts.app ?? (await loadApp(dir))
     config.port = await resolvePort(opts)
     // Production (`abide start`) minifies the client bundle; `abide dev` does not (TODO #6).
     config.dev = opts.dev === true

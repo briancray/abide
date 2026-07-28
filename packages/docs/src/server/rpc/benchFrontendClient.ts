@@ -52,8 +52,16 @@ const SCENARIOS: Scenario[] = CORPUS.map((scenario) => ({
 
 // Emitted client modules import the runtime as a bare specifier; rewrite it to an absolute path so
 // Bun.build — running from a tmpdir entry outside the package — resolves it (same trick as
-// `clientBundle.emitOne`). Resolved once per process.
-const RUNTIME_PATH = Bun.resolveSync('abide/ui/internal/runtime', import.meta.dir)
+// `clientBundle.emitOne`). Resolved once per process — but on FIRST CALL, not at import: this handler
+// bundles abide's own source at request time, so it can only run where that source is on disk, and
+// resolving at module top level would turn "this one RPC is unavailable here" into "the app does not
+// boot here" (an `abide compile` binary, where `import.meta.dir` is the read-only `/$bunfs/root`).
+let runtimePath: string | undefined
+
+function runtimeModulePath(): string {
+    runtimePath ??= Bun.resolveSync('abide/ui/internal/runtime', import.meta.dir)
+    return runtimePath
+}
 
 // A `<script>`'s framework imports (`abide/shared/state`, …) are emitted as bare `abide/*` specifiers;
 // Bun.build runs from a tmpdir entry outside the package, so rewrite each to its absolute path (same as
@@ -104,7 +112,7 @@ async function buildBundle(): Promise<ClientBenchBundle> {
             const scenario = SCENARIOS[i]!
             let client = emitModuleSource(scenario.src).client.replace(
                 '"abide/ui/internal/runtime"',
-                JSON.stringify(RUNTIME_PATH),
+                JSON.stringify(runtimeModulePath()),
             )
             client = resolveModuleImports(client, scenario.src)
             const file = join(dir, `s${i}.ts`)

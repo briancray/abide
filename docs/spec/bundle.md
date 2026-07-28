@@ -19,7 +19,7 @@ framework. Dual-mode (remote or self-host) like the CLI, and self-configuring on
    (Linux) via a small Bun-hosted native shell (Tauri-style). Keeps bundles small; the host
    process is Bun.
 3. **`abide bundle` builds for the *host platform only*** — no cross-compilation (native shells
-   need platform toolchains), unlike `abide cli --platforms`.
+   need platform toolchains), unlike `abide compile --platforms`.
 
 ## BU2. First-run setup screen
 

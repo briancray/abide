@@ -13,16 +13,16 @@
 // "/users/[id]"); socket name from the filename stem.
 
 import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import type { Socket } from '../socket.ts'
 import { type DeriveEntry, deriveSchemas } from './deriveSchema.ts'
-import { layoutRoutePrefix } from './layouts.ts'
+import { mergeSchemas } from './mergeSchemas.ts'
 import type { Middleware } from './middleware.ts'
-import { routePrefixFromRelative } from './routePrefixFromRelative.ts'
 import type { AppConfig, Route } from './router.ts'
+import { type AppSources, scanAppSources } from './scanAppSources.ts'
 
 // The baked type-derived schema map (§11.5): `abide build` writes it to `dist/schemas.json` so a
 // source-less/tsgo-less runtime (`abide start`, a future `compile`/`cli` standalone) merges schemas
@@ -53,7 +53,11 @@ export interface LoadedApp extends AppConfig, AppLifecycle {}
 // Pull the single meaningful export from an imported module, WITH the name it was found under (needed
 // to derive its schema from source). Prefer `default`, else the sole named export. Returns undefined
 // when the module has no usable export (the caller decides to skip it).
-function singleExport(
+//
+// Exported because a `abide compile` binary imports the same modules STATICALLY and must read them the
+// same way: what counts as "the RPC in this file" is one rule, and a second copy of it in the code
+// generator would be a rule two surfaces could disagree about.
+export function singleExport(
     module: Record<string, unknown>,
 ): { value: unknown; exportName: string } | undefined {
     if (module.default !== undefined) return { value: module.default, exportName: 'default' }
@@ -64,14 +68,14 @@ function singleExport(
 }
 
 // An RPC module's export is an `Rpc`/`Mutation` — both carry non-enumerable `__rpc` metadata.
-function isRoute(value: unknown): value is Route {
+export function isRoute(value: unknown): value is Route {
     return typeof value === 'function' && '__rpc' in (value as object)
 }
 
 // A socket module's export is a `Socket` — it carries the `__socket` internals handle. A `Socket` is a
 // CALLABLE (`socket({room})` picks a room; ADR 0023), so it is a `function`, not an `object` — accept
 // either callable or object as long as it carries `__socket`.
-function isSocket(value: unknown): value is Socket<unknown> {
+export function isSocket(value: unknown): value is Socket<unknown> {
     return (
         (typeof value === 'object' || typeof value === 'function') &&
         value !== null &&
@@ -79,47 +83,15 @@ function isSocket(value: unknown): value is Socket<unknown> {
     )
 }
 
-// rpc/<a>/<b>.ts → "<a>/<b>". Relative path already POSIX from Bun.Glob; strip the `.ts` suffix.
-function rpcRouteName(relativePath: string): string {
-    return relativePath.replace(/\.ts$/, '')
-}
-
-// pages/**/page.abide → the request path.
-function pageRoutePath(relativePath: string): string {
-    return routePrefixFromRelative(relativePath, 'page.abide')
-}
-
-// sockets/<name>.ts → "<name>".
-function socketName(relativePath: string): string {
-    return relativePath.replace(/\.ts$/, '')
-}
-
-// Enumerate files matching `pattern` under `baseDir`, returning POSIX-relative paths. A missing
-// base dir yields nothing (Bun.Glob.scan simply finds no matches).
-async function scanFiles(baseDir: string, pattern: string): Promise<string[]> {
-    if (!existsSync(baseDir)) return []
-    const glob = new Bun.Glob(pattern)
-    const found: string[] = []
-    for await (const relative of glob.scan({ cwd: baseDir, onlyFiles: true })) {
-        found.push(relative)
-    }
-    found.sort()
-    return found
-}
-
 async function loadRoutes(
-    dir: string,
+    sources: AppSources['rpc'],
 ): Promise<{ routes: Record<string, Route>; derivationTargets: DeriveEntry[] }> {
-    const rpcDir = join(dir, 'src/server/rpc')
     const routes: Record<string, Route> = {}
     const derivationTargets: DeriveEntry[] = []
-    const files = await scanFiles(rpcDir, '**/*.ts')
-    for (const relative of files) {
-        const absolute = join(rpcDir, relative)
+    for (const { name, path: absolute } of sources) {
         const module = (await import(absolute)) as Record<string, unknown>
         const exported = singleExport(module)
         if (exported === undefined || !isRoute(exported.value)) continue
-        const name = rpcRouteName(relative)
         routes[name] = exported.value
         // An RPC missing EITHER a hand-written input or output schema is a candidate for type
         // derivation (§11): the handler's arg type → input schema, its return payload → output schema.
@@ -154,24 +126,16 @@ async function applyDerivedSchemas(
     const baked = await readBakedSchemas(dir)
     // Baked path: no tsgo, no warnings (they were emitted at build). Live path: derive + log warnings.
     const derived = baked ?? (await deriveSchemas(targets))
-    for (const target of targets) {
-        const result = derived[target.key]
-        if (result === undefined) continue
-        if (baked === undefined && 'warnings' in result) {
+    if (baked === undefined) {
+        for (const target of targets) {
+            const result = derived[target.key]
+            if (result === undefined || !('warnings' in result)) continue
             for (const warning of (result as { warnings: string[] }).warnings) {
                 log.channel('abide:rpc').warn(warning)
             }
         }
-        const route = routes[target.key]
-        if (route === undefined) continue
-        const options = route.__rpc.options
-        const schemas = { ...options.schemas }
-        if (schemas.input === undefined && result.input !== undefined) schemas.input = result.input
-        if (schemas.output === undefined && result.output !== undefined) {
-            schemas.output = result.output
-        }
-        options.schemas = schemas
     }
+    mergeSchemas(routes, derived)
 }
 
 // Read the baked schema map if `abide build` wrote one. A missing/corrupt file → live derivation.
@@ -204,33 +168,28 @@ export async function writeBakedSchemas(dir: string, routes: Record<string, Rout
     await Bun.write(join(dir, BAKED_SCHEMAS_FILE), JSON.stringify(baked, null, 2))
 }
 
-async function loadSockets(dir: string): Promise<Record<string, Socket<unknown>>> {
-    const socketsDir = join(dir, 'src/server/sockets')
+async function loadSockets(
+    sources: AppSources['sockets'],
+): Promise<Record<string, Socket<unknown>>> {
     const sockets: Record<string, Socket<unknown>> = {}
-    const files = await scanFiles(socketsDir, '*.ts')
-    for (const relative of files) {
-        const module = (await import(join(socketsDir, relative))) as Record<string, unknown>
+    for (const { name, path } of sources) {
+        const module = (await import(path)) as Record<string, unknown>
         const exported = singleExport(module)
         if (exported === undefined || !isSocket(exported.value)) continue
-        sockets[socketName(relative)] = exported.value
+        sockets[name] = exported.value
     }
     return sockets
 }
 
 async function loadPages(
-    dir: string,
+    sources: AppSources['pages'],
 ): Promise<{ pages: Record<string, string>; dirs: Record<string, string> }> {
-    const pagesDir = join(dir, 'src/ui/pages')
     const pages: Record<string, string> = {}
     const dirs: Record<string, string> = {}
-    const files = await scanFiles(pagesDir, '**/page.abide')
-    for (const relative of files) {
-        const absolute = join(pagesDir, relative)
-        const source = await Bun.file(absolute).text()
-        const route = pageRoutePath(relative)
-        pages[route] = source
+    for (const { route, path, dir } of sources) {
+        pages[route] = await Bun.file(path).text()
         // The page's source dir — used to resolve its relative CSS imports in the client bundle (TODO #20).
-        dirs[route] = dirname(absolute)
+        dirs[route] = dir
     }
     return { pages, dirs }
 }
@@ -238,34 +197,34 @@ async function loadPages(
 // pages/**/layout.abide → the directory route prefix it wraps (TODO #7). Keyed by prefix so the
 // composer can select a page's applicable layouts (root → nearest). Sits alongside the page scan.
 async function loadLayouts(
-    dir: string,
+    sources: AppSources['layouts'],
 ): Promise<{ layouts: Record<string, string>; dirs: Record<string, string> }> {
-    const pagesDir = join(dir, 'src/ui/pages')
     const layouts: Record<string, string> = {}
     const dirs: Record<string, string> = {}
-    const files = await scanFiles(pagesDir, '**/layout.abide')
-    for (const relative of files) {
-        const absolute = join(pagesDir, relative)
-        const source = await Bun.file(absolute).text()
-        const prefix = layoutRoutePrefix(relative)
-        layouts[prefix] = source
-        dirs[prefix] = dirname(absolute)
+    for (const { prefix, path, dir } of sources) {
+        layouts[prefix] = await Bun.file(path).text()
+        dirs[prefix] = dir
     }
     return { layouts, dirs }
 }
 
-// Import `src/app.ts` (if present) for its middleware array + lifecycle hooks. A middleware export
-// that isn't an array is ignored (defensive); each hook is carried only when it is a function.
-async function loadAppModule(dir: string): Promise<{
+// Import `src/app.ts` (if present) for its middleware array + lifecycle hooks.
+async function loadAppModule(appPath: string | undefined): Promise<AppModuleExports> {
+    if (appPath === undefined) return { middleware: [], lifecycle: {} }
+    return appModuleExports((await import(appPath)) as Record<string, unknown>)
+}
+
+export interface AppModuleExports {
     middleware: Middleware[]
     lifecycle: AppLifecycle
     onHealth?: AppConfig['onHealth']
     onError?: AppConfig['onError']
-}> {
-    const appPath = join(dir, 'src/app.ts')
-    if (!(await Bun.file(appPath).exists())) return { middleware: [], lifecycle: {} }
+}
 
-    const module = (await import(appPath)) as Record<string, unknown>
+// Read a project's `src/app.ts` module object (CL3). A middleware export that isn't an array is ignored
+// (defensive); each hook is carried only when it is a function. Split from the import above so a
+// compiled binary, which has the module as a static import, applies the identical rule.
+export function appModuleExports(module: Record<string, unknown>): AppModuleExports {
     const middleware = Array.isArray(module.middleware) ? (module.middleware as Middleware[]) : []
     const lifecycle: AppLifecycle = {}
     if (typeof module.onStart === 'function')
@@ -273,12 +232,7 @@ async function loadAppModule(dir: string): Promise<{
     if (typeof module.onStop === 'function')
         lifecycle.onStop = module.onStop as (stop: () => Promise<void>) => void | Promise<void>
     // onHealth/onError ride on AppConfig (router-consumed per request), not AppLifecycle.
-    const result: {
-        middleware: Middleware[]
-        lifecycle: AppLifecycle
-        onHealth?: AppConfig['onHealth']
-        onError?: AppConfig['onError']
-    } = { middleware, lifecycle }
+    const result: AppModuleExports = { middleware, lifecycle }
     if (typeof module.onHealth === 'function')
         result.onHealth = module.onHealth as AppConfig['onHealth']
     if (typeof module.onError === 'function')
@@ -288,9 +242,8 @@ async function loadAppModule(dir: string): Promise<{
 
 // Import `src/server/config.ts` (if present) for its boot-time `env(...)` side effect (CO1). The
 // module itself has no export we consume — importing it validates config at load.
-async function loadConfig(dir: string): Promise<void> {
-    const configPath = join(dir, 'src/server/config.ts')
-    if (!(await Bun.file(configPath).exists())) return
+async function loadConfig(configPath: string | undefined): Promise<void> {
+    if (configPath === undefined) return
     await import(configPath)
 }
 
@@ -315,14 +268,15 @@ async function seedAppName(dir: string): Promise<void> {
 // that don't exist are simply skipped, so partial projects load fine.
 export async function loadApp(dir: string): Promise<LoadedApp> {
     await seedAppName(dir)
-    await loadConfig(dir)
+    const sources = await scanAppSources(dir)
+    await loadConfig(sources.config)
 
-    const { routes, derivationTargets } = await loadRoutes(dir)
+    const { routes, derivationTargets } = await loadRoutes(sources.rpc)
     await applyDerivedSchemas(dir, routes, derivationTargets)
-    const sockets = await loadSockets(dir)
-    const pages = await loadPages(dir)
-    const layouts = await loadLayouts(dir)
-    const app = await loadAppModule(dir)
+    const sockets = await loadSockets(sources.sockets)
+    const pages = await loadPages(sources.pages)
+    const layouts = await loadLayouts(sources.layouts)
+    const app = await loadAppModule(sources.app)
 
     const loaded: LoadedApp = {
         dir,

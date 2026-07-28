@@ -22,6 +22,8 @@
 // client RPC memos BEFORE mount, so an SSR-computed read resolves from cache instead of re-fetching;
 // any remaining keys become mount props.
 
+import { identity } from '../../shared/identity.ts'
+import { adoptIdentity } from '../../shared/internal/adoptIdentity.ts'
 import { adoptTrace } from '../../shared/internal/adoptTrace.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
@@ -164,7 +166,7 @@ function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, ba
 // the RPC + socket proxies (keyed by the local import name), the seed's recorded reads/streams replayed
 // into those memos BEFORE mount (so a seeded read never re-fetches), plus the framework bindings —
 // `state` (the seed-replaying wrapper; its ordinal resets per call and consumes `seed.states` in order),
-// `watch`, `props()`, and the isomorphic `route`/`url`/`navigate`. Reused for both the whole-page mount
+// `watch`, `props()`, and the isomorphic `route`/`identity`/`url`/`navigate`. Reused for both the whole-page mount
 // and a same-chain soft-nav's diverging-suffix sub-hydrate (C6.2), each with its own (partial) seed.
 export function buildPageScope(
     seed: HydrationSeed,
@@ -182,12 +184,24 @@ export function buildPageScope(
     // every log line, which auto-correlates on it) names the server span that produced this page. Runs
     // on first load AND on a full soft-nav's sub-hydrate, each carrying its own request's id.
     adoptTrace(seed.trace)
-    // Strip ALL internal seed sections — `reads`, `states`, `streams`, and `trace` are hydration
-    // plumbing, not page props. Leaving `states`/`streams` in would make client `props()` return an
-    // encoded blob / handoff records while the server's `props()` returns `{}` — an isomorphism break
-    // + internal leak.
-    const { reads: _reads, states: _states, streams: _streams, trace: _trace, ...props } = seed
+    // AU3: adopt the rendering request's principal onto the tab, so a browser `identity()` answers the
+    // same thing the SSR pass did — and re-adopt on every full soft-nav, since a nav is a fresh request
+    // whose middleware may well have resolved someone else.
+    adoptIdentity(seed.identity)
+    // Strip ALL internal seed sections — `reads`, `states`, `streams`, `trace` and `identity` are
+    // hydration plumbing, not page props. Leaving `states`/`streams` in would make client `props()`
+    // return an encoded blob / handoff records while the server's `props()` returns `{}` — an
+    // isomorphism break + internal leak.
+    const {
+        reads: _reads,
+        states: _states,
+        streams: _streams,
+        trace: _trace,
+        identity: _identity,
+        ...props
+    } = seed
     imports.route = route
+    imports.identity = identity
     imports.url = url
     imports.navigate = navigate
     return { ...imports, state: makeSeededState(seed, isHydrating), watch, props: () => props }

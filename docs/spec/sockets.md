@@ -47,18 +47,18 @@ replayable*. Declarative by default (validated pass-through relay); server logic
 
 1. **`tail: N` = last-N replay buffer** delivered to a new/reconnecting subscriber before
    live messages. **Default `tail: 0`** (live-only, like §12). Per-socket ring buffer.
-2. **`ttl: <ms>` = tail message age bound** — a buffered message older than `ttl` is dropped
-   and not replayed. **Default `ttl: ∞`** (consistent with §3). A message is replayable only
-   within *both* `tail` (count) and `ttl` (age). This `ttl` is buffer retention, **not** the
+2. **`maxAge: <ms>` = tail message age bound** — a buffered message older than `maxAge` is dropped
+   and not replayed. **Default `maxAge: ∞`** (consistent with §3). A message is replayable only
+   within *both* `tail` (count) and `maxAge` (age). This `maxAge` is buffer retention, **not** the
    connection idle timeout (`ABIDE_SOCKET_TIMEOUT`).
 3. **Ordering: per-socket FIFO by server-arrival.** The server is the serialization point;
    all subscribers observe messages in accept order (client publishes ordered by arrival,
    not send-time).
 4. **Delivery: at-most-once, best-effort** (matches §8). No per-subscriber durable queue, no
    acks, no redelivery. A subscriber offline at send time gets a message *only if* it
-   reconnects within the `tail`/`ttl` window.
+   reconnects within the `tail`/`maxAge` window.
 5. **No cursor/offset protocol.** Reconnect gets the current tail (may re-see or miss);
-   `tail`/`ttl` is fuzzy resync, not a durable log.
+   `tail`/`maxAge` is fuzzy resync, not a durable log.
 
 ## S3. Transport, HTTP face, scaling
 

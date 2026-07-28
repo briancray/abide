@@ -16,6 +16,8 @@
 // inside a request writing into that request's cache and nowhere else.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { anonymousPrincipal } from '../../shared/internal/anonymousPrincipal.ts'
+import type { Principal } from '../../shared/internal/principal.ts'
 import {
     enterScope,
     type ReactiveScope,
@@ -24,22 +26,23 @@ import {
 } from '../../shared/internal/reactiveScope.ts'
 import type { RouteInfo, RouteKind } from '../../shared/internal/routeInfo.ts'
 import { log } from '../../shared/log.ts'
+import { identityWriter } from './identityWriter.ts'
 import { isProd } from './isProd.ts'
 
 // `RouteInfo`/`RouteKind` moved to `shared/internal/` (ADR 0026) so `shared/route.ts` can name the type
 // it returns without importing up. Re-exported here because every server + ui importer already reaches
 // them through this module.
-export type { RouteInfo, RouteKind }
-
-export interface Principal {
-    id: string
-    authenticated: boolean
-    [k: string]: unknown
-}
+export type { Principal, RouteInfo, RouteKind }
+export { anonymousPrincipal }
 
 export interface RequestScope {
     request: Request
     cookies: Bun.CookieMap
+    // WHO this request is acting as, resolved by the bearer/cookie ladder before any handler runs.
+    // Set at construction and thereafter written ONLY by the identity writer, which updates this and
+    // the reactive scope's copy together — the reactive one is what `shared/identity.ts` reads (it is
+    // isomorphic and cannot import this module), this one is what the router seals into the cookie.
+    // One writer, so the two cannot drift; same arrangement `traceparent` has.
     identity: Principal
     // The router re-seals the rolling abide-identity cookie after every dispatch; `identityCleared`
     // distinguishes logout (clear the cookie) from login/refresh (write it). `identityStateless` marks
@@ -70,11 +73,6 @@ export interface RequestScope {
     traceparent?: string | undefined
 }
 
-// The anonymous-default identity stub (M2). Real cookie-sealed identity resolution is M7.
-export function anonymousPrincipal(): Principal {
-    return { id: crypto.randomUUID(), authenticated: false }
-}
-
 // Per-request scope storage. Separate from M1's reactive scope so accessors can retrieve the
 // full scope while the memo primitive still sees only its reactive scope.
 //
@@ -95,7 +93,12 @@ export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T 
         requestScoped: true,
         route: scope.route,
         traceparent: scope.traceparent,
+        identity: scope.identity,
     }
+    // The write half of the isomorphic `identity()`: installed here because only the server can seal a
+    // cookie, and ABSENT on the client for the same reason — which is what turns a browser
+    // `identity.set()` into a specific error instead of a silent no-op.
+    context.identityWrite = identityWriter(scope, context)
     const result = scopeStorage.run(scope, () =>
         enterScope(context, () => {
             // The fail-closed guarantee now RESTS on this identity (see `currentScope`), where it used

@@ -38,8 +38,8 @@ export interface RpcEntry {
     method: string
     read: boolean
     // Opt-in server cross-request cache (rpc-core §2). Surfaced so the client bundle can flag the read
-    // proxy as `shared` — a shared read auto-subscribes to its broadcast channel (shared-cache-plan §2.5).
-    shared: boolean
+    // proxy: a crossRequest read auto-subscribes to its broadcast channel (shared-cache-plan §2.5).
+    crossRequest: boolean
     // Whether the route routes through a memo (`memo !== false`). The client proxy mirrors it: `false`
     // means the bare call bypasses the client memo (direct fetch, at-least-once) — matters for mutations.
     memo: boolean
@@ -47,6 +47,16 @@ export interface RpcEntry {
     // a read's default; a mutation defaults to `0` (coalesce concurrent, retain nothing). Symmetry: an
     // author who sets `memo: { ttl }` gets that retention on both sides.
     ttl: number | null
+    // Cache tags (rpc-core §8). Carried to the client for the same reason `ttl` is: the tag verbs are
+    // isomorphic, so a `refresh({ tags })`/`invalidate({ tags })` in the browser has to be able to
+    // select this read's client memo. Omitted when the author declared none.
+    tags?: string[]
+    // The SWR refetch clock (rpc-core §3), carried for the same reason `ttl` and `tags` are: it is
+    // bilateral, and the client half is the one that matters most — a broadcast storm calling
+    // `fn.refresh()` is a browser-side stream of triggers. Omitted when the author declared neither, so
+    // the common spec stays two fields lighter in the bundle.
+    throttle?: number
+    debounce?: number
     // The resolved run deadline in ms (ADR 0028), `0` when unbounded. Surfaced so the browser proxy
     // arms the SAME number the server does — bilateral means two independent enforcements (D6), not one
     // timer with two ends. BAKED at build time: `ABIDE_RPC_TIMEOUT` retunes the server on deploy while
@@ -64,9 +74,9 @@ export interface SocketEntry {
     messageSchema?: JSONSchema
     clientPublish: boolean
     // Retention knobs the client proxy needs (client-sockets.md CS7): `tail` sizes the `chunks()` cap,
-    // `ttl` (ms; Infinity = sticky) windows `peek()`.
+    // `maxAge` (ms; Infinity = sticky) windows `peek()`.
     tail: number
-    ttl: number
+    maxAge: number
     clients: Clients
 }
 
@@ -141,14 +151,16 @@ function rpcEntry(name: string, route: Route): RpcEntry {
         name,
         method: meta.method,
         read: meta.read,
-        // Wire/internal field name (the client spec has always called it `shared`); the AUTHORED
-        // option is `crossRequest` (ADR 0027 D5). Renaming reached the authoring surface, not the payload.
-        shared: memoOpt?.crossRequest === true,
+        crossRequest: memoOpt?.crossRequest === true,
         memo: memoed,
         ttl,
         timeout: meta.timeout,
         clients: resolveClients(options.clients, `rpc "${name}"`),
     }
+
+    if (memoOpt?.tags !== undefined && memoOpt.tags.length > 0) entry.tags = memoOpt.tags
+    if (memoOpt?.throttle !== undefined) entry.throttle = memoOpt.throttle
+    if (memoOpt?.debounce !== undefined) entry.debounce = memoOpt.debounce
 
     const inputSchema = jsonSchemaOf(schemas?.input)
     if (inputSchema !== undefined) entry.inputSchema = inputSchema
@@ -199,12 +211,12 @@ function deriveRegistry(config: AppConfig): Registry {
         const entry: SocketEntry = {
             name,
             clientPublish: clientPublishAllowed(options.clientPublish),
-            // The channel's own options (ADR 0027 D1). `maxAge` is the channel's word for the
-            // per-MESSAGE age window; the registry/wire spec keeps calling it `ttl` because that is
-            // what the CLIENT spec field has always been named — the rename is to the authoring
-            // surface, not to the transport payload.
+            // The channel's own options (ADR 0027 D1), carried under the channel's own name the whole
+            // way to the browser. The wire spec used to call this `ttl`, which put the one word the
+            // rename exists to avoid back into the payload — and left `socketSpecs`/`SocketSpec`
+            // reading like a memo retention knob when it is a per-MESSAGE age window.
             tail: typeof options.channel?.tail === 'number' ? options.channel.tail : 0,
-            ttl: typeof options.channel?.maxAge === 'number' ? options.channel.maxAge : Infinity,
+            maxAge: typeof options.channel?.maxAge === 'number' ? options.channel.maxAge : Infinity,
             clients: resolveClients(options.clients, `socket "${name}"`),
         }
         const messageSchema = jsonSchemaOf(options.schema)

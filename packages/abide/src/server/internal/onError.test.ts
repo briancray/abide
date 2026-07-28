@@ -2,9 +2,9 @@
 // A typed error/redirect is a returned Response (not a throw) and never reaches onError.
 
 import { describe, expect, test } from 'bun:test'
+import { identity } from '../../shared/identity.ts'
 import { error } from '../error.ts'
 import { GET } from '../GET.ts'
-import { identity } from '../identity.ts'
 import { request } from '../request.ts'
 import { type AppConfig, createApp } from './router.ts'
 

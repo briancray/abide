@@ -37,10 +37,47 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
 5. **Route-based code-splitting** — each `page.abide` / `layout.abide` is a split point → its own
    lazy client chunk, fetched on nav (C6-nav). Default split strategy.
 6. **`abide compile` = Bun single-file compile** (`bun build --compile`) → standalone server
-   executable; also the base for the CLI's embedded mode (MS3.1).
+   executable, which is ALSO the CLI's embedded mode (MS3.1): they were specced as two artifacts and
+   built as one, so there is one `stageCompileEntry` staging one entry that calls `runCompiledApp`.
+   Staging once is what makes `--platforms` pay for the client build, the emitted pages and the baked
+   schemas once, and only re-run the Bun linker per target. **BUILT.** The mechanism is one
+   idea applied five times: *every lookup `abide start` performs at runtime becomes a build-time
+   one*, because on the deploy machine there is no source tree, no `node_modules`, no `dist/`, and
+   the executable's own directory (`/$bunfs/root`) is read-only.
+   - file discovery (glob + dynamic import) → **static imports** of each rpc/socket/`app.ts`/
+     `config.ts` in a GENERATED ENTRY (`dist/compile/entry.ts`), which `bun build --compile`
+     bundles. The module objects are read by the same `singleExport`/`isRoute`/`isSocket`/
+     `appModuleExports` rules `loadApp` uses, so "what is the RPC in this file" has one definition.
+   - `.abide` compiled on first render → the server module **AOT-emitted** beside the entry
+     (`emitServerTree`), one per page/layout and per imported component, registered into the same
+     cache SSR looks up (`registerEmittedServer`). This is the step that makes a binary possible at
+     all: the SSR path compiles a `.abide` by writing a temp module next to abide's runtime and
+     importing it, and a binary can do neither.
+   - `dist/schemas.json` read at boot → the baked map **inlined** (no tsgo in the binary).
+   - boot itself → `runCompiledApp`, whose `serve` path lands in `serveCompiled` and converges on the
+     same `serve()` the CLI drives, so port resolution, the `onStart`/`onStop` wrappers, warm pages and
+     graceful shutdown are not a second implementation.
+   - The entry imports abide as a PACKAGE SPECIFIER (`abide/server/internal/runCompiledApp`), not a
+     path resolved from the running CLI: the app's own modules resolve `abide` through its
+     `node_modules`, and two copies in one bundle would give the reactive graph, the memo registry
+     and the request scope two homes.
 7. **`compile` and `bundle` embed the client assets** into the executable (Bun asset embedding) —
    the standalone server / desktop binary serves its hashed client assets from **embedded data**,
-   no external `dist/_app` needed. Single-file portable.
+   no external `dist/_app` needed. Single-file portable. **BUILT for `compile`**: each chunk *and
+   each precompressed sidecar* is embedded separately, so `/__abide/chunk/*` negotiates encodings in
+   a binary exactly as it does off disk, and `src/ui/public/**` is embedded keyed by request path
+   (`AppConfig.publicFiles`, which replaces the directory walk).
+   - **Constraint (inherent, not a gap):** a binary carries no SOURCE tree, so a module that resolves
+     or reads paths off `import.meta.dir` finds the read-only `/$bunfs/root`. Two rules follow, and
+     the docs app demonstrates both, because its content IS its source:
+     - **Read it at first call, not at import.** A top-level `Bun.resolveSync` turns "this one handler
+       is unavailable here" into "the app does not boot" (`benchFrontendClient`, whose live bundler
+       genuinely cannot run in a binary — its page degrades to its `{:catch}`).
+     - **What the binary must still answer for, EMBED at build time.** The docs `snippet` RPC reads
+       the demonstrated file off disk; `bun run compile` regenerates `src/server/EMBEDDED_SOURCES.json`
+       first and the RPC falls back to it when there is no disk. Disk stays the primary read, so `abide
+       dev`/`start` show live edits with no regeneration. With that in place the compiled docs binary
+       serves every page byte-identically to `abide start` and passes the whole functional e2e suite.
 
 ## BP2. `abide dev`
 

@@ -13,11 +13,13 @@
 // — as `{ reads: [{ name, args, value }] }`, each value trimmed to its output schema — so the client
 // replays them from cache instead of re-fetching on hydration. An empty seed serialises to `{}`.
 
+import { identity } from '../../shared/identity.ts'
 import { encode } from '../../shared/internal/codec.ts'
 import type { HydrationSeed, SeedRead, StreamHandle } from '../../shared/internal/hydrationSeed.ts'
 import type { ReactiveScope } from '../../shared/internal/reactiveScope.ts'
 import {
     enterScope,
+    peekReactiveScope,
     reactiveScope,
     releaseScope,
     retainScope,
@@ -39,7 +41,6 @@ import {
     drainPatches,
 } from '../../ui/internal/streamScheduler.ts'
 import { cookies } from '../cookies.ts'
-import { identity } from '../identity.ts'
 import { request } from '../request.ts'
 import type { Socket } from '../socket.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
@@ -328,6 +329,13 @@ export function collectSeed(config: AppConfig): HydrationSeed {
     // property of every request rather than of whether the page happened to read something.
     const traceparent = trace()
     if (traceparent !== undefined) seed.trace = traceparent
+    // AU3: hand this request's resolved principal to the client so `identity()` answers in the browser.
+    // Same reasoning as the traceparent above — it is a per-request ambient the page cannot re-derive
+    // (the identity cookie is HttpOnly), so it rides the seed or it does not exist client-side. Read
+    // off the scope rather than through `identity()`, which THROWS outside a request by design (the
+    // fail-closed guarantee): a render with no request scope should seed nothing, not fail.
+    const principal = peekReactiveScope()?.identity
+    if (principal !== undefined) seed.identity = principal
     return seed
 }
 

@@ -1,18 +1,24 @@
 // Cache TAG registry + global tag selectors — rpc-core §8, shared-cache-plan §2.4 (PR4).
 //
-// A SHARED memo declaring `memo: { tags: [...] }` registers itself here under each tag. Registration
-// is server-only in EFFECT — a shared memo is server-only (`memo.ts`: `shared === true && !isBrowser`),
-// so a client memo never registers — but the registry itself depends on nothing above `shared/`, so it
-// lives here (ADR 0026) and the four global verbs reach it without importing up. The global verbs `invalidate({ tags })` / `refresh({ tags })` — the ONLY global cache-verb
+// A memo declaring `memo: { tags: [...] }` registers itself here under each tag. This is ISOMORPHIC:
+// the registry depends on nothing above `shared/` (ADR 0026), and nothing in a tag verb is server
+// machinery — `invalidate`/`refresh` drive the memo's own slot verbs, and the broadcast they trigger
+// self-neuters on the client (a client memo has no `notify` sink). It was once gated on `crossRequest`,
+// which made it server-only in effect: a browser memo is never `crossRequest` (`memo.ts`:
+// `opts?.crossRequest === true && !isBrowser`), so `tags` were discarded in the browser and a client
+// `refresh({ tags })` matched an empty registry and silently did nothing.
+// The global verbs `invalidate({ tags })` / `refresh({ tags })` — the ONLY global cache-verb
 // form (per-callable `fn.invalidate/refresh/publish` stay canonical) — select every registered memo
 // carrying ANY listed tag and run its local drop/revalidate, which (through the memo's already-bound
 // transport-free `notify` sink) broadcasts a per-slot frame on each `@rpc:` channel. A per-tag frame
-// is also emitted on the reserved `@tag:<tag>` channel so a tag-level subscriber mirrors it (client
-// bare-tag subscription itself is deferred; the substrate is complete).
+// is also emitted on the reserved `@tag:<tag>` channel, which the BROWSER now joins (`clientProxy`
+// → `mux.subscribeTagChannel`, authorized by declaration in `channelAuth.authorizeTagJoin`) and
+// mirrors through `applyTagFrame`. That is what carries a server-side verb to a read that is not
+// `crossRequest`: only a crossRequest route has an `@rpc:` channel, but any tagged one has this.
 //
-// The registry maps tag → the MEMOS carrying it, NOT individual slots: a tagged memo is a process
-// lifetime singleton (one per tagged RPC), and each entry enumerates the memo's CURRENT live slots
-// on demand when a verb fires. So the registry never retains per-slot references and never grows
+// The registry maps tag → the MEMOS carrying it, NOT individual slots: each entry enumerates the
+// memo's CURRENT live slots on demand when a verb fires, so the registry never retains per-slot
+// references and never grows
 // with request/slot churn — it is bounded by the count of distinct tagged memos. Slot memory is
 // managed independently by the shared store's LRU.
 
@@ -32,10 +38,15 @@ export interface TaggedMemo {
 // tag → the memos carrying it. A memo with N tags appears in N buckets.
 const registry = new Map<string, Set<TaggedMemo>>()
 
-// Register a shared memo under each of its tags. No unregister: a tagged memo is `crossRequest` by
-// construction (`memo.ts`), which makes it a module singleton that lives for the process — the closure
-// this used to return was allocated per memo and discarded by its only caller.
-export function registerTaggedMemo(entry: TaggedMemo): void {
+// Register a memo under each of its tags, returning its unregister.
+//
+// The unregister is what lets tags come off `crossRequest`. A `crossRequest` memo is a module singleton
+// that lives for the process, so registering one forever cost nothing — but a tagged `memo(...)` in a
+// component `<script>` is built per instance, and each one holds `selectSlots`/`dropSlot` closures over
+// its whole slot map. Without this, mounting that component N times would pin N entries in a
+// process-global `Map` that nothing ever drains. `memo.ts` calls it from the same `onScopeDispose` that
+// tears down a request-scoped auto backing.
+export function registerTaggedMemo(entry: TaggedMemo): () => void {
     for (const tag of entry.tags) {
         let bucket = registry.get(tag)
         if (bucket === undefined) {
@@ -43,6 +54,15 @@ export function registerTaggedMemo(entry: TaggedMemo): void {
             registry.set(tag, bucket)
         }
         bucket.add(entry)
+    }
+    return () => {
+        for (const tag of entry.tags) {
+            const bucket = registry.get(tag)
+            if (bucket === undefined) continue
+            bucket.delete(entry)
+            // Drop the empty bucket too, so a churning per-instance memo leaves no tag keys behind.
+            if (bucket.size === 0) registry.delete(tag)
+        }
     }
 }
 
@@ -72,6 +92,18 @@ export function refreshTags(tags: string[]): void {
     for (const tag of tags) publishMemoFrame(tagChannelName(tag), { verb: 'refresh' })
 }
 
+// Apply an INBOUND tag frame — the browser mirroring a server-side `invalidate/refresh({ tags })`
+// that arrived over the `@tag:` mux channel. Deliberately NOT `invalidateTags`/`refreshTags`: those
+// re-publish onto the tag channel, and a received frame must not echo. (The echo would be inert today,
+// since a browser publish lands in a local in-memory hub with no subscribers, but "inert because
+// nothing happens to be listening" is not a property worth depending on.)
+export function applyTagFrame(tag: string, verb: 'invalidate' | 'refresh'): void {
+    for (const memo of selectMemos([tag])) {
+        if (verb === 'invalidate') memo.invalidate()
+        else memo.refresh()
+    }
+}
+
 // Global `pending({ tags })`: LOCAL reactive aggregate — true if ANY tagged slot is on its first
 // load. Reads every selected memo's slot states (no short-circuit) so a tracking caller subscribes
 // to all of them. No broadcast.
@@ -97,4 +129,12 @@ export function refreshingTags(tags: string[]): boolean {
 // call this in `afterEach` to stay isolated (mirrors `sharedStore().clear()`).
 export function clearTagRegistry(): void {
     registry.clear()
+}
+
+// TEST-ONLY: how many memos are registered under `tag`. The registry is the only place the
+// unregister is observable — a disposed memo's SLOTS die with its scope either way, so a test that
+// watches for re-runs after disposal passes whether or not the entry was ever removed. This asserts
+// the thing that actually leaks.
+export function taggedMemoCount(tag: string): number {
+    return registry.get(tag)?.size ?? 0
 }

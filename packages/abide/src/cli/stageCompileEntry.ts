@@ -1,0 +1,268 @@
+// stageCompileEntry(dir) — everything `bun build --compile` needs, written to `dist/compile/`.
+//
+// There is ONE staged entry and one binary: it always calls `runCompiledApp`, which hosts the app
+// (`serve`), dispatches rpcs as subcommands, or drops into the interactive REPL depending on how the
+// executable is RUN. Staging once also means a cross-compile (`--platforms`) builds the client and
+// emits the pages ONCE, then only re-runs the Bun linker per target.
+//
+// `abide start` serves a project the way `abide dev` does: it scans the source tree, imports what it
+// finds, and reads `dist/` beside it. A binary can do none of that — on the deploy machine there is no
+// source, no `node_modules`, no `dist/_app`, and its own directory (`/$bunfs/root`) is read-only. So
+// staging turns every one of those runtime lookups into a BUILD-TIME one and writes a generated entry
+// module that states the result literally:
+//
+//   discovery (glob + dynamic import)  → static imports of each rpc/socket/app/config module
+//   `.abide` compiled on first render  → the server module AOT-emitted next to the entry (BP1.6)
+//   `dist/_app/<hash>/` read at boot   → the same files embedded as assets (BP1.7)
+//   `dist/schemas.json` read at boot   → the baked map inlined (no tsgo in the binary)
+//   `src/ui/public/**` read per request→ embedded, keyed by request path
+//
+// The entry is ordinary TypeScript in the app's own directory, so `abide` and the app's dependencies
+// resolve exactly as they do for `abide start` — one resolution root, one copy of abide in the bundle
+// (two would give the reactive graph two module-level registries).
+
+import { existsSync } from 'node:fs'
+import { mkdir, rm } from 'node:fs/promises'
+import { basename, join } from 'node:path'
+import { scanAppSources } from '../server/internal/scanAppSources.ts'
+import { emitServerTree } from '../ui/internal/emit.ts'
+import { build } from './main.ts'
+
+export interface StagedEntry {
+    // The generated `dist/compile/entry.ts`, absolute.
+    entryPath: string
+    // The app's package.json name — the default output filename and the binary's `log(...)` channel.
+    name: string
+}
+
+// What `abide build` wrote to `dist/manifest.json` — the client artifacts to embed.
+interface ClientManifest {
+    hash: string
+    entry: string
+    css: string | null
+    files: string[]
+    encodings?: Record<string, string[]>
+    chunkByPattern: Record<string, string>
+}
+
+// Where the generated entry + AOT-emitted page modules live. Under `dist/` because they are build
+// output, not source; rewritten from scratch on every compile so a deleted page can't linger.
+const STAGING = 'dist/compile'
+
+function literal(value: unknown): string {
+    return JSON.stringify(value)
+}
+
+// A generated `import` of an absolute path. Always double-quoted through JSON.stringify so a path
+// containing a quote or backslash (Windows) can't break out of the string.
+function importLine(binding: string | undefined, path: string, attribute?: string): string {
+    const clause = binding === undefined ? '' : `${binding} from `
+    const suffix = attribute === undefined ? '' : ` with { type: ${literal(attribute)} }`
+    return `import ${clause}${literal(path)}${suffix}`
+}
+
+// The app's name, for the default output filename.
+async function appName(dir: string): Promise<string> {
+    const file = Bun.file(join(dir, 'package.json'))
+    if (await file.exists()) {
+        try {
+            const pkg = (await file.json()) as { name?: unknown }
+            if (typeof pkg.name === 'string' && pkg.name.length > 0) return pkg.name
+        } catch {
+            // A malformed package.json is not fatal — fall back to the directory name.
+        }
+    }
+    return basename(dir) || 'app'
+}
+
+// `src/ui/public/**` → the request path each file is served at (`public/fonts/x.woff2` →
+// `/fonts/x.woff2`), which is what the router looks up. Absent dir → nothing to embed.
+async function scanPublicFiles(dir: string): Promise<{ path: string; file: string }[]> {
+    const publicDir = join(dir, 'src/ui/public')
+    const found: { path: string; file: string }[] = []
+    if (!existsSync(publicDir)) return found
+    const glob = new Bun.Glob('**/*')
+    for await (const relativePath of glob.scan({ cwd: publicDir, onlyFiles: true, dot: false })) {
+        found.push({ path: `/${relativePath}`, file: join(publicDir, relativePath) })
+    }
+    found.sort((a, b) => (a.path < b.path ? -1 : 1))
+    return found
+}
+
+// Generate the entry module: static imports for everything the binary carries, then one call into
+// `runCompiledApp`. Every path is absolute (the entry sits in `dist/compile`, not next to the
+// source) except the emitted page modules, which are its siblings.
+function entrySource(input: {
+    dir: string
+    name: string
+    sources: Awaited<ReturnType<typeof scanAppSources>>
+    pages: { route: string; source: string; dir: string }[]
+    layouts: { prefix: string; source: string; dir: string }[]
+    emitted: { source: string; dir: string; file: string }[]
+    schemas: unknown
+    manifest: ClientManifest
+    buildDir: string
+    publicFiles: { path: string; file: string }[]
+}): string {
+    const lines: string[] = [
+        '// GENERATED by `abide compile` — do not edit. Rewritten on every compile.',
+        // A PACKAGE specifier, not a path resolved from the running CLI: the app's own modules import
+        // `abide/...` through its node_modules, and abide must land in the bundle exactly once — two
+        // copies would give the reactive graph, the memo registry and the request scope two homes.
+        // Same reason the emitted page modules keep importing `abide/ui/internal/serverRuntime`.
+        'import { runCompiledApp } from "abide/server/internal/runCompiledApp"',
+        '',
+    ]
+
+    // `src/server/config.ts` first and for its side effect only: `env(...)` validates at boot, and it
+    // must do so before any module that reads config is evaluated.
+    if (input.sources.config !== undefined) lines.push(importLine(undefined, input.sources.config))
+
+    const rpcBindings: string[] = []
+    input.sources.rpc.forEach((entry, index) => {
+        const binding = `$rpc${index}`
+        rpcBindings.push(`{ name: ${literal(entry.name)}, module: ${binding} }`)
+        lines.push(importLine(`* as ${binding}`, entry.path))
+    })
+
+    const socketBindings: string[] = []
+    input.sources.sockets.forEach((entry, index) => {
+        const binding = `$socket${index}`
+        socketBindings.push(`{ name: ${literal(entry.name)}, module: ${binding} }`)
+        lines.push(importLine(`* as ${binding}`, entry.path))
+    })
+
+    if (input.sources.app !== undefined) lines.push(importLine('* as $app', input.sources.app))
+
+    // The AOT-emitted server module for each page/layout/component tree, imported as a sibling.
+    const moduleBindings: string[] = []
+    input.emitted.forEach((entry, index) => {
+        const binding = `$page${index}`
+        lines.push(importLine(`{ render as ${binding} }`, `./${basename(entry.file)}`))
+        moduleBindings.push(
+            `{ source: ${literal(entry.source)}, dir: ${literal(entry.dir)}, render: ${binding} }`,
+        )
+    })
+
+    // The client build. Each encoding is its own embedded file so the router negotiates in the binary
+    // exactly as it does off disk.
+    const assetEntries: string[] = []
+    input.manifest.files.forEach((name, index) => {
+        const fields: string[] = [`name: ${literal(name)}`]
+        lines.push(importLine(`$asset${index}`, join(input.buildDir, name), 'file'))
+        fields.push(`identity: $asset${index}`)
+        const encodings = input.manifest.encodings?.[name] ?? []
+        if (encodings.includes('gzip')) {
+            lines.push(importLine(`$asset${index}gz`, join(input.buildDir, `${name}.gz`), 'file'))
+            fields.push(`gzip: $asset${index}gz`)
+        }
+        if (encodings.includes('brotli')) {
+            lines.push(importLine(`$asset${index}br`, join(input.buildDir, `${name}.br`), 'file'))
+            fields.push(`brotli: $asset${index}br`)
+        }
+        assetEntries.push(`{ ${fields.join(', ')} }`)
+    })
+
+    const publicEntries: string[] = []
+    input.publicFiles.forEach((entry, index) => {
+        lines.push(importLine(`$public${index}`, entry.file, 'file'))
+        publicEntries.push(`${literal(entry.path)}: $public${index}`)
+    })
+
+    const pageSources = input.pages.map((page) => `${literal(page.route)}: ${literal(page.source)}`)
+    const pageDirs = input.pages.map((page) => `${literal(page.route)}: ${literal(page.dir)}`)
+    const layoutSources = input.layouts.map(
+        (layout) => `${literal(layout.prefix)}: ${literal(layout.source)}`,
+    )
+    const layoutDirs = input.layouts.map(
+        (layout) => `${literal(layout.prefix)}: ${literal(layout.dir)}`,
+    )
+
+    lines.push(
+        '',
+        'await runCompiledApp({',
+        `    dir: ${literal(input.dir)},`,
+        `    name: ${literal(input.name)},`,
+        `    rpc: [${rpcBindings.join(', ')}],`,
+        `    sockets: [${socketBindings.join(', ')}],`,
+        input.sources.app === undefined ? '' : '    app: $app,',
+        `    pages: { ${pageSources.join(', ')} },`,
+        `    pageDirs: { ${pageDirs.join(', ')} },`,
+        `    layouts: { ${layoutSources.join(', ')} },`,
+        `    layoutDirs: { ${layoutDirs.join(', ')} },`,
+        `    modules: [${moduleBindings.join(', ')}],`,
+        `    schemas: ${literal(input.schemas)},`,
+        `    client: { entry: ${literal(input.manifest.entry)}, css: ${literal(input.manifest.css)}, chunkByPattern: ${literal(input.manifest.chunkByPattern)} },`,
+        `    assets: [${assetEntries.join(', ')}],`,
+        `    publicFiles: { ${publicEntries.join(', ')} },`,
+        '})',
+        '',
+    )
+    return lines.filter((line) => line !== '').join('\n')
+}
+
+export async function stageCompileEntry(dir: string): Promise<StagedEntry> {
+    // The client bundle + baked schemas the binary will carry. Building first also means a broken app
+    // fails HERE, with the bundler's diagnostics, rather than inside `bun build --compile`.
+    await build(dir)
+
+    const manifestFile = Bun.file(join(dir, 'dist', 'manifest.json'))
+    if (!(await manifestFile.exists())) {
+        throw new Error('abide compile: `abide build` produced no dist/manifest.json')
+    }
+    const manifest = (await manifestFile.json()) as ClientManifest
+    const buildDir = join(dir, 'dist', '_app', manifest.hash)
+
+    const schemasFile = Bun.file(join(dir, 'dist', 'schemas.json'))
+    const schemas = (await schemasFile.exists()) ? await schemasFile.json() : {}
+
+    const sources = await scanAppSources(dir)
+    const pages = await Promise.all(
+        sources.pages.map(async (page) => ({
+            route: page.route,
+            dir: page.dir,
+            source: await Bun.file(page.path).text(),
+        })),
+    )
+    const layouts = await Promise.all(
+        sources.layouts.map(async (layout) => ({
+            prefix: layout.prefix,
+            dir: layout.dir,
+            source: await Bun.file(layout.path).text(),
+        })),
+    )
+
+    const stagingDir = join(dir, STAGING)
+    await rm(stagingDir, { recursive: true, force: true })
+    await mkdir(stagingDir, { recursive: true })
+
+    // Every page AND layout renders through its own emitted module (a layout is a level, not a
+    // fragment of the page), so both are emitted — components they import come along in the tree.
+    const emitted = await emitServerTree(
+        [
+            ...pages.map((page) => ({ source: page.source, dir: page.dir })),
+            ...layouts.map((layout) => ({ source: layout.source, dir: layout.dir })),
+        ],
+        stagingDir,
+    )
+
+    const name = await appName(dir)
+    const entryPath = join(stagingDir, 'entry.ts')
+    await Bun.write(
+        entryPath,
+        entrySource({
+            dir,
+            name,
+            sources,
+            pages,
+            layouts,
+            emitted,
+            schemas,
+            manifest,
+            buildDir,
+            publicFiles: await scanPublicFiles(dir),
+        }),
+    )
+
+    return { entryPath, name }
+}

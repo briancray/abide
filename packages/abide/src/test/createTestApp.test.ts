@@ -2,9 +2,9 @@ import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { error } from '../server/error.ts'
 import { GET } from '../server/GET.ts'
-import { identity } from '../server/identity.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
 import { POST } from '../server/POST.ts'
+import { identity } from '../shared/identity.ts'
 import { createTestApp, identityCookie, type TestApp } from './createTestApp.ts'
 
 let running: TestApp | undefined

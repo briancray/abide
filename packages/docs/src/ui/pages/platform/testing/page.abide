@@ -74,7 +74,7 @@
     <p>Drop to <code>fetch(path, init?)</code> against the live origin when you need to assert status codes, headers, or transport details the proxy hides. This is the same <code>Request</code> → <code>Response</code> path the browser hits. Building the URL by hand means naming the reserved transport param yourself: a read's canonical JSON args blob is <code>?__abide_args=&lt;json&gt;</code> (the <code>__abide_</code> prefix is what stops it colliding with a handler's own arg field). Flat per-field params — <code>?name=x</code> — work too, coerced by the input schema.</p>
   </aside>
   <Panel id="impersonate-an-identity" title="Impersonate an identity" source="test">
-    <pre class="code" data-lang="ts"><code>import &#123; identity &#125; from 'abide/server/identity'
+    <pre class="code" data-lang="ts"><code>import &#123; identity &#125; from 'abide/shared/identity'
   
   const whoami = GET(async () =&gt; (&#123; id: identity().id, authenticated: identity().authenticated &#125;))
   const app = await createTestApp(&#123; routes: &#123; whoami &#125; &#125;)

@@ -75,7 +75,7 @@ afterEach(() => {
 })
 
 function makeProxy(spec: Partial<SocketSpec> = {}): SocketLike {
-    const full: SocketSpec = { clientPublish: false, tail: 0, ttl: null, ...spec }
+    const full: SocketSpec = { clientPublish: false, tail: 0, maxAge: null, ...spec }
     const imports = makeClientSocketImports({ chat: full })
     return imports.chat as SocketLike
 }
@@ -191,7 +191,7 @@ interface RoomedSocketLike {
 }
 
 function roomedProxy(spec: Partial<SocketSpec> = {}): RoomedSocketLike {
-    const full: SocketSpec = { clientPublish: true, tail: 5, ttl: null, ...spec }
+    const full: SocketSpec = { clientPublish: true, tail: 5, maxAge: null, ...spec }
     return makeClientSocketImports({ feed: full }).feed as RoomedSocketLike
 }
 

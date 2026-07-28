@@ -349,16 +349,24 @@ export function disposeEffectScope(scope: EffectScope): void {
     scope.disposers.length = 0
 }
 
+// Register a teardown on the INNERMOST open effect scope — a component's setup preamble on the client,
+// a render's on the server. Returns false when no scope is open, which is the caller's signal that it
+// owns the lifetime itself (a module-level construction lives for the process).
+export function onEffectScopeDispose(dispose: () => void): boolean {
+    if (openScopeCount === 0) return false
+    const stack = reactiveScope().effectScopes
+    const scope = stack === undefined ? undefined : stack[stack.length - 1]
+    if (scope === undefined) return false
+    scope.disposers.push(dispose)
+    return true
+}
+
 // biome-ignore lint/suspicious/noConfusingVoidType: void (not undefined) lets callers pass a void-returning thunk (e.g. watch.ts) whose value is ignored; undefined would break assignability
 export function effect(fn: () => void | (() => void)): () => void {
     const node = new Reactive(fn, true, true)
     node.updateIfNecessary() // runs synchronously to establish subscriptions
     const dispose = () => disposeNode(node)
-    if (openScopeCount > 0) {
-        const stack = reactiveScope().effectScopes
-        const scope = stack === undefined ? undefined : stack[stack.length - 1]
-        if (scope !== undefined) scope.disposers.push(dispose)
-    }
+    onEffectScopeDispose(dispose)
     return dispose
 }
 

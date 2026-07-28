@@ -11,10 +11,15 @@ import { staticAssetType } from './staticAssetType.ts'
 //
 // Returns undefined when nothing matches, so the router falls through to page/RPC routing — a public
 // file never shadows a route it does not literally name.
+//
+// `embedded` is the `abide compile` case (BP1.7): the executable carries these files inside itself, so
+// the lookup is a MAP rather than a directory walk. That also makes the traversal guard moot on that
+// path — a binary can only answer for the exact paths it embedded, and a `..` simply isn't a key.
 export async function servePublicFile(
-    dir: string,
+    dir: string | undefined,
     pathname: string,
     request: Request,
+    embedded?: Record<string, string>,
 ): Promise<Response | undefined> {
     // A public asset is always an absolute, non-root path. Anything else is not ours to answer.
     if (!pathname.startsWith('/') || pathname === '/') return undefined
@@ -31,11 +36,19 @@ export async function servePublicFile(
     // file than the one validated below. Refuse it outright rather than normalise it.
     if (decoded.includes('\0')) return undefined
 
-    const publicDir = resolve(join(dir, 'src/ui/public'))
-    // `resolve` collapses `..` — the containment check below is what actually stops traversal, and it
-    // compares the RESOLVED path (so `/fonts/../../app.ts` is caught after normalisation, not before).
-    const target = resolve(join(publicDir, decoded))
-    if (target !== publicDir && !target.startsWith(publicDir + sep)) return undefined
+    let target: string
+    if (embedded !== undefined) {
+        const embeddedPath = embedded[decoded]
+        if (embeddedPath === undefined) return undefined
+        target = embeddedPath
+    } else {
+        if (dir === undefined) return undefined
+        const publicDir = resolve(join(dir, 'src/ui/public'))
+        // `resolve` collapses `..` — the containment check below is what actually stops traversal, and it
+        // compares the RESOLVED path (so `/fonts/../../app.ts` is caught after normalisation, not before).
+        target = resolve(join(publicDir, decoded))
+        if (target !== publicDir && !target.startsWith(publicDir + sep)) return undefined
+    }
 
     // Resolve the content type BEFORE touching the filesystem: an extensionless path is never a public
     // file (it is a page route), so this rejects it without a syscall. It also skips directories, which

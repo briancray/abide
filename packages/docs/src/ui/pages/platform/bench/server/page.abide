@@ -39,10 +39,10 @@
       <thead>
         <tr class="border-b border-slate-300 text-left">
           <th class="py-1.5 pr-4">bench</th>
-          <th class="py-1.5 pr-4 text-right">ns/op</th>
-          <th class="py-1.5 pr-4 text-right">vanilla JS</th>
-          <th class="py-1.5 pr-4 text-right">×</th>
-          <th class="py-1.5 pr-4 text-right">iters</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">ns/op</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">vanilla JS</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">×</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">iters</th>
           <th class="py-1.5">note</th>
         </tr>
       </thead>
@@ -50,10 +50,10 @@
         {#for await row of benchServer()}
           <tr class="border-b border-slate-100" data-testid="bench-row">
             <td class="py-1.5 pr-4 font-mono">{row.group}/{row.name}</td>
-            <td class="py-1.5 pr-4 text-right font-mono">{fmtNs(row.nsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono font-semibold">{fmtRatio(row)}</td>
-            <td class="py-1.5 pr-4 text-right font-mono text-slate-400">{row.iters}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.nsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.vanillaNsPerOp === null ? "—" : fmtNs(row.vanillaNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono font-semibold">{fmtRatio(row)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-400">{row.iters}</td>
             <td class="py-1.5 font-mono text-slate-500">{row.vanillaNote === null ? row.note : row.note + " · vs " + row.vanillaNote}</td>
           </tr>
         {:catch}

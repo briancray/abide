@@ -13,6 +13,7 @@ import { parseSoftNav } from '../test/parseSoftNav.ts'
 function readSeedFromDocument(html: string): {
     reads?: Array<{ name: string; args: unknown; value: unknown }>
     trace?: string
+    identity?: { id: string; authenticated: boolean }
 } {
     const match = html.match(/<script type="application\/json" id="__abide-seed">(.*?)<\/script>/s)
     expect(match).not.toBeNull()
@@ -36,18 +37,21 @@ test('SSR document records the resolved read into #__abide-seed', async () => {
     await app.stop()
 })
 
-test('a read-free page seeds only the trace (CO2.3)', async () => {
-    // The seed used to be byte-identically `{}` here. It now always carries the rendering request's
-    // traceparent — the client's only way to adopt it, since a document response's headers are not
-    // JS-readable — and nothing else. A regression that leaks another field into a read-free, state-
-    // free page's seed shows up as an extra key on this exact-shape assertion.
+test('a read-free page seeds only the request ambients (CO2.3 / AU3)', async () => {
+    // The seed used to be byte-identically `{}` here. It now always carries the two per-request
+    // ambients the client cannot re-derive for itself — the rendering request's `traceparent` (a
+    // document response's headers are not JS-readable) and its resolved `identity` (the identity
+    // cookie is HttpOnly) — and nothing else. A regression that leaks another field into a read-free,
+    // state-free page's seed shows up as an extra key on this exact-shape assertion.
     const app = await createTestApp({ pages: { '/': '<h1>static</h1>' } })
 
     const response = await app.fetch('/')
     const seed = readSeedFromDocument(await response.text())
-    expect(Object.keys(seed)).toEqual(['trace'])
+    expect(Object.keys(seed).sort()).toEqual(['identity', 'trace'])
     // Same id the response stamps, so a client log line and a server span line up.
     expect(seed.trace).toBe(response.headers.get('traceresponse') ?? '')
+    // The anonymous principal this request resolved to — what a browser `identity()` will answer.
+    expect(seed.identity).toMatchObject({ authenticated: false })
 
     await app.stop()
 })

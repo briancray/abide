@@ -72,11 +72,14 @@ test('a soft-nav request (Abide-Nav header) returns a streamed JSONL envelope of
     expect(stripAnchors(envelope.html)).toContain('<span>99</span>')
     expect(envelope.html).not.toContain('<!doctype html>')
     expect(envelope.html).not.toContain('__abide-app')
-    // Read-free page → no `reads`; the soft-nav seed still carries THIS nav request's trace (CO2.3),
-    // which is how the client's `trace()` follows a navigation instead of freezing on the first load.
-    const seed = envelope.seed as { trace?: string }
-    expect(Object.keys(seed)).toEqual(['trace'])
+    // Read-free page → no `reads`; the soft-nav seed still carries THIS nav request's per-request
+    // ambients — its trace (CO2.3), which is how the client's `trace()` follows a navigation instead of
+    // freezing on the first load, and its identity (AU3), so a nav whose middleware resolved someone
+    // else re-adopts rather than leaving the tab on the identity it loaded with.
+    const seed = envelope.seed as { trace?: string; identity?: { authenticated: boolean } }
+    expect(Object.keys(seed).sort()).toEqual(['identity', 'trace'])
     expect(seed.trace).toBe(response.headers.get('traceresponse') ?? '')
+    expect(seed.identity).toMatchObject({ authenticated: false })
     expect(envelope.url).toBe('/users/99')
 
     await app.stop()

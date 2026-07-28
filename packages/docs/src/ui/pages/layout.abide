@@ -111,7 +111,7 @@
     "/platform/observability": "Every response carries a traceparent, because the trace belongs to the REQUEST — not to whether a handler happened to ask for one. The browser then adopts the trace of the request that rendered the page.",
     "/platform/lifecycle": "<code>onStart</code> WRAPS boot rather than running before it: set up, then await the start you were handed. Returning without calling it means the app never boots.",
     "/platform/machines": "The MCP tool list is your own RPCs — the same handlers the browser calls, so there is no second surface to keep in sync.",
-    "/platform/cli": "<code>abide cli</code> builds a DUAL-MODE binary: it self-hosts the embedded app, or targets a remote one through <code>ABIDE_APP_URL</code>.",
+    "/platform/cli": "One executable, three faces: <code>serve</code> hosts the app, an rpc name runs that rpc, and a bare run opens an interactive session.",
     "/platform/testing": "Naming no surface is DISCOVERY mode — the test app loads the real project and runs its lifecycle hooks. Name one and you get a hermetic app instead.",
     "/platform/deploy": "<code>abide build</code> precompresses every asset and bakes the derived schemas to disk, so production carries neither a bundler nor a type-derivation pass.",
     "/platform/bench": "A performance claim is a RATIO against hand-written code in the same substrate. Absolute milliseconds describe the machine that produced them.",

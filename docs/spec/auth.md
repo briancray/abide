@@ -62,6 +62,31 @@ second-param idea from the interview was rejected in favor of imported ambient a
    - `identity.set(principal)` — **authenticate**: upgrade the anonymous identity to `principal`;
      abide encrypts it into the `abide-identity` cookie automatically.
    - `identity.clear()` — **logout**: revert to a fresh anonymous identity / clear the cookie.
+   - `identity.refresh()` — **client-side**: re-ask the server who this caller is now (after a login
+     mutation changed the cookie) and wake every reader. A no-op on the server, whose scope was
+     resolved from the live request and cannot be stale.
+5. **ISOMORPHIC (`abide/shared/identity`).** Same import, same call, both sides — it was
+   `abide/server/identity` until the read gained a client. On the SERVER it is the request's resolved
+   principal; in the BROWSER it is the principal the server resolved FOR THAT PAGE, carried in the
+   hydration seed (the identity cookie is HttpOnly, so a tab cannot work it out for itself),
+   re-adopted on every navigation, and **reactive** — a component reading `identity()` re-renders when
+   it changes, while an identical re-adopt wakes nobody (every nav decodes a fresh object; waking on
+   object identity would re-render the tree per nav to say nothing changed).
+   - **The reads are isomorphic; the WRITES are server-side by physics.** `set`/`clear` need
+     `ABIDE_IDENTITY_SECRET` and the outgoing response, so in a browser they THROW and name the fix
+     (call a login/logout rpc, then `refresh()`). A client that could authenticate itself would be a
+     client that could forge an identity — the round trip through a mutation IS the boundary.
+   - **Outside a request, on the server, `identity()` throws** — and that is load-bearing, not
+     pedantry: a `memo({ crossRequest: true })` body runs scope-EXITED so that touching an ambient
+     fails closed (rpc-core checkpoint (a)). An anonymous fallback there would turn a loud error into
+     a silent cross-user leak. The browser has no "outside a request", so its pre-hydration floor is
+     the right answer there and only there.
+   - **`GET /__abide/identity`** returns the caller's own resolved principal — what
+     `identity.refresh()` and a compiled binary's `identity` subcommand read. It discloses nothing
+     they do not already hold (their next request IS this identity) and runs through the middleware
+     chain like every other route. It is also what makes an OPAQUE sealed credential debuggable
+     without making it forgeable: the holder cannot read their own token, so the only honest answer to
+     "as whom?" comes from the server.
 4. **Anonymous vs authenticated signal (FLAGGED default):** `identity()` always returns at
    least `{ id }`. Recommended default to distinguish: an **`authenticated: boolean`** field
    (false for the auto anonymous identity, true after `identity.set()`). Alternative

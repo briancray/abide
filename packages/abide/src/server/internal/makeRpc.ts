@@ -88,7 +88,19 @@ export interface RpcOptions {
     // `false` opts a call OUT of the memo entirely (replayable-streams.md §1): a mutation runs every call
     // (no coalescing); a read runs at ttl:0. `{ … }` overrides the per-verb default (reads ttl:∞,
     // mutations ttl:0).
-    memo?: false | { ttl?: number; crossRequest?: boolean; tags?: string[] }
+    // `throttle`/`debounce` are the SWR refetch clock (rpc-core §3) and, like `ttl` and `tags`, they are
+    // BILATERAL: carried to the browser proxy's memo too, so an author who rate-limits revalidation gets
+    // it on both sides. That is where it earns most of its keep — a socket broadcast storm calling
+    // `fn.refresh()` is a client-side stream of triggers.
+    memo?:
+        | false
+        | {
+              ttl?: number
+              crossRequest?: boolean
+              tags?: string[]
+              throttle?: number
+              debounce?: number
+          }
 }
 
 // An `output` schema, when present, must ACCEPT the handler's resolved return payload — its Standard
@@ -327,6 +339,11 @@ export function makeRead<Args, T>(
         // Tags register a crossRequest read for the global `invalidate/refresh({ tags })` selectors
         // (rpc-core §8). Honored only on a crossRequest memo (server-only registry); inert otherwise.
         if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
+        // The SWR refetch clock (rpc-core §3): rate-limits this read's explicit revalidation. Setting
+        // both edges is a TypeError from the memo constructor below, which surfaces at module load with
+        // the route's own stack — no second validation needed here.
+        if (memoConfig?.throttle !== undefined) memoOptions.throttle = memoConfig.throttle
+        if (memoConfig?.debounce !== undefined) memoOptions.debounce = memoConfig.debounce
     }
     // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets
     // the actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
@@ -377,6 +394,13 @@ export function makeMutation<Args, R>(
     const memoOptions: MemoOptions = { ttl: memoConfig?.ttl ?? 0 }
     if (memoConfig?.crossRequest === true) memoOptions.crossRequest = true
     if (memoConfig?.tags !== undefined) memoOptions.tags = memoConfig.tags
+    // The refetch clock gates REVALIDATION of a retained value, so it only bites on a mutation that
+    // opted into retention (`memo: { ttl }`) — at the default ttl:0 there is no stale value to serve
+    // and every trigger is a cold load. Forwarded regardless: the option pairing is the author's, and
+    // silently dropping it on the verb that happens to default to 0 is the kind of surface asymmetry
+    // this file already carries `ttl` and `tags` across.
+    if (memoConfig?.throttle !== undefined) memoOptions.throttle = memoConfig.throttle
+    if (memoConfig?.debounce !== undefined) memoOptions.debounce = memoConfig.debounce
     let broadcast: MemoNotify | undefined
     // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
     // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.

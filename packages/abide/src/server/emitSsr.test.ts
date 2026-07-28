@@ -96,8 +96,9 @@ test('[emit] a read-free page seeds no reads (only the request trace)', async ()
     expect(match).not.toBeNull()
     const seedJson = match?.[1]
     if (seedJson === undefined) throw new Error('expected a seed script tag')
-    // `trace` (CO2.3) is on every seed — the client adopts it so `trace()` answers in the browser.
-    expect(Object.keys(JSON.parse(seedJson))).toEqual(['trace'])
+    // `trace` (CO2.3) and `identity` (AU3) are on every seed — the client adopts both so `trace()`
+    // and `identity()` answer in the browser.
+    expect(Object.keys(JSON.parse(seedJson)).sort()).toEqual(['identity', 'trace'])
 
     await app.stop()
 })
