@@ -34,8 +34,8 @@ import { basename, dirname, join } from 'node:path'
 import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
-import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
+import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import { buildRegistry } from './registry.ts'
@@ -105,11 +105,25 @@ function rpcSpecs(
     importedNames: Set<string>,
 ): Record<
     string,
-    { method: string; read: boolean; shared: boolean; memo: boolean; ttl: number | null }
+    {
+        method: string
+        read: boolean
+        shared: boolean
+        memo: boolean
+        ttl: number | null
+        timeout: number
+    }
 > {
     const specs: Record<
         string,
-        { method: string; read: boolean; shared: boolean; memo: boolean; ttl: number | null }
+        {
+            method: string
+            read: boolean
+            shared: boolean
+            memo: boolean
+            ttl: number | null
+            timeout: number
+        }
     > = {}
     for (const entry of buildRegistry(config).rpcs) {
         if (!importedNames.has(entry.name)) continue
@@ -124,6 +138,7 @@ function rpcSpecs(
             shared: entry.shared,
             memo: entry.memo,
             ttl: entry.ttl,
+            timeout: entry.timeout,
         }
     }
     return specs

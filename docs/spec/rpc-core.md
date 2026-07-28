@@ -466,11 +466,24 @@ pages — nothing is reserved outside `/__abide/*`.
    on the response, and **exempts** an admitted origin from the same-origin CSRF gate;
    `credentials: true` forces the concrete-origin echo (the `*` wildcard is illegal with
    credentials). `OPTIONS` to an RPC without `crossOrigin` is a 405.
-4. **`timeout` is bilateral** — both a client-side abort (`AbortSignal`) **and** a
-   server-side deadline (handler execution + SSR scalar-read render), default
-   `ABIDE_RPC_TIMEOUT`, per-RPC overridable. The server deadline gives SSR peek reads their
-   own bound (closing the slowloris hole where only streams had a deadline). **`maxBodySize`**
-   = per-RPC override of `ABIDE_MAX_REQUEST_BODY_SIZE`, enforced pre-parse.
+4. **`timeout` is the maximum time WITHOUT PROGRESS** (ADR 0028) — for a value RPC the only
+   progress event is settling, so it is time-to-settle; for a streaming RPC it is
+   time-to-first-chunk and then the inter-chunk gap, re-armed on every chunk. One meaning,
+   both shapes. Default `ABIDE_RPC_TIMEOUT` (**300000**, a fallback CEILING rather than a tuned
+   bound), per-RPC overridable; `timeout: 0`/`Infinity` opts out and **warns**, because an
+   unbounded RPC re-opens its own SSR streaming exemption. It is **bilateral** — a client-side
+   abort **and** a server-side deadline — but as two INDEPENDENT enforcements of one number, not
+   one timer with two ends: the client's clock includes connect/queueing/body-read and so always
+   fires first for a browser call, while the server's bounds the work. The deadline is
+   **run-scoped and aborts the run** (the memo owns the run, so one coalesced slot has one
+   outcome); a **client abort** additionally kills the server's run unless `memo: { crossRequest:
+   true }`, whose slot outlives the request that started it. The handler receives the composed
+   signal on `request().signal`, so the abort is COOPERATIVE — a handler that ignores it keeps
+   running and only the caller is released. A trip settles as a typed `TimeoutError` / **504** and
+   the slot is EXPIRED, not disposed: `fn.error()` still reports it while the next read runs cold.
+   A caller's own `fn(args, { signal })` aborts only THEIR wait (`AbortSignal.timeout(n)` there is
+   how a per-call bound is spelled). **`maxBodySize`** = per-RPC override of
+   `ABIDE_MAX_REQUEST_BODY_SIZE`, enforced pre-parse.
 5. **`memo` opt = the value-cache config for that RPC** (`{ ttl, crossRequest, tags, … }`) —
    the in-memory reactive/coalescing cache (§2–§3, §8 tags), **not** HTTP `Cache-Control`.
    HTTP response caching, if wanted, rides response-init headers separately. **Wire default:**
@@ -489,6 +502,7 @@ pages — nothing is reserved outside `/__abide/*`.
 | Form | Meaning |
 | --- | --- |
 | `fn(args)` | smart read — cached, coalesced, reactive, SSR in-proc → browser fetch |
+| `fn(args, { signal })` | same read, with a caller-owned abort that detaches THIS waiter (ADR 0028 D3) |
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
 | `fn.refresh()` / `fn.refresh(args)` | eager refetch, keep stale visible (partial-args match) |
 | `fn.invalidate()` / `fn.invalidate(args)` | drop cached slot(s), lazy reload (partial-args match; no arg = whole callable) |

@@ -19,7 +19,12 @@ import {
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
-import type { MutationCallSurface, RpcCallSurface } from '../../shared/internal/rpcSurface.ts'
+import type {
+    MutationCallSurface,
+    RpcCallOptions,
+    RpcCallSurface,
+} from '../../shared/internal/rpcSurface.ts'
+import { withAbort } from '../../shared/internal/withAbort.ts'
 import { memo } from '../../shared/memo.ts'
 import { applyMemoFrame } from './applyMemoFrame.ts'
 import { subscribeMemoChannel } from './mux.ts'
@@ -134,7 +139,13 @@ function mutationInit(method: string, args: unknown, sameOrigin: boolean): Reque
 export function clientProxy<Args = unknown, T = unknown>(
     name: string,
     method: string,
-    opts?: { base?: string; shared?: boolean; memo?: boolean; ttl?: number | null },
+    opts?: {
+        base?: string
+        shared?: boolean
+        memo?: boolean
+        ttl?: number | null
+        timeout?: number
+    },
 ): RpcCallSurface<Args, T> | MutationCallSurface<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
@@ -144,17 +155,38 @@ export function clientProxy<Args = unknown, T = unknown>(
     // (direct fetch every time; at-least-once for a mutation), mirroring the server. Default reads and
     // mutations are memoed.
     const memoed = opts?.memo !== false
+    // The rpc's run deadline, BAKED at build time (ADR 0028 D6/D9). `0` = unbounded. The client half is
+    // an independent enforcement of the same number, not the far end of one timer: this clock includes
+    // DNS, connect, HTTP/1 connection queueing and body read, none of which the server's sees — so for a
+    // browser call it is the one that fires. Aborting the fetch closes the connection, which is what the
+    // server reads as "the client aborted" (D4).
+    const timeout = opts?.timeout ?? 0
+
+    // Compose the run deadline with a caller-supplied signal (D3). The caller's aborts THEIR wait; the
+    // deadline aborts the work — two different owners, so the fetch honours whichever fires first rather
+    // than letting one replace the other.
+    const callSignal = (signal?: AbortSignal | null): AbortSignal | undefined => {
+        const deadline = timeout > 0 ? AbortSignal.timeout(timeout) : undefined
+        if (deadline === undefined) return signal ?? undefined
+        if (signal === undefined || signal === null) return deadline
+        return AbortSignal.any([deadline, signal])
+    }
 
     // Transport + decode: a jsonl/sse response decodes to an AsyncIterable (ReplayableStream) so a
     // streaming handler is consumed identically on both sides (`{#for await x of rpc()}`); a value
     // response parses JSON. Same for reads and mutations — only the request differs.
-    const load = async (args: Args | FormData): Promise<T> => {
+    const load = async (args: Args | FormData, signal?: AbortSignal): Promise<T> => {
+        const armed = callSignal(signal)
         const response = read
             ? await fetch(readUrl(base, name, args), {
                   method,
                   headers: traceHeaders(sameOrigin),
+                  ...(armed !== undefined ? { signal: armed } : {}),
               })
-            : await fetch(`${base}/__abide/rpc/${name}`, mutationInit(method, args, sameOrigin))
+            : await fetch(`${base}/__abide/rpc/${name}`, {
+                  ...mutationInit(method, args, sameOrigin),
+                  ...(armed !== undefined ? { signal: armed } : {}),
+              })
         if (!response.ok) throw await toHttpError(response)
         if (isStreamContentType(response.headers.get('content-type'))) {
             return decodeStreamResponse(response) as unknown as T
@@ -166,11 +198,17 @@ export function clientProxy<Args = unknown, T = unknown>(
     // mutation's spec carries `ttl: 0` by default (coalesce concurrent, retain nothing); `memo: { ttl }`
     // carries the author's value so a cached mutation retains on the client too.
     const ttl = opts?.ttl
-    const loadForMemo = load as (args: Args) => Promise<T>
+    // Deliberately a 1-arg wrapper: the memo classifies a body by `fn.length` (auto-tracked vs
+    // args-keyed), so handing it `load`'s 2-arg shape directly would let a transport detail decide a
+    // reactivity question.
+    const loadForMemo = (args: Args): Promise<T> => load(args)
+    // The client memo carries the deadline too, so a timed-out slot EXPIRES rather than caching its
+    // TimeoutError for the rest of a read's infinite ttl (ADR 0028 D7). The fetch above is already
+    // armed; this is what makes the next read run cold instead of re-rejecting from the slot.
     const backing =
         ttl === null || ttl === undefined
-            ? memo<Args, T>(loadForMemo)
-            : memo<Args, T>(loadForMemo, { ttl })
+            ? memo<Args, T>(loadForMemo, { timeout })
+            : memo<Args, T>(loadForMemo, { ttl, timeout })
 
     // A `shared` route broadcasts cache verbs on its `(rpc,args)` channel (rpc-core §8). On the FIRST
     // read for a given args the browser memo auto-joins that channel and mirrors inbound frames through
@@ -194,13 +232,17 @@ export function clientProxy<Args = unknown, T = unknown>(
     // subscribe the reactive context so `{await fn()}` re-awaits on invalidate). A `memo: false` call
     // (read OR mutation) bypasses the memo — every call runs (direct fetch; at-least-once for a
     // mutation), mirroring the server. A FormData mutation body always bypasses (can't be keyed).
-    const rpc = ((args: Args | FormData): Promise<T> => {
+    // A caller's `signal` (ADR 0028 D3) reaches the two paths differently, and the difference is the
+    // decision: a memo-BACKED call detaches the waiter only, because the run fills a slot other callers
+    // are coalesced onto; a `memo: false` call has no slot and exactly one consumer, so its signal goes
+    // straight to `fetch` and really cancels the request.
+    const rpc = ((args: Args | FormData, options?: RpcCallOptions): Promise<T> => {
         if (!memoed || (!read && typeof FormData !== 'undefined' && args instanceof FormData)) {
-            return load(args)
+            return load(args, options?.signal)
         }
         ensureSubscribed(args as Args)
-        return backing(args as Args)
-    }) as RpcCallSurface<Args, T>
+        return withAbort(backing(args as Args), options?.signal)
+    }) as unknown as RpcCallSurface<Args, T>
     rpc.peek = (args: Args): T | undefined => {
         ensureSubscribed(args)
         return backing.peek(args)
@@ -221,17 +263,24 @@ export function clientProxy<Args = unknown, T = unknown>(
         backing.watch(args, handler)
     // Raw fetch, full bypass of the memo — the untouched `Response` (no parse, no `!ok` throw). A read
     // GETs `?__abide_args=`; a mutation POSTs the body + CSRF header. `init` overrides wholesale.
-    rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> =>
-        read
+    rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> => {
+        // `.raw` bypasses the MEMO, not the deadline (ADR 0028 D6). `init` still overrides wholesale, but
+        // its `signal` is COMPOSED with the run deadline rather than replacing it — a caller reaching for
+        // the escape hatch is asking for transport control, not for an unbounded request.
+        const armed = callSignal(init?.signal)
+        return read
             ? fetch(readUrl(base, name, args), {
                   method,
                   headers: traceHeaders(sameOrigin),
                   ...(init ?? {}),
+                  ...(armed !== undefined ? { signal: armed } : {}),
               })
             : fetch(`${base}/__abide/rpc/${name}`, {
                   ...mutationInit(method, args, sameOrigin),
                   ...(init ?? {}),
+                  ...(armed !== undefined ? { signal: armed } : {}),
               })
+    }
     rpc.isError = (e: unknown, name: string): boolean =>
         e !== null &&
         typeof e === 'object' &&
@@ -257,7 +306,14 @@ export function clientProxy<Args = unknown, T = unknown>(
 export function makeClientImports(
     specs: Record<
         string,
-        { method: string; read: boolean; shared?: boolean; memo?: boolean; ttl?: number | null }
+        {
+            method: string
+            read: boolean
+            shared?: boolean
+            memo?: boolean
+            ttl?: number | null
+            timeout?: number
+        }
     >,
     base?: string,
 ): Record<string, unknown> {
@@ -269,6 +325,7 @@ export function makeClientImports(
             // Absent → memoed (default); only an explicit `false` opts the call out of the memo.
             memo: spec.memo !== false,
             ttl: spec.ttl ?? null,
+            timeout: spec.timeout ?? 0,
         })
     }
     return imports

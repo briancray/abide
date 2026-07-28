@@ -3,9 +3,10 @@
 // The `{#for await}` SSR streamer applies the last-resort global `ABIDE_SSR_STREAM_BUDGET` ONLY to a
 // NON-abide source (a raw generator / `fetch().body`) — the one thing abide can't otherwise bound. An
 // ABIDE RPC source (`attachable`, tagged by the emitter when the head resolves to a known RPC import)
-// is bounded by its OWN bilateral RPC timeout, so it gets NO global cap: firing the budget must not cut
-// it off. These tests drive the streamer generator directly with a MANUALLY-controlled source + budget
-// (no wall-clock racing) so the branch is proven deterministically.
+// carries its OWN run deadline — a PROGRESS clock (ADR 0028 D1), not this total-wall-clock one — so it
+// gets NO global cap: firing the budget must not cut it off. These tests drive the streamer generator
+// directly with a MANUALLY-controlled source + budget (no wall-clock racing) so the branch is proven
+// deterministically. What bounds the exempted source is covered in `server/rpcTimeout.test.ts`.
 
 import { expect, test } from 'bun:test'
 import { createReactiveScope, enterScope } from '../../shared/internal/reactiveScope.ts'

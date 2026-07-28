@@ -13,6 +13,7 @@
 // out-of-order `<template>` + move-script patch. Blocking forms (`{await fn()}`, `{#await p then v}`)
 // never call this — they await inline as before.
 
+import { envMs } from '../../shared/internal/envMs.ts'
 import { markIterableDone } from '../../shared/internal/iterableDone.ts'
 import { log } from '../../shared/log.ts'
 import type {
@@ -37,11 +38,6 @@ const BUDGET_PASSED: unique symbol = Symbol('abide.ssr.budget')
 // deadline would fire first and stream EVERY read. 4ms cleanly separates a cold-but-fast in-proc read
 // (~0.1ms) from genuine I/O (network/disk, ms+) with wide margin on both sides, so the inline/stream
 // classification is stable across machines (fast/warm pages stay byte-identical to the buffered path).
-function envMs(name: string, fallback: number): number {
-    const raw = typeof process !== 'undefined' ? process.env?.[name] : undefined
-    const parsed = raw !== undefined ? Number(raw) : NaN
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
-}
 
 // A timer promise resolving to `sentinel` after `ms`, unref'd so it never by itself holds the process.
 function timerPromise(ms: number, sentinel: symbol): Promise<symbol> {
@@ -57,8 +53,9 @@ function timerPromise(ms: number, sentinel: symbol): Promise<symbol> {
 // Create the per-render streaming scope with its deadline (default 4ms, `ABIDE_SSR_DEADLINE`) and the
 // `{#for await}` streaming budget (default 5min, `ABIDE_SSR_STREAM_BUDGET`) — a LAST-RESORT bound past
 // which a still-running streamed list is cut off (client re-iterates) so an SSR `{#for await}` never
-// hangs. It applies ONLY to NON-abide sources (raw generators / `fetch().body`); an abide RPC source is
-// bounded by its OWN bilateral timeout and gets no global cap at all (replayable-streams.md §6).
+// hangs. It applies ONLY to NON-abide sources (raw generators / `fetch().body`); an abide RPC source
+// carries its OWN progress deadline (ADR 0028 D1) and gets no global cap at all
+// (replayable-streams.md §6).
 export function createRenderStream(): RenderStream {
     let budgetPromise: Promise<symbol> | undefined
     return {
@@ -220,10 +217,14 @@ function dropHandle(scope: RenderStream, handle: StreamHandleRecord): void {
 // (a synchronous/fast stream stays byte-identical to the buffered path); if it is still yielding past
 // the deadline it returns the items seen so far + a trailing `<template>` sentinel and registers a
 // STREAMER that appends each subsequent item as a patch, then marks the list COMPLETE iff the source
-// ends. The SSR budget is SOURCE-DERIVED (§6): an abide RPC source (`attachable`) is bounded by its own
-// bilateral RPC timeout — which already self-terminates the stream — so it gets NO global SSR cap; only
-// a NON-abide source (raw generator / `fetch().body`) is cut off at the last-resort global
-// `ABIDE_SSR_STREAM_BUDGET` (default 5min) so an unbounded local stream never hangs the flush. For an
+// ends. The SSR budget is SOURCE-DERIVED (§6), and the two clocks differ in KIND, not just in who owns
+// them: an abide RPC source (`attachable`) carries its own run deadline, which is a PROGRESS clock (ADR
+// 0028 D1) — it trips only on an idle gap, so a healthy stream runs for hours and gets NO global SSR
+// cap; a NON-abide source (raw generator / `fetch().body`) is cut off at the last-resort global
+// `ABIDE_SSR_STREAM_BUDGET` (default 5min), which is TOTAL wall-clock and cuts a perfectly healthy
+// stream too. That asymmetry is the exemption's justification. A tripped abide deadline arrives as an
+// iteration ERROR (the memo `fail`s the transcript), so it lands in the catch below — `{:catch}`
+// rendered, handle dropped, client re-runs — rather than as a silent truncation. For an
 // ATTACHABLE (known-RPC) source it ALSO captures the decoded item values
 // and registers a `StreamHandleRecord` (§5) so the client ADOPTS the transcript (mode A, completed) or
 // RESUMES it (mode B, open) on hydrate instead of re-invoking the RPC — the SSR paint is placeholder
@@ -324,8 +325,9 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
             let step = inFlight
             try {
                 for (;;) {
-                    // Source-derived budget (§6): an abide RPC source is bounded by its OWN timeout, so await it
-                    // directly with no global cap; a non-abide source races the last-resort `ABIDE_SSR_STREAM_BUDGET`.
+                    // Source-derived budget (§6): an abide RPC source carries its own PROGRESS deadline (ADR
+                    // 0028), which self-terminates the stream as an error, so await it directly with no global
+                    // cap; a non-abide source races the last-resort total-wall-clock `ABIDE_SSR_STREAM_BUDGET`.
                     const raced = attachable
                         ? { kind: 'item' as const, result: await step }
                         : await Promise.race([

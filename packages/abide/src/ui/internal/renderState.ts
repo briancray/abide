@@ -33,8 +33,9 @@ export interface RenderStream {
     // LAZILY-ARMED last-resort `{#for await}` streaming budget (default 5min, `ABIDE_SSR_STREAM_BUDGET`).
     // Consulted ONLY by a NON-abide source (raw generator / `fetch().body`), which is cut off when it
     // fires (client re-iterates) — this is why an unbounded SSR `{#for await}` never hangs the body. An
-    // abide RPC source is bounded by its own bilateral timeout and NEVER calls this (§6), so a page whose
-    // streaming sources are all abide RPCs never schedules the timer. Memoized: one timer per render, max.
+    // abide RPC source carries its own PROGRESS deadline instead (ADR 0028 D1: an idle clock, not this
+    // total-wall-clock one) and NEVER calls this (§6), so a page whose streaming sources are all abide
+    // RPCs never schedules the timer. Memoized: one timer per render, max.
     budget: () => Promise<symbol>
     deferred: DeferredSubtree[]
     streamers: DeferredStreamer[]

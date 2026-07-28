@@ -122,7 +122,20 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, memo?: false | { ttl?, crossR
   proxy decodes a streaming response by content-type into an `AsyncIterable` (routed through the same memo),
   so `{#for await x of rpc()}` works in the browser identically to SSR; `sse` is also consumable via the
   native `EventSource`.
-- **`timeout`**: bilateral (client abort + server deadline); defaults to `ABIDE_RPC_TIMEOUT`.
+- **`timeout`**: the maximum time **without PROGRESS** (ADR 0028) — for a value that is time-to-settle,
+  for a stream time-to-first-chunk then the inter-chunk gap (re-armed per chunk), so a healthy stream
+  runs for hours. Default `ABIDE_RPC_TIMEOUT` (**5 min**, a fallback CEILING, not a tuned bound);
+  `timeout: 0`/`Infinity` opts out and **warns** (it re-opens the rpc's own SSR streaming exemption).
+  **Bilateral** = two INDEPENDENT enforcements of one number, not one timer with two ends: the client
+  clock includes connect/queueing/body-read and so fires first for a browser call; the server's bounds
+  the work. **Run-scoped and aborts the run** — the memo owns the run, so one coalesced slot yields one
+  outcome for every joined caller. A **client abort** also kills the server's run *unless*
+  `memo: { crossRequest: true }` (that slot outlives the request that started it). The handler gets the
+  composed signal on **`request().signal`** — no new ambient — so the abort is COOPERATIVE: ignore it and
+  the run continues, only the caller is released. A trip is a typed **`TimeoutError` / 504**
+  (`fn.isError(e, 'TimeoutError')` narrows both sides) and the slot is **EXPIRED, not disposed**:
+  `fn.error()` still reports it while the next read runs cold. `.raw()` bypasses the memo, not the
+  deadline.
 - **`crossOrigin`**: CORS opt-in, **default closed** (no `Access-Control-*`; a cross-origin mutation is
   CSRF-rejected). `true` = allow any origin; `{ origin?: string | string[] | boolean, methods?, headers?,
   credentials?, maxAge? }` = an allowlist (`origin` string/array is exact; `true`/omitted = any). When
@@ -291,6 +304,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | Form | Meaning |
 | --- | --- |
 | `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate. A mutation call is the same, but posts args in the body (default `ttl:0` retains nothing) |
+| `fn(args, { signal })` | the same read with a caller-owned abort. It detaches **THIS waiter only** — the author's `timeout` owns the work, a caller's signal owns their wait — so it never strands the other callers coalesced onto the slot (a `memo: false` call, having no slot and one consumer, does cancel the request outright). This is why no per-call timeout option exists: `fn(args, { signal: AbortSignal.timeout(500) })` is one. Zero-arg: `fn(undefined, { signal })` |
 | `fn.peek(args)` | reactive `T \| undefined` snapshot — subscribes + kicks a coalesced load; the non-blocking display read |
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
 | `memo.state(args, initial)` | the WRITABLE PROJECTION of one slot (`memo` only): a live cell over that slot whose `set` IS `publish`, so a local write is provisional until the next re-fill. The key is a `Room` positional and the `initial` trails it (`m.state(initial)` argless, `m.state({id}, initial)` keyed) — required on an **async** memo because a cold slot has no value and `State<T>` is invariant, so widening the read would also let `set` forge the not-loaded sentinel. A **sync** memo needs none: it is never pending and rethrows, so its read is already `T`-or-throw |
@@ -424,7 +438,7 @@ already-compressed format are left alone; `abide dev` skips it entirely. Measure
 | `ABIDE_APP_TOKEN` / `ABIDE_APP_URL` | bearer token / app URL for remote CLI & bundle |
 | `ABIDE_MAX_SHARED_CACHE_SIZE` | byte ceiling (LRU) for shared + default-context cache (default: no limit) |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | per-stream ReplayableStream transcript cap in bytes (default: no limit; exceed → overflow, no replay) |
-| `ABIDE_RPC_TIMEOUT` | default for the RPC `timeout` prop (bilateral); per-RPC `timeout` overrides |
+| `ABIDE_RPC_TIMEOUT` | default run deadline in ms (**300000**) — a fallback ceiling, per-RPC `timeout` is the real knob. Read at construction, so the browser half is **baked by `abide build`** and a deploy-time change retunes only the server |
 | `ABIDE_SOCKET_TIMEOUT` | socket idle/connection timeout (WS) |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | default max request body |
 | `ABIDE_DERIVE_SCHEMAS` (`0`) | disable load-time type-derived schema inference at boot (default on; `abide dev`/`run`/test app derive live via a `node`/tsgo pass, `abide build` bakes to `dist/schemas.json`) |

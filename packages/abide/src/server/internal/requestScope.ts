@@ -125,8 +125,9 @@ export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T 
 }
 
 // How long a context may legitimately outlive its handler before an outstanding retain looks like a bug
-// rather than a slow stream. Generous: a long-poll `{#for await}` is bounded by its RPC timeout, not by
-// this.
+// rather than a slow stream. Generous: a long-poll `{#for await}` is bounded by its rpc's run deadline
+// (ADR 0028), not by this — and since that deadline is a PROGRESS clock, a stream that keeps flowing
+// legitimately outlives this window. Hence a warning rather than a teardown.
 const RETAIN_WARN_MS = 60_000
 
 // Dev-only leak detector for the retain/release refcount (ADR 0026). An unmatched retain is SILENT

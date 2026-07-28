@@ -24,13 +24,20 @@
 // the probe surface stays present but reads an empty slot. A `FormData` body always bypasses the memo
 // (it can't be safely keyed — see §1).
 
+import { envMs } from '../../shared/internal/envMs.ts'
 import type { Payload } from '../../shared/internal/responseSource.ts'
 import type {
     MutationCallArgs,
+    MutationInvokeArgs,
     RpcCallArgs,
+    RpcCallOptions,
     RpcCallSurface,
+    RpcInvokeArgs,
 } from '../../shared/internal/rpcSurface.ts'
 import { markSettled } from '../../shared/internal/settledRead.ts'
+import { withAbort } from '../../shared/internal/withAbort.ts'
+import { withDeadline } from '../../shared/internal/withDeadline.ts'
+import { log } from '../../shared/log.ts'
 import { type Memo, type MemoNotify, type MemoOptions, memo } from '../../shared/memo.ts'
 
 export type { Payload } from '../../shared/internal/responseSource.ts'
@@ -114,6 +121,10 @@ export interface RpcMeta<Args, T> {
     handler: (args: Args) => Promise<T> | T
     options: RpcOptions
     read: boolean
+    // The RESOLVED run deadline in ms (ADR 0028), `0` when unbounded. Baked at construction rather than
+    // recomputed per request so the env read and the unbounded-opt-out warning happen exactly once —
+    // a per-request `resolveRpcTimeout` would re-emit that warning on every call to an unbounded rpc.
+    timeout: number
 }
 
 // A read-call argument tuple. A ZERO-arg handler (`GET(() => …)`) infers `Args = unknown`, so the
@@ -138,7 +149,7 @@ export interface Rpc<Args, T> extends RpcCallSurface<Args, T> {
 // are meaningless (or throw) on a stream slot. This is what a user's editor sees for a streaming read.
 export interface StreamRead<Args, C> {
     // THE READ: awaitable; resolves to a fresh cursor that replays the transcript so far then goes live.
-    (...args: RpcCallArgs<Args>): Promise<AsyncIterable<C>>
+    (...args: RpcInvokeArgs<Args>): Promise<AsyncIterable<C>>
     // Reactive PEEK: the "current value" of a stream = its MOST-RECENT chunk (undefined before the first).
     // The non-blocking "latest value" read — same name/role as a value read's `peek`. Use `chunks` for all.
     peek(...args: RpcCallArgs<Args>): C | undefined
@@ -173,13 +184,13 @@ export type ReadSurface<Args, R> = [Payload<R>] extends [AsyncIterable<infer C>]
 // keeps the argument optional. The `.raw` here still carries the mutation body + CSRF header on the
 // client and returns the untouched `Response` (no parse, no `!ok` throw).
 export interface Mutation<Args, T> extends Rpc<Args, T> {
-    (...args: MutationCallArgs<Args>): Promise<T>
+    (...args: MutationInvokeArgs<Args>): Promise<T>
 }
 
 // A streaming MUTATION shares the full `StreamRead` chunk-probe surface (peek=latest chunk / chunks /
 // done / pending / error / refresh / invalidate / raw); only the call widens to accept `FormData`.
 export interface StreamMutation<Args, C> extends StreamRead<Args, C> {
-    (...args: MutationCallArgs<Args>): Promise<AsyncIterable<C>>
+    (...args: MutationInvokeArgs<Args>): Promise<AsyncIterable<C>>
 }
 
 // The surface a mutation helper (POST/PUT/PATCH/DELETE) yields — the read-side `ReadSurface`, widened
@@ -229,6 +240,7 @@ function attachSurface<Args, T>(
     method: string,
     options: RpcOptions,
     read: boolean,
+    timeout: number,
     setBroadcast: (sink: MemoNotify) => void,
 ): void {
     callable.peek = (args: Args): T | undefined => backing.peek(args)
@@ -272,8 +284,33 @@ function attachSurface<Args, T>(
     streamable.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
     streamable.done = (args: Args): boolean => backing.done(args)
     streamable.resumeStream = (args: Args, from: number) => backing.resumeStream(args, from)
-    attachMeta(callable, { method, handler: rawSource, options, read })
+    attachMeta(callable, { method, handler: rawSource, options, read, timeout })
 }
+
+// The run deadline for this rpc in ms (ADR 0028 D9). `ABIDE_RPC_TIMEOUT` is a FALLBACK CEILING, not a
+// tuned bound — the per-rpc `timeout` is the real knob, and a caller wanting a tight one arms its own
+// (`fn(args, { signal: AbortSignal.timeout(500) })`, D3). It cannot default to unbounded: SSR exempts an
+// abide `{#for await}` source from the global `ABIDE_SSR_STREAM_BUDGET` on the strength of THIS deadline
+// (`streamScheduler.ts`), so an infinite default would ship that exemption with nothing behind it.
+//
+// `0`/`Infinity` is a legal opt-out and is LOUD, in the manner of `deriveSchema`'s `any`-param warning:
+// an unbounded rpc re-opens that exemption for itself, and a silently unbounded stream is precisely the
+// hole this option was added to close.
+function resolveRpcTimeout(options: RpcOptions, method: string): number {
+    const declared = options.timeout
+    if (declared === undefined) return envMs('ABIDE_RPC_TIMEOUT', DEFAULT_RPC_TIMEOUT_MS)
+    if (!Number.isFinite(declared) || declared <= 0) {
+        log.channel('abide:rpc').warn(
+            `${method} declares timeout: ${String(declared)} — this rpc runs UNBOUNDED. Its SSR ` +
+                `{#for await} exemption from ABIDE_SSR_STREAM_BUDGET now has nothing behind it, so a ` +
+                `hung run holds the document open. Set a finite timeout unless that is intended.`,
+        )
+        return 0
+    }
+    return declared
+}
+
+const DEFAULT_RPC_TIMEOUT_MS = 300_000
 
 export function makeRead<Args, T>(
     method: string,
@@ -305,13 +342,23 @@ export function makeRead<Args, T>(
     // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
     // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.
     memoOptions.loader = true
+    // The deadline is the MEMO's (ADR 0028 D2): the memo owns the run, so one coalesced slot has one
+    // deadline and every joined caller observes the identical outcome.
+    const timeout = resolveRpcTimeout(options, method)
+    memoOptions.timeout = timeout
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }
     const backing = memo<Args, T>(fn, memoOptions)
 
-    const rpc = ((args: Args): Promise<T> => settleRead(() => backing(args))) as Rpc<Args, T>
-    attachSurface(rpc, backing, fn, method, options, true, (sink) => {
+    // A caller's `signal` detaches THEIR wait and leaves the run alone (ADR 0028 D3) — the run belongs
+    // to the memo slot, which other callers are coalesced onto.
+    const rpc = ((args: Args, options?: RpcCallOptions): Promise<T> =>
+        withAbort(
+            settleRead(() => backing(args)),
+            options?.signal,
+        )) as unknown as Rpc<Args, T>
+    attachSurface(rpc, backing, fn, method, options, true, timeout, (sink) => {
         broadcast = sink
     })
     return rpc
@@ -342,21 +389,32 @@ export function makeMutation<Args, R>(
     // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
     // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.
     memoOptions.loader = true
+    const timeout = resolveRpcTimeout(options, method)
+    memoOptions.timeout = timeout
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }
     const backing = memo<Args, T>(handler, memoOptions)
 
-    const mutation = ((args: Args | FormData): Promise<T> => {
+    const mutation = ((args: Args | FormData, options?: RpcCallOptions): Promise<T> => {
         // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw
         // FormData throws in canonicalKey), and `memo: false` opts the call out entirely → run the
         // handler directly (at-least-once). Otherwise route through the memo (coalesce/retain).
         if (!memoed || (typeof FormData !== 'undefined' && args instanceof FormData)) {
-            return Promise.resolve(handler(args as Args))
+            // The memo-bypass path still gets its deadline (ADR 0028): `memo: false` opts out of
+            // coalescing and retention, not out of being bounded — and with no slot there is nothing else
+            // left to bound it.
+            return withAbort(
+                Promise.resolve(withDeadline(handler(args as Args), timeout)),
+                options?.signal,
+            )
         }
-        return settleRead(() => backing(args as Args))
-    }) as Rpc<Args, T>
-    attachSurface(mutation, backing, handler, method, options, false, (sink) => {
+        return withAbort(
+            settleRead(() => backing(args as Args)),
+            options?.signal,
+        )
+    }) as unknown as Rpc<Args, T>
+    attachSurface(mutation, backing, handler, method, options, false, timeout, (sink) => {
         broadcast = sink
     })
     return mutation as unknown as MutationSurface<Args, R>

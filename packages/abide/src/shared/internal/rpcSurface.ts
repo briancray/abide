@@ -18,6 +18,31 @@ import type { MemoNotify } from '../memo.ts'
 // concrete shape — exactly the discriminator between "no declared input" and "declared input".
 export type RpcCallArgs<Args> = unknown extends Args ? [args?: Args] : [args: Args]
 
+// Per-call options on the BARE CALL only (ADR 0028 D3) — `fn(args, { signal })`. A caller's signal
+// aborts THEIR wait, never the run; that is what makes a per-call timeout need no API of its own
+// (`fn(args, { signal: AbortSignal.timeout(500) })` is one, composed from the platform).
+//
+// It trails the arg slot, and a zero-arg rpc therefore writes `fn(undefined, { signal })`. The leading
+// slot does not collapse, because a zero-arg rpc infers `Args = unknown` rather than `void` — the same
+// reason `rpc.publish(args, value)` keeps its arg slot. A trailing options bag cannot be confused with
+// a leading args object the way a single collapsed parameter could.
+export interface RpcCallOptions {
+    signal?: AbortSignal
+}
+
+// The BARE CALL's argument tuple — the args slot plus the trailing options bag. Spelled out rather than
+// built as `[...RpcCallArgs<Args>, options?]`: a tuple with an OPTIONAL element cannot be spread and
+// then extended, so the appended member was silently dropped for the zero-arg case and
+// `fn(undefined, { signal })` reported "Expected 0-1 arguments". The probes keep the plain
+// `RpcCallArgs` — per-call options belong to the call, not to `peek`/`pending`/`error`.
+export type RpcInvokeArgs<Args> = unknown extends Args
+    ? [args?: Args, options?: RpcCallOptions]
+    : [args: Args, options?: RpcCallOptions]
+
+export type MutationInvokeArgs<Args> = unknown extends Args
+    ? [args?: Args | FormData, options?: RpcCallOptions]
+    : [args: Args | FormData, options?: RpcCallOptions]
+
 // A mutation-call argument tuple — same zero-arg discriminator as `RpcCallArgs`, but a mutation also
 // accepts a `FormData` in the arg slot. A ZERO-arg mutation (`POST(() => …)`) makes the argument
 // OPTIONAL so a bare `fn()` type-checks (parity with a zero-arg read); a declared arg stays REQUIRED.
@@ -29,7 +54,7 @@ export interface RpcCallSurface<Args, T> {
     // THE READ (Promise-read model): the bare call is the awaitable, coalesced load; it also subscribes
     // the calling reactive context, so `{await fn()}` / `{#await fn()}` re-await on invalidate. Use
     // `.peek()` for the non-blocking `T | undefined` snapshot.
-    (...args: RpcCallArgs<Args>): Promise<T>
+    (...args: RpcInvokeArgs<Args>): Promise<T>
     // Reactive peek: subscribes, kicks a coalesced load when cold, returns value or undefined.
     peek(...args: RpcCallArgs<Args>): T | undefined
     pending(...args: RpcCallArgs<Args>): boolean
@@ -70,5 +95,5 @@ export interface RpcCallSurface<Args, T> {
 
 // The mutation call surface: identical probes/verbs, widened call (args in the body, `FormData` legal).
 export interface MutationCallSurface<Args, T> extends RpcCallSurface<Args, T> {
-    (...args: MutationCallArgs<Args>): Promise<T>
+    (...args: MutationInvokeArgs<Args>): Promise<T>
 }

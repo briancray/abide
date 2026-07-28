@@ -33,6 +33,7 @@
 
 import { canonicalKey } from './internal/codec.ts'
 import { isBrowser } from './internal/isBrowser.ts'
+import { isTimeoutError } from './internal/isTimeoutError.ts'
 import { registerTaggedMemo } from './internal/memoTags.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
 import { type Computed, computed, effect, type State, state, untrack } from './internal/reactive.ts'
@@ -56,6 +57,7 @@ import {
     sharedStore,
 } from './internal/sharedCache.ts'
 import { tagStreamTranscript } from './internal/streamTranscript.ts'
+import { withDeadline } from './internal/withDeadline.ts'
 import { log } from './log.ts'
 
 // `crossRequest` is a SERVER concept (cross-request store + scope isolation). On the client a
@@ -78,6 +80,40 @@ interface SlotState<T> {
     // Set only when status === "stream": the shared replay buffer this slot fans out (§4).
     stream?: ReplayableStream<unknown>
 }
+
+// The idle clock behind a streaming run's deadline (ADR 0028 D1). One timer for the whole stream,
+// restarted in place on every chunk via `refresh()` — no allocation per chunk, and `unref` so a stream
+// awaiting its next chunk never by itself holds the process open (which would break `abide run` and any
+// short-lived script). `ms` of 0 arms nothing and hands back inert no-ops, so an unbounded stream pays
+// neither the timer nor a branch per chunk beyond one already-monomorphic call.
+function armStreamDeadline(ms: number, onIdle: () => void): { progress(): void; cancel(): void } {
+    if (!Number.isFinite(ms) || ms <= 0) return INERT_STREAM_DEADLINE
+    let timer = setTimeout(onIdle, ms)
+    timer.unref?.()
+    // `refresh()` restarts a timer IN PLACE, which is what keeps a hot stream from allocating one per
+    // chunk — but it is a Node/Bun `Timeout` method and this module is ISOMORPHIC: in the browser
+    // `setTimeout` returns a number, `timer.refresh()` throws, and the throw lands in the pump's catch,
+    // which fails the transcript. That is a whole-stream break with a per-chunk cause, and no unit test
+    // sees it (happy-dom takes the same server path) — the docs-app e2e suite is what caught it. So the
+    // capability is probed ONCE here and each branch stays monomorphic, rather than re-arming blindly
+    // on the server too.
+    const refreshable = typeof (timer as { refresh?: unknown }).refresh === 'function'
+    return {
+        progress: refreshable
+            ? () => {
+                  timer.refresh()
+              }
+            : () => {
+                  clearTimeout(timer)
+                  timer = setTimeout(onIdle, ms)
+              },
+        cancel: () => {
+            clearTimeout(timer)
+        },
+    }
+}
+
+const INERT_STREAM_DEADLINE = { progress: (): void => {}, cancel: (): void => {} }
 
 interface Slot<Args, T> {
     args: Args
@@ -105,6 +141,13 @@ interface Slot<Args, T> {
     auto?: AutoBacking<T>
     // True once the fill mode has been decided for this slot, so `fn` is classified exactly once.
     modeResolved?: boolean
+    // SETTLED BUT IMMEDIATELY EXPIRED — how a timed-out run is retained (ADR 0028 D7). `fn.error()` reads
+    // the slot state with no expiry check, while the read path gates its cached rejection behind
+    // `isExpired`, so this flag keeps the TimeoutError visible to probes while the very next read runs
+    // cold. Disposing the slot instead would blank `fn.error()` at once and an error banner would flash
+    // and vanish, and a `loadedAt` stamp cannot express it: `isExpired` short-circuits on `ttl ===
+    // Infinity` before consulting the clock, and `Infinity` is exactly a read's default ttl.
+    expired: boolean
 }
 
 // One run of an AUTO-TRACKED fill. `run` counts fills of this slot. `deferred` carries the produced value
@@ -164,6 +207,15 @@ export interface MemoOptions {
     // registers under each tag so the global `invalidate/refresh({ tags })` selectors can drop/
     // revalidate + broadcast its slots. Inert on the client and on a request-scoped memo.
     tags?: string[]
+    // The RUN DEADLINE in ms (ADR 0028). Owned here because the memo owns the run: a deadline enforced
+    // at any caller would give two callers of one coalesced slot divergent outcomes, which is exactly
+    // what `setState`'s one-state-one-wake-up contract forbids. Measures time WITHOUT PROGRESS (D1) —
+    // for a value that is time-to-settle, for a stream time-to-first-chunk and then the inter-chunk gap.
+    //
+    // Absent/0/Infinity = unbounded, and a plain `memo(...)` derivation defaults to exactly that: the
+    // 5-minute `ABIDE_RPC_TIMEOUT` ceiling is an RPC policy, resolved in `makeRpc`, not a property of
+    // memoization. A derivation that reads three cells has no run to bound.
+    timeout?: number
     // INTERNAL (set by `makeRpc`, never by an author): this memo wraps a LOADER — an rpc handler —
     // rather than a derivation. An async body is the expected shape for a loader, so the auto-tracking
     // diagnostic (ADR 0027 D8) does not apply and would fire on every zero-arg rpc as pure noise.
@@ -470,6 +522,9 @@ export function memo<Args, T>(
                   return untrack(() => transform(value))
               }
     const ttl = opts?.ttl ?? Infinity
+    // 0 = unbounded (ADR 0028 D9's declared opt-out and a plain derivation's default alike), which is
+    // what `withDeadline` and the stream watchdog both read as "arm nothing".
+    const timeoutMs = opts?.timeout ?? 0
     const id = opts?.key ?? `memo#${++memoCounter}`
     // `crossRequest` is server-only; on the client it is inert (falls through to the client cache).
     const crossRequest = opts?.crossRequest === true && !isBrowser
@@ -596,6 +651,7 @@ export function memo<Args, T>(
                 inflight: null,
                 loadedAt: 0,
                 generation: 0,
+                expired: false,
             }
             cache.set(slotKey, slot)
             ownSlotsIn(cache).set(slotKey, slot)
@@ -632,6 +688,8 @@ export function memo<Args, T>(
     }
 
     function isExpired(slot: Slot<Args, T>): boolean {
+        // Checked before the ttl short-circuit: a deadline expires a slot regardless of retention policy.
+        if (slot.expired) return true
         if (ttl === Infinity) return false
         const state = slot.state.untracked()
         if (state.status === 'stream') {
@@ -675,6 +733,9 @@ export function memo<Args, T>(
         preProduced?: { produced: unknown },
     ): Promise<T> {
         if (slot.inflight !== null) return slot.inflight
+        // A new run supersedes a deadline expiry (ADR 0028 D7) — the flag exists to force exactly this
+        // run, so clearing it here is what keeps ONE cold retry from becoming a permanent one.
+        slot.expired = false
 
         const current = slot.state.untracked()
         if (keepStale && current.status === 'value') {
@@ -699,9 +760,14 @@ export function memo<Args, T>(
         const runLoad = (): Promise<T> =>
             (async () => {
                 try {
-                    const produced = (
-                        preProduced === undefined ? await fn(slot.args) : await preProduced.produced
-                    ) as T
+                    // The run deadline covers PRODUCTION only (ADR 0028 D1). A streaming handler resolves
+                    // here almost immediately — with the iterable, not the data — so its real clock is the
+                    // per-chunk watchdog in `startStream`; bounding both from one timer would cut a healthy
+                    // stream at T no matter how fast it was flowing.
+                    const produced = (await withDeadline(
+                        preProduced === undefined ? fn(slot.args) : preProduced.produced,
+                        timeoutMs,
+                    )) as T
                     if (slot.generation !== generation) return produced as T // superseded — discard silently
                     // See through a json()/jsonl()/sse() wrapper to its pre-encoding payload, so a wrapped result
                     // caches/streams exactly like the raw form (replayable-streams.md §4).
@@ -722,6 +788,7 @@ export function memo<Args, T>(
                 } catch (caught) {
                     if (slot.generation === generation) {
                         slot.loadedAt = Date.now()
+                        slot.expired = isTimeoutError(caught)
                         setState(slot, {
                             status: 'error',
                             value: undefined,
@@ -981,19 +1048,41 @@ export function memo<Args, T>(
         }
         const rest = tail
         void (async () => {
+            // PROGRESS-based deadline (ADR 0028 D1): the clock measures time WITHOUT a chunk, so it is
+            // armed before the first one and re-armed on every push — a stream that keeps flowing never
+            // approaches it, however long it runs, which is exactly what lets SSR exempt an abide source
+            // from the global `ABIDE_SSR_STREAM_BUDGET` (a total-wall-clock cut) and still be bounded.
+            //
+            // A refreshed timer rather than a raced `next()`: racing allocates a promise and a timer per
+            // chunk on the hottest path a stream has, to observe an event that almost never fires.
+            const watchdog = armStreamDeadline(timeoutMs, () => {
+                // `fail`, not `abort`: an aborted ReplayableStream ends its consumers SILENTLY, and a
+                // truncated list a caller cannot distinguish from a finished one is the failure mode D8
+                // rejects. `fail` makes the cursor throw, which lands in the SSR streamer's existing catch
+                // (`{:catch}` rendered, handle dropped, client re-runs) and reaches a browser
+                // `{#for await}` as an ordinary iteration error.
+                stream.fail(new DOMException('The rpc run exceeded its timeout.', 'TimeoutError'))
+                // The stream's own `onAbort` no longer runs (it is settled), so stop the SOURCE directly.
+                controller.abort()
+            })
             try {
                 for await (const chunk of rest) {
                     if (controller.signal.aborted) break
                     stream.push(chunk)
+                    watchdog.progress()
                 }
                 stream.close()
             } catch (caught) {
                 stream.fail(caught)
             } finally {
+                watchdog.cancel()
                 // Only touch the slot if it STILL holds this stream (not superseded by an invalidate/re-run).
                 if (slot.state.untracked().stream === stream) {
                     // TTL-from-close (§2): the retention clock starts when the transcript settles, not at fn-resolve.
+                    // A transcript the DEADLINE cut is settled-but-expired instead (ADR 0028 D7), so the next
+                    // read re-runs rather than replaying a truncated one for the rest of its ttl.
                     slot.loadedAt = Date.now()
+                    slot.expired = isTimeoutError(stream.error)
                     // The transcript is now a CLOSED value: unpin (LRU-evictable) and record its final size.
                     if (store !== undefined) {
                         sharedCacheUnpin(store, slot.key)

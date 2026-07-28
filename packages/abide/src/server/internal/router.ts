@@ -21,6 +21,7 @@
 
 import { health } from '../../shared/health.ts'
 import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
+import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import { matchRoute } from '../../shared/internal/matchRoute.ts'
@@ -73,7 +74,7 @@ import {
 } from './cors.ts'
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { sharedLayoutDepth } from './layouts.ts'
-import type { Mutation, Rpc, StreamRead } from './makeRpc.ts'
+import type { Mutation, Rpc, RpcMeta, StreamRead } from './makeRpc.ts'
 import { handleMcp } from './mcp.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { negotiateEncoding } from './negotiateEncoding.ts'
@@ -94,6 +95,11 @@ import { staticAssetType } from './staticAssetType.ts'
 import { validateFiles } from './validateFiles.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+// The wire form of a tripped run deadline (ADR 0028 D7). Built through `error.typed` so the body carries
+// the name the client narrows on, rather than a hand-rolled shape that would drift from every other
+// typed error.
+const TIMEOUT_RESPONSE = error.typed('TimeoutError', 504)
 
 // One config's page-pattern list, derived once. `matchRoute` needs the full pattern array on every
 // nav — twice on a soft-nav, which also matches the `Abide-Nav` origin path — and an app's pages are
@@ -253,6 +259,17 @@ async function applyIdentityCookie(scope: RequestScope, response: Response): Pro
 // can read request()/route()/identity() ambiently. The hook may return a Response to shape the client
 // reply; anything else (or a throwing hook) falls back to a generic 500 that never leaks the detail.
 async function handleUncaught(caught: unknown, config: AppConfig): Promise<Response> {
+    // A tripped run deadline is not a bug in the app, so it is answered before `onError` and never
+    // reaches the generic 500 (ADR 0028 D7). It leaves as a TYPED error so the two sides of an
+    // isomorphic call agree: the browser proxy's `fn.isError(e, 'TimeoutError')` narrows on the body's
+    // `name`, which is the same value `AbortSignal.timeout` gives a caller that aborted locally.
+    //
+    // 504, not 408 — 408 says the CLIENT was slow sending its request; here the server was slow
+    // producing, which is what a gateway timeout means.
+    if (isTimeoutError(caught)) {
+        log.channel('abide:rpc').warn('run exceeded its timeout:', caught)
+        return TIMEOUT_RESPONSE()
+    }
     log.channel('abide:router').error('uncaught error in dispatch:', caught)
     const onError = config.onError
     if (onError !== undefined) {
@@ -797,6 +814,7 @@ async function dispatch(
 
     const meta = route.__rpc
     log.channel('abide:rpc').trace(`dispatch ${meta.method} ${scope.route.name}`)
+    applyRunDeadlineSignal(scope, meta)
     let args: unknown
     // A mutation carrying a `multipart/form-data` body is a file upload (TODO #8): the args are a
     // `FormData` (a `File` rides in it, never in a JSON args object), passed straight to the handler.
@@ -1223,4 +1241,35 @@ export function createApp(config: AppConfig = {}): App {
             await server.stop(true)
         },
     }
+}
+
+// Hand an rpc handler its RUN deadline through the `Request` it already reads (ADR 0028 D5). No new
+// ambient accessor: a handler writes the completely standard `fetch(url, { signal: request().signal })`
+// and gets both halves of the rule, because the substituted signal is composed from them:
+//
+//     crossRequest  →  AbortSignal.timeout(T)
+//     otherwise     →  AbortSignal.any([AbortSignal.timeout(T), <the incoming request's signal>])
+//
+// The fork is D4. A NON-crossRequest slot lives in this request's own scope, so when the client aborts,
+// every reader of that slot is dying with the request and the run can never be observed — kill it. A
+// crossRequest slot lives in the process-global store and a DIFFERENT request will read the fill, so the
+// originating request's death is not the run's death; only the deadline ends it.
+//
+// ORDER IS LOAD-BEARING, in both directions. It must run AFTER route resolution (the timeout is
+// per-rpc) and BEFORE the body is read below — constructing a `Request` from one whose body is already
+// disturbed throws. The construction also transfers the body to the new object, which is why the scope's
+// request is REPLACED rather than shadowed: the body read further down must happen on the new one.
+//
+// Two things this deliberately does not reach, recorded rather than papered over: a `crossRequest`
+// handler runs scope-exited (`memo.ts`) so `request()` is unavailable to it at all, and an rpc invoked
+// IN-PROCESS during page SSR never passes through here — its `request()` is the page's, carrying the
+// page's client-abort signal but no deadline component. Both are still bounded at the waiter by the
+// memo's own deadline; what they lack is the cooperative teardown signal.
+function applyRunDeadlineSignal(scope: RequestScope, meta: RpcMeta<unknown, unknown>): void {
+    if (meta.timeout <= 0) return // unbounded by declaration — nothing to arm
+    const memoOption = meta.options.memo
+    const crossRequest = memoOption !== false && memoOption?.crossRequest === true
+    const deadline = AbortSignal.timeout(meta.timeout)
+    const signal = crossRequest ? deadline : AbortSignal.any([deadline, scope.request.signal])
+    scope.request = new Request(scope.request, { signal })
 }

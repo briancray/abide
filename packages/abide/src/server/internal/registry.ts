@@ -47,6 +47,12 @@ export interface RpcEntry {
     // a read's default; a mutation defaults to `0` (coalesce concurrent, retain nothing). Symmetry: an
     // author who sets `memo: { ttl }` gets that retention on both sides.
     ttl: number | null
+    // The resolved run deadline in ms (ADR 0028), `0` when unbounded. Surfaced so the browser proxy
+    // arms the SAME number the server does — bilateral means two independent enforcements (D6), not one
+    // timer with two ends. BAKED at build time: `ABIDE_RPC_TIMEOUT` retunes the server on deploy while
+    // the browser keeps whatever `abide build` wrote, which is accepted because the client half is a UX
+    // bound and a deploy-time retune of a UX bound does not earn a hydration-seed field.
+    timeout: number
     inputSchema?: JSONSchema
     outputSchema?: JSONSchema
     clients: Clients
@@ -140,6 +146,7 @@ function rpcEntry(name: string, route: Route): RpcEntry {
         shared: memoOpt?.crossRequest === true,
         memo: memoed,
         ttl,
+        timeout: meta.timeout,
         clients: resolveClients(options.clients, `rpc "${name}"`),
     }
 
