@@ -21,8 +21,11 @@ left. Builds on §2 (ambient context), CO1/CO2, machine-surfaces.md.
    - `src/server/config.ts` — an `env(schema)` stub (CO1);
    - `src/app.ts` — an `AppModule` (lifecycle hooks) exporting an empty `middleware` array
      (passthrough `next => next()`);
-   - `package.json` (dep on `abide`; scripts dev/build/start), `tsconfig.json` (TS7), and the
-     `CLAUDE.md` agent pointer.
+   - `package.json` (dep on `abide`; scripts dev/build/start) and `tsconfig.json` (TS7).
+     This item once ended "and the `CLAUDE.md` agent pointer (via `init-agent`)". The attribution
+     went when CL4 was withdrawn (below), but the claim outlived it by one edit — and with the
+     generator gone there is nothing left that could emit that file, so `scaffold()` writes `src/**`,
+     `tsconfig.json` and a rewritten `package.json`, and no agent pointer.
 3. **Non-interactive by default** — `<name>` is the arg, flags control the rest; no wizard.
 4. **Single default starter, no `--template` variant matrix** — one good starting point, small
    surface.
@@ -34,6 +37,26 @@ left. Builds on §2 (ambient context), CO1/CO2, machine-surfaces.md.
   cron tasks, one-off maintenance.
 - Server-side APIs work; a wrapped async fn with no request uses the **default ambient context**
   (§2 — the "no request scope" path).
+- **Everything after `<file>` is the SCRIPT's**, including anything that looks like an abide flag:
+  `abide run migrate.ts --port 5` passes `--port 5` to the migration. `process.argv` is rewritten to
+  `[bun, <file>, …args]` for the duration and restored after, so a script reads its arguments where
+  any other Bun script would.
+- **A throw from the script propagates with its stack** rather than being flattened into an exit
+  code — for a failed migration the stack IS the report. Only the wrapper's own failures are coded:
+  a missing `<file>` argument or a path that does not exist is stderr + `CLI_EXIT_CODES.usage`.
+- It takes the CL3 wrapper contract but **not** `bootApp`: it binds no socket, warms no pages, and
+  never enables the log feed (CO1.3) — there would be no route to read it from.
+
+### CL2.1 Exit codes for the `abide` CLI
+
+The development CLI reports the **same** `CLI_EXIT_CODES` table the compiled binary does
+(machine-surfaces MS3.4) rather than a second vocabulary. The rule is that **asking for help is a
+success and getting the command wrong is not**: a bare `abide`, `-h` or `--help` prints usage to
+stdout and exits `0`; an unknown subcommand prints it to **stderr** and exits `usage` (2). These
+shared one branch and both exited `0`, which is how `abide biuld` in a CI script printed the usage
+text and reported the build succeeded. Also `usage`: `scaffold` with no `<name>`, and `run` with a
+missing or nonexistent file. A `check` that finds type errors is `failed` (1) — a real failure, not a
+wrong command line — as is a `scaffold` whose `bun install` fails.
 
 ## CL3. `src/app.ts` — process-lifecycle hooks
 

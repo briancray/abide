@@ -3,6 +3,7 @@ import { mockEngine } from '../test/mockEngine.ts'
 import { agent } from './agent.ts'
 import { GET } from './GET.ts'
 import type { AgentFrame, AgentTool, NeutralMessage } from './internal/agentTypes.ts'
+import { defaultAgentSurface, provideDefaultAgentSurface } from './internal/defaultAgentSurface.ts'
 import { rpcTools } from './internal/rpcTools.ts'
 
 async function collect(stream: AsyncIterable<AgentFrame>): Promise<AgentFrame[]> {
@@ -181,5 +182,76 @@ describe('rpcTools', () => {
             type: 'object',
             properties: { text: { type: 'string' } },
         })
+    })
+})
+
+// The DEFAULT tool surface (agent.md AG2.2 / DX9). `rpcTools` was correct and orphaned: nothing
+// imported it outside this file, so `agent()` ran with an empty tool set while the spec and CLAUDE.md
+// both promised the app's `clients.mcp` RPCs. `clients.mcp` is already the gate — declaring it in a
+// second place per `agent()` call would be a second concept — so the app PROVIDES the surface at boot
+// and naming `tools` is the override.
+//
+// These drive `agent()` end to end rather than asserting the holder: the failure being guarded is that
+// a real loop reaches a real handler, which is the step that was missing.
+describe('agent default tool surface', () => {
+    async function callsTool(tools?: AgentTool[]): Promise<AgentFrame[]> {
+        const engine = mockEngine([
+            [{ type: 'tool-call', id: 'c1', name: 'add', args: { a: 2, b: 3 } }],
+            [{ type: 'text-delta', text: 'done' }],
+        ])
+        const options = tools === undefined ? {} : { tools }
+        return await collect(agent(engine, [user('add them')], options))
+    }
+
+    test('with no app provided, the default is empty — agent() stands alone', async () => {
+        const frames = await callsTool()
+        // The call resolves to a tool-not-found result rather than a sum: no app, no tools.
+        expect(frames.some((f) => f.type === 'tool-result' && String(f.result).includes('5'))).toBe(
+            false,
+        )
+    })
+
+    test('a booted app supplies its clients.mcp RPCs without the caller naming them', async () => {
+        const add = GET((args: { a: number; b: number }) => args.a + args.b)
+        const withdraw = provideDefaultAgentSurface(() => rpcTools({ routes: { add } }))
+        try {
+            const frames = await callsTool()
+            const result = frames.find((frame) => frame.type === 'tool-result')
+            expect(result).toBeDefined()
+            expect(String((result as { result: unknown }).result)).toContain('5')
+        } finally {
+            withdraw()
+        }
+    })
+
+    test('an explicit tools: [] is "no tools", not "give me the default"', async () => {
+        const add = GET((args: { a: number; b: number }) => args.a + args.b)
+        const withdraw = provideDefaultAgentSurface(() => rpcTools({ routes: { add } }))
+        try {
+            const frames = await callsTool([])
+            expect(
+                frames.some((f) => f.type === 'tool-result' && String(f.result).includes('5')),
+            ).toBe(false)
+        } finally {
+            withdraw()
+        }
+    })
+
+    // A stopped app must not answer as the next one's default. `provide` returns its own undo and
+    // `App.stop()` calls it, so nesting is balanced rather than last-one-wins — which matters because
+    // `createTestApp` boots many apps in one process.
+    test('withdrawing restores the previous provider rather than clearing it', () => {
+        const outer = GET(() => 'outer')
+        const inner = GET(() => 'inner')
+        const undoOuter = provideDefaultAgentSurface(() => rpcTools({ routes: { outer } }))
+        const undoInner = provideDefaultAgentSurface(() => rpcTools({ routes: { inner } }))
+
+        expect(defaultAgentSurface().map((tool) => tool.name)).toEqual(['inner'])
+        undoInner()
+        expect(defaultAgentSurface().map((tool) => tool.name)).toEqual(['outer'])
+        undoInner() // idempotent — a lifecycle backstop may stop twice
+        expect(defaultAgentSurface().map((tool) => tool.name)).toEqual(['outer'])
+        undoOuter()
+        expect(defaultAgentSurface()).toEqual([])
     })
 })

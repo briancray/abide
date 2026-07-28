@@ -24,9 +24,9 @@ import type { ClientsOption } from './internal/registry.ts'
 // unmediated; a FUNCTION = mediated — it TRANSFORMS the untrusted message (or returns `DROP` to suppress),
 // and its mere presence PERMITS the publish. Folding the mediator into the permission makes "a mediator on
 // a closed publish path" unrepresentable, and matches the house `false | true | config` idiom.
-// biome-ignore lint/suspicious/noConfusingVoidType: void lets a side-effect-only mediator (returns nothing → treated as DROP) be assignable.
 export type ClientPublish<T> =
     | boolean
+    // biome-ignore lint/suspicious/noConfusingVoidType: void lets a side-effect-only mediator (returns nothing → treated as DROP) be assignable. `undefined`, the rule's suggested fix, does NOT: a `(msg) => { … }` body infers `void`, which is not assignable to `T | undefined`. The suppression sits on the union MEMBER because that is the line the diagnostic lands on — one line higher it silently covered nothing.
     | ((message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>)
 
 export interface SocketOptions<T> {

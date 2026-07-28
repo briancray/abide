@@ -724,14 +724,16 @@ the known shortcuts and gaps. Ordered by impact.
       `unknown`-typed public option plus a silently-lenient normalizer is how a documented feature
       evaporates without any scan catching it — the other three in this item were all findable
       because they were typed.
-24. **`rpcTools.ts` is orphaned because the agent tool-default was never wired.** `rpcTools()`
-    (`server/internal/rpcTools.ts`, 45 lines incl. `asJsonSchema`/`toTool`) has no importer outside
-    `server/agent.test.ts`. Its own header says it is "the mapping the app-config default surface is
-    built from (all `clients.mcp` RPCs)" — and CLAUDE.md documents `agent`'s `tools` default as
-    exactly that — but `agent.ts:47` reads `options.tools ?? []`, so the default surface is empty and
-    nothing ever calls the mapper. Left in place on purpose: deleting it would cement the gap. Fix is
-    to default `tools` to `rpcTools(config)` (keeping `[]` as the explicit opt-out CLAUDE.md already
-    describes), then the module is live.
+24. **`rpcTools.ts` is orphaned because the agent tool-default was never wired.** ~~FIXED.~~
+    `rpcTools()` had no importer outside `server/agent.test.ts`: its header called it "the mapping the
+    app-config default surface is built from (all `clients.mcp` RPCs)", CLAUDE.md and agent.md AG2.2
+    both documented that default, and `agent.ts` read `options.tools ?? []` — so the surface was empty
+    and nothing ever called the mapper. Now `createApp` provides `() => rpcTools(config)` into a leaf
+    (`internal/defaultAgentSurface`) and `agent()` asks it, so the arrow points from the module that
+    HAS the config toward the loop that must stay usable without one. **The generalizable lesson:** a
+    module with no importer is not dead code until you check what the docs promise — this one was the
+    load-bearing half of a documented default, and deleting it (the usual answer to an orphan) would
+    have cemented the gap instead of closing it.
 25. **Unwired socket teardown seam.** `muxUnsubscribe` (`ui/internal/mux.ts`) is the obvious
     counterpart to `muxSubscribe` and is called by nobody; `socketProxy.ts` has no teardown path at
     all (no refcount/dispose), so `MUX_UPSTREAM.unsub` is never sent by any in-repo client and the

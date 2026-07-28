@@ -61,6 +61,9 @@ describe('abide run', () => {
         probe.stop(true)
 
         const file = await script(
+            // The `${}` belongs to the SCRIPT being written to disk, not to this file — making this a
+            // template literal would substitute at test-build time and the fixture would read the wrong port.
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: see above — it is the fixture's syntax.
             'const reachable = await fetch(`http://127.0.0.1:${Bun.env.PORT}/__abide/health`)\n' +
                 '    .then(() => true)\n' +
                 '    .catch(() => false)\n' +

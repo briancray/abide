@@ -488,6 +488,34 @@ pages — nothing is reserved outside `/__abide/*`.
    calls, retain nothing after settle, so sequential mutations each execute); opt in to
    caching/replay with `memo: { ttl, crossRequest }`, opt OUT with `memo: false`. The read/mutation
    split would narrow to the wire (method, URL vs body, CSRF) + the default TTL (`∞`/`0`).
+
+   **1a. The declared verb is ENFORCED, not merely advertised.** A method that is not the rpc's own
+   is a **405** carrying an `Allow` derived from the declaration — `GET, HEAD` for a read, the bare
+   method for a mutation — rather than reaching the handler. `HEAD` is the one derived verb (ADR 0027
+   D6): it IS `GET` minus the body, so it reaches a `GET` handler and the body is dropped, and it is
+   why `Allow` is computed from `__rpc` in one place instead of restated per call site (there were
+   five, none agreeing). This is an AUTH property, not tidiness: `auth.md` §AU8 rests the whole
+   `SameSite=Lax` argument on "mutations are never on `GET`", and the top-level cross-site `GET` that
+   Lax still admits carries the identity cookie and skips the CSRF gate (which exempts reads) — so a
+   mutation reachable over `GET` is a CSRF hole whatever the handler was declared as. The declaration
+   was previously trusted to describe the route; now it constrains it.
+
+   **1b. `memo: false` means "retain nothing", and what that costs is VERB-DEPENDENT.** On a
+   **mutation** it is a full bypass: the bare call skips the memo, every call runs, at-least-once,
+   nothing coalesced. On a **read** the memo STAYS at `ttl: 0` — a read needs its reactive surface,
+   so nothing is retained and every call runs cold, but identical concurrent calls still coalesce and
+   `peek`/`pending`/`refresh`/`error` stay live.
+
+   One **normalizer** (`shared/internal/rpcMemoPolicy`) answers this once and one **builder**
+   (`memoOptionsFor`) turns its answer into memo options; the server memo, the wire registry spec and
+   the browser proxy all read that pair, so a read's two memos are built from ONE answer rather than
+   from three ladders kept in step. They were not in step: a `memo: false` read ran at `ttl: 0` on
+   the server while the spec shipped `ttl: null` — the wire spelling of the memo's Infinity default —
+   so the browser cached it FOREVER. One field, and the only observable was the WORK, which is why no
+   test over values saw it. The normalizer is **idempotent**, which is what makes it correct for the
+   client to re-normalize a spec the server already normalized; `crossRequest` is deliberately NOT in
+   `memoOptionsFor`'s output, because it selects a STORE rather than a retention and a browser has no
+   request to cross.
 2. **No request batching.** Coalescing (dedup identical in-flight) yes; batching (combine
    distinct calls in one tick into one round-trip) **no** — it couples requests (HOL),
    defeats per-URL HTTP/CDN caching, hurts visibility; HTTP/2 multiplexing makes N small

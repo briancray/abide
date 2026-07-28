@@ -41,11 +41,20 @@ test('Config page lists all built-in env vars', async ({ page }) => {
     await expect(table).toContainText('ABIDE_IDENTITY_SECRET')
     await expect(table).toContainText('ABIDE_MAX_STREAM_BUFFER_SIZE')
     await expect(table).toContainText('ABIDE_RPC_TIMEOUT')
-    // Two rows were removed as never-implemented: `ABIDE_APP_DIR` (a built-output path is a compile
-    // flag, `--out`, not a runtime env var) and `ABIDE_DEV_SURFACE`. This count is what caught the
-    // page still advertising them, which is the whole reason it is asserted rather than spot-checked.
+    // The log feed is opt-in, so the ONLY way to discover how to turn it on is this table — and the
+    // page is billed (and linked from Deploy) as the full list. It shipped without them.
+    await expect(table).toContainText('ABIDE_LOGS')
+    await expect(table).toContainText('ABIDE_LOG_BUFFER')
+    // Four rows were removed as never-implemented: `ABIDE_APP_DIR` (a built-output path is neither a
+    // runtime env var nor, as a first correction claimed, `compile --out` — that names the
+    // executable; nothing renames `dist/_app/<hash>/`), `ABIDE_DEV_SURFACE`, and the two inspector
+    // vars gating a route that does not exist. The count is what caught the page advertising them,
+    // which is the whole reason it is asserted rather than spot-checked — a var a reader cannot use
+    // and a var a reader cannot find are the same failure from opposite ends.
     await expect(table).not.toContainText('ABIDE_APP_DIR')
     await expect(table).not.toContainText('ABIDE_DEV_SURFACE')
+    await expect(table).not.toContainText('ABIDE_ENABLE_INSPECTOR')
+    await expect(table).not.toContainText('ABIDE_INSPECT')
     await expect(table.locator('tbody tr')).toHaveCount(16)
 })
 

@@ -2,6 +2,7 @@
   import Demo from "$ui/components/Demo.abide"
   import Panel from "$ui/components/Panel.abide"
   import BranchScriptDemo from "$ui/demos/templating/scripts/BranchScriptDemo.abide"
+  import MultilineScriptDemo from "$ui/demos/templating/scripts/MultilineScriptDemo.abide"
 </script>
 
 <main class="page">
@@ -24,5 +25,13 @@
   <aside class="aside">
     <p>A branch-local <code>&lt;script&gt;</code> must be the <strong>first node of a block body</strong> — the body of an <code>&#123;#if&#125;</code> branch, a <code>&#123;#for&#125;</code>, an <code>&#123;#await&#125;</code> branch, a <code>&#123;:case&#125;</code>, a <code>&#123;#try&#125;</code> branch, or a <code>&#123;#component&#125;</code>. That is the only position with a lifetime and a scope of its own, so anywhere else is a compile error rather than a script that quietly never runs.</p>
     <p>It carries no <code>import</code> of its own — an import is module-level wherever it is written, so one here could only look conditional without being it. The component's imports are already in scope, which is why the demo above calls <code>state</code> without importing it a second time.</p>
+  </aside>
+  <h2>An assignment may span lines</h2>
+  <p>Writing to a cell compiles to <code>cell.set(&hellip;)</code>, so the compiler has to find where the right-hand side actually ENDS. A line break next to a continuation operator is not the end — a ternary broken before its <code>?</code> and <code>:</code>, an operator with the break after it, a member chain broken before the <code>.</code>, an <code>instanceof</code>, an <code>in</code>, an <code>as</code> cast, or a template literal spanning lines are all one expression, exactly as they are in plain JavaScript.</p>
+  <Demo id="multiline" title="A right-hand side that spans lines" client="src/ui/demos/templating/scripts/MultilineScriptDemo.abide" tab="client">
+    <MultilineScriptDemo />
+  </Demo>
+  <aside class="aside">
+    <p>This one is here because getting it wrong is <strong>silent</strong>. Severing the right-hand side at the break emits <code>size.set( count &gt; 2)</code> followed by an orphaned <code>? "many" : "few"</code> — which is not a syntax error, so nothing downstream complains. The cell is quietly set to the CONDITION and the branches evaluate against a discarded result. Every value on the page is still a value; it is just the wrong one, which is why the guard is a rendered demo rather than a compile check.</p>
   </aside>
 </main>

@@ -1,0 +1,44 @@
+<script>
+  import { state } from "abide/shared/state"
+  import cacheThrottled from "$server/rpc/cacheThrottled"
+  import cacheDebounced from "$server/rpc/cacheDebounced"
+
+  // The clock rate-limits EXPLICIT REVALIDATION of a slot that already holds a value. So each burst
+  // loads once cold (never deferred — there is nothing stale to serve), then fires five `refresh()`
+  // calls inside one 400ms window and waits it out.
+  //
+  // What is asserted is the WORK, not the value: both bursts end up serving the same fresh number,
+  // and the only thing that distinguishes throttle from debounce is how many times the handler RAN.
+  let result = state(null)
+  let busy = state(false)
+
+  async function burst() {
+    busy = true
+
+    const throttledCold = (await cacheThrottled({ tag: "th" })).runs
+    for (let i = 0; i < 5; i++) cacheThrottled.refresh({ tag: "th" })
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    const throttledAfter = (await cacheThrottled({ tag: "th" })).runs
+
+    const debouncedCold = (await cacheDebounced({ tag: "db" })).runs
+    for (let i = 0; i < 5; i++) cacheDebounced.refresh({ tag: "db" })
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    const debouncedAfter = (await cacheDebounced({ tag: "db" })).runs
+
+    result = {
+      throttled: throttledAfter - throttledCold,
+      debounced: debouncedAfter - debouncedCold,
+    }
+    busy = false
+  }
+</script>
+
+{#if result}
+  <ul class="grid">
+    <li>5 refreshes, <code>throttle: 400</code> → <strong data-testid="clock-throttled">{result.throttled}</strong> extra runs <span class="muted">(leading + one trailing)</span></li>
+    <li>5 refreshes, <code>debounce: 400</code> → <strong data-testid="clock-debounced">{result.debounced}</strong> extra run <span class="muted">(trailing only)</span></li>
+  </ul>
+{/if}
+<div class="row">
+  <button data-testid="clock-burst" disabled={busy} onclick={burst}>Fire 5 refreshes at each (~2s)</button>
+</div>

@@ -104,9 +104,12 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
 
 ## BP3. Production serving (implied)
 
-- **`abide start`** runs the built `dist/` (client assets under `dist/_app/<hash>/`). The output
-  PATH is a build-time choice, not a runtime one — `abide compile --out` names it; there is no env
-  override, and the `ABIDE_APP_DIR` one this line used to promise was never implemented.
+- **`abide start`** runs the built `dist/` (client assets under `dist/_app/<hash>/`, found through the
+  stable `dist/manifest.json`). That path is **fixed**: nothing renames it, at build time or at run
+  time. The `ABIDE_APP_DIR` override this line used to promise was never implemented, and the first
+  correction of it pointed at `abide compile --out` — which is not the same knob at all: `--out` names
+  the standalone EXECUTABLE (or, with `--platforms`, the directory the release set lands in), and a
+  compiled binary carries its client assets embedded rather than reading them from disk.
 - Static assets from `dist/_app/<hash>/` served **immutable, long-cache** (content-addressed).
 - `APP_URL` sets the public app URL → mount base; `PORT` the listen port (existing `ABIDE_*`
   vars).

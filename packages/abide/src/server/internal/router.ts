@@ -79,6 +79,7 @@ import {
     preflightResponse,
 } from './cors.ts'
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
+import { provideDefaultAgentSurface } from './defaultAgentSurface.ts'
 import { isProd } from './isProd.ts'
 import { sharedLayoutDepth } from './layouts.ts'
 import { logFeedSettings } from './logFeedSettings.ts'
@@ -99,6 +100,7 @@ import {
     type RouteKind,
     runInScope,
 } from './requestScope.ts'
+import { rpcTools } from './rpcTools.ts'
 import { servePublicFile } from './servePublicFile.ts'
 import { staticAssetType } from './staticAssetType.ts'
 import { validateFiles } from './validateFiles.ts'
@@ -1420,11 +1422,18 @@ export function createApp(config: AppConfig = {}): App {
     })
 
     const origin = `http://localhost:${server.port}`
+
+    // This process is now serving THIS app, so this is what `agent()` means by "the app's tools"
+    // (AG2.2). A thunk, so a process that never calls `agent()` never walks the routes; withdrawn on
+    // `stop()`, so a stopped app is not still answering as the default for whatever boots next.
+    const withdrawAgentSurface = provideDefaultAgentSurface(() => rpcTools(config))
+
     return {
         // Public App surface keeps `Bun.Server<undefined>`; the WS-data generic is internal (see above).
         server: server as unknown as Bun.Server<undefined>,
         origin,
         async stop(): Promise<void> {
+            withdrawAgentSurface()
             await server.stop(true)
         },
     }

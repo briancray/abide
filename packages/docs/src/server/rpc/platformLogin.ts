@@ -1,6 +1,7 @@
 // #demo platformLogin
-import { identity } from 'abide/shared/identity'
+
 import { POST } from 'abide/server/POST'
+import { identity } from 'abide/shared/identity'
 
 // A login mutation: `identity.set()` promotes the request principal to authenticated and marks the
 // scope so the router seals a rolling `abide-identity` cookie onto the response. The next request

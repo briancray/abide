@@ -121,7 +121,7 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
     })
 
     test('the adopted stream is reactive: chunk probes read the transcript and refresh() re-runs it', async () => {
-        const { html, seed } = await ssrStream(SRC, { complete: makeServerComplete() })
+        const { html } = await ssrStream(SRC, { complete: makeServerComplete() })
 
         // On refresh the client source IS run — it yields a DIFFERENT transcript so the repaint is visible.
         let runs = 0

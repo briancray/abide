@@ -1,6 +1,7 @@
 // #demo platformLogout
-import { identity } from 'abide/shared/identity'
+
 import { POST } from 'abide/server/POST'
+import { identity } from 'abide/shared/identity'
 
 // The inverse of login: `identity.clear()` reverts to a fresh anonymous principal and marks the
 // scope so the router clears the `abide-identity` cookie. Subsequent reads see anonymous again.

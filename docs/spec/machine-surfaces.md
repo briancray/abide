@@ -73,7 +73,19 @@ manifests; every surface derives from the same RPC + socket metadata.
      (remote or embedded) is active.
 2. **Command mapping:** each `clients.cli` RPC → a subcommand; the args object's JSON Schema →
    flags (`--field`, required/optional/types/`--help` from schema + doc-comment); streaming RPC →
-   line-streamed stdout.
+   line-streamed stdout. A field's schema `default` renders as `default <value>` in `help`, spelled
+   out rather than compressed into the placeholder — `help` has the width for a sentence, and this is
+   the column someone reads when deciding whether they need the flag at all.
+   - **A type-derived handler's default is its DESTRUCTURING default** (`GET(({ message = 'hello' })
+     => …)`), which the type alone cannot carry: `message = 'hello'` widens to `string`, and the only
+     thing the inferred type records is that the property became OPTIONAL. The value lives in the AST,
+     so `deriveSchema` reads it off the binding pattern into the schema's `default`. Before that, every
+     surface describing an rpc — OpenAPI, MCP, `help`, the prompt — said "optional" and none could say
+     what you get by omitting it, which is the question anyone actually has at that point.
+   - **Literals only, deliberately.** A string, number, `true`, `false` or `null`. A default that is a
+     call or a reference (`= Date.now()`, `= FOO`) has no value at derivation time and inventing one
+     would be worse than staying silent; a nested pattern (`{ a: { b } }`) has no single name to key
+     one on.
 3. **Auth:** reaches its server via `connect` / `ABIDE_APP_URL` / `--url` and, if the app's middleware requires it,
    authenticates with a bearer token that resolves `identity()` through the same middleware chain
    — uniform with all surfaces. abide imposes no auth of its own; `clients.cli` is reachability
@@ -107,6 +119,8 @@ What the executable does is decided at RUN time:
 | `./app disconnect` | forget it and go back to hosting |
 | `./app login --token <t>` | remember WHO you are there · `logout` drops it |
 | `./app identity` | ask the server who it thinks you are (`/__abide/identity`) |
+| `./app logs [--tail n] [--level l] [--debug pat] [--trace id] [--no-follow]` | tail that deployment's log records (`/__abide/logs`, CO1.3) |
+| `./app completion <bash\|zsh\|fish>` | print the shell completion script · `completion --line <line>` is the callback it invokes on every TAB |
 | `serve [--port n]` at the prompt | host it mid-session; commands keep running against it |
 
 ### As built (MS3.1-3.4)
@@ -150,6 +164,24 @@ Five decisions the design left open, resolved by the implementation:
    could host, and unlike the rpc (still reachable over HTTP, MCP and the browser) hosting has no
    second door. `connect`/`disconnect` are reserved for the same reason: a binary you cannot re-target
    is as stuck as one you cannot host. A shadowed rpc is still projected into help and warns on `abide:cli`.
+
+   The list grew to **eleven** names, and the argument had to widen with it. `login`/`logout`/
+   `identity` are the WHO to `connect`'s WHERE; `logs` is WHAT IT IS DOING; `completion` is how the
+   shell asks. None of those four is un-substitutable the way hosting is — an operator can curl
+   `/__abide/logs` — so the reason to reserve them is **consistency of vocabulary**, not rescue: a
+   reserved list you have to memorise exceptions to is worse than one shadowed rpc, and `identity`
+   had already set the precedent.
+
+   `exit`/`quit` forced a second axis. They end a SESSION, which means nothing on a command line, so
+   the table carries `where: 'both' | 'prompt'` and they are the only two `'prompt'` entries: an rpc
+   named `exit` is still callable as `./app exit` and is merely unreachable from the REPL. The shadow
+   warning says which of the two it is, because "shadowed" now names two different losses.
+
+   It is **one table**, holding the name, the `where` and the help text, because four places have to
+   agree: the dispatcher (`runCompiledApp`), the REPL (`interactiveCli`), the generated help
+   (`cliUsage`) and the warning (`cliCommands`). The first two reach it through `reservedCliCommand`,
+   so a name they intercept that is not in the table is a compile error; the other two read it
+   directly, so a name added shows up in help and in the warning with no second edit.
    **Global options (`--url`, `--token`, `--pretty`/`--compact`, `-h`) are read only BEFORE the
    subcommand** — after it every flag belongs to the rpc, so a handler may still own a `url` or
    `token` field.
@@ -203,9 +235,24 @@ shared secret.** This is a real change to `docs/spec/auth.md` AU6:
   baseline; live streaming depends on serving-transport capability.
 - **OpenAPI documentation of the socket HTTP face and streaming (`jsonl`/`sse`) endpoints** —
   MS4 covers RPC operations; streaming/socket HTTP faces in OpenAPI not yet specced.
-- **CLI interactive-mode UX details** (history, completion, output formatting) — MS3.1 fixes the
-  model, not the polish. As built the REPL reads lines (so it behaves the same piped as at a
-  terminal) and has no history, completion or line editing.
+- **CLI interactive-mode UX details** — no longer parked; MS3.1 fixed the model and the polish
+  followed. At a TTY the REPL now has line editing (cursor, word motions, kill/yank), a 200-entry
+  history, TAB completion and inline ghost text; piped, it still reads plain lines and behaves
+  identically to before, which is what keeps the two modes one command.
+
+  The completion rule is the load-bearing part: the generated shell script **bakes no names in**. It
+  calls `./app completion --line "<line>"` on every TAB, which is the same call the REPL makes, so
+  the shell and the prompt cannot offer different candidates and neither goes stale when a handler
+  gains a field. Candidates are commands, the reserved names, a command's `--flags` and a field's
+  `enum` values — all read from the live input schemas. Completing a command boots nothing.
+
+  Ghost text is dim, INLINE, and never part of the submitted line: the best candidate where one is
+  being completed, or at a bare flag position the command's whole signature (`--name <string>
+  --loud`, a boolean carrying no placeholder, an enum showing its set). `→`/`ctrl-e` accepts the flag
+  alone, not the placeholder. It is suppressed under `NO_COLOR`, where undimmed ghost text would be
+  indistinguishable from what the user typed. `--args` is never volunteered — it is on every command,
+  so it out-sorted everything anyone was actually reaching for — though it still works spelled out
+  and `help` still lists it.
 - **Per-user CLI distribution (MS3.5) — NOT built.** `abide compile --platforms` cross-compiles the
   artifacts, but `/__abide/cli` (install script + per-platform tarballs, provisioned with a bearer
   token bound to the fetching user) is a serving surface with its own auth story (AU9 sealed

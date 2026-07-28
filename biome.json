@@ -65,10 +65,7 @@
             }
         },
         {
-            "includes": [
-                "packages/abide/src/shared/log.ts",
-                "packages/abide/src/cli/main.ts"
-            ],
+            "includes": ["packages/abide/src/shared/log.ts", "packages/abide/src/cli/main.ts"],
             "linter": {
                 "rules": {
                     "suspicious": {

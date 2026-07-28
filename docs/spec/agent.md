@@ -61,6 +61,28 @@ the app's own RPCs as tools — consumed with the same streaming primitives as a
    `tools: []` = no app tools, `tools: [...]` = a selected subset. Safe because app tools are gated
    by the **app's own middleware** (AG1.7) — availability ≠ authorization. Engine tools are *not*
    in this surface (AG2.5).
+
+   **`clients.mcp` IS the gate, and there is no second one.** An agent's tool set is the MCP tool set
+   by definition (MS2.6), so the declaration that admits an rpc to MCP admits it here — one flag, on
+   the surface every other machine client already reads. Naming `tools` per call is the OVERRIDE, not
+   the way in; a second per-agent inclusion flag would be a second concept for one question.
+
+   **How the default reaches a loop that has no config.** `agent()` is deliberately usable with no app
+   at all, so it cannot import the registry — that would drag `buildRegistry` and the whole `router`
+   type graph behind every caller, and there would be nothing to read outside a booted app anyway. The
+   arrow points the other way: `createApp` PROVIDES a thunk into a leaf
+   (`internal/defaultAgentSurface`), and `agent()` only asks. With nothing provided the answer is `[]`
+   — the documented no-app behaviour, not a special case. A THUNK because projecting the surface walks
+   every route, and a process that never calls `agent()` should not pay for it at boot; the result is
+   memoised, since the registry cannot change once the app is built.
+
+   Registration is a **stack**, not a slot. Production serves one app per process, but `createTestApp`
+   boots many, and last-one-wins would leave a stopped app answering as the next one's default.
+   `provide` returns its own idempotent undo, which `App.stop()` calls.
+
+   `?? ` and not `|| `: an explicit `tools: []` means "no tools", never "give me the default". This
+   item read NOT BUILT until the wiring landed — `rpcTools` was correct and orphaned, so the spec
+   promised a default that no code path produced (once `docs/TODO.md` #24).
 3. **Cancellation:** the frame stream is abortable (§12.5 `AbortSignal`) — aborting stops the
    loop and cancels the in-flight LLM call and any running tool.
 4. **Stateless — no built-in transcript persistence.** `agent()` takes `messages`, streams

@@ -76,12 +76,19 @@ coerced to its `input`-schema field type (no runtime schema → the raw string p
 reserved transport params are namespaced (`__abide_args`, `__abide_from`) so they never collide with a
 handler's own arg fields; the JSON blob wins when both are present.
 
-**RPC `opts`**: `{ schemas?: { input?, output?, files? }, clients?: { browser?, mcp?, cli? },
+**RPC `opts`**: `{ doc?, schemas?: { input?, output?, files? }, clients?: { browser?, mcp?, cli? },
 middleware?, crossOrigin?, maxBodySize?, timeout?, memo?: false | { ttl?, crossRequest?, tags?,
-throttle?, debounce? } }`.
+throttle?, debounce? } }`. **`doc`** is the human description carried onto every generated surface —
+the OpenAPI operation summary, the MCP tool description, and the CLI's `help`.
 - **No schema** → input/output JSON Schema is **type-derived** (TS7), runtime-enforced, loud on
   unrepresentable types. The handler arg needs no annotation when a destructuring **default** types it
-  (`GET(({ n = 0 }) => …)` derives `{ n?: number }`); an annotation or explicit generic still works. A
+  (`GET(({ n = 0 }) => …)` derives `{ n?: number }`); an annotation or explicit generic still works.
+  The default's VALUE is carried too, not just its optionality: `deriveSchema` reads the initializer
+  off the binding pattern into the schema's `default`, which is what OpenAPI, the MCP tool schema,
+  `help` (`default <value>` per flag) and the REPL prompt render. **Literals only** — a string,
+  number, `true`, `false` or `null`. A call or a reference (`= Date.now()`, `= FOO`) has no value at
+  derivation time, so none is recorded rather than invented, and a nested pattern (`{ a: { b } }`) has
+  no single name to key one on. A
   param field left `any` (no default, no annotation) still derives permissive `{}` but is now **loud**
   (a `deriveSchema` warning) — only a zero-arg handler or bare `unknown` stays silent.
 - **Schema-first input** → passing a Standard Schema as `schemas.input` makes the handler arg type
@@ -115,8 +122,16 @@ throttle?, debounce? } }`.
   a tag frame carries a verb and **no payload**; the client then re-reads over HTTP under its own
   identity. So it grants no data, but it does reveal change-TIMING for any tag on a browser-reachable
   read — don't tag a browser read with a name or a rhythm that is itself a secret.
-  `memo: false` opts a call OUT of the memo entirely (every call runs; a mutation's at-least-once). A
-  `FormData` mutation body always bypasses (can't be keyed). A streaming handler that yields an
+  **`memo: false` means "retain nothing", and what that costs is VERB-DEPENDENT** (`rpcMemoPolicy`,
+  the one normalizer the server memo, the wire spec and the browser proxy all read, so the two sides
+  cannot disagree). On a **mutation** it is a full bypass: the bare call skips the memo, every call
+  runs, at-least-once, nothing coalesced. On a **read** the memo STAYS (a read needs its reactive
+  surface) at `ttl: 0` — nothing is retained, so every call still runs cold, but identical concurrent
+  calls still coalesce onto one run and `peek`/`pending`/`refresh`/`error` stay live. This is
+  bilateral: the browser memo is built from the same `ttl: 0`. It used to ship `ttl: null` (= the
+  memo's Infinity default) and so cached a `memo: false` read FOREVER in the tab while the server ran
+  it cold — one field, and the only observable was the WORK, which is why a value test never saw it.
+  A `FormData` mutation body always bypasses (can't be keyed). A streaming handler that yields an
   `AsyncIterable` (or `jsonl(gen())`, which sees through to it) is stored as a **ReplayableStream**
   (replay-then-live; ttl clock from stream CLOSE; open streams pinned; per-stream cap
   `ABIDE_MAX_STREAM_BUFFER_SIZE`, default unbounded) so concurrent/late viewers share one run. Resume a
@@ -156,6 +171,19 @@ throttle?, debounce? } }`.
   origin is echoed) on the response, and **exempts** an admitted origin from the same-origin CSRF gate.
   `credentials: true` forces the concrete-origin echo (the `*` wildcard is illegal with credentials).
   `OPTIONS` to an RPC without `crossOrigin` is a 405.
+- **`maxBodySize`**: the ceiling on a mutation's request body, defaulting to
+  `ABIDE_MAX_REQUEST_BODY_SIZE` (unset = no ceiling). A declared `content-length` over it is a **413**
+  before anything is buffered; a chunked body that can't declare one is re-checked after the read,
+  since a header can lie. The env var was documented in two places and read NOWHERE, so an rpc that
+  declared no ceiling buffered an unbounded body — the default is now stated once, here.
+
+**The declared verb is ENFORCED, not merely advertised.** A method that isn't the rpc's own is a
+**405** carrying an `Allow` derived from the declaration — `GET, HEAD` for a read, the bare method for
+a mutation. `HEAD` is the one verb the router derives rather than accepts (ADR 0027 D6), so it reaches
+a `GET` handler and the body is dropped. This is load-bearing for auth, not tidiness: `auth.md` §AU8
+rests the whole `SameSite=Lax` argument on "mutations are never on `GET`", and the top-level
+cross-site `GET` that Lax still admits carries the identity cookie and skips the CSRF gate (which
+exempts reads) — so a mutation reachable over `GET` is a CSRF hole whatever it was declared as.
 
 ### Response
 | Import | Signature |
@@ -183,7 +211,17 @@ addressed `/__abide/chunk/` assets opt out by declaring their own immutable long
 carries `traceparent` + `traceresponse`: the router mints a traceparent per request when none came in
 (propagating a well-formed incoming one), so the trace is a property of the request rather than of whether
 a handler called `trace()`. The one exemption is the `/__abide/chunk/` asset — static, identity-free,
-immutable, cross-user-shared, and joined by no span.
+immutable, cross-user-shared, and joined by no span. "Every" is now literally true: the stamping used to
+be inlined per route class, and the four that short-circuit early — the CSWSH reject, the CORS preflight,
+the CSRF rejection, the first-load document — had each acquired a different subset of it (a
+`traceparent`-less 403; a CSRF rejection with no `Access-Control-Allow-Origin`, so the browser reported
+an opaque CORS failure instead of the 403 it was handed). Every response now leaves through one `exit()`
+whose stages are declared rather than optional, so a new exit path cannot skip one by not mentioning it.
+
+A **first-load HTML document** also carries `Vary: Abide-Nav`. It shares a URL with the soft-nav JSONL
+response, differing only by the `Abide-Nav` request header, so both representations must declare it —
+only the soft-nav half used to, which left a cache free to serve a page fragment to a first load
+(`Vary: Cookie`, the identity-scoped default, does not key them apart; nothing about the cookie differs).
 
 ### Sockets
 | Import | Signature |
@@ -228,7 +266,7 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 ### Beyond the browser
 | Import | Signature |
 | --- | --- |
-| `abide/server/agent` | `agent(engine, messages, options?)` → `AgentFrame` stream. `options`: `{ model?, system?, tools?, approval?, … }`. `tools` default = all `clients.mcp` RPCs; `[]` = none. Types: `NeutralMessage`, `AgentFrame`, `AgentSurface`, `AgentEngine`. Ships a Claude engine (Anthropic Messages API over `fetch`) + a Claude Code engine (spawns the local `claude` CLI via `Bun.spawn`; **self-contained** — runs its own loop, engine tools OFF by default). |
+| `abide/server/agent` | `agent(engine, messages, options?)` → `AgentFrame` stream. `options`: `{ model?, system?, tools?, approval?, … }`. **`tools` defaults to the app's own `clients.mcp` RPCs**; `[]` = none, `[...]` = a subset. `clients.mcp` IS the gate — an agent's tool set is the MCP tool set by definition — so an rpc withheld from MCP is withheld here, by the same declaration, and naming `tools` is the OVERRIDE rather than the way in. Reachability, not authorization: a tool that IS reachable still runs its middleware on every call. `agent()` itself imports no registry (it stays usable with no app at all, where the default is `[]`) — `createApp` provides the surface, lazily. Types: `NeutralMessage`, `AgentFrame`, `AgentSurface`, `AgentEngine`. Ships a Claude engine (Anthropic Messages API over `fetch`) + a Claude Code engine (spawns the local `claude` CLI via `Bun.spawn`; **self-contained** — runs its own loop, engine tools OFF by default). |
 | `abide/server/appDataDir` | `appDataDir()` → per-user data dir |
 
 ## Isomorphic — `abide/shared/*`
@@ -318,7 +356,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | Form | Meaning |
 | --- | --- |
 | `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate. A mutation call is the same, but posts args in the body (default `ttl:0` retains nothing) |
-| `fn(args, { signal })` | the same read with a caller-owned abort. It detaches **THIS waiter only** — the author's `timeout` owns the work, a caller's signal owns their wait — so it never strands the other callers coalesced onto the slot (a `memo: false` call, having no slot and one consumer, does cancel the request outright). This is why no per-call timeout option exists: `fn(args, { signal: AbortSignal.timeout(500) })` is one. Zero-arg: `fn(undefined, { signal })` |
+| `fn(args, { signal })` | the same read with a caller-owned abort. It detaches **THIS waiter only** — the author's `timeout` owns the work, a caller's signal owns their wait — so it never strands the other callers coalesced onto the slot (a call that BYPASSES the memo — a `memo: false` mutation, or a `FormData` body — has no slot and one consumer, so it does cancel the request outright; a `memo: false` READ is still slot-backed at `ttl: 0` and so detaches the waiter only). This is why no per-call timeout option exists: `fn(args, { signal: AbortSignal.timeout(500) })` is one. Zero-arg: `fn(undefined, { signal })` |
 | `fn.peek(args)` | reactive `T \| undefined` snapshot — subscribes + kicks a coalesced load; the non-blocking display read |
 | `fn.raw(args, init?)` | raw `Response`, full bypass |
 | `memo.state(args, initial)` | the WRITABLE PROJECTION of one slot (`memo` only): a live cell over that slot whose `set` IS `publish`, so a local write is provisional until the next re-fill. The key is a `Room` positional and the `initial` trails it (`m.state(initial)` argless, `m.state({id}, initial)` keyed) — required on an **async** memo because a cold slot has no value and `State<T>` is invariant, so widening the read would also let `set` forge the not-loaded sentinel. A **sync** memo needs none: it is never pending and rethrows, so its read is already `T`-or-throw |
@@ -405,10 +443,21 @@ startedAt, uptime }` (app fields win; `reachable: false` or a throw → 503, car
 | `abide start` | serve the app against the built `dist/` client assets (no bundler at boot; builds first if absent); prefers the baked `dist/schemas.json` over a live `node`/tsgo derivation pass; `--port` (default `3000`) binds directly (hard `EADDRINUSE` on clash); graceful `onStop` teardown on SIGINT/SIGTERM/crash |
 | `abide run <file> [args...]` | run script under the abide runtime (no HTTP; `onStart`/`onStop` run) |
 | `abide compile [--target] [--out] [--platforms]` | ONE standalone executable (`bun build --compile`; default out `dist/<app name>`). Every lookup `abide start` makes at RUNTIME becomes a BUILD-time one, because the binary has no project beside it: discovery → static imports of each rpc/socket/`app.ts`/`config.ts` in a generated entry (`dist/compile/entry.ts`), the on-demand `.abide` compile → each page/layout/component's server module AOT-emitted next to that entry, `dist/_app/<hash>/` + `src/ui/public/**` → embedded assets, `dist/schemas.json` → inlined (no tsgo in the binary). `--platforms a,b,…` cross-compiles a release set for the price of ONE client build (bare `--platforms` = the default five; with it `--out` names the output DIRECTORY). **Constraint:** an app that needs its own SOURCE at runtime cannot be compiled — a module resolving/reading paths off `import.meta.dir` finds the read-only `/$bunfs/root` (do that work lazily, so it costs one handler rather than boot) |
-| ↳ what the executable DOES | Decided at RUN time, not build time (the command surface costs 16 KB in a 67 MB binary, so there is no server-only artifact to build; `abide cli` was folded into `compile` and removed). **`./app`** → interactive, schema-driven REPL (the DEFAULT; `serve [--port n]` from the prompt hosts the app and the session keeps calling it). **`./app <rpc> [flags]`** → that rpc: flags are its input schema's fields (`--field value`/`--field=value`, a boolean as a presence flag `--loud`/`--no-loud`, an array as one JSON list or a repeated flag, `--args '<json>'` for the whole object). THE SCHEMA IS THE PARSER (`--n 5` on an integer field arrives as `5`); with no baked schema flags pass through JSON-first and the server validates. **`./app serve [--port n]`** → hosts it in the foreground, exactly as `abide start` does — a deployment must SPELL this, since a bare run with no console and no stdin is a loud `exit 2` naming `serve` rather than a silent success. **`./app connect <url>`** → REMEMBER that deployment until **`./app disconnect`** (bare `connect` reports it). **`./app login --token <t>`** → remember WHO you are there, **`./app logout`** drops it, **`./app identity`** asks the server who it thinks you are. **`./app logs`** → a LIVE feed of that deployment's log records (`--tail <n>` backlog first · `--level <l>` a severity floor · `--debug <pattern>` in the same `DEBUG` grammar the server gates with · `--trace <id>` matching a trace-id PREFIX, so the 8 hex a pretty line prints is paste-able · `--no-follow` for history-then-exit). Requires `ABIDE_LOGS` on the SERVER (else 404). Records arrive structured and are rendered by the READER through the same formatter the server uses for stdout, so a remote tail at a terminal is identical to reading that console and a pipe still gets `tsv`; `warn`/`error` go to stderr. It is the one command that PREFLIGHTS `/__abide/health` — a tail is expected to sit there producing nothing, so a wrong host, a too-old deployment and a quiet app would otherwise be three states with one empty screen. At the prompt ctrl-c DETACHES the feed instead of leaving the session. WHERE and WHO are separate because a credential belongs to an ORIGIN: credentials are keyed by origin in a per-user file under `appDataDir()` (`0600`), so moving staging→prod→staging keeps both logins and `connect` never touches a credential. All of them work at the prompt too (the live session re-points/re-credentials). **`./app help [rpc]`** → generated help. **`./app completion <bash|zsh|fish>`** → the shell completion script, which delegates back to `./app completion --line <line>` on every TAB rather than baking names in — so it answers from the LIVE input schemas and cannot go stale when a handler gains a field. The same call backs TAB **inside** the REPL (commands, reserved names, a command's `--flags`, and a field's `enum` values), so both surfaces offer identical candidates. The prompt also shows dim ghost text INLINE as you type: the best candidate where one is being completed, and at a bare flag position the command's whole SIGNATURE (`--name <string> --loud`, a boolean carrying no placeholder and an enum showing its set). `→`/`ctrl-e` accepts — the flag alone, not the placeholder — anything else ignores it, and it is never part of the submitted line. `--args` is never volunteered by completion (it is on every command, so it out-sorted everything you were actually reaching for); it still works spelled out and `help` still lists it. Suppressed under `NO_COLOR`, where undimmed ghost text would be indistinguishable from what you typed. **Output** (MS3.4): JSON to stdout — pretty at a TTY, compact through a pipe (`--pretty`/`--compact`) — a streaming handler line-streamed as it arrives (jsonl verbatim, sse unwrapped to its `data:` payloads); errors are a JSON object on **stderr** (a typed error keeps its `name`/`data`) plus a failure-CLASS exit code (`0` ok · `1` unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx). **Where the call lands** (`resolveCliTarget`, url and token resolved independently): `--url`/`--token` (this run) → `ABIDE_APP_URL`/`ABIDE_APP_TOKEN` (this environment) → a stored `connect` (this user) → otherwise it hosts ITSELF. Flag over env over file is the conventional ladder and is what lets `ABIDE_APP_URL=… ./app` beat a connected binary without disconnecting; when a mid-session `connect` is outranked, the REPL says where calls actually go. A named deployment means nothing boots (the embedded app still supplies the command table, so flags and types are known offline); hosting itself is on an ephemeral loopback port, LAZILY — printing help, mistyping a command or `connect`ing never runs `onStart` — and calls it over HTTP, not in-process, so middleware/identity/CSRF/validation/memo/deadline all apply. `serve`, `help`, `completion`, `connect`, `disconnect`, `login`, `logout`, `identity` and `logs` are RESERVED — they WIN over an app rpc of the same name (hosting has no second door; a shadowed rpc warns on `abide:cli` and stays reachable over HTTP/MCP/browser). Global options are read only BEFORE the subcommand, so an rpc may still own `--url`/`--token` |
+| ↳ what the executable DOES | Decided at RUN time, not build time (the command surface costs 16 KB in a 67 MB binary, so there is no server-only artifact to build; `abide cli` was folded into `compile` and removed). **`./app`** → interactive, schema-driven REPL (the DEFAULT; `serve [--port n]` from the prompt hosts the app and the session keeps calling it). **`./app <rpc> [flags]`** → that rpc: flags are its input schema's fields (`--field value`/`--field=value`, a boolean as a presence flag `--loud`/`--no-loud`, an array as one JSON list or a repeated flag, `--args '<json>'` for the whole object). THE SCHEMA IS THE PARSER (`--n 5` on an integer field arrives as `5`); with no baked schema flags pass through JSON-first and the server validates. **`./app serve [--port n]`** → hosts it in the foreground, exactly as `abide start` does — a deployment must SPELL this, since a bare run with no console and no stdin is a loud `exit 2` naming `serve` rather than a silent success. **`./app connect <url>`** → REMEMBER that deployment until **`./app disconnect`** (bare `connect` reports it). **`./app login --token <t>`** → remember WHO you are there, **`./app logout`** drops it, **`./app identity`** asks the server who it thinks you are. **`./app logs`** → a LIVE feed of that deployment's log records (`--tail <n>` backlog first · `--level <l>` a severity floor · `--debug <pattern>` in the same `DEBUG` grammar the server gates with · `--trace <id>` matching a trace-id PREFIX, so the 8 hex a pretty line prints is paste-able · `--no-follow` for history-then-exit). Requires `ABIDE_LOGS` on the SERVER (else 404). Records arrive structured and are rendered by the READER through the same formatter the server uses for stdout, so a remote tail at a terminal is identical to reading that console and a pipe still gets `tsv`; `warn`/`error` go to stderr. It is the one command that PREFLIGHTS `/__abide/health` — a tail is expected to sit there producing nothing, so a wrong host, a too-old deployment and a quiet app would otherwise be three states with one empty screen. At the prompt ctrl-c DETACHES the feed instead of leaving the session. WHERE and WHO are separate because a credential belongs to an ORIGIN: credentials are keyed by origin in a per-user file under `appDataDir()` (`0600`), so moving staging→prod→staging keeps both logins and `connect` never touches a credential. All of them work at the prompt too (the live session re-points/re-credentials). **`./app help [rpc]`** → generated help. **`./app completion <bash|zsh|fish>`** → the shell completion script, which delegates back to `./app completion --line <line>` on every TAB rather than baking names in — so it answers from the LIVE input schemas and cannot go stale when a handler gains a field. The same call backs TAB **inside** the REPL (commands, reserved names, a command's `--flags`, and a field's `enum` values), so both surfaces offer identical candidates. The prompt also shows dim ghost text INLINE as you type: the best candidate where one is being completed, and at a bare flag position the command's whole SIGNATURE (`--name <string> --loud`, a boolean carrying no placeholder and an enum showing its set). `→`/`ctrl-e` accepts — the flag alone, not the placeholder — anything else ignores it, and it is never part of the submitted line. `--args` is never volunteered by completion (it is on every command, so it out-sorted everything you were actually reaching for); it still works spelled out and `help` still lists it. Suppressed under `NO_COLOR`, where undimmed ghost text would be indistinguishable from what you typed. **Output** (MS3.4): JSON to stdout — pretty at a TTY, compact through a pipe (`--pretty`/`--compact`) — a streaming handler line-streamed as it arrives (jsonl verbatim, sse unwrapped to its `data:` payloads); errors are a JSON object on **stderr** (a typed error keeps its `name`/`data`) plus a failure-CLASS exit code (`0` ok · `1` unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx). **Where the call lands** (`resolveCliTarget`, url and token resolved independently): `--url`/`--token` (this run) → `ABIDE_APP_URL`/`ABIDE_APP_TOKEN` (this environment) → a stored `connect` (this user) → otherwise it hosts ITSELF. Flag over env over file is the conventional ladder and is what lets `ABIDE_APP_URL=… ./app` beat a connected binary without disconnecting; when a mid-session `connect` is outranked, the REPL says where calls actually go. A named deployment means nothing boots (the embedded app still supplies the command table, so flags and types are known offline); hosting itself is on an ephemeral loopback port, LAZILY — printing help, mistyping a command or `connect`ing never runs `onStart` — and calls it over HTTP, not in-process, so middleware/identity/CSRF/validation/memo/deadline all apply. `serve`, `help`, `completion`, `connect`, `disconnect`, `login`, `logout`, `identity` and `logs` are RESERVED on **both** surfaces — they WIN over an app rpc of the same name (hosting has no second door; a shadowed rpc warns on `abide:cli` and stays reachable over HTTP/MCP/browser). `exit` and `quit` are reserved at the **prompt only**: they end a SESSION, which means nothing on a command line, so an rpc named `exit` is still callable as `./app exit` and is merely unreachable from the REPL — the shadow warning says which of the two it is. One table (`RESERVED_CLI_COMMANDS`) carries the names, that `where`, and the help text, because four places have to agree: the dispatcher, the REPL, the generated help, and the shadow warning. Global options are read only BEFORE the subcommand, so an rpc may still own `--url`/`--token` |
 | `abide bundle` | desktop app (host platform; embeds assets; first-run setup screen) |
 | `abide check` | type-check `.abide` (generate-TS → TS7 → map back); template + cross-file component-prop type-flow |
 | `abide lsp` | `.abide` language server over stdio: diagnostics · hover · go-to-definition · completion · signature-help · find-references · semantic-tokens/highlighting (markup + inline script/style; the Zed extension in `packages/zed-abide` consumes it) (runs under node; `abide lsp` forwards from Bun) |
+
+The `abide` CLI reports the same failure-CLASS exit codes the compiled binary does (`CLI_EXIT_CODES`,
+one table). **Asking for help is a success; getting the command wrong is not** — a bare `abide`, `-h`
+or `--help` prints usage to stdout and exits `0`, while an unknown subcommand prints it to **stderr**
+and exits `2` (usage). They used to share one branch and both exit `0`, so `abide biuld` in a CI
+script printed the usage text and reported success. Also `2`: `abide scaffold` with no `<name>`, and
+`abide run` with a missing or nonexistent file. A `check` that finds type errors is `1` (failed) — a
+real failure, not a wrong command line. Everything after `abide run <file>` belongs to the SCRIPT,
+including anything that looks like an abide flag (`abide run migrate.ts --port 5` passes `--port 5`
+to the migration), and a throw from the script propagates with its stack rather than becoming an exit
+code — for a failed migration the stack IS the report.
 
 ## File-based conventions
 | Path | Meaning |
@@ -436,8 +485,7 @@ other route) · `/__abide/logs` (SSE log feed — **opt-in** via `ABIDE_LOGS`, 4
 `./app logs` tails. Backlog-then-live, filtered server-side by `tail`/`level`/`debug`/`trace`, with
 `follow=0` for history-then-EOF. Runs through the middleware chain like every other route, and is
 deliberately NOT on the WS mux — a browser-joinable log channel would make any XSS a log exfil) ·
-`/__abide/cli` (per-user install) ·
-`/__abide/inspector` (gated) · `/__abide/chunk/<name>-<hash>.(js|css)` (content-hashed, code-split client
+`/__abide/chunk/<name>-<hash>.(js|css)` (content-hashed, code-split client
 assets — the loader entry + per-route chunks + shared chunks + CSS; served immutable/long-cache, and in a
 production build **precompressed**: `abide build` stores brotli (max quality) + gzip beside each asset and
 the route negotiates `Accept-Encoding` over them, adding `Vary: Accept-Encoding` only where a URL really
@@ -446,6 +494,24 @@ what buys maximum-quality brotli, since the bytes are content-addressed and comp
 encoding is kept only when it beats the identity bytes by 10%, and assets under one MTU (512 B) or of an
 already-compressed format are left alone; `abide dev` skips it entirely. Measured on the docs app: 692 KB
 → 179 KB, 74% off the client payload).
+
+**Not built, though specced** — `/__abide/cli` (per-user install: install script + per-platform
+tarballs behind a sealed per-user token; `machine-surfaces.md` MS3.5 parks it explicitly, and
+`abide compile --platforms` cross-compiles the artifacts a serving surface would hand out) and
+`/__abide/inspector` (the operator inspector, `config-observability.md` CO2.7). Both were listed here
+as if they existed. They are named in this section rather than deleted from it because the design
+decision stands and the absence is the thing worth knowing.
+
+**The document `<head>` `modulepreload`s the whole static boot graph** — the loader entry, its
+transitive static imports, and then the matched route's chunk and *its* static imports, each named
+INDIVIDUALLY. The executing `<script type="module">` has to stay last (it must not run before the
+hydration seed is parsed), which meant the browser did not DISCOVER the client bundle until
+`responseEnd` — after every streamed read had drained. Measured on the docs app: boot download began at
+4494 ms on a page whose `responseStart` was 364 ms; with the links, the whole graph is down by 392 ms
+while the document streams on to 4566 ms. Naming only the entry moves the waterfall down one level
+rather than removing it — following a preloaded module's own static imports is optional in the HTML
+spec and Safari declines. Only STATIC edges are followed: the dynamic ones are other routes' code, and
+preloading those would fetch the whole app on every page.
 
 ## Environment variables
 | Var | Effect |
@@ -460,9 +526,11 @@ already-compressed format are left alone; `abide dev` skips it entirely. Measure
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | per-stream ReplayableStream transcript cap in bytes (default: no limit; exceed → overflow, no replay) |
 | `ABIDE_RPC_TIMEOUT` | default run deadline in ms (**300000**) — a fallback ceiling, per-RPC `timeout` is the real knob. Read at construction, so the browser half is **baked by `abide build`** and a deploy-time change retunes only the server |
 | `ABIDE_SOCKET_TIMEOUT` | socket idle/connection timeout (WS) |
-| `ABIDE_MAX_REQUEST_BODY_SIZE` | default max request body |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` | the default ceiling on a mutation's request body, which a per-RPC `maxBodySize` OVERRIDES. Unset = no ceiling. A declared `content-length` over it is a **413** before anything is buffered; a chunked body is re-checked after the read, since a header can lie |
 | `ABIDE_DERIVE_SCHEMAS` (`0`) | disable load-time type-derived schema inference at boot (default on; `abide dev`/`run`/test app derive live via a `node`/tsgo pass, `abide build` bakes to `dist/schemas.json`) |
 | `ABIDE_COMPRESS` (`static` \| `all` \| `off`) | how much is compressed. **`static`** (default) serves the brotli/gzip variants `abide build` precomputed for `/__abide/chunk/` — free at request time. **`all`** additionally compresses DYNAMIC responses per request: streamed HTML documents (through a flushing `node:zlib` transform, so the shell still paints before a slow `{#for await}` resolves — `CompressionStream` cannot do this and would silently buffer the whole document) and buffered JSON above 1 KB. `text/event-stream` and `application/jsonl` are **never** compressed: flushing per event inflates them (an 11-byte SSE event comes out 14 bytes) and adds latency to a transport whose point is immediacy. **`off`** withholds compression everywhere, including variants already on disk. The default is not `all` because most deployments sit behind a proxy/CDN that already compresses, and compressing twice grows the payload; the surfaces with no proxy (`abide compile`, `abide bundle`) are the ones that want `all` |
 | `ABIDE_LOGS` / `ABIDE_LOG_BUFFER` | opt IN to the remote log feed (`GET /__abide/logs`, what `./app logs` tails) / its ring size in records (default 500). **Default closed**: every other `/__abide/` route discloses something the caller already holds, this one discloses whatever the app logged — including lines written for other users. Served inside the middleware chain, so auth is the app's own middleware; deliberately NOT on the WS mux, since a browser-joinable log channel makes any XSS a log exfil. Once enabled the ring fills unconditionally (you run `logs` AFTER noticing a problem), and the fan-out happens BEFORE the `DEBUG` gate — so `logs --debug abide:rpc` lights a framework channel on a LIVE deployment booted without it. Off, the emit path pays one property load |
 | `ABIDE_LOG_FORMAT` (`tsv` \| `json`) / `DEBUG` | log format / channel gating. The var names the two MACHINE formats — `tsv` (level, ISO time, [channel], traceparent, message) and `json` — i.e. "this output is consumed, not read". Unset, the shape follows the TTY: a human at a terminal gets the **pretty** line (colour + columns, local `HH:MM:SS.mmm`, per-channel colour, traceparent shortened to 8 hex, dimmed/indented stack continuations), a pipe gets `tsv`. The human format is forced the other way with `FORCE_COLOR` and refused with `NO_COLOR` (→ `tsv`) — the conventional spellings, so there is no third abide name |
-| `ABIDE_ENABLE_INSPECTOR` / `ABIDE_INSPECT` | inspector route (off by default) / debug instrumentation |
+
+`ABIDE_ENABLE_INSPECTOR` / `ABIDE_INSPECT` were listed here and are **not implemented** — they gate the
+`/__abide/inspector` route above, which is specced (CO2.7) and not built.

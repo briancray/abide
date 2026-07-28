@@ -16,18 +16,36 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 
 ## Coverage summary (verify phase)
 
-- **Total capabilities in this manifest: 168** (119 browser-facing PW/PW+RT, 47 runtime-only RT, 2 `unit`).
-  By status: **129 `[x]`, 7 `[~]`, 32 `[ ]`** — i.e. ~77% covered, and the manifest deliberately lists
+- **Total capabilities in this manifest: 187** (127 browser-facing PW/PW+RT, 58 runtime-only RT, 2 `unit`).
+  By status: **137 `[x]`, 7 `[~]`, 43 `[ ]`** — i.e. ~73% covered, and the manifest deliberately lists
   capabilities it does *not* yet cover, so a `[ ]` is a known gap rather than an oversight.
-- **Playwright suite: 25 spec files, 175 tests — ALL PASSING.** They drive the real docs app
+- **Re-derive these with ONE parser, not by hand.** Three rows carry an escaped `\|` inside the
+  capability cell and a fourth spells its kind `unit (checkTemplate.test.ts)`, so a naive
+  column-split silently drops four rows — which is how the previous figures (168 / 119 / 47) came to
+  disagree with the tables above them *and* with each other. Strip `\|`, take the last two columns,
+  and match the kind with a prefix:
+  ```sh
+  sed 's/\\|/~ESC~/g' CAPABILITIES.md | awk -F'|' '
+    /^## [0-9]+\./ { sec=$0; sub(/^## /,"",sec); sub(/ .*/,"",sec); order[++n]=sec }
+    /^\| / && NF>=5 { k=$3; s=$4; gsub(/^ +| +$/,"",k)
+      if (s ~ /\[[x~ ]\]/ && k ~ /^(PW\+RT|PW|RT|unit)/) { if (k ~ /^unit/) k="unit"
+        total++; kind[k]++; st[substr(s,index(s,"[")+1,1)]++
+        items[sec]++; if (k ~ /^PW/) pw[sec]++; else if (k=="RT") rt[sec]++ } }
+    END { print total, kind["PW"]+kind["PW+RT"], kind["RT"], kind["unit"], st["x"], st["~"], st[" "]
+      for (i=1;i<=n;i++) printf "%s %d %d %d\n", order[i], items[order[i]], pw[order[i]]+0, rt[order[i]]+0 }'
+  ```
+  The three totals must reconcile three ways — kinds, statuses, and the bucket table's own column
+  sums all equal the total — which is the check that catches a dropped row.
+- **Playwright suite: 26 spec files, 187 tests — ALL PASSING** (`bunx playwright test --list | tail -1`).
+  They drive the real docs app
   (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
   binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, raw SSR-emitter bytes,
   and machine surfaces fetched from the browser.
-  - `rpc` (22), `routing` (22), `bindings` (15), `platform` (14), `memo` (14), `ssr-emit` (10),
-    `control` (10), `sockets` (8), `memo-verbs` (6), `state` (5), `memo-global` (5), `build-deploy` (5),
-    `smoke` (4), `rpc-probes` (4), `bench` (4), `watch` (4), `streaming` (4), `hydration` (3),
-    `channel` (4), `bench-client` (3), `uploads` (2), `bench-server` (2), `sidebar` (2), `styling` (1),
-    `nav-perf` (1).
+  - `rpc` (24), `routing` (22), `platform` (17), `memo` (14), `bindings` (14), `control` (11),
+    `ssr-emit` (10), `sockets` (8), `memo-verbs` (7), `state` (5), `memo-global` (5), `channel` (5),
+    `build-deploy` (5), `branch-scope` (5), `watch` (4), `streaming` (4), `smoke` (4),
+    `rpc-probes` (4), `bench` (4), `bench-client` (4), `hydration` (3), `uploads` (2),
+    `sidebar` (2), `bench-server` (2), `styling` (1), `nav-perf` (1).
   - Note: `bench.spec.ts`'s two re-run tests were flaky under CPU contention (they failed in a
     full-suite run while passing 3/3 in isolation). Both asserted that two *live* microbenchmark
     measurements DIFFER — but an identical iteration count is a legitimate outcome of measuring twice,
@@ -145,9 +163,13 @@ Import `abide/server/{VERB}`; handler takes one positional object arg. Reads →
 | RPC `opts.clients` (browser/mcp/cli reachability; `validate`) | RT | [ ] |
 | RPC `opts.middleware` (per-RPC onion) | RT | [ ] |
 | RPC `opts.cache` (ttl/shared/tags) | PW+RT | [ ] |
+| RPC `opts.memo` normalization — ONE `rpcMemoPolicy` feeds the server memo, the wire spec and the browser proxy, so a read's two memos cannot disagree | RT | [x] (abide `ui/internal/clientProxy.test.ts` counts handler RUNS on both sides of one rpc) |
+| `memo: false` is verb-dependent — a MUTATION bypasses the bare call, a READ stays memo-backed at `ttl: 0` (retains nothing, still coalesces, probes stay live) | RT | [x] (abide `clientProxy.test.ts` "a memo:false read has the same peek policy on the server and in the browser") |
+| The SWR refetch clock (`memo: { throttle }` / `{ debounce }`) — rate-limits explicit revalidation of a slot that already holds a value; `invalidate` CANCELS a scheduled one on both the pulled and derivation paths | PW+RT | [x] (/memo/verbs refetch-clock demo + e2e/memo-verbs.spec counts RUNS — throttle 2, debounce 1 — since both edges serve the same value; abide `shared/memo.test.ts` for the derivation-path cancel, which counts the ARMED TIMER) |
 | RPC `opts.timeout` (bilateral) | RT | [ ] |
 | RPC `opts.crossOrigin` | RT | [ ] |
 | RPC `opts.maxBodySize` | RT | [ ] |
+| RPC `opts.doc` — the human description carried onto OpenAPI, the MCP tool description and CLI `help` | RT | [ ] |
 
 ## 2. Responses
 Import `abide/server/{json,jsonl,sse,error,redirect}`.
@@ -253,6 +275,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | Reactive component — cell/memo-named tag `<C/>` (`const C = memo(…)`) re-mounts on change | PW | [x] (/templating/components) |
 | Component-valued prop typing `Component<Props>` | unit (checkTemplate.test.ts) | [x] |
 | `<script>` / `<script module>` / nested branch-local scripts | PW | [~] |
+| A cell assignment whose RHS spans a LINE BREAK is one expression (ternary, operator, member chain, `instanceof`, `in`, template middles) — severing it sets the cell to the head and orphans the tail, silently | PW | [x] (/templating/scripts multiline demo + e2e/branch-scope.spec; `as` is unit-only — the operator forbids a preceding line break in TS itself) |
 | `<style>` component-scoped / nested subtree-scoped | PW | [x] (/templating/styling ScopedStyleDemo + e2e/styling.spec) |
 
 ## 8. Async reads in templates
@@ -332,15 +355,23 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | MCP prompts (`src/mcp/prompts/<name>.md`) / resources | RT | [ ] |
 | Socket → MCP tail/publish tools | RT | [ ] |
 | `/__abide/health` | PW+RT | [x] (platform/observability fetches /__abide/health in-browser) |
-| `/__abide/inspector` (gated) | RT | [ ] |
-| `/__abide/cli` (per-user install) | RT | [ ] |
+| `/__abide/identity` — the caller's OWN resolved principal | RT | [ ] |
+| `/__abide/logs` — SSE log feed, opt-in via `ABIDE_LOGS` (404 otherwise); backlog-then-live, filtered server-side by tail/level/debug/trace, `follow=0` for history-then-EOF | RT | [ ] |
+| Log feed is inside the middleware chain and NOT on the WS mux (a browser-joinable log channel makes any XSS a log exfil) | RT | [ ] |
+| Log fan-out happens BEFORE the `DEBUG` gate — `logs --debug abide:rpc` lights a channel on a live deployment booted without it | RT | [ ] |
+| Declared RPC verb is ENFORCED — a mismatched method is a 405 carrying a derived `Allow` (`GET, HEAD` for a read); HEAD rides with GET | RT | [ ] |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` / per-RPC `maxBodySize` — declared oversize is a 413 before buffering, chunked re-checked after | RT | [ ] |
+| First-load HTML document carries `Vary: Abide-Nav` (it shares a URL with the soft-nav JSONL response) | PW | [ ] |
+| `<head>` `modulepreload`s the whole static boot graph + the matched route's chunk graph, each chunk named individually | PW | [ ] |
+| `/__abide/inspector` (gated) — **specced, NOT built** (config-observability CO2.7; no route, no env var) | RT | [ ] |
+| `/__abide/cli` (per-user install) — **specced, NOT built** (machine-surfaces MS3.5 parks it) | RT | [ ] |
 
 ## 14. Agent (`abide/server/agent`)
 | Capability | Kind | Status |
 | --- | --- | --- |
 | `agent(engine, messages, options?)` → `AgentFrame` stream | PW+RT | [~] (/platform/machines AgentDemo: browser consumes an `AgentFrame` stream from a scripted engine via `{#for await}`) |
 | `options` (model/system/tools/approval) | RT | [ ] |
-| Tools default = all `clients.mcp` RPCs; `[]` = none | RT | [ ] |
+| Tools default = all `clients.mcp` RPCs; `[]` = none (`clients.mcp` is the one gate — naming `tools` is the override, not the way in) | RT | [x] (abide `server/agent.test.ts` "agent default tool surface" — drives the loop to a real handler, since the gap was that nothing wired the mapper) |
 | Claude engine | RT | [ ] |
 | Claude Code engine (engine tools OFF by default) | RT | [ ] |
 | Types: `NeutralMessage` / `AgentFrame` / `AgentSurface` / `AgentEngine` | RT | [ ] |
@@ -355,9 +386,15 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | Server-dispatch microbench (`route`/`cache-key`/`memo` hot paths) | PW+RT | [x] (/platform/bench/server + e2e/bench-server.spec) |
 | Raw SSR-emitter byte fixture (static attrs, class/style merge, spread override, escaping, null-attr omission, block anchors) | PW | [x] (/__e2e/ssr-emit + e2e/ssr-emit.spec) |
 | `abide start` | RT | [ ] |
-| `abide run <file>` | RT | [ ] |
-| `abide compile` / `abide cli` / `abide bundle` | RT | [ ] |
+| `abide run <file> [args…]` — boots the lifecycle, serves no HTTP; everything after `<file>` is the script's; a throw propagates with its stack | RT | [x] (abide `cli/run.test.ts`) |
+| `abide` exit codes — help is stdout + 0, an unknown subcommand is stderr + 2 (usage); `check` errors are 1 (failed) | RT | [x] (abide `cli/main.test.ts`) |
+| `abide compile` / `abide bundle` | RT | [ ] |
 | `abide check` / `abide lsp` | RT | [ ] |
+| Compiled binary — `logs` subcommand (`--tail`/`--level`/`--debug`/`--trace`/`--no-follow`), rendered by the READER through the server's own formatter | RT | [ ] |
+| Compiled binary — `completion <bash\|zsh\|fish>`; the generated script bakes no names in, calling `completion --line` on every TAB (same call the REPL makes) | RT | [ ] |
+| REPL line editing, 200-entry history, TAB completion and inline ghost text (suppressed under `NO_COLOR`); piped it still reads plain lines | RT | [ ] |
+| Reserved command table — 9 names on both surfaces, `exit`/`quit` at the prompt ONLY (an rpc named `exit` is still callable as `app exit`); a shadowed rpc warns on `abide:cli` | RT | [x] (abide `cli/main.test.ts` — dispatcher, REPL, generated help and the shadow warning all read the one list) |
+| A handler's DESTRUCTURING default reaches the derived input schema as `default` (literals only) → OpenAPI, MCP, `help` (`default <value>`), the REPL prompt | RT | [ ] |
 | Desktop bundle (`BundleWindow`/`BundleMenu`/`onMenu`) | RT | [ ] |
 
 ## 16. Testing harness
@@ -371,27 +408,30 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 
 | # | Bucket | Items | Playwright-relevant (PW / PW+RT) | Runtime-only (RT) |
 | --- | --- | --- | --- | --- |
-| 1 | RPC helpers — verbs | 16 | 9 | 7 |
-| 2 | Responses | 6 | 5 | 1 |
+| 1 | RPC helpers — verbs | 20 | 10 | 10 |
+| 2 | Responses | 8 | 7 | 1 |
 | 3 | Call surface | 5 | 4 | 1 |
 | 4 | Cache verbs + probes | 19 | 18 | 1 |
-| 5 | Reactivity (shared state/watch + UI) | 13 | 12 | 1 |
+| 5 | Reactivity (shared state/watch + UI) | 22 | 19 | 2 |
 | 6 | Template bindings / directives | 12 | 12 | 0 |
-| 7 | Control flow | 13 | 12 | 0 |
-| 8 | Async reads in templates | 5 | 5 | 0 |
+| 7 | Control flow | 15 | 14 | 0 |
+| 8 | Async reads in templates | 6 | 6 | 0 |
 | 9 | Routing / navigation | 10 | 10 | 0 |
 | 10 | Sockets | 11 | 7 | 4 |
-| 11 | Auth / request scope | 9 | 6 | 3 |
+| 11 | Auth / request scope | 10 | 7 | 3 |
 | 12 | Config / observability | 10 | 5 | 5 |
-| 13 | Machine surfaces | 7 | 2 | 5 |
+| 13 | Machine surfaces | 15 | 4 | 11 |
 | 14 | Agent | 6 | 1 | 5 |
-| 15 | CLI / build | 12 | 3 | 9 |
+| 15 | CLI / build | 17 | 3 | 14 |
 | 16 | Testing harness | 1 | 0 | 1 |
-| | **Total** | **155** | **111 browser-facing** | **43 runtime-only** |
+| | **Total** | **187** | **127 browser-facing** | **58 runtime-only** |
 
-> Counts are mechanical (rows per `## n.` section; PW column = `PW` or `PW+RT`). PW + RT = 154; the
-> 155th is bucket 7's one `unit` row (`checkTemplate.test.ts`), a kind outside the PW/RT taxonomy.
-> **Re-derive after editing any table** — this summary silently drifted by 18 rows before.
+> Counts are mechanical — **run the parser in the coverage summary above**, don't split columns by
+> hand. PW + RT = 185; the other two are bucket 7's and bucket 15's `unit` rows, a kind outside the
+> PW/RT taxonomy. **Re-derive after editing any table** — this summary silently drifted by 18 rows
+> once, and then by 31 more, because "re-derive" had no command attached to it. It does now, and the
+> three-way reconciliation (kinds = statuses = bucket column sums = total) is what makes a dropped
+> row visible instead of plausible.
 
 Notes:
 - Buckets 5–9 (reactivity, template bindings, control flow, async reads, routing) are the richest

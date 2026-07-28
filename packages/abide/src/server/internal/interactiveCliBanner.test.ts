@@ -46,7 +46,14 @@ async function banner(): Promise<string> {
     return out.join('')
 }
 
-const ESCAPE = /\[/
+// The ANSI CSI introducer. Spelled `\x1b` rather than carried as a LITERAL escape byte in the
+// source, which is invisible in every editor and does not survive a copy-paste.
+// Matching the ANSI CSI introducer IS the test: these assertions exist to prove the styled branch
+// emitted escapes and the NO_COLOR branch did not, so the control character is the subject rather
+// than a stray paste. Spelled `\x1b` rather than carried as a literal escape BYTE in the source,
+// which is invisible in every editor and does not survive a copy-paste.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: see above — the escape is the subject.
+const ESCAPE = /\x1b\[/
 
 const previous = { no: Bun.env.NO_COLOR, force: Bun.env.FORCE_COLOR }
 afterEach(() => {

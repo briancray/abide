@@ -338,7 +338,7 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
         const command = byName.get(head)
         if (command === undefined) {
             options.writeError(
-                paint.error(`unknown command "${head}"`) + ' — type `help` for the list.\n',
+                `${paint.error(`unknown command "${head}"`)} — type \`help\` for the list.\n`,
             )
             lastCode = CLI_EXIT_CODES.usage
             continue

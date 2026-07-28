@@ -61,7 +61,10 @@ export interface TestApp {
 export interface TestAppConfig {
     routes?: Record<string, Route>
     middleware?: Middleware[]
-    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous socket record; Socket is contravariant in its message type so `unknown` rejects concrete `Socket<T>` values
+    // A heterogeneous socket record: `Socket` is contravariant in its message type, so `unknown` REJECTS
+    // concrete `Socket<T>` values and the erasure has to live in `ErasedSocket`. (This carried a
+    // `noExplicitAny` suppression until the `any` moved into that alias, leaving the directive covering
+    // nothing — the reason is worth keeping, the suppression was not.)
     sockets?: Record<string, ErasedSocket>
     pages?: Record<string, string>
     layouts?: Record<string, string>

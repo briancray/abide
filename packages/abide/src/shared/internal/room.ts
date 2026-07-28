@@ -8,6 +8,10 @@
 // needs the tuple spread (`[...Room<Args>, next: T]`).
 //
 // The `[Args] extends [void]` wrap is deliberate — it stops a union `Args` from distributing.
+// `void` is the SUBJECT here, not a sloppy `undefined`: it is what a caller writes to say "this callable
+// has no room", and the whole point of the type is that TypeScript then collapses the parameter away.
+// The rule's suggested `undefined` is a value you would still have to pass.
+// biome-ignore lint/suspicious/noConfusingVoidType: see above — the void IS the API.
 export type Room<Args> = [Args] extends [void] ? [] : [args: Args]
 
 // The RUNTIME twin of the type above. The type says where the room sits in a call; this says how to

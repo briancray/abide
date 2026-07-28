@@ -14,7 +14,13 @@
     <ul class="surfaces">
       <li><a href="/openapi.json">/openapi.json</a> — an OpenAPI 3.1 document describing every RPC.</li>
       <li><code>/__abide/mcp</code> — a Model Context Protocol endpoint exposing RPCs as tools.</li>
+      <li><code>/__abide/rpc/&lt;name&gt;</code> — each RPC's own transport, plus <code>?__abide_from=&lt;n&gt;</code> to resume a retained stream.</li>
+      <li><code>/__abide/sockets</code> — the multiplexed WebSocket, and a per-socket HTTP face.</li>
+      <li><code>/__abide/health</code> — reachability and whatever <code>onHealth()</code> merges in.</li>
+      <li><code>/__abide/identity</code> — the caller's OWN resolved principal; it discloses nothing they do not already hold.</li>
+      <li><code>/__abide/logs</code> — a live SSE log feed. The one generated route that is <strong>off by default</strong> (<code>ABIDE_LOGS</code>), because it is the one that discloses something the caller did not already have.</li>
     </ul>
+    <p>All of them run through your middleware chain, like every other route — which is the whole authorization story for each of them.</p>
   </Panel>
   <aside class="aside">
     <p>Nothing here was written by hand. Both documents here are generated from the same RPC definitions the browser calls, which is why they cannot drift from the implementation — there is only one.</p>

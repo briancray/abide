@@ -114,16 +114,22 @@ effects into one run is always an explicit author choice — never a silent defa
 `ttl: 0` is safe as the default: the "two POSTs → one execution" case only arises under an opt-in
 `shared` mutation, where the pure-over-args contract already applies.
 
-`memo: false` is the escape hatch: opt OUT of the memo entirely so **even intra-scope concurrent
-identical calls each execute** — for a genuinely non-idempotent handler (mint an idempotency key, append
-a log line twice) where every call must run. `memo: { … }` overrides the per-verb default.
+`memo: false` is the escape hatch, and **as built it is verb-dependent** (`rpcMemoPolicy`, rpc-core
+§14.1b). On a **mutation** it opts out of the memo entirely, so even intra-scope concurrent identical
+calls each execute — for a genuinely non-idempotent handler (mint an idempotency key, append a log line
+twice) where every call must run. On a **read** it resolves to `ttl: 0` instead: a read needs its
+reactive surface, so the slot stays and concurrent identical calls still coalesce, but nothing is
+retained and every fresh call runs cold. This paragraph and the last table row read as the
+mutation-only story for both verbs, which is exactly the divergence that let the browser proxy ship
+`ttl: null` for a `memo: false` read and cache it forever. `memo: { … }` overrides the per-verb default.
 
 | Option | Enters memo? | Concurrent-identical (same scope) | After settle | Cache verbs | Default for |
 | --- | --- | --- | --- | --- | --- |
 | `memo: { ttl: ∞ }` | yes | coalesce | retain until LRU | full | reads |
-| `memo: { ttl: 0 }` | yes | **coalesce** to one run | dispose on drain | full (surface present; slot is transient) | **mutations** |
+| `memo: { ttl: 0 }` | yes | **coalesce** to one run | dispose on drain | full (surface present; slot is transient) | **mutations**; also a `memo: false` READ |
 | `memo: { ttl: n }` | yes | coalesce | retain n ms after settle | full | opt-in: cacheable POST; late-join replay window |
-| `memo: false` | no | each executes | nothing | none | opt-out: non-idempotent handlers; file-bearing FormData; hand-built `Response` |
+| `memo: false` (mutation) | no | each executes | nothing | none | opt-out: non-idempotent handlers; file-bearing FormData; hand-built `Response` |
+| `memo: false` (read) | yes, at `ttl: 0` | coalesce | nothing | full (surface present) | opt-out of RETENTION while keeping the read surface |
 
 Type change: `cache?: false | { ttl?: number; shared?: boolean; tags?: string[] }` (`makeRpc.ts:53`).
 

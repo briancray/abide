@@ -125,3 +125,24 @@ test('cache: { ttl } serves from cache in-window, then expires and re-fetches', 
     expect(immediate).toBe(first) // within the 700ms window → cached
     expect(after).toBeGreaterThan(immediate) // after the window → re-fetched
 })
+
+// The SWR refetch clock. This asserts the WORK — how many times the handler RAN — because it is the
+// only observable that distinguishes the two edges: both bursts end up serving the same fresh value,
+// so a test over values passes against throttle, against debounce, and against no clock at all.
+//
+// Five `refresh()` calls inside one 400ms window: throttle fires on the LEADING edge and collapses
+// the rest into one trailing load (2 runs); debounce waits for quiet, every trigger restarting the
+// window (1 run). The clock is bilateral, so this drives the CLIENT memo's copy of it.
+test('the refetch clock collapses a burst — throttle leading+trailing, debounce trailing only', async ({
+    page,
+}) => {
+    await page.goto('/memo/verbs')
+
+    await page.getByTestId('clock-burst').click()
+    await expect(page.getByTestId('clock-debounced')).toHaveText(/^\d+$/, { timeout: 15000 })
+
+    // Exact counts, not a bound: "fewer than five" is also true of a clock that dropped every
+    // trigger, and the trailing load is the half that keeps the value fresh.
+    expect(await intOf(page, 'clock-throttled')).toBe(2)
+    expect(await intOf(page, 'clock-debounced')).toBe(1)
+})

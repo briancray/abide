@@ -48,9 +48,14 @@ always `await` it.
      layout, and `src/app.ts` middleware), then booted through its `onStart`/`onStop` **hooks**.
      Integration-test against the real app. **Control knobs** (not surfaces, so setting one alone
      still triggers discovery): `dir` (project root to scan) and `lifecycle` (default `true`; set
-     `false` to skip an expensive boot the test doesn't exercise — discovery still runs, only the
-     hooks are skipped). `as(identity)` siblings share the one server + teardown, so `onStop`
-     runs exactly once.
+     `false` to skip the app's own `onStart`/`onStop` — discovery still runs, and so does the
+     framework boot). `lifecycle: false` skips the HOOKS, not the boot: discovery goes through
+     `bootApp`, whose contract is `createApp` **plus `warmPages`** and whose teardown backstop runs
+     either way, so the AOT page warm is not what the knob turns off. That sharing is the point —
+     `bootApp` is the same module `serve()` drives, so a discovery test gets the wrapper order, the
+     breakout (an `onStart` that returns without calling `start()`) and the teardown backstop that
+     production gets, instead of a second copy of them that can drift. `as(identity)` siblings share
+     the one server + teardown, so `onStop` runs exactly once.
 
 ---
 

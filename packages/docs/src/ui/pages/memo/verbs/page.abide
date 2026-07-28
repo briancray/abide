@@ -4,6 +4,7 @@
   import CacheFalseDemo from "$ui/demos/memo/CacheFalseDemo.abide"
   import MetricDemo from "$ui/demos/memo/MetricDemo.abide"
   import PublishDemo from "$ui/demos/memo/PublishDemo.abide"
+  import RefetchClockDemo from "$ui/demos/memo/RefetchClockDemo.abide"
   import SharedDemo from "$ui/demos/memo/SharedDemo.abide"
   import TtlDemo from "$ui/demos/memo/TtlDemo.abide"
 </script>
@@ -46,6 +47,14 @@
   </Demo>
   <aside class="aside">
     <p>And <code>ttl</code> bounds it in time. A shared read with a 700ms TTL. Two reads inside the window return the same count (served from cache); after the window elapses the next read re-runs the handler and the count climbs.</p>
+  </aside>
+  <Demo id="refetch-clock" title="<code>memo: {'{'} throttle {'}'}</code> / <code>{'{'} debounce {'}'}</code> — the refetch clock" server="src/server/rpc/cacheThrottled.ts" client="src/ui/demos/memo/RefetchClockDemo.abide" tab="server">
+    <RefetchClockDemo />
+  </Demo>
+  <aside class="aside">
+    <p>Where <code>ttl</code> bounds how long a value is <em>served</em>, the clock bounds how fast triggers may fire <em>loads</em>. It rate-limits explicit revalidation of a slot that already holds a value — <code>refresh()</code>, a tag refresh, a broadcast refresh — and the two names are two edges of ONE clock, so setting both is a construction-time error. Each burst here fires five <code>refresh()</code> calls inside one 400ms window: <strong>throttle</strong> fires on the leading edge and collapses the rest into one trailing load (two runs), <strong>debounce</strong> waits for quiet with every trigger restarting the window (one run). Both end up serving the same fresh value, which is exactly why this demo counts handler RUNS — a test over values cannot tell the two apart, or tell either from no clock at all.</p>
+    <p>It is per SLOT, and it does not gate a <strong>cold</strong> load (there is nothing stale to serve), an <strong>invalidate</strong> (which instead cancels a scheduled revalidation — deferring a discard would serve known-wrong data), or a <strong>ttl</strong> re-fill. During the window the retained value keeps being served, so <code>await fn()</code> never blocks on the deferred load and <code>refreshing()</code> is true. The clock is bilateral: the registry ships it to the browser proxy, so the burst above is driving the CLIENT memo's clock.</p>
+    <p class="note">This is <em>not</em> how you rate-limit a read whose ARGS keep moving. The clock is per slot, so <code>getQuery({'{'} q {'}'})</code> with a changing <code>q</code> is a cold load every time and throttle does nothing — debounce the INPUT and key the read on it: <code>getQuery({'{'} q: slow() {'}'})</code>.</p>
     <p class="note"><code>refresh</code> is the eager sibling of <code>invalidate</code> — it re-runs while keeping the stale value visible, which is what makes a <code>refreshing</code> flag meaningful. It is easiest to see next to the probe that reports it, so it lives on <a href="/memo/probes">Reactive probes</a>. Acting on many slots at once is <a href="/memo/global">Global probes</a>.</p>
   </aside>
 </main>

@@ -21,6 +21,7 @@ import type {
     NeutralContentPart,
     NeutralMessage,
 } from './internal/agentTypes.ts'
+import { defaultAgentSurface } from './internal/defaultAgentSurface.ts'
 
 export type {
     AgentEngine,
@@ -41,10 +42,17 @@ export async function* agent(
     options: AgentOptions = {},
 ): AsyncIterable<AgentFrame> {
     const signal = options.signal
-    // The tool surface for this run (AG2.2): explicit `tools` wins ([] = none, [...] = a subset);
-    // otherwise none here — the app-config default (all clients.mcp RPCs) is layered on by the
-    // caller that has a registry, since agent() itself may run without app config.
-    const tools: AgentTool[] = options.tools ?? []
+    // The tool surface for this run (AG2.2, DX9): the DEFAULT is the app's own `clients.mcp` RPCs, and
+    // naming `tools` is the OVERRIDE (`[]` = none, `[...]` = a subset). `clients.mcp` is already the
+    // gate — an agent's tool set IS the MCP tool set (MS2.6) — so an rpc withheld from MCP is withheld
+    // here, by the same declaration every other machine client reads, and there is no second place to
+    // say it. Availability is not authorization either way: an app tool that IS reachable still runs
+    // its own middleware on every call (AG1.7).
+    //
+    // `defaultAgentSurface()` is a leaf the booted app PROVIDES into (`createApp`), not a registry this
+    // module reaches for — `agent()` stays usable with no app config at all, where the answer is `[]`.
+    // `?? ` and not `|| `: an explicit `tools: []` is "no tools", not "give me the default".
+    const tools: AgentTool[] = options.tools ?? defaultAgentSurface()
 
     // The running transcript — a local copy so the caller's array is never mutated (AG2.4).
     const transcript: NeutralMessage[] = messages.slice()

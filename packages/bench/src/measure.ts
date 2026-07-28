@@ -15,8 +15,9 @@ export {
     DEFAULT_MIN_TIME_MS,
     DEFAULT_WARMUP_ITERS,
 } from './benchBudget.ts'
-import { benchBudget, DEFAULT_WARMUP_ITERS } from './benchBudget.ts'
+
 import type { BenchBudgetOptions } from './benchBudget.ts'
+import { benchBudget, DEFAULT_WARMUP_ITERS } from './benchBudget.ts'
 
 export type MeasureOptions = BenchBudgetOptions
 

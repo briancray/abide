@@ -94,3 +94,47 @@ test('a nested <style> scopes its own subtree and nothing else', async ({ page }
     expect(await attrCount('nested-inside')).toBe(2)
     expect(await attrCount('nested-outside')).toBe(1)
 })
+
+// A cell assignment compiles to `cell.set(…)`, so the binding-analysis lane has to find where the
+// right-hand side ENDS. It had its own private copy of the continuation-operator set that had drifted
+// from the check lane's: it knew `+` and `.` but not `? :`, `as`, `instanceof`, `in`, or template
+// middles. Each of those truncated at the line break and emitted `size.set( count > 2)` followed by an
+// orphaned `? "many" : "few"` — not a syntax error, so nothing downstream complained. The cell was
+// silently set to the CONDITION.
+//
+// That is why this is a rendered assertion and not a compile check: every value on the page is still a
+// value, just the wrong one. The unit test in `analyzeBindings.test.ts` compares emitted strings; this
+// one is the dogfooding half, which had no case that could tell the two implementations apart.
+//
+// Verified by reverting the continuation set to the drifted build-lane copy: the ternary, binary and
+// member cases go silently wrong, and the template-literal case severs into unbalanced source, so the
+// page fails to BUILD and every assertion below fails at once. The loud case masking the quiet ones is
+// fine here — the guard only has to fail when the rule regresses, and a build error is the better of
+// the two outcomes to get.
+//
+// `as` is in the continuation set but deliberately NOT demoed: the operator carries a
+// no-line-terminator restriction, so `x` ⏎ `as number` is a syntax error in TypeScript itself. Not
+// severing it is still right (the lane should not invent a statement boundary), but there is no
+// working program to render, so the unit test is the only place that case can live.
+test('a multi-line right-hand side is not severed at the line break', async ({ page }) => {
+    await page.goto('/templating/scripts')
+
+    // count starts at 2, so the ternary takes its ELSE branch. Severed, this reads "true".
+    await expect(page.getByTestId('rhs-ternary')).toHaveText('few')
+    await expect(page.getByTestId('rhs-binary')).toHaveText('4')
+    await expect(page.getByTestId('rhs-member')).toHaveText('a then b')
+    await expect(page.getByTestId('rhs-instanceof')).toHaveText('a date')
+    await expect(page.getByTestId('rhs-in')).toHaveText('present')
+    await expect(page.getByTestId('rhs-template')).toHaveText('2 items')
+
+    // Re-run the whole set in the BROWSER: SSR evaluates the script once server-side, so without a
+    // client write every assertion above would also pass against a client bundle that never ran.
+    await page.getByTestId('bump').click()
+
+    // count is 3 now — the ternary flips, which is the value that proves the branches were reached
+    // rather than the condition being stored.
+    await expect(page.getByTestId('rhs-ternary')).toHaveText('many')
+    await expect(page.getByTestId('rhs-binary')).toHaveText('6')
+    await expect(page.getByTestId('rhs-member')).toHaveText('a then b then c')
+    await expect(page.getByTestId('rhs-template')).toHaveText('3 items')
+})

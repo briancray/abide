@@ -97,9 +97,15 @@ Scope: boot-time config (`env(schema)`) and the observability surface
      to reading that server's console, and through a pipe degrades to the same `tsv`. `ABIDE_LOG_FORMAT`
      / `NO_COLOR` / the TTY govern it exactly as they do locally; `warn`/`error` go to the reader's
      stderr, everything else to stdout.
-   - **Filters are applied server-side**: `--tail <n>` (backlog before live), `--level <l>` (a
-     severity FLOOR), `--debug <pattern>` (the **same** `DEBUG` grammar), `--trace <id>` (a trace-id
-     PREFIX, so the 8 hex the pretty line prints is paste-able), `--no-follow` (history, then EOF).
+   - **Filters are applied server-side**: `--tail <n>` (backlog before live; **200** when absent, so
+     a bare `logs` opens with context rather than a blank screen), `--level <l>` (a severity FLOOR),
+     `--debug <pattern>` (the **same** `DEBUG` grammar), `--trace <id>` (a trace-id PREFIX, so the 8
+     hex the pretty line prints is paste-able), `--no-follow` (history, then EOF).
+   - **The route answers `GET`/`HEAD` only** — anything else is a 405 with `Allow: GET, HEAD`. The
+     404 is the DISABLED case specifically, so "this deployment doesn't expose logs" and "you asked
+     for it wrong" stay distinguishable. `ABIDE_LOG_BUFFER` unset, unparseable or ≤ 0 falls back to
+     the ring's own 500 rather than erroring: "opted in, but keep nothing" is never what someone who
+     set the var meant.
    - **Backlog buffers unconditionally once enabled**, not only while someone is subscribed: you run
      `logs` *after* noticing a problem, and a feed that starts empty at connect has discarded the
      only lines you wanted.
@@ -158,7 +164,9 @@ Scope: boot-time config (`env(schema)`) and the observability surface
    check.
 7. **`/__abide/inspector` = operator inspector, gated OFF by default** — injected + routed only
    when `ABIDE_ENABLE_INSPECTOR=true` (it exposes internals, so closed unless opted in);
-   `ABIDE_INSPECT` adds debug instrumentation.
+   `ABIDE_INSPECT` adds debug instrumentation. **NOT BUILT** — neither the route nor either env var
+   exists in the tree, and CLAUDE.md listed all three as if they did until this was written down.
+   The design stands (the parked item below is its *contents*); the absence is what needed stating.
 
 ---
 

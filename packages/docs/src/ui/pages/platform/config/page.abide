@@ -29,11 +29,11 @@
         <tr><td><code>ABIDE_MAX_STREAM_BUFFER_SIZE</code></td><td>Per-stream replay-buffer cap in bytes (default: no limit; exceeding it overflows → no replay).</td></tr>
         <tr><td><code>ABIDE_RPC_TIMEOUT</code></td><td>Default bilateral RPC timeout in ms; a per-RPC <code>timeout</code> overrides it.</td></tr>
         <tr><td><code>ABIDE_SOCKET_TIMEOUT</code></td><td>Socket (WebSocket) idle / connection timeout.</td></tr>
-        <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td>Default maximum request body size.</td></tr>
+        <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td>Default ceiling on a mutation's request body, which a per-RPC <code>maxBodySize</code> overrides. Unset means no ceiling. A declared <code>content-length</code> over it is a <code>413</code> before anything is buffered.</td></tr>
         <tr><td><code>ABIDE_LOG_FORMAT</code></td><td>Machine log format — <code>tsv</code> or <code>json</code>. Unset, the shape follows the TTY: coloured columns for a human, <code>tsv</code> when piped. <code>FORCE_COLOR</code> forces the coloured form, <code>NO_COLOR</code> refuses it.</td></tr>
         <tr><td><code>DEBUG</code></td><td>Enables gated log channels (<code>log.channel(name)</code>).</td></tr>
-        <tr><td><code>ABIDE_ENABLE_INSPECTOR</code></td><td>Enables the <code>/__abide/inspector</code> route (off by default).</td></tr>
-        <tr><td><code>ABIDE_INSPECT</code></td><td>Enables debug instrumentation.</td></tr>
+        <tr><td><code>ABIDE_LOGS</code></td><td>Opts IN to the remote log feed at <code>GET /__abide/logs</code> — what <code>./myapp logs</code> tails. Off by default and a <code>404</code> until set: every other generated route discloses something the caller already holds, this one discloses whatever the app logged, including lines written for other users. It is served inside your middleware chain, so authorization is your own middleware.</td></tr>
+        <tr><td><code>ABIDE_LOG_BUFFER</code></td><td>Size of that feed's backlog ring, in records (default 500). It fills unconditionally once the feed is enabled — you run <code>logs</code> <em>after</em> noticing a problem, and a feed that starts empty at connect has discarded the only lines you wanted.</td></tr>
       </tbody>
     </table>
   </Panel>

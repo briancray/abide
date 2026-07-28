@@ -1,0 +1,67 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  // Every assignment below has a right-hand side that spans a LINE BREAK. The compiler rewrites a
+  // cell assignment to `n.set(...)`, so it has to know where the expression really ends — and a line
+  // break next to a continuation operator is not the end, whatever ASI would do to a bare statement.
+  let count = state(2)
+
+  let size = state("")
+  let doubled = state(0)
+  let joined = state("")
+  let dated = state("")
+  let hasKey = state("")
+  let labelled = state("")
+
+  const sample = { alpha: 1 }
+
+  function recompute() {
+    // A ternary: the break sits before `?` and before `:`.
+    size = count > 2
+      ? "many"
+      : "few"
+
+    // A binary operator with the break AFTER it — the next line supplies the missing operand.
+    doubled = count +
+      count
+
+    // A member chain: the break comes before the `.`.
+    joined = ["a", "b", "c"]
+      .slice(0, count)
+      .join(" then ")
+
+    // `instanceof` and `in` bind their two sides across a break just as an operator does.
+    dated = new Date()
+      instanceof Date
+        ? "a date"
+        : "not a date"
+
+    hasKey = "alpha"
+      in sample
+        ? "present"
+        : "absent"
+
+    // A template literal whose substitution spans the break: the middle and tail tokens carry the
+    // expression across it. (`as` is NOT in this list — the operator carries a no-line-terminator
+    // restriction, so `x` ⏎ `as number` is a syntax error in TypeScript itself, not something the
+    // compiler is free to keep together.)
+    labelled = `${count} item${
+      count === 1 ? "" : "s"
+    }`
+  }
+
+  recompute()
+</script>
+
+<div class="controls">
+  <button data-testid="bump" onclick={() => { count++; recompute() }}>count is {count} — bump it</button>
+</div>
+
+<dl class="rows">
+  <dt>ternary</dt><dd data-testid="rhs-ternary">{size}</dd>
+  <dt>binary operator</dt><dd data-testid="rhs-binary">{doubled}</dd>
+  <dt>member chain</dt><dd data-testid="rhs-member">{joined}</dd>
+  <dt><code>instanceof</code></dt><dd data-testid="rhs-instanceof">{dated}</dd>
+  <dt><code>in</code></dt><dd data-testid="rhs-in">{hasKey}</dd>
+  <dt>template literal</dt><dd data-testid="rhs-template">{labelled}</dd>
+</dl>
