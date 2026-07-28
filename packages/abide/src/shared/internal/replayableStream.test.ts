@@ -170,7 +170,8 @@ describe('ReplayableStream — frozen after terminal & ref-counting', () => {
     })
 
     test('bytes accumulate per chunk and stop at the terminal', () => {
-        const rs = new ReplayableStream<string>()
+        const measure = (chunk: unknown): number => JSON.stringify(chunk)?.length ?? 0
+        const rs = new ReplayableStream<string>({ measure })
         rs.push('ab') // JSON.stringify("ab") === '"ab"' → length 4
         rs.push('c') //  '"c"' → length 3
         const settled = rs.bytes
@@ -178,6 +179,28 @@ describe('ReplayableStream — frozen after terminal & ref-counting', () => {
         rs.close()
         rs.push('ignored')
         expect(rs.bytes).toBe(settled)
+    })
+
+    // The measurer is INJECTED, and its absence is the common case: only the two bounded server stores
+    // read the total, so a browser stream / per-request slot / standalone stream must not serialize a
+    // chunk to produce a number nobody reads. This asserts the WORK, not the value — the whole point is
+    // that no measuring happens, and `bytes === 0` is the only observable that says so.
+    test('no measurer means no per-chunk accounting at all', () => {
+        let measured = 0
+        const counted = new ReplayableStream<string>({
+            measure: (chunk) => {
+                measured++
+                return JSON.stringify(chunk)?.length ?? 0
+            },
+        })
+        for (let i = 0; i < 5; i++) counted.push('x')
+        expect(measured).toBe(5)
+        expect(counted.bytes).toBeGreaterThan(0)
+
+        const unmeasured = new ReplayableStream<string>()
+        for (let i = 0; i < 5; i++) unmeasured.push('x')
+        expect(unmeasured.bytes).toBe(0)
+        expect(unmeasured.chunks).toHaveLength(5) // the transcript itself is unaffected
     })
 
     test('onPush fires once per appended chunk and never after a terminal', () => {

@@ -443,17 +443,31 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
         {
             group: 'watch',
             name: 'stream-baseline',
-            note: `${CHUNKS} chunks under a watch — fires 0× TODAY (step 1 changes this)`,
+            note: `${CHUNKS} chunks under a watch — fires once per append`,
             run: async () => {
+                let fired = 0
                 const watchedStream = memo<{ id: number }, AsyncIterable<Chunk>>(() =>
                     chunkSource(CHUNKS),
                 )
                 watchedStream.watch({ id: 1 }, (value) => {
-                    watchSink = value as number | undefined
+                    fired++
+                    watchSink = (value as Chunk | undefined)?.i
                 })
                 for await (const _ of await watchedStream({ id: 1 })) {
                     // drain under an attached watch
                 }
+                // LOUD, like `watch/value-fire` — and this is why that guard is not optional. The note
+                // above read "fires 0× TODAY (step 1 changes this)" long after step 1 landed and the
+                // watch began firing per append: the human-facing bench table said this ratio was pure
+                // attach overhead with no fan-out while `gate.ts` recorded the exact opposite, and a
+                // reader trusting the table would go hunting the wrong layer. Nothing announced the flip
+                // because nothing asserted the behaviour. An observer that never fires also
+                // distinguishes no implementation from any other, so 0 is not a slow bench — it is a
+                // bench measuring nothing.
+                if (fired === 0)
+                    throw new Error(
+                        'watch/stream-baseline: watch never fired — bench measures nothing',
+                    )
             },
             baseline: {
                 note: `raw drain with a per-chunk callback, ${CHUNKS} chunks/op`,

@@ -33,6 +33,7 @@
 
 import { canonicalKey } from './internal/codec.ts'
 import { isBrowser } from './internal/isBrowser.ts'
+import { isThenable } from './internal/isThenable.ts'
 import { isTimeoutError } from './internal/isTimeoutError.ts'
 import { registerTaggedMemo } from './internal/memoTags.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
@@ -49,6 +50,7 @@ import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.t
 import type { Room } from './internal/room.ts'
 import { markSettled } from './internal/settledRead.ts'
 import {
+    sharedCacheBounded,
     sharedCacheEvictIfNeeded,
     sharedCachePin,
     sharedCacheRecordSize,
@@ -396,13 +398,6 @@ function isStreamSource(value: unknown): value is AsyncIterable<unknown> {
     return (
         typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
     )
-}
-
-// Any thenable, not just a native Promise — the auto-tracked classifier must treat a hand-rolled or
-// third-party promise exactly as it treats `await`, which follows `.then`.
-function isThenable(value: unknown): value is Promise<unknown> {
-    if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return false
-    return typeof (value as { then?: unknown }).then === 'function'
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -1002,6 +997,24 @@ export function memo<Args, T>(
         const controller = new AbortController()
         // A reactive tick for chunk-level probes (peek/chunks/done). Reused across re-runs of this slot.
         if (slot.streamTick === undefined) slot.streamTick = state(0)
+        // Resolved BEFORE the stream is built: it decides both the pin and whether per-chunk byte
+        // accounting happens at all.
+        //
+        // `stream.bytes` has exactly two readers, and BOTH are ceilings that default to unbounded: the
+        // per-stream cap in `accountStreamChunk` (compared against Infinity) and the LRU's recorded size
+        // (a no-op while `sharedCacheBounded()` is false). Off that path — a browser stream, a
+        // per-request slot, a standalone stream, or any server stream in the default configuration —
+        // every chunk was being serialized to produce a total nothing could read, ~48 ns and a discarded
+        // string apiece. So the measurer is INJECTED only when something will actually read the total.
+        //
+        // Resolved ONCE per stream rather than per chunk, which is the deliberate trade: an operator who
+        // raises a ceiling from unset while a stream is already open leaves that transcript counted as 0
+        // until it re-runs. An open stream is pinned against eviction regardless, and a closed one
+        // re-measures on its next cold fill, so the window is bounded — and the alternative is reading
+        // two env vars on every chunk to answer a question whose answer is a deployment constant.
+        const store = boundedStore(slots())
+        const accounted =
+            store !== undefined && (sharedCacheBounded() || streamBufferCap() !== Infinity)
         const stream = new ReplayableStream<unknown>({
             onAbort: () => controller.abort(),
             onRefCountZero: () => onStreamRefCountZero(slot, stream),
@@ -1009,10 +1022,10 @@ export function memo<Args, T>(
                 bumpStreamTick(slot)
                 accountStreamChunk(slot, stream)
             },
+            measure: accounted ? measureBytes : undefined,
         })
         stream.encoding = encoding // carried so the router re-serves the handler's chosen wire format
         // Pin an open stream against LRU eviction while it fills (bounded store only).
-        const store = boundedStore(slots())
         if (store !== undefined) sharedCachePin(store, slot.key)
         setState(slot, {
             status: 'stream',

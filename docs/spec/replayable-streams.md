@@ -246,7 +246,7 @@ interface ReplayableStream<T> {
   errored: boolean      // terminal discriminant (so fail(undefined) is still a well-defined terminal)
   error: unknown        // the failure value when errored (mutually exclusive with done)
   aborted: boolean      // terminal: torn down by policy/invalidate (a distinct terminal from error)
-  bytes: number         // running Σ measureBytes(chunk), for LRU/cap accounting
+  bytes: number         // running Σ measure(chunk) when a measurer was injected, else 0 (LRU/cap only)
   refCount: number      // live attachments (consumers currently iterating)
   generation: number    // bumped by publish/refresh; cursors re-replay from 0 on change
   abort: () => void      // aborts the owning source's AbortController (§3)
@@ -330,9 +330,9 @@ own bilateral timeout. The budget timer is LAZILY armed (memoized `scope.budget(
 page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`). Step 6 (socket-core convergence) has since landed via ADR 0023.
 
 - The **first** consumer starts the source (owned by the slot, §3). Each chunk is `chunks.push(chunk)`,
-  `bytes += measureBytes(chunk)`, then the `waiters` are drained (resolve-and-clear). `done`/`error`/
-  `aborted` is set **last**, after the final push, so the terminal is never observed before the chunk
-  that precedes it.
+  then `bytes += measure(chunk)` **if a measurer was injected** (below), then the `waiters` are drained
+  (resolve-and-clear). `done`/`error`/`aborted` is set **last**, after the final push, so the terminal is
+  never observed before the chunk that precedes it.
 - A **consumer is a cursor**, not a queue. `consume()` returns a fresh `AsyncIterable<T>` with a private
   index `i`; replay and live are the *same* read (the cursor walks the one shared buffer). This
   eliminates the double-copy and the socket-style drop-oldest overflow entirely — a lagging consumer
@@ -375,7 +375,21 @@ page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`)
 
 **Byte accounting & buffer bound.** `bytes` accrues **incrementally per chunk** and is recorded via
 `sharedCacheRecordSize` while the stream is open (not once at settle), so an open transcript pressures
-the LRU as it grows. Streams split into two disjoint classes at buffer-bound time:
+the LRU as it grows.
+
+The measurer is **injected, not built in** (`ReplayableStreamHooks.measure`), and absent means the stream
+does not account at all — `bytes` stays 0. Measuring means `JSON.stringify`-ing every chunk and discarding
+the string, and `bytes` has exactly two readers, BOTH ceilings that default to unbounded: the per-stream
+cap and the LRU's recorded size. `memo.startStream` therefore passes `measureBytes` only when the slot
+lives in one of the two bounded server stores AND at least one ceiling is actually set; a browser stream,
+a per-request slot, a standalone `ReplayableStream`, or any server stream in the default configuration
+does no per-chunk work. Measured: `stream/push-raw` 12.74× → 1.13× vs a plain array push, `memo-drain`
+265 µs → 204 µs, `consume-replay` 1.71× → 1.01×. The predicate is resolved **once per stream** rather than
+per chunk, so raising a ceiling from unset while a stream is already open leaves that transcript counted
+as 0 until it re-runs — bounded, because an open stream is pinned against eviction anyway and a closed one
+re-measures on its next cold fill.
+
+Streams split into two disjoint classes at buffer-bound time:
 - **BOUNDED (opt-in).** When `ABIDE_MAX_STREAM_BUFFER_SIZE` is set (measured bytes; **unbounded by
   default**; operator sets it ≤ the global `ABIDE_MAX_SHARED_CACHE_SIZE`), buffer the whole transcript up
   to that cap. Under the cap — and always, when unset — the full-replay contract holds: every consumer

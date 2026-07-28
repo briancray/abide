@@ -51,10 +51,20 @@ const BOUNDS: Bound[] = [
     },
     {
         numerator: 'stream/memo-drain',
-        denominator: 'stream/push-raw',
-        max: 12,
-        observed: '≈5.0×',
-        why: "the memo's per-chunk hooks (tick + byte accounting); steps 1 and 3 COMPOUND here",
+        // RECALIBRATED, and the denominator changed with it. This used to divide by `stream/push-raw`,
+        // which was ≈5.0× — but ~82% of that denominator was `ReplayableStream.push` serializing every
+        // chunk to a string it threw away. Making that accounting opt-in (it is read only by two
+        // ceilings, both unbounded by default) took push-raw from 12.74× vanilla to 1.13×, and the old
+        // pair jumped to 41× on a change that made BOTH sides faster. A bound whose denominator is
+        // approximately a bare `Array.push` measures the numerator's absolute cost in disguise; loosening
+        // its max would have kept it green while telling us nothing.
+        //
+        // `consume-replay` is the same drain WITHOUT the memo wrapped around it, so the ratio is now what
+        // the bound always meant: what the memo's per-chunk hooks add to draining a transcript.
+        denominator: 'stream/consume-replay',
+        max: 8,
+        observed: '≈2.9×',
+        why: "the memo's per-chunk hooks (reactive tick + accounting) over the same drain without them",
     },
     {
         numerator: 'watch/stream-baseline',

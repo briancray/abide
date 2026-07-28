@@ -120,21 +120,23 @@ function settledStatement(expr: string, use: (value: string) => string): string 
 // A branch body assigned to `target`. A stream-free body writes straight into a shadowed accumulator
 // instead of an awaited IIFE — inside a `{#for}` that frame is per ROW, and a branch is the commonest
 // thing a row contains.
+//
+// `scopeExpr` names the scope the body renders against; a branch that binds a parameter (`{:catch e}`)
+// passes the child scope it just built. The inline arm rebinds `$scope` in a NESTED block rather than
+// at this level, because the `const $cc = Object.create($scope)` that produced it is a sibling
+// statement — shadowing in the same block would put that reference in the temporal dead zone.
 function branchBody(
     analysis: BindingAnalysis,
     children: ServerChunk[],
     target: string,
     pad: string,
+    scopeExpr = '$scope',
 ): string {
     if (!inlinableChildren(children))
-        return `${target} = await ${bodyExpr(analysis, children)}($scope);`
-    return `let $out = "";\n${genChunks(analysis, children)}${pad}${target} = $out;`
-}
-
-// A branch body RETURNED from the enclosing arrow (the `{#switch}` shape) rather than assigned.
-function branchReturn(analysis: BindingAnalysis, children: ServerChunk[], pad: string): string {
-    if (!inlinableChildren(children)) return `return await ${bodyExpr(analysis, children)}($scope);`
-    return `let $out = "";\n${genChunks(analysis, children)}${pad}return $out;`
+        return `${target} = await ${bodyExpr(analysis, children)}(${scopeExpr});`
+    const body = `let $out = "";\n${genChunks(analysis, children)}${pad}${target} = $out;`
+    if (scopeExpr === '$scope') return body
+    return `{ const $scope = ${scopeExpr};\n${body} }`
 }
 
 // One level of an `{#if}` / `{:else if}` / `{:else}` chain, nested so later conditions stay unevaluated.
@@ -155,6 +157,34 @@ function genIfChain(
     return (
         `${pad}{ const $v = (${branch.expr});\n` +
         `${pad}  if ($rt.isThenable($v) ? await $v : $v) { ${body} }${rest}\n` +
+        `${pad}}\n`
+    )
+}
+
+// One level of a `{#switch}` case chain, nested for the same reason `genIfChain` nests: a later case's
+// expression must stay unevaluated once an earlier one matched. `{:default}` is skipped in place and
+// emitted as the innermost fallback, which is where the old `return`-based form put it too — a
+// `{:default}` written between two cases still runs last.
+function genSwitchChain(
+    analysis: BindingAnalysis,
+    cases: { expr: string | null; children: ServerChunk[] }[],
+    index: number,
+    fallback: { children: ServerChunk[] } | undefined,
+    pad: string,
+): string {
+    let at = index
+    while (at < cases.length && cases[at]?.expr === null) at++
+    const branch = cases[at]
+    if (branch === undefined || branch.expr === null) {
+        if (fallback === undefined) return ''
+        return `${pad}{ ${branchBody(analysis, fallback.children, '$r', `${pad}  `)} }\n`
+    }
+    const body = branchBody(analysis, branch.children, '$r', `${pad}  `)
+    const inner = genSwitchChain(analysis, cases, at + 1, fallback, `${pad}  `)
+    const rest = inner === '' ? '' : ` else {\n${inner}${pad}}`
+    return (
+        `${pad}{ const $v = (${branch.expr});\n` +
+        `${pad}  if (($rt.isThenable($v) ? await $v : $v) === $subject) { ${body} }${rest}\n` +
         `${pad}}\n`
     )
 }
@@ -482,6 +512,43 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
                 }
                 return `  $out += await $rt.forAwaitStream({ source: () => (${chunk.iterable}), renderItem: ${renderItem}, caught: ${caught}${attachTag} });\n`
             }
+            // The loop KEEPS its async IIFE, unlike `{#if}`/`{#try}`/`{#switch}`, which all render into
+            // an accumulator in the enclosing frame. Collapsing it the same way was tried TWICE and
+            // reverted both times — the frame is worth one microtask tick per BLOCK, and a list amortises
+            // that over every row it contains, so there is very little to win and it measurably loses.
+            //
+            // Attempt 1 — rows appended straight to the enclosing `$out`. `bench:delta` vs base:
+            // `for-list-1000 · render` +16.4%, `nested-for-if-50` +18.2%, `for-list-100` +7.1%,
+            // `for-list-10000` +6.5%; every list row slower, clear of the vanilla noise controls, ≈8 ns
+            // per row at n=1000.
+            //
+            // Attempt 2 tested the obvious explanation for attempt 1 — that appending per row to an
+            // already-long enclosing accumulator is what cost, rather than the frame — by collapsing the
+            // frame while keeping a fresh shadowed `$out` and assigning it out at the end, which is
+            // exactly the shape `{#if}` uses. It came back +12.8% / +12.1% / +7.8%. So that explanation
+            // is WRONG and worth writing down: the accumulator is not the variable. A small
+            // self-contained async arrow optimises better here than the same loop nested inside the much
+            // larger enclosing `render`, and the tick it costs is cheaper than whatever that buys.
+            // The trade is therefore inverted from `{#try}`, where the frame was per ROW.
+            //
+            // The source await is the ONE expression slot in this file that is deliberately NOT guarded
+            // by `$rt.isThenable`, and that is a measured decision, not an oversight. A `{#for}` source
+            // is usually an already-materialised array, so the guard looks free: in a standalone
+            // reconstruction of this shape it saved 31.5 ns per block by skipping the promise wrap and
+            // the microtask tick. In the ACTUAL emitted arrow it loses. `bench:delta` vs base, three
+            // runs, consistent sign: `for-list-1000 · render` +16.4% / +12.8% / +8.3%, `for-list-10000`
+            // +6.5% / +7.9%, and removing the guard again returned every row to parity-or-faster with
+            // quiet vanilla controls (+1.7%, +0.1%).
+            //
+            // The mechanism is the difference between `const $src = await (…)` as the arrow's leading
+            // statement and `let $src` + a conditional `await` in its body: the second is a mutable
+            // binding whose suspension point is inside a branch, and it compiles worse than the
+            // unconditional form regardless of the tick it avoids. The lesson generalises — the
+            // micro-ablation that motivated this was not the emitted shape, and it disagreed with it.
+            //
+            // The tick is per BLOCK, which a list amortises over every row, so there was little to win
+            // even if it had worked. The per-ROW slots (`leafStatement`, `settledStatement`) are where
+            // the guard pays, and they keep it.
             let out = '  $out += await (async ($scope) => {\n    let $out = "";\n    let $i = 0;\n'
             out += `    const $src = await (${chunk.iterable});\n`
             out += `    for (const $value of ($src ?? [])) {\n${body}    }\n`
@@ -534,40 +601,50 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
             return out
         }
         case 'switch': {
-            // Same two treatments as `{#if}`: the discriminant and each case expression settle through
-            // the guard rather than an unconditional await, and a stream-free case body returns a
-            // locally accumulated string instead of an awaited IIFE. Cases are still tried in order and
-            // stop at the first match, so nothing is evaluated that was not evaluated before.
-            let out = '  $out += await (async ($scope) => {\n'
-            out += `    const $d = (${chunk.discriminant});\n`
-            out += '    const $subject = $rt.isThenable($d) ? await $d : $d;\n'
-            for (const c of chunk.cases) {
-                if (c.expr === null) continue
-                out += `    { const $v = (${c.expr});\n`
-                out += `      if (($rt.isThenable($v) ? await $v : $v) === $subject) { ${branchReturn(analysis, c.children, '      ')} }\n`
-                out += '    }\n'
-            }
+            // Now exactly the `{#if}` shape: an accumulator in the ENCLOSING frame plus a nested chain.
+            // The IIFE was here only because the cases `return`ed — the one thing that needs a function
+            // — and that cost a microtask tick per `{#switch}`, per ROW inside a `{#for}` (measured at
+            // ~26 ns/row). Assigning `$r` down a nested chain buys the same first-match-wins laziness
+            // structurally: a later case's expression sits inside the previous case's `else`, so it is
+            // no more evaluated than it was before.
             const fallback = chunk.cases.find((c) => c.expr === null)
-            if (fallback) out += `    { ${branchReturn(analysis, fallback.children, '    ')} }\n`
-            out += '    return "";\n  })($scope);\n'
-            return out
+            return (
+                `  {\n    let $r = "";\n` +
+                `    const $d = (${chunk.discriminant});\n` +
+                `    const $subject = $rt.isThenable($d) ? await $d : $d;\n` +
+                genSwitchChain(analysis, chunk.cases, 0, fallback, '    ') +
+                `    $out += $r;\n  }\n`
+            )
         }
         case 'try': {
-            let out = '  $out += await (async ($scope) => {\n    let $out = "";\n    try {\n'
-            out += `      $out = await ${bodyExpr(analysis, chunk.children)}($scope);\n`
+            // Same two treatments as `{#if}`, and for the same reason. The outer async IIFE is gone: a
+            // block-scoped accumulator in the ENCLOSING frame is enough, since every `await` this block
+            // emits is already legal there. And each body goes through `branchBody`, so a stream-free
+            // one renders straight into that accumulator instead of a second awaited IIFE.
+            //
+            // It used to be both frames unconditionally — 2 microtask ticks per `{#try}`, where `{#if}`
+            // costs 0, and inside a `{#for}` that is per ROW (measured: +86 ns/row over the same markup
+            // in an `{#if}`, ~48% of a 1000-row render whose body is a `{#try}`). Anything that
+            // participates in streaming SSR still keeps its own frame — `inlinableChildren` is the gate,
+            // and it is the gate because a blanket inline was tried and reverted (see that function).
+            let out = '  {\n    let $r = "";\n    try {\n'
+            out += `      ${branchBody(analysis, chunk.children, '$r', '      ')}\n`
             out += '    } catch ($e) {\n'
             if (chunk.catch) {
                 out +=
                     '      ' +
                     childScopeCode('$cc', chunk.catch.param, '$e').replace(/\n/g, '\n      ')
-                out += `      $out = await ${bodyExpr(analysis, chunk.catch.children)}($cc);\n`
+                out += `      ${branchBody(analysis, chunk.catch.children, '$r', '      ', '$cc')}\n`
             } else {
                 out += '      throw $e;\n'
             }
             out += '    }\n'
-            if (chunk.finally)
-                out += `    $out += await ${bodyExpr(analysis, chunk.finally)}($scope);\n`
-            out += '    return $out;\n  })($scope);\n'
+            // `{:finally}` APPENDS to whatever the try/catch produced, so it accumulates separately and
+            // is concatenated — it must not overwrite `$r`.
+            if (chunk.finally) {
+                out += `    { let $f = "";\n      ${branchBody(analysis, chunk.finally, '$f', '      ')}\n      $r += $f;\n    }\n`
+            }
+            out += '    $out += $r;\n  }\n'
             return out
         }
         case 'componentDef':

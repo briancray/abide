@@ -10,22 +10,15 @@
 // This primitive is memo-independent: it owns no cache slot, no TTL, no LRU. The memo wires it into
 // a slot (close/fail stamp the slot clock, per-consume ref-counting drives disposal) in step 1b.
 
-// Byte size of one decoded chunk, for the transcript accounting the memo/LRU will consume later.
-// A non-serializable chunk contributes 0 rather than throwing — accounting is best-effort.
-function measureChunkBytes(chunk: unknown): number {
-    try {
-        const encoded = JSON.stringify(chunk)
-        return encoded === undefined ? 0 : encoded.length
-    } catch {
-        return 0
-    }
-}
-
 // Lifecycle hooks the memo wires in; all optional so the standalone primitive needs none.
 export interface ReplayableStreamHooks {
     onAbort?: () => void
     onRefCountZero?: () => void
     onPush?: () => void
+    // Byte size of one decoded chunk, for the transcript accounting the LRU / per-stream cap consume.
+    // INJECTED, and absent means "do not account" — see `bytes`. Spelled `| undefined` because the one
+    // caller decides per stream and passes the absent case explicitly (`exactOptionalPropertyTypes`).
+    measure?: ((chunk: unknown) => number) | undefined
 }
 
 export class ReplayableStream<T> {
@@ -36,7 +29,16 @@ export class ReplayableStream<T> {
     errored = false
     error: unknown = undefined
     aborted = false
-    // Running Σ measureChunkBytes(chunk), for LRU / per-stream-cap accounting.
+    // Running Σ measure(chunk), for LRU / per-stream-cap accounting — and 0 when no `measure` hook was
+    // supplied, which is the common case and the point.
+    //
+    // Measuring means serializing every chunk and throwing the string away, ~48 ns and one garbage
+    // string PER CHUNK. Only two stores ever read the total (`memo.accountStreamChunk` returns early for
+    // anything else), so every browser stream, every per-request slot and every standalone stream used
+    // to pay for a number nothing could consume. Ablated: `stream/push-raw` 52.29 µs → 5.38 µs for 1000
+    // pushes, 12.74× → 1.22× against a plain array push; `stream/memo-drain` 265 µs → 205 µs;
+    // `stream/consume-replay` 116 µs → 72 µs. Injecting the measurer moves the choice to the one caller
+    // that knows whether the total will be read.
     bytes = 0
     // Exceeded the per-stream buffer cap (replayable-streams.md §4). An overflowed stream is aborted
     // (bounded memory), drops replay eligibility, and a new read re-runs instead of replaying.
@@ -59,11 +61,14 @@ export class ReplayableStream<T> {
     // Fired after each chunk is appended. The memo uses this to bump a reactive tick so `latest`/`chunks`
     // re-run as the transcript grows — WITHOUT touching the state-machine atom the bare read subscribes.
     private readonly onPush: (() => void) | undefined
+    // Absent = do not account (see `bytes`). Held as a field so `push` stays one monomorphic shape.
+    private readonly measure: ((chunk: unknown) => number) | undefined
 
     constructor(hooks: ReplayableStreamHooks = {}) {
         this.onAbort = hooks.onAbort
         this.onRefCountZero = hooks.onRefCountZero
         this.onPush = hooks.onPush
+        this.measure = hooks.measure
     }
 
     get settled(): boolean {
@@ -74,7 +79,7 @@ export class ReplayableStream<T> {
     push(chunk: T): void {
         if (this.settled) return
         this.chunks.push(chunk)
-        this.bytes += measureChunkBytes(chunk)
+        if (this.measure !== undefined) this.bytes += this.measure(chunk)
         this.wake()
         this.onPush?.()
     }

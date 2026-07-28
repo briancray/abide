@@ -62,6 +62,14 @@ function readLimit(): number {
     return positiveEnvBytes('ABIDE_MAX_SHARED_CACHE_SIZE')
 }
 
+// Is the byte ceiling active? Both `sharedCacheRecordSize` and `sharedCacheEvictIfNeeded` are no-ops
+// when it is not, so a caller that must do real WORK to produce a size (serializing a stream chunk) can
+// skip producing it at all. Exported rather than re-read from the env at the call site, so the var name
+// and the "unset means unbounded" rule stay in one place.
+export function sharedCacheBounded(): boolean {
+    return readLimit() !== Infinity
+}
+
 // Move a key to the most-recently-used end (delete + re-set) so LRU eviction drops the
 // least-recently-touched first. No-op (and no reordering) when the cache is unbounded.
 export function sharedCacheTouch(store: Map<string, unknown>, key: string): void {
