@@ -104,7 +104,7 @@ async function compressBuffered(response: Response, encoding: 'br' | 'gzip'): Pr
 
     const compressed =
         encoding === 'br'
-            ? await compressWholeStream(identity, 'br')
+            ? await compressWholeBrotli(identity)
             : Bun.gzipSync(identity, { level: 6 })
     // Compression is not guaranteed to win on arbitrary payloads; if it did not, send the original.
     if (compressed.byteLength >= identity.byteLength) return rebuild(response, identity)
@@ -115,14 +115,14 @@ async function compressBuffered(response: Response, encoding: 'br' | 'gzip'): Pr
 }
 
 // Brotli has no synchronous Bun API, so a buffered brotli goes through the same flushing transform the
-// streaming path uses — one chunk in, one flush, done. Gzip takes `Bun.gzipSync` directly.
-async function compressWholeStream(
+// streaming path uses — one chunk in, one flush, done. Gzip never reaches here: its caller takes
+// `Bun.gzipSync` directly, which is why this takes no encoding.
+async function compressWholeBrotli(
     identity: Uint8Array<ArrayBuffer>,
-    encoding: 'br' | 'gzip',
 ): Promise<Uint8Array<ArrayBuffer>> {
     const source = new Response(identity).body
     if (source === null) return identity
-    const piped = source.pipeThrough(compressionTransform(encoding))
+    const piped = source.pipeThrough(compressionTransform('br'))
     return new Uint8Array(await new Response(piped).arrayBuffer())
 }
 

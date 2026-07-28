@@ -10,7 +10,7 @@ import { createTestApp } from '../test/createTestApp.ts'
 import { compose } from '../ui/internal/compose.ts'
 import { loadEmitted } from '../ui/internal/emit.ts'
 import { Raw } from '../ui/internal/serverRuntime.ts'
-import { layoutChain } from './internal/layouts.ts'
+import { applicableLayoutPrefixes } from './internal/layouts.ts'
 
 // SSR HTML carries the client skeleton's comment anchors; strip them for structural assertions.
 function stripAnchors(html: string): string {
@@ -158,14 +158,18 @@ describe('layout error boundaries + module parity (TODO #7 follow-ups)', () => {
     })
 })
 
-describe('layoutChain — discovery + ordering', () => {
+describe('applicableLayoutPrefixes — discovery + ordering', () => {
     test('selects applicable layouts on segment boundaries, ordered root → nearest', () => {
         const layouts = { '/': 'R', '/admin': 'A', '/admin/reports': 'AR', '/blog': 'B' }
-        expect(layoutChain('/admin/reports/q3', layouts)).toEqual(['R', 'A', 'AR'])
-        expect(layoutChain('/admin', layouts)).toEqual(['R', 'A'])
+        expect(applicableLayoutPrefixes('/admin/reports/q3', layouts)).toEqual([
+            '/',
+            '/admin',
+            '/admin/reports',
+        ])
+        expect(applicableLayoutPrefixes('/admin', layouts)).toEqual(['/', '/admin'])
         // "/administrators" must NOT match the "/admin" layout (segment boundary).
-        expect(layoutChain('/administrators', layouts)).toEqual(['R'])
-        expect(layoutChain('/', layouts)).toEqual(['R'])
+        expect(applicableLayoutPrefixes('/administrators', layouts)).toEqual(['/'])
+        expect(applicableLayoutPrefixes('/', layouts)).toEqual(['/'])
     })
 })
 

@@ -32,9 +32,10 @@ export interface TaggedMemo {
 // tag → the memos carrying it. A memo with N tags appears in N buckets.
 const registry = new Map<string, Set<TaggedMemo>>()
 
-// Register a shared memo under each of its tags. Returns an unregister function (called on the rare
-// disposal of a dynamically-created tagged memo; module-singleton RPC memos simply stay registered).
-export function registerTaggedMemo(entry: TaggedMemo): () => void {
+// Register a shared memo under each of its tags. No unregister: a tagged memo is `crossRequest` by
+// construction (`memo.ts`), which makes it a module singleton that lives for the process — the closure
+// this used to return was allocated per memo and discarded by its only caller.
+export function registerTaggedMemo(entry: TaggedMemo): void {
     for (const tag of entry.tags) {
         let bucket = registry.get(tag)
         if (bucket === undefined) {
@@ -42,14 +43,6 @@ export function registerTaggedMemo(entry: TaggedMemo): () => void {
             registry.set(tag, bucket)
         }
         bucket.add(entry)
-    }
-    return (): void => {
-        for (const tag of entry.tags) {
-            const bucket = registry.get(tag)
-            if (bucket === undefined) continue
-            bucket.delete(entry)
-            if (bucket.size === 0) registry.delete(tag)
-        }
     }
 }
 

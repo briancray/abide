@@ -161,7 +161,31 @@ function rpcEntry(name: string, route: Route): RpcEntry {
     return entry
 }
 
+// Derived once per (routes, sockets) pair. The registry is a pure projection of an immutable config,
+// but it was re-derived on every `/openapi.json` hit, twice per MCP `tools/call`, and twice per client
+// build — and `resolveClients` warns as it goes, so an unrecognized `clients` key was reported twice
+// per build. Keyed on the two FIELDS rather than on the config object: `abide dev` reassigns
+// `config.routes`/`config.sockets` in place on reload (`cli/serve.ts`), which a `WeakMap<AppConfig>`
+// would not see.
+const REGISTRY_CACHE = new WeakMap<
+    AppConfig,
+    { routes: unknown; sockets: unknown; registry: Registry }
+>()
+
 export function buildRegistry(config: AppConfig): Registry {
+    const cached = REGISTRY_CACHE.get(config)
+    if (
+        cached !== undefined &&
+        cached.routes === config.routes &&
+        cached.sockets === config.sockets
+    )
+        return cached.registry
+    const registry = deriveRegistry(config)
+    REGISTRY_CACHE.set(config, { routes: config.routes, sockets: config.sockets, registry })
+    return registry
+}
+
+function deriveRegistry(config: AppConfig): Registry {
     const rpcs: RpcEntry[] = []
     const routes = config.routes ?? {}
     for (const [name, route] of Object.entries(routes)) {

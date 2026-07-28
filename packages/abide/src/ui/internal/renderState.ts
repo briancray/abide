@@ -52,13 +52,16 @@ export interface RenderStream {
 // A per-render, mutable record backing one attachable `{#for await}` handoff. `name` is the source's
 // RPC route name (null when the source is attachable-tagged but ran without one — defensive; a null
 // name is inline-adopt-only, never resumed). `values` is the append-only decoded transcript captured
-// during SSR; `count` = `values.length` at flush; `done` flips true when the source closed normally.
+// during SSR; `done` flips true when the source closed normally.
+//
+// No `listId` and no `count`. The client matches its region off the memo transcript
+// (`claimStreamedRegion` → `peekSettled`), never by looking the sentinel up by id, and `count` was
+// always `values.length` — hand-synced on every streamed chunk, and read once, in an expression that
+// already had `values` in scope.
 export interface StreamHandleRecord {
-    listId: string
     name: string | null
     args: unknown
     done: boolean
-    count: number
     values: unknown[]
 }
 
@@ -79,7 +82,11 @@ export interface DeferredStreamer {
     run: () => AsyncGenerator<StreamFrame>
 }
 
-export type StreamFrame = { op: 'append'; html: string } | { op: 'complete' }
+// An `append` is the only frame a streamer emits. There was a `complete` too, whose entire effect —
+// through both transports — was stamping `data-ab-done` on the list sentinel, which nothing ever read:
+// `done()` is `shared/internal/iterableDone.ts`, a WeakMap of state cells flipped by `markIterableDone`,
+// with no DOM path at all.
+export type StreamFrame = { op: 'append'; html: string }
 
 export interface RenderState {
     // Recorder of `state(initial)` initial values seen during SSR (§5 state-initializer record/replay).

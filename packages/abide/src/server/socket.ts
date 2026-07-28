@@ -15,6 +15,7 @@
 
 import { type ChannelOptions, channel } from '../shared/channel.ts'
 import type { Room } from '../shared/internal/room.ts'
+import type { SocketSurface } from '../shared/internal/socketSurface.ts'
 import { DROP } from './DROP.ts'
 import type { Middleware } from './internal/middleware.ts'
 import type { ClientsOption } from './internal/registry.ts'
@@ -66,20 +67,10 @@ export interface SocketInternals<T, Args = void> {
     subscribe(args: Args, replay?: boolean): AsyncIterator<T>
 }
 
-export interface Socket<T, Args = void> extends AsyncIterable<T> {
-    // Subscribe to a room — a fresh replay-then-live cursor. A void socket also iterates directly
-    // (`for await m of socket`); a roomed socket picks a room (`socket({room})`).
-    (...room: Room<Args>): AsyncIterable<T>
-    // Server publish. Void: `publish(msg)`. Roomed: `publish({room}, msg)`.
-    publish(...args: [...Room<Args>, message: T]): void
-    // ACTIVE probes (client-sockets.md CS4.1) — reading these drives a subscription on the client.
-    peek(...room: Room<Args>): T | undefined
-    chunks(...room: Room<Args>): T[] | undefined
-    // STATUS probes — observe the subscription lifecycle without driving it.
-    pending(...room: Room<Args>): boolean
-    refreshing(...room: Room<Args>): boolean
-    done(...room: Room<Args>): boolean
-    error(...room: Room<Args>): unknown | undefined
+// A socket is its ISOMORPHIC surface plus the server-only transport handle. The surface itself lives in
+// `shared/internal/socketSurface.ts` so the browser proxy can be type-checked against it — `__socket` is
+// precisely the part the proxy must not implement, so the split falls there.
+export interface Socket<T, Args = void> extends SocketSurface<T, Args> {
     readonly __socket: SocketInternals<T, Args>
 }
 

@@ -3,12 +3,12 @@ import {
     clearIdentityCookieHeader,
     identityCookieHeader,
     identityCookieIsDue,
-    isProd,
     requireSecretForAuthedSet,
     resolveIdentity,
     resolveIdentityDetailed,
     unrecognizedNodeEnv,
 } from './auth.ts'
+import { isProd } from './isProd.ts'
 import type { Principal } from './requestScope.ts'
 import { seal } from './seal.ts'
 

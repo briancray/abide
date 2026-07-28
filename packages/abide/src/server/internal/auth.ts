@@ -11,19 +11,11 @@
 // Cookie helpers here mint the auto-managed, encrypted `abide-identity` cookie (AU5): HttpOnly +
 // SameSite=Lax (AU8 CSRF) + Path=/ + rolling Max-Age, Secure in prod.
 
+import { isProd } from './isProd.ts'
 import { anonymousPrincipal, type Principal } from './requestScope.ts'
 import { seal, ttlMs, unseal, unsealPayload } from './seal.ts'
 
 const APP_OWNER: Principal = { id: 'app-owner', authenticated: true, appOwner: true }
-
-// The single production gate — drives the `Secure` cookie flag, HSTS, and the authenticated
-// `identity.set()` secret fail-fast (AU5.3). Case/whitespace-insensitive ON PURPOSE: a `Production` /
-// `PRODUCTION ` misconfiguration must still enable the prod security posture (fail-SAFE) rather than
-// silently degrade it. An unset NODE_ENV is development, per the Node convention. A set-but-unrecognized
-// value (`prod`, `staging`) is treated as non-production and warned once at boot — see `createApp`.
-export function isProd(): boolean {
-    return (Bun.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
-}
 
 // A NODE_ENV value that is set but is not one of the recognized modes — the case that silently relaxes
 // the security posture and therefore warrants a loud boot warning. `undefined`/empty (→ development) is

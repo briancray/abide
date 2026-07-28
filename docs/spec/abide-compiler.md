@@ -363,8 +363,11 @@ bespoke checker.
    the route tree, typed `navigate` targets — all from generated types keyed to the filesystem
    routes. `url(path, params?, query?)` fills `[name]` (required), `[[name]]` (optional — an
    absent param drops the segment), and `[...name]` (rest — a `/`-joined string, each part
-   encoded); an all-optional path makes the params argument itself optional. The legacy `/:name`
-   colon form is still accepted as a required segment.
+   encoded); an all-optional path makes the params argument itself optional. The bracket forms are
+   the whole grammar — a `/:name` colon segment is a LITERAL, the same reading `matchRoute` gives it.
+   (It was once filled as a required segment by `resolveUrl` alone: the param types never derived a
+   key from it and the router never matched one, so `url('/users/:id', { id: 7 })` built `/users/7`,
+   a link no route could resolve.)
 7. **`abide check` (batch/CI) and `abide lsp` (editor: diagnostics/completion/hover/go-to-def/
    signature-help/find-references/**semantic-tokens** over stdio) share one core** — the
    `.abide`→TS transform + a TS language service. `check` is a one-shot run of what `lsp` does

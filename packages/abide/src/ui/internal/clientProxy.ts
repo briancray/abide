@@ -16,6 +16,7 @@ import {
     decodeStreamResponse,
     isStreamContentType,
 } from '../../shared/internal/decodeStreamResponse.ts'
+import { isTypedError } from '../../shared/internal/isTypedError.ts'
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
@@ -281,11 +282,7 @@ export function clientProxy<Args = unknown, T = unknown>(
                   ...(armed !== undefined ? { signal: armed } : {}),
               })
     }
-    rpc.isError = (e: unknown, name: string): boolean =>
-        e !== null &&
-        typeof e === 'object' &&
-        ((e as Record<string, unknown>).kind === name ||
-            (e as Record<string, unknown>).name === name)
+    rpc.isError = isTypedError
     rpc.refresh = (args?: Args): void => backing.refresh(args)
     rpc.invalidate = (args?: Args): void => backing.invalidate(args)
     rpc.publish = (args: Args, next: T | ((current: T | undefined) => T)): void =>

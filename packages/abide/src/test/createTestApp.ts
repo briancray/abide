@@ -24,6 +24,8 @@ import type { Principal } from '../server/internal/requestScope.ts'
 import { type App, createApp, type Route } from '../server/internal/router.ts'
 import { seal } from '../server/internal/seal.ts'
 import type { ErasedSocket } from '../server/socket.ts'
+import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
+import { parseMuxFrame } from '../shared/internal/parseMuxFrame.ts'
 import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
 import { subscriptionKey } from '../shared/internal/subscriptionKey.ts'
 
@@ -145,24 +147,15 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
             ws = new WebSocket(url)
         }
         ws.addEventListener('message', (event) => {
-            let frame: {
-                name?: unknown
-                args?: unknown
-                msg?: unknown
-                ok?: unknown
-                error?: unknown
-            }
-            try {
-                frame = JSON.parse(String(event.data))
-            } catch {
-                return
-            }
-            if (typeof frame.name !== 'string') return
+            // The SHARED reader of the server→client contract — the same one the browser mux uses. This
+            // harness exists to catch protocol drift, so it must not run a second copy of the protocol.
+            const frame = parseMuxFrame(String(event.data))
+            if (frame === null) return
             const key = subscriptionKey(frame.name, frame.args)
-            // User-socket control frames (sub-ack `{name,ok}` / sub-error `{name,error}`, CS2): resolve
-            // the pending ack, don't deliver as data.
-            if (frame.ok !== undefined || frame.error !== undefined) {
-                const verdict = frame.error !== undefined ? 'error' : 'ok'
+            // User-socket control frames (sub-ack / sub-error, CS2): resolve the pending ack rather
+            // than delivering as data.
+            if (frame.kind !== 'data') {
+                const verdict = frame.kind === 'error' ? 'error' : 'ok'
                 const waiter = waiters.get(key)
                 if (waiter !== undefined) {
                     waiters.delete(key)
@@ -194,7 +187,10 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
                 queues.set(key, list as MessageQueue<unknown>[])
             }
             list.push(queue)
-            const frame = args !== undefined ? { t: 'sub', name, args } : { t: 'sub', name }
+            const frame =
+                args !== undefined
+                    ? { t: MUX_UPSTREAM.sub, name, args }
+                    : { t: MUX_UPSTREAM.sub, name }
             void opened.then(() => {
                 if (ws === undefined) throw new Error('socket not connected')
                 ws.send(JSON.stringify(frame))
@@ -204,8 +200,8 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
         publish(name: string, message: unknown, args?: unknown): void {
             const frame =
                 args !== undefined
-                    ? { t: 'pub', name, args, msg: message }
-                    : { t: 'pub', name, msg: message }
+                    ? { t: MUX_UPSTREAM.pub, name, args, msg: message }
+                    : { t: MUX_UPSTREAM.pub, name, msg: message }
             void opened.then(() => {
                 if (ws === undefined) throw new Error('socket not connected')
                 ws.send(JSON.stringify(frame))

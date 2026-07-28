@@ -25,7 +25,6 @@ let currentSourcesIndex = 0
 // the CLEAN -> stale edge).
 let effectQueue: Reactive[] = []
 let flushScheduled = false
-let batchDepth = 0
 
 class Reactive {
     value: unknown
@@ -227,7 +226,7 @@ function removeSourceObservers(node: Reactive, index: number): void {
 }
 
 function scheduleFlush(): void {
-    if (batchDepth > 0 || flushScheduled) return
+    if (flushScheduled) return
     flushScheduled = true
     queueMicrotask(flush)
 }
@@ -361,16 +360,6 @@ export function effect(fn: () => void | (() => void)): () => void {
         if (scope !== undefined) scope.disposers.push(dispose)
     }
     return dispose
-}
-
-export function batch(fn: () => void): void {
-    batchDepth++
-    try {
-        fn()
-    } finally {
-        batchDepth--
-        if (batchDepth === 0) flush()
-    }
 }
 
 export function untrack<T>(fn: () => T): T {

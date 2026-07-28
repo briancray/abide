@@ -13,17 +13,15 @@ export interface SeedRead {
     value: unknown
 }
 
-// One attachable `{#for await}` stream handed off to the client (replayable-streams.md §5). `listId`
-// matches the `<abide-list id>` the SSR painted; `name`/`args` identify the source RPC for a mode-B
-// resume (`GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>`); `done` picks the mode (true → adopt `values`, false
-// → resume); `count` is the flushed item count (= `values.length`); `values` is the decoded transcript
-// so mode A re-mounts with zero network. `values` is absent only if it wasn't JSON-serializable.
+// One attachable `{#for await}` stream handed off to the client (replayable-streams.md §5).
+// `name`/`args` identify the source RPC for a mode-B resume (`GET /__abide/rpc/<name>?__abide_args=…&
+// __abide_from=<count>`, where the count is `values.length`); `done` picks the mode (true → adopt
+// `values`, false → resume); `values` is the decoded transcript so mode A re-mounts with zero network.
+// `values` is absent only if it wasn't JSON-serializable.
 export interface StreamHandle {
-    listId: string
     name: string | null
     args: unknown
     done: boolean
-    count: number
     values?: unknown[]
 }
 

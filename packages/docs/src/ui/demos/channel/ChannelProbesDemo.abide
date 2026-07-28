@@ -46,6 +46,6 @@
 <ul class="grid">
   <li><code>peek()</code> — latest: <strong data-testid="probe-peek">{latest ?? "—"}</strong></li>
   <li><code>chunks()</code> — tail ({tail.length}/3): <strong data-testid="probe-chunks">{tail.join(", ") || "—"}</strong></li>
-  <li><code>pending()</code> / <code>done()</code>: <strong data-testid="probe-status">{feed.pending()} / {feed.done()}</strong> <span class="muted">(degenerate on a local channel)</span></li>
+  <li><code>pending()</code> / <code>done()</code>: <strong data-testid="probe-status">{feed.pending()} / {feed.done()}</strong> <span class="muted">(<code>pending()</code> is degenerate on a local channel — it is always live; <code>done()</code> is the lifecycle axis and reports whether anyone is subscribed)</span></li>
   <li class="muted">probes read {read} times</li>
 </ul>

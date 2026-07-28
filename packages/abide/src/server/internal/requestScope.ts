@@ -24,6 +24,7 @@ import {
 } from '../../shared/internal/reactiveScope.ts'
 import type { RouteInfo, RouteKind } from '../../shared/internal/routeInfo.ts'
 import { log } from '../../shared/log.ts'
+import { isProd } from './isProd.ts'
 
 // `RouteInfo`/`RouteKind` moved to `shared/internal/` (ADR 0026) so `shared/route.ts` can name the type
 // it returns without importing up. Re-exported here because every server + ui importer already reaches
@@ -101,7 +102,7 @@ export function runInScope<T>(scope: RequestScope, fn: () => T | Promise<T>): T 
             // to rest on a comment. If a future edit builds the context with its own Map, every
             // request-scope accessor silently starts throwing inside a live request — a failure that
             // would surface as an unexplained 500 far from here. Assert it once, at entry, in dev.
-            if (Bun.env.NODE_ENV !== 'production' && scope.slots !== reactiveScope().slots) {
+            if (!isProd() && scope.slots !== reactiveScope().slots) {
                 throw new Error(
                     'runInScope: the request scope and its reactive scope must share one slots Map',
                 )
@@ -139,7 +140,7 @@ const RETAIN_WARN_MS = 60_000
 // script). Armed only when the handler finished while someone else still held the context, which for a
 // non-streaming request is never.
 function watchForLeakedRetain(context: ReactiveScope): void {
-    if (Bun.env.NODE_ENV === 'production') return
+    if (isProd()) return
     if ((context.retains ?? 0) <= 0) return
     const timer = setTimeout(() => {
         if ((context.retains ?? 0) > 0) {

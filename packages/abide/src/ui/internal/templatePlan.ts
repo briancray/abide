@@ -18,6 +18,7 @@ import type { BindingAnalysis, NestedScript } from './analyzeBindings.ts'
 import { type CellBindings, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
+import { escapeHtml } from './serverRuntime.ts'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -188,20 +189,6 @@ export interface TemplatePlan {
     slots: DynamicSlot[]
     serverChunks: ServerChunk[]
     elementTags: ElementTag[]
-}
-
-// ---------------------------------------------------------------------------
-// HTML escaping (attribute values baked into the client skeleton)
-// ---------------------------------------------------------------------------
-
-const ATTR_ESCAPE: Record<string, string> = {
-    '&': '&amp;',
-    '"': '&quot;',
-    '<': '&lt;',
-    '>': '&gt;',
-}
-function escapeAttr(value: string): string {
-    return value.replace(/[&"<>]/g, (char) => ATTR_ESCAPE[char] ?? char)
 }
 
 // ---------------------------------------------------------------------------
@@ -540,7 +527,10 @@ function staticAttrString(attrs: AttrPlan[], scopeAttrs: string[]): string {
     for (const attr of attrs) {
         if (attr.kind !== 'static') continue
         if (attr.value === null) out += ` ${attr.name}`
-        else out += ` ${attr.name}="${escapeAttr(attr.value)}"`
+        // `escapeHtml`, not an attribute-specific variant: it is a strict superset (it also escapes
+        // `'`, inert inside a double-quoted value) and carries the probe-first fast path. Two escapers
+        // is how the skeleton and the server render come to disagree about one character.
+        else out += ` ${attr.name}="${escapeHtml(attr.value)}"`
     }
     for (const scopeAttr of scopeAttrs) out += ` ${scopeAttr}`
     return out

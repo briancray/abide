@@ -61,7 +61,8 @@ const RESULT_MARKER = '__ABIDE_CHECK_RESULT__:'
 // path), so rules that can only be satisfied by adding TypeScript syntax — annotations, `as`, `!` —
 // are unactionable here and are dropped. Genuine shape/resolution errors (wrong RPC args, unresolved
 // imports, undefined identifiers, non-null-safety that control flow can fix) are kept.
-const SUPPRESSED_CODES = new Set<number>([
+// Codes suppressed as noise (shared with the persistent `lsp` engine).
+export const SUPPRESSED_CODES = new Set<number>([
     7005, // Variable implicitly has an 'any' type.
     7006, // Parameter implicitly has an 'any' type.
     7031, // Binding element implicitly has an 'any' type.
@@ -295,9 +296,6 @@ export function overlayFs(getFiles: () => Record<string, string>): FileSystem {
         },
     }
 }
-
-// Codes suppressed as noise (shared with the persistent `lsp` engine).
-export const CHECK_SUPPRESSED_CODES = SUPPRESSED_CODES
 
 function diagnose(cwd: string, request: DiagnoseRequest): RawDiagnostic[] {
     const bun = (globalThis as { Bun?: unknown }).Bun

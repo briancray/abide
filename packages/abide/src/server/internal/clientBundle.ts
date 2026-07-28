@@ -27,11 +27,12 @@
 import { mkdir, readdir, rm, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { promisify } from 'node:util'
 // Brotli is the one compressor with no Bun API: `Bun.gzipSync`/`Bun.zstdCompressSync` exist, and
 // `CompressionStream` accepts gzip/deflate/deflate-raw/zstd but NOT `br`. Since brotli is the encoding
 // worth having here (176 KB vs gzip's 209 KB across the docs app's 61 chunks) this is a necessary
 // `node:` exception, and it is confined to this build-time path — nothing per-request imports zlib.
-import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
+import { brotliCompress, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
@@ -92,6 +93,10 @@ const MINIMUM_COMPRESSIBLE_BYTES = 512
 // than estimating it, so the rule is a measurement, not a heuristic: 10% smaller or it is discarded and
 // the asset serves identity. This is also what makes a generous `compressible: true` in
 // CONTENT_TYPE_BY_EXTENSION safe — a format that turns out not to compress silently drops out here.
+// Promisified so the q11 compresses of a build overlap on libuv's threadpool instead of
+// serialising on the main thread — see `compressChunk`.
+const brotliCompressAsync = promisify(brotliCompress)
+
 const MAXIMUM_COMPRESSED_RATIO = 0.9
 
 const BUNDLE_CACHE = new WeakMap<AppConfig, Promise<ClientBuild>>()
@@ -504,9 +509,17 @@ async function build(config: AppConfig): Promise<ClientBuild> {
         // buys brotli at its maximum quality. Dev rebuilds skip it (it would be seconds per keystroke
         // for bytes localhost never waits on).
         const compressing = config.dev === false
+        // Concurrently: brotli-q11 dominates a production build (measured 590ms of the docs app's
+        // 896ms over 61 files) and `brotliCompressSync` runs it on the main thread one file at a time.
+        // The async form dispatches to libuv's threadpool, so the files overlap — same bytes out, 4.5x.
         const files = new Map<string, ChunkAsset>()
-        for (const [name, identity] of identityFiles)
-            files.set(name, compressChunk(name, identity, compressing))
+        const compressed = await Promise.all(
+            [...identityFiles].map(async ([name, identity]) => {
+                const asset = await compressChunk(name, identity, compressing)
+                return [name, asset] as const
+            }),
+        )
+        for (const [name, asset] of compressed) files.set(name, asset)
         // Map each route pattern → its code-split chunk filename (via the chain's unique index-prefixed
         // slug), so the SSR document can `<link rel="modulepreload">` the matched route's chunk and load
         // it in parallel with the loader — eliminating the loader→dynamic-import waterfall on first load.
@@ -557,11 +570,11 @@ async function publicExternals(dir: string | undefined): Promise<string[]> {
 // here: the output is keyed by a content hash, so it is computed once and served until the source
 // changes. An encoding that fails MAXIMUM_COMPRESSED_RATIO is dropped rather than stored, so the
 // serving path never has to ask whether a compressed variant is worth using — if it exists, it won.
-function compressChunk(
+async function compressChunk(
     name: string,
     identity: Uint8Array<ArrayBuffer>,
     compressing: boolean,
-): ChunkAsset {
+): Promise<ChunkAsset> {
     if (
         !compressing ||
         identity.byteLength < MINIMUM_COMPRESSIBLE_BYTES ||
@@ -573,14 +586,14 @@ function compressChunk(
     // node:zlib returns a `Buffer`, whose type argument is the permissive `ArrayBufferLike`. A Buffer is
     // never SharedArrayBuffer-backed in practice, so narrowing it here is sound and keeps the cast at
     // this one boundary instead of leaking `ArrayBufferLike` into ChunkAsset and every consumer.
-    const brotli = brotliCompressSync(identity, {
+    const brotli = (await brotliCompressAsync(identity, {
         params: {
             [zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
             // The encoder sizes its window and its cost model from this; without it a one-shot compress
             // assumes a stream of unknown length and leaves ratio on the table.
             [zlibConstants.BROTLI_PARAM_SIZE_HINT]: identity.byteLength,
         },
-    }) as Uint8Array<ArrayBuffer>
+    })) as Uint8Array<ArrayBuffer>
     const gzip = Bun.gzipSync(identity, { level: 9 })
     return {
         identity,

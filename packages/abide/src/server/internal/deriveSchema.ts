@@ -221,11 +221,19 @@ export type DeriveEntry = { key: string; filePath: string; exportName: string }
 
 // Batch-derive many exports in ONE type-engine session (grouped by tsconfig project root), so a whole
 // app's RPCs cost a single tsgo project load instead of N subprocess spawns. Same Bun→Node bridge as
-// the single path.
-export function deriveSchemas(entries: DeriveEntry[]): Record<string, DeriveSchemaResult> {
+// the single path, but ASYNC across it: the bridge is a ~212ms tsgo session for a 60-rpc app, and
+// `Bun.spawnSync` would hard-block the event loop for all of it. That is invisible at boot but not on
+// a dev save — `cli/serve.ts` re-runs `loadApp` per debounced save, so the app would stop answering
+// requests for a fifth of a second every keystroke-save. (The in-process branch is genuinely sync; it
+// runs only under node, where this module IS the subprocess.)
+export async function deriveSchemas(
+    entries: DeriveEntry[],
+): Promise<Record<string, DeriveSchemaResult>> {
     if (entries.length === 0) return {}
     const bun = (globalThis as { Bun?: unknown }).Bun
-    return bun !== undefined ? deriveBatchViaNodeSubprocess(entries) : deriveBatchInProcess(entries)
+    return bun !== undefined
+        ? await deriveBatchViaNodeSubprocess(entries)
+        : deriveBatchInProcess(entries)
 }
 
 function deriveBatchInProcess(entries: DeriveEntry[]): Record<string, DeriveSchemaResult> {
@@ -260,31 +268,39 @@ function deriveBatchInProcess(entries: DeriveEntry[]): Record<string, DeriveSche
     return out
 }
 
-function deriveBatchViaNodeSubprocess(entries: DeriveEntry[]): Record<string, DeriveSchemaResult> {
+async function deriveBatchViaNodeSubprocess(
+    entries: DeriveEntry[],
+): Promise<Record<string, DeriveSchemaResult>> {
     const self = fileURLToPath(import.meta.url)
-    const spawnSync = (
+    const spawn = (
         globalThis as {
             Bun: {
-                spawnSync: (
+                spawn: (
                     cmd: string[],
                     opts?: unknown,
                 ) => {
-                    stdout: { toString(): string }
-                    stderr: { toString(): string }
-                    success: boolean
+                    stdout: ReadableStream<Uint8Array>
+                    stderr: ReadableStream<Uint8Array>
+                    exited: Promise<number>
                 }
             }
         }
-    ).Bun.spawnSync
-    const proc = spawnSync(['node', self, '--batch'], {
+    ).Bun.spawn
+    const proc = spawn(['node', self, '--batch'], {
         stdin: Buffer.from(JSON.stringify(entries)),
         stdout: 'pipe',
         stderr: 'pipe',
     })
-    const stdout = proc.stdout.toString()
+    // Drain both pipes concurrently with the exit. Reading them in sequence can deadlock: a subprocess
+    // that fills the stderr pipe buffer blocks until it is read, and it never exits.
+    const [stdout, stderrRaw] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+    ])
     const markerAt = stdout.lastIndexOf(RESULT_MARKER)
     if (markerAt === -1) {
-        const stderr = proc.stderr.toString().trim()
+        const stderr = stderrRaw.trim()
         const warning = `deriveSchema: batch Node subprocess produced no result${stderr ? ` (stderr: ${stderr})` : ''}`
         const out: Record<string, DeriveSchemaResult> = {}
         for (const entry of entries) out[entry.key] = { warnings: [warning] }

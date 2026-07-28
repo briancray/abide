@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { batch, computed, effect, state, untrack } from './reactive.ts'
+import { computed, effect, state, untrack } from './reactive.ts'
 
 // Effect re-runs are deferred to a microtask flush; a macrotask tick guarantees the
 // microtask queue has drained.
@@ -202,44 +202,6 @@ describe('batching', () => {
         expect(runs).toBe(2) // one re-run for the whole burst
         expect(count()).toBe(5)
     })
-
-    test('batch() flushes synchronously at the end and coalesces', () => {
-        const a = state(1)
-        const b = state(2)
-        let runs = 0
-        let sum = 0
-        effect(() => {
-            runs++
-            sum = a() + b()
-        })
-        expect(runs).toBe(1)
-        batch(() => {
-            a.set(10)
-            b.set(20)
-            expect(runs).toBe(1) // no flush mid-batch
-        })
-        expect(runs).toBe(2) // exactly one flush after batch
-        expect(sum).toBe(30)
-    })
-
-    test('nested batches flush once at the outermost boundary', () => {
-        const count = state(0)
-        let runs = 0
-        effect(() => {
-            runs++
-            count()
-        })
-        batch(() => {
-            count.set(1)
-            batch(() => {
-                count.set(2)
-            })
-            expect(runs).toBe(1) // inner batch does not flush
-            count.set(3)
-        })
-        expect(runs).toBe(2)
-        expect(count()).toBe(3)
-    })
 })
 
 describe('glitch-freedom (diamond)', () => {
@@ -267,7 +229,7 @@ describe('glitch-freedom (diamond)', () => {
         expect(seen).toEqual(['2,2', '6,10'])
     })
 
-    test('deep diamond stays consistent under batch', () => {
+    test('deep diamond stays consistent across a coalesced burst', async () => {
         const a = state(1)
         const b = computed(() => a() * 2)
         const c = computed(() => a() * 3)
@@ -280,11 +242,10 @@ describe('glitch-freedom (diamond)', () => {
         })
         expect(last).toBe(5)
         expect(runs).toBe(1)
-        batch(() => {
-            a.set(2)
-            a.set(3)
-            a.set(4)
-        })
+        a.set(2)
+        a.set(3)
+        a.set(4)
+        await tick()
         expect(runs).toBe(2)
         expect(last).toBe(20) // 4*2 + 4*3
     })

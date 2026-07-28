@@ -40,3 +40,11 @@ test('static paths keep the (path, query) shape', () => {
     expect(url('/search', { q: 'abide framework' })).toBe('/search?q=abide+framework')
     expect(url('/plain')).toBe('/plain')
 })
+
+// The colon form is a LITERAL, not a param — the same reading `matchRoute` gives it, and the one
+// `PathParamsArg` always gave it. It used to fill like `[name]` here and nowhere else, so `url()`
+// built links the router could not match.
+test('a :name colon segment is a literal, and a params-shaped arg is a query', () => {
+    expect(url('/users/:id', { id: 7 })).toBe('/users/:id?id=7')
+    expect(url('/users/:id')).toBe('/users/:id')
+})

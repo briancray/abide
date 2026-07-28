@@ -11,6 +11,7 @@
 
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import type { MemoFrame } from '../../shared/internal/memoChannels.ts'
+import { parseMuxFrame } from '../../shared/internal/parseMuxFrame.ts'
 import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
 
 // Reconnect backoff bounds (CS2.4). Doubles from MIN to MAX, reset on a clean open.
@@ -82,30 +83,18 @@ function sendSubscribe(sub: Subscription): void {
     sub.replay = true
 }
 
-// Untrusted JSON parsed into a loose superset of `MuxDownstream` (the shared server→client contract), then
-// narrowed by field presence. Loose ON PURPOSE — the field NAMES must match `MuxDownstream`; the producer
-// guarantees it sends only conforming frames (`satisfies MuxDownstream` at each send site in router.ts).
+// Route one downstream frame to its subscription. Parsing + narrowing is `parseMuxFrame`, shared with
+// the test app's client so there is exactly one reader of the server→client contract.
 function onMessage(event: MessageEvent): void {
-    let framed: { name?: unknown; args?: unknown; msg?: unknown; ok?: unknown; error?: unknown }
-    try {
-        framed = JSON.parse(String(event.data))
-    } catch {
-        return
-    }
-    if (typeof framed.name !== 'string') return
+    const frame = parseMuxFrame(String(event.data))
+    if (frame === null) return
     // Route by the same room-aware key the sub registered under (the server echoes `args` on roomed
     // frames; omits it for void sockets / cache channels).
-    const sub = subscriptions.get(subscriptionKey(framed.name, framed.args))
+    const sub = subscriptions.get(subscriptionKey(frame.name, frame.args))
     if (sub === undefined) return
-    if (framed.error !== undefined) {
-        sub.onError?.(framed.error)
-        return
-    }
-    if (framed.ok === true) {
-        sub.onAck?.()
-        return
-    }
-    sub.onMessage(framed.msg)
+    if (frame.kind === 'error') sub.onError?.(frame.error)
+    else if (frame.kind === 'ack') sub.onAck?.()
+    else sub.onMessage(frame.msg)
 }
 
 function scheduleReconnect(): void {

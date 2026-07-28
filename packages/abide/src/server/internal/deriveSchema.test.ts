@@ -203,8 +203,8 @@ describe('deriveSchema — §11.4 output-wrapper unwrapping', () => {
 })
 
 describe('deriveSchemas (batch)', () => {
-    test('derives many exports in one session, keyed by the caller key', () => {
-        const map = deriveSchemas([
+    test('derives many exports in one session, keyed by the caller key', async () => {
+        const map = await deriveSchemas([
             { key: 'echo', filePath: FIXTURE, exportName: 'echo' },
             { key: 'counter', filePath: DEFAULT_FIXTURE, exportName: 'default' },
             { key: 'zero', filePath: FIXTURE, exportName: 'zeroArg' },
@@ -222,7 +222,7 @@ describe('deriveSchemas (batch)', () => {
         expect(map.zero?.input).toBeUndefined()
     })
 
-    test('an empty entry list derives nothing without spawning a session', () => {
-        expect(deriveSchemas([])).toEqual({})
+    test('an empty entry list derives nothing without spawning a session', async () => {
+        expect(await deriveSchemas([])).toEqual({})
     })
 })

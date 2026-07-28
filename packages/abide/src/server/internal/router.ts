@@ -52,7 +52,6 @@ import {
     clearIdentityCookieHeader,
     identityCookieHeader,
     identityCookieIsDue,
-    isProd,
     resolveIdentity,
     resolveIdentityDetailed,
     unrecognizedNodeEnv,
@@ -73,6 +72,7 @@ import {
     preflightResponse,
 } from './cors.ts'
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
+import { isProd } from './isProd.ts'
 import { sharedLayoutDepth } from './layouts.ts'
 import type { Mutation, Rpc, RpcMeta, StreamRead } from './makeRpc.ts'
 import { handleMcp } from './mcp.ts'
@@ -536,12 +536,17 @@ async function wsPublish(
 }
 
 // The per-socket HTTP face: GET/HEAD → SSE subscribe, POST → publish (respecting clientPublish).
+//
+// Reached from `dispatch`, INSIDE the request scope — so it runs the middleware onion (global + this
+// socket's own), the CSRF gate, and the response stamping, exactly like an rpc. It used to return
+// straight out of `Bun.serve.fetch` ~110 lines above all of that, which meant a state-changing,
+// cookie-authenticated POST ran no middleware and no CSRF check: `export const middleware = [auth]`
+// did not protect a socket publish, and the reply carried no identity cookie and no traceparent.
 async function socketHttpFace(
     request: Request,
-    url: URL,
+    name: string,
     sockets: Record<string, ErasedSocket>,
 ): Promise<Response> {
-    const name = decodeURIComponent(url.pathname.slice('/__abide/sockets/'.length))
     const sock = sockets[name]
     if (sock === undefined) return error(404, `Unknown socket: ${name}`)
 
@@ -588,7 +593,7 @@ function isRedirectResponse(response: Response): boolean {
     )
 }
 
-function routeInfo(url: URL): { kind: RouteKind; name: string } {
+function routeInfo(url: URL, method: string): { kind: RouteKind; name: string } {
     const pathname = url.pathname
     // RPC transport lives under the framework namespace (`/__abide/rpc/<name>`), alongside
     // `/__abide/sockets`, `/__abide/health`, and `/__abide/mcp` — so the `/rpc/*` URL space is free
@@ -597,8 +602,21 @@ function routeInfo(url: URL): { kind: RouteKind; name: string } {
     if (pathname.startsWith('/__abide/rpc/')) {
         return { kind: 'rpc', name: pathname.slice('/__abide/rpc/'.length) }
     }
+    // The per-socket HTTP face (sockets.md S3.2). Classified HERE rather than short-circuited in
+    // `fetch`, so it reaches the same policy stack every other route does. Subscribe and publish are
+    // distinct kinds — both already declared on `RouteKind`, and unused until now precisely because
+    // this path never built a scope for `route()` to report.
+    if (pathname.startsWith(SOCKET_FACE_PREFIX)) {
+        const name = decodeURIComponent(pathname.slice(SOCKET_FACE_PREFIX.length))
+        const reading = method === 'GET' || method === 'HEAD'
+        return { kind: reading ? 'socket-subscribe' : 'socket-publish', name }
+    }
     return { kind: 'nav', name: pathname }
 }
+
+// The WS-less per-socket face. The bare `/__abide/sockets` (no trailing slash) is the WS mux upgrade
+// and is NOT this — an upgrade cannot travel through the response pipeline.
+const SOCKET_FACE_PREFIX = '/__abide/sockets/'
 
 async function dispatch(
     scope: RequestScope,
@@ -697,6 +715,15 @@ async function dispatch(
     // (MS2.5/DX8).
     if (url.pathname === '/__abide/mcp') {
         return handleMcp(scope.request, config)
+    }
+
+    // S3.2: the per-socket HTTP face, in the onion for the same reason OpenAPI and MCP are — the app
+    // gates it with middleware. `route()` reports `socket-subscribe`/`socket-publish`, so a middleware
+    // can tell a subscribe from a publish. Iterating a socket here does NOT hit the SSR
+    // snapshot-then-complete path: that keys off `reactiveScope().rendering`, which only a page render
+    // sets, so the SSE subscribe stays live.
+    if (scope.route.kind === 'socket-subscribe' || scope.route.kind === 'socket-publish') {
+        return socketHttpFace(scope.request, scope.route.name, config.sockets ?? {})
     }
 
     // `src/ui/public/**` served at its literal path. Placed AFTER the framework-generated routes (so a
@@ -975,6 +1002,18 @@ export function createApp(config: AppConfig = {}): App {
         })
     }
 
+    // The socket analog of `routePolicy`. A socket's own `middleware` authorizes its subscribes and
+    // publishes (CLAUDE.md: "the socket analog of an rpc's middleware"); the WS join path already runs
+    // it via `authorizeSocketJoin`, so without this the HTTP face was the one way in that skipped it.
+    // Same boot-time derivation, same reason: the merged list is a constant per socket.
+    const socketPolicy = new Map<string, Middleware[]>()
+    for (const [socketName, sock] of Object.entries(sockets)) {
+        socketPolicy.set(socketName, [
+            ...globalMiddleware,
+            ...(sock.__socket.options.middleware ?? []),
+        ])
+    }
+
     // AU8.3 / CX8.1: the Origin/Referer CSRF check and the CSWSH WebSocket-upgrade gate both key off
     // `APP_URL`. An unset `APP_URL` is legitimate in dev (and for hand-built/test apps), so those gates
     // fall OPEN rather than block — but in production that silently disables two same-origin defenses.
@@ -1043,12 +1082,7 @@ export function createApp(config: AppConfig = {}): App {
                 if (srv.upgrade(request, { data: connData })) return undefined
                 return applyResponseHeaders(error(426, 'Expected a WebSocket upgrade request.'))
             }
-            // Per-socket HTTP face (sockets.md S3.2).
-            if (url.pathname.startsWith('/__abide/sockets/')) {
-                return applyResponseHeaders(await socketHttpFace(request, url, sockets))
-            }
-
-            const info = routeInfo(url)
+            const info = routeInfo(url, request.method.toUpperCase())
             const route: RouteInfo = {
                 kind: info.kind,
                 name: info.name,
@@ -1121,7 +1155,13 @@ export function createApp(config: AppConfig = {}): App {
                           }),
                 )
             }
-            const chain = compose(policy?.middleware ?? globalMiddleware, () =>
+            // One selection for every route class: an rpc uses its route policy, a socket-face request
+            // uses its socket policy, everything else the global chain.
+            const socketChain =
+                info.kind === 'socket-subscribe' || info.kind === 'socket-publish'
+                    ? socketPolicy.get(info.name)
+                    : undefined
+            const chain = compose(policy?.middleware ?? socketChain ?? globalMiddleware, () =>
                 dispatch(scope, config, startedAt),
             )
 

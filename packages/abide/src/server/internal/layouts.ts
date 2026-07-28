@@ -49,12 +49,3 @@ export function sharedLayoutDepth(
     while (depth < from.length && depth < to.length && from[depth] === to[depth]) depth++
     return depth
 }
-
-// The layout sources applicable to `pattern`, ordered outermost → innermost (shortest prefix first).
-export function layoutChain(pattern: string, layouts: Record<string, string>): string[] {
-    return applicableLayoutPrefixes(pattern, layouts).map((prefix) => {
-        const source = layouts[prefix]
-        if (source === undefined) throw new Error(`missing layout source for prefix: ${prefix}`)
-        return source
-    })
-}

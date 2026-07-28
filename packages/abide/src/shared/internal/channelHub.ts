@@ -48,6 +48,14 @@ export class ChannelHub<T> {
         for (const subscriber of this.subscribers) subscriber.push(message)
     }
 
+    // No live subscriber on this room. Backs the isomorphic `done()` probe (ADR 0023: "true-when-idle,
+    // then false once live"), which is a LIFECYCLE axis and not one of the three genuinely degenerate
+    // ones. Note `snapshotIterator` registers nothing, so an SSR render leaves the room idle — which is
+    // exactly `client-sockets.md` CS5.1's "`done()===true` post-render".
+    get idle(): boolean {
+        return this.subscribers.size === 0
+    }
+
     // Drop the retained state (tail + last) WITHOUT detaching live subscribers — the room's `invalidate`:
     // future joiners replay nothing until the next publish; current subscribers keep receiving live.
     clearTail(): void {

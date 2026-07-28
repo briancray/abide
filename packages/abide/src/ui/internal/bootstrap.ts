@@ -152,7 +152,7 @@ function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, ba
             const args = handle.args
             proxy.seedStream(args, {
                 prefix: handle.values,
-                rest: resumeStreamSource(base, handle.name, args, handle.count, () => {
+                rest: resumeStreamSource(base, handle.name, args, handle.values.length, () => {
                     proxy.invalidate?.(args)
                 }),
             })

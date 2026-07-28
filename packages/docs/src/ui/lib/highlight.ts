@@ -58,20 +58,43 @@ const KEYWORDS: ReadonlySet<string> = new Set([
     'set',
 ])
 
+// Probe before replacing, the way the framework's own `escapeHtml` does. This runs once per TOKEN —
+// ~1100 of them in a 2 KB snippet — and almost no token contains any of the three, so three
+// unconditional `.replace()` passes were allocating up to three intermediate strings apiece for
+// nothing. One `test()` scan that allocates nothing covers the common case.
+const NEEDS_ESCAPE = /[&<>]/
+const ESCAPE_MAP: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' }
+
 function escapeHtml(text: string): string {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    if (!NEEDS_ESCAPE.test(text)) return text
+    return text.replace(/[&<>]/g, (char) => ESCAPE_MAP[char] ?? char)
 }
 
 function span(kind: string, text: string): string {
     return `<span class="tok-${kind}">${escapeHtml(text)}</span>`
 }
 
+// charCode ranges rather than a regex `.test()`: these are called PER CHARACTER of every snippet, and
+// a regex match object per character dominated the scan.
 function isIdentifierStart(ch: string): boolean {
-    return /[A-Za-z_$]/.test(ch)
+    const code = ch.charCodeAt(0)
+    return (
+        (code >= 65 && code <= 90) || // A-Z
+        (code >= 97 && code <= 122) || // a-z
+        code === 95 || // _
+        code === 36 // $
+    )
 }
 
 function isIdentifierPart(ch: string): boolean {
-    return /[A-Za-z0-9_$]/.test(ch)
+    const code = ch.charCodeAt(0)
+    return (
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122) ||
+        (code >= 48 && code <= 57) || // 0-9
+        code === 95 ||
+        code === 36
+    )
 }
 
 // Highlights a run of JavaScript/TypeScript source (also used for the inside of `.abide` `{…}`).

@@ -25,6 +25,7 @@
 // (it can't be safely keyed — see §1).
 
 import { envMs } from '../../shared/internal/envMs.ts'
+import { isTypedError } from '../../shared/internal/isTypedError.ts'
 import type { Payload } from '../../shared/internal/responseSource.ts'
 import type {
     MutationCallArgs,
@@ -219,15 +220,6 @@ function attachMeta<Args, T>(target: object, meta: RpcMeta<Args, T>): void {
     Object.defineProperty(target, '__rpc', { value: meta, enumerable: false })
 }
 
-// Narrow a caught value to a typed error by name — used by `fn.isError(e, name)`. A typed error
-// (`error.typed(name, …)`) carries its name as `kind` (client HttpError-like) or `name` (server
-// HttpError). Isomorphic: the same predicate works for a server-thrown error and a client-fetched one.
-export function isTypedError(e: unknown, name: string): boolean {
-    if (e === null || typeof e !== 'object') return false
-    const record = e as Record<string, unknown>
-    return record.kind === name || record.name === name
-}
-
 // Attach the FULL isomorphic surface (reactive probes + cache verbs + `raw` + stream chunk probes +
 // `__rpc` meta) to a memo-backed callable. Shared by reads and mutations — the only caller-specific
 // pieces are the bare CALL (built by the caller, so a mutation can bypass on FormData/`memo:false`)
@@ -258,7 +250,7 @@ function attachSurface<Args, T>(
             ...(init ?? {}),
         })
     }
-    callable.isError = (e: unknown, name: string): boolean => isTypedError(e, name)
+    callable.isError = isTypedError
     callable.refresh = (args?: Partial<Args> | Args): void => backing.refresh(args)
     callable.invalidate = (args?: Partial<Args> | Args): void => backing.invalidate(args)
     callable.publish = (args: Args, next: T | ((current: T | undefined) => T)): void =>

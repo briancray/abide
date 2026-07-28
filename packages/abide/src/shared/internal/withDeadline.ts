@@ -1,4 +1,5 @@
 import { isThenable } from './isThenable.ts'
+import { withAbort } from './withAbort.ts'
 
 // Bound a pending run by a deadline (ADR 0028). Rejects with the PLATFORM's own timeout reason — the
 // `DOMException` named `TimeoutError` that `AbortSignal.timeout` aborts with — so nothing here mints an
@@ -12,23 +13,9 @@ import { isThenable } from './isThenable.ts'
 export function withDeadline<T>(value: Promise<T> | T, ms: number): Promise<T> | T {
     if (!isThenable(value)) return value
     if (!Number.isFinite(ms) || ms <= 0) return value as Promise<T>
-    const promise = value as Promise<T>
-    const signal = AbortSignal.timeout(ms)
-    return new Promise<T>((resolve, reject) => {
-        const onAbort = (): void => reject(signal.reason)
-        signal.addEventListener('abort', onAbort, { once: true })
-        // Detach on settle. Left attached, a long-lived listener on a still-armed signal keeps both the
-        // signal and this promise's closure reachable for the rest of the window — on a hot rpc that is a
-        // retained allocation per call rather than per timeout.
-        promise.then(
-            (settled) => {
-                signal.removeEventListener('abort', onAbort)
-                resolve(settled)
-            },
-            (caught) => {
-                signal.removeEventListener('abort', onAbort)
-                reject(caught)
-            },
-        )
-    })
+    // A deadline IS an abort the author owns rather than the caller, so the race — including the
+    // detach-on-settle that stops a still-armed signal retaining this closure for the rest of the
+    // window — is `withAbort`'s, not a second copy of it. `AbortSignal.timeout(ms > 0)` is never
+    // already aborted, so `withAbort`'s pre-check is inert here.
+    return withAbort(value as Promise<T>, AbortSignal.timeout(ms))
 }

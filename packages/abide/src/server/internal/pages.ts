@@ -315,11 +315,9 @@ export function collectSeed(config: AppConfig): HydrationSeed {
     const streamRecords = renderState()?.stream?.streamHandles
     if (streamRecords !== undefined && streamRecords.length > 0) {
         seed.streams = streamRecords.map((record) => ({
-            listId: record.listId,
             name: record.name,
             args: jsonSafeState(record.args),
             done: record.done,
-            count: record.count,
             values: record.values.map(jsonSafeState),
         }))
     }
@@ -394,12 +392,6 @@ export function documentTail(
         `<script type="application/json" id="__abide-seed">${serialiseSeed(seed)}</script>` +
         `${clientScript}${devReload}</body></html>`
     )
-}
-
-// Wrap inner SSR HTML in a full HTML document, inlining the §5 hydration seed so the client replays
-// SSR-computed reads instead of re-fetching them. Buffered/byte-identical (the seed rides in `opts`).
-export function renderDocument(inner: string, opts?: RenderDocumentOptions): string {
-    return documentHead(opts) + inner + documentTail(opts?.seed, opts)
 }
 
 // The streaming SSR transport (PR2). Serves `head → shell → out-of-order patches → tail` over a
@@ -508,8 +500,7 @@ export function streamSoftNav(
                     await enterScope(ctx, async () => {
                         for await (const patch of drainPatches(stream)) {
                             if (disconnected) break // client gone — stop draining
-                            if (patch.op === 'complete') frame({ kind: 'complete', id: patch.id })
-                            else frame({ kind: patch.op, id: patch.id, html: patch.html }) // "fill" | "append"
+                            frame({ kind: patch.op, id: patch.id, html: patch.html }) // "fill" | "append"
                         }
                     })
                 }

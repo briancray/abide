@@ -29,20 +29,11 @@ type TypedArrayName = keyof typeof TYPED_ARRAY_CONSTRUCTORS
 // ---------------------------------------------------------------------------
 
 export function canonicalKey(value: unknown): string {
-    // Scalar fast path — the overwhelmingly common memo-read arg. Returns without the cycle-guard Map:
-    // a scalar can never form a cycle, so allocating one per read was dead work on the hottest path.
-    if (value === null) return 'N'
-    const kind = typeof value
-    if (kind === 'string') return `s${quoteString(value as string)}`
-    if (kind === 'number') return `n${numberToToken(value as number)}`
-    if (kind === 'boolean') return value ? 'b1' : 'b0'
-    if (kind === 'undefined') return 'U'
-    if (kind === 'bigint') return `g${(value as bigint).toString()}`
-    if (kind === 'symbol') throw new TypeError('canonicalKey: symbols are not supported')
-    if (kind === 'function') throw new TypeError('canonicalKey: functions are not supported')
-    // Reference type. The cycle guard is allocated LAZILY (see `writeKey`), not here: a `@n` back-
-    // reference can only ever be EMITTED once a second reference value is reached, so a flat
-    // `{ id, tab }` — the shape almost every memo/RPC read is keyed by — never needs the Map at all.
+    // No cycle guard at entry. It is allocated LAZILY inside `writeKey` (see `armGuard`), so a scalar —
+    // the overwhelmingly common memo-read arg — and a flat `{ id, tab }` both reach their token without
+    // allocating a Map at all. A `@n` back-reference can only be EMITTED once a second reference value
+    // is reached, which is the point `writeKey` arms it. Scalars are NOT re-branched here: a duplicated
+    // prologue is how the two disagree about a newly added token type depending on nesting depth.
     return writeKey(value, null)
 }
 

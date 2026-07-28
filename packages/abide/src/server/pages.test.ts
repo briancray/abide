@@ -6,47 +6,10 @@ import { expect, test } from 'bun:test'
 import { error } from '../server/error.ts'
 import { GET } from '../server/GET.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
-import type { HydrationSeed, RenderDocumentOptions } from '../server/internal/pages.ts'
-import { documentHead, documentTail, renderDocument, warmPages } from '../server/internal/pages.ts'
-import { encode } from '../shared/internal/codec.ts'
+import { warmPages } from '../server/internal/pages.ts'
 import { onScopeDispose } from '../shared/internal/reactiveScope.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { loadEmittedServer } from '../ui/internal/emit.ts'
-
-// Streaming SSR (PR1/PR2) — the head/tail seam must compose back to the byte-identical buffered doc.
-test('documentHead + inner + documentTail is byte-identical to renderDocument across opts', () => {
-    const seed: HydrationSeed = {
-        reads: [{ name: 'greet', args: { name: 'a' }, value: 'hi a' }],
-        states: encode([[1]]),
-    }
-    const cases: Array<{ inner: string; opts?: RenderDocumentOptions }> = [
-        { inner: '<h1>plain</h1>' },
-        { inner: '<p>seeded</p>', opts: { seed } },
-        {
-            inner: '<p>styled</p>',
-            opts: {
-                cssHref: '/__abide/chunk/style-abc.css',
-                clientHref: '/__abide/chunk/loader-x.js',
-                seed,
-            },
-        },
-        {
-            inner: '<p>dev</p>',
-            opts: {
-                devReloadScript: 'console.log(1)',
-                seed,
-                cssHref: '/__abide/chunk/style-abc.css',
-                clientHref: '/__abide/chunk/loader-x.js',
-            },
-        },
-        { inner: '<p>t</p>', opts: { title: 'Title & <thing>' } },
-    ]
-    for (const { inner, opts } of cases) {
-        expect(documentHead(opts) + inner + documentTail(opts?.seed, opts)).toBe(
-            renderDocument(inner, opts),
-        )
-    }
-})
 
 // SSR HTML now carries the client skeleton's comment anchors; strip them for structural assertions.
 function stripAnchors(html: string): string {
@@ -209,7 +172,7 @@ test('a slow {#await} error with NO {:catch} → 200 with an empty patch that cl
 // createTestApp's cold first-compile can elapse the 4ms deadline before render, deferring even a fast
 // stream. The real app warms pages, so the deadline is meaningful.)
 
-test('a slow {#for await} streams items as append-patches then marks complete (PR6)', async () => {
+test('a slow {#for await} streams its items as append-patches (PR6)', async () => {
     const app = await createTestApp({
         pages: {
             '/': "<script>const slowGen = async function*(){ for (const l of ['a','b','c']){ await new Promise((r)=>setTimeout(r,15)); yield l } }</script><main>{#for await chunk of slowGen()}<span>{chunk}</span>{/for}</main>",
@@ -223,8 +186,11 @@ test('a slow {#for await} streams items as append-patches then marks complete (P
     expect(body).toContain('$abideAppend(0)')
     expect(stripAnchors(body)).toContain('<span>a</span>')
     expect(stripAnchors(body)).toContain('<span>c</span>')
-    // ...and the source ended within the budget → a complete marker (the client will CLAIM the items).
-    expect(body).toContain('$abideDone(0)')
+    // ...and that is the whole protocol. The document used to also carry an `$abideDone` move-script
+    // per streamed list, whose only effect was stamping `data-ab-done` on the sentinel — an attribute
+    // nothing read. `done()` is driven by `markIterableDone`, not by the DOM.
+    expect(body).not.toContain('$abideDone')
+    expect(body).not.toContain('data-ab-done')
 
     await app.stop()
 })

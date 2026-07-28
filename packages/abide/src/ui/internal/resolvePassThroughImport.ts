@@ -11,10 +11,7 @@ import { resolveTemplateAlias } from './resolveTemplateAlias.ts'
 // for an app that does not depend on abide directly (its own test harness, chiefly).
 const ABIDE_DIR = import.meta.dir
 
-export function resolvePassThroughImport(
-    specifier: string,
-    sourceDir: string | undefined,
-): string {
+export function resolvePassThroughImport(specifier: string, sourceDir: string | undefined): string {
     const alias = sourceDir === undefined ? undefined : resolveTemplateAlias(specifier, sourceDir)
     const candidates = alias === undefined ? [specifier] : [alias, specifier]
     const bases = sourceDir === undefined ? [ABIDE_DIR] : [sourceDir, ABIDE_DIR]

@@ -125,6 +125,43 @@ test('chunks() is capped at tail size (drop-oldest)', () => {
     expect(chat.peek()).toBe(3)
 })
 
+// ADR 0023 measured and rejected fusing the replay `tail` with the per-cursor delivery FIFO, and the
+// proxy did it anyway (`cap = spec.tail > 0 ? spec.tail : 1024`, used for BOTH). The server never has:
+// `ChannelHub.subscribe` gives every cursor the default FIFO regardless of `tail`. So a small-tail
+// socket dropped a burst in the browser and delivered it in full on the server — the exact `tail:4` /
+// burst-10 case ADR 0023 records as `[7,8,9,10]` vs `1..10`.
+test('a small tail bounds chunks() but NOT a parked cursor — the two are separate capacities', async () => {
+    const chat = makeProxy({ tail: 4 })
+    const iterator = chat[Symbol.asyncIterator]()
+    const ws = lastWs()
+    ws.inbound({ name: 'chat', ok: true })
+
+    // A burst larger than `tail`, delivered while the cursor is parked (nothing has pulled yet).
+    for (let n = 1; n <= 10; n++) ws.inbound({ name: 'chat', msg: n })
+
+    // Retention IS bounded by tail — that is what `tail` means.
+    expect(chat.chunks()).toEqual([7, 8, 9, 10])
+
+    // Delivery is NOT. The parked cursor still owes every message, as it does on the server.
+    const received: unknown[] = []
+    for (let n = 1; n <= 10; n++) received.push((await iterator.next()).value)
+    expect(received).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    void iterator.return?.()
+})
+
+// A `tail: 0` socket retains nothing to replay — `peek()` is still sticky (CS4.2, the hub keeps `last`
+// independent of the ring). The proxy used to fall back to a 1024-deep `chunks()` here, which the
+// server never offered.
+test('tail: 0 retains no transcript, but peek() stays sticky', () => {
+    const chat = makeProxy({ tail: 0 })
+    chat.chunks()
+    const ws = lastWs()
+    ws.inbound({ name: 'chat', msg: 'a' })
+    ws.inbound({ name: 'chat', msg: 'b' })
+    expect(chat.chunks()).toEqual([])
+    expect(chat.peek()).toBe('b')
+})
+
 test('publish gating: clientPublish:false throws; true sends a pub frame', () => {
     const closed = makeProxy({ clientPublish: false })
     expect(() => closed.publish('x')).toThrow(/client publish is disabled/)

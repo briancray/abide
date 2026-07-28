@@ -36,7 +36,7 @@ import {
 import { encodeSemanticTokens } from '../ui/internal/encodeSemanticTokens.ts'
 import { parse } from '../ui/internal/parse.ts'
 import { templateSemanticTokens } from '../ui/internal/templateSemanticTokens.ts'
-import { CHECK_SUPPRESSED_CODES, findAbideFiles, offsetToLineColumn, overlayFs } from './check.ts'
+import { findAbideFiles, offsetToLineColumn, overlayFs, SUPPRESSED_CODES } from './check.ts'
 
 export interface LspServerOptions {
     projectRoot: string
@@ -196,7 +196,7 @@ class LspEngine {
                 ...program.getSemanticDiagnostics(file),
             ]) {
                 if (diagnostic.category !== DiagnosticCategory.Error) continue
-                if (CHECK_SUPPRESSED_CODES.has(diagnostic.code)) continue
+                if (SUPPRESSED_CODES.has(diagnostic.code)) continue
                 diagnostics.push({
                     file: diagnostic.fileName ?? file,
                     pos: diagnostic.pos,
@@ -380,7 +380,6 @@ function overlaySignature(files: Record<string, string>, open: string[]): string
             hash ^= text.charCodeAt(index)
             hash = Math.imul(hash, 0x01000193)
         }
-        hash ^= 0
         hash = Math.imul(hash, 0x01000193)
     }
     for (const path of Object.keys(files).sort()) {

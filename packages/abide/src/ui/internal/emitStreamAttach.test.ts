@@ -67,11 +67,10 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
     test('the RPC source is never invoked on the client; items render + an item onclick fires', async () => {
         const { html, seed } = await ssrStream(SRC, { complete: makeServerComplete() })
 
-        // The SSR painted the list sentinel with a data-ab-count and the completed marker, and the seed
-        // carries the decoded transcript inline (mode A).
-        expect(html).toContain('<template id="ab-l:0"')
-        expect(html).toContain('data-ab-count="3"')
-        expect(html).toContain('data-ab-done')
+        // The SSR painted the bare id'd sentinel and the SEED carries the decoded transcript inline
+        // (mode A). Attachability is a property of the seed, not of a DOM marker: the client matches
+        // its region off the memo transcript, so the sentinel needs no count/done attributes.
+        expect(html).toContain('<template id="ab-l:0"></template>')
         expect(seed.streams).toBeDefined()
         const streams = seed.streams
         if (streams === undefined) throw new Error('expected seed.streams')
@@ -178,7 +177,6 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?__abide_from=<count>
         const handle = streams[0]
         if (handle === undefined) throw new Error('expected a stream handle')
         handle.done = false
-        handle.count = 2
         handle.values = ['t0', 't1']
 
         // The source is modeled as a seeded memo — `replayStreams` warms an OPEN handle with
@@ -215,9 +213,15 @@ describe('mode B — an OPEN RPC {#for await} resumes over ?__abide_from=<count>
                 { n: 5 },
                 {
                     prefix: handle.values ?? [],
-                    rest: resumeStreamSource('', 'complete', { n: 5 }, handle.count, () => {
-                        complete.invalidate({ n: 5 })
-                    }),
+                    rest: resumeStreamSource(
+                        '',
+                        'complete',
+                        { n: 5 },
+                        handle.values?.length ?? 0,
+                        () => {
+                            complete.invalidate({ n: 5 })
+                        },
+                    ),
                 },
             )
             const host = document.createElement('div')
@@ -427,7 +431,7 @@ describe('attach recognises every RPC import specifier form', () => {
                 `<ul>{#for await tok of complete({ n: 2 })}<li>{tok}</li>{/for}</ul>`
             const { html, seed } = await ssrStream(src, { complete: makeServerComplete() })
 
-            expect(html).toContain('data-ab-count="2"')
+            expect(html).toContain('<template id="ab-l:0"></template>')
             expect(seed.streams?.length).toBe(1)
             expect(seed.streams?.[0]?.name).toBe('complete')
             expect(seed.streams?.[0]?.done).toBe(true)
@@ -441,7 +445,9 @@ describe('attach recognises every RPC import specifier form', () => {
             `<ul>{#for await tok of complete({ n: 2 })}<li>{tok}</li>{/for}</ul>`
         const { html, seed } = await ssrStream(src, { complete: makeServerComplete() })
 
-        expect(html).not.toContain('data-ab-count')
+        // Non-attachable and completed inline: no sentinel and no handoff record at all, so the
+        // client re-iterates the source instead of adopting a transcript.
+        expect(html).not.toContain('ab-l:')
         expect(seed.streams).toBeUndefined()
     })
 })

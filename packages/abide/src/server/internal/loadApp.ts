@@ -153,7 +153,7 @@ async function applyDerivedSchemas(
     if (Bun.env.ABIDE_DERIVE_SCHEMAS === '0') return
     const baked = await readBakedSchemas(dir)
     // Baked path: no tsgo, no warnings (they were emitted at build). Live path: derive + log warnings.
-    const derived = baked ?? deriveSchemas(targets)
+    const derived = baked ?? (await deriveSchemas(targets))
     for (const target of targets) {
         const result = derived[target.key]
         if (result === undefined) continue

@@ -13,7 +13,7 @@
 //   SHARED cache must never hold it. Content-addressed assets opt OUT by declaring their own immutable
 //   policy, so they keep their long cache and never get `Vary: Cookie`.
 
-import { isProd } from './auth.ts'
+import { isProd } from './isProd.ts'
 
 // Append a token to `Vary` without duplicating one already present (case-insensitive).
 export function appendVary(headers: Headers, value: string): void {

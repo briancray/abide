@@ -114,8 +114,9 @@ async function startStreamer(
 test('an abide RPC source ignores the budget — firing it does not cut the stream off', async () => {
     const src = manualSource()
     const { scope, fireBudget, shell, frames } = await startStreamer(true, src.source)
-    expect(shell).toContain('<template id="ab-l:0"')
-    expect(shell).toContain('data-ab-count="0"') // attachable → count attr present
+    // The sentinel carries its id and nothing else: the client matches the region off the memo
+    // transcript, never by reading a count attribute back out of the DOM.
+    expect(shell).toContain('<template id="ab-l:0"></template>')
 
     // Fire the budget IMMEDIATELY: an abide source never consults it, so the stream must still run.
     fireBudget()
@@ -128,25 +129,25 @@ test('an abide RPC source ignores the budget — firing it does not cut the stre
     src.emit('t1')
     expect((await second).value).toEqual({ op: 'append', html: '<li>t1</li>' })
 
+    // The source closes within its own bound, so the generator simply ENDS — there is no `complete`
+    // frame. It existed only to stamp `data-ab-done`, which nothing read.
     const third = frames.next()
-    src.end() // source closes within its own bound → complete, not cut off
-    expect((await third).value).toEqual({ op: 'complete' })
+    src.end()
+    expect((await third).done).toBe(true)
 
     // The handoff record is finalized as a completed transcript (mode A).
     expect(scope.streamHandles.length).toBe(1)
     const handle = scope.streamHandles[0]
     if (handle === undefined) throw new Error('expected a stream handle')
     expect(handle.done).toBe(true)
-    expect(handle.count).toBe(2)
     expect(handle.values).toEqual(['t0', 't1'])
 })
 
 test('a non-abide source is cut off when the budget fires (client re-iterates)', async () => {
     const src = manualSource()
     const { scope, fireBudget, shell, frames } = await startStreamer(false, src.source)
-    expect(shell).toContain('<template id="ab-l:0"')
-    expect(shell).not.toContain('data-ab-count') // non-attachable → no handoff markers
-    expect(scope.streamHandles.length).toBe(0)
+    expect(shell).toContain('<template id="ab-l:0"></template>')
+    expect(scope.streamHandles.length).toBe(0) // non-attachable → no handoff record
 
     // One item streams, then the budget fires while the next item is still pending → cut off.
     const first = frames.next()

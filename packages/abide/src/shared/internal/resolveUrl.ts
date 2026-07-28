@@ -5,9 +5,14 @@
 //                            loudly at call time rather than emitting a malformed URL)
 //   - `[[name]]`  optional — filled when `params[name]` is present, otherwise the segment is DROPPED
 //   - `[...name]` rest     — filled from a `/`-joined string (each part encoded); an empty string drops it
-//   - `/:name`   legacy colon form — treated as a required segment
 // The type helpers derive a path literal's params so callers pass a correctly-shaped params object
 // (and only when the path declares one).
+//
+// The bracket forms are the WHOLE grammar. A `/:name` colon segment is a LITERAL, exactly as
+// `matchRoute.classify` reads it. This file used to fill it as a required param, which no other layer
+// agreed with: `PathParamsArg`/`HasParams` never derived a key from it, so the types already declared
+// the path param-less, and the router already matched the segment literally. The result was that
+// `url('/users/:id', { id: 7 })` produced `/users/7` — a link no route could ever match.
 
 export type UrlQueryValue = string | number | boolean | null | undefined
 export type UrlQuery = Record<string, UrlQueryValue | UrlQueryValue[]>
@@ -43,10 +48,9 @@ export type UrlArgs<P extends string> =
         : [query?: UrlQuery]
 
 // Whether a path declares any dynamic segment — the runtime split between the (path, params, query)
-// and (path, query) call shapes. The `(?<=\/)` lookbehind keeps a colon-port (`host:8080`) or a URL
-// scheme (`https:`) from reading as a `:name` param.
+// and (path, query) call shapes. Bracket forms only, matching `HasParams` above and the router.
 export function hasDynamicSegments(path: string): boolean {
-    return /\[[^\]]*\]|(?<=\/):[A-Za-z0-9_]+/.test(path)
+    return /\[[^\]]*\]/.test(path)
 }
 
 // Fill one path segment from params. Returns the resolved text, an array of resolved segments (a rest
@@ -67,8 +71,6 @@ function fillSegment(
         rest = true
     } else if (segment.length > 2 && segment.startsWith('[') && segment.endsWith(']')) {
         name = segment.slice(1, -1)
-    } else if (segment.length > 1 && segment.startsWith(':')) {
-        name = segment.slice(1)
     } else {
         return segment // literal
     }

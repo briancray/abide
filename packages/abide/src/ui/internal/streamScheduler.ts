@@ -282,14 +282,12 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
             const id = scope.nextId++
             const listId = `ab-l:${id}`
             scope.streamHandles.push({
-                listId,
                 name: config.rpcName ?? null,
                 args: await resolveArgs(config),
                 done: true,
-                count: values.length,
                 values,
             })
-            return `${html}<template id="${listId}" data-ab-count="${values.length}" data-ab-done></template>`
+            return `${html}<template id="${listId}"></template>`
         }
         values.push(raced.step.value)
         html += await config.renderItem(raced.step.value, index++)
@@ -304,15 +302,14 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
 
     // Register the handoff record now (needed synchronously for collectSeed): an attachable source that
     // completes within the budget lands as mode A (done:true, full values); one cut off at the budget
-    // stays mode B (done:false, resume from `count`). The streamer mutates this record as it flushes.
+    // stays mode B (done:false, resume from `values.length`). The streamer mutates this record as it
+    // flushes — `values` is append-only, and the flushed count is just its length.
     let handle: StreamHandleRecord | null = null
     if (attachable) {
         handle = {
-            listId,
             name: config.rpcName ?? null,
             args: await resolveArgs(config),
             done: false,
-            count: values.length,
             values,
         }
         scope.streamHandles.push(handle)
@@ -336,21 +333,16 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
                           ])
                     if (raced.kind === 'budget') return // budget hit — cut off; handle stays open (mode B resume).
                     if (raced.result.done === true) break
-                    if (handle !== null) {
-                        handle.values.push(raced.result.value)
-                        handle.count = handle.values.length
-                    }
+                    if (handle !== null) handle.values.push(raced.result.value)
                     yield { op: 'append', html: await config.renderItem(raced.result.value, i++) }
                     step = next()
                 }
                 markIterableDone(source)
                 if (handle !== null) handle.done = true // completed within the budget → mode A on the client.
-                yield { op: 'complete' }
             } catch (error) {
                 markIterableDone(source)
                 if (handle !== null) dropHandle(scope, handle) // errored → drop the handle (client re-runs).
                 if (config.caught !== null) yield { op: 'append', html: await config.caught(error) }
-                yield { op: 'complete' } // an errored stream is finished → the client claims it.
             }
         },
     })
@@ -358,8 +350,7 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
     // `append` patch inserts before the sentinel, so document order is item order at O(1) per patch (no
     // container, so nothing can be foster-parented out of a table and a streamed `<tr>` lands as a real
     // `<tbody>` child). Hydration clears the whole region — items and sentinel — between the block anchors.
-    const countAttr = attachable ? ` data-ab-count="${startIndex}"` : ''
-    return `${html}<template id="${listId}"${countAttr}></template>`
+    return `${html}<template id="${listId}"></template>`
 }
 
 // One out-of-order patch: `fill` a `{#await}` slot, `append` a `{#for await}` item, or mark a streamed
@@ -369,7 +360,6 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
 export type Patch =
     | { op: 'fill'; id: number; html: string }
     | { op: 'append'; id: number; html: string }
-    | { op: 'complete'; id: number }
 
 // The idempotent move-scripts (defined once, re-run per id): fill a slot, append into a list, or flag a
 // list complete (so hydration CLAIMS its items instead of re-iterating). Both patches address a
@@ -401,11 +391,7 @@ export function documentPatch(patch: Patch): string {
             `};$abideAppend(${patch.id})</script>`
         )
     }
-    return (
-        `<script>window.$abideDone=window.$abideDone||function(n){` +
-        `var l=document.getElementById('ab-l:'+n);if(l){l.setAttribute('data-ab-done','');}` +
-        `};$abideDone(${patch.id})</script>`
-    )
+    throw new Error(`documentPatch: unknown patch op ${(patch as { op: string }).op}`)
 }
 
 // Drain the deferred subtrees AND streamers, yielding each patch as it becomes ready (out-of-order — a
@@ -444,10 +430,7 @@ export async function* drainPatches(scope: RenderStream): AsyncGenerator<Patch> 
                 generator.next().then((step) => {
                     if (step.done === true) return { key, patch: null, advance: null }
                     const frame = step.value
-                    const patch: Patch =
-                        frame.op === 'append'
-                            ? { op: 'append', id: streamer.id, html: frame.html }
-                            : { op: 'complete', id: streamer.id }
+                    const patch: Patch = { op: 'append', id: streamer.id, html: frame.html }
                     return { key, patch, advance: pull }
                 }),
             )

@@ -9,9 +9,10 @@
 // ACTIVE probes (iterate / `peek` / `chunks`) open the subscription; STATUS probes (`pending` /
 // `refreshing` / `done` / `error`) only observe it (CS11). `publish` is fire-and-forget (CS3.4).
 
+import { ChannelHub } from '../../shared/internal/channelHub.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import { state } from '../../shared/internal/reactive.ts'
-import { Subscriber } from '../../shared/internal/subscriber.ts'
+import type { SocketSurface, SocketSurfaceMembers } from '../../shared/internal/socketSurface.ts'
 import { muxPublish, muxSubscribe } from './mux.ts'
 
 // The per-socket spec shipped in the client bundle (client-sockets.md CS7). `tail` sizes the
@@ -25,11 +26,6 @@ export interface SocketSpec {
 
 // The reactive lifecycle state (CS4.1). `idle` = never subscribed / torn down (→ `done()`).
 type Status = 'idle' | 'pending' | 'live' | 'refreshing' | 'error'
-
-interface LatestEntry {
-    value: unknown
-    time: number
-}
 
 // One ROOM's client state + reactive probes, backed by a single mux subscription (client-sockets.md
 // CS3/CS4). A void socket has exactly one room (`args: undefined`); a roomed socket lazily makes one per
@@ -46,24 +42,34 @@ interface RoomProxy {
 }
 
 function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: string): RoomProxy {
-    const cap = spec.tail > 0 ? spec.tail : 1024
+    // The pub/sub MECHANICS are the shared hub's, not a second copy: the bounded tail ring, the
+    // ttl-windowed latest, and the per-cursor FIFO fan-out all live in `ChannelHub`, which sits in
+    // `shared/` precisely so one hub backs a channel on both sides. Re-deriving them here is how the
+    // two came to disagree — this room used to size its per-cursor FIFO from `spec.tail`, fusing
+    // replay depth with delivery capacity, so a `tail: 4` socket dropped a burst of 10 in the browser
+    // and not on the server (ADR 0023 measured that fusion and rejected it: `[7,8,9,10]` vs `1..10`).
+    // The hub keeps the two separate: `tail` bounds retention, each cursor keeps its own default FIFO.
+    const hub = new ChannelHub<unknown>({
+        tail: spec.tail,
+        // JSON cannot carry Infinity, so the wire spells sticky as `null`.
+        ttl: spec.ttl ?? Infinity,
+    })
     const status = state<Status>('idle')
-    const latest = state<LatestEntry | undefined>(undefined)
-    const chunks = state<unknown[]>([])
-    // Local iterator fan-out: one Subscriber per live `{#for await}` cursor (CS3.2). Late cursors get
-    // live-only (no local tail replay).
-    const localSubs = new Set<Subscriber<unknown>>()
+    // What this proxy genuinely ADDS over the hub: reactivity. The hub's retained state is plain BY
+    // DESIGN — `server/socket.ts` records that the server's probes rest at their connected values
+    // because probe liveness follows the TRANSPORT. So the transport half bumps one cell and the
+    // probes read through it, rather than the hub growing a reactive shape the server does not want.
+    const revision = state(0)
+    // Live `{#for await}` cursors (CS3.2), retained only so `onError` can close them.
+    const cursors = new Set<AsyncIterator<unknown>>()
     let errorValue: unknown
     let subscribed = false
 
-    // Deliver one inbound message: update the reactive latest/chunks, mark live, fan out to iterators.
+    // Deliver one inbound message: retain + fan out through the hub, then wake the reactive probes.
     function deliver(message: unknown): void {
-        latest.set({ value: message, time: Date.now() })
-        const next = chunks.untracked().concat([message])
-        if (next.length > cap) next.splice(0, next.length - cap)
-        chunks.set(next)
+        hub.publish(message)
+        revision.set(revision.untracked() + 1)
         if (status.untracked() !== 'error') status.set('live')
-        for (const sub of localSubs) sub.push(message)
     }
 
     // Open the ONE mux subscription (idempotent). Reading an ACTIVE probe drives this (CS11). We always
@@ -88,7 +94,10 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
                 onError: (error: unknown): void => {
                     errorValue = error
                     status.set('error')
-                    for (const sub of localSubs) sub.close()
+                    // `return()` is the hub's own detach: it unregisters the subscriber AND closes it,
+                    // so a cursor cannot be closed while still in the hub's fan-out set.
+                    for (const cursor of [...cursors]) void cursor.return?.()
+                    cursors.clear()
                 },
                 onReconnecting: (): void => {
                     if (status.untracked() === 'live') status.set('refreshing')
@@ -106,19 +115,19 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
             }
             muxPublish(name, message, base, args)
         },
-        // ACTIVE probes — drive the subscription.
+        // ACTIVE probes — drive the subscription. Each reads `revision` FIRST so the caller subscribes
+        // to the room even when the hub currently has nothing to hand back; the hub then applies the
+        // same ttl window (`peekLatest`) and tail bound (`tailSnapshot`) the server applies, lazily on
+        // read (CS4.2) — no timer, so a static view may hold a stale value until the next reactive tick.
         peek(): unknown {
             ensureSubscribed()
-            const entry = latest()
-            if (entry === undefined) return undefined
-            // Lazy `ttl` window on read (CS4.2): no timer, so a static view may hold a stale value
-            // until the next reactive tick. `ttl: null` (Infinity, the default) → sticky.
-            if (spec.ttl !== null && Date.now() - entry.time > spec.ttl) return undefined
-            return entry.value
+            revision()
+            return hub.peekLatest()
         },
         chunks(): unknown[] {
             ensureSubscribed()
-            return chunks()
+            revision()
+            return hub.tailSnapshot()
         },
         // STATUS probes — observe only (CS11), never open a subscription.
         pending(): boolean {
@@ -135,25 +144,38 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
         },
         iterate(): AsyncIterator<unknown> {
             ensureSubscribed()
-            const sub = new Subscriber<unknown>(cap)
-            localSubs.add(sub)
+            // `replay: false` — a local cursor is live-only. The MUX subscription already asked the
+            // server for the tail replay, and those messages arrive through `deliver`, so replaying the
+            // hub's copy here would double every retained message into a fresh `{#for await}`.
+            const cursor = hub.subscribe(false)
+            cursors.add(cursor)
             return {
-                next: (): Promise<IteratorResult<unknown>> => sub.next(),
+                next: (): Promise<IteratorResult<unknown>> => cursor.next(),
                 return: (): Promise<IteratorResult<unknown>> => {
-                    localSubs.delete(sub)
-                    sub.close()
-                    return Promise.resolve({ value: undefined, done: true })
+                    cursors.delete(cursor)
+                    return cursor.return?.() ?? Promise.resolve({ value: undefined, done: true })
                 },
             }
         },
     }
 }
 
+// The transport-boundary view of the isomorphic surface, erased the way `ErasedSocket` erases `Socket`
+// on the server: this registry holds heterogeneous sockets, so both the message type and the room args
+// go. `any` rather than `unknown` for the same reason given there — the contravariant positions make a
+// concrete `SocketSurface<number, …>` unassignable to `SocketSurface<unknown, …>`.
+// biome-ignore lint/suspicious/noExplicitAny: erased existential — mirrors `ErasedSocket` in server/socket.ts.
+type ErasedSocketSurface = SocketSurface<any, any>
+
 // The isomorphic `Socket<T, Args>` browser proxy: a CALLABLE that mirrors the server socket. A void
 // socket uses the single (undefined) room — direct iteration + argless probes/`publish`. A roomed socket
 // picks a room: `sock({room})` iterates it, `sock.peek({room})` / `sock.publish({room}, msg)` address it.
 // One `RoomProxy` (⇒ one mux subscription) per distinct room, created lazily.
-function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown {
+//
+// Typed against `SocketSurface`, not `unknown`. While this returned `unknown` nothing checked the client
+// half against the server's interface at all, so a probe added to the socket surface compiled clean on
+// both sides and surfaced in the browser as `chat.peek is not a function`.
+function makeSocketProxy(name: string, spec: SocketSpec, base: string): ErasedSocketSurface {
     const rooms = new Map<string, RoomProxy>()
     const roomFor = (args: unknown): RoomProxy => {
         const key = canonicalKey(args)
@@ -180,13 +202,20 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown 
         const room = args.length > 1 ? args[0] : undefined
         roomFor(room).publish(message)
     }
-    proxy.peek = (...r: unknown[]): unknown => roomFor(roomArg(r)).peek()
-    proxy.chunks = (...r: unknown[]): unknown[] => roomFor(roomArg(r)).chunks()
-    proxy.pending = (...r: unknown[]): boolean => roomFor(roomArg(r)).pending()
-    proxy.refreshing = (...r: unknown[]): boolean => roomFor(roomArg(r)).refreshing()
-    proxy.done = (...r: unknown[]): boolean => roomFor(roomArg(r)).done()
-    proxy.error = (...r: unknown[]): unknown => roomFor(roomArg(r)).error()
-    return proxy
+    // Assigned as ONE typed object rather than member-by-member onto an untyped bag. `Omit`-derived, so
+    // a probe added to `SocketSurface` appears here as a missing property and this stops compiling —
+    // which is the only reason the surface type is worth having.
+    const members: SocketSurfaceMembers<unknown, unknown> = {
+        publish: proxy.publish as ErasedSocketSurface['publish'],
+        peek: (...r: unknown[]): unknown => roomFor(roomArg(r)).peek(),
+        chunks: (...r: unknown[]): unknown[] => roomFor(roomArg(r)).chunks(),
+        pending: (...r: unknown[]): boolean => roomFor(roomArg(r)).pending(),
+        refreshing: (...r: unknown[]): boolean => roomFor(roomArg(r)).refreshing(),
+        done: (...r: unknown[]): boolean => roomFor(roomArg(r)).done(),
+        error: (...r: unknown[]): unknown => roomFor(roomArg(r)).error(),
+    }
+    Object.assign(proxy, members)
+    return proxy as unknown as ErasedSocketSurface
 }
 
 // Build the imports map injected into a page's client `$scope`: socket name → its client proxy
@@ -195,8 +224,8 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): unknown 
 export function makeClientSocketImports(
     specs: Record<string, SocketSpec>,
     base?: string,
-): Record<string, unknown> {
-    const imports: Record<string, unknown> = {}
+): Record<string, ErasedSocketSurface> {
+    const imports: Record<string, ErasedSocketSurface> = {}
     for (const [name, spec] of Object.entries(specs)) {
         imports[name] = makeSocketProxy(name, spec, base ?? '')
     }

@@ -242,6 +242,93 @@ describe('socket transport — HTTP face', () => {
         },
         TEST_TIMEOUT,
     )
+
+    // The HTTP face used to return straight out of `Bun.serve.fetch`, ~110 lines above the request
+    // scope, the middleware onion, the CSRF gate and the response stamping. So a state-changing,
+    // cookie-authenticated POST ran none of them: `export const middleware = [auth]` did not protect
+    // a socket publish. These four pin it to the same policy stack every other route runs.
+
+    test(
+        'global middleware gates the HTTP face — a denied publish never reaches the socket',
+        async () => {
+            const ticks = socket<string>({ clientPublish: true, channel: { tail: 4 } })
+            const deny: Middleware = () => error(401, 'nope')
+            const app = await start({ sockets: { ticks }, middleware: [deny] })
+
+            const response = await app.fetch('/__abide/sockets/ticks', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify('blocked'),
+            })
+            expect(response.status).toBe(401)
+            expect(ticks.chunks()).toEqual([])
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        "a socket's own middleware gates its HTTP face, as it already gated the WS join",
+        async () => {
+            const guarded = socket<string>({
+                clientPublish: true,
+                channel: { tail: 4 },
+                middleware: [() => error(403, 'not yours')],
+            })
+            const app = await start({ sockets: { guarded } })
+
+            const response = await app.fetch('/__abide/sockets/guarded', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify('blocked'),
+            })
+            expect(response.status).toBe(403)
+            expect(guarded.chunks()).toEqual([])
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'the AU8 CSRF gate covers a socket publish — a simple-shape POST is rejected',
+        async () => {
+            const ticks = socket<string>({ clientPublish: true, channel: { tail: 4 } })
+            const app = await start({ sockets: { ticks } })
+
+            // No `application/json` and no `x-abide`: the exact shape a cross-site <form> can send.
+            const response = await app.fetch('/__abide/sockets/ticks', {
+                method: 'POST',
+                headers: { 'content-type': 'text/plain' },
+                body: '"forged"',
+            })
+            expect(response.status).toBe(403)
+            expect(ticks.chunks()).toEqual([])
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'route() reports the face as socket-subscribe / socket-publish, and the reply is stamped',
+        async () => {
+            const seen: string[] = []
+            const ticks = socket<string>({ clientPublish: true, channel: { tail: 4 } })
+            const record: Middleware = (next) => {
+                seen.push(`${route().kind}:${route().name}`)
+                return next()
+            }
+            const app = await start({ sockets: { ticks }, middleware: [record] })
+
+            const published = await app.fetch('/__abide/sockets/ticks', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify('through'),
+            })
+            expect(published.status).toBe(200)
+            // Stamped by `finalize`/`applyResponseHeaders`, which the old early return skipped.
+            expect(published.headers.get('traceparent')).not.toBeNull()
+            expect(published.headers.get('x-content-type-options')).toBe('nosniff')
+            expect(seen).toEqual(['socket-publish:ticks'])
+        },
+        TEST_TIMEOUT,
+    )
 })
 
 // A per-room guard: the `secret` room is admissible only to the `owner` identity; every other room

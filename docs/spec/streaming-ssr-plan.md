@@ -207,15 +207,17 @@ no-stream-scope path), then returns the items seen so far followed by a trailing
 `<template id="ab-l:N">` sentinel (the insertion point every `append` inserts BEFORE) and registers a
 **streamer** (a multi-yield deferred, `DeferredStreamer`). The
 scheduler generalized: `drainPatches` now interleaves single-resolve subtrees (`fill`) with streamers
-that yield many `append`s then a `complete` (out-of-order, keyed `s`/`l`). Each item streams as an
+that yield many `append`s (out-of-order, keyed `s`/`l`). Each item streams as an
 `append` patch (`<template data-ab-append>` + `$abideAppend` inserting before the sentinel) as the
 source yields it;
-when the source **ends within the budget** (`ABIDE_SSR_STREAM_BUDGET`, default 30s) a `complete` patch
-flags the list `data-ab-done` (the client will CLAIM it — PR7); if it **exceeds** the budget it is cut
-off WITHOUT the flag (client re-iterates) — so an SSR `{#for await}` NEVER hangs the body. `{:catch}`
-appends the catch branch then completes. The `done(source)` probe flips when the streamer finishes.
+when the source **ends within the budget** (`ABIDE_SSR_STREAM_BUDGET`, default 30s) the streamer simply
+ends and the handoff record is marked `done` (the client will CLAIM it — PR7); if it **exceeds** the
+budget it is cut off with `done: false` (client resumes) — so an SSR `{#for await}` NEVER hangs the body.
+`{:catch}` appends the catch branch then ends. The `done(source)` probe flips when the streamer
+finishes — via `markIterableDone`, NOT via the DOM. (There was once a third `complete` patch op whose
+whole effect was stamping `data-ab-done` on the sentinel; nothing read that attribute, so both are gone.)
 Works for any source (local generator / RPC / socket) — HTML is streamed, no value serialization.
-**Verified:** a server integration test (a slow generator streams `append` patches then `$abideDone`) +
+**Verified:** a server integration test (a slow generator streams `append` patches) +
 the existing `{#for await}` e2e green (client still re-iterates over the streamed list — a safe state)
 + 911 unit + tsc + lint + `abide check` + docs e2e (95). Refs: `ui/internal/streamScope.ts`
 (`forAwaitStream`/`DeferredStreamer`/generalized `drainPatches`/`Patch` union), `ui/internal/emitServer.ts`,
@@ -245,8 +247,9 @@ escaped). Measured on `/platform/bench/server`: 3 of 4 streamed rows stranded mi
 
 The fix keeps the O(1) `getElementById` addressing and drops the container:
 - **`{#for await}`** — items are emitted BARE, followed by a trailing `<template id="ab-l:N">`. Each
-  `append` inserts before the sentinel (document order = item order, O(1) per patch); `complete` stamps
-  `data-ab-done` on it. Hydration clears the whole region (items + sentinel) with the block region.
+  `append` inserts before the sentinel (document order = item order, O(1) per patch). The sentinel
+  carries its id and nothing else. Hydration clears the whole region (items + sentinel) with the block
+  region.
 - **`{#await}`** — `<!--ab-p:N-->` … pending fallback … `<template id="ab-p:N">`. `fill` walks back from
   the id'd sentinel to the comment (bounded by the fallback's node count, not the document), removes that
   run, and inserts before the sentinel. Hydration drops both sentinels (`unwrapStreamSlot`).

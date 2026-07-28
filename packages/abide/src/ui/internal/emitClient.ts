@@ -544,11 +544,9 @@ class ClientEmitter {
         // `update` instead. Those were plain property writes, which notify nobody: the body had already
         // subscribed to `$child.t`, so a reconcile that handed the row a new object left it rendering the
         // old one. Both shapes now read through the one cell.
-        const needsItemState = true
-        const needsIndexState = index !== null
         let createItem = '($p, $end, $value, $index) => {\n'
-        if (needsItemState) createItem += '    const $itemState = $rt.state($value);\n'
-        if (needsIndexState) createItem += '    const $indexState = $rt.state($index);\n'
+        createItem += '    const $itemState = $rt.state($value);\n'
+        if (index !== null) createItem += '    const $indexState = $rt.state($index);\n'
         createItem += '    const $child = Object.create($scope);\n'
         // Anything in the loop body that owns state gets a DISTINCT seed bucket per iteration — a
         // component, or a branch-local `<script>` (see emitServer's `for`). Only emitted when the body
@@ -564,7 +562,7 @@ class ClientEmitter {
         createItem += '    return {\n'
         createItem += '      update: ($v, $i) => {'
         createItem += ' $itemState.set($v);'
-        if (needsIndexState) createItem += ' $indexState.set($i);'
+        if (index !== null) createItem += ' $indexState.set($i);'
         createItem += ' },\n'
         createItem += '      dispose: () => $dispose(),\n'
         createItem += '    };\n  }'

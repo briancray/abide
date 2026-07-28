@@ -87,12 +87,17 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
     }) as Channel<T, Args>['publish']
     ch.peek = (args: Args): T | undefined => hubFor(args).peekLatest()
     ch.chunks = (args: Args): T[] | undefined => hubFor(args).tailSnapshot()
-    // Degenerate on this in-process core: a local topic is immediately live, never reconnecting/errored,
-    // and eternal.
+    // Degenerate on this in-process core: a local topic is immediately live and never
+    // reconnecting/errored. These three have no axis to move along without a transport.
     ch.pending = (): boolean => false
     ch.refreshing = (): boolean => false
     ch.error = (): unknown => undefined
-    ch.done = (): boolean => false
+    // `done` is NOT one of them — it is the LIFECYCLE axis, and a hub knows whether anyone is
+    // subscribed. It was `() => false` always, which inverted the probe across the isomorphism: the
+    // browser proxy reports `status === 'idle'`, so `{#if chat.done()}` painted one branch server-side
+    // and flipped on hydrate. Both truth surfaces say the client reading is the right one
+    // (`client-sockets.md` CS5.1, ADR 0023 "true-when-idle, then false once live").
+    ch.done = (args: Args): boolean => hubFor(args).idle
     // A source-less local channel has nothing to re-acquire, so `refresh` is a no-op. `invalidate` clears
     // the retained tail (per room, or every room when no args) without detaching live subscribers.
     ch.refresh = (): void => {}

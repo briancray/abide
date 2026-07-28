@@ -78,9 +78,9 @@ An implementer must know the starting point; the spec is honest about the gap.
   source-derived** (§6) — an abide RPC source gets no cap, only a non-abide source is bounded by the
   now-last-resort default (300 000 ms, `streamScope.ts:50-53`). It emits a trailing `<template id="ab-l:N">`
   sentinel (an ELEMENT container is unrepresentable inside a table section — the parser foster-parents it
-  out; see `streaming-ssr-plan.md` *Sentinel placeholders*) and sets `data-ab-done` on close. The sentinel
-  is now READ on hydrate: `runtime.claimStreamedRegion` stops the claim at it and removes it (see the
-  same-node claim note below).
+  out; see `streaming-ssr-plan.md` *Sentinel placeholders*). The sentinel carries its **id and nothing
+  else**, and is READ on hydrate: `runtime.claimStreamedRegion` stops the claim at it and removes it (see
+  the same-node claim note below).
 - **The `{#await}` claim path works** and was the precedent to mirror: `unwrapStreamSlot` + `claimAwait`
   adopt the server-resolved branch in place because the tail seed primed the read. `{#for await}` now
   mirrors it for **mode A** (see the same-node claim note below); mode B and a cold source still clear.
@@ -315,7 +315,7 @@ docs app). The transport half of step **4** is built — the router transport-en
 (jsonl/sse) with HTTP-level fan-out AND serves the resumable `?__abide_from=<count>` replay endpoint (`router.ts`,
 `memo.resumeStream`, `ReplayableStream.consume(from)`, `responseSource.ts` see-through helpers +
 `streamHttp.test.ts`). The **client half of 4b is now built** — the `StreamHandle` seed section
-(`pages.ts`, inline `values` + `data-ab-count`), the value capture + handoff records (`streamScope.ts`,
+(`pages.ts`, inline `values`), the value capture + handoff records (`streamScope.ts`,
 `context.ts`), the emit-time source tag (`emitServer.ts`, `{ attachable, rpcName?, args }` for a
 known-RPC head under `src/server/rpc/`), and the `forBlock` reactive drain (`runtime.ts`) fed by a
 warm-seeded memo: `bootstrap.replayStreams` warms the memo via `memo.seedStream` — a completed
@@ -442,15 +442,23 @@ scope-exited, §3) and falls back to re-run with a dev warning.
 
 ```
 streams?: StreamHandle[]
-StreamHandle = { listId: string; name: string; args: unknown; done: boolean; count: number; values?: T[] }
+StreamHandle = { name: string; args: unknown; done: boolean; values?: T[] }
 ```
 
-The streamer registration (`streamScope`) records `listId`, the flushed item `count`, `done`, and the
-source's `(name, args)` at drain time, and emits `data-ab-count="<count>"` on the `<template id="ab-l:N">`
-sentinel alongside `data-ab-done`. On hydrate the client iterates `streams`, finds `document.getElementById(listId)`, and
-chooses adopt-from-`values` (mode A) vs resume-replay-`?__abide_from=<count>` (mode B). The client keys the replay
-request off the recorded `(name, args)` — **never** by re-evaluating the source expression (which may
-reference server-only bindings).
+The streamer registration (`streamScope`) records `done` and the source's `(name, args)` at drain time,
+plus the append-only `values` transcript. On hydrate the client iterates `streams` and chooses
+adopt-from-`values` (mode A) vs resume-replay-`?__abide_from=<values.length>` (mode B). The client keys
+the replay request off the recorded `(name, args)` — **never** by re-evaluating the source expression
+(which may reference server-only bindings).
+
+**The handoff is carried entirely by the seed, not by DOM markers.** The handle once also held a
+`listId` and a `count`, and the sentinel was stamped `data-ab-count`/`data-ab-done` to match — a
+protocol where the client looked its region up by `document.getElementById(listId)`. It does not: the
+client matches off the memo transcript (`claimStreamedRegion` → `peekSettled`), so all four were
+write-only. `count` was additionally always `values.length`, re-synced on every streamed chunk. There
+is likewise **no `complete` patch frame**: its only effect through either transport was setting
+`data-ab-done`, and `done()` is `shared/internal/iterableDone.ts` — a WeakMap of state cells flipped by
+`markIterableDone`, with no DOM path at all.
 
 **Attach applies only to a known RPC source.** A `{#for await x of EXPR}` whose head is a bare async
 generator / `fetch().body` / any non-RPC `AsyncIterable` has no route name and no shared slot; it keeps
@@ -519,7 +527,7 @@ and dropped until then.
 | Cache verb | `CacheFrame { verb, value? }` (`cacheChannels.ts:23`) | `@rpc:<name>:<key>` mux | invalidate/refresh/publish — **verbs only, never chunks** |
 | Stream replay | `jsonl`/`sse` body | `GET /__abide/rpc/<name>?__abide_args=…&__abide_from=<count>` | replay `chunks[from..]` then live — **read-only**: a streaming mutation is consumable client-side via `{#for await}`, but the `?__abide_from=` RESUME endpoint stays `GET`-only (`router.ts` gates it on `__rpc.read`), since replaying a POST/PUT/… over a GET would re-trigger the effect. This is the one deliberate read/mutation asymmetry. |
 | Seed (value) | `SeedRead { name, args, value }` (`pages.ts:170`) | hydration payload | a resolved value |
-| Seed (stream) | `StreamHandle { listId, name, args, done, count, values? }` | hydration payload | inline transcript (A) or slot handle (B) |
+| Seed (stream) | `StreamHandle { name, args, done, values? }` | hydration payload | inline transcript (A) or slot handle (B) |
 
 ## Limits (inherited / documented)
 - **Single-process.** The `ReplayableStream` lives in the process-global `sharedStore()`. Multi-instance
@@ -636,7 +644,7 @@ live via `ReplayableStream.consume(from)` + `memo.resumeStream`), or, when the t
 fresh from 0 and sets `x-abide-stream-resume: fresh` so the client REPLACES its painted prefix
 (`streamHttp.test.ts`). **Client half (4b)**: the SSR→client handoff — an attachable `{#for await}`
 captures its decoded values + registers a `StreamHandle` (`streamScope.ts`/`context.ts`), `collectSeed`
-emits the `streams` seed section (+ inline `values` / `data-ab-count`; `pages.ts`), the emitter tags a
+emits the `streams` seed section (+ inline `values`; `pages.ts`), the emitter tags a
 known-RPC head `{ attachable, rpcName?, args }` (`emitServer.ts`), and `bootstrap.replayStreams` warms the
 memo via `memo.seedStream` — the `values` transcript (A) or a `resumeStreamSource` prefix+`?__abide_from` resume
 (B, `fresh`-replaces on attach-miss / prefix-stands on offline) — so `forBlock`'s reactive drain re-reads

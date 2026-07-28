@@ -307,12 +307,6 @@ test('applyPatchFrame: `append` puts a streamed <tr> inside the real <tbody>', (
     expect(host?.querySelector('tr')?.parentElement?.tagName).toBe('TBODY')
 })
 
-test('applyPatchFrame: `complete` stamps data-ab-done on the list sentinel (the done() probe)', () => {
-    document.body.innerHTML = '<ul><li>x</li><template id="ab-l:5"></template></ul>'
-    expect(applyPatchFrame({ kind: 'complete', id: 5 })).toBe(true)
-    expect(document.getElementById('ab-l:5')?.hasAttribute('data-ab-done')).toBe(true)
-})
-
 test('applyPatchFrame: a non-patch kind is not a patch, and a missing anchor is a safe no-op', () => {
     document.body.innerHTML = ''
     expect(applyPatchFrame({ kind: 'shell', html: '<p/>' })).toBe(false)
@@ -320,5 +314,7 @@ test('applyPatchFrame: a non-patch kind is not a patch, and a missing anchor is 
     // Missing anchor: still classified as a patch (true), but touches nothing / never throws.
     expect(applyPatchFrame({ kind: 'fill', id: 99, html: '<b/>' })).toBe(true)
     expect(applyPatchFrame({ kind: 'append', id: 99, html: '<li/>' })).toBe(true)
-    expect(applyPatchFrame({ kind: 'complete', id: 99 })).toBe(true)
+    // There is no `complete` op — it stamped `data-ab-done`, which nothing read — so a stale server
+    // sending one is simply not a patch.
+    expect(applyPatchFrame({ kind: 'complete', id: 99 })).toBe(false)
 })

@@ -190,9 +190,9 @@ export function disposeActive(): void {
 // (`documentPatch` in streamScheduler.ts), but from JS since a `fetch`ed body's inline scripts don't
 // auto-run. The server emits the op AS the frame `kind`: `fill` replaces a deferred `{#await}` slot's
 // pending fallback (bracketed by `<!--ab-p:<id>-->` … `<template id="ab-p:<id>">`), `append` adds one
-// streamed `{#for await}` item before the list's `<template id="ab-l:<id>">` sentinel, `complete` marks a
-// streamed list finished (`data-ab-done`, read by the `done()` probe). Hydration later drops the
-// sentinels. Returns true when the frame was a patch (so the consumer
+// streamed `{#for await}` item before the list's `<template id="ab-l:<id>">` sentinel. Hydration later
+// drops the sentinels. There is no `complete` op: it stamped `data-ab-done` on the sentinel, which
+// nothing read — `done()` lives in `shared/internal/iterableDone.ts` and has no DOM path. Returns true when the frame was a patch (so the consumer
 // loops can treat every non-shell/non-seed frame uniformly). A missing anchor is a no-op. Exported for
 // unit testing — the browser end-state is otherwise seed-masked (hydrate re-renders from the seed).
 export function applyPatchFrame(frame: Record<string, unknown>): boolean {
@@ -236,13 +236,6 @@ export function applyPatchFrame(frame: Record<string, unknown>): boolean {
                 template.innerHTML = frame.html
                 parent.insertBefore(template.content, sentinel)
             }
-        }
-        return true
-    }
-    if (frame.kind === 'complete') {
-        if (typeof id === 'number') {
-            const list = document.getElementById(`ab-l:${id}`)
-            if (list !== null) list.setAttribute('data-ab-done', '')
         }
         return true
     }

@@ -14,8 +14,8 @@ import { analyzeBindings, type BindingAnalysis } from './analyzeBindings.ts'
 import { emitClientModule } from './emitClient.ts'
 import { emitServerModule } from './emitServer.ts'
 import { parse } from './parse.ts'
-import { resolveTemplateAlias } from './resolveTemplateAlias.ts'
 import { resolvePassThroughImport } from './resolvePassThroughImport.ts'
+import { resolveTemplateAlias } from './resolveTemplateAlias.ts'
 import { buildPlan } from './templatePlan.ts'
 
 export interface EmittedSource {

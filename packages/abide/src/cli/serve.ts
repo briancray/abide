@@ -22,6 +22,7 @@ import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
 import { type App, createApp } from '../server/internal/router.ts'
 import { socket } from '../server/socket.ts'
+import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { log } from '../shared/log.ts'
 
 // The reserved dev-reload channel name on the socket mux (BP2.3). Not a per-slot cache channel —
@@ -62,7 +63,10 @@ const DEV_RELOAD_SNIPPET =
     `sessionStorage.setItem(K,JSON.stringify({x:scrollX,y:scrollY,els:es}));}catch(_){}}` +
     `var proto=location.protocol==="https:"?"wss://":"ws://";` +
     `var ws=new WebSocket(proto+location.host+"/__abide/sockets");` +
-    `ws.addEventListener("open",function(){ws.send(JSON.stringify({t:"sub",name:${JSON.stringify(DEV_RELOAD_CHANNEL)}}));});` +
+    // The discriminant is INTERPOLATED from the shared constant, not spelled inline: this string is
+    // emitted into the browser, so a rename of `sub` would otherwise leave dev live-reload silently
+    // subscribing to nothing, with no compile error anywhere.
+    `ws.addEventListener("open",function(){ws.send(JSON.stringify({t:${JSON.stringify(MUX_UPSTREAM.sub)},name:${JSON.stringify(DEV_RELOAD_CHANNEL)}}));});` +
     `ws.addEventListener("message",function(e){try{var f=JSON.parse(e.data);if(f&&f.name===${JSON.stringify(DEV_RELOAD_CHANNEL)}&&f.msg!==undefined){cap();location.reload();}}catch(_){}});` +
     `}catch(_){}})();`
 

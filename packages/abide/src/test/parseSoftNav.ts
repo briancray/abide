@@ -1,10 +1,10 @@
 // Test helper: reconstruct the soft-nav `{ html, seed, url }` shape from the STREAMED JSONL frame
 // response (streaming-ssr-plan.md PR4 — soft-nav returns `{kind:"shell"}`, then patch frames whose kind
-// is the op — `fill`/`append`/`complete` — then `{kind:"seed"}`, instead of one buffered JSON envelope).
+// is the op — `fill`/`append` — then `{kind:"seed"}`, instead of one buffered JSON envelope).
 // `html` is the shell with each streamed patch applied — mirroring the browser's `applyPatchFrame`:
 // `fill` replaces the pending fallback bracketed by `<!--ab-p:<id>-->` … `<template id="ab-p:<id>">`,
-// `append` inserts an item before the `<template id="ab-l:<id>">` list sentinel, `complete` stamps
-// `data-ab-done` on that sentinel — so assertions see the fully-assembled inner HTML.
+// `append` inserts an item before the `<template id="ab-l:<id>">` list sentinel — so assertions see the
+// fully-assembled inner HTML.
 
 export interface SoftNavEnvelope {
     html: string
@@ -12,7 +12,7 @@ export interface SoftNavEnvelope {
     url?: string | undefined
 }
 
-type PatchFrame = { kind: 'fill' | 'append' | 'complete'; id: number; html: string }
+type PatchFrame = { kind: 'fill' | 'append'; id: number; html: string }
 
 export async function parseSoftNav(response: Response): Promise<SoftNavEnvelope> {
     const text = await response.text()
@@ -35,7 +35,7 @@ export async function parseSoftNav(response: Response): Promise<SoftNavEnvelope>
         } else if (frame.kind === 'seed') {
             seed = frame.seed ?? {}
         } else if (
-            (frame.kind === 'fill' || frame.kind === 'append' || frame.kind === 'complete') &&
+            (frame.kind === 'fill' || frame.kind === 'append') &&
             typeof frame.id === 'number'
         ) {
             patches.push({ kind: frame.kind, id: frame.id, html: frame.html ?? '' })
@@ -48,15 +48,9 @@ export async function parseSoftNav(response: Response): Promise<SoftNavEnvelope>
                 new RegExp(`(<!--ab-p:${patch.id}-->)[\\s\\S]*?(<template id="ab-p:${patch.id}">)`),
                 `$1${patch.html}$2`,
             )
-        } else if (patch.kind === 'append') {
-            // Insert before the list's trailing `<template id="ab-l:<id>">` sentinel.
-            html = html.replace(new RegExp(`(<template id="ab-l:${patch.id}")`), `${patch.html}$1`)
         } else {
-            // `complete`: stamp the finished marker on the list sentinel if not already present.
-            html = html.replace(
-                new RegExp(`(<template id="ab-l:${patch.id}")((?![^>]*data-ab-done)[^>]*>)`),
-                `$1 data-ab-done$2`,
-            )
+            // `append`: insert before the list's trailing `<template id="ab-l:<id>">` sentinel.
+            html = html.replace(new RegExp(`(<template id="ab-l:${patch.id}")`), `${patch.html}$1`)
         }
     }
     return { html, seed, url }
