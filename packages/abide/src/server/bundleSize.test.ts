@@ -106,13 +106,21 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // repair on `shared/{invalidate,refresh}.ts`, which had been describing tags as server-only ever
     // since they became isomorphic (~0.7 KB).
     //
+    // 134→136 KB is `shared/internal/refetchClock.ts`: the throttle/debounce DECISION, which had been
+    // written out twice inside `memo` — once for the pulled path (`scheduleRefresh`) and once for the
+    // derivation path (`armAutoAdmit`) — and had already drifted in the arithmetic, one copy guarding
+    // against a remainder its own caller made unreachable. 2.9 KB of source of which the decision is
+    // about eight lines; the rest is the WHY, including why the two paths' STATE stays separate even
+    // though their timing does not. Same shape as the entry above: it minifies to almost nothing, and
+    // the duplication it removes is the kind that goes wrong silently.
+    //
     // The ceiling is raised rather than the comments trimmed, deliberately: this bound is a
     // heavy-item tripwire (does a TypeScript compiler / a server-only subsystem reach the client?),
     // not a shipping budget — the assertions above are the real guard, and production is minified.
     // Squeezing under it by deleting the reasoning would trade the thing that has repeatedly caught
     // real bugs in this codebase for a number that measures nothing anyone ships.
     const bytes = Buffer.byteLength(body, 'utf8')
-    expect(bytes).toBeLessThan(134_000)
+    expect(bytes).toBeLessThan(136_000)
 
     // Still a real bundle that boots the app and carries the AOT client mount runtime path.
     expect(body).toContain('bootstrapPage')

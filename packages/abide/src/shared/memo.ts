@@ -55,6 +55,7 @@ import {
     reactiveScope,
     serverDefaultScope,
 } from './internal/reactiveScope.ts'
+import { refetchClockDecision } from './internal/refetchClock.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
 import { type Room, room } from './internal/room.ts'
@@ -962,25 +963,23 @@ export function memo<Args, T>(
             clock = { timer: undefined, lastRunAt: 0 }
             slot.clock = clock
         }
-        if (clockIsDebounce) {
-            // Fire after quiet: every trigger restarts the window.
-            if (clock.timer !== undefined) clearTimeout(clock.timer)
-            armRefreshing(slot)
-            clock.timer = deferFire(slot, clockMs)
-            return
-        }
-        // Throttle. A timer already armed IS the coalesced trailing fire — a further trigger inside the
-        // window is exactly what it represents, so it returns rather than arming a second one.
-        if (clock.timer !== undefined) return
         const now = Date.now()
-        const since = now - clock.lastRunAt
-        if (since >= clockMs) {
+        const decision = refetchClockDecision(
+            clockIsDebounce,
+            clockMs,
+            clock.lastRunAt,
+            clock.timer !== undefined,
+            now,
+        )
+        if (decision.kind === 'coalesce') return
+        if (decision.kind === 'fire') {
             clock.lastRunAt = now
             startLoad(slot, true)
             return
         }
+        if (decision.kind === 'restart' && clock.timer !== undefined) clearTimeout(clock.timer)
         armRefreshing(slot)
-        clock.timer = deferFire(slot, clockMs - since)
+        clock.timer = deferFire(slot, decision.ms)
     }
 
     function deferFire(slot: Slot<Args, T>, ms: number): ReturnType<typeof setTimeout> {
@@ -1037,22 +1036,32 @@ export function memo<Args, T>(
     // publication does not stamp `lastRunAt`, so the first real change still fires on the leading edge —
     // the same rule the loading path follows, where a cold load is not a trigger.
     function autoAdmitsNow(gate: AutoGate<T>): boolean {
-        if (clockIsDebounce || gate.timer !== undefined) return false
         const now = Date.now()
-        if (now - gate.lastRunAt < clockMs) return false
+        const decision = refetchClockDecision(
+            clockIsDebounce,
+            clockMs,
+            gate.lastRunAt,
+            gate.timer !== undefined,
+            now,
+        )
+        if (decision.kind !== 'fire') return false
         gate.lastRunAt = now
         return true
     }
 
     function armAutoAdmit(gate: AutoGate<T>): void {
-        if (clockIsDebounce) {
-            if (gate.timer !== undefined) clearTimeout(gate.timer)
-            gate.timer = deferAdmit(gate, clockMs)
-            return
-        }
-        if (gate.timer !== undefined) return // already coalescing into the pending trailing admission
-        const remaining = clockMs - (Date.now() - gate.lastRunAt)
-        gate.timer = deferAdmit(gate, remaining > 0 ? remaining : clockMs)
+        const decision = refetchClockDecision(
+            clockIsDebounce,
+            clockMs,
+            gate.lastRunAt,
+            gate.timer !== undefined,
+            Date.now(),
+        )
+        // `fire` cannot reach here — the caller only arms after `autoAdmitsNow` declined, which is the
+        // same decision one tick earlier. `coalesce` means a trailing admission is already pending.
+        if (decision.kind === 'fire' || decision.kind === 'coalesce') return
+        if (decision.kind === 'restart' && gate.timer !== undefined) clearTimeout(gate.timer)
+        gate.timer = deferAdmit(gate, decision.ms)
     }
 
     function deferAdmit(gate: AutoGate<T>, ms: number): ReturnType<typeof setTimeout> {
