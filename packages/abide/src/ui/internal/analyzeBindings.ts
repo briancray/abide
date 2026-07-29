@@ -41,7 +41,6 @@
 //   statement/RHS boundaries follow the same line-break (ASI) heuristic as `transformScript.ts`.
 
 import type { SyntaxKind } from 'typescript/unstable/ast'
-import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { Root, Script, TemplateNode } from './ast.ts'
 import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
 import { matchingBracket, splitParams, topLevelIndexOf } from './scanText.ts'
