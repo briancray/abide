@@ -1,4 +1,5 @@
 import { join, resolve, sep } from 'node:path'
+import { enforceMethod } from './enforceMethod.ts'
 import { staticAssetType } from './staticAssetType.ts'
 
 // `src/ui/public/**` — files served VERBATIM at their literal request path (`src/ui/public/fonts/x.woff2`
@@ -73,10 +74,9 @@ export async function servePublicFile(
     }
     // Method check BEFORE revalidation: a `POST` carrying a stale-but-matching `If-None-Match` is still
     // a method error, and answering it 304 would tell the caller its unsupported request succeeded.
+    const denied = enforceMethod(request, ['GET'])
+    if (denied !== undefined) return denied
     const method = request.method.toUpperCase()
-    if (method !== 'GET' && method !== 'HEAD') {
-        return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } })
-    }
     if (request.headers.get('if-none-match') === etag) {
         return new Response(null, { status: 304, headers })
     }

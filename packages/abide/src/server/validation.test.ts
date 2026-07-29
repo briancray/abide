@@ -8,7 +8,7 @@ import { type StandardSchemaV1, validateStandard } from '../shared/StandardSchem
 import { toValidationErrorData } from '../shared/ValidationErrorData.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { GET } from './GET.ts'
-import { deriveSchema } from './internal/deriveSchema.ts'
+import { deriveOne } from './internal/deriveSchema.ts'
 import { validationError } from './internal/validationError.ts'
 import { POST } from './POST.ts'
 
@@ -75,7 +75,7 @@ describe('validateStandard + ValidationErrorData (unit)', () => {
         expect((await validateStandard(asyncSchema, 1)).ok).toBe(false)
     })
 
-    test('toValidationErrorData flattens issues and records first message per top-level field', () => {
+    test('toValidationErrorData flattens issues and records first message per top-level field', async () => {
         const data = toValidationErrorData([
             { message: 'id must be a number', path: ['id'] },
             { message: 'id also bad', path: ['id'] },
@@ -212,7 +212,7 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
     const FIXTURE = fileURLToPath(new URL('./internal/__fixtures__/handlers.ts', import.meta.url))
 
     test('a JSON Schema derived from a handler drives 200/422 through the RPC path', async () => {
-        const { input } = deriveSchema(FIXTURE, 'echo')
+        const { input } = await deriveOne(FIXTURE, 'echo')
         expect(input).toEqual({
             type: 'object',
             properties: { text: { type: 'string' } },

@@ -1,4 +1,5 @@
 import { appendVary } from './applyResponseHeaders.ts'
+import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import { compressionMode } from './compressionMode.ts'
 import { compressionTransform } from './compressionTransform.ts'
 import { negotiateEncoding } from './negotiateEncoding.ts'
@@ -28,7 +29,6 @@ const MINIMUM_DYNAMIC_BYTES = 1024
 // Stage 1 owns these bytes: they are precompressed at build time and negotiated in the chunk route
 // itself. Re-compressing an identity-served one here would undo a deliberate decision (a dev build's
 // skipped compression, or an asset whose compressed form lost to its identity bytes).
-const CHUNK_PREFIX = '/__abide/chunk/'
 
 export async function applyResponseCompression(
     response: Response,

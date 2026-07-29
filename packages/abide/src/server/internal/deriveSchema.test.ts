@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import { fileURLToPath } from 'node:url'
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
-import { deriveSchema, deriveSchemas } from './deriveSchema.ts'
+import { deriveOne, deriveSchemas } from './deriveSchema.ts'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/handlers.ts', import.meta.url))
 const DEFAULT_FIXTURE = fileURLToPath(new URL('./__fixtures__/defaultRpc.ts', import.meta.url))
@@ -11,8 +11,8 @@ const DEFAULTS_FIXTURE = fileURLToPath(
 )
 
 describe('deriveSchema', () => {
-    test('derives input/output for a wrapped async handler with mixed field shapes', () => {
-        const { input, output, warnings } = deriveSchema(FIXTURE, 'create')
+    test('derives input/output for a wrapped async handler with mixed field shapes', async () => {
+        const { input, output, warnings } = await deriveOne(FIXTURE, 'create')
 
         expect(input).toBeDefined()
         if (input === undefined) throw new Error('expected input schema to be derived')
@@ -68,8 +68,8 @@ describe('deriveSchema', () => {
         expect(outputRequired.sort()).toEqual(['id', 'ok'])
     })
 
-    test('derives from a direct (unwrapped) arrow function', () => {
-        const { input, output, warnings } = deriveSchema(FIXTURE, 'echo')
+    test('derives from a direct (unwrapped) arrow function', async () => {
+        const { input, output, warnings } = await deriveOne(FIXTURE, 'echo')
         expect(warnings).toEqual([])
         expect(input).toEqual({
             type: 'object',
@@ -83,8 +83,8 @@ describe('deriveSchema', () => {
         })
     })
 
-    test('handles number-literal unions, tuples, and nullable fields', () => {
-        const { input } = deriveSchema(FIXTURE, 'configure')
+    test('handles number-literal unions, tuples, and nullable fields', async () => {
+        const { input } = await deriveOne(FIXTURE, 'configure')
         if (input === undefined) throw new Error('expected input schema to be derived')
         const props = input.properties
         if (props === undefined) throw new Error('expected input properties')
@@ -111,20 +111,20 @@ describe('deriveSchema', () => {
         expect(branches).toContainEqual({ type: 'string' })
     })
 
-    test('warns (does not throw) when the export is not callable', () => {
-        const { input, output, warnings } = deriveSchema(FIXTURE, 'notAFunction')
+    test('warns (does not throw) when the export is not callable', async () => {
+        const { input, output, warnings } = await deriveOne(FIXTURE, 'notAFunction')
         expect(input).toBeUndefined()
         expect(output).toBeUndefined()
         expect(warnings.some((w) => w.includes('not callable'))).toBe(true)
     })
 
-    test('warns when the export does not exist', () => {
-        const { warnings } = deriveSchema(FIXTURE, 'doesNotExist')
+    test('warns when the export does not exist', async () => {
+        const { warnings } = await deriveOne(FIXTURE, 'doesNotExist')
         expect(warnings.some((w) => w.includes('not found'))).toBe(true)
     })
 
-    test('option 5: derives the input schema from destructuring defaults (no annotation)', () => {
-        const { input, warnings } = deriveSchema(FIXTURE, 'defaulted')
+    test('option 5: derives the input schema from destructuring defaults (no annotation)', async () => {
+        const { input, warnings } = await deriveOne(FIXTURE, 'defaulted')
         expect(warnings).toEqual([])
         if (input === undefined) throw new Error('expected input schema to be derived')
         expect(input.type).toBe('object')
@@ -139,8 +139,8 @@ describe('deriveSchema', () => {
         expect(input.required).toBeUndefined()
     })
 
-    test('option 5: warns (loud) on a param field that is `any` (no default, no annotation)', () => {
-        const { input, warnings } = deriveSchema(FIXTURE, 'partlyUntyped')
+    test('option 5: warns (loud) on a param field that is `any` (no default, no annotation)', async () => {
+        const { input, warnings } = await deriveOne(FIXTURE, 'partlyUntyped')
         // The untyped field is called out by path...
         expect(warnings.some((w) => w.includes('`any`') && w.includes('"id"'))).toBe(true)
         // ...while the defaulted sibling still derives cleanly.
@@ -150,14 +150,14 @@ describe('deriveSchema', () => {
         expect(props.id).toEqual({})
     })
 
-    test('a zero-arg handler yields no input and no `any` warning', () => {
-        const { input, warnings } = deriveSchema(FIXTURE, 'zeroArg')
+    test('a zero-arg handler yields no input and no `any` warning', async () => {
+        const { input, warnings } = await deriveOne(FIXTURE, 'zeroArg')
         expect(input).toBeUndefined()
         expect(warnings).toEqual([])
     })
 
-    test('unwraps `export default GET(...)` to the handler arg (not the Rpc parameter tuple)', () => {
-        const { input, output, warnings } = deriveSchema(DEFAULT_FIXTURE, 'default')
+    test('unwraps `export default GET(...)` to the handler arg (not the Rpc parameter tuple)', async () => {
+        const { input, output, warnings } = await deriveOne(DEFAULT_FIXTURE, 'default')
         // The single arg object — NOT an array/tuple (the pre-fix bug read the Rpc callable's params).
         expect(input).toEqual({
             type: 'object',
@@ -173,8 +173,8 @@ describe('deriveSchema', () => {
 })
 
 describe('deriveSchema — §11.4 output-wrapper unwrapping', () => {
-    test('json(T) output sees through to T', () => {
-        const { output, warnings } = deriveSchema(OUTPUTS_FIXTURE, 'jsonReturn')
+    test('json(T) output sees through to T', async () => {
+        const { output, warnings } = await deriveOne(OUTPUTS_FIXTURE, 'jsonReturn')
         expect(output).toEqual({
             type: 'object',
             properties: { id: { type: 'number' }, name: { type: 'string' } },
@@ -183,8 +183,8 @@ describe('deriveSchema — §11.4 output-wrapper unwrapping', () => {
         expect(warnings).toEqual([]) // no Response-shape leakage, no brand-property warnings
     })
 
-    test('jsonl(C) output is the element/chunk schema', () => {
-        const { output, warnings } = deriveSchema(OUTPUTS_FIXTURE, 'streamReturn')
+    test('jsonl(C) output is the element/chunk schema', async () => {
+        const { output, warnings } = await deriveOne(OUTPUTS_FIXTURE, 'streamReturn')
         expect(output).toEqual({
             type: 'object',
             properties: { seq: { type: 'number' }, kind: { type: 'string' } },
@@ -193,8 +193,8 @@ describe('deriveSchema — §11.4 output-wrapper unwrapping', () => {
         expect(warnings).toEqual([])
     })
 
-    test('a value|error union drops the error member and keeps the payload', () => {
-        const { output } = deriveSchema(OUTPUTS_FIXTURE, 'valueOrError')
+    test('a value|error union drops the error member and keeps the payload', async () => {
+        const { output } = await deriveOne(OUTPUTS_FIXTURE, 'valueOrError')
         expect(output).toEqual({
             type: 'object',
             properties: { value: { type: 'number' } },
@@ -202,8 +202,8 @@ describe('deriveSchema — §11.4 output-wrapper unwrapping', () => {
         })
     })
 
-    test('a redirect-only handler contributes no output schema', () => {
-        const { output, warnings } = deriveSchema(OUTPUTS_FIXTURE, 'redirectOnly')
+    test('a redirect-only handler contributes no output schema', async () => {
+        const { output, warnings } = await deriveOne(OUTPUTS_FIXTURE, 'redirectOnly')
         expect(output).toBeUndefined()
         expect(warnings).toEqual([])
     })
@@ -239,38 +239,41 @@ describe('destructuring defaults', () => {
     // records is that the property became OPTIONAL. The value lives in the AST and was being dropped,
     // so every surface that describes an rpc said "optional" and none could say what omitting it
     // gives you.
-    const properties = (): Record<string, JSONSchema> => {
-        const { input } = deriveSchema(DEFAULTS_FIXTURE, 'withDefaults')
+    // Derived ONCE for the whole block — each call is a real tsgo session, so per-test derivation
+    // would spawn five.
+    let properties: Record<string, JSONSchema>
+    beforeAll(async () => {
+        const { input } = await deriveOne(DEFAULTS_FIXTURE, 'withDefaults')
         const props = input?.properties
         if (props === undefined) throw new Error('expected input properties')
-        return props
-    }
+        properties = props
+    })
 
-    test('a string, number and boolean default reach the schema', () => {
-        const props = properties()
+    test('a string, number and boolean default reach the schema', async () => {
+        const props = properties
         expect(props.message?.default).toBe('hello')
         expect(props.limit?.default).toBe(10)
         expect(props.loud?.default).toBe(true)
     })
 
-    test('a `false` default survives — it is a value, not an absence', () => {
+    test('a `false` default survives — it is a value, not an absence', async () => {
         // The obvious bug: a falsy default dropped by a truthiness check, so `--quiet` would claim no
         // default while defaulting to false.
-        expect(properties().quiet?.default).toBe(false)
+        expect(properties.quiet?.default).toBe(false)
     })
 
-    test('a field with no default declares none', () => {
-        expect(properties().plain?.default).toBeUndefined()
-        expect(properties().plain).toEqual({ type: 'string' })
+    test('a field with no default declares none', async () => {
+        expect(properties.plain?.default).toBeUndefined()
+        expect(properties.plain).toEqual({ type: 'string' })
     })
 
-    test('a NON-literal default is declined rather than invented', () => {
+    test('a NON-literal default is declined rather than invented', async () => {
         // `= Date.now()` has no value at derivation time. Emitting one would be worse than silence.
-        expect(properties().stamped?.default).toBeUndefined()
+        expect(properties.stamped?.default).toBeUndefined()
     })
 
-    test('the type is still derived alongside the default', () => {
-        expect(properties().message?.type).toBe('string')
-        expect(properties().limit?.type).toBe('number')
+    test('the type is still derived alongside the default', async () => {
+        expect(properties.message?.type).toBe('string')
+        expect(properties.limit?.type).toBe('number')
     })
 })

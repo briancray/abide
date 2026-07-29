@@ -52,63 +52,7 @@ const MAX_DEPTH = 24
 // something else writes to stdout.
 const RESULT_MARKER = '__ABIDE_DERIVE_RESULT__:'
 
-export function deriveSchema(filePath: string, exportName: string): DeriveSchemaResult {
-    // Under Bun the sync TS API cannot open its pipe (see file header) — bridge through Node.
-    const bun = (globalThis as { Bun?: unknown }).Bun
-    if (bun !== undefined) return deriveViaNodeSubprocess(filePath, exportName)
-    return deriveInProcess(filePath, exportName)
-}
-
-function deriveViaNodeSubprocess(filePath: string, exportName: string): DeriveSchemaResult {
-    const self = fileURLToPath(import.meta.url)
-    const spawnSync = (
-        globalThis as {
-            Bun: {
-                spawnSync: (
-                    cmd: string[],
-                    opts?: unknown,
-                ) => {
-                    stdout: { toString(): string }
-                    stderr: { toString(): string }
-                    success: boolean
-                }
-            }
-        }
-    ).Bun.spawnSync
-    const proc = spawnSync(['node', self, filePath, exportName], { stdout: 'pipe', stderr: 'pipe' })
-    const stdout = proc.stdout.toString()
-    const markerAt = stdout.lastIndexOf(RESULT_MARKER)
-    if (markerAt === -1) {
-        const stderr = proc.stderr.toString().trim()
-        return {
-            warnings: [
-                `deriveSchema: Node subprocess produced no result${stderr ? ` (stderr: ${stderr})` : ''}`,
-            ],
-        }
-    }
-    const jsonStart = markerAt + RESULT_MARKER.length
-    const jsonEnd = stdout.indexOf('\n', jsonStart)
-    const json = stdout.slice(jsonStart, jsonEnd === -1 ? undefined : jsonEnd)
-    return JSON.parse(json) as DeriveSchemaResult
-}
-
-function deriveInProcess(filePath: string, exportName: string): DeriveSchemaResult {
-    const api = new API({ cwd: findProjectRoot(filePath) })
-    try {
-        const project = api
-            .updateSnapshot({ openFiles: [filePath] })
-            .getDefaultProjectForFile(filePath)
-        if (project === undefined) {
-            return { warnings: [`deriveSchema: no TypeScript project found for ${filePath}`] }
-        }
-        return deriveExportFromProject(project, filePath, exportName)
-    } finally {
-        api.close()
-    }
-}
-
-// One export-name in an already-open project → its {input, output} JSON Schema. Shared by the single
-// (`deriveInProcess`) and batch (`deriveBatchInProcess`) paths so the derivation rules stay identical.
+// One export-name in an already-open project → its {input, output} JSON Schema.
 function deriveExportFromProject(
     project: Project,
     filePath: string,
@@ -254,6 +198,13 @@ export async function deriveSchemas(
     return bun !== undefined
         ? await deriveBatchViaNodeSubprocess(entries)
         : deriveBatchInProcess(entries)
+}
+
+// One export, over the batch path — the convenience the deleted `deriveSchema` used to be, minus the
+// second subprocess bridge. Async because `deriveSchemas` is; there is no sync single path any more.
+export async function deriveOne(filePath: string, exportName: string): Promise<DeriveSchemaResult> {
+    const derived = await deriveSchemas([{ key: 'one', filePath, exportName }])
+    return derived.one ?? { warnings: [`deriveSchema: no result for ${exportName} in ${filePath}`] }
 }
 
 function deriveBatchInProcess(entries: DeriveEntry[]): Record<string, DeriveSchemaResult> {
@@ -673,24 +624,18 @@ function findProjectRoot(filePath: string): string {
     return process.cwd()
 }
 
-// When executed directly by Node (the Bun-side bridge above), read args and print the JSON result.
-// `--batch` reads a JSON `DeriveEntry[]` from stdin and prints a `key → result` map; otherwise the
-// two positional args are a single `<filePath> <exportName>`.
+// When executed directly by Node (the Bun-side bridge above): read a JSON `DeriveEntry[]` from stdin
+// and print a `key → result` map.
+//
+// There used to be a second, positional `<filePath> <exportName>` form here, reached by a `deriveSchema`
+// singular with its own Bun→Node bridge and its own copy of the marker scrape. It had no production
+// caller — only tests — so a test seam had been built as a duplicate production code path, and the two
+// bridges could drift where it mattered least visibly. The single-entry convenience is now expressed
+// over the batch path (`deriveOne`), which is what it always described itself as.
 if (import.meta.main) {
-    if (process.argv[2] === '--batch') {
-        const chunks: Buffer[] = []
-        for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
-        const entries = JSON.parse(Buffer.concat(chunks).toString('utf8')) as DeriveEntry[]
-        const derived = deriveBatchInProcess(entries)
-        process.stdout.write(`${RESULT_MARKER}${JSON.stringify(derived)}\n`)
-    } else {
-        const filePath = process.argv[2]
-        const exportName = process.argv[3]
-        if (filePath === undefined || exportName === undefined) {
-            process.stderr.write('usage: node deriveSchema.ts <filePath> <exportName>\n')
-            process.exit(2)
-        }
-        const derived = deriveInProcess(filePath, exportName)
-        process.stdout.write(`${RESULT_MARKER}${JSON.stringify(derived)}\n`)
-    }
+    const chunks: Buffer[] = []
+    for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
+    const entries = JSON.parse(Buffer.concat(chunks).toString('utf8')) as DeriveEntry[]
+    const derived = deriveBatchInProcess(entries)
+    process.stdout.write(`${RESULT_MARKER}${JSON.stringify(derived)}\n`)
 }

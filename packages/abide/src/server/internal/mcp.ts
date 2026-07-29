@@ -13,7 +13,7 @@
 import { json } from '../json.ts'
 import type { Socket } from '../socket.ts'
 import { callOwnRpc } from './callOwnRpc.ts'
-import { errorResponse } from './errorResponse.ts'
+import { enforceMethod } from './enforceMethod.ts'
 import type { RpcEntry, SocketEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
@@ -241,9 +241,8 @@ function envelope(id: unknown, outcome: Outcome): Record<string, unknown> {
 }
 
 export async function handleMcp(request: Request, config: AppConfig): Promise<Response> {
-    if (request.method.toUpperCase() !== 'POST') {
-        return errorResponse(405, 'MCP endpoint accepts POST only.', { headers: { allow: 'POST' } })
-    }
+    const denied = enforceMethod(request, ['POST'])
+    if (denied !== undefined) return denied
 
     let body: unknown
     try {

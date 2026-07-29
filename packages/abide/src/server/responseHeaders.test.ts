@@ -51,6 +51,66 @@ describe('405 Allow', () => {
         }
     })
 
+    // The four TRANSPORT surfaces. `enforceMethod` consolidated the framework endpoints above and then
+    // stopped: the rpc verb gate re-implemented the HEAD-rides-with-GET rule inline, and the socket
+    // HTTP face, the public-file route and MCP each hand-rolled a 405 with its own `Allow` literal —
+    // four private copies of the rule the helper exists to own. All four ask the gate now, so this
+    // enumeration is what keeps the next transport surface from starting a fifth copy.
+    test('an rpc enforces its DECLARED verb, and its Allow is derived from the declaration', async () => {
+        const app = await createTestApp({
+            routes: { read: GET(() => ({ ok: true })), write: POST(() => ({ ok: true })) },
+        })
+        try {
+            // A mutation on a read is the CSRF hole `auth.md` §AU8 rests the SameSite=Lax argument on.
+            const onRead = await app.fetch('/__abide/rpc/read', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', 'x-abide': '1' },
+                body: '{}',
+            })
+            expect(onRead.status).toBe(405)
+            expect(onRead.headers.get('allow')).toBe('GET, HEAD')
+            await onRead.text()
+
+            // A mutation advertises its bare verb — HEAD rides only with GET.
+            const onWrite = await app.fetch(`/__abide/rpc/write${argsQuery({})}`)
+            expect(onWrite.status).toBe(405)
+            expect(onWrite.headers.get('allow')).toBe('POST')
+            await onWrite.text()
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('HEAD reaches a GET rpc — the router derives it, it is never declared', async () => {
+        const app = await createTestApp({ routes: { read: GET(() => ({ ok: true })) } })
+        try {
+            const response = await app.fetch(`/__abide/rpc/read${argsQuery({})}`, {
+                method: 'HEAD',
+            })
+            expect(response.status).toBe(200)
+            await response.text()
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('a public file is GET/HEAD only', async () => {
+        const app = await createTestApp({ routes: {} })
+        try {
+            const response = await app.fetch('/robots.txt', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', 'x-abide': '1' },
+                body: '{}',
+            })
+            // Either the file is absent (404) or the gate answers — never a 200 for a POST.
+            expect(response.status).not.toBe(200)
+            if (response.status === 405) expect(response.headers.get('allow')).toBe('GET, HEAD')
+            await response.text()
+        } finally {
+            await app.stop()
+        }
+    })
+
     // Every read-only framework route, enumerated. Three of these — `/openapi.json`,
     // `/__abide/identity` and `/__abide/health` — answered a POST with a **200** and the document,
     // because the method gate was written out per route class (five times) while these three simply

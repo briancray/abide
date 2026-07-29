@@ -61,6 +61,7 @@ import {
     resolveIdentityDetailed,
     unrecognizedNodeEnv,
 } from './auth.ts'
+import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import {
     authorizeChannelJoin,
     authorizeSocketJoin,
@@ -80,7 +81,7 @@ import {
 } from './cors.ts'
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { provideDefaultAgentSurface } from './defaultAgentSurface.ts'
-import { enforceMethod } from './enforceMethod.ts'
+import { enforceMethod, methodNotAllowed } from './enforceMethod.ts'
 import { errorResponse } from './errorResponse.ts'
 import { isProd } from './isProd.ts'
 import { applicableLayoutPrefixes, sharedLayoutDepth } from './layouts.ts'
@@ -149,7 +150,6 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 // build DOES vary it on `Accept-Encoding` (precompressed brotli/gzip), which is not a per-request
 // header in that sense: it selects among fixed representations of the same content-addressed bytes and
 // stays identity-free, so the response is still shared across every client that negotiates alike.
-const CHUNK_PREFIX = '/__abide/chunk/'
 
 // Does the LAST path segment carry an extension? The cheap synchronous gate in front of the
 // `src/ui/public/**` lookup — a page route (`/memo`, `/users/7`) has none and never reaches the
@@ -239,14 +239,19 @@ const NO_CORS: NormalizedCors = {
     maxAge: 0,
 }
 
-// The `Allow` header for a route, derived from the route's DECLARED verb instead of being restated
-// as a literal per call site (there were five independent ones, none agreeing). HEAD rides with GET
-// because the router DERIVES it rather than accepting a declaration (ADR 0027 D6). An unmatched name
-// has no declared verb to report, so it names the full set.
-function allowHeaderFor(route: Route | undefined): string {
+// The methods an rpc route admits, derived from its DECLARED verb — the whole gate, since a handler
+// serves exactly one. HEAD is not in the list: `enforceMethod` derives it from GET (ADR 0027 D6), so
+// there is no second statement of that rule here. An unmatched name has no declared verb to report,
+// so it names the full set.
+//
+// This used to be `allowHeaderFor`, a HEADER — five independent literals, none agreeing. Returning the
+// method LIST instead is what lets the rpc gate be `enforceMethod` rather than a hand-rolled compare
+// that re-implemented the HEAD rule next to a helper written to own it.
+const ANY_RPC_METHOD = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+
+function allowedMethodsFor(route: Route | undefined): readonly string[] {
     const meta = route?.__rpc
-    if (meta === undefined) return 'GET, HEAD, POST, PUT, PATCH, DELETE'
-    return meta.read ? `${meta.method}, HEAD` : meta.method
+    return meta === undefined ? ANY_RPC_METHOD : [meta.method]
 }
 
 // After dispatch, refresh (or clear) the rolling abide-identity cookie for browser identities.
@@ -628,6 +633,11 @@ async function wsPublish(
 // straight out of `Bun.serve.fetch` ~110 lines above all of that, which meant a state-changing,
 // cookie-authenticated POST ran no middleware and no CSRF check: `export const middleware = [auth]`
 // did not protect a socket publish, and the reply carried no identity cookie and no traceparent.
+//
+// SSE subscribe on GET, publish on POST — the two verbs it serves, declared once and handed to the
+// one gate. HEAD rides with GET.
+const SOCKET_FACE_METHODS = ['GET', 'POST'] as const
+
 async function socketHttpFace(
     request: Request,
     name: string,
@@ -636,11 +646,14 @@ async function socketHttpFace(
     const sock = sockets[name]
     if (sock === undefined) return errorResponse(404, `Unknown socket: ${name}`)
 
+    const denied = enforceMethod(request, SOCKET_FACE_METHODS)
+    if (denied !== undefined) return denied
+
     const method = request.method.toUpperCase()
     if (method === 'GET' || method === 'HEAD') {
         return sse(sock)
     }
-    if (method === 'POST') {
+    {
         if (!clientPublishAllowed(sock.__socket.options.clientPublish)) {
             return errorResponse(403, `socket: client publish is disabled for ${name}.`)
         }
@@ -657,9 +670,6 @@ async function socketHttpFace(
         }
         return json({ ok: true })
     }
-    return errorResponse(405, `Method not allowed: ${method}`, {
-        headers: { allow: 'GET, HEAD, POST' },
-    })
 }
 
 export interface App {
@@ -994,12 +1004,8 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
     // still admits carries the identity cookie and skips the CSRF gate (`csrfReject` exempts reads),
     // so a mutation reachable over GET is a CSRF hole no matter what the handler was declared as.
     // HEAD is the one derived verb: it IS GET minus the body (ADR 0027 D6), so it reaches a GET rpc.
-    const requestMethod = scope.request.method.toUpperCase()
-    if (requestMethod !== meta.method && !(requestMethod === 'HEAD' && meta.method === 'GET')) {
-        return errorResponse(405, `Method not allowed: ${requestMethod}`, {
-            headers: { allow: allowHeaderFor(route) },
-        })
-    }
+    const denied = enforceMethod(scope.request, [meta.method])
+    if (denied !== undefined) return denied
     log.channel('abide:rpc').trace(`dispatch ${meta.method} ${scope.route.name}`)
     applyRunDeadlineSignal(scope, meta)
     let args: unknown
@@ -1376,9 +1382,7 @@ export function createApp(config: AppConfig = {}): App {
                 return exit(
                     cors !== undefined
                         ? preflightResponse(cors, request)
-                        : errorResponse(405, 'Method not allowed: OPTIONS', {
-                              headers: { allow: allowHeaderFor(matched) },
-                          }),
+                        : methodNotAllowed('OPTIONS', allowedMethodsFor(matched)),
                     { scope: undefined, cors: undefined },
                 )
             }
