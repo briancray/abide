@@ -7,6 +7,7 @@
 // client bundle composer wrap page = `[rootLayout, …, nearestLayout, page]` — each layout rendering
 // the next level where its template calls `{children()}`.
 
+import { commonPrefixLength } from '../../shared/internal/commonPrefixLength.ts'
 import { routePrefixFromRelative } from './routePrefixFromRelative.ts'
 
 // `pages/**/layout.abide` → the directory route prefix it wraps.
@@ -43,9 +44,8 @@ export function sharedLayoutDepth(
     toPattern: string,
     layouts: Record<string, string>,
 ): number {
-    const from = applicableLayoutPrefixes(fromPattern, layouts)
-    const to = applicableLayoutPrefixes(toPattern, layouts)
-    let depth = 0
-    while (depth < from.length && depth < to.length && from[depth] === to[depth]) depth++
-    return depth
+    return commonPrefixLength(
+        applicableLayoutPrefixes(fromPattern, layouts),
+        applicableLayoutPrefixes(toPattern, layouts),
+    )
 }

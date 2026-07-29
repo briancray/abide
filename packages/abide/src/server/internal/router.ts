@@ -90,6 +90,7 @@ import { logsRoute } from './logsRoute.ts'
 import type { Mutation, Rpc, RpcMeta, StreamRead } from './makeRpc.ts'
 import { handleMcp } from './mcp.ts'
 import { compose, type Middleware } from './middleware.ts'
+import { navKeepLevels } from './navKeepLevels.ts'
 import { negotiateEncoding } from './negotiateEncoding.ts'
 import { buildOpenApi } from './openapi.ts'
 import { outcomeResponse } from './outcomeResponse.ts'
@@ -901,36 +902,19 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
                 // true)` awaits blocking reads (a throw still 500s below) and returns the SHELL. Vary on the
                 // header so caches key first-load vs soft-nav.
                 if (isSoftNav(scope.request)) {
-                    // C6.2: how many outer layouts the client is KEEPING. Render only the diverging
-                    // suffix; the client grafts + claims it into the innermost kept layout's outlet.
-                    //
-                    // The CLIENT's number wins where it sends one (`NAV_HEADERS.keep`), because only the
-                    // client knows it: `sharedLayoutDepth` answers what the route TABLE permits, which is
-                    // static, while what a live page can keep depends on whether a chain is mounted at
-                    // all, whether it has been claimed, whether the boundary carries a `graftSuffix`. The
-                    // two used to be derived independently and reconciled at runtime — the client checked
-                    // the shell's `sharedLevels` against its own and hard-loaded on a mismatch. One
-                    // number, one derivation, and the disagreement is now unrepresentable.
-                    //
-                    // Clamped to the destination's OWN layout depth: a client cannot keep levels that do
-                    // not exist, and an unclamped over-count would slice past the end and ship an empty
-                    // shell. The `Abide-Nav` derivation remains the answer for a client that sends no
-                    // number — a browser too old to, or any other caller.
+                    // C6.2: how many outer layouts the client is KEEPING (`navKeepLevels`, which owns
+                    // the precedence and the clamp). Render only the diverging suffix; the client grafts
+                    // + claims it into the innermost kept layout's outlet.
                     const fromPath = scope.request.headers.get(NAV_HEADERS.from)
                     const fromMatch = fromPath !== null ? matchRoute(patterns, fromPath) : null
                     const layoutConfig = config.layouts ?? {}
-                    const derivedLevels =
+                    const sharedLevels = navKeepLevels(
+                        navKeepDeclared(scope.request),
                         fromMatch !== null
                             ? sharedLayoutDepth(fromMatch.pattern, match.pattern, layoutConfig)
-                            : 0
-                    const declared = navKeepDeclared(scope.request)
-                    const sharedLevels =
-                        declared === null
-                            ? derivedLevels
-                            : Math.min(
-                                  declared,
-                                  applicableLayoutPrefixes(match.pattern, layoutConfig).length,
-                              )
+                            : 0,
+                        applicableLayoutPrefixes(match.pattern, layoutConfig).length,
+                    )
                     const shell = await renderPage(
                         source,
                         config,

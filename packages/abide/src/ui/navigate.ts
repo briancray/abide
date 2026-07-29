@@ -34,6 +34,7 @@
 
 import { adoptIdentity } from '../shared/internal/adoptIdentity.ts'
 import { adoptTrace } from '../shared/internal/adoptTrace.ts'
+import { commonPrefixLength } from '../shared/internal/commonPrefixLength.ts'
 import { decodeJsonlStream } from '../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../shared/internal/hydrationSeed.ts'
 import { matchRoute } from '../shared/internal/matchRoute.ts'
@@ -147,14 +148,6 @@ function restoreStampedScroll(): void {
 function navRequestHeaders(from: string, keep?: number): Record<string, string> {
     if (keep === undefined) return { [NAV_HEADERS.from]: from }
     return { [NAV_HEADERS.from]: from, [NAV_HEADERS.keep]: String(keep) }
-}
-
-// The number of leading layout levels the current route and a destination SHARE (longest common prefix
-// of their applicable-layout-prefix lists) — the client mirror of the server's `sharedLayoutDepth`.
-function sharedDepth(from: string[], to: string[]): number {
-    let depth = 0
-    while (depth < from.length && depth < to.length && from[depth] === to[depth]) depth++
-    return depth
 }
 
 // Build the reactive RouteInfo for a matched destination — shared by the full mount and param-nav paths.
@@ -507,7 +500,7 @@ async function softLoad(
         const levels = entry?.levels
         const prefixes = entry?.prefixes
         if (levels !== undefined && prefixes !== undefined) {
-            const keep = sharedDepth(currentPrefixes, prefixes)
+            const keep = commonPrefixLength(currentPrefixes, prefixes)
             const boundary = activeChain.records[keep]
             if (
                 keep >= 1 &&
