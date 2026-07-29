@@ -516,22 +516,25 @@ code — for a failed migration the stack IS the report.
 | `$server/*` · `$ui/*` · `$shared/*` | tsconfig-path import aliases for `src/server/*` · `src/ui/*` · `src/shared/*` (scaffolded into the app `tsconfig.json`; resolved by the Bun runtime and `abide check`). A local `.ts` imported into an `.abide` client script stays unsupported client-side (aliased or relative) — share client state via `state.shared(key)`. |
 
 ## Generated routes
-**Every one of these gates its METHOD** — but by three mechanisms, not one, because they answer three
-different questions. The five READ-ONLY framework routes (`/__abide/identity`, `/__abide/logs`,
-`/__abide/health`, `/__abide/chunk/*`, `/openapi.json`) share `enforceMethod`, which admits the methods it
-is passed and answers anything else with a **405 + `Allow`**. An **RPC** route instead enforces its own
-DECLARED verb and derives its `Allow` from the declaration (`allowHeaderFor`: `GET, HEAD` for a read, the
-bare method for a mutation) — the declaration is the gate, so there is nothing to pass. `/__abide/mcp`
-inlines its own check (**`Allow: POST`**), and a socket's HTTP face `/__abide/sockets/<name>` inlines one
-too, admitting all three of the verbs it actually serves (**`Allow: GET, HEAD, POST`** — SSE subscribe on
-`GET`, publish on `POST`). `HEAD` is never named anywhere: it rides along with `GET`, because the router
-derives it (ADR 0027 D6). The consolidation is stated here because it was *not* true until `enforceMethod`
-got one owner — that check had been written out per route class five times and simply omitted from three,
-so a `POST /openapi.json` carrying the abide client's shape cleared the CSRF gate and returned **200 with
-the spec document**. Same for `/__abide/identity` and `/__abide/health`. (`allowHeaderFor` is the same
-consolidation one layer up, for the HEADER rather than the gate: five independent literals, none agreeing.
-The header got an owner and the gate did not, which is exactly how three routes ended up with no check at
-all — a rule stated once and applied per call site is a rule the next route class forgets.)
+**Every one of these gates its METHOD, through ONE mechanism.** Every route class — the five read-only
+framework routes (`/__abide/identity`, `/__abide/logs`, `/__abide/health`, `/__abide/chunk/*`,
+`/openapi.json`), every **RPC**, `/__abide/mcp`, the socket HTTP face, and `src/ui/public/**` — passes the
+methods it SERVES to `enforceMethod`, which admits them and answers anything else with a **405 + `Allow`**
+derived from that same list. An rpc passes its DECLARED verb, so the declaration is the gate; the socket
+face passes `GET, POST` (SSE subscribe / publish). `HEAD` is never named anywhere: `enforceMethod` derives
+it from `GET`, because the router derives it (ADR 0027 D6). The one caller that cannot use the gate — an
+`OPTIONS` preflight to an rpc that declared no `crossOrigin`, a 405 by construction rather than by
+comparison — uses the same module's `methodNotAllowed`, so its header is built identically.
+
+This is stated here because it was *not* true twice over. The check had been written out per route class
+five times and simply OMITTED from three, so a `POST /openapi.json` carrying the abide client's shape
+cleared the CSRF gate and returned **200 with the spec document** (same for `/__abide/identity` and
+`/__abide/health`). `enforceMethod` fixed those five and stopped: the four TRANSPORT surfaces kept private
+copies — the rpc gate re-implementing the HEAD rule inline, and mcp / the socket face / public files each
+hand-rolling a 405 with its own `Allow` literal, alongside an `allowHeaderFor` helper that was itself the
+fifth independent statement of the header. A rule stated once and applied per call site is a rule the next
+route class forgets, and the header having an owner while the gate did not is exactly how three routes
+ended up with no check at all.
 
 `/__abide/rpc/<name>` (per-RPC transport; `+ ?__abide_from=<count>` stream resume) · `/openapi.json` (OpenAPI
 3.1) · `/__abide/mcp` (MCP; socket → tail/publish tools) · `/__abide/sockets`

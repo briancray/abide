@@ -28,10 +28,15 @@ the resolved fork at each branch is stated with its rationale.
   `.ts` (HEADER + verbatim imports + declarations, rewriting `let/const/var x = <init>` →
   `let x = __abideUnwrap(<init>)` to model the `$def` accessor), type-checks via the TS7 `unstable/sync`
   `API` bridged through a `node` subprocess (`diagnose` → `diagnoseViaNodeSubprocess`, `check.ts:436`),
-  and maps diagnostics back with a **verbatim-copy `Segment[]`** offset map (`buildGenerated`,
-  `check.ts:202`; `mapGenToOrig`). It does NOT check template expressions (`check.ts:19-24`).
+  and maps diagnostics back with a **verbatim-copy `Segment[]`** offset map (`ui/internal/lowerProject.ts`,
+  which `check` and `lsp` now SHARE — it was `buildGenerated` in `check.ts` plus a same-shaped twin in
+  `lsp.ts`; `mapGenToOrig`). It does NOT check template expressions (`check.ts:19-24`).
 - `cli/lsp.ts` is the current stub: a diagnostics-only LSP that re-runs `check(dir)` on open/save
   (whole-project, one-shot) and publishes mapped diagnostics. Reuses `check()` — no second checker.
+  (STALE as written: `lsp.ts` is now a persistent, buffer-aware server with a warm `API` and live
+  in-memory lowering of unsaved buffers, and it shares the lowering LOOP with `check` rather than
+  calling `check()`. The "no second checker" invariant is the part that still holds, and is now
+  structural.)
 - The runtime emitters resolve free template identifiers to `$scope.<name>` (`emitClient.ts:22`) —
   **type-erasing**. So the runtime emit gives NO template types: "point `abide check` at the emitted
   TS" is false for template type-flow. `emitCheck` is a separate lowering.
