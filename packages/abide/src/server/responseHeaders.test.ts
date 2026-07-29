@@ -117,26 +117,36 @@ describe('405 Allow', () => {
     // never spelled it. `enforceMethod` is now the one gate; this is the list it has to cover, kept as
     // an enumeration precisely because the failure mode is a route class nobody remembered to check.
     // A POST carrying the abide client's shape clears the CSRF gate, so that is what it sends.
-    test.each([['/openapi.json'], ['/__abide/identity'], ['/__abide/health'], ['/__abide/logs']])(
-        'a POST to the read-only route %s is 405, not 200',
-        async (path) => {
-            const app = await createTestApp({ routes: {} })
-            try {
-                const response = await app.fetch(path, {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json', 'x-abide': '1' },
-                    body: '{}',
-                })
-                expect(response.status).toBe(405)
-                // `HEAD` rides along with `GET` — the router derives it rather than accepting it (ADR 0027
-                // D6), so a read-only route advertises both.
-                expect(response.headers.get('allow')).toBe('GET, HEAD')
-                await response.text()
-            } finally {
-                await app.stop()
-            }
-        },
-    )
+    //
+    // PAGE SSR is on the list now because the enumeration missed it for the same reason the gate did:
+    // both are lists. That branch hand-rolled the GET/HEAD comparison and let any other verb fall
+    // through to the catch-all, so a matched page answered 404 with no `Allow`.
+    test.each([
+        ['/openapi.json'],
+        ['/__abide/identity'],
+        ['/__abide/health'],
+        ['/__abide/logs'],
+        ['/a-page'],
+    ])('a POST to the read-only route %s is 405, not 200', async (path) => {
+        const app = await createTestApp({
+            routes: {},
+            pages: { '/a-page': '<p>hi</p>' },
+        })
+        try {
+            const response = await app.fetch(path, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', 'x-abide': '1' },
+                body: '{}',
+            })
+            expect(response.status).toBe(405)
+            // `HEAD` rides along with `GET` — the router derives it rather than accepting it (ADR 0027
+            // D6), so a read-only route advertises both.
+            expect(response.headers.get('allow')).toBe('GET, HEAD')
+            await response.text()
+        } finally {
+            await app.stop()
+        }
+    })
 })
 
 describe('SSE stream headers', () => {

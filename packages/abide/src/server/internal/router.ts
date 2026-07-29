@@ -588,10 +588,15 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
         // the request scope + middleware onion (dispatch is the chain terminal), so a short-circuiting
         // middleware blocks the page like any other request.
         const pages = config.pages ?? {}
-        const method = scope.request.method.toUpperCase()
         const patterns = pagePatternsOf(config, pages)
         const match = matchRoute(patterns, url.pathname)
-        if (match !== null && (method === 'GET' || method === 'HEAD')) {
+        if (match !== null) {
+            // The tenth route class, and the one `enforceMethod` did not reach: this branch hand-rolled
+            // the GET/HEAD comparison and let anything else FALL THROUGH to the catch-all 404. So a
+            // `POST /users/7` against an app with a `/users/[id]` page answered 404 with no `Allow`,
+            // where every sibling class answers 405 + `Allow: GET, HEAD`.
+            const rejected = enforceMethod(scope.request, ['GET'])
+            if (rejected !== undefined) return rejected
             log.channel('abide:router').trace(
                 `page ${match.pattern}${scope.route.navigating ? ' (soft-nav)' : ''}`,
             )
