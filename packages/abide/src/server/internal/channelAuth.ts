@@ -17,6 +17,7 @@
 
 import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannels.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { SOCKET_FACE_PREFIX } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { TAG_CHANNEL_PREFIX } from '../../shared/internal/tagChannelName.ts'
 import { log } from '../../shared/log.ts'
 import type { Socket } from '../socket.ts'
@@ -159,7 +160,7 @@ export async function authorizeSocketJoin(
     return reauthorize(
         'socket-subscribe',
         socketName,
-        `/__abide/sockets/${socketName}`,
+        `${SOCKET_FACE_PREFIX}${socketName}`,
         roomArgs,
         connData,
         [...globalMiddleware, ...socketMiddleware],

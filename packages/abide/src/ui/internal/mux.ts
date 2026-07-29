@@ -12,6 +12,7 @@
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import type { MemoFrame } from '../../shared/internal/memoChannels.ts'
 import { parseMuxFrame } from '../../shared/internal/parseMuxFrame.ts'
+import { SOCKETS_ROUTE } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
 import { tagChannelName } from '../../shared/internal/tagChannelName.ts'
 
@@ -68,7 +69,7 @@ function isBrowser(): boolean {
 // under). `wss:` on a secure page, `ws:` otherwise.
 function socketUrl(): string {
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${scheme}//${location.host}${base}/__abide/sockets`
+    return `${scheme}//${location.host}${base}${SOCKETS_ROUTE}`
 }
 
 function sendSubscribe(sub: Subscription): void {

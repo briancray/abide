@@ -14,6 +14,7 @@
 // states a reader cannot tell apart from an empty screen. One round trip buys a real answer.
 
 import { formatLogLine } from '../../shared/internal/formatLogLine.ts'
+import { HEALTH_ROUTE } from '../../shared/internal/HEALTH_ROUTE.ts'
 import { LOGS_ROUTE } from '../../shared/internal/LOGS_ROUTE.ts'
 import type { LogRecord } from '../../shared/internal/logFeed.ts'
 import { logFormat } from '../../shared/internal/logFormat.ts'
@@ -111,7 +112,7 @@ async function preflight(options: LogsCommandOptions): Promise<number | undefine
     if (options.token !== undefined) headers.authorization = `Bearer ${options.token}`
     let response: Response
     try {
-        response = await fetch(`${options.origin}/__abide/health`, {
+        response = await fetch(`${options.origin}${HEALTH_ROUTE}`, {
             headers,
             ...(options.signal === undefined ? {} : { signal: options.signal }),
         })
@@ -132,7 +133,7 @@ async function preflight(options: LogsCommandOptions): Promise<number | undefine
                 error: 'not-an-abide-server',
                 target: options.origin,
                 status: response.status,
-                message: `${options.origin}/__abide/health did not answer with an abide health document`,
+                message: `${options.origin}${HEALTH_ROUTE} did not answer with an abide health document`,
             })}\n`,
         )
         return CLI_EXIT_CODES.failed

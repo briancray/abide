@@ -23,6 +23,7 @@ import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
 import { socket } from '../server/socket.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
+import { SOCKETS_ROUTE } from '../shared/internal/SOCKETS_ROUTE.ts'
 import { log } from '../shared/log.ts'
 import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
@@ -63,7 +64,9 @@ const DEV_RELOAD_SNIPPET =
     `var sel=d?'[data-testid="'+d+'"]':'#'+CSS.escape(n.id);es.push({sel:sel,l:n.scrollLeft,t:n.scrollTop});}}` +
     `sessionStorage.setItem(K,JSON.stringify({x:scrollX,y:scrollY,els:es}));}catch(_){}}` +
     `var proto=location.protocol==="https:"?"wss://":"ws://";` +
-    `var ws=new WebSocket(proto+location.host+"/__abide/sockets");` +
+    // The ADDRESS is interpolated for the same reason the discriminant below is: this string is
+    // emitted into the browser, so a rename would leave dev live-reload dialling a 404 in silence.
+    `var ws=new WebSocket(proto+location.host+${JSON.stringify(SOCKETS_ROUTE)});` +
     // The discriminant is INTERPOLATED from the shared constant, not spelled inline: this string is
     // emitted into the browser, so a rename of `sub` would otherwise leave dev live-reload silently
     // subscribing to nothing, with no compile error anywhere.

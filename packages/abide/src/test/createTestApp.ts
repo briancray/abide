@@ -25,9 +25,11 @@ import type { Principal } from '../server/internal/requestScope.ts'
 import { type App, createApp, type Route } from '../server/internal/router.ts'
 import { seal } from '../server/internal/seal.ts'
 import type { ErasedSocket } from '../server/socket.ts'
+import { HEALTH_ROUTE } from '../shared/internal/HEALTH_ROUTE.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { parseMuxFrame } from '../shared/internal/parseMuxFrame.ts'
 import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
+import { SOCKETS_ROUTE } from '../shared/internal/SOCKETS_ROUTE.ts'
 import { subscriptionKey } from '../shared/internal/subscriptionKey.ts'
 
 // A thin test client over the multiplexed socket WS (`/__abide/sockets`). `subscribe(name)`
@@ -141,7 +143,7 @@ function socketClient(origin: string, identity: Partial<Principal> | undefined):
     // resolves it through the real per-user-token rung of the identity ladder (matching HTTP `as`).
     // Bun's WebSocket accepts a non-standard `headers` option; the DOM lib type omits it (cast).
     const opened = (async (): Promise<void> => {
-        const url = `${origin.replace(/^http/, 'ws')}/__abide/sockets`
+        const url = `${origin.replace(/^http/, 'ws')}${SOCKETS_ROUTE}`
         if (identity !== undefined) {
             const token = await seal(identity as Principal)
             ws = new WebSocket(url, {
@@ -301,7 +303,7 @@ function bind(
         fetch: doFetch,
         rpc,
         socket: (_name?: string): SocketClient => socketClient(origin, identity),
-        health: (): Promise<Response> => doFetch('/__abide/health'),
+        health: (): Promise<Response> => doFetch(HEALTH_ROUTE),
         stop,
         // A sibling shares the same server and the same `stop` — teardown (and any `onStop`) runs once.
         as: (asIdentity: Partial<Principal>): TestApp => bind(app, routes, asIdentity, stop),

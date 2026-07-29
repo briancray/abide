@@ -18,6 +18,7 @@
 // A NAMED json import keeps the client bundle from inlining the rest of package.json.
 
 import { version } from '../../package.json'
+import { HEALTH_ROUTE } from './internal/HEALTH_ROUTE.ts'
 import { healthSource } from './internal/healthSource.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { log } from './log.ts'
@@ -55,7 +56,7 @@ export type HealthFields = HealthAugmentation extends { onHealth: infer Fields }
 
 export async function health(): Promise<HealthDocument & HealthFields> {
     if (isBrowser) {
-        const response = await fetch('/__abide/health')
+        const response = await fetch(HEALTH_ROUTE)
         return (await response.json()) as HealthDocument & HealthFields
     }
     const source = healthSource()

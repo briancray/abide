@@ -22,6 +22,7 @@
 import { health } from '../../shared/health.ts'
 import { identity } from '../../shared/identity.ts'
 import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
+import { HEALTH_ROUTE } from '../../shared/internal/HEALTH_ROUTE.ts'
 import { provideHealthSource } from '../../shared/internal/healthSource.ts'
 import { IDENTITY_ROUTE } from '../../shared/internal/IDENTITY_ROUTE.ts'
 import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
@@ -39,6 +40,7 @@ import { NAV_HEADERS, NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
 import { positiveEnvBytes } from '../../shared/internal/positiveEnvBytes.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
+import { SOCKET_FACE_PREFIX, SOCKETS_ROUTE } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { STREAM_RESUME, STREAM_RESUME_HEADER } from '../../shared/internal/STREAM_RESUME_HEADER.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
@@ -393,12 +395,10 @@ function routeInfo(url: URL, method: string): { kind: RouteKind; name: string } 
     return { kind: 'nav', name: pathname }
 }
 
-// The WS-less per-socket face. The bare `/__abide/sockets` (no trailing slash) is the WS mux upgrade
-// and is NOT this — an upgrade cannot travel through the response pipeline.
-const SOCKET_FACE_PREFIX = '/__abide/sockets/'
-
-// The multiplexed WS mux itself (the socket HTTP FACE is the `/…/<name>` prefix above).
-const SOCKET_MUX_ROUTE = '/__abide/sockets'
+// The multiplexed WS mux itself. The bare address (no trailing slash) is the WS upgrade; the
+// `/…/<name>` face above is NOT it — an upgrade cannot travel through the response pipeline. Both are
+// derived from one constant, because a browser bundle and a hand-written browser snippet both dial it.
+const SOCKET_MUX_ROUTE = SOCKETS_ROUTE
 
 // The terminal of the socket-connect chain. Compared by IDENTITY, so a middleware returning its own
 // response — of ANY status — reads as the short-circuit it is.
@@ -472,7 +472,7 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
         return logsRoute(url, scope.request.signal)
     }
 
-    if (url.pathname === '/__abide/health') {
+    if (url.pathname === HEALTH_ROUTE) {
         const rejected = enforceMethod(scope.request, ['GET'])
         if (rejected !== undefined) return rejected
         // CO2.4: the whole document — baseline, bind clock, and the app's `onHealth` fields merged over
