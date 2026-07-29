@@ -2,7 +2,7 @@
 //
 // The reorder pass leaves the longest already-ascending run of survivors untouched and moves only the
 // rest, which is the minimum number of moves that reaches the target order (`increasingSubsequence` in
-// runtime.ts). That is a real algorithm with real off-by-one surface, and the failure mode is not a
+// `reconcilePlan.ts`, whose own tests assert the PLAN; this file asserts the DOM it produces). That is a real algorithm with real off-by-one surface, and the failure mode is not a
 // throw — it is a list that renders in the WRONG ORDER, which every existing `{#for}` test would miss
 // because they all mutate in one direction.
 //

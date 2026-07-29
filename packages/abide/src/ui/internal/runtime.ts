@@ -26,6 +26,7 @@ import { streamTranscriptOf } from '../../shared/internal/streamTranscript.ts'
 import { log } from '../../shared/log.ts'
 import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
+import { keptInPlace, NEW_ITEM } from './reconcilePlan.ts'
 import { STREAM_SENTINEL } from './STREAM_SENTINEL.ts'
 
 // Re-export the reactive substrate so emitted client modules import everything from one place.
@@ -1341,60 +1342,6 @@ interface ListItem {
     firstNode: Node
 }
 
-// `oldPositions` entry for an item built during this reconcile — it has no previous position, and is
-// never a candidate to be left in place.
-const NEW_ITEM = -1
-
-// Indices of a longest increasing subsequence of `positions`, ignoring `NEW_ITEM` entries.
-//
-// These are the items whose relative DOM order is ALREADY correct, so leaving them alone and moving
-// everything else is the minimum number of moves that reaches the target order. Patience-sorting shape:
-// `tails[length - 1]` is the index ending the best subsequence of that length, binary-searched; `previous`
-// records each index's predecessor so the answer can be walked back out at the end.
-function increasingSubsequence(positions: number[]): number[] {
-    const previous: number[] = new Array(positions.length)
-    const tails: number[] = []
-    for (let index = 0; index < positions.length; index++) {
-        const position = positions[index] as number
-        if (position === NEW_ITEM) continue
-        // The empty case is called out rather than folded into the search below: with no tails yet
-        // there is nothing to compare against, and reading `tails[0]` would compare against undefined
-        // and silently refuse to seed — leaving the subsequence permanently empty (every item then
-        // looks out of place, which is CORRECT but moves the whole list, the exact bug this fixes).
-        if (tails.length === 0) {
-            previous[index] = -1
-            tails.push(index)
-            continue
-        }
-        const last = tails[tails.length - 1] as number
-        if ((positions[last] as number) < position) {
-            previous[index] = last
-            tails.push(index)
-            continue
-        }
-        // First tail whose position is >= this one; that is the length this index improves on.
-        let low = 0
-        let high = tails.length - 1
-        while (low < high) {
-            const mid = (low + high) >> 1
-            if ((positions[tails[mid] as number] as number) < position) low = mid + 1
-            else high = mid
-        }
-        if (position < (positions[tails[low] as number] as number)) {
-            previous[index] = low > 0 ? (tails[low - 1] as number) : -1
-            tails[low] = index
-        }
-    }
-    let cursor = tails.length
-    if (cursor === 0) return tails
-    let walk = tails[cursor - 1] as number
-    while (cursor-- > 0) {
-        tails[cursor] = walk
-        walk = previous[walk] as number
-    }
-    return tails
-}
-
 // The `{#for}` source as an array. An ARRAY passes through uncopied — the list is consumed
 // synchronously by the walk that receives it and never retained, so the defensive copy `Array.from`
 // made was pure per-update allocation (a 200-row list re-runs this on every reactive change).
@@ -1791,19 +1738,19 @@ export function forBlock(
             }
         }
 
-        const keptInPlace = ascending ? null : increasingSubsequence(oldPositions)
-        let keptCursor = keptInPlace === null ? -1 : keptInPlace.length - 1
+        const kept = keptInPlace(oldPositions, ascending)
+        let keptCursor = kept === null ? -1 : kept.length - 1
         let reference: Node = blockEnd
         for (let index = nextItems.length - 1; index >= 0; index--) {
             const item = nextItems[index]
             if (item === undefined) continue
-            if (keptInPlace === null) {
+            if (kept === null) {
                 // Survivors are already in ascending order, so they are already correct relative to one
                 // another; only a freshly built item (appended at `blockEnd`) needs positioning.
                 if (oldPositions[index] === NEW_ITEM && item.endMarker.nextSibling !== reference) {
                     moveRange(parent, item.firstNode, item.endMarker, reference)
                 }
-            } else if (keptCursor >= 0 && keptInPlace[keptCursor] === index) {
+            } else if (keptCursor >= 0 && kept[keptCursor] === index) {
                 keptCursor-- // named by the subsequence — leave it exactly where it is
             } else if (item.endMarker.nextSibling !== reference) {
                 moveRange(parent, item.firstNode, item.endMarker, reference)
