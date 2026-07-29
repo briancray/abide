@@ -3,7 +3,13 @@
 // Turns a `TemplatePlan` + `BindingAnalysis` into an ES-module string exporting `async function
 // render($scope)` that builds the SSR HTML string. Reads from the SAME plan the client emitter uses,
 // so comment anchors match. Uses `serverRuntime` ($rt) for escaping / attribute serialization and
-// lexical `<script>` bindings from `emitSetup`. Event attributes are omitted (as `renderServer` does).
+// lexical `<script>` bindings from `emitSetup`.
+//
+// Event attributes on an ELEMENT are omitted — SSR emits markup and a listener is not markup. On a
+// COMPONENT they are not: `onclick={fn}` there is a PROP named `onclick` (a component has no element to
+// attach a listener to), and dropping it made SSR and hydrate disagree about the props a component
+// received. See `componentAttrLanes.test.ts`, which enumerates the per-kind lowering across all three
+// lanes; the element/component split is the whole distinction it guards.
 
 import type { BindingAnalysis, ScriptInfo } from './analyzeBindings.ts'
 import { reconstructImport } from './analyzeBindings.ts'
@@ -379,10 +385,27 @@ function genComponent(
                         `const $s = ${value}; if ($s !== null && typeof $s === "object") Object.assign($props, $s);`,
                 )
                 break
+            // `onclick={fn}` on a COMPONENT is a prop named `onclick`, not a native listener — a
+            // component has no element to attach one to, so passing it is the only thing it can mean
+            // (the component places it on an element of its own, or spreads it).
+            //
+            // The server used to DROP it while the client passed it, which is an isomorphism break, not
+            // a missing optimisation: a component that branches on the prop (`{onclick ? … : …}`, or
+            // spreading props onto a tag) rendered one thing in SSR and another on hydrate. Proven:
+            // server `<b>none</b>`, client `<b>has</b>`, for `<Btn onclick={go}/>`. Handlers do not
+            // *fire* during SSR, which is why this looked free — but whether the prop EXISTS is
+            // observable in the output.
             case 'event':
+                out += settledStatement(
+                    attr.expr,
+                    (value) => `$props[${JSON.stringify(attr.name)}] = ${value};`,
+                )
+                break
+            // `class:`/`style:` on a component are rejected by `templatePlan` (they target one element),
+            // so the planner never produces them here.
             case 'class':
             case 'style':
-                break // ignored on components (M4b)
+                break
         }
     }
     // `ref` was resolved by `templatePlan`, which is the only place that knows which bindings are in

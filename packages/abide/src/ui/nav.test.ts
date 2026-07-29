@@ -10,9 +10,10 @@ import { clearClientRoute, setClientRoute } from '../shared/internal/routeHolder
 import { route } from '../shared/route.ts'
 import { url } from '../shared/url.ts'
 import { bootstrapApp } from './internal/bootstrap.ts'
+import { clearClientProxyCache } from './internal/clientProxy.ts'
 import { loadEmitted } from './internal/emit.ts'
 import type { PageEntry, PageLoader } from './internal/pageRegistry.ts'
-import { applyPatchFrame, mountPathname, navigate } from './navigate.ts'
+import { applyPatchFrame, handlePopState, mountPathname, navigate } from './navigate.ts'
 
 // Wrap a resolved page entry as a code-split LOADER (what the client bundle registers now — TODO #6).
 // Promise.resolve stands in for the chunk import; a mount is thus one microtask late (poll for it).
@@ -26,6 +27,11 @@ const HOME_SOURCE = '<h1>Home page</h1>'
 const ABOUT_SOURCE = '<h2>About page</h2>'
 const USER_SOURCE =
     "<script>import { route } from 'abide/shared/route'</script><span>user {route().params.id}</span>"
+// A page whose read depends on NOTHING a nav can move — no args, no `route()`. That is the shape the
+// param/query nav's "the kept page's reads have already re-fetched reactively" premise does not cover:
+// there is nothing for it to re-fire on, so only the confirm's seed can bring it a new value.
+const COUNT_SOURCE =
+    "<script>import counter from '$server/rpc/counter'</script><b>count {await counter()}</b>"
 
 // Populated in beforeEach (emit is async — it instantiates each page's client module once). Keyed by
 // route pattern → a code-split LOADER, exactly like the client bundle entry registers now.
@@ -41,9 +47,14 @@ let HOME_HTML: string
 
 let realFetch: typeof globalThis.fetch
 let realPushState: typeof history.pushState
-let fetchCalls: { url: string; nav: string | null }[]
+let fetchCalls: { url: string; nav: string | null; keep: string | null }[]
 let pushCalls: unknown[][]
 let cleanupApp: () => void
+// The `seed` frame the stubbed soft-nav body carries, and what a bare `GET /__abide/rpc/counter`
+// answers. Both are per-test knobs: a nav's seed is the only channel a param/query nav has to the live
+// mount's memos, and the rpc value proves whether a read went to the network or came from that seed.
+let navSeed: Record<string, unknown>
+let counterValue: number
 
 function tick(): Promise<void> {
     return Promise.resolve()
@@ -55,21 +66,30 @@ function container(): HTMLElement {
     return el
 }
 
+// Move `location` without navigating — happy-dom's own hook (the preload deletes the global `window`,
+// so reach it via document.defaultView). This is how a traversal is reproduced: the browser moves
+// `location` first, THEN fires popstate.
+function setUrl(href: string): void {
+    ;(
+        document.defaultView as unknown as { happyDOM: { setURL(url: string): void } }
+    ).happyDOM.setURL(href)
+}
+
 beforeEach(async () => {
     const home = await loadEmitted(HOME_SOURCE)
     const about = await loadEmitted(ABOUT_SOURCE)
     const user = await loadEmitted(USER_SOURCE)
+    const count = await loadEmitted(COUNT_SOURCE)
     PAGES = {
         '/': loaderFor({ mount: home.mount, hydrate: home.hydrate }),
         '/about': loaderFor({ mount: about.mount, hydrate: about.hydrate }),
         '/users/[id]': loaderFor({ mount: user.mount, hydrate: user.hydrate }),
+        '/count': loaderFor({ mount: count.mount, hydrate: count.hydrate }),
     }
 
     // happy-dom defaults to about:blank (null origin); give it a real URL so location behaves like a
     // browser (the preload deletes the global `window`, so reach it via document.defaultView).
-    ;(
-        document.defaultView as unknown as { happyDOM: { setURL(url: string): void } }
-    ).happyDOM.setURL('http://localhost/')
+    setUrl('http://localhost/')
 
     // Build the REAL anchored SSR HTML the client hydrates. Static pages render context-free; the
     // param page reads route() during render, so seed the client route to /users/42 for it, then reset.
@@ -83,9 +103,15 @@ beforeEach(async () => {
     })
     const userHtml = await user.render({ route })
     clearClientRoute()
+    counterValue = 1
+    navSeed = {}
     ENVELOPE_HTML = {
+        // `/` is here for the traversal case — a Back lands on it as a soft-nav DESTINATION, not just as
+        // the first-load HTML the container is seeded with.
+        '/': HOME_HTML,
         '/about': await about.render({}),
         '/users/42': userHtml,
+        '/count': await count.render({ counter: async () => counterValue }),
     }
 
     // The document arrives SSR'd: seed the container with the home page's server HTML so first-load
@@ -101,13 +127,21 @@ beforeEach(async () => {
                 : input instanceof URL
                   ? input.pathname
                   : (input as Request).url
-        const nav = new Headers(init?.headers).get('Abide-Nav')
-        fetchCalls.push({ url, nav })
+        const headers = new Headers(init?.headers)
+        const nav = headers.get('Abide-Nav')
+        fetchCalls.push({ url, nav, keep: headers.get('Abide-Nav-Keep') })
         const parsed = new URL(url, location.origin)
+        // A bare RPC call — what a client proxy does when its slot is COLD. Answering it separately is
+        // what lets a test tell a seeded read from a re-fetched one.
+        if (parsed.pathname.startsWith('/__abide/rpc/')) {
+            return new Response(JSON.stringify(counterValue), {
+                headers: { 'content-type': 'application/json' },
+            })
+        }
         const html = ENVELOPE_HTML[parsed.pathname] ?? '<p>missing</p>'
         // The streamed soft-nav body (PR4): a JSONL frame stream — a `shell` frame then a `seed` frame.
         // The real server sends pathname + search as the shell `url` so route().url keeps the query.
-        const body = `${JSON.stringify({ kind: 'shell', html, url: parsed.pathname + parsed.search })}\n${JSON.stringify({ kind: 'seed', seed: {} })}\n`
+        const body = `${JSON.stringify({ kind: 'shell', html, url: parsed.pathname + parsed.search })}\n${JSON.stringify({ kind: 'seed', seed: navSeed })}\n`
         return new Response(body, { headers: { 'content-type': 'application/jsonl' } })
     }) as typeof globalThis.fetch
 
@@ -118,7 +152,7 @@ beforeEach(async () => {
         ;(realPushState as (...a: unknown[]) => void)(...args)
     } as typeof history.pushState
 
-    cleanupApp = bootstrapApp(PAGES, {})
+    cleanupApp = bootstrapApp(PAGES, { counter: { method: 'GET', read: true } })
     // The first-load mount is async now (it imports the current route's chunk — here a Promise.resolve),
     // so poll until the home page has hydrated into the container before the tests run.
     for (let i = 0; i < 50; i++) {
@@ -129,6 +163,9 @@ beforeEach(async () => {
 
 afterEach(() => {
     cleanupApp()
+    // A client proxy is one object per (base, rpc name) for the tab — module state, so without this one
+    // test's warmed slots would be the next test's starting cache.
+    clearClientProxyCache()
     globalThis.fetch = realFetch
     history.pushState = realPushState
     document.body.innerHTML = ''
@@ -222,6 +259,116 @@ test('param navigation updates route().params', async () => {
     expect(route().params.id).toBe('42')
     expect(route().url.pathname).toBe('/users/42')
     expect(container().textContent).toContain('user 42')
+})
+
+// Poll until the container's text matches — a soft-nav drains a streamed body and a `{await}` slot fills
+// a tick after its read settles, so neither lands on a fixed number of ticks.
+async function settleText(match: string): Promise<string> {
+    for (let i = 0; i < 100; i++) {
+        if ((container().textContent ?? '').includes(match)) break
+        await tick()
+    }
+    return container().textContent ?? ''
+}
+
+test('a nav to the URL you are already on does not push a history entry', async () => {
+    await navigate('/about')
+    expect(pushCalls.length).toBe(1)
+
+    // The re-navigation still runs (the server round-trip is what carries middleware + the confirm seed)
+    // but it must not stack a second entry on the same URL — Back would then land where it started.
+    await navigate('/about')
+    expect(pushCalls.length).toBe(1)
+    expect(location.pathname).toBe('/about')
+    expect(fetchCalls.length).toBe(2)
+
+    // A hash IS a move the reader can go Back from, so that one still pushes.
+    await navigate('/about#section')
+    expect(pushCalls.length).toBe(2)
+})
+
+test("a param/query nav replays the confirm's seed into the LIVE mount's memos", async () => {
+    await navigate('/count')
+    expect(await settleText('count 1')).toContain('count 1')
+
+    // The nav's confirm is a full render of this route — the server ran the read on it. A read taking no
+    // args and reading no `route()` has nothing to re-fire ON, so the seed is the only thing that can
+    // bring the new value to a mount this nav deliberately keeps alive. `counterValue` stays 1, so a
+    // value of 7 can ONLY have come from the seed and not from a re-fetch.
+    navSeed = { reads: [{ name: 'counter', value: 7 }] }
+    await navigate('/count')
+
+    expect(await settleText('count 7')).toContain('count 7')
+})
+
+test('back/forward names the OUTGOING route in Abide-Nav, not the one it just landed on', async () => {
+    await navigate('/about')
+    expect(location.pathname).toBe('/about')
+
+    // A traversal moves `location` BEFORE popstate fires, so the handler cannot read the outgoing route
+    // off it — that is what made every Back send the destination as its own origin. The server answers
+    // `sharedLevels` for a from==to nav (its full layout depth), the client computes `keep` from the route
+    // it actually has mounted, and `partialCrossNav` hard-loads on the disagreement.
+    setUrl('http://localhost/')
+    handlePopState()
+    expect(await settleText('Home page')).toContain('Home page')
+
+    const last = fetchCalls[fetchCalls.length - 1]
+    if (!last) throw new Error('expected a soft-nav fetch call')
+    expect(last.nav).toBe('/about')
+    expect(last.url).toContain('/')
+})
+
+test('every nav DECLARES what it keeps; a nav that does not know declares nothing', async () => {
+    // The full path replaces `#__abide-app` outright, so it keeps nothing and says so. Left to derive,
+    // the server answers from the route table alone and can ship a diverging SUFFIX — correct for a
+    // graft, and for this path a shell with every layout above it missing.
+    await navigate('/about')
+    const full = fetchCalls[fetchCalls.length - 1]
+    if (!full) throw new Error('expected a soft-nav fetch call')
+    expect(full.nav).toBe('/')
+    expect(full.keep).toBe('0')
+
+    // A param MOVE keeps its whole chain, so it declares every layout level it HAS — except that this
+    // harness registers pages without prefixes, so the client does not know how many that is and
+    // declares nothing rather than guess. `0` would be a false claim: it keeps the chain either way,
+    // and would buy a full render for nothing.
+    await navigate('/users/42')
+    await navigate('/users/42?tab=posts')
+    const moved = fetchCalls[fetchCalls.length - 1]
+    if (!moved) throw new Error('expected a confirm fetch call')
+    expect(moved.nav).toBe('/users/42')
+    expect(moved.keep).toBeNull()
+})
+
+test('a SAME-URL nav asks for the whole tree, so the seed carries the kept layouts’ reads too', async () => {
+    await navigate('/users/42')
+
+    // Re-navigating to the URL you are already on is a refresh gesture, and the layouts are on screen.
+    // Left alone the server skips every layout level for a same-pattern nav (from == to, so the derived
+    // depth is this route's full depth) and renders the page alone — so only the page's reads reach the
+    // seed, and a LAYOUT's route-independent read keeps painting its first-paint value exactly as the
+    // page's did before any of this. Asking for `0` renders the whole tree.
+    await navigate('/users/42')
+    const same = fetchCalls[fetchCalls.length - 1]
+    if (!same) throw new Error('expected a confirm fetch call')
+    expect(same.nav).toBe('/users/42')
+    expect(same.keep).toBe('0')
+})
+
+test('a superseded param/query nav does not apply its seed', async () => {
+    await navigate('/count')
+    expect(await settleText('count 1')).toContain('count 1')
+
+    navSeed = { reads: [{ name: 'counter', value: 7 }] }
+    const stale = navigate('/count')
+    navSeed = { reads: [{ name: 'counter', value: 9 }] }
+    await Promise.all([stale, navigate('/count')])
+
+    // Newest-wins: the second nav's seed stands, and the first must not land on top of it afterwards.
+    expect(await settleText('count 9')).toContain('count 9')
+    for (let i = 0; i < 20; i++) await tick()
+    expect(container().textContent).toContain('count 9')
 })
 
 test('navigate(url(...)) composes an href from typed params', async () => {

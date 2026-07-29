@@ -17,6 +17,7 @@ import { formatLogLine } from '../../shared/internal/formatLogLine.ts'
 import { LOGS_ROUTE } from '../../shared/internal/LOGS_ROUTE.ts'
 import type { LogRecord } from '../../shared/internal/logFeed.ts'
 import { logFormat } from '../../shared/internal/logFormat.ts'
+import { readLines } from '../../shared/internal/readLines.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { cliExitCodeForStatus } from './cliExitCodeForStatus.ts'
 
@@ -188,8 +189,6 @@ export async function logsCommand(options: LogsCommandOptions): Promise<number> 
 
     // SSE framing: `data: <json>` lines, `:`-prefixed comments (the prelude and the idle heartbeat)
     // ignored. One record per frame, so a line reader is the whole parser.
-    const decoder = new TextDecoder()
-    let buffered = ''
     const consume = (line: string): void => {
         if (!line.startsWith('data:')) return
         const payload = line.slice(5).trim()
@@ -204,16 +203,9 @@ export async function logsCommand(options: LogsCommandOptions): Promise<number> 
     }
 
     try {
-        for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
-            buffered += decoder.decode(chunk, { stream: true })
-            let newline = buffered.indexOf('\n')
-            while (newline !== -1) {
-                consume(buffered.slice(0, newline).trimEnd())
-                buffered = buffered.slice(newline + 1)
-                newline = buffered.indexOf('\n')
-            }
+        for await (const line of readLines(body as unknown as AsyncIterable<Uint8Array>)) {
+            consume(line.trimEnd())
         }
-        consume((buffered + decoder.decode()).trimEnd())
     } catch (caught) {
         // A detach (REPL Ctrl-C) aborts the fetch, which lands here. That is a clean end to a tail, not
         // a failure — the reader asked to stop.

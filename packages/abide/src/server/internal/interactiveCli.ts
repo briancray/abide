@@ -25,16 +25,11 @@ import { cliUsage } from './cliUsage.ts'
 import { columnise } from './columnise.ts'
 import type { CommandTarget } from './commandTarget.ts'
 import { completeCliLine } from './completeCliLine.ts'
-import { connectCommand } from './connectCommand.ts'
-import { disconnectCommand } from './disconnectCommand.ts'
-import { identityCommand } from './identityCommand.ts'
 import { type LineReader, lineReader } from './lineReader.ts'
-import { loginCommand } from './loginCommand.ts'
-import { logoutCommand } from './logoutCommand.ts'
-import { logsCommand } from './logsCommand.ts'
 import { parseCliArgs } from './parseCliArgs.ts'
 import { reservedCliCommand } from './reservedCliCommand.ts'
-import { resolveCliTarget } from './resolveCliTarget.ts'
+import { reservedCliDispatch } from './reservedCliDispatch.ts'
+import { type ResolvedCliTarget, resolveCliTarget } from './resolveCliTarget.ts'
 import { tokenizeCliLine } from './tokenizeCliLine.ts'
 
 export interface InteractiveCliOptions {
@@ -148,10 +143,11 @@ async function promptField(
     return { value: coerced }
 }
 
-// `serve [--port n]` from the prompt: bind the app on a real port and keep it there.
-async function hostFromPrompt(options: InteractiveCliOptions, tokens: string[]): Promise<number> {
-    const flagIndex = tokens.indexOf('--port')
-    const raw = flagIndex === -1 ? undefined : tokens[flagIndex + 1]
+// `serve [--port n]` from the prompt: bind the app on a real port and keep it there. `argv` is what
+// followed the word, as every other reserved command receives it.
+async function hostFromPrompt(options: InteractiveCliOptions, argv: string[]): Promise<number> {
+    const flagIndex = argv.indexOf('--port')
+    const raw = flagIndex === -1 ? undefined : argv[flagIndex + 1]
     const port = raw === undefined ? undefined : Number(raw)
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) {
         options.writeError(`serve: --port expects a port number — got "${raw}"\n`)
@@ -210,8 +206,15 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
     }
 
     // Both are re-resolved after a `connect`/`disconnect`, so a session that re-points itself keeps
-    // calling the right place with the right credential.
+    // calling the right place with the right credential. Through the SAME ladder the session started
+    // with — the launch-time `--url`/`--token` still outrank whatever was just written to the file.
     let token = options.token
+    const reresolve = (): Promise<ResolvedCliTarget> =>
+        resolveCliTarget({
+            appName: options.name,
+            url: options.flags.url,
+            token: options.flags.token,
+        })
     const reader = lineReader({
         input: options.input,
         tty: options.tty,
@@ -238,100 +241,53 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
         // prompt-only `exit`/`quit`, which is why they are in it: a name that ends the session shadows
         // an rpc of that name just as `serve` does, and the author deserves the same warning.
         const reserved = reservedCliCommand(head, 'prompt')
-        if (reserved === 'exit' || reserved === 'quit') break
-        if (reserved === 'help' || head === '--help' || head === '-h') {
+        // `--help`/`-h` typed bare is the same request as `help`; every other reserved name is answered
+        // by the SHARED table below rather than by a second ladder here.
+        if (head === '--help' || head === '-h') {
             const target = tokens[1] === undefined ? undefined : byName.get(tokens[1])
             options.write(`${cliUsage(options.name, options.commands, target)}\n`)
             continue
         }
-        if (reserved === 'serve') {
-            lastCode = await hostFromPrompt(options, tokens)
-            continue
-        }
-        if (reserved === 'identity') {
-            lastCode = await identityCommand({
-                origin: await options.target.origin(),
-                token,
-                pretty: options.pretty,
-                write: options.write,
-                writeError: options.writeError,
-            })
-            continue
-        }
-        if (reserved === 'logs') {
-            // A tail owns the terminal until it is stopped, so ctrl-c must DETACH rather than leave
-            // the session — the one reserved command that needs its own interrupt.
-            const feed = new AbortController()
-            const release = reader.interceptInterrupt(() => {
-                options.write('^C\n')
-                feed.abort()
-            })
-            try {
-                lastCode = await logsCommand({
-                    origin: await options.target.origin(),
-                    token,
+        if (reserved !== undefined) {
+            // The prompt-only half: loop control, not calls, which is exactly what `where: 'prompt'`
+            // means. Narrowing on it leaves `reserved` as `CommandSurfaceReserved` for the dispatcher.
+            if (reserved === 'exit' || reserved === 'quit') break
+            lastCode =
+                (await reservedCliDispatch(reserved, {
+                    appName: options.name,
+                    commands: options.commands,
+                    surface: 'prompt',
                     argv: tokens.slice(1),
+                    pretty: options.pretty,
                     write: options.write,
                     writeError: options.writeError,
-                    signal: feed.signal,
-                })
-            } finally {
-                release()
-            }
-            continue
-        }
-        if (reserved === 'login' || reserved === 'logout') {
-            const at = options.target.remote()
-            lastCode =
-                reserved === 'login'
-                    ? await loginCommand({
-                          appName: options.name,
-                          origin: at,
-                          argv: tokens.slice(1),
-                          write: options.write,
-                          writeError: options.writeError,
-                      })
-                    : await logoutCommand({
-                          appName: options.name,
-                          origin: at,
-                          write: options.write,
-                          writeError: options.writeError,
-                      })
-            token = (
-                await resolveCliTarget({
-                    appName: options.name,
-                    url: options.flags.url,
-                    token: options.flags.token,
-                })
-            ).token
-            continue
-        }
-        if (reserved === 'connect' || reserved === 'disconnect') {
-            lastCode =
-                reserved === 'connect'
-                    ? await connectCommand({
-                          appName: options.name,
-                          argv: tokens.slice(1),
-                          write: options.write,
-                          writeError: options.writeError,
-                      })
-                    : await disconnectCommand({ appName: options.name, write: options.write })
-            // Re-read rather than trusting what was just written: the flag and env rungs still
-            // outrank the stored file, so a launch-time `--url` keeps winning over a mid-session
-            // `connect`. That is the right precedence and the wrong thing to leave implicit — when
-            // the two disagree, say where calls actually go.
-            const resolved = await resolveCliTarget({
-                appName: options.name,
-                url: options.flags.url,
-                token: options.flags.token,
-            })
-            options.target.retarget(resolved.remote)
-            token = resolved.token
-            if (resolved.remote !== resolved.connected) {
-                options.write(
-                    `note: calls go to ${resolved.remote ?? 'the app hosted here'} — --url / ABIDE_APP_URL outranks the stored target.\n`,
-                )
-            }
+                    origin: () => options.target.origin(),
+                    remote: async () => options.target.remote(),
+                    token: async () => token,
+                    // At the prompt `serve` binds a real port and the session CARRIES ON against it,
+                    // so this hands back a code where the subcommand hands back `null`.
+                    serve: (argv) => hostFromPrompt(options, argv),
+                    // A tail owns the terminal until it is stopped, so ctrl-c DETACHES the feed rather
+                    // than leaving the session — the one command that needs its own interrupt.
+                    interceptInterrupt: (onInterrupt) => reader.interceptInterrupt(onInterrupt),
+                    afterTargetChange: async () => {
+                        // Re-read rather than trusting what was just written: the flag and env rungs
+                        // still outrank the stored file, so a launch-time `--url` keeps winning over a
+                        // mid-session `connect`. That is the right precedence and the wrong thing to
+                        // leave implicit — when the two disagree, say where calls actually go.
+                        const at = await reresolve()
+                        options.target.retarget(at.remote)
+                        token = at.token
+                        if (at.remote !== at.connected) {
+                            options.write(
+                                `note: calls go to ${at.remote ?? 'the app hosted here'} — --url / ABIDE_APP_URL outranks the stored target.\n`,
+                            )
+                        }
+                    },
+                    afterCredentialChange: async () => {
+                        token = (await reresolve()).token
+                    },
+                })) ?? CLI_EXIT_CODES.ok
             continue
         }
 

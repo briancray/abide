@@ -24,23 +24,35 @@ function schemaOrAny(schema: JSONSchema | undefined): Record<string, unknown> {
     return schema !== undefined ? (schema as Record<string, unknown>) : anySchema()
 }
 
-// The 422 body the router emits (ValidationErrorData: `{ issues, fields }`). Declared once under
-// components/schemas and referenced from every operation's 422 response.
+// The 422 body the router emits. Declared once under components/schemas and referenced from every
+// operation's 422 response. It is the typed-error ENVELOPE, not the payload alone — this described
+// `{ issues, fields }` as the whole body, which is the `data` field of it, so a generated client
+// read the spec and looked for `fields` one level above where it travels.
 function validationErrorSchema(): Record<string, unknown> {
     return {
         type: 'object',
         properties: {
-            issues: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    properties: {
-                        message: { type: 'string' },
-                        path: { type: 'array' },
+            status: { type: 'integer' },
+            statusText: { type: 'string' },
+            message: { type: 'string' },
+            // The typed error's name — what `fn.isError(e, 'ValidationError')` narrows on.
+            name: { type: 'string', const: 'ValidationError' },
+            data: {
+                type: 'object',
+                properties: {
+                    issues: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                message: { type: 'string' },
+                                path: { type: 'array' },
+                            },
+                        },
                     },
+                    fields: { type: 'object' },
                 },
             },
-            fields: { type: 'object' },
         },
     }
 }

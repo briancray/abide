@@ -1,3 +1,4 @@
+import type { ReactiveProbeSurface } from './reactiveReadSurface.ts'
 import type { Room } from './room.ts'
 
 // The ISOMORPHIC face of a socket — everything a `.abide` can call, and nothing else.
@@ -11,20 +12,29 @@ import type { Room } from './room.ts'
 // `Socket` is this plus `__socket`, the server-only transport handle (the mux, the MCP tail tool and
 // the HTTP face reach through it). That member is exactly what the browser proxy has no business
 // implementing, which is why the split runs here and not somewhere else.
-export interface SocketSurface<T, Args = void> extends AsyncIterable<T> {
+// The six probes are INHERITED from `ReactiveProbeSurface` rather than re-listed here. They were
+// hand-copied, and this interface extended nothing — the exact rot ADR 0027 names, surviving at the
+// type level after D4 fixed the runtime half: a probe added to the shared surface reached `Memo` and
+// `Channel` and silently did NOT reach a socket, on either side. Only `chunks` is re-stated, to narrow
+// the shared `unknown[]` to `T[]` (a channel's transcript IS its messages), which is the same legal
+// covariant override `Channel` makes for the same reason.
+//
+// What is NOT inherited is deliberate: `refresh`/`invalidate`/`watch` live on `ReactiveReadSurface`,
+// one level up, and a socket implements none of them — `server/socket.ts` and `ui/internal/socketProxy.ts`
+// each assign exactly seven members. Folding the verbs in would widen the public surface with three
+// members nothing implements, which is a feature decision, not a unification.
+export interface SocketSurface<T, Args = void>
+    extends AsyncIterable<T>,
+        ReactiveProbeSurface<Args, T> {
     // Subscribe to a room — a fresh replay-then-live cursor. A void socket also iterates directly
     // (`for await m of socket`); a roomed socket picks a room (`socket({room})`).
     (...room: Room<Args>): AsyncIterable<T>
-    // Publish. Void: `publish(msg)`. Roomed: `publish({room}, msg)`.
+    // Publish. Void: `publish(msg)`. Roomed: `publish({room}, msg)`. A TRAILING payload, so this one
+    // genuinely needs the `Room` spread — the key is not last.
     publish(...args: [...Room<Args>, message: T]): void
-    // ACTIVE probes (client-sockets.md CS4.1) — reading these drives a subscription on the client.
-    peek(...room: Room<Args>): T | undefined
-    chunks(...room: Room<Args>): T[] | undefined
-    // STATUS probes — observe the subscription lifecycle without driving it.
-    pending(...room: Room<Args>): boolean
-    refreshing(...room: Room<Args>): boolean
-    done(...room: Room<Args>): boolean
-    error(...room: Room<Args>): unknown | undefined
+    // Narrows the shared `chunks(): unknown[] | undefined` to the message type. ACTIVE probe
+    // (client-sockets.md CS4.1) — reading it drives a subscription on the client, as `peek` does.
+    chunks(args: Args): T[] | undefined
 }
 
 // The property members, with the call signature and the iterator dropped. Built by `Omit` rather than

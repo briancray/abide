@@ -328,6 +328,91 @@ test('a cross-route nav keeps the shared layout nodes alive (not rebuilt)', asyn
     await expect(page.locator('[data-testid="section-layout"]')).toHaveAttribute('data-pin', 'SEC')
 })
 
+// A TRAVERSAL is a nav like any other and must keep the shared layouts alive too. It did not.
+// `Abide-Nav` names the route being LEFT — the server computes `sharedLayoutDepth(from, to)` from it.
+// A traversal could not supply it: the browser moves `location` to the destination BEFORE firing
+// popstate, so the handler read the destination and announced it as its own origin. The server then
+// answered `sharedLevels` for a from==to nav (the destination's FULL layout depth) while the client had
+// computed `keep` from the route it actually had mounted, and `partialCrossNav` treats that disagreement
+// as "not the suffix I am set up to graft" and hard-loads. Every such Back was a full document load.
+//
+// The pair has to DISAGREE on depth for it to show, which is why the Back/forward content test above
+// never caught it: the two coincide whenever the route being left sits under the same layouts as the one
+// returned to. Leaving the layouts section entirely makes them differ — `/pages/layouts/[item]` shares
+// two layout levels with itself and only the root with `/state`.
+//
+// Content alone cannot witness this — a reload restores it just as well. The marker is the assertion.
+test('a Back that RE-ENTERS a layout section is a soft-nav, not a full reload', async ({
+    page,
+}) => {
+    await page.goto('/pages/layouts/alpha')
+    await expect(page.getByTestId('carousel-heading')).toHaveText('Item: alpha')
+
+    // Out of the section entirely — /state shares only the ROOT layout with it.
+    await page.locator('aside.sidebar').getByRole('link', { name: 'state — owned' }).click()
+    await expect(page).toHaveURL(/\/state$/)
+    // Let the destination's frame stream CLOSE before traversing. A nav commits its
+    // `currentPattern`/`currentPrefixes` bookkeeping at end-of-stream, so a nav issued inside that window
+    // is classified against the route it is still leaving — a separate race, and not what this locks.
+    await page.waitForLoadState('networkidle')
+
+    await page.evaluate(() => {
+        document.querySelector('aside.sidebar')?.setAttribute('data-pin', 'ROOT')
+        ;(window as unknown as { __softBack?: boolean }).__softBack = true
+    })
+
+    await page.goBack()
+    await expect(page).toHaveURL(/\/pages\/layouts\/alpha$/)
+    await expect(page.getByTestId('carousel-heading')).toHaveText('Item: alpha')
+
+    // The kept root layout is the SAME live node and the tab never reloaded.
+    await expect(page.locator('aside.sidebar')).toHaveAttribute('data-pin', 'ROOT')
+    const soft = await page.evaluate(
+        () => (window as unknown as { __softBack?: boolean }).__softBack === true,
+    )
+    expect(soft).toBe(true)
+})
+
+// A partial cross-nav grafts the destination's shell at the START of its frame stream and CLAIMS it at
+// the end — on a streaming destination, seconds apart. The nav's `currentPattern` bookkeeping used to be
+// committed only at the claim, so for that whole window it named a route that had already left the
+// screen, and a nav starting inside it was classified against that ghost: a Back to the route just
+// departed matched the stale pattern, was taken for a same-pattern param nav, and "kept" a mount showing
+// the other page — a permanently wrong page under the right URL. `graftSuffix` is also not re-entrant
+// (it disposes a holder the claim has not repointed and inserts before the same anchor), so classifying
+// into a second graft would have left BOTH suffixes in the document.
+test('a nav issued while the previous one is still streaming lands on the right page', async ({
+    page,
+}) => {
+    await page.goto('/pages/layouts/alpha')
+    await expect(page.getByTestId('carousel-heading')).toHaveText('Item: alpha')
+
+    // Leave again from INSIDE the graft-to-claim window. `pending` is the app's own statement that the
+    // window is open: /pages/ssr flushes its shell at the render deadline and holds the frame stream
+    // until its slow `{#await}` resolves, and that placeholder is on screen for exactly that span. A
+    // wall-clock wait would only be inside it while the box is idle.
+    await page.locator('aside.sidebar').getByRole('link', { name: 'Streaming SSR' }).click()
+    await expect(page.getByTestId('pending')).toBeVisible()
+    await page.evaluate(() => {
+        ;(window as unknown as { __softRace?: boolean }).__softRace = true
+    })
+    await page.goBack()
+
+    await expect(page).toHaveURL(/\/pages\/layouts\/alpha$/)
+    await expect(page.getByTestId('carousel-heading')).toHaveText('Item: alpha')
+    // The page left behind is GONE, not standing under the new URL, and nothing was grafted twice.
+    await expect(page.locator('h1')).toHaveCount(1)
+    await expect(page.locator('aside.sidebar')).toHaveCount(1)
+    // …and it got there WITHOUT a document load. The recovery path here is the whole-container swap, and
+    // the two routes share the root layout — so the server would have shipped a suffix this path cannot
+    // place, and the only correct answer left would have been a reload. `Abide-Nav-Keep: 0` is what asks
+    // for the whole tree instead, and it is the difference between recovering and reloading.
+    const soft = await page.evaluate(
+        () => (window as unknown as { __softRace?: boolean }).__softRace === true,
+    )
+    expect(soft).toBe(true)
+})
+
 // The definitive proof: a kept layout's `state` (not just its DOM node) survives, across BOTH a
 // cross-route nav and a param nav within its subtree.
 test('layout state survives cross-route and param navigation within the subtree', async ({

@@ -79,3 +79,65 @@ describe('reactive component name', () => {
         expect(host.querySelectorAll('[data-testid="d"]').length).toBe(1)
     })
 })
+
+// A MEMBER tag — `<item.Icon/>` — names the component held at that path. The head is an ordinary
+// binding (a `{#for}` item, a cell), so the tag is an expression rather than an import and resolves
+// reactively, like a cell-named tag.
+const FOR_PAGE =
+    `<script>` +
+    `import Pending from "./Pending.abide"; ` +
+    `import Done from "./Done.abide"; ` +
+    `const items = [{ Icon: Pending }, { Icon: Done }]` +
+    `</script>` +
+    `{#for item of items}<item.Icon/>{/for}`
+
+const CELL_PAGE =
+    `<script>` +
+    `import { state } from "abide/shared/state"; ` +
+    `import Pending from "./Pending.abide"; ` +
+    `import Done from "./Done.abide"; ` +
+    `let box = state({ Icon: Pending })` +
+    `</script>` +
+    `<div><box.Icon/></div>` +
+    `<button onclick={() => box = { Icon: Done }}>swap</button>`
+
+describe('member component tag', () => {
+    test('each `{#for}` item resolves its own component (server)', async () => {
+        const emitted = await loadEmitted(FOR_PAGE, resolve)
+        const html = stripAnchors(await emitted.render({ state }))
+        expect(html).toContain('pending')
+        expect(html).toContain('done')
+    })
+
+    test('each `{#for}` item resolves its own component (client)', async () => {
+        const emitted = await loadEmitted(FOR_PAGE, resolve)
+        const host = document.createElement('div')
+        emitted.mount(host, { state })
+        expect(host.querySelectorAll('[data-testid="p"]').length).toBe(1)
+        expect(host.querySelectorAll('[data-testid="d"]').length).toBe(1)
+    })
+
+    test('hydrating a `{#for}` of member tags claims the SSR nodes (no double-render)', async () => {
+        const emitted = await loadEmitted(FOR_PAGE, resolve)
+        const host = document.createElement('div')
+        host.innerHTML = await emitted.render({ state })
+        emitted.hydrate(host, { state })
+        expect(host.querySelectorAll('[data-testid="p"]').length).toBe(1)
+        expect(host.querySelectorAll('[data-testid="d"]').length).toBe(1)
+    })
+
+    test('a cell head re-mounts the tag when the component behind it changes', async () => {
+        const emitted = await loadEmitted(CELL_PAGE, resolve)
+        const host = document.createElement('div')
+        emitted.mount(host, { state })
+        expect(host.querySelector('[data-testid="p"]')).not.toBeNull()
+
+        const button = host.querySelector('button')
+        if (button === null) throw new Error('expected a button')
+        button.click()
+        await tick()
+
+        expect(host.querySelector('[data-testid="p"]')).toBeNull()
+        expect(host.querySelectorAll('[data-testid="d"]').length).toBe(1)
+    })
+})

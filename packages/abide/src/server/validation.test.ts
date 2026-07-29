@@ -5,10 +5,11 @@
 import { describe, expect, test } from 'bun:test'
 import { fileURLToPath } from 'node:url'
 import { type StandardSchemaV1, validateStandard } from '../shared/StandardSchema.ts'
-import { toValidationErrorData, validationError } from '../shared/ValidationErrorData.ts'
+import { toValidationErrorData } from '../shared/ValidationErrorData.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { GET } from './GET.ts'
 import { deriveSchema } from './internal/deriveSchema.ts'
+import { validationError } from './internal/validationError.ts'
 import { POST } from './POST.ts'
 
 // A tiny conforming validator: requires `{ id: number }`, emitting an issue per bad/missing field.
@@ -85,16 +86,23 @@ describe('validateStandard + ValidationErrorData (unit)', () => {
         expect(data.issues[0]).toEqual({ message: 'id must be a number', path: ['id'] })
     })
 
-    test('validationError builds a 422 with kind ValidationError and data', async () => {
+    // The 422 must be the SAME wire shape as every other typed error, because the browser proxy has
+    // one decoder and it reads the kind off `name`. This asserted `kind` while the proxy read `name`,
+    // so `fn.isError(e, 'ValidationError')` was false client-side and no value test could see it.
+    test('validationError builds a 422 carrying the typed-error name on the wire', async () => {
         const response = validationError([{ message: 'id must be a number', path: ['id'] }])
         expect(response.status).toBe(422)
         const body = (await response.json()) as {
             status: number
-            kind: string
+            statusText: string
+            name: string
+            __typedError: string
             data: { fields: Record<string, string> }
         }
         expect(body.status).toBe(422)
-        expect(body.kind).toBe('ValidationError')
+        expect(body.statusText).toBe('Unprocessable Content')
+        expect(body.name).toBe('ValidationError')
+        expect(body.__typedError).toBe('ValidationError')
         expect(body.data.fields.id).toBe('id must be a number')
     })
 })
@@ -144,10 +152,10 @@ describe('RPC input validation (integration)', () => {
             )
             expect(response.status).toBe(422)
             const body = (await response.json()) as {
-                kind: string
+                name: string
                 data: { fields: Record<string, string> }
             }
-            expect(body.kind).toBe('ValidationError')
+            expect(body.name).toBe('ValidationError')
             expect(body.data.fields.id).toBe('id must be a number')
             expect(calls).toBe(0)
         } finally {
@@ -185,10 +193,10 @@ describe('RPC input validation (integration)', () => {
             })
             expect(bad.status).toBe(422)
             const body = (await bad.json()) as {
-                kind: string
+                name: string
                 data: { fields: Record<string, string> }
             }
-            expect(body.kind).toBe('ValidationError')
+            expect(body.name).toBe('ValidationError')
             expect(body.data.fields.id).toBe('id must be a number')
             expect(calls).toBe(1)
         } finally {
@@ -239,10 +247,10 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
             )
             expect(badType.status).toBe(422)
             const typeBody = (await badType.json()) as {
-                kind: string
+                name: string
                 data: { fields: Record<string, string> }
             }
-            expect(typeBody.kind).toBe('ValidationError')
+            expect(typeBody.name).toBe('ValidationError')
             expect(typeBody.data.fields.text).toBeDefined()
             expect(calls).toBe(1)
 
@@ -252,10 +260,10 @@ describe('RPC input validation with a derived JSON Schema (integration)', () => 
             )
             expect(missing.status).toBe(422)
             const missingBody = (await missing.json()) as {
-                kind: string
+                name: string
                 data: { fields: Record<string, string> }
             }
-            expect(missingBody.kind).toBe('ValidationError')
+            expect(missingBody.name).toBe('ValidationError')
             expect(missingBody.data.fields.text).toBeDefined()
             expect(calls).toBe(1)
         } finally {

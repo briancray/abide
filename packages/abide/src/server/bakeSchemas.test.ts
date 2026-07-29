@@ -4,7 +4,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { build } from '../cli/main.ts'
+import { build } from '../cli/build.ts'
 import { loadApp, writeBakedSchemas } from './internal/loadApp.ts'
 
 const tempDirs: string[] = []

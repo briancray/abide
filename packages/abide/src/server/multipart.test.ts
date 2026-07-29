@@ -118,10 +118,10 @@ describe('multipart RPC upload (TODO #8)', () => {
                 })
                 expect(response.status).toBe(422)
                 const body = (await response.json()) as {
-                    kind: string
+                    name: string
                     data: { fields: Record<string, string> }
                 }
-                expect(body.kind).toBe('ValidationError')
+                expect(body.name).toBe('ValidationError')
                 expect(body.data.fields.avatar).toContain('Missing required file')
             } finally {
                 await app.stop()
@@ -191,10 +191,10 @@ describe('multipart RPC upload (TODO #8)', () => {
                 })
                 expect(response.status).toBe(422)
                 const body = (await response.json()) as {
-                    kind: string
+                    name: string
                     data: { fields: Record<string, string> }
                 }
-                expect(body.kind).toBe('ValidationError')
+                expect(body.name).toBe('ValidationError')
                 expect(body.data.fields.caption).toBeDefined()
             } finally {
                 await app.stop()

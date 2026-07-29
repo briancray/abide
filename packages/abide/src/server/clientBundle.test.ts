@@ -64,6 +64,26 @@ test('the client builds, code-splits, and serves content-hashed chunks', async (
     await app.stop()
 })
 
+// CO2.2. `log` labels its default channel with the app name and qualifies a bare
+// `log.channel('cards')` under it — but a browser has no environment to read the name from, so the
+// build has to carry it. Un-seeded, a client line says `abide:cards` where the server line for the
+// same channel says `myapp:cards`: one channel, two names, on an isomorphic primitive.
+test('the loader entry bakes the app name for the browser half of `log`', async () => {
+    const previous = Bun.env.ABIDE_APP_NAME
+    Bun.env.ABIDE_APP_NAME = 'bakedapp'
+    try {
+        const build = await buildClient({ pages: { '/': '<h1>hi</h1>' } })
+        const entry = build.files.get(build.entry)
+        if (entry === undefined) throw new Error('no loader entry')
+        const loader = new TextDecoder().decode(entry.identity)
+        expect(loader).toContain('__ABIDE_APP_NAME__')
+        expect(loader).toContain('bakedapp')
+    } finally {
+        if (previous === undefined) delete Bun.env.ABIDE_APP_NAME
+        else Bun.env.ABIDE_APP_NAME = previous
+    }
+})
+
 test("the SSR'd page HTML injects the content-hashed loader script tag", async () => {
     const app = await createTestApp({
         pages: { '/': '<h1>ok</h1>' },

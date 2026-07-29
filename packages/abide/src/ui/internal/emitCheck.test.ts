@@ -233,3 +233,55 @@ describe('cell-value widening header', () => {
         )
     })
 })
+
+// A declarator list is split on TOP-LEVEL commas, which means the splitter has to know where a string
+// literal ends. It used a private, naive skipper that treated a backtick like an ordinary quote — so for
+// a NESTED template the "closing" backtick it found was the inner one's OPENER, and everything after was
+// scanned in the wrong state. The comma inside the nested template then read as top-level and split the
+// declarator, emitting truncated, unparseable TypeScript (`let x = __abideUnwrap( \`a${\`b);`) from a
+// perfectly valid script — after which `abide check` and the LSP report nonsense at a meaningless
+// position. Third bug of this family in this compiler, which is why the scanning rule now has one owner
+// (`skipQuoted`, with its own unit tests).
+describe('nested template literals in a declarator list', () => {
+    function lowered(script: string): string[] {
+        const source = `<script>${script}</script><p>x</p>`
+        return emitCheck(source, parse(source))
+            .code.split('\n')
+            .filter((line) => line.includes('__abideUnwrap(') && !line.startsWith('declare'))
+    }
+
+    test('a nested template carrying a comma stays ONE declarator, and the next one survives', () => {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the nested ${…} IS the fixture under test
+        const lines = lowered('let x = `a${`b,c`}d`, y = 1')
+        expect(lines).toHaveLength(2)
+        // Verbatim: the whole template, inner backticks and comma included.
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the nested ${…} IS the fixture under test
+        expect(lines[0]).toContain('`a${`b,c`}d`')
+        expect(lines[1]).toContain('y')
+    })
+
+    test('a single-level template with a comma was already fine and stays fine', () => {
+        const lines = lowered('const s = `a,b`, n = 2')
+        expect(lines).toHaveLength(2)
+        expect(lines[0]).toContain('`a,b`')
+    })
+
+    test('a plain string with a comma is unaffected', () => {
+        const lines = lowered(`const s = 'a,b', n = 2`)
+        expect(lines).toHaveLength(2)
+    })
+
+    test('the verbatim-copy invariant still holds for the nested case', () => {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the nested ${…} IS the fixture under test
+        const source = '<script>let x = `a${`b,c`}d`, y = 1</script><p>x</p>'
+        const { code, segments } = emitCheck(source, parse(source))
+        for (const segment of segments) {
+            expect(code.slice(segment.genStart, segment.genEnd)).toBe(
+                source.slice(
+                    segment.origStart,
+                    segment.origStart + (segment.genEnd - segment.genStart),
+                ),
+            )
+        }
+    })
+})

@@ -17,8 +17,14 @@
 // propagating the live page's trace would grow ONE immortal trace for the tab's whole session, and the
 // destination would report the trace id of the page BEFORE it. So every nav (full soft-nav, partial
 // cross-nav, and the param/query confirm) lets the server mint a fresh trace, and the client ADOPTS it —
-// from the `seed` frame where the nav hydrates, from the confirm's `traceresponse` header where it does
-// not (a param/query nav keeps its mount and never sees a seed).
+// from the `seed` frame where the nav hydrates, from the confirm's `traceresponse` header on a
+// param/query nav. That nav drains its confirm for the seed too, but the header is readable as soon as
+// the response arrives while the seed frame trails the whole render.
+//
+// A param/query nav is the one shape that keeps its mount, so it has no hydrate to seed through: it
+// replays the confirm's seed into the client RPC memos instead (`replaySeedIntoProxies`). Without
+// that, a read the nav did not MOVE — no args, no `route()` dependency, so nothing to re-fire on — kept
+// serving its first-paint value while the server recomputed the page and the answer was thrown away.
 //
 // CODE-SPLITTING (TODO #6): `mountPathname` is now async — it `loadPageEntry`s the destination's
 // content-hashed chunk (deferring the chunk BODY, not the pattern match) before claiming. `softLoad`
@@ -26,13 +32,15 @@
 // the top on the SHELL frame unless `keepScroll`; back/forward stays the browser's (`scrollRestoration`
 // is left `'auto'`) and abide only corrects the clamp it can't see — see `settleScroll`/`stampScroll`.
 
+import { adoptIdentity } from '../shared/internal/adoptIdentity.ts'
 import { adoptTrace } from '../shared/internal/adoptTrace.ts'
 import { decodeJsonlStream } from '../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../shared/internal/hydrationSeed.ts'
 import { matchRoute } from '../shared/internal/matchRoute.ts'
+import { NAV_HEADERS } from '../shared/internal/NAV_HEADERS.ts'
 import { setClientRoute } from '../shared/internal/routeHolder.ts'
 import type { RouteInfo } from '../shared/internal/routeInfo.ts'
-import { bootstrapPage, buildPageScope } from './internal/bootstrap.ts'
+import { bootstrapPage, buildPageScope, replaySeedIntoProxies } from './internal/bootstrap.ts'
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
 import { HYDRATED_ATTRIBUTE } from './internal/HYDRATED_ATTRIBUTE.ts'
 import { HYDRATION_ELEMENT_ID } from './internal/HYDRATION_ELEMENT_ID.ts'
@@ -62,6 +70,24 @@ let activeChain: ChainHandle | null = null
 // leading layout prefix keeps those layouts alive and grafts only the diverging suffix (C6.2).
 let currentPattern: string | null = null
 let currentPrefixes: string[] | null = null
+// The PATH the live mount is showing — what `Abide-Nav` must name on the next nav, so the server can
+// compute `sharedLayoutDepth(from, to)` against the route being left. `navigate()` reads it off
+// `location` instead, correctly: it runs BEFORE its own `pushState`. A traversal cannot — the browser
+// has already moved `location` by the time `popstate` fires — so `handlePopState` reads this.
+let currentPath: string | null = null
+// Whether the live DOM has been CLAIMED — i.e. whether `activeChain` still describes what is on screen.
+// A partial cross-nav grafts the destination's shell at the START of its frame stream and claims it at
+// the END, and on a streaming destination that gap is the whole render. In between the DOM is the
+// destination's while the chain is the outgoing route's, and `graftSuffix` is not re-entrant: it
+// `dispose()`s a holder the claim has not yet repointed and inserts before the same anchor, so a second
+// graft would double-dispose and leave BOTH suffixes in the document. So the two optimized nav shapes —
+// which exist to KEEP a live mount — are unavailable while this is false, and a nav arriving in that
+// window takes the full path, which rebuilds unconditionally and is therefore correct from any DOM state.
+//
+// Deliberately not "is a nav in flight": a nav superseded BEFORE its shell landed left the DOM alone, so
+// classifying against `currentPattern` is still both correct and optimal there — that is the ordinary
+// impatient-clicking case, and it keeps its optimizations.
+let mountClaimed = true
 // Monotonic nav token — newest-wins. A background param-nav confirmation / a streamed cross-route graft
 // checks it before acting on a stale response (a redirect or claim from a superseded nav must not fire).
 let navGen = 0
@@ -116,6 +142,13 @@ function restoreStampedScroll(): void {
     scrollTo({ top: stamped, behavior: 'instant' })
 }
 
+// The request headers for a nav fetch. `keep` is omitted where the client makes no claim about depth
+// and the router's own `sharedLayoutDepth(from, to)` stands.
+function navRequestHeaders(from: string, keep?: number): Record<string, string> {
+    if (keep === undefined) return { [NAV_HEADERS.from]: from }
+    return { [NAV_HEADERS.from]: from, [NAV_HEADERS.keep]: String(keep) }
+}
+
 // The number of leading layout levels the current route and a destination SHARE (longest common prefix
 // of their applicable-layout-prefix lists) — the client mirror of the server's `sharedLayoutDepth`.
 function sharedDepth(from: string[], to: string[]): number {
@@ -133,10 +166,16 @@ function routeInfoFor(pattern: string, url: URL, params: Record<string, string>)
 // set the reactive client route, dispose the previous mount, and mount the destination page. Async
 // (TODO #6): the chunk import is awaited BEFORE the dispose so the swap stays atomic — the page is
 // never torn-down/blank while a chunk downloads. A resident chunk resolves in a microtask (no network),
-// so first load + same-route param nav are effectively synchronous. Returns false when no page matches
-// OR the chunk fails to load (caller falls back to a full load). Used for the initial client mount (no
-// `seed` → the inline seed script) AND every soft-nav (`seed` = the envelope's hydration payload).
-export async function mountPathname(pathname: string, seed?: HydrationSeed): Promise<boolean> {
+// so first load + same-route param nav are effectively synchronous. Returns false when no page matches,
+// the chunk fails to load, OR `gen` names a superseded nav — the caller separates the last case from the
+// others by re-checking `navGen`, since a superseded nav must stop rather than fall back to a hard load.
+// Used for the initial client mount (no `seed` → the inline seed script) AND every soft-nav (`seed` =
+// the envelope's hydration payload).
+export async function mountPathname(
+    pathname: string,
+    seed?: HydrationSeed,
+    gen?: number,
+): Promise<boolean> {
     // `pathname` may carry a query string (a navigate(url(…, query)) target); match on the pathname
     // alone but keep the full URL so route().url.search reflects the query.
     const targetUrl = new URL(pathname, location.origin)
@@ -144,6 +183,9 @@ export async function mountPathname(pathname: string, seed?: HydrationSeed): Pro
     if (match === null) return false
     const entry = await loadPageEntry(match.pattern)
     if (entry === undefined) return false
+    // A cold chunk is a network fetch, which is ample time for a newer nav to start. It owns the DOM now,
+    // so hydrating over it here would claim nodes it is in the middle of replacing.
+    if (gen !== undefined && gen !== navGen) return false
 
     const info = routeInfoFor(match.pattern, targetUrl, match.params)
 
@@ -171,6 +213,8 @@ export async function mountPathname(pathname: string, seed?: HydrationSeed): Pro
     ) as unknown as ChainHandle
     currentPattern = match.pattern
     currentPrefixes = entry.prefixes ?? null
+    currentPath = targetUrl.pathname
+    mountClaimed = true
     return true
 }
 
@@ -180,6 +224,10 @@ export async function mountPathname(pathname: string, seed?: HydrationSeed): Pro
 // dispose-before-hydrate above. `mountPathname` disposes and re-hydrates in one synchronous window, so
 // clearing the mark there would only flicker it; here the page really is going away with nothing
 // replacing it, and a container still claiming to be hydrated would be a lie.
+// `currentPath` is deliberately NOT cleared here. The full soft-nav path calls this before swapping the
+// container, so clearing would blank the outgoing route for the whole drain that follows — and that is
+// exactly when a traversal can arrive and need it for `Abide-Nav`. It stays truthful until the shell
+// swap re-points it, and every mount overwrites it.
 export function disposeActive(): void {
     if (activeChain !== null) {
         activeChain()
@@ -265,7 +313,7 @@ async function partialCrossNav(
 ): Promise<void> {
     let response: Response
     try {
-        response = await fetch(path, { headers: { 'Abide-Nav': from } })
+        response = await fetch(path, { headers: navRequestHeaders(from, keep) })
     } catch {
         location.href = path
         return
@@ -293,18 +341,32 @@ async function partialCrossNav(
     let grafted = false
     try {
         for await (const frame of decodeJsonlStream(response.body)) {
+            // Re-checked EVERY frame, not once after the fetch: a streamed destination holds this loop
+            // open for the whole render, and a nav that started meanwhile owns the DOM. Applying a graft
+            // or a patch on top of it would corrupt the newer page. Bailing after the graft leaves
+            // `mountClaimed` false, which is exactly the state that routes the newer nav to the full path.
+            if (gen !== navGen) return
             if (frame.kind === 'shell') {
-                // The server computed the same shared prefix from `Abide-Nav`; if it disagrees, the shell is
-                // not the suffix we're set up to graft → hard load to stay correct.
-                if (frame.sharedLevels !== keep) {
-                    location.href = path
-                    return
-                }
+                // No `sharedLevels !== keep` bail any more: `keep` is what we ASKED for, so the shell is
+                // the suffix we are set up to graft by construction. That check existed because the two
+                // sides derived the number independently and could disagree — the disagreement is now
+                // unrepresentable. A server too old to honour the header is the one case left, and it
+                // shows up as a shell that does not claim, which `claimSuffix` already recovers from by
+                // fresh-mounting the suffix from the client's own levels.
                 // Dispose the outgoing suffix + graft the shell, THEN publish the new route — so the kept
                 // layouts' `route()` bindings update while the just-disposed old suffix can't misfire.
                 firstNode =
                     boundary.graftSuffix?.(typeof frame.html === 'string' ? frame.html : '') ?? null
                 setClientRoute(routeInfoFor(dest.pattern, target, dest.params))
+                // The DOM and `route()` ARE the destination's from here, so the bookkeeping that describes
+                // them has to be too — it used to be committed at end-of-stream, which on a streaming page
+                // left `currentPattern` naming a route that had already left the screen. A nav starting in
+                // that window classified against it: a Back to the route just departed matched the stale
+                // pattern and was taken for a param nav, so it kept a mount showing the other page.
+                currentPattern = dest.pattern
+                currentPrefixes = prefixes
+                currentPath = target.pathname
+                mountClaimed = false
                 grafted = true
                 settleScroll(opts)
             } else if (frame.kind === 'seed') {
@@ -321,6 +383,7 @@ async function partialCrossNav(
         location.href = path // no shell frame — not the body we expected
         return
     }
+    if (gen !== navGen) return // superseded while the render streamed — do not claim over the newer nav
 
     // Claim the assembled suffix DOM with its own (partial) seed: `state` ordinals from 0, reads seeded.
     const scope = buildPageScope(seed ?? {}, pageSpecs(), pageBase(), pageSocketSpecs())
@@ -330,9 +393,8 @@ async function partialCrossNav(
         location.href = path
         return
     }
-    // Commit the new chain identity: the kept prefix + the freshly-claimed suffix are now the live chain.
-    currentPattern = dest.pattern
-    currentPrefixes = prefixes
+    // The kept prefix + the freshly-claimed suffix are now a live, claimed chain again.
+    mountClaimed = true
     // Second pass: the grafted suffix streamed in AFTER the shell, so the page is only now at its final
     // height. A forward nav is already at the top and must not re-scroll (that was the bug).
     if (opts?.keepScroll === true) restoreStampedScroll()
@@ -342,7 +404,12 @@ async function partialCrossNav(
 // assembled DOM). Shared by navigate() (after a history push) and popstate (no history mutation). A
 // non-stream response (a middleware `{redirect}` JSON envelope, a full HTML document, an error), a
 // network failure, or an unmatched route falls back so navigation never dead-ends.
-async function softLoad(path: string, from: string, opts?: NavigateOptions): Promise<void> {
+async function softLoad(
+    path: string,
+    from: string,
+    opts?: NavigateOptions,
+    sameEntry = false,
+): Promise<void> {
     const target = new URL(path, location.origin)
     const gen = ++navGen
 
@@ -352,16 +419,43 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     // re-hydrate (so a carousel scroll / focus / element state is preserved). The server still runs in the
     // background for middleware (follow a redirect if it short-circuits); the kept page's reads re-fire
     // reactively (slice: reads-only seed replay to avoid the re-fetch).
+    //
+    // `mountClaimed` gates this and the graft below: both KEEP a live mount, and a grafted-but-unclaimed
+    // subtree has no live effects to keep — nothing would re-render, and re-grafting would corrupt.
     const destMatch = matchRoute(pagePatterns(), target.pathname)
-    if (destMatch !== null && activeChain !== null && destMatch.pattern === currentPattern) {
+    if (
+        destMatch !== null &&
+        activeChain !== null &&
+        mountClaimed &&
+        destMatch.pattern === currentPattern
+    ) {
         setClientRoute(routeInfoFor(destMatch.pattern, target, destMatch.params))
+        currentPath = target.pathname
         try {
-            const confirm = await fetch(path, { headers: { 'Abide-Nav': from } })
+            // A nav to the URL you are ALREADY on is a refresh gesture, and the layouts are part of
+            // what is on screen. Left alone the server skips every layout level here (from == to, so
+            // `sharedLayoutDepth` is this route's full depth) and renders the page alone — so only the
+            // page's reads reach the seed, and a LAYOUT's route-independent read would keep painting its
+            // first-paint value exactly as the page's did before the seed was replayed at all. `keep: 0`
+            // renders the whole tree so the seed carries those too.
+            //
+            // Same-URL only. A param MOVE should leave the kept layouts alone — persisting is the whole
+            // point of keeping them — and it would pay for a full render on every step of a carousel.
+            // This nav keeps its WHOLE chain, layouts included, so it declares every layout level it
+            // has — which is what the server would derive for a same-pattern nav anyway, now said
+            // rather than inferred. With the prefixes unknown it declares NOTHING and lets the
+            // derivation stand: `0` there would be a false claim (it keeps the chain either way) and
+            // would buy a full render for nothing.
+            const keptLevels = currentPrefixes === null ? undefined : currentPrefixes.length
+            const confirm = await fetch(path, {
+                headers: navRequestHeaders(from, sameEntry ? 0 : keptLevels),
+            })
             if (gen !== navGen) return // superseded by a newer nav
-            // CO2.3: a param/query nav keeps the live mount, so it never hydrates and never sees a
-            // seed — the confirm response's `traceresponse` is the only carrier for the trace of the
-            // request this navigation actually made. Without it `trace()` would keep answering with
-            // the previous page's id, which is worse than a stale route: it points at the wrong span.
+            // CO2.3: a param/query nav keeps the live mount, so it never hydrates — the confirm
+            // response's `traceresponse` header is the earliest carrier for the trace of the request
+            // this navigation actually made (the seed below carries the same id, but only once the
+            // whole render has streamed). Without it `trace()` would keep answering with the previous
+            // page's id, which is worse than a stale route: it points at the wrong span.
             adoptTrace(confirm.headers.get('traceresponse'))
             const type = confirm.headers.get('content-type') ?? ''
             if (!type.includes('application/jsonl') && type.includes('application/json')) {
@@ -371,7 +465,32 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
                 if (envelope?.redirect !== undefined && envelope.redirect.length > 0) {
                     await navigate(envelope.redirect, { replace: true })
                 }
+                return
             }
+            if (!type.includes('application/jsonl') || confirm.body === null) return
+            // The confirm is a FULL render of this route — the server ran every read on it. Drain the
+            // frame stream for the trailing `seed` and replay its reads/streams into the live mount's
+            // memos. This body used to be discarded on the premise that "the kept page's reads have
+            // already re-fetched reactively" (abide-compiler.md C6-nav), which holds only for a read the
+            // nav actually MOVED: a param-keyed read lands on a new cache key and loads cold. A read
+            // taking no args and reading no `route()` has nothing to re-fire on, so on a nav to the URL
+            // you are already on NOTHING re-fired — the server recomputed the page and the client kept
+            // painting the value it loaded on first paint.
+            //
+            // Only the `seed` frame is applied. The shell and the `fill`/`append` patches address the
+            // server's freshly-painted DOM, which this nav deliberately did not adopt — the live DOM has
+            // no matching slot sentinels, and re-rendering is the reactive graph's job once the memos hold
+            // the new values.
+            let seed: HydrationSeed | undefined
+            for await (const frame of decodeJsonlStream(confirm.body)) {
+                if (frame.kind === 'seed') seed = frame.seed as HydrationSeed
+            }
+            if (gen !== navGen || seed === undefined) return // superseded while the render streamed
+            replaySeedIntoProxies(seed, pageBase() ?? '')
+            // AU3: a nav is a fresh request whose middleware may have resolved someone else. A full nav
+            // re-adopts through `buildPageScope`; this path never gets there, so it was the one nav shape
+            // that left `identity()` answering for the request BEFORE it. An identical re-adopt wakes nobody.
+            adoptIdentity(seed.identity)
         } catch {
             // Offline / network failure: the optimistic route update stands (the page is already live).
         }
@@ -382,7 +501,7 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     // page. Keep those layout instances alive (DOM, state, effects) and graft + claim ONLY the diverging
     // suffix into the innermost kept layout's outlet, instead of rebuilding the whole tree. Needs the
     // destination's chunk (for its `levels`/`prefixes`), which the full path below would load anyway.
-    if (destMatch !== null && activeChain !== null && currentPrefixes !== null) {
+    if (destMatch !== null && activeChain !== null && mountClaimed && currentPrefixes !== null) {
         const entry = await loadPageEntry(destMatch.pattern)
         if (gen !== navGen) return
         const levels = entry?.levels
@@ -420,11 +539,18 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
 
     let response: Response
     try {
-        response = await fetch(path, { headers: { 'Abide-Nav': from } })
+        // `keep: 0` — this path replaces the WHOLE container, so it can keep nothing, and it says so
+        // rather than hoping the server's own `sharedLayoutDepth(from, to)` happens to come out 0. It
+        // often does not: the reasons we are here are all invisible to the server (no live chain, a
+        // boundary record without a `graftSuffix`, a mount grafted but not yet claimed), while the
+        // routes involved may share every layout. The server then rendered a diverging SUFFIX for a
+        // graft nobody could perform, and this path had to hard-load rather than swap a partial tree in.
+        response = await fetch(path, { headers: navRequestHeaders(from, 0) })
     } catch {
         location.href = path
         return
     }
+    if (gen !== navGen) return // superseded before we touch the DOM
 
     const contentType = response.headers.get('content-type') ?? ''
     const container = document.getElementById(CONTAINER_ID)
@@ -465,9 +591,22 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     let navUrl = target.pathname + target.search
     try {
         for await (const frame of decodeJsonlStream(response.body)) {
+            if (gen !== navGen) return // superseded mid-stream — the newer nav owns the container
             if (frame.kind === 'shell') {
+                // The request asked for `keep: 0`, so a TRIMMED shell means the server did not honour it
+                // — a deployment older than this bundle, during a rolling deploy. Swapping a diverging
+                // suffix into the container would drop every layout above it, so hard-load instead: the
+                // pre-header behaviour, kept exactly where it is still the only correct answer. This is
+                // the one nav shape with no `sharedLevels` agreement to check, so it checks it hardest.
+                if (typeof frame.sharedLevels === 'number' && frame.sharedLevels > 0) {
+                    location.href = path
+                    return
+                }
                 if (typeof frame.html === 'string') container.innerHTML = frame.html
                 if (typeof frame.url === 'string') navUrl = frame.url
+                // The container IS the destination's now — keep the outgoing-route header truthful for a
+                // nav that starts before this one hydrates (`handlePopState` reads it).
+                currentPath = target.pathname
                 settleScroll(opts)
             } else if (frame.kind === 'seed') {
                 seed = frame.seed as HydrationSeed
@@ -483,7 +622,12 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     // Hydrate the fully-assembled DOM: replay this stream's recorded reads then claim in place (PR3
     // unwraps any streamed `<abide-slot>`). Awaits the destination chunk (primed above, usually already
     // resolved); a chunk-load failure returns false → fall back to a full load rather than dead-end.
-    if (!(await mountPathname(navUrl, seed))) {
+    if (gen !== navGen) return
+    if (!(await mountPathname(navUrl, seed, gen))) {
+        // `false` also covers "a newer nav started while the chunk downloaded", which must NOT hard-load
+        // — that would drag the tab to THIS nav's destination on top of the one the reader actually asked
+        // for. Only a genuine failure (no match, dead chunk) falls back.
+        if (gen !== navGen) return
         location.href = path
         return
     }
@@ -501,15 +645,25 @@ export async function navigate(target: string | URL, options?: NavigateOptions):
     if (typeof document === 'undefined') return
     const path = typeof target === 'string' ? target : target.pathname + target.search + target.hash
     const from = location.pathname
+    // A nav to the URL you are ALREADY on touches history not at all. Pushing there stacks a second entry
+    // on the same URL, so Back becomes a round trip that lands where it started — and a clicked-again nav
+    // link fills the stack with duplicates for what is a re-navigation, not a move. Nor is it a
+    // `replaceState`: the URL already IS `path`, so the only thing a replace would accomplish is wiping
+    // the entry's own state, including the scroll offset `stampScroll` may have left on it. The compare
+    // includes the hash, since `/page#a` → `/page#b` really is a move the reader can go Back from.
+    const resolved = new URL(path, location.href)
+    const sameEntry =
+        resolved.pathname + resolved.search + resolved.hash ===
+        location.pathname + location.search + location.hash
     // Stamp where we are onto the entry we're leaving, BEFORE pushing — that's the offset a later Back
     // wants, and the only moment we can read it uncontested by the browser's own restore. A `replace`
     // discards the current entry, so there is nothing to come back to and nothing to stamp.
     if (options?.replace === true) history.replaceState(null, '', path)
-    else {
+    else if (!sameEntry) {
         stampScroll()
         history.pushState(null, '', path)
     }
-    await softLoad(path, from, options)
+    await softLoad(path, from, options, sameEntry)
 }
 
 // Whether a pathname matches a known in-app page pattern. Used to decide if a link/history entry is
@@ -523,7 +677,18 @@ export function isKnownPage(pathname: string): boolean {
 // browser already restored the offset, and `settleScroll` only corrects it where the browser clamped.
 // If the current entry isn't an in-app page (e.g. the user is arriving back from a non-page URL), let
 // the browser own it rather than soft-loading a non-envelope response.
+// `Abide-Nav` names the route being LEFT — it is what the server computes `sharedLayoutDepth(from, to)`
+// from. On a traversal the browser has already moved `location` to the destination before `popstate`
+// fires, so `location.pathname` is the wrong end of the nav: it named the destination, the server
+// answered `sharedLevels` for a from==to nav (its FULL layout depth), and the client — which computes
+// `keep` from the outgoing route it actually has mounted — disagreed. `partialCrossNav` treats that
+// disagreement as "this is not the suffix I am set up to graft" and hard-loads to stay correct, so every
+// cross-route Back/Forward was a full document load: the whole live chain thrown away, hydration re-run,
+// and the kept-layout state the graft exists to preserve gone with it. `currentPath` is the route
+// actually mounted; before the first mount there is none, and `location` is then still right.
 export function handlePopState(): void {
     if (!isKnownPage(location.pathname)) return
-    void softLoad(location.pathname + location.search, location.pathname, { keepScroll: true })
+    void softLoad(location.pathname + location.search, currentPath ?? location.pathname, {
+        keepScroll: true,
+    })
 }

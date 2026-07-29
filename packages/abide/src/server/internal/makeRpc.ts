@@ -27,6 +27,10 @@
 import { envMs } from '../../shared/internal/envMs.ts'
 import { isTypedError } from '../../shared/internal/isTypedError.ts'
 import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
+import type {
+    ReactiveStreamProbes,
+    ReactiveValueProbes,
+} from '../../shared/internal/reactiveReadSurface.ts'
 import type { Payload } from '../../shared/internal/responseSource.ts'
 import { type RpcMemoDeclaration, rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import type {
@@ -49,6 +53,7 @@ import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import type { StandardSchemaV1 } from '../../shared/StandardSchema.ts'
 import type { CrossOriginOption } from './cors.ts'
 import type { Middleware } from './middleware.ts'
+import { outcomeResponse } from './outcomeResponse.ts'
 import type { ClientsOption } from './registry.ts'
 
 // A minimal, JSON-Schema-ish description of the file fields a multipart mutation accepts (TODO #8).
@@ -158,20 +163,16 @@ export interface Rpc<Args, T> extends RpcCallSurface<Args, T> {
 // resolves to a fresh replay-then-live `consume()` cursor, and the surface is stream-correct: reactive
 // chunk probes (`latest`/`chunks`/`done`) instead of the value-shaped `peek`/`publish`/`snapshot`, which
 // are meaningless (or throw) on a stream slot. This is what a user's editor sees for a streaming read.
-export interface StreamRead<Args, C> {
+// BOTH probe halves, inherited at the RPC arity: a stream has a latest value AND a transcript. The six
+// names were hand-copied here and this interface extended nothing — and the copy had already drifted,
+// silently omitting `refreshing` while `RpcCallSurface` next door declared it, for no stated reason.
+// `peek` means the MOST-RECENT CHUNK here (same name and role as a value read's `peek`, over `C` rather
+// than `T`), which is exactly what parameterizing the surfaces by their value type buys.
+export interface StreamRead<Args, C>
+    extends ReactiveValueProbes<C, RpcCallArgs<Args>>,
+        ReactiveStreamProbes<C, RpcCallArgs<Args>> {
     // THE READ: awaitable; resolves to a fresh cursor that replays the transcript so far then goes live.
     (...args: RpcInvokeArgs<Args>): Promise<AsyncIterable<C>>
-    // Reactive PEEK: the "current value" of a stream = its MOST-RECENT chunk (undefined before the first).
-    // The non-blocking "latest value" read — same name/role as a value read's `peek`. Use `chunks` for all.
-    peek(...args: RpcCallArgs<Args>): C | undefined
-    // Reactive snapshot (copy) of the whole transcript so far; undefined until the stream starts.
-    chunks(...args: RpcCallArgs<Args>): C[] | undefined
-    // Source started but no chunk yet. Reactive.
-    pending(...args: RpcCallArgs<Args>): boolean
-    // The stream has closed (settled successfully). Reactive.
-    done(...args: RpcCallArgs<Args>): boolean
-    // Terminal error (read off the stream) or undefined. Reactive.
-    error(...args: RpcCallArgs<Args>): unknown
     // Re-run the source; `invalidate` aborts an open stream + drops it (replayable-streams.md §4).
     refresh(args?: Partial<Args> | Args): void
     invalidate(args?: Partial<Args> | Args): void
@@ -252,7 +253,18 @@ function attachSurface<Args, T>(
     callable.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
         backing.watch(args, handler)
     callable.raw = async (args: Args, init?: RequestInit): Promise<Response> => {
-        const value = await Promise.resolve(rawSource(args))
+        let value: T | Response
+        try {
+            value = await Promise.resolve(rawSource(args))
+        } catch (caught) {
+            // `.raw` is the RESPONSE surface, so a deliberate `error()`/`redirect()` is rendered rather
+            // than rethrown — matching the browser proxy's `.raw`, which hands back a non-2xx untouched
+            // (no parse, no `!ok` throw). An unexpected error still propagates; only transport turns a
+            // genuine bug into a 500, and doing it here would disguise one as a normal response.
+            const outcome = outcomeResponse(caught)
+            if (outcome === undefined) throw caught
+            return outcome
+        }
         if (value instanceof Response) return value
         return new Response(JSON.stringify(value), {
             status: 200,

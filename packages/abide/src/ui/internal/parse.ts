@@ -74,6 +74,11 @@ export class ParseError extends Error {
 
 const IDENT_CHAR = /[A-Za-z0-9_$]/
 
+// A tag that reads as a JS member expression — `<item.Icon/>`, `<Icons.Chevron.Left/>`. `.` is legal
+// in a custom-element name (`<my-el.foo>`), so the hyphen is the tiebreaker: a hyphen means HTML and
+// this pattern declines to match it. Every other dotted tag names a component held at that path.
+const MEMBER_TAG = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$/
+
 export function parse(
     source: string,
     opts?: {
@@ -407,14 +412,28 @@ export function parse(
 
     // --- elements / components / script / style ----------------------------
 
+    // Capitalization is the component/element discriminator, and it applies to the component's NAME —
+    // which for a member tag (`<item.Icon/>`) is the LAST segment, not the head binding. A dotted tag
+    // used to be classified off its first character alone, so `<item.Icon/>` was emitted as a literal
+    // `<item.Icon>` element with no error at all, while `<Item.Icon/>` already worked end to end.
+    function classifyTag(name: string, start: number): boolean {
+        if (!MEMBER_TAG.test(name)) return /[A-Z]/.test(name[0] ?? '')
+        const last = name.slice(name.lastIndexOf('.') + 1)
+        if (!/[A-Z]/.test(last[0] ?? ''))
+            fail(
+                `<${name}> reads as a member tag, so \`${last}\` names a component and must be TitleCase (lowercase is reserved for element tags)`,
+                start,
+            )
+        return true
+    }
+
     function parseElement(): TemplateNode {
         const start = pos
         emit(start, start + 1, 'operator') // `<`
         pos++ // `<`
         const nameStart = pos
         const name = readTagName()
-        const firstChar = name[0]
-        const isComponent = firstChar !== undefined && /[A-Z]/.test(firstChar)
+        const isComponent = classifyTag(name, start)
         emit(nameStart, pos, isComponent ? 'type' : 'tag')
         const lower = name.toLowerCase()
         if (lower === 'script') return parseRawText(start, name, true) as Script
@@ -438,7 +457,7 @@ export function parse(
         if (!selfClosing && !isVoid) {
             children = parseChildren()
             if (!(source[pos] === '<' && source[pos + 1] === '/')) fail(`unclosed <${name}>`, start)
-            consumeClosingTag(name, start)
+            consumeClosingTag(name, start, isComponent)
         }
 
         if (isComponent) {
@@ -466,14 +485,14 @@ export function parse(
         return node
     }
 
-    function consumeClosingTag(name: string, openStart: number): void {
+    function consumeClosingTag(name: string, openStart: number, isComponent: boolean): void {
         emit(pos, pos + 2, 'operator') // `</`
         pos += 2 // `</`
         const nameStart = pos
         const closeName = readTagName()
         if (closeName !== name)
             fail(`mismatched closing tag: expected </${name}> but found </${closeName}>`, openStart)
-        emit(nameStart, pos, /[A-Z]/.test(name[0] ?? '') ? 'type' : 'tag')
+        emit(nameStart, pos, isComponent ? 'type' : 'tag')
         skipWhitespace()
         if (source[pos] !== '>') fail(`expected \`>\` to close </${name}>`)
         emit(pos, pos + 1, 'operator') // `>`

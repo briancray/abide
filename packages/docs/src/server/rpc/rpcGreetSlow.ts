@@ -14,6 +14,6 @@ import { GET } from 'abide/server/GET'
 // is what lets the demo drive the third branch without a second RPC.
 export default GET(async ({ name = 'world', fail = false }) => {
     await Bun.sleep(400)
-    if (fail) return error(503, 'the greeting service is unreachable')
+    if (fail) error(503, 'the greeting service is unreachable')
     return { greeting: `Hello, ${name}!`, length: name.length }
 })

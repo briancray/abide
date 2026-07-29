@@ -34,6 +34,22 @@ manifests; every surface derives from the same RPC + socket metadata.
    per MS1.2; output schema → declared result. **Method → annotation:** GET/HEAD →
    `readOnlyHint: true`; POST/PUT/PATCH/DELETE → mutating (destructive hints as appropriate) so
    clients know read vs write.
+   - **A tool call dispatches over the app's OWN HTTP loopback** (`callOwnRpc`), not by invoking
+     the rpc callable. The callable is only the HANDLER: `schemas.input` validation and the rpc's
+     own `middleware` are both composed by the **ROUTER** — the validate step ahead of `dispatch`,
+     and `routePolicy` at mount — so an in-process call had NEITHER. The declared input schema was
+     advertised to the model and never enforced against what it sent back, and an rpc whose
+     authorization IS its middleware ran unauthorized. That is a bad trade at every surface and a
+     disqualifying one here, where the caller is a model and the args are its own output. One
+     loopback request applies the whole chain verbatim — CSRF, CORS, identity, middleware, input
+     validation, the memo, the run deadline, output shaping — with no second copy of any of it. The
+     request carries the incoming MCP request's credentials and a CHILD `traceparent`, uses the
+     rpc's **DECLARED** method (the router enforces the declaration with a 405, so a hardcoded
+     `POST` would leave a `PUT`/`PATCH`/`DELETE` rpc unreachable through this door), and a
+     **non-2xx becomes an `HttpError`**. A **streaming** rpc is drained to an array — a model reads
+     a VALUE, not a cursor — bounded by the rpc's own progress `timeout` and inventing no second
+     bound. `agent()`'s tool surface reaches the same door (MS2.6; `agent.md` AG1.4), because the
+     two ARE the same tool set and must not differ on whether the app's own gates run.
 2. **Socket → "tail" tool (resolves the parked S4 mapping — tools, not MCP resource-
    subscriptions, since every MCP client supports tools).** MCP tool calls are request/response,
    so the tail tool returns a **snapshot of the socket's current tail buffer** (last-N within
@@ -48,7 +64,11 @@ manifests; every surface derives from the same RPC + socket metadata.
 5. **Auth = your middleware, not a framework default.** abide does **not** impose auth on
    machine surfaces. `clients.mcp` controls *reachability/curation* only — it does **not** make a
    tool anonymous-callable or closed-by-default. `/__abide/mcp` is HTTP, so every MCP request runs
-   the **same middleware chain** as browser/CLI; if you want the MCP surface gated, write that
+   the **same middleware chain** as browser/CLI — and since MS2.1 that is true PER TOOL and not only
+   of the MCP envelope: the tool call is its own loopback request, so the rpc's own `middleware` and
+   `schemas.input` run on it. It used to be true only of the envelope, which made "reachability, not
+   authorization" a claim about a gate that did not exist on this surface. If you want the MCP
+   surface gated, write that
    middleware (bearer via `ABIDE_APP_TOKEN` or a user token → resolve `identity()`, AU6, is the
    convenience path). Whatever authz your middleware enforces applies uniformly across
    browser/MCP/CLI — an unauthorized call fails in middleware, not by being hidden. `clients`
@@ -56,7 +76,10 @@ manifests; every surface derives from the same RPC + socket metadata.
 6. **Agent tools (DX9).** An agent's `AgentSurface` tool set defaults to **all `clients.mcp`
    RPCs**; `tools: []` = none, `tools: [...]` = a selective subset (see `agent.md` AG2.5). Engine
    built-in tools (bash/file/web) stay **off by default**; app-RPC tools are auto-run and subject
-   to whatever authz your middleware enforces.
+   to whatever authz your middleware enforces — **enforced**, not merely intended, because they
+   dispatch over the same loopback door MS2.1 describes (`rpcTools` → `callOwnRpc`). `agent.md`
+   AG1.4/AG1.7 owns that half, including what identity the call inherits when there is no enclosing
+   request; this section states only that the two surfaces share the one door.
 
 ## MS3. CLI projection (the compiled binary) — **BUILT** (except MS3.5 distribution)
 
@@ -120,8 +143,11 @@ What the executable does is decided at RUN time:
 | `./app login --token <t>` | remember WHO you are there · `logout` drops it |
 | `./app identity` | ask the server who it thinks you are (`/__abide/identity`) |
 | `./app logs [--tail n] [--level l] [--debug pat] [--trace id] [--no-follow]` | tail that deployment's log records (`/__abide/logs`, CO1.3) |
-| `./app completion <bash\|zsh\|fish>` | print the shell completion script · `completion --line <line>` is the callback it invokes on every TAB |
+| `./app completion <bash\|zsh\|fish>` | print the shell completion script · `completion --line <line>` is the callback it invokes on every TAB — and the same call backs TAB **inside** the REPL, so both surfaces offer identical candidates |
 | `serve [--port n]` at the prompt | host it mid-session; commands keep running against it |
+
+Every row above except `exit`/`quit` is answered on **both** surfaces — the command line and the
+prompt. That is a declared property, not a coincidence of two ladders happening to agree: see MS3.3.
 
 ### As built (MS3.1-3.4)
 
@@ -179,9 +205,22 @@ Five decisions the design left open, resolved by the implementation:
 
    It is **one table**, holding the name, the `where` and the help text, because four places have to
    agree: the dispatcher (`runCompiledApp`), the REPL (`interactiveCli`), the generated help
-   (`cliUsage`) and the warning (`cliCommands`). The first two reach it through `reservedCliCommand`,
-   so a name they intercept that is not in the table is a compile error; the other two read it
-   directly, so a name added shows up in help and in the warning with no second edit.
+   (`cliUsage`) and the warning (`cliCommands`). The last two read it directly, so a name added
+   shows up in help and in the warning with no second edit.
+
+   **The guarantee runs BOTH ways, and it did not used to.** The two answering surfaces classify a
+   token through `reservedCliCommand(name, where)`, whose `where` split is in the RETURN TYPE and not
+   only in the runtime check — asking as `'command'` narrows the answer to the derived
+   `CommandSurfaceReserved` (the `'both'` names), so the command line cannot be handed a name it has
+   no way to mean and needs no dead `exit` branch; `PromptOnlyReserved` is the complement, and the
+   prompt's own loop-control switch is total over it. Both surfaces then dispatch through the ONE
+   shared `reservedCliDispatch`, which is **total over `CommandSurfaceReserved`**. So a table entry
+   that no surface answers **does not compile**, alongside the direction that already held (a name a
+   surface intercepts that is not in the table). The two hand-written ladders it replaced bought only
+   the second half, and `completion` was exactly what the missing half lost: declared `'both'`,
+   printed by `help`, warned about as shadowing an author's rpc — and answered `unknown command` at
+   the prompt. `where` being DERIVED into those two types is what makes the field checked by the type
+   system rather than only read at runtime.
    **Global options (`--url`, `--token`, `--pretty`/`--compact`, `-h`) are read only BEFORE the
    subcommand** — after it every flag belongs to the rpc, so a handler may still own a `url` or
    `token` field.
@@ -204,13 +243,26 @@ Five decisions the design left open, resolved by the implementation:
    form, §14.1), else the `__abide_args` JSON-blob param (a type-derived read carries no runtime
    schema, so its fields are unknown to the projection and it falls back to the blob); POST/etc →
    `requestBody`; output schema → `responses`; typed errors (§9) → declared error responses;
-   `ValidationErrorData` → 422.
+   a validation failure → **422**. What the 422 projects is the typed-error **ENVELOPE**, not the
+   payload alone: `{ status, statusText, message, name: 'ValidationError', data: { issues, fields } }`.
+   `ValidationErrorData` is the `data` field — `{ issues, fields }` — and describing it as the whole
+   body is the conflation this projection used to publish, which told a generated client to read
+   `body.issues` off a body that carries `body.data.issues` (rpc-core §9.1 owns the envelope, §11 the
+   payload).
 2. **Security schemes documented:** both **bearer** (token) and **cookie** (`abide-identity`)
    auth appear as OpenAPI security schemes.
 3. **Gating:** `/openapi.json` is **served by default** and runs through the **middleware
    chain**, so the app can restrict it with middleware (e.g. require auth in prod) or keep it
    public. abide does **not** close it by default — gating is your middleware, not a framework
    default (DX8).
+4. **It gates its METHOD**, through the same `enforceMethod` every framework route and every RPC
+   route uses: it is read-only, so anything but `GET`/`HEAD` is a **405 + `Allow: GET, HEAD`**
+   (`HEAD` is never named — the router derives it from `GET`). The gate had been written out per
+   route class inside `dispatch` and simply omitted from three of them, `/openapi.json` among
+   them — so a `POST` carrying the abide client's `content-type` cleared the AU8 CSRF gate (which
+   exempts nothing about method here) and was answered **200 with the spec document**. A rule
+   stated once and applied per call site is a rule the next route class forgets, so it has one
+   owner now.
 
 ## MS5. Per-user tokens (forced by MS3.5 — un-parks auth's token model)
 

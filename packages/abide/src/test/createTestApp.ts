@@ -265,24 +265,28 @@ function bind(
             return async (args?: unknown): Promise<unknown> => {
                 const route = routes[property]
                 const read = route?.__rpc.read ?? false
+                // The DECLARED verb, not a hardcoded POST: the router enforces the declaration and
+                // answers a mismatch with a 405, so a `PUT`/`PATCH`/`DELETE` rpc is unreachable through
+                // this proxy unless the method comes off the same meta the router reads.
+                const method = route?.__rpc.method ?? 'POST'
                 let response: Response
                 if (read) {
                     const query =
                         args !== undefined
                             ? `?${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
                             : ''
-                    response = await doFetch(`/__abide/rpc/${property}${query}`, { method: 'GET' })
+                    response = await doFetch(`/__abide/rpc/${property}${query}`, { method })
                 } else if (args instanceof FormData) {
                     // TODO #8 multipart upload: send the FormData as the raw body (fetch sets the boundary)
                     // with the `x-abide` header so the CSRF gate admits it — no content-type header.
                     response = await doFetch(`/__abide/rpc/${property}`, {
-                        method: 'POST',
+                        method,
                         headers: { 'x-abide': '1' },
                         body: args,
                     })
                 } else {
                     response = await doFetch(`/__abide/rpc/${property}`, {
-                        method: 'POST',
+                        method,
                         headers: { 'content-type': 'application/json' },
                         body: JSON.stringify(args ?? {}),
                     })

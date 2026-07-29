@@ -6,6 +6,7 @@
   import SpreadPropsDemo from "$ui/demos/templating/components/SpreadPropsDemo.abide"
   import NamedSlotDemo from "$ui/demos/templating/components/NamedSlotDemo.abide"
   import ReactiveComponentDemo from "$ui/demos/templating/components/ReactiveComponentDemo.abide"
+  import MemberTagDemo from "$ui/demos/templating/components/MemberTagDemo.abide"
   import ComponentInBlockDemo from "$ui/demos/templating/components/ComponentInBlockDemo.abide"
   import InlineScopeDemo from "$ui/demos/templating/components/InlineScopeDemo.abide"
 </script>
@@ -48,6 +49,13 @@
   </Demo>
   <aside class="aside">
     <p>Because it is a value, a <a href="/state">cell</a> or <a href="/memo">memo</a> can hold one. <code>&lt;Current/&gt;</code> where <code>Current</code> is a memo re-mounts whenever the derivation picks a different component — a dynamic component, again with no new syntax.</p>
+  </aside>
+  <Demo id="member-tag" title="A member tag — <code>&lt;item.Icon/&gt;</code>" client="src/ui/demos/templating/components/MemberTagDemo.abide">
+    <MemberTagDemo />
+  </Demo>
+  <aside class="aside">
+    <p>Since it is a value, it can also just be a field. A tag may be a <strong>member path</strong> — <code>&lt;row.Icon/&gt;</code> — so a row carries its own renderer as data instead of the list branching on a <code>kind</code>. The head is any binding in scope; TitleCase applies to the component's <em>name</em>, which is the last segment (<code>&lt;row.icon/&gt;</code> is a parse error).</p>
+    <p>And because it is an <em>expression</em> over bindings rather than an import, it is reactive for the same reason the memo-named tag above is: hand a row a different component and that one tag re-mounts. The <code>by</code> key hasn't changed, so the row's own <code>&lt;li&gt;</code> is never rebuilt — only the icon inside it. (A hyphen is what keeps a dotted tag an element: <code>&lt;my-el.foo&gt;</code> is legal HTML.)</p>
   </aside>
   <Demo id="in-block" title="A component invoked — and defined — inside <code>&#123;#for&#125;</code> / <code>&#123;#if&#125;</code>" client="src/ui/demos/templating/components/ComponentInBlockDemo.abide">
     <ComponentInBlockDemo />

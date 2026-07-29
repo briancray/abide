@@ -24,6 +24,7 @@
   </Panel>
   <aside class="aside">
     <p>Nothing here was written by hand. Both documents here are generated from the same RPC definitions the browser calls, which is why they cannot drift from the implementation — there is only one.</p>
+    <p>And so does a <strong>tool call</strong>. An MCP <code>tools/call</code>, and an <code>agent()</code> run reaching for one of these same RPCs, both dispatch over this app's <em>own HTTP face</em> on the loopback rather than invoking the handler in-process. That is not a detour: the handler is only the handler — an RPC's <code>middleware</code> and its <code>schemas.input</code> validation are both composed by the <em>router</em>, so an in-process call would have neither. For a caller that is a model choosing what to invoke, with arguments it wrote itself, that is the difference between "reachability, not authorization" and no authorization at all. One loopback request means the whole chain applies verbatim — CSRF, CORS, identity, middleware, input validation, the memo, the run deadline — with no second copy of any of it. The call inherits the identity of whatever provoked it (the incoming MCP request, or the request scope an <code>agent()</code> run sits inside); from a cron tick or an <code>abide run</code> script it goes out <em>anonymous</em>, which is the fail-closed answer.</p>
   </aside>
   <Demo id="openapi" title="<code>/openapi.json</code>" client="src/ui/demos/platform/machines/OpenApiDemo.abide">
     <OpenApiDemo />
@@ -47,6 +48,6 @@
     <AgentDemo />
   </Demo>
   <aside class="aside">
-    <p>A description is only half of it — something has to call these tools. That is an agent: the same RPCs and schemas, now driven by a model. <code>agent(engine, messages, options)</code> drives any <code>AgentEngine</code> (the shipped Claude / Claude Code engines, or a scripted one). Here a deterministic scripted engine requests the <code>clock</code> tool; the loop runs it in-process and streams every <code>AgentFrame</code>, consumed live with <code>{'{'}#for await{'}'}</code>.</p>
+    <p>A description is only half of it — something has to call these tools. That is an agent: the same RPCs and schemas, now driven by a model. <code>agent(engine, messages, options)</code> drives any <code>AgentEngine</code> (the shipped Claude / Claude Code engines, or a scripted one). Here a deterministic scripted engine requests the <code>clock</code> tool; the loop calls it back through this app's own HTTP face — so the rpc's middleware and input validation run on the model's arguments — and streams every <code>AgentFrame</code>, consumed live with <code>{'{'}#for await{'}'}</code>. The tool set defaults to the app's <code>clients.mcp</code> RPCs: an rpc withheld from MCP is withheld here too, by the same declaration.</p>
   </aside>
 </main>

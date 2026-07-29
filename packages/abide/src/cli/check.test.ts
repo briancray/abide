@@ -149,3 +149,26 @@ test('an inferred state var is checked against its value type (number has no toU
     const usage = result.diagnostics.find((diagnostic) => diagnostic.code === 2339)
     expect(usage?.line).toBe(4)
 })
+
+// A `.abide` whose FILENAME carries uppercase. The virtual TS name `check` hands tsgo is derived from
+// that basename, and tsgo canonicalizes the path it reports back on a case-insensitive filesystem — so
+// a case-sensitive lookup can miss and `continue`, silently DROPPING every diagnostic for the file
+// while `check` reports green. `lsp.ts` canonicalizes for exactly this reason; this lane did not,
+// because the two hand-rolled the same pipeline separately. The failure is invisible to a lowercase
+// fixture, which is why every other test here missed it.
+test('a mixed-case .abide filename still reports its diagnostics', async () => {
+    const badPage =
+        '<script>\n' + //
+        'const value = 123\n' +
+        'const oops = value.toUpperCase()\n' +
+        '</script>\n' +
+        '<p>{oops}</p>\n'
+    const root = await makeProject({ 'src/ui/components/MyWidget.abide': badPage })
+
+    const result = await check(root)
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.length).toBeGreaterThan(0)
+    for (const diagnostic of result.diagnostics) {
+        expect(diagnostic.file).toBe(join(root, 'src/ui/components/MyWidget.abide'))
+    }
+})

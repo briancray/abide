@@ -7,6 +7,7 @@ import { health } from './health.ts'
 import { adoptTrace } from './internal/adoptTrace.ts'
 import { outgoingTraceparent } from './internal/outgoingTraceparent.ts'
 import { createReactiveScope, enterScope } from './internal/reactiveScope.ts'
+import { clearClientTrace } from './internal/traceHolder.ts'
 import { log } from './log.ts'
 import { online } from './online.ts'
 import { reachable } from './reachable.ts'
@@ -62,10 +63,11 @@ afterEach(() => {
 describe('log — channel gating by DEBUG', () => {
     test('a channel emits only when DEBUG names it (or *)', () => {
         const writes = captureStdout(() => {
+            Bun.env.ABIDE_APP_NAME = 'myapp'
             delete Bun.env.DEBUG
             log.channel('cache')('hidden')
 
-            Bun.env.DEBUG = 'cache,rpc'
+            Bun.env.DEBUG = 'myapp:cache,myapp:rpc'
             log.channel('cache')('shown')
             log.channel('other')('still hidden')
 
@@ -74,8 +76,32 @@ describe('log — channel gating by DEBUG', () => {
         })
         expect(writes.length).toBe(2)
         expect(writes[0]).toContain('shown')
-        expect(writes[0]).toContain('[cache]')
+        expect(writes[0]).toContain('[myapp:cache]')
         expect(writes[1]).toContain('wildcard')
+    })
+
+    // The gate reads the QUALIFIED label, so an app namespaces its own channels the way abide does
+    // and lights all of them at once — without any call site spelling the app name.
+    test('a bare channel name is qualified with the app name, and DEBUG=<app>:* lights it', () => {
+        const writes = captureStdout(() => {
+            Bun.env.ABIDE_APP_NAME = 'myapp'
+            Bun.env.DEBUG = 'myapp:*'
+            log.channel('cards')('qualified')
+        })
+        expect(writes.length).toBe(1)
+        expect(writes[0]).toContain('[myapp:cards]')
+    })
+
+    // The escape hatch, and what keeps `abide:*` intact inside an app called something else.
+    test('a name that already carries a namespace is used verbatim', () => {
+        const writes = captureStdout(() => {
+            Bun.env.ABIDE_APP_NAME = 'myapp'
+            Bun.env.DEBUG = 'abide:*'
+            log.channel('abide:rpc')('framework')
+        })
+        expect(writes.length).toBe(1)
+        expect(writes[0]).toContain('[abide:rpc]')
+        expect(writes[0]).not.toContain('myapp')
     })
 
     test('base log levels always emit regardless of DEBUG', () => {
@@ -387,6 +413,16 @@ describe('trace — the outgoing (client → server) child span', () => {
     })
 
     test('undefined when there is no trace to be inside — no locally invented parent', () => {
+        // The precondition has to be established explicitly now. `trace()`'s client half reads a
+        // module-level holder (a TAB singleton — one adopted trace per tab, which is what makes
+        // `{trace()}` re-render on a nav), so entering a fresh reactive scope no longer means "nothing
+        // adopted"; the tests above in this block adopted one. Previously the trace lived ON the scope,
+        // which also meant a component that mounted its own scope silently lost it.
+        //
+        // The assertion is unchanged, and it is the one that matters: with nothing adopted we return
+        // undefined rather than MINTING a parent locally. A client-invented id would name a trace no
+        // server span belongs to.
+        clearClientTrace()
         enterScope(createReactiveScope(), () => {
             expect(outgoingTraceparent()).toBeUndefined()
         })

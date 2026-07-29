@@ -1,8 +1,9 @@
 <script>
   import { state } from "abide/shared/state"
 
-  // A handler returning `redirect(url, status)` is followed transparently by the browser fetch —
-  // the resolved `Response` reports `redirected` and the final `url`.
+  // `redirect(url, status)` THROWS a Redirect in the handler; the router renders the 3xx + Location,
+  // and the browser fetch follows it transparently — the resolved `Response` reports `redirected` and
+  // the final `url`.
   //
   // Hand-built URL, so it names the RESERVED transport param itself: `__abide_args` carries the
   // canonical JSON args blob. The `__abide_` prefix is what keeps it from ever colliding with a

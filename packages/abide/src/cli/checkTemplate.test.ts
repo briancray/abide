@@ -181,6 +181,73 @@ test('a Component<P>-typed prop with correct props type-checks clean', async () 
     expect(result.ok).toBe(true)
 })
 
+// The `.d.ts` companion carries no imports, so a props type naming an imported type is meant to degrade
+// to `any`. It only degrades when TS cannot resolve the name — and the DOM lib declares `File`, `Event`,
+// `Request`, `Text`, `Node`… so an owned name that collides was silently CHECKED, against the browser's
+// type, at every call site. `componentDts` shadows owned names to restore the degradation.
+test('an imported type colliding with a DOM global degrades to any, not to the DOM type', async () => {
+    const files = {
+        'src/lib/props.ts': PROPS_SHIM,
+        'src/lib/media.ts': 'export interface File { path: string }\n',
+        'src/ui/components/Media.abide':
+            "<script>import { props } from '../../lib/props.ts'\n" +
+            "import type { File } from '../../lib/media.ts'\n" +
+            'const { file } = props<{ file: File }>()</script><div>{file.path}</div>\n',
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import Media from '../../components/Media.abide'\n" +
+            "const picked = { path: 'a.png' }\n" +
+            '</script>\n' +
+            '<Media file={picked} />\n', // a local File, not a browser File
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+test('a locally declared type colliding with a DOM global degrades the same way', async () => {
+    const files = {
+        'src/lib/props.ts': PROPS_SHIM,
+        'src/ui/components/Bell.abide':
+            "<script>import { props } from '../../lib/props.ts'\n" +
+            'type Notification = { text: string }\n' +
+            'const { item } = props<{ item: Notification }>()</script><div>{item.text}</div>\n',
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import Bell from '../../components/Bell.abide'\n" +
+            "const note = { text: 'hi' }\n" +
+            '</script>\n' +
+            '<Bell item={note} />\n',
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+// The other half: only OWNED names are shadowed, so a global the script never imports or declares is
+// still the global the author meant — and still checked.
+test('an un-owned global in a props type stays checked at the call site', async () => {
+    const files = {
+        'src/lib/props.ts': PROPS_SHIM,
+        'src/ui/components/Stamp.abide':
+            "<script>import { props } from '../../lib/props.ts'\n" +
+            'const { when } = props<{ when: Date }>()</script><div>{when.getTime()}</div>\n',
+        'src/ui/pages/p/page.abide':
+            '<script>\n' + // 1
+            "import Stamp from '../../components/Stamp.abide'\n" + // 2
+            '</script>\n' + // 3
+            "<Stamp when={'nope'} />\n", // 4: string is not a Date
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.ok).toBe(false)
+    expect(
+        result.diagnostics.some((d) => d.line === 4 && d.file.endsWith('pages/p/page.abide')),
+    ).toBe(true)
+})
+
 test('a wrong RPC-style argument in a template call is caught', async () => {
     // A typed function imported into the script, called from the TEMPLATE with a wrong arg type.
     const files = {
@@ -249,9 +316,26 @@ test('a sometimes-thenable value stays legal — the passthrough case the auto-a
 // `rpc = memo + transport`, so the promise diagnostic must key on the TYPE, not on which callable it
 // is. ADR 0024 classification decides that for a memo: an argless SYNCHRONOUS body returns `T` (and so
 // stays legal bare), an async one returns `Promise<T>` (and so reads exactly like a bare RPC read).
+//
+// The shim must stay STRUCTURALLY faithful to `shared/memo.ts` for the same reason `check.test.ts`'s
+// `CELL_MODULE` must: `__abideUnwrap` resolves on the shape, so a simplified stand-in silently takes a
+// different overload than the real type does. A flat `{ (): T; peek(); invalidate() }` — which is
+// `__AbideMemo` itself — is exactly the shape that cannot reproduce the nullish-unwrap holes below,
+// because the real `SyncMemo<T> extends Memo<void, T>` also carries the INHERITED `(args: void):
+// Promise<T>` call signature, and that is what the overload is matched against.
 const MEMO_SHIM =
-    'export function memo<T>(fn: () => T): { (): T; peek(): T | undefined; invalidate(): void }\n' +
-    '{ return null as never }\n'
+    'export interface State<T> { (): T; set(value: T): void; untracked(): T }\n' +
+    'export interface Memo<Args, T> {\n' +
+    '  (args: Args): Promise<T>\n' +
+    '  peek(args: Args): T | undefined\n' +
+    '  invalidate(args?: Args): void\n' +
+    '  state(args: Args, initial: T): State<T>\n' +
+    '}\n' +
+    'export interface SyncMemo<T> extends Memo<void, T> { (): T; state(initial?: T): State<T> }\n' +
+    '// The real overload pair, in the real order: a promise-returning body takes the loading overload,\n' +
+    '// anything else the synchronous one.\n' +
+    'export declare function memo<T>(fn: () => Promise<T>): Memo<void, T>\n' +
+    'export declare function memo<T>(fn: () => T): SyncMemo<T>\n'
 
 test('an argless SYNCHRONOUS memo stays legal bare — it returns T, not a promise', async () => {
     const files = {
@@ -268,7 +352,10 @@ test('an argless SYNCHRONOUS memo stays legal bare — it returns T, not a promi
     expect(result.ok).toBe(true)
 })
 
-test('an ASYNC memo hits the same diagnostic as a bare RPC read', async () => {
+// An ASYNC memo is read with an EXPLICIT call, because `memoKind` (analyzeBindings.ts) classifies an
+// async body as opaque — the binding is a plain const and the emit never auto-calls it. So the two
+// lanes agree that `d` is the memo OBJECT, and the promise the diagnostic is about is `d()`.
+test('an ASYNC memo read hits the same diagnostic as a bare RPC read', async () => {
     const files = {
         'src/lib/memo.ts': MEMO_SHIM,
         'src/ui/pages/p/page.abide':
@@ -276,14 +363,14 @@ test('an ASYNC memo hits the same diagnostic as a bare RPC read', async () => {
             "import { memo } from '../../../lib/memo.ts'\n" + // 2
             'const d = memo(async () => "hi")\n' + // 3
             '</script>\n' + // 4
-            '<p>{d}</p>\n', // 5  auto-called binding reads Promise<string> → error
+            '<p>{d()}</p>\n', // 5  reads Promise<string> → error
     }
     const result = await check(await makeProject(files))
     expect(result.ok).toBe(false)
     expect(result.diagnostics.find((d) => d.line === 5)?.message).toContain('{await expr}')
 })
 
-test('an ASYNC memo read as `{await d}` type-checks clean', async () => {
+test('an ASYNC memo read as `{await d()}` type-checks clean', async () => {
     const files = {
         'src/lib/memo.ts': MEMO_SHIM,
         'src/ui/pages/p/page.abide':
@@ -291,9 +378,73 @@ test('an ASYNC memo read as `{await d}` type-checks clean', async () => {
             "import { memo } from '../../../lib/memo.ts'\n" +
             'const d = memo(async () => "hi")\n' +
             '</script>\n' +
-            '<p>{await d}</p>\n',
+            '<p>{await d()}</p>\n',
     }
     const result = await check(await makeProject(files))
     expect(result.diagnostics).toEqual([])
     expect(result.ok).toBe(true)
+})
+
+// A NULLISH value type is where the unwrap used to fall off the memo overload and off the widen. Both
+// holes were silent — no diagnostic, just a binding typed as something the runtime never produces —
+// so each test asserts BOTH halves: the guarded read is clean AND the unguarded one still errors.
+// The second half is what tells a real unwrap apart from a collapse to `any`.
+test('a memo whose value type includes `undefined` still reads as the VALUE', async () => {
+    const files = {
+        'src/lib/memo.ts': MEMO_SHIM,
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import { memo } from '../../../lib/memo.ts'\n" +
+            'const d = memo(() => 1 as number | undefined)\n' +
+            '</script>\n' +
+            '<p>{d?.toFixed(1)}</p>\n',
+    }
+    const result = await check(await makeProject(files))
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+test('a `T | undefined` memo binding is CHECKED, not widened to any', async () => {
+    const files = {
+        'src/lib/memo.ts': MEMO_SHIM,
+        'src/ui/pages/p/page.abide':
+            '<script>\n' + // 1
+            "import { memo } from '../../../lib/memo.ts'\n" + // 2
+            'const d = memo(() => 1 as number | undefined)\n' + // 3
+            '</script>\n' + // 4
+            '<p>{d.toFixed(1)}</p>\n', // 5  possibly undefined
+    }
+    const result = await check(await makeProject(files))
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.some((d) => d.code === 18048 && d.line === 5)).toBe(true)
+})
+
+test('a memo whose value type includes `null` still reads as the VALUE', async () => {
+    const files = {
+        'src/lib/memo.ts': MEMO_SHIM,
+        'src/ui/pages/p/page.abide':
+            '<script>\n' +
+            "import { memo } from '../../../lib/memo.ts'\n" +
+            'const d = memo(() => 1 as number | null)\n' +
+            '</script>\n' +
+            '<p>{d?.toFixed(1)}</p>\n',
+    }
+    const result = await check(await makeProject(files))
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+test('a `T | null` memo binding is CHECKED, not widened to any', async () => {
+    const files = {
+        'src/lib/memo.ts': MEMO_SHIM,
+        'src/ui/pages/p/page.abide':
+            '<script>\n' + // 1
+            "import { memo } from '../../../lib/memo.ts'\n" + // 2
+            'const d = memo(() => 1 as number | null)\n' + // 3
+            '</script>\n' + // 4
+            '<p>{d.toFixed(1)}</p>\n', // 5  possibly null
+    }
+    const result = await check(await makeProject(files))
+    expect(result.ok).toBe(false)
+    expect(result.diagnostics.some((d) => d.code === 18047 && d.line === 5)).toBe(true)
 })

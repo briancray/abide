@@ -10,20 +10,54 @@
 
 import type { Room } from './room.ts'
 
-export interface ReactiveReadSurface<Args, T> {
+// THE PROBE VOCABULARY, declared once. It was hand-copied into FIVE interfaces — this one,
+// `SocketSurface`, `RpcCallSurface`, `StreamRead`, and `emitCheck`'s compiler shims — each extending
+// nothing, which is the exact rot ADR 0027 names (a rule stated at the root and enforced one layer
+// short of the leaves) surviving at the type level after D4 fixed the runtime half. The drift was
+// already visible: `StreamRead` had no `refreshing` while `RpcCallSurface` did, for no stated reason.
+//
+// Two axes had to be parameterized before the four could share one declaration:
+//
+// (1) ARITY. Each surface spells its key differently and each spelling is load-bearing, so the tuple is
+//     a parameter rather than something to normalize. A memo/channel/socket takes `[args: Args]` — the
+//     key is last-or-only, and TypeScript's omittable-`void`-parameter rule collapses `peek(args: void)`
+//     to `peek()` for free. An RPC takes `RpcCallArgs<Args>`, which makes the slot OPTIONAL, because a
+//     zero-arg rpc infers `Args = unknown` rather than `void` and so gets no free collapse. Forcing
+//     either into the other's shape breaks real call sites.
+// (2) CARDINALITY. A value read has no transcript, so the four VALUE probes and the two STREAM probes
+//     are separate interfaces. `RpcCallSurface` takes only the value half; a socket and a streaming read
+//     take both. Folding them into one would put `chunks`/`done` on every scalar rpc.
+//
+// What is deliberately NOT here: `refresh`/`invalidate`/`watch` live on `ReactiveReadSurface` below, one
+// level up, because a socket implements none of them (`server/socket.ts` and `ui/internal/socketProxy.ts`
+// each assign exactly seven members — six probes plus `publish`). Folding the verbs down would widen the
+// socket's public surface with three members nothing implements, which is a feature, not a unification.
+export interface ReactiveValueProbes<T, A extends unknown[]> {
     // Non-blocking snapshot. Scalar: the current value (sticky). Stream/socket: the latest chunk/message
     // (socket additionally age-windows it by `maxAge`). Reactive; `undefined` while pending / empty.
-    peek(args: Args): T | undefined
+    peek(...args: A): T | undefined
     // No value yet (first acquisition in flight). Reactive.
-    pending(args: Args): boolean
+    pending(...args: A): boolean
     // Re-acquiring over a retained value/tail. Reactive.
-    refreshing(args: Args): boolean
+    refreshing(...args: A): boolean
     // Retained error (a stream slot's error is read off its buffer). Reactive.
-    error(args: Args): unknown
+    error(...args: A): unknown
+}
+
+export interface ReactiveStreamProbes<C, A extends unknown[]> {
     // Stream/socket transcript snapshot; `undefined` for a scalar slot. Reactive.
-    chunks(args: Args): unknown[] | undefined
+    chunks(...args: A): C[] | undefined
     // Stream closed. Scalar: n/a. Socket: eternal, so effectively false once live. Reactive.
-    done(args: Args): boolean
+    done(...args: A): boolean
+}
+
+// The both-halves surface at the PRIMITIVE arity (key last-or-only). What `memo`, `channel` and
+// `socket` share; the transported RPC forms instantiate the two halves directly with their own tuple.
+export interface ReactiveProbeSurface<Args, T>
+    extends ReactiveValueProbes<T, [args: Args]>,
+        ReactiveStreamProbes<unknown, [args: Args]> {}
+
+export interface ReactiveReadSurface<Args, T> extends ReactiveProbeSurface<Args, T> {
     // EAGER re-acquire: a memo re-runs its `fn` keeping the stale value visible; a socket re-subscribes
     // keeping the tail visible until the new subscription is live.
     refresh(args?: Partial<Args> | Args): void

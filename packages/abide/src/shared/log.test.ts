@@ -169,6 +169,15 @@ describe('the browser half', () => {
         expect(failed?.level).toBe('error')
     })
 
+    // The client has no environment, so it reads the app name off the global the client build bakes
+    // into the loader entry. If that seed were missing this badge would read `[abide:cards]` while
+    // the server's line for the same channel read `[probeapp:cards]`.
+    test('a bare channel qualifies under the app name on the client too', async () => {
+        const calls = await inBrowser()
+        const bare = calls.find((call) => call.args.includes('bare channel'))
+        expect(bare?.args[0]).toBe('%c[probeapp:cards]%c')
+    })
+
     test('the un-channeled logger is never gated on the client either', async () => {
         const calls = await inBrowser()
         expect(calls.some((call) => call.args.includes('the app said something'))).toBe(true)

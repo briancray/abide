@@ -91,13 +91,13 @@
   <aside class="aside">
     <p>Finally, the escape hatch that makes the rest composable: a bind target does not have to be a cell. Give it <code>{'{'} get, set {'}'}</code> and you can validate, clamp, or reshape on the way through — the same accessor the compiler writes for you above, now yours to put logic in.</p>
   </aside>
-  <Demo id="noderef" title="<code>bind:element={cell}</code> — the node itself" client="src/ui/demos/templating/bindings/NodeRefDemo.abide">
+  <Demo id="noderef" title={"<code>bind:element={cell}</code> — the node itself"} client="src/ui/demos/templating/bindings/NodeRefDemo.abide">
     <NodeRefDemo />
   </Demo>
   <aside class="aside">
     <p>When you need the DOM node — to focus it, measure it, or hand it to a library — <code>bind:element</code> gives it to you two ways. A cell receives the node; a <em>function</em> is called with it on mount and can return a teardown, which makes it the place to put per-instance setup.</p>
   </aside>
-  <Demo id="attach" title="<code>bind:element={fn}</code> — attach + teardown" client="src/ui/demos/templating/bindings/AttachFnDemo.abide">
+  <Demo id="attach" title={"<code>bind:element={fn}</code> — attach + teardown"} client="src/ui/demos/templating/bindings/AttachFnDemo.abide">
     <AttachFnDemo />
   </Demo>
   <aside class="aside">

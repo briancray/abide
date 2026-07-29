@@ -54,16 +54,30 @@ passes the SAME gate that authorizes reading `(rpc,args)` — reuse that RPC's o
 ## 2. Design highlights
 ### 2.1 Storage + fail-closed
 Store keyed exactly as today (`prefix + canonicalKey(args)`, nothing ambient). `slotCache() = shared ?
-sharedStore() : reactiveScope().slots`. Fail-closed = TWO complementary checkpoints:
-1. **Handler isolation** — a shared slot's `startLoad` runs `fn(args)` OUTSIDE any request scope (new
-   `runOutsideScope` via `scopeStorage.exit`) so `identity()`/`cookies()`/`request()` THROW → a shared
-   handler touching request scope rejects, value NEVER cached, in dev AND prod (accessors throw
-   unconditionally). This is §2.3.
-2. **Ambient-entry guard** — a shared READ with `currentScope() === undefined` throws "shared memo
-   read requires an active request scope" (bare script/cron has no gate + no client to serve). Scoped
-   to shared memos only; the default-context LRU ceiling still applies to ordinary ambient reads.
-The caller must be authorized (in a request); the handler must be blind to it (purity). Same call,
-opposite ends.
+sharedStore() : reactiveScope().slots`. Fail-closed = ONE checkpoint, on the HANDLER:
+
+**Handler isolation** — a shared slot's `startLoad` runs `fn(args)` OUTSIDE any request scope
+(`exitScope` via `scopeStorage.exit`) so `identity()`/`cookies()`/`request()`/`context()` THROW → a
+shared handler touching request scope rejects, value NEVER cached, in dev AND prod (accessors throw
+unconditionally). This is §2.3. It applies on every fill path — the async one, the keyed-sync one and
+the auto-tracked backing — because it is a property of `crossRequest`, not of asynchrony.
+
+**The READ is unrestricted.** `crossRequest` means ONE SLOT FOR EVERY CALLER, wherever the call comes
+from: a request handler, a cron tick, an `abide run` migration, an `onStart` warmer. That is the whole
+content of the option, and handler isolation is what makes the slot safe to hand to any of them — the
+stored value is identity-free by construction, so there is nothing user-specific to disclose.
+
+> **Retracted: the ambient-entry guard.** This plan originally paired handler isolation with a second
+> checkpoint — a shared READ outside a request scope threw `"crossRequest memo read requires an active
+> request scope"` — on the reading that "the caller must be authorized (in a request); the handler must
+> be blind to it (purity)". The mechanism never delivered the first half. The test was
+> `requestScoped === true`, the mere PRESENCE of a scope, so an unauthenticated request passed it
+> exactly as an authenticated one did; authorization for an rpc is its middleware, on the HTTP path,
+> and in-process server code can read `sharedStore()` directly regardless. What it did deliver was an
+> inconsistency: only `fn()`/`peek`/`chunks`/`done`/`resumeStream` carried the guard, so a cron job
+> could `refresh()`, `invalidate()`, `publish()` and `error()` a slot it was forbidden to read — which
+> is the exact operational shape (a background job warming a cache every request then serves) the
+> option exists for.
 
 ### 2.2 Broadcast channels
 `cacheChannelName(rpc,args) = "@rpc:" + rpc + ":" + canonicalKey(args)` (reserved `@` namespace; user

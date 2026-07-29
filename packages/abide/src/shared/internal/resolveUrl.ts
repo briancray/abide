@@ -14,6 +14,8 @@
 // the path param-less, and the router already matched the segment literally. The result was that
 // `url('/users/:id', { id: 7 })` produced `/users/7` — a link no route could ever match.
 
+import { classifyRouteSegment, LITERAL, OPTIONAL, REST } from './routeSegmentKind.ts'
+
 export type UrlQueryValue = string | number | boolean | null | undefined
 export type UrlQuery = Record<string, UrlQueryValue | UrlQueryValue[]>
 
@@ -60,20 +62,15 @@ function fillSegment(
     params: Record<string, string | number> | undefined,
     path: string,
 ): string | string[] | undefined {
-    let name: string | undefined
-    let optional = false
-    let rest = false
-    if (segment.length > 4 && segment.startsWith('[[') && segment.endsWith(']]')) {
-        name = segment.slice(2, -2)
-        optional = true
-    } else if (segment.length > 5 && segment.startsWith('[...') && segment.endsWith(']')) {
-        name = segment.slice(4, -1)
-        rest = true
-    } else if (segment.length > 2 && segment.startsWith('[') && segment.endsWith(']')) {
-        name = segment.slice(1, -1)
-    } else {
-        return segment // literal
-    }
+    // The bracket grammar is `routeSegmentKind`, shared with `matchRoute`. These two are INVERSES —
+    // one matches a pathname against a pattern, the other fills the pattern back into an href — so a
+    // private copy here is a copy that can disagree with the matcher, and the failure mode is a link no
+    // route can match (which is exactly what happened once; see the note at the head of this file).
+    const classified = classifyRouteSegment(segment)
+    if (classified.kind === LITERAL) return segment
+    const name = classified.name
+    const optional = classified.kind === OPTIONAL
+    const rest = classified.kind === REST
     const value = params?.[name]
     if (rest) {
         if (value === undefined) {

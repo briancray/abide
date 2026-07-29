@@ -1,5 +1,6 @@
 // Process/request lifecycle hooks + the request/nav middleware onion. Driven live on the
-// /platform/lifecycle page. Auth is just middleware: a guard returns error(403) instead of next().
+// /platform/lifecycle page. Auth is just middleware: a guard calls error(403) — which THROWS, and the
+// chain renders it — instead of calling next().
 import { error } from 'abide/server/error'
 
 export const middleware = []
@@ -26,9 +27,12 @@ export function onHealth(): { app: string; bootWrappedBy: string; bootId: string
     return { app: 'docs', bootWrappedBy: 'onStart', bootId }
 }
 
-// onError is the outermost net for an UNEXPECTED throw during a request (a typed error()/redirect() is
-// a returned Response, not a throw, so it never reaches here). Runs in request scope. Returning a
-// Response shapes the client reply; returning nothing falls back to a generic 500.
-export function onError(_error: unknown): Response {
-    return error(500, 'This handler threw on purpose — onError caught it and shaped this reply.')
+// onError is the outermost net for an UNEXPECTED throw during a request. A typed error()/redirect()
+// throws too, but it arrives as an HttpError/Redirect that the router renders at its OWN status before
+// this hook runs — a declared 404 is not a bug in the app — so it never reaches here. Runs in request
+// scope. Shape the reply by returning a Response, or, as here, by calling error(): it THROWS, and the
+// router renders that throw exactly as it renders a returned Response. Returning nothing (or an
+// unexpected throw from the hook) falls back to a generic 500.
+export function onError(_error: unknown) {
+    error(500, 'This handler threw on purpose — onError caught it and shaped this reply.')
 }

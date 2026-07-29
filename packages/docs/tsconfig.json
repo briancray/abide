@@ -10,5 +10,5 @@
       "$shared/*": ["./src/shared/*"]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/.abide/*.d.ts"]
 }

@@ -24,6 +24,7 @@ import { warmPages } from '../server/internal/pages.ts'
 import { socket } from '../server/socket.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { log } from '../shared/log.ts'
+import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
 // The reserved dev-reload channel name on the socket mux (BP2.3). Not a per-slot cache channel —
 // the dev client subscribes to it by name with no join.
@@ -133,6 +134,9 @@ function isAddressInUse(caught: unknown): boolean {
 }
 
 export async function serve(dir: string, opts: ServeOptions = {}): Promise<ServeResult> {
+    // Only `abide dev` writes into `src/`: it is the lane an editor is pointed at. `abide start` serves
+    // the same code in production and has no business regenerating source-adjacent types at boot.
+    if (opts.dev === true) await writeHealthCompanion(dir)
     const config: LoadedApp = opts.app ?? (await loadApp(dir))
     config.port = await resolvePort(opts)
     // Production (`abide start`) minifies the client bundle; `abide dev` does not (TODO #6).
@@ -184,6 +188,11 @@ function startWatch(
         try {
             invalidateClientBundle(config)
             const fresh = await loadApp(dir)
+            // Regenerated before anything else: an edit to `onHealth` changes the app's health TYPE,
+            // and an editor that reads the stale companion would report the old shape against the new
+            // hook. The router reads `config.onHealth` live (a getter), so the two land together.
+            await writeHealthCompanion(dir)
+            config.onHealth = fresh.onHealth
             config.routes = fresh.routes ?? {}
             config.pages = fresh.pages ?? {}
             config.pageDirs = fresh.pageDirs ?? {}

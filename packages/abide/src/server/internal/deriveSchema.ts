@@ -185,8 +185,13 @@ function deriveOutputSchema(
     const schemas: JSONSchema[] = []
     for (const member of members) {
         if ((member.flags & (TypeFlags.Void | TypeFlags.Undefined)) !== 0) continue
+        // `never` is the OUTCOME-ONLY return: `error()`/`redirect()` throw, so a handler that only ever
+        // fails settles to `never` and has no success payload to describe. It contributes nothing rather
+        // than the `{ not: {} }` that `never` renders as elsewhere — an output schema nothing can satisfy
+        // would fail the router's drift-check on every response the handler never produces.
+        if ((member.flags & TypeFlags.Never) !== 0) continue
         const payload = unwrapResponseWrapper(member, checker)
-        if (payload === undefined) continue // a bare Response member (redirect/error) — no payload
+        if (payload === undefined) continue // a bare Response member — no payload
         if ((payload.flags & (TypeFlags.Void | TypeFlags.Undefined)) !== 0) continue
         schemas.push(typeToSchema(payload, checker, warnings, new Set<number>(), 0, ''))
     }

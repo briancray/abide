@@ -8,12 +8,14 @@
 // that is not a well-formed traceparent is DROPPED rather than adopted: the invariant `trace()`
 // callers rely on is "a valid traceparent or undefined", and a malformed one would ride into log
 // lines and outgoing headers. A drop leaves the previous trace standing.
+//
+// The validate-or-drop rule lives on the holder now (`traceHolder` → `adoptedAmbient`), shared with
+// `route()` and `identity()`. What stays here is the null-check: "nothing arrived" is a different case
+// from "something arrived and was malformed".
 
-import { reactiveScope } from './reactiveScope.ts'
-import { TRACEPARENT_PATTERN } from './TRACEPARENT_PATTERN.ts'
+import { setClientTrace } from './traceHolder.ts'
 
 export function adoptTrace(traceparent: string | null | undefined): void {
     if (traceparent === null || traceparent === undefined) return
-    if (!TRACEPARENT_PATTERN.test(traceparent)) return
-    reactiveScope().traceparent = traceparent
+    setClientTrace(traceparent)
 }

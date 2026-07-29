@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { context } from '../../server/context.ts'
 import { cookies } from '../../server/cookies.ts'
+import { GET } from '../../server/GET.ts'
 import {
     anonymousPrincipal,
     type RequestScope,
@@ -14,7 +15,12 @@ import {
 import { request } from '../../server/request.ts'
 import { identity } from '../identity.ts'
 import { memo } from '../memo.ts'
-import { sharedStore } from './sharedCache.ts'
+import {
+    sharedCacheAccount,
+    sharedCachePin,
+    sharedCacheSettleStream,
+    sharedStore,
+} from './sharedCache.ts'
 
 function makeScope(overrides?: Partial<RequestScope>): RequestScope {
     const url = new URL('http://localhost/test')
@@ -207,12 +213,82 @@ describe('fail-closed checkpoint (a) — the full accessor matrix', () => {
     })
 })
 
-describe('fail-closed checkpoint (b) — ambient-entry guard', () => {
-    test('a shared read with no active request scope throws a clear error', () => {
-        const c = memo(async (n: number) => n, { crossRequest: true })
-        // The guard runs at the read entry (synchronously) on both the reactive peek and load paths.
-        expect(() => c(1)).toThrow('crossRequest memo read requires an active request scope')
-        expect(() => c(1)).toThrow('crossRequest memo read requires an active request scope')
+// `crossRequest` means ONE SLOT FOR EVERY CALLER, wherever the call is made from. There is no
+// ambient-entry guard: the read used to throw outside a request scope, which made a cron tick or an
+// `abide run` migration unable to read a cache it was allowed to `refresh()`. Checkpoint (a) is what
+// keeps the store safe — the body is scope-exited, so the value is identity-free by construction.
+describe('a crossRequest memo is callable from ANY caller, request or not', () => {
+    test('a shared read with no active request scope works', async () => {
+        const c = memo(async (n: number) => n + 1, { crossRequest: true })
+        expect(await c(1)).toBe(2)
+        expect(c.peek(1)).toBe(2)
+    })
+
+    test('a scriptless caller and a request share ONE slot in both directions', async () => {
+        let calls = 0
+        const c = memo(
+            async (n: number) => {
+                calls++
+                return n * 2
+            },
+            { crossRequest: true },
+        )
+
+        // Bare (cron/script) caller fills the slot; the request reads the same one.
+        expect(await c(5)).toBe(10)
+        expect(await runInScope(makeScope(), () => c(5))).toBe(10)
+        expect(calls).toBe(1)
+
+        // And the reverse: a request fills, a bare caller reads.
+        expect(await runInScope(makeScope(), () => c(6))).toBe(12)
+        expect(await c(6)).toBe(12)
+        expect(calls).toBe(2)
+    })
+
+    test('a bare caller can invalidate what a request cached, and re-fill it', async () => {
+        let calls = 0
+        const c = memo(
+            async (n: number) => {
+                calls++
+                return n + calls
+            },
+            { crossRequest: true },
+        )
+
+        expect(await runInScope(makeScope(), () => c(1))).toBe(2)
+        c.invalidate(1)
+        expect(await c(1)).toBe(3)
+        expect(calls).toBe(2)
+    })
+
+    test('checkpoint (a) still holds for a bare caller — the body cannot read request scope', async () => {
+        const c = memo(async (_n: number) => identity().id, { crossRequest: true })
+        await expect(c(1)).rejects.toThrow(/no active request scope/)
+        expect(hasCachedValue()).toBe(false)
+    })
+
+    // The operational shape the option exists for: a cron tick / `abide run` migration warming a
+    // crossRequest rpc in-process, which every later request then serves from. Covered at the RPC
+    // surface and not only at the memo, because `makeRpc` is where a caller-side gate would sit.
+    test('a crossRequest RPC is callable in-process with no request scope', async () => {
+        let calls = 0
+        const read = GET(
+            ({ n = 0 }) => {
+                calls++
+                return { n: n * 2 }
+            },
+            { memo: { crossRequest: true } },
+        )
+
+        expect(await read({ n: 4 })).toEqual({ n: 8 })
+        expect(await runInScope(makeScope(), () => read({ n: 4 }))).toEqual({ n: 8 })
+        expect(calls).toBe(1)
+        expect(read.peek({ n: 4 })).toEqual({ n: 8 })
+
+        // And the write verbs reach the same slot they always could.
+        read.invalidate({ n: 4 })
+        expect(await read({ n: 4 })).toEqual({ n: 8 })
+        expect(calls).toBe(2)
     })
 })
 
@@ -261,5 +337,64 @@ describe('LRU eviction by ABIDE_MAX_SHARED_CACHE_SIZE', () => {
         expect(present(2)).toBe(false)
         expect(present(1)).toBe(true)
         expect(present(3)).toBe(true)
+    })
+})
+
+// The two named TRANSITIONS (`sharedCacheAccount` / `sharedCacheSettleStream`), which replaced
+// hand-driven verb sequences at six call sites in `memo.ts`.
+//
+// Both failure modes here are SILENT and invisible in a value — which is why they are asserted as
+// state, not as a returned result:
+//   • forget `evictIfNeeded` → the store quietly grows past its ceiling.
+//   • forget `unpin` when a stream closes → the key is pinned forever, so it is never evictable again
+//     AND its bytes keep counting against the ceiling, dragging every other entry down with it.
+describe('the shared-cache transitions', () => {
+    const LIMIT = 'ABIDE_MAX_SHARED_CACHE_SIZE'
+    const originalLimit = Bun.env[LIMIT]
+
+    afterEach(() => {
+        if (originalLimit === undefined) delete Bun.env[LIMIT]
+        else Bun.env[LIMIT] = originalLimit
+    })
+
+    test('account() records a size AND trims to the ceiling in one step', () => {
+        Bun.env[LIMIT] = '100'
+        const store = new Map<string, unknown>()
+        store.set('a', 'first')
+        sharedCacheAccount(store, 'a', 80)
+        expect(store.has('a')).toBe(true)
+
+        store.set('b', 'second')
+        sharedCacheAccount(store, 'b', 80) // 160 > 100 → the LRU entry goes
+        expect(store.has('b')).toBe(true)
+        expect(store.has('a')).toBe(false)
+    })
+
+    test('account() does NOT unpin — an open stream must stay pinned through its growth', () => {
+        Bun.env[LIMIT] = '50'
+        const store = new Map<string, unknown>()
+        store.set('open', 'streaming')
+        sharedCachePin(store, 'open')
+        sharedCacheAccount(store, 'open', 500) // way over the ceiling
+        // Pinned entries are deliberately not evictable: a replay in progress must survive.
+        expect(store.has('open')).toBe(true)
+    })
+
+    test('settleStream() unpins, so a CLOSED stream becomes evictable again', () => {
+        Bun.env[LIMIT] = '50'
+        const store = new Map<string, unknown>()
+        store.set('closed', 'transcript')
+        sharedCachePin(store, 'closed')
+        // While pinned and over the ceiling it survives...
+        sharedCacheAccount(store, 'closed', 500)
+        expect(store.has('closed')).toBe(true)
+        // ...and once settled it is an ordinary sized entry, so the ceiling reaches it.
+        sharedCacheSettleStream(store, 'closed', 500)
+        expect(store.has('closed')).toBe(false)
+    })
+
+    test('both are a no-op when there is no shared store (a non-crossRequest memo)', () => {
+        expect(() => sharedCacheAccount(undefined, 'k', 1)).not.toThrow()
+        expect(() => sharedCacheSettleStream(undefined, 'k', 1)).not.toThrow()
     })
 })

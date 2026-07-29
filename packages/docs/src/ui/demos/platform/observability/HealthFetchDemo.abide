@@ -1,13 +1,20 @@
 <script>
   import { state } from "abide/shared/state"
   import { health } from "abide/shared/health"
+  import platformHealth from "$server/rpc/platformHealth"
 
-  // health() is ISOMORPHIC: on the client `await health()` fetches the live /__abide/health endpoint
-  // (the same call returns the framework baseline in-proc on the server). No hand-rolled fetch.
+  // health() is ISOMORPHIC: on the client `await health()` fetches the live /__abide/health endpoint,
+  // and the same call composes the same document in-proc on the server. No hand-rolled fetch.
+  //
+  // The second line is the server half, over an RPC that calls the SAME health() and reads
+  // `doc.bootId` off it — a read the checker verifies against the generated src/.abide/health.d.ts.
+  // This cell can't: a `state(null)` widens to `any`, so `doc.bootId` here is never checked at all.
   let doc = state(null)
+  let composed = state(null)
 
   async function loadHealth() {
     doc = await health()
+    composed = await platformHealth()
   }
 </script>
 
@@ -16,4 +23,7 @@
   <pre class="out" id="health-block">reachable = {doc.reachable ? "true" : "false"}</pre>
 {:else}
   <p id="health-block">not fetched yet</p>
+{/if}
+{#if composed}
+  <pre class="out" data-testid="health-composed">server-composed bootId = {composed.bootId}</pre>
 {/if}

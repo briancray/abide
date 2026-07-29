@@ -21,7 +21,12 @@ left. Builds on §2 (ambient context), CO1/CO2, machine-surfaces.md.
    - `src/server/config.ts` — an `env(schema)` stub (CO1);
    - `src/app.ts` — an `AppModule` (lifecycle hooks) exporting an empty `middleware` array
      (passthrough `next => next()`);
-   - `package.json` (dep on `abide`; scripts dev/build/start) and `tsconfig.json` (TS7).
+   - `package.json` (dep on `abide`; scripts dev/build/start) and `tsconfig.json` (TS7), whose
+     `include` must name **`"src/.abide/*.d.ts"`** explicitly. A tsconfig `include` wildcard never
+     descends into a dot-directory, so without that entry the generated health companion (CO2.4) is
+     written on every `dev`/`check`/`lsp`/`build` and **never read** — `health()` silently keeps
+     typing as the bare baseline, with no error to notice. The scaffold owns the file, so the
+     scaffold owns the entry.
      This item once ended "and the `CLAUDE.md` agent pointer (via `init-agent`)". The attribution
      went when CL4 was withdrawn (below), but the claim outlived it by one edit — and with the
      generator gone there is nothing left that could emit that file, so `scaffold()` writes `src/**`,
@@ -72,20 +77,33 @@ process-lifecycle hooks:
   anyway (in a `finally`) so the server never strands as a zombie; a hook that threw then has its
   original error **re-thrown** to the caller (teardown still completed). Same contract under
   `createTestApp`.
-- **`onError(error)`** — **request-scoped**; runs when a request throws an unexpected error (a typed
-  `error(...)`/`redirect(...)` is a returned Response, not a throw, so it never reaches here). Read
-  `request()`/`route()`/`identity()` ambiently. May return a `Response` to shape the client reply;
-  anything else (or a throwing hook) falls back to a generic 500 that never leaks the detail. The
+- **`onError(error)`** — **request-scoped**; runs when a request throws an **unexpected** error. A
+  typed `error(...)`/`redirect(...)` also throws — that is the mechanism, not an exception to it — but
+  it arrives at `handleUncaught` as an `HttpError`/`Redirect` and is rendered at its own status
+  **BEFORE** the hook is consulted, on the rule that a declared 404 or a login redirect is not a bug in
+  the app and must not fire its error hook. So the hook sees only what nobody declared. Read
+  `request()`/`route()`/`identity()` ambiently. Shape the client reply by **returning** a `Response`
+  **or by calling `error(...)`/`redirect(...)`**, which throw — both are deliberate, so both shape it;
+  only an *unexpected* throw from the hook falls back to a generic 500 that never leaks the detail (a
+  hook that fails while reporting a failure cannot be trusted to have produced a reply). The
   `onError` reply is **finalized like any response** — it still gets the post-dispatch stamping
   (identity cookie / CORS / `traceparent`+`traceresponse`), so an error response is not a
   header-stamping hole. A deferred **identity-resolution failure** (a bearer/cookie that *throws* on
   unseal, AU9) is routed here too, in request scope, rather than escaping as a bare pre-scope 500.
-- **`onHealth()`** — **request-scoped** app health hook run on every `GET /__abide/health`; its
-  returned fields merge over the framework stub `{ reachable, version, startedAt, uptime }` (app
-  fields win). `reachable: false` or a throw → the endpoint answers **503** (CO2.4).
+- **`onHealth()`** — the app health hook run on **every server-side `health()` call**, not only inside
+  the route; its returned fields merge over the framework baseline `{ reachable, version, startedAt,
+  uptime }` (app fields win). `health()` composes the whole document in-proc and `GET
+  /__abide/health` is a wrapper that picks the status code and nothing else — `reachable: false` or a
+  throw → **503** + `Retry-After: 30` (CO2.4) — so the route and an in-proc caller cannot describe the
+  same app differently. Inside the route the call is still in request scope, so the hook may read
+  `identity()`/`context()`; from a scope-free caller (a migration, a warmer) that read throws, which
+  lands on the existing throw-fails-closed rule rather than a new one. The hook reaches `health()`
+  through a provided source (`shared/internal/healthSource.ts`) rather than an import, because
+  `shared/` may not name the router — so `abide run`, which binds no server at all, provides one too.
 
 Both `onStart`/`onStop` and `onHealth`/`onError` are async-capable and awaited. `onStart`/`onStop`
-live on the process lifecycle; `onHealth`/`onError` are router-consumed (per request).
+live on the process lifecycle; `onError` is router-consumed (per request), and `onHealth` is consumed
+by the `health()` primitive (per call, wherever the call comes from).
 
 **Signal-driven shutdown (long-lived `abide dev` / `abide start`).** The CLI installs process handlers
 so `onStop` teardown always runs before exit instead of stranding in-flight work — one path, two
@@ -99,9 +117,20 @@ The request/nav interceptor is **onion middleware**, not a lifecycle hook: `expo
 = [(next) => Response]`. Each entry is `async (next) => { … return await next() }` — `next()` takes
 no args (the request comes from `request()`), so the passthrough is `next => next()`. It is
 onion-composed with any per-RPC `{ middleware: [...] }` (global wraps per-RPC wraps handler);
-short-circuit by returning a `Response`. **Auth is just middleware** — a guard is a middleware that
-returns `error(403)` instead of calling `next()`; there is no separate framework gate. Arg/route
-checks read the isomorphic `route()` → `{ kind, name, params, url }`.
+short-circuit by returning a `Response` **or by throwing one of the outcome helpers** — `error(403)`
+/`redirect(...)` return `never` and throw, and the chain renders a thrown outcome exactly as it
+renders a returned `Response`. **Auth is just middleware** — a guard is a middleware that calls
+`error(403)` instead of `next()`; there is no separate framework gate. Arg/route checks read the
+isomorphic `route()` → `{ kind, name, params, url }`.
+
+The throw path is what makes the **per-subscribe channel/room re-authorization** fail closed
+(`server/internal/channelAuth.ts`). That gate runs the same chain against a synthetic request and
+decides on whether the chain reached its terminal sentinel; a middleware that short-circuits by
+throwing never reaches it, so a bare sentinel comparison would let the throw escape and take the
+whole subscribe (and the connection) with it. Any throw — deliberate `error(403)` or an unexpected
+crash — is therefore read as a **DENY**, on the rule that the safe reading of "the chain did not
+reach its terminal" is that it did not authorize. Only a non-outcome throw is logged (`abide:socket`);
+a declared 403 is the gate working.
 
 **Under `abide run`:** `onStart`/`onStop` **run** (the script needs the booted runtime); the
 **middleware chain does not** (no requests). So `run` = boot lifecycle without the request path.

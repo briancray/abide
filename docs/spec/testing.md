@@ -19,8 +19,14 @@ always `await` it.
    middleware chain (FD1). **Not a mocked harness.** Tests hit the same runtime as production.
 2. **Handles (`{ origin, fetch, rpc, sockets, health, stop }`):**
    - **`origin`** — the ephemeral base URL.
-   - **`rpc`** — the **typed** isomorphic call surface (§6) in-process against the test app;
-     `await app.rpc.user({ id: 1 })` is type-checked against the handler.
+   - **`rpc`** — the **typed** isomorphic call surface (§6) against the test app;
+     `await app.rpc.user({ id: 1 })` is type-checked against the handler. It is a **`fetch` against
+     `origin`**, not an in-process invocation of the callable — the point of booting a real server is
+     that a test exercises the whole chain (CSRF, identity, middleware, input validation, the memo,
+     the deadline), and calling the handler directly would skip all of it. That makes the **verb**
+     load-bearing: the proxy sends the rpc's **DECLARED** method (`route.__rpc.method`), because the
+     router enforces the declaration with a 405, so a hardcoded `POST` left every `PUT`/`PATCH`/
+     `DELETE` rpc simply unreachable through this handle.
    - **`sockets`** — subscribe/publish to sockets (`AsyncIterable`, S1).
    - **`fetch`** — raw `fetch` against `origin` for low-level assertions (headers, status, SSR
      HTML).

@@ -155,14 +155,36 @@ application/jsonl`). **`sharedLevels`** (C6.2, added with the layout keep-alive 
 layouts the client is keeping alive: the `shell` `html` is then only the diverging suffix, and the
 client grafts it into the innermost kept layout's outlet (not `#__abide-app`) rather than swapping the
 whole app root. `sharedLevels: 0` (no shared layout / first-diverging is the root) grafts the full shell
-into `#__abide-app` as before. `navigate.ts softLoad` reads the frames
+into `#__abide-app` as before.
+
+**The authority runs client→server, not the reverse.** This PR described `sharedLevels` as the
+server's number with the client as its consumer; it is the other way round. The client sends
+**`Abide-Nav-Keep: <n>`** — how many outer levels it is KEEPING — and where sent that **decides** the
+render (`levels.slice(keep)`, clamped to the destination's own layout depth, since a client cannot keep
+levels that do not exist and an unclamped over-count slices past the end and ships an empty shell).
+`sharedLayoutDepth(from, to)`, derived from the `Abide-Nav` header, is the FALLBACK for a caller that
+declares nothing — an older browser bundle, or any non-browser caller — and a malformed or negative
+value falls back the same way, because falling back renders MORE of the tree, which is always
+placeable, so there is no outcome in it worth a 400. The two answer different questions: the derivation
+says what the route TABLE permits (static), while what a LIVE page can keep depends on things the
+server cannot see (whether a chain is mounted, claimed, graftable). Deriving both independently and
+reconciling at runtime — with the client hard-loading on a mismatch — is what one derivation makes
+unrepresentable. Both representations of the URL therefore declare
+**`Vary: Abide-Nav, Abide-Nav-Keep`**: the JSONL soft-nav response and the first-load HTML document
+share a URL and differ only by those request headers, and only the soft-nav half used to say so, which
+left a cache free to serve a page fragment to a first load (`Vary: Cookie`, the identity-scoped
+default, does not key them apart — nothing about the cookie differs).
+
+`navigate.ts softLoad` reads the frames
 PROGRESSIVELY (`readFrames` — decode + split on `\n`, parse each line as it completes): swaps the shell
 into the kept outlet (or `#__abide-app` when `sharedLevels: 0`) immediately (a slow read shows its
 sentinel-bracketed fallback), fills each placeholder
 as its patch frame arrives (`applyPatchFrame` — a `<template>`.innerHTML parse, then clear the fallback
 run between the sentinels and insert before the id'd one, i.e. the same DOM op the first-load
 move-script does but in JS, since a `fetch`ed body's inline scripts don't auto-run), then once the
-stream ends hydrates the assembled DOM (the SAME `mountPathname` path — PR3 drops the sentinels). Disposes the previous mount BEFORE the shell swap (dispose-first invariant). A
+stream ends hydrates the assembled DOM (the SAME `mountPathname` path — PR3 drops the sentinels;
+its signature is now `mountPathname(path, seed?, gen?)`, the trailing generation counter being what a
+later nav is checked against). Disposes the previous mount BEFORE the shell swap (dispose-first invariant). A
 middleware short-circuit still arrives as a JSON `{redirect}` envelope (checked before the stream —
 `jsonl` is matched BEFORE `json` since the former contains the latter as a substring). JSONL is the
 framing (robustly newline-delimited + JSON-escaped so HTML can't break it + carries url/id/seed). One

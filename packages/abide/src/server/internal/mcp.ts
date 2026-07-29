@@ -10,10 +10,10 @@
 // internal request back through the app's full middleware/auth chain, so whatever the app's
 // middleware enforces applies here uniformly with the browser and CLI surfaces.
 
-import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
-import { error } from '../error.ts'
 import { json } from '../json.ts'
 import type { Socket } from '../socket.ts'
+import { callOwnRpc } from './callOwnRpc.ts'
+import { errorResponse } from './errorResponse.ts'
 import type { RpcEntry, SocketEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
@@ -108,27 +108,12 @@ function listTools(config: AppConfig): McpTool[] {
     return tools
 }
 
-// Dispatch an RPC tool by routing an internal request to `/rpc/<name>` on this same server, so it
-// runs the identical middleware/auth chain as any browser or CLI call (MS2.5). Reads carry the
-// args object in `?__abide_args=`; mutations send it as a JSON body. Auth headers ride along.
+// Dispatch an RPC tool by routing an internal request back through this same server, so it runs the
+// identical middleware/auth/validation chain as any browser or CLI call (MS2.5). The loopback itself is
+// `callOwnRpc`, shared with the `agent()` tool surface — the two are the SAME tool set by definition
+// (MS2.6), so they must not reach it through two different doors.
 async function callRpc(rpc: RpcEntry, args: unknown, request: Request): Promise<McpToolResult> {
-    const headers = new Headers()
-    const authorization = request.headers.get('authorization')
-    if (authorization !== null) headers.set('authorization', authorization)
-    const cookie = request.headers.get('cookie')
-    if (cookie !== null) headers.set('cookie', cookie)
-
-    const encoded = JSON.stringify(args ?? {})
-    let response: Response
-    if (rpc.read) {
-        const target = new URL(`/__abide/rpc/${rpc.name}`, request.url)
-        target.searchParams.set(RPC_QUERY_PARAMS.args, encoded)
-        response = await fetch(target, { method: rpc.method, headers })
-    } else {
-        const target = new URL(`/__abide/rpc/${rpc.name}`, request.url)
-        headers.set('content-type', 'application/json')
-        response = await fetch(target, { method: rpc.method, headers, body: encoded })
-    }
+    const response = await callOwnRpc(rpc, args, request.url, request)
 
     const body = await response.text()
     let payload: unknown = body
@@ -257,7 +242,7 @@ function envelope(id: unknown, outcome: Outcome): Record<string, unknown> {
 
 export async function handleMcp(request: Request, config: AppConfig): Promise<Response> {
     if (request.method.toUpperCase() !== 'POST') {
-        return error(405, 'MCP endpoint accepts POST only.', { headers: { allow: 'POST' } })
+        return errorResponse(405, 'MCP endpoint accepts POST only.', { headers: { allow: 'POST' } })
     }
 
     let body: unknown

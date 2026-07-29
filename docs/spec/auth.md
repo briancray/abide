@@ -84,7 +84,12 @@ second-param idea from the interview was rejected in favor of imported ambient a
    - **`GET /__abide/identity`** returns the caller's own resolved principal — what
      `identity.refresh()` and a compiled binary's `identity` subcommand read. It discloses nothing
      they do not already hold (their next request IS this identity) and runs through the middleware
-     chain like every other route. It is also what makes an OPAQUE sealed credential debuggable
+     chain like every other route. It is **read-only and gates its method** through the same
+     `enforceMethod` every framework route uses — anything but `GET`/`HEAD` is a **405 + `Allow: GET,
+     HEAD`** (`HEAD` is never named; the router derives it from `GET`). The gate had been written out
+     per route class and simply omitted here, so a `POST` carrying the abide client's shape cleared
+     the CSRF gate and was answered with the principal. It is also what makes an OPAQUE sealed
+     credential debuggable
      without making it forgeable: the holder cannot read their own token, so the only honest answer to
      "as whom?" comes from the server.
 4. **Anonymous vs authenticated signal (FLAGGED default):** `identity()` always returns at
@@ -161,13 +166,23 @@ second-param idea from the interview was rejected in favor of imported ambient a
   `export const middleware = [(next) => Response, …]` — an **onion** of `(next) => Response`
   functions, onion-composed (global wraps per-RPC wraps handler). It runs on **every server-
   touching request except static assets**. `next()` takes **no args** (reach the request via
-  `request()`); **return a `Response` (e.g. `error(403)` / `redirect`) to short-circuit**, or
-  `return next()` to pass through. A middleware reads `identity()` and the isomorphic
+  `request()`); **short-circuit by calling `error(403)` / `redirect(...)`, which THROW** (both
+  return `never`), or by returning a `Response` directly — the chain renders a thrown outcome at
+  its own status exactly as it renders a returned one; `return next()` passes through. A
+  middleware reads `identity()` and the isomorphic
   `route()` → `{ kind, name, params }` (DX6/FD2 — there is **no** `ctx` object; the former
   `ctx.kind`/`ctx.name`/`ctx.params` are `route()` fields derived from the request URL; for
   `rpc` kind, `params` is the args object). **Auth is just middleware** — a guard is a
-  middleware that returns `error(403)` instead of calling `next` (the former `auth:` RPC
+  middleware that calls `error(403)` instead of calling `next` (the former `auth:` RPC
   property is retired, FD1).
+- **The throw is what makes the gate fail CLOSED.** A denial that a middleware *returned* is
+  distinguishable from a middleware that crashed; a denial it *throws* is not, and every
+  consumer of the chain must therefore treat both the same way. The per-subscribe channel/room
+  re-authorization (`channelAuth`) does: it runs the chain to a terminal sentinel and reads
+  **any** throw — declared `error(403)` or unexpected crash — as a **DENY**, because the safe
+  reading of "the chain did not reach its terminal" is that it did not authorize. Anything else
+  would let a short-circuit escape and take the subscribe with it. Only a non-outcome throw is
+  logged; a declared 403 is the gate doing its job.
 - **Per-RPC middleware** uses the same shape: `POST(fn, { middleware: [(next) => …] })`. Global
   middleware wraps per-RPC middleware wraps the handler.
 - **Uniform across surfaces (§13.4):** RPC, nav, socket-connect, and HTTP-face socket ops all
@@ -193,7 +208,8 @@ if (await Bun.password.verify(pw, user.hash)) identity.set({ id: user.id, roles:
 // app.ts — authorization IS middleware (no ctx; read route() + identity()):
 export const middleware = [
   async (next) => {
-    if (route().name === 'deleteUser' && !identity().roles?.includes('admin')) return error(403)
+    // `error(403)` THROWS (it returns `never`); the chain renders it as the 403. No `return` needed.
+    if (route().name === 'deleteUser' && !identity().roles?.includes('admin')) error(403)
     return next()
   },
 ]

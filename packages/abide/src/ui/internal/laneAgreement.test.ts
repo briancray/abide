@@ -59,6 +59,21 @@ const CASES: Array<{ what: string; source: string; legal: boolean }> = [
         source: '{#if x}<b>hi</b><script>let a = 1</script>{/if}',
         legal: false,
     },
+    {
+        what: 'an export in <script module>',
+        source: '<script module>export const a = 1</script><p>{a}</p>',
+        legal: false,
+    },
+    {
+        what: 'an export in the instance <script>',
+        source: '<script>export let a = 1</script><p>{a}</p>',
+        legal: false,
+    },
+    {
+        what: 'an export in a branch-local <script>',
+        source: '{#if x}<script>export const a = 1</script><p>{a}</p>{/if}',
+        legal: false,
+    },
     { what: 'plain text', source: '<p>hello</p>', legal: true },
     { what: 'an interpolation', source: '<p>{name}</p>', legal: true },
     {

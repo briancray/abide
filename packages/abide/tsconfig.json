@@ -25,5 +25,6 @@
       "$shared/*": ["./src/shared/*.ts"]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/.abide/*.d.ts"],
+  "exclude": ["node_modules", "src/cli/__fixtures__/healthApp"]
 }

@@ -26,7 +26,7 @@
     <TagsInvalidateDemo />
   </Demo>
   <aside class="aside">
-    <p>Two shared reads carry the tag <code>"docs"</code>. The global verb <code>invalidate({'{'} tags: ["docs"] {'}'})</code> — run server-side (the tag registry is server-only) through a POST RPC — drops <strong>both</strong> slots at once, so a re-read of each re-fetches together.</p>
+    <p>Two shared reads carry the tag <code>"docs"</code>. The global verb <code>invalidate({'{'} tags: ["docs"] {'}'})</code> — run server-side through a POST RPC, so the drop is observable in one pass — drops <strong>both</strong> slots at once, so a re-read of each re-fetches together.</p>
   </aside>
   <Demo id="tags-refresh" title="global <code>refresh({'{'}tags{'}'})</code> — eager revalidate every tagged slot" server="src/server/rpc/cacheTagRefresh.ts" client="src/ui/demos/memo/TagsRefreshDemo.abide" tab="server">
     <TagsRefreshDemo />
@@ -34,10 +34,10 @@
   <aside class="aside">
     <p>The eager sibling: <code>refresh({'{'} tags: ["docs"] {'}'})</code> revalidates every tagged slot in place, retaining each stale value while it re-runs — so a re-read returns a freshly climbed count.</p>
   </aside>
-  <Demo id="tag-probes" title="<code>pending({'{'}tags{'}'})</code> / <code>refreshing({'{'}tags{'}'})</code> — server-side aggregates" server="src/server/rpc/tagProbes.ts" client="src/ui/demos/memo/TagProbesDemo.abide" tab="server">
+  <Demo id="tag-probes" title="<code>pending({'{'}tags{'}'})</code> / <code>refreshing({'{'}tags{'}'})</code> — aggregates over a tag" server="src/server/rpc/tagProbes.ts" client="src/ui/demos/memo/TagProbesDemo.abide" tab="server">
     <TagProbesDemo />
   </Demo>
   <aside class="aside">
-    <p>The read side of the tag surface: reactive aggregates that are <strong>true</strong> if <em>any</em> shared slot carrying a tag is loading or revalidating. Like the tag verbs, they're <strong>server-side</strong> (the tag registry lives on the server), so this demo captures them in one server pass — a tagged shared read goes <code>pending</code> while it first loads, then <code>refreshing</code> while it revalidates over the retained value.</p>
+    <p>The read side of the tag surface: reactive aggregates that are <strong>true</strong> if <em>any</em> slot carrying a tag is loading or revalidating. Like the tag verbs, they're <strong>isomorphic</strong> — tags no longer require <code>crossRequest</code>, so a tagged read registers its browser memo too and these answer on either side. This demo reaches them over an RPC only because a server pass can observe the whole transition <em>deterministically</em>, in one go: a tagged read goes <code>pending</code> while it first loads, then <code>refreshing</code> while it revalidates over the retained value.</p>
   </aside>
 </main>

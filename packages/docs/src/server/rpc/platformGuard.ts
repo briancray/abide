@@ -10,8 +10,9 @@ import { request } from 'abide/server/request'
 // Layer 1 — authorize. A read carries its args in the URL in EITHER documented form: the canonical
 // `?__abide_args=<json>` blob a machine caller (the browser proxy) emits, or flat per-field params
 // (`?allow=no`) for hand-testing. The reserved param is namespaced so it can never collide with a
-// handler's own field. When `allow` is "no" this returns an `error(403)` Response WITHOUT calling
-// `next()` — a short-circuit, so layer 2 and the handler never run.
+// handler's own field. When `allow` is "no" this calls `error(403)` WITHOUT calling `next()` — and
+// `error()` THROWS rather than returning a Response, which the chain renders at the status asked for.
+// Either way it is a short-circuit: layer 2 and the handler never run.
 const authorize = (next: () => Response | Promise<Response>) => {
     const params = new URL(request().url).searchParams
     // Flat form first as the default, then let the canonical blob win if present (same precedence the
@@ -26,7 +27,7 @@ const authorize = (next: () => Response | Promise<Response>) => {
             // Malformed args — leave the default and let the handler's own validation handle it.
         }
     }
-    if (allow === 'no') return error(403, 'blocked by middleware')
+    if (allow === 'no') error(403, 'blocked by middleware')
     return next()
 }
 

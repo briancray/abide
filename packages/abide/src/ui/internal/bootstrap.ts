@@ -28,7 +28,7 @@ import { adoptTrace } from '../../shared/internal/adoptTrace.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
-import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
@@ -39,6 +39,7 @@ import { HYDRATION_ELEMENT_ID } from './HYDRATION_ELEMENT_ID.ts'
 import {
     type PageLoader,
     type PageMount,
+    pageSpecs,
     type RpcSpecs,
     registerPages,
     type SocketSpecs,
@@ -101,10 +102,6 @@ export async function* resumeStreamSource(
     count: number,
     onFresh: () => void,
 ): AsyncGenerator<unknown> {
-    const argsQuery =
-        args !== undefined
-            ? `&${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
-            : ''
     let response: Response
     // A resume IS an RPC call (the same handler, continued), so it carries the trace like one — a
     // fresh span under the page's trace. `base` is the app's own origin here; a cross-origin base is
@@ -112,7 +109,7 @@ export async function* resumeStreamSource(
     const traceparent = outgoingTraceparent()
     try {
         response = await fetch(
-            `${base}/__abide/rpc/${name}?${RPC_QUERY_PARAMS.from}=${count}${argsQuery}`,
+            rpcUrl(base, name, { from: count, args }),
             traceparent === undefined ? undefined : { headers: { traceparent } },
         )
     } catch {
@@ -161,6 +158,23 @@ function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, ba
             })
         }
     }
+}
+
+// Replay a soft-nav confirm's seed into the client RPC memos (C6-nav, the param/query nav's half of the
+// round trip). Same handoff contract a hydrate replays through, applied to memos that already exist:
+// `seed` is authoritative over a retained slot, so a read whose value the server just recomputed lands
+// even though the read itself never re-fired — a read with no args and no `route()` dependency has
+// nothing to re-fire ON, which is why the confirm's answer used to be discarded and the page kept
+// serving the value it loaded on first paint.
+//
+// It can simply ASK for the imports map because a proxy is one object per `(base, name)` for the tab, so
+// the memos here are the ones every live mount is reading. While proxies were minted per mount this
+// needed a registry of every live scope, kept in sync with the graft depth — machinery that existed only
+// to work around that.
+export function replaySeedIntoProxies(seed: HydrationSeed, base: string): void {
+    const imports = makeClientImports(pageSpecs(), base)
+    replayReads(seed, imports)
+    replayStreams(seed, imports, base)
 }
 
 // Build the merged `$scope` an emitted mount reads (mirrors the SSR scope in server/internal/pages.ts):

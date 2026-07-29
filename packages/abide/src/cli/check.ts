@@ -26,16 +26,16 @@ import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FileSystem } from 'typescript/unstable/fs'
 import { API, DiagnosticCategory } from 'typescript/unstable/sync'
-import type { Root } from '../ui/internal/ast.ts'
 import {
-    CHECK_HEADER_LENGTH,
-    componentDts,
-    emitCheck,
-    mapGenToOrig,
-    type Segment,
-} from '../ui/internal/emitCheck.ts'
+    indexByGeneratedPath,
+    type RawDiagnostic,
+    resolveAbidePosition,
+} from '../ui/internal/abideDiagnostic.ts'
+import type { Root } from '../ui/internal/ast.ts'
+import { componentDts, emitCheck, type Segment } from '../ui/internal/emitCheck.ts'
 import { parse } from '../ui/internal/parse.ts'
 import { validateTemplate } from '../ui/internal/validateTemplate.ts'
+import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
 // A single mapped diagnostic against a `.abide` file. `line`/`column` are 1-based.
 export interface CheckDiagnostic {
@@ -72,17 +72,10 @@ export const SUPPRESSED_CODES = new Set<number>([
 ])
 
 // One raw diagnostic as returned by the TS7 pass (before source mapping).
-interface RawDiagnostic {
-    file: string
-    pos: number
-    code: number
-    text: string
-}
-
 // The generated TS for one `.abide` file plus everything needed to map its diagnostics back.
 interface Generated {
     abidePath: string
-    tempPath: string
+    tsPath: string
     source: string
     code: string
     segments: Segment[]
@@ -93,6 +86,10 @@ interface Generated {
 // ---------------------------------------------------------------------------
 
 export async function check(dir: string): Promise<CheckResult> {
+    // The app's generated type companions come first: a `.abide` that reads `health()` is checked
+    // against the same document its editor sees, and a check on a fresh clone (where `src/.abide/` is
+    // gitignored and therefore absent) is not a different check from one on a dev machine.
+    await writeHealthCompanion(dir)
     const abideFiles = findAbideFiles(dir)
     const toCheck: Generated[] = []
     const diagnostics: CheckDiagnostic[] = []
@@ -135,24 +132,28 @@ export async function check(dir: string): Promise<CheckResult> {
 
     // Each generated module is a virtual sibling of its `.abide` (so relative imports resolve
     // identically); the type engine reads them through the `fs` overlay — nothing touches disk.
-    for (const entry of toCheck) virtualFiles[entry.tempPath] = entry.code
+    for (const entry of toCheck) virtualFiles[entry.tsPath] = entry.code
 
     const rawDiagnostics =
         toCheck.length > 0
-            ? diagnose(dir, { files: virtualFiles, open: toCheck.map((entry) => entry.tempPath) })
+            ? diagnose(dir, { files: virtualFiles, open: toCheck.map((entry) => entry.tsPath) })
             : []
 
-    const byTemp = new Map<string, Generated>()
-    for (const entry of toCheck) byTemp.set(entry.tempPath, entry)
-
+    // Indexing + map-back is `abideDiagnostic`, shared with the LSP. Both traps it handles (tsgo
+    // canonicalizing the reported path, a diagnostic landing in the synthetic header) DROP a diagnostic
+    // rather than throw, so getting either wrong here means `abide check` reports GREEN on a file with
+    // type errors — which is exactly what happened while the two lanes hand-rolled this separately.
+    const index = indexByGeneratedPath(toCheck)
     for (const raw of rawDiagnostics) {
-        const entry = byTemp.get(raw.file)
-        if (entry === undefined) continue
-        // The synthetic header is emitted first for every file; a diagnostic inside it is not user code.
-        if (raw.pos < CHECK_HEADER_LENGTH) continue
-        const origOffset = mapGenToOrig(entry.segments, raw.pos)
-        const { line, column } = offsetToLineColumn(entry.source, origOffset)
-        diagnostics.push({ file: entry.abidePath, line, column, code: raw.code, message: raw.text })
+        const resolved = resolveAbidePosition(raw, index)
+        if (resolved === undefined) continue
+        diagnostics.push({
+            file: resolved.module.abidePath,
+            line: resolved.line,
+            column: resolved.column,
+            code: raw.code,
+            message: raw.text,
+        })
     }
 
     diagnostics.sort((a, b) =>
@@ -224,34 +225,21 @@ export function findAbideFiles(dir: string): string[] {
 function buildGenerated(abidePath: string, source: string, root: Root): Generated {
     const { code, segments } = emitCheck(source, root)
     const directory = dirname(abidePath)
-    const tempPath = join(
+    const tsPath = join(
         directory,
         `__abide_check_${basename(abidePath).replace(/[^\w]/g, '_')}_${Bun.hash(abidePath).toString(36)}.ts`,
     )
-    return { abidePath, tempPath, source, code, segments }
+    return { abidePath, tsPath, source, code, segments }
 }
 
 // ---------------------------------------------------------------------------
 // Offset mapping
 // ---------------------------------------------------------------------------
 
-export function offsetToLineColumn(
-    source: string,
-    offset: number,
-): { line: number; column: number } {
-    let line = 1
-    let column = 1
-    const limit = Math.min(offset, source.length)
-    for (let index = 0; index < limit; index++) {
-        if (source.charCodeAt(index) === 10) {
-            line++
-            column = 1
-        } else {
-            column++
-        }
-    }
-    return { line, column }
-}
+// Moved to `ui/internal/abideDiagnostic.ts` (it belongs with the map-back step it serves) and
+// re-exported here only because `lsp.ts` imported it FROM this file — a CLI command doubling as the
+// LSP's library. New callers should take it from `abideDiagnostic` directly.
+export { offsetToLineColumn } from '../ui/internal/abideDiagnostic.ts'
 
 // ---------------------------------------------------------------------------
 // TS7 diagnostics — the `TypeEngine` seam (Bun -> node bridge, mirrors deriveSchema)

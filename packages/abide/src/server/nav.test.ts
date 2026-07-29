@@ -9,6 +9,7 @@ import { expect, test } from 'bun:test'
 import { url } from '../shared/url.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { parseSoftNav } from '../test/parseSoftNav.ts'
+import { GET } from './GET.ts'
 
 // SSR HTML now carries the client skeleton's comment anchors; strip them for structural assertions.
 function stripAnchors(html: string): string {
@@ -81,6 +82,145 @@ test('a soft-nav request (Abide-Nav header) returns a streamed JSONL envelope of
     expect(seed.trace).toBe(response.headers.get('traceresponse') ?? '')
     expect(seed.identity).toMatchObject({ authenticated: false })
     expect(envelope.url).toBe('/users/99')
+
+    await app.stop()
+})
+
+// C6.2 / NAV_HEADERS: how deep a graft the ROUTE TABLE allows and how deep a graft the LIVE PAGE can
+// take are different questions. The server can only answer the first; `Abide-Nav-Keep` is the client
+// answering the second, and it WINS — one number, one derivation. The two used to be derived
+// independently and reconciled at runtime, with the client hard-loading on a disagreement.
+test('Abide-Nav-Keep decides the shared-layout depth: a client keeping nothing gets the whole tree', async () => {
+    const app = await createTestApp({
+        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
+    })
+
+    // Both routes sit under the root layout, so the server's own derivation keeps it and ships only the
+    // diverging page for the client to graft into the live one.
+    const grafting = await parseSoftNav(await app.fetch('/b', { headers: { 'Abide-Nav': '/a' } }))
+    expect(grafting.sharedLevels).toBe(1)
+    expect(grafting.html).not.toContain('chrome')
+
+    // The same nav from a client that can keep nothing — no live chain, or one grafted but not yet
+    // claimed. The ceiling wins and the layout comes back, because this client is going to replace its
+    // whole container and a bare `<p>B</p>` would drop the chrome entirely.
+    const whole = await parseSoftNav(
+        await app.fetch('/b', { headers: { 'Abide-Nav': '/a', 'Abide-Nav-Keep': '0' } }),
+    )
+    expect(whole.sharedLevels).toBe(0)
+    expect(whole.html).toContain('chrome')
+    expect(whole.html).toContain('<p>B</p>')
+
+    await app.stop()
+})
+
+test('a declared depth is clamped to the route’s own, and a malformed one falls back to the derivation', async () => {
+    const app = await createTestApp({
+        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
+    })
+
+    // `/b` sits under exactly one layout, so a client claiming to keep five is claiming levels that do
+    // not exist. Unclamped that slices past the end and ships an empty shell; clamped it means "keep
+    // everything there is", which is the only thing it could have meant.
+    const over = await parseSoftNav(
+        await app.fetch('/b', { headers: { 'Abide-Nav': '/a', 'Abide-Nav-Keep': '5' } }),
+    )
+    expect(over.sharedLevels).toBe(1)
+    expect(over.html).toContain('<p>B</p>')
+
+    // A value that isn't a count says nothing, so the router's own derivation stands — which renders
+    // MORE of the tree than a bad parse might have, and more is always placeable. Note `''`: `Number('')`
+    // is `0`, so an empty header would otherwise read as the most consequential value the field has.
+    for (const keep of ['banana', '-1', '', '1.5']) {
+        const envelope = await parseSoftNav(
+            await app.fetch('/b', { headers: { 'Abide-Nav': '/a', 'Abide-Nav-Keep': keep } }),
+        )
+        expect(envelope.sharedLevels).toBe(1)
+        expect(envelope.html).toContain('<p>B</p>')
+    }
+
+    await app.stop()
+})
+
+// The point of the client winning: it can keep LESS than the route table permits. Both routes share the
+// root layout, so the derivation says 1 — but a client with nothing mounted, or a mount grafted and not
+// yet claimed, can keep 0, and the server has no way to know that.
+test('a client may declare a SHALLOWER keep than the route table permits', async () => {
+    const app = await createTestApp({
+        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
+    })
+
+    const derived = await parseSoftNav(await app.fetch('/b', { headers: { 'Abide-Nav': '/a' } }))
+    expect(derived.sharedLevels).toBe(1)
+
+    const shallower = await parseSoftNav(
+        await app.fetch('/b', { headers: { 'Abide-Nav': '/a', 'Abide-Nav-Keep': '0' } }),
+    )
+    expect(shallower.sharedLevels).toBe(0)
+    expect(shallower.html).toContain('chrome')
+
+    await app.stop()
+})
+
+// What the ceiling is FOR on a same-pattern nav, stated as the seed contents rather than as HTML: the
+// client keeps its whole chain there, so it wants the confirm only for its seed — and a seed can only
+// carry reads from levels the server actually RAN. A same-pattern nav skips every layout by default
+// (from == to, so the derived depth is that route's full depth), which is why a layout's route-
+// independent read had nowhere to come from and kept painting its first-paint value.
+test('a same-pattern nav seeds only the PAGE by default, and the layouts too when keep is 0', async () => {
+    const app = await createTestApp({
+        routes: {
+            chrome: GET(() => ({ where: 'layout' })),
+            body: GET(() => ({ where: 'page' })),
+        },
+        layouts: {
+            '/': "<script>import chrome from 'abide-rpc:chrome'</script><div>{(await chrome()).where}{children()}</div>",
+        },
+        pages: {
+            '/a': "<script>import body from 'abide-rpc:body'</script><p>{(await body()).where}</p>",
+        },
+    })
+
+    const names = (envelope: { seed: unknown }): string[] =>
+        ((envelope.seed as { reads?: { name: string }[] }).reads ?? [])
+            .map((read) => read.name)
+            .sort()
+
+    // Default: the layout is kept, so it is not re-rendered — and its read is therefore absent.
+    const kept = await parseSoftNav(await app.fetch('/a', { headers: { 'Abide-Nav': '/a' } }))
+    expect(kept.sharedLevels).toBe(1)
+    expect(names(kept)).toEqual(['body'])
+
+    // `keep: 0` — what the client sends when the nav is to the URL it is already on. The whole tree
+    // renders, so the layout's read runs and reaches the seed the client replays.
+    const whole = await parseSoftNav(
+        await app.fetch('/a', { headers: { 'Abide-Nav': '/a', 'Abide-Nav-Keep': '0' } }),
+    )
+    expect(whole.sharedLevels).toBe(0)
+    expect(names(whole)).toEqual(['body', 'chrome'])
+
+    await app.stop()
+})
+
+test('a nav response varies on BOTH nav headers — each picks a different representation', async () => {
+    const app = await createTestApp({
+        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
+    })
+
+    // `Abide-Nav` picks document-vs-frame-stream; `Abide-Nav-Keep` picks how much tree the stream
+    // carries. A cache keyed on only the first could hand a whole-tree render to a client that asked for
+    // a suffix, or the reverse — so both representations declare both.
+    const soft = await app.fetch('/b', { headers: { 'Abide-Nav': '/a' } })
+    const first = await app.fetch('/b')
+    for (const response of [soft, first]) {
+        const vary = response.headers.get('vary') ?? ''
+        expect(vary).toContain('Abide-Nav')
+        expect(vary).toContain('Abide-Nav-Keep')
+    }
 
     await app.stop()
 })

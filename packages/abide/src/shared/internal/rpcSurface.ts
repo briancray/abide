@@ -12,6 +12,7 @@
 // surface is identical for reads and mutations, on the server and in the browser.
 
 import type { MemoNotify } from '../memo.ts'
+import type { ReactiveValueProbes } from './reactiveReadSurface.ts'
 
 // A read-call argument tuple. A ZERO-arg read infers `Args = unknown`, which makes the argument
 // OPTIONAL so a bare `fn()` type-checks; a declared arg stays REQUIRED because `Args` is then a
@@ -50,17 +51,16 @@ export type MutationCallArgs<Args> = unknown extends Args
     ? [args?: Args | FormData]
     : [args: Args | FormData]
 
-export interface RpcCallSurface<Args, T> {
+// The four VALUE probes (`peek`/`pending`/`refreshing`/`error`) are INHERITED from
+// `ReactiveValueProbes` at this surface's own arity, rather than re-listed. They were hand-copied and
+// this interface extended nothing — see the note on `ReactiveValueProbes` for why that mattered and why
+// the arity is a parameter instead of something normalized away. Only the value half: a scalar read has
+// no transcript, so `chunks`/`done` stay off it and `StreamRead` adds them.
+export interface RpcCallSurface<Args, T> extends ReactiveValueProbes<T, RpcCallArgs<Args>> {
     // THE READ (Promise-read model): the bare call is the awaitable, coalesced load; it also subscribes
     // the calling reactive context, so `{await fn()}` / `{#await fn()}` re-await on invalidate. Use
     // `.peek()` for the non-blocking `T | undefined` snapshot.
     (...args: RpcInvokeArgs<Args>): Promise<T>
-    // Reactive peek: subscribes, kicks a coalesced load when cold, returns value or undefined.
-    peek(...args: RpcCallArgs<Args>): T | undefined
-    pending(...args: RpcCallArgs<Args>): boolean
-    // Revalidating over a retained value (distinct from first-load `pending`). Reactive.
-    refreshing(...args: RpcCallArgs<Args>): boolean
-    error(...args: RpcCallArgs<Args>): unknown
     // Run `handler` whenever this slot's value changes; returns a dispose function. Reactive probe.
     watch(args: Args, handler: (value: T | undefined) => void): () => void
     // Raw `Response`, full bypass of the memo (rpc-core call surface): on the client a bare fetch to

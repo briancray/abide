@@ -25,6 +25,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
 import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
+import { skipQuoted } from './skipQuoted.ts'
 import { skipTypeArguments } from './skipTypeArguments.ts'
 
 // A verbatim span of the generated file: [genStart, genEnd) maps to original offset `origStart`.
@@ -54,17 +55,36 @@ export interface CheckModule {
 // as `[index, item]`; `children` is the intrinsic slot callable.
 const HEADER =
     // `untracked()`, not `peek()` (ADR 0027 D2) — this shim must match `shared/internal/reactive.ts`'s
-    // real `State`, and `peek` now means the REACTIVE snapshot on `memo`/`channel` (see `__AbideMemo`
-    // below, whose `peek` returns `__T | undefined` precisely because it subscribes and may be cold).
+    // real `State`, and `peek` now means the REACTIVE snapshot on `memo`/`channel`, which is cold-safe
+    // (`__T | undefined`) and so cannot stand in for a value type at all (see `__AbideMemo` below).
     `interface __AbideState<__T> { (): __T; set(value: __T): void; untracked(): __T; }\n` +
-    `type __AbideWiden<__T> = [__T] extends [never] ? any : __T extends readonly never[] ? any[] : [__T] extends [null | undefined] ? any : __T;\n` +
+    // Every arm is BRACKETED so the conditional does not distribute. A naked `__T extends readonly
+    // never[]` distributes over a union, which sent each constituent through the arms alone: the `null`
+    // of a `number | null` matched `[null] extends [null | undefined]` and widened to `any`, and
+    // `number | any` collapses to `any` — so a nullable cell/memo silently stopped being type-checked at
+    // all. What this widen exists for is a WHOLE initializer that is empty/nullish, never one member of
+    // a union.
+    `type __AbideWiden<__T> = [__T] extends [never] ? any : [__T] extends [readonly never[]] ? any[] : [__T] extends [null | undefined] ? any : __T;\n` +
     `declare function __abideUnwrap<__T>(cell: __AbideState<__T>): __AbideWiden<__T>;\n` +
     // An auto-called MEMO binding (ADR 0024 §5) reads as its VALUE, exactly as a cell does — the rewrite
     // turns `d` into `d()` everywhere, including before a member access, so `d.length` is the value's
     // length. Unwrapping it here is what makes the check agree with the emit; a probe reached through the
-    // binding (`d.peek()`) is not reachable at runtime either, so it fails loudly on both sides. The extra
-    // members below only need to be enough to tell a memo from a `State` (which has `set`, not `invalidate`).
-    `interface __AbideMemo<__T> { (): __T; peek(): __T | undefined; invalidate(): void; }\n` +
+    // binding (`d.peek()`) is not reachable at runtime either, so it fails loudly on both sides.
+    //
+    // `__T` is pinned by `state`, NOT by `peek`, and the difference is load-bearing. `peek` returns
+    // `__T | undefined`, so inference against a `SyncMemo<T | undefined>` STRIPS the `undefined` and
+    // fixes `__T = T` — after which the memo's own `(): T | undefined` is not assignable to `(): __T`,
+    // the overload is rejected, and the binding falls through to the identity overload below and types
+    // as the memo OBJECT. `peek` cannot be repaired: `T | undefined` is what it returns whether or not
+    // `T` itself includes `undefined`, so the value type is not recoverable from it. Nor can `(): __T`
+    // pin it alone — `SyncMemo<T> extends Memo<void, T>` inherits `(args: void): Promise<T>`, and
+    // inference from an overloaded source takes the LAST signature, which is the inherited async one.
+    // `state(): State<__T>` is exact on both counts, and it is also the member that actually MEANS memo
+    // (`peek`/`invalidate` are on the shared reactive surface, so a channel/socket binding matched them
+    // too; `state` is memo-only — ADR 0024 §4). The `(): __T` signature stays as the ASSIGNABILITY gate:
+    // it is what keeps an async `Memo` and a keyed `SyncKeyedMemo` — neither of which the emit
+    // auto-calls — falling through to identity, so the two lanes keep agreeing.
+    `interface __AbideMemo<__T> { (): __T; state(...args: never[]): __AbideState<__T>; invalidate(): void; }\n` +
     `declare function __abideUnwrap<__T>(memo: __AbideMemo<__T>): __AbideWiden<__T>;\n` +
     `declare function __abideUnwrap<__T>(value: __T): __T;\n` +
     `declare function __ref(value: unknown): void;\n` +
@@ -160,7 +180,7 @@ function scanBalancedAngle(text: string, ltIndex: number): number {
         const c = text[i]
         if (c === undefined) break
         if (c === "'" || c === '"' || c === '`') {
-            i = skipString(text, i)
+            i = skipQuoted(text, i)
             continue
         }
         if (c === '<') depth++
@@ -192,18 +212,101 @@ function deriveProps(source: string, root: Root): string {
     return 'Record<string, unknown>'
 }
 
+// Every name the component's own script OWNS: each import BINDING (the local name — `X as Y` owns `Y`)
+// plus each locally declared type (`type`/`interface`/`enum`/`class`). Driven by the TS scanner rather
+// than a regex so a name sitting inside a string or a comment cannot leak in as a binding.
+function ownedNames(source: string, root: Root): Set<string> {
+    const names = new Set<string>()
+    const scripts: Script[] = []
+    if (root.moduleScript !== null) scripts.push(root.moduleScript)
+    if (root.instanceScript !== null) scripts.push(root.instanceScript)
+    for (const script of scripts) {
+        const scanner = createScanner(
+            true,
+            /* Standard */ 0,
+            source.slice(script.contentStart, script.contentEnd),
+        )
+        let inImportClause = false
+        // An import-clause identifier is held one token: `X as Y` binds `Y`, so `X` is discarded when
+        // `as` turns out to follow it.
+        let pending = ''
+        let afterDeclarationKeyword = false
+        for (;;) {
+            const token = scanner.scan()
+            if (token === SyntaxKind.EndOfFile) break
+            if (pending !== '') {
+                if (token !== SyntaxKind.AsKeyword) names.add(pending)
+                pending = ''
+            }
+            if (afterDeclarationKeyword && token === SyntaxKind.Identifier)
+                names.add(scanner.getTokenText())
+            afterDeclarationKeyword =
+                token === SyntaxKind.TypeKeyword ||
+                token === SyntaxKind.InterfaceKeyword ||
+                token === SyntaxKind.EnumKeyword ||
+                token === SyntaxKind.ClassKeyword
+            if (token === SyntaxKind.ImportKeyword) inImportClause = true
+            // The specifier ends the clause; a side-effect `import './x.ts'` has no `from`.
+            else if (token === SyntaxKind.FromKeyword || token === SyntaxKind.StringLiteral)
+                inImportClause = false
+            else if (inImportClause && token === SyntaxKind.Identifier)
+                pending = scanner.getTokenText()
+        }
+        if (pending !== '') names.add(pending)
+    }
+    return names
+}
+
+// The identifiers `propsText` uses in TYPE-REFERENCE position. A property NAME is the one identifier
+// that is not one, and it is exactly the identifier followed by `:` or `?`; a qualified name's tail
+// (`Ns.Inner`) resolves through its head, which is what gets collected.
+function referencedTypeNames(propsText: string): Set<string> {
+    const names = new Set<string>()
+    const scanner = createScanner(true, /* Standard */ 0, propsText)
+    let pending = ''
+    let previous = SyntaxKind.EndOfFile
+    for (;;) {
+        const token = scanner.scan()
+        if (token === SyntaxKind.EndOfFile) break
+        if (pending !== '' && token !== SyntaxKind.ColonToken && token !== SyntaxKind.QuestionToken)
+            names.add(pending)
+        pending =
+            token === SyntaxKind.Identifier && previous !== SyntaxKind.DotToken
+                ? scanner.getTokenText()
+                : ''
+        previous = token
+    }
+    if (pending !== '') names.add(pending)
+    return names
+}
+
 // The typed `.d.ts` companion for a `.abide` file: its default export as a component whose props are
 // `deriveProps`. Written next to the `.abide` during `abide check` so a verbatim `import X from
 // "./X.abide"` resolves to this typed default instead of the ambient `declare module "*.abide"` (any).
 // Errors INSIDE this file are never collected (only checked temp modules are), so a `props<T>()` that
-// references an unimported type degrades that prop to `any` (no check, no false positive) — v1 omits
-// the component's imports deliberately.
+// references a type the companion cannot resolve degrades that prop to `any` (no check, no false
+// positive) — v1 omits the component's imports deliberately.
+//
+// That degradation only holds for a name TS CANNOT resolve. A name the script owns but the companion
+// dropped still resolves whenever the DOM lib also declares it — and DOM took most of the common nouns
+// (`File`, `Event`, `Request`, `Response`, `Text`, `Node`, `Range`, `Image`, `Location`, `Comment`). An
+// `import type { File }` then typed the prop as the BROWSER's `File`: not unchecked, checked against
+// the wrong type, at every call site, silently. So each owned name the props type references is shadowed
+// with `any` here, which is what makes the documented degradation true for those names too. Only owned
+// names — an unshadowed `Date`/`Promise`/`Map` is the global the author meant, and stays checked.
+// `Component` is exempt: the companion declares it (shadowing would be a duplicate identifier).
 export function componentDts(source: string, root: Root): string {
+    const props = deriveProps(source, root)
+    const owned = ownedNames(source, root)
+    let shadows = ''
+    for (const name of referencedTypeNames(props))
+        if (name !== 'Component' && owned.has(name)) shadows += `type ${name} = any;\n`
     return (
         // Self-contained `Component<P>` so a component-valued prop in `props<{ Row: Component<…> }>()`
         // resolves in this `.d.ts` companion (mirrors the check HEADER's definition).
         `type Component<__P = Record<string, unknown>> = (props: __P, children?: () => unknown) => unknown;\n` +
-        `type __AbideProps = ${deriveProps(source, root)};\n` +
+        shadows +
+        `type __AbideProps = ${props};\n` +
         `declare const _default: (props: __AbideProps, children?: () => unknown) => unknown;\n` +
         `export default _default;\n`
     )
@@ -349,6 +452,9 @@ function emitComponentCall(node: Extract<TemplateNode, { type: 'Component' }>, e
                     ` ${JSON.stringify(attr.name)}: ${attr.value === null ? 'true' : JSON.stringify(attr.value)},`,
                 )
                 break
+            // An `on<event>` on a component IS a prop (a component has no element to attach a native
+            // listener to), so it types exactly like an expression attribute. Both emitters now pass it;
+            // the server used to drop it, which made this the one lane that told the author the truth.
             case 'ExpressionAttribute':
             case 'EventAttribute':
                 e.emitSynthetic(` ${JSON.stringify(attr.name)}: (`)
@@ -356,13 +462,19 @@ function emitComponentCall(node: Extract<TemplateNode, { type: 'Component' }>, e
                 e.emitSynthetic('),')
                 break
             case 'BindDirective':
-            case 'ClassDirective':
-            case 'StyleDirective':
                 if (attr.expression !== null) {
                     e.emitSynthetic(` ${JSON.stringify(attr.name)}: (`)
                     e.emitExpr(attr.start, attr.end, attr.expression)
                     e.emitSynthetic('),')
                 }
+                break
+            // UNREACHABLE: `templatePlan` rejects `class:`/`style:` on a component, and the check lane
+            // asks that gate (`validateTemplate`) BEFORE it emits — `check.ts` reports and `continue`s.
+            // Kept as explicit no-op arms rather than folded in with `bind:`, because typing them as
+            // props is what this lane used to do and it was wrong in a way nothing caught: the author was
+            // told the directive was a valid, type-checked prop while both runtimes dropped it.
+            case 'ClassDirective':
+            case 'StyleDirective':
                 break
             case 'SpreadAttribute':
                 e.emitSynthetic(' ...(')
@@ -740,20 +852,6 @@ function emitDeclarators(
 // String utilities (depth + quote aware)
 // ---------------------------------------------------------------------------
 
-function skipString(text: string, openIndex: number): number {
-    const quote = text[openIndex]
-    let index = openIndex + 1
-    while (index < text.length) {
-        if (text[index] === '\\') {
-            index += 2
-            continue
-        }
-        if (text[index] === quote) return index
-        index++
-    }
-    return index
-}
-
 interface CommaPart {
     text: string
     start: number
@@ -767,7 +865,7 @@ function splitTopLevelCommas(text: string): CommaPart[] {
         const char = text[index]
         if (char === undefined) break
         if (char === "'" || char === '"' || char === '`') {
-            index = skipString(text, index)
+            index = skipQuoted(text, index)
             continue
         }
         if (char === '{' || char === '[' || char === '(') depth++
@@ -794,7 +892,7 @@ function topLevelAssignmentIndex(text: string): number {
         const char = text[index]
         if (char === undefined) break
         if (char === "'" || char === '"' || char === '`') {
-            index = skipString(text, index)
+            index = skipQuoted(text, index)
             continue
         }
         if (char === '{' || char === '[' || char === '(') depth++

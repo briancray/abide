@@ -11,7 +11,9 @@
 // reach stdout as one JSON value per line); errors go to stderr as a JSON object, and the exit code
 // names the failure class.
 
-import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { isStreamContentType } from '../../shared/internal/decodeStreamResponse.ts'
+import { readLines } from '../../shared/internal/readLines.ts'
+import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import type { CliCommand } from './cliCommands.ts'
 import { cliExitCodeForStatus } from './cliExitCodeForStatus.ts'
@@ -25,15 +27,6 @@ export interface CliCallOptions {
     pretty: boolean
     write(text: string): void
     writeError(text: string): void
-}
-
-function isStreamContentType(contentType: string | null): boolean {
-    if (contentType === null) return false
-    return (
-        contentType.includes('application/jsonl') ||
-        contentType.includes('application/x-ndjson') ||
-        contentType.includes('text/event-stream')
-    )
 }
 
 function requestInit(options: CliCallOptions): RequestInit {
@@ -51,13 +44,12 @@ function requestInit(options: CliCallOptions): RequestInit {
     }
 }
 
+// Reads carry args in the canonical `__abide_args` JSON blob — the machine form, the same one the
+// browser proxy emits, which is why the address is built by the shared `rpcUrl` rather than restated
+// here. (The flat per-field query form exists for hand-testing with curl; nothing generates it.)
 function requestUrl(options: CliCallOptions): string {
-    const base = `${options.origin}/__abide/rpc/${options.command.name}`
-    if (!options.command.read) return base
-    // Reads carry args in the canonical `__abide_args` JSON blob — the machine form, the same one the
-    // browser proxy emits. The flat per-field query form exists for hand-testing with curl.
-    const blob = encodeURIComponent(JSON.stringify(options.args))
-    return `${base}?${RPC_QUERY_PARAMS.args}=${blob}`
+    if (!options.command.read) return rpcUrl(options.origin, options.command.name)
+    return rpcUrl(options.origin, options.command.name, { args: options.args })
 }
 
 // Report a non-2xx as a structured stderr object. The server's own error body is the payload when it
@@ -84,8 +76,6 @@ async function streamBody(response: Response, options: CliCallOptions): Promise<
     const body = response.body
     if (body === null) return CLI_EXIT_CODES.ok
     const sse = (response.headers.get('content-type') ?? '').includes('text/event-stream')
-    const decoder = new TextDecoder()
-    let buffered = ''
     const emit = (line: string): void => {
         if (line === '') return
         if (!sse) {
@@ -94,16 +84,9 @@ async function streamBody(response: Response, options: CliCallOptions): Promise<
         }
         if (line.startsWith('data:')) options.write(`${line.slice(5).trim()}\n`)
     }
-    for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
-        buffered += decoder.decode(chunk, { stream: true })
-        let newline = buffered.indexOf('\n')
-        while (newline !== -1) {
-            emit(buffered.slice(0, newline).trimEnd())
-            buffered = buffered.slice(newline + 1)
-            newline = buffered.indexOf('\n')
-        }
+    for await (const line of readLines(body as unknown as AsyncIterable<Uint8Array>)) {
+        emit(line.trimEnd())
     }
-    emit((buffered + decoder.decode()).trimEnd())
     return CLI_EXIT_CODES.ok
 }
 

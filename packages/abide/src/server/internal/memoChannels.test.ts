@@ -9,8 +9,8 @@ import { makeRead, type Rpc } from './makeRpc.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './requestScope.ts'
 import { createApp } from './router.ts'
 
-// A minimal request scope so a shared read's fail-closed `guardSharedRead` (requires an active
-// scope) is satisfied while loading the durable value.
+// A minimal request scope. A crossRequest read no longer REQUIRES one — it is callable from any
+// caller — but these cases exercise the request path, which is where the broadcast originates.
 function makeScope(name: string): RequestScope {
     const request = new Request(`http://localhost/rpc/${name}`)
     return {

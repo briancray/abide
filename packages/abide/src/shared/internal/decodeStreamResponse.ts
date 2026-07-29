@@ -9,8 +9,16 @@
 // connection is torn down, never leaked. A malformed frame throws (surfaces to `{:catch}`), matching
 // the loud-failure posture of the server encoders.
 
+// `application/x-ndjson` is the same wire format as `application/jsonl` under its other common name —
+// newline-delimited JSON — so it decodes on the `jsonl` path. abide's own `jsonl()` helper never emits
+// it, but a handler that sets its own content-type (or an upstream being proxied through) can, and the
+// CLI already accepted it: `callCliCommand` carried a PRIVATE copy of this predicate that listed
+// x-ndjson while this one did not, so the same response line-streamed at the command line and decoded
+// as a single JSON value in the browser. One predicate, and it recognises the union of what the two
+// used to.
 function streamEncodingFor(contentType: string): 'jsonl' | 'sse' | undefined {
     if (contentType.includes('application/jsonl')) return 'jsonl'
+    if (contentType.includes('application/x-ndjson')) return 'jsonl'
     if (contentType.includes('text/event-stream')) return 'sse'
     return undefined
 }

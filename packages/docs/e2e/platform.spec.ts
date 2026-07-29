@@ -143,6 +143,12 @@ test('health(): the /__abide/health probe fetched straight in-browser', async ({
     await page.goto('/platform/observability')
     await page.locator('#health-btn').click()
     await expect(page.locator('#health-block')).toHaveText('reachable = true')
+    // The server half of the same call, over `platformHealth` — which composes the document in-proc and
+    // reads `doc.bootId` off it as a TYPED field. That read is the regression guard for the generated
+    // `src/.abide/health.d.ts`: the browser cell above widens to `any`, so it checks nothing.
+    await expect(page.getByTestId('health-composed')).toHaveText(
+        /server-composed bootId = [0-9a-f]{8}/,
+    )
 })
 
 test('lifecycle onStart + onHealth: /__abide/health merges app fields over the framework stub', async ({
@@ -210,7 +216,8 @@ test('RPC middleware onion: authorized call stamps context, blocked call short-c
         'passedGuard=platformGuard.authorize',
     )
 
-    // Blocked: layer 1 returns error(403) without next() — a short-circuit caught off .load().
+    // Blocked: layer 1 calls error(403) without next() — it THROWS, the chain renders the 403, and the
+    // browser proxy decodes it back into the same HttpError the caller catches.
     await page.locator('#guard-block-btn').click()
     await expect(page.locator('#guard-block-out')).toContainText('HTTP 403')
 })

@@ -1,5 +1,6 @@
 import { createInterface, type Interface } from 'node:readline'
 import { colourEnabled } from '../../shared/internal/colourEnabled.ts'
+import { readLines } from '../../shared/internal/readLines.ts'
 
 // lineReader({ input, tty, write }) — one line of input at a time, under a prompt.
 //
@@ -54,24 +55,9 @@ export interface LineReader {
     close(): void
 }
 
-// Newline-framed lines off a byte stream — the pipe adapter, unchanged in behaviour. Bun's `prompt()`
-// would be shorter but blocks the event loop, and this process may also be hosting the server the
-// next call goes to.
-async function* readLines(input: ReadableStream<Uint8Array>): AsyncGenerator<string> {
-    const decoder = new TextDecoder()
-    let buffered = ''
-    for await (const chunk of input as unknown as AsyncIterable<Uint8Array>) {
-        buffered += decoder.decode(chunk, { stream: true })
-        let newline = buffered.indexOf('\n')
-        while (newline !== -1) {
-            yield buffered.slice(0, newline)
-            buffered = buffered.slice(newline + 1)
-            newline = buffered.indexOf('\n')
-        }
-    }
-    buffered += decoder.decode()
-    if (buffered.length > 0) yield buffered
-}
+// Line framing is `readLines` (shared) — the pipe adapter only decides what to DO with a line. Bun's
+// `prompt()` would be shorter than either but blocks the event loop, and this process may also be
+// hosting the server the next call goes to.
 
 export function lineReader(options: {
     input: ReadableStream<Uint8Array>

@@ -16,8 +16,8 @@
 
 import { type LogRecord, logFeed } from '../../shared/internal/logFeed.ts'
 import { logFilterFromParams, logRecordMatches } from '../../shared/internal/logRecordMatches.ts'
-import { error } from '../error.ts'
 import { sse } from '../sse.ts'
+import { errorResponse } from './errorResponse.ts'
 
 // How many records may sit undelivered for one slow subscriber before further ones are counted as
 // lost. A bound is mandatory, and it does more work than the slow-reader case suggests: MEASURED, Bun
@@ -138,7 +138,7 @@ function logRecordSource(url: URL, signal: AbortSignal): AsyncIterable<LogRecord
 
 export function logsRoute(url: URL, signal: AbortSignal): Response {
     if (!logFeed.enabled) {
-        return error(
+        return errorResponse(
             404,
             'the log feed is disabled on this deployment — set ABIDE_LOGS=1 on the server to enable it',
         )

@@ -34,6 +34,7 @@ import { promisify } from 'node:util'
 // `node:` exception, and it is confined to this build-time path — nothing per-request imports zlib.
 import { brotliCompress, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
+import { appName } from '../../shared/internal/appName.ts'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
@@ -422,6 +423,11 @@ function loaderSource(
     }
     return (
         `import { bootstrapApp } from ${JSON.stringify(BOOTSTRAP_PATH)};\n` +
+        // CO2.2: the app's name, BAKED. A browser has no environment to read it from, and `log` needs
+        // it for both the default channel label and the qualification of a bare `log.channel('cards')`
+        // → `docs:cards` — un-seeded, the same channel would be `abide:cards` on the client and
+        // `docs:cards` on the server. First statement, so it lands before anything can log.
+        `globalThis.__ABIDE_APP_NAME__ = ${JSON.stringify(appName())};\n` +
         `const LOADERS = { ${entries} };\n` +
         `const RPC_SPECS = ${specsJson};\n` +
         `const SOCKET_SPECS = ${socketSpecsJson};\n` +

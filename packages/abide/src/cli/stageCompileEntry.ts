@@ -26,23 +26,13 @@ import { mkdir, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { scanAppSources } from '../server/internal/scanAppSources.ts'
 import { emitServerTree } from '../ui/internal/emit.ts'
-import { build } from './main.ts'
+import { build, type ClientManifest } from './build.ts'
 
 export interface StagedEntry {
     // The generated `dist/compile/entry.ts`, absolute.
     entryPath: string
     // The app's package.json name — the default output filename and the binary's `log(...)` channel.
     name: string
-}
-
-// What `abide build` wrote to `dist/manifest.json` — the client artifacts to embed.
-interface ClientManifest {
-    hash: string
-    entry: string
-    css: string | null
-    files: string[]
-    encodings?: Record<string, string[]>
-    chunkByPattern: Record<string, string>
 }
 
 // Where the generated entry + AOT-emitted page modules live. Under `dist/` because they are build
@@ -180,7 +170,7 @@ function entrySource(input: {
 
     lines.push(
         '',
-        'await runCompiledApp({',
+        'const $code = await runCompiledApp({',
         `    dir: ${literal(input.dir)},`,
         `    name: ${literal(input.name)},`,
         `    rpc: [${rpcBindings.join(', ')}],`,
@@ -196,6 +186,10 @@ function entrySource(input: {
         `    assets: [${assetEntries.join(', ')}],`,
         `    publicFiles: { ${publicEntries.join(', ')} },`,
         '})',
+        // `runCompiledApp` RETURNS the exit code rather than calling `process.exit` itself, so it stays
+        // testable in-process. `null` means the branch is long-lived (`serve`) and the process must stay
+        // alive on the server's handles — exiting there would kill the deployment on the first request.
+        'if ($code !== null) process.exit($code)',
         '',
     )
     return lines.filter((line) => line !== '').join('\n')
@@ -204,14 +198,14 @@ function entrySource(input: {
 export async function stageCompileEntry(dir: string): Promise<StagedEntry> {
     // The client bundle + baked schemas the binary will carry. Building first also means a broken app
     // fails HERE, with the bundler's diagnostics, rather than inside `bun build --compile`.
-    await build(dir)
-
-    const manifestFile = Bun.file(join(dir, 'dist', 'manifest.json'))
-    if (!(await manifestFile.exists())) {
-        throw new Error('abide compile: `abide build` produced no dist/manifest.json')
-    }
-    const manifest = (await manifestFile.json()) as ClientManifest
-    const buildDir = join(dir, 'dist', '_app', manifest.hash)
+    //
+    // The manifest comes back from `build` rather than being re-read off `dist/manifest.json`: it was
+    // just written by the call above, and going back to disk for it meant re-declaring its shape here
+    // (a third copy, after `build`'s own and `clientBundle`'s reader) and handling a
+    // "the build produced no manifest" case that could only happen if `build` had lied about
+    // succeeding. Nothing else changes — the file is still written, for `abide start`.
+    const { hash, manifest } = await build(dir)
+    const buildDir = join(dir, 'dist', '_app', hash)
 
     const schemasFile = Bun.file(join(dir, 'dist', 'schemas.json'))
     const schemas = (await schemasFile.exists()) ? await schemasFile.json() : {}

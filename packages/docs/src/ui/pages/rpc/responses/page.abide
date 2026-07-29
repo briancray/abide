@@ -10,7 +10,7 @@
 
 <main class="page">
   <h1>Response helpers</h1>
-  <p class="lead">A handler returns a plain value (auto-wrapped in <code>json</code>) or an explicit response: <code>json</code>, <code>error</code>, <code>error.typed</code>, or <code>redirect</code>. Each is a real HTTP response consumed live in the browser below. Streaming responses (<code>jsonl</code>/<code>sse</code>) have their own page — see <a href="/rpc/streaming">Streaming</a>.</p>
+  <p class="lead">A handler returns a plain value (auto-wrapped in <code>json</code>), makes that explicit with <code>json</code>, or ends the call another way entirely — <code>error</code>, <code>error.typed</code> and <code>redirect</code> all <strong>throw</strong>, and the router renders each at the status it asked for. Every one is consumed live in the browser below. Streaming responses (<code>jsonl</code>/<code>sse</code>) have their own page — see <a href="/rpc/streaming">Streaming</a>.</p>
   <Demo id="json" title="<code>json(data)</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/responses/JsonResponseDemo.abide" tab="server">
     <JsonResponseDemo />
   </Demo>
@@ -21,7 +21,8 @@
     <ErrorResponseDemo />
   </Demo>
   <aside class="aside">
-    <p>A failure is a return, not a throw. <code>error(status, message)</code> builds a real HTTP error response — and because the client proxy knows the shape, it surfaces as a caught <code>HttpError</code> with the status intact.</p>
+    <p>A failure is a <strong>throw</strong>, not a return. <code>error(status, message)</code> does not hand a <code>Response</code> back — it throws an <code>HttpError</code>. That is what puts the failure in the memo slot's <em>error</em> channel and keeps it out of the value channel: an in-process caller reaches it with <code>catch</code>, <code>fn.error()</code> reports it, and a read at <code>ttl: ∞</code> never retains a 422 as that slot's value forever.</p>
+    <p>Transport is the other half. The router renders the thrown error at its own status — before <code>onError</code>, because a declared 422 is not a bug in the app — and the browser proxy decodes the non-2xx back into the same <code>HttpError</code>, so the same <code>catch</code> reads the same <code>status</code> on both sides. Throwing also <em>retires</em> type machinery instead of adding it: a <code>throw</code> is <code>never</code> and a union absorbs it, so <code>({'{'} fail {'}'}) =&gt; fail ? error(503) : {'{'} greeting {'}'}</code> still infers <code>{'{'} greeting {'}'}</code> with no brand and no conditional.</p>
   </aside>
   <Demo id="typed" title="<code>error.typed(name, status)</code> + narrowing" server="src/server/rpc/rpcLimited.ts" client="src/ui/demos/rpc/responses/TypedErrorDemo.abide" tab="server">
     <TypedErrorDemo />
@@ -33,7 +34,7 @@
     <RedirectResponseDemo />
   </Demo>
   <aside class="aside">
-    <p>The third kind of answer is "not here, there". <code>redirect(url, status=302)</code> builds it, and the browser fetch follows it transparently — the resolved response reports <code>redirected</code> and the final <code>url</code>.</p>
+    <p>The third kind of answer is "not here, there". <code>redirect(url, status=302)</code> throws a <code>Redirect</code> for the same reason <code>error()</code> throws an <code>HttpError</code> — a handler that redirects produced no value, so it must not resolve as one — and the router renders the 3xx. The browser fetch then follows it transparently — the resolved response reports <code>redirected</code> and the final <code>url</code>.</p>
   </aside>
   <Panel id="baseline-headers" title="The baseline every response carries">
     <ul class="grid">

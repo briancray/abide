@@ -7,14 +7,20 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { makeClientSocketImports, type SocketSpec } from './socketProxy.ts'
 
+// A structurally FAITHFUL shim for the erased proxy. The probes take an optional key because
+// `ErasedSocketSurface` is `SocketSurface<unknown, unknown>` — `Args` is `unknown`, not `void`, so the
+// real surface's probes carry a parameter even though a single-topic socket calls them bare. Declaring
+// them zero-arg made the cast below stop overlapping. Worth keeping faithful rather than widening the
+// cast: a shim that has drifted from the surface it stands in for is how a proxy silently ends up
+// missing a member, which is the whole reason `SocketSurfaceMembers` is `Omit`-derived.
 interface SocketLike {
     publish(message: unknown): void
-    peek(): unknown
-    chunks(): unknown[]
-    pending(): boolean
-    refreshing(): boolean
-    done(): boolean
-    error(): unknown
+    peek(args?: unknown): unknown
+    chunks(args?: unknown): unknown[]
+    pending(args?: unknown): boolean
+    refreshing(args?: unknown): boolean
+    done(args?: unknown): boolean
+    error(args?: unknown): unknown
     [Symbol.asyncIterator](): AsyncIterator<unknown>
 }
 

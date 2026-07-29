@@ -34,6 +34,11 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
      proxies to `src/.abide/` (§8b);
    - **type→JSON-Schema derivation pass** — TypeScript 7 (§11), emits JSON Schema artifacts to
      `src/.abide/`.
+   - **the `health.d.ts` companion** — also written into `src/.abide/`, by `build` (`cli/build.ts`)
+     as well as by `dev`/`check`/`lsp`, since the app author's own editor and `tsc` have to see it
+     and neither runs through abide. Unlike the virtual component companions this one is written to
+     DISK for that reason, and the project's tsconfig must name `"src/.abide/*.d.ts"` explicitly —
+     an `include` wildcard never descends into a dot-directory (CO2.4).
 5. **Route-based code-splitting** — each `page.abide` / `layout.abide` is a split point → its own
    lazy client chunk, fetched on nav (C6-nav). Default split strategy.
 6. **`abide compile` = Bun single-file compile** (`bun build --compile`) → standalone server
@@ -56,7 +61,11 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
    - `dist/schemas.json` read at boot → the baked map **inlined** (no tsgo in the binary).
    - boot itself → `runCompiledApp`, whose `serve` path lands in `serveCompiled` and converges on the
      same `serve()` the CLI drives, so port resolution, the `onStart`/`onStop` wrappers, warm pages and
-     graceful shutdown are not a second implementation.
+     graceful shutdown are not a second implementation. It **RETURNS the exit code** rather than
+     calling `process.exit` itself — `null` meaning this branch is long-lived (`serve`) and the
+     process must stay alive on the server's handles — and the GENERATED ENTRY is the one place that
+     turns a code into an exit. Returning it rather than exiting four times over is what makes the
+     dispatch testable in-process.
    - The entry imports abide as a PACKAGE SPECIFIER (`abide/server/internal/runCompiledApp`), not a
      path resolved from the running CLI: the app's own modules resolve `abide` through its
      `node_modules`, and two copies in one bundle would give the reactive graph, the memo registry

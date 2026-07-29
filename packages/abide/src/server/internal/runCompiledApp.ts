@@ -37,19 +37,12 @@ import { type CliCommand, cliCommands } from './cliCommands.ts'
 import { cliUsage } from './cliUsage.ts'
 import { type CommandTarget, commandTarget } from './commandTarget.ts'
 import { type CompiledApp, compiledAppConfig } from './compiledAppConfig.ts'
-import { completeCliLine } from './completeCliLine.ts'
-import { COMPLETION_SHELLS, type CompletionShell, completionScript } from './completionScript.ts'
-import { connectCommand } from './connectCommand.ts'
-import { disconnectCommand } from './disconnectCommand.ts'
-import { identityCommand } from './identityCommand.ts'
 import { interactiveCli } from './interactiveCli.ts'
-import { loginCommand } from './loginCommand.ts'
-import { logoutCommand } from './logoutCommand.ts'
-import { logsCommand } from './logsCommand.ts'
 import { normalizeOrigin } from './normalizeOrigin.ts'
 import { parseCliArgs } from './parseCliArgs.ts'
 import { reservedCliCommand } from './reservedCliCommand.ts'
-import { resolveCliTarget } from './resolveCliTarget.ts'
+import { reservedCliDispatch } from './reservedCliDispatch.ts'
+import { type ResolvedCliTarget, resolveCliTarget } from './resolveCliTarget.ts'
 import { serveCompiled } from './serveCompiled.ts'
 
 interface GlobalOptions {
@@ -61,18 +54,26 @@ interface GlobalOptions {
     rest: string[]
 }
 
-function write(text: string): void {
-    process.stdout.write(text)
+// What a compiled binary reads and writes. Injectable for the same reason `interactiveCli`'s already
+// is — so the dispatcher is callable from a test rather than only from a shell. It was NOT, and the
+// asymmetry had no stated reason: the two halves of the same command surface, one fully testable and
+// one reachable only by spawning a binary. The defaults reproduce the shell exactly, so the generated
+// compile entry passes nothing.
+export interface RunCompiledAppOptions {
+    // argv from the SUBCOMMAND onward (i.e. already sliced past the executable + script).
+    argv?: string[]
+    write?: (text: string) => void
+    writeError?: (text: string) => void
+    // Is a person typing? Drives the pretty/compact output default and whether a bare run opens the REPL.
+    stdinIsTty?: boolean
+    stdoutIsTty?: boolean
+    input?: ReadableStream<Uint8Array>
 }
 
-function writeError(text: string): void {
-    process.stderr.write(text)
-}
-
-function parseGlobals(argv: string[]): GlobalOptions {
+function parseGlobals(argv: string[], stdoutIsTty: boolean): GlobalOptions {
     // Pretty on a terminal, compact through a pipe — the same TTY-shaped default the log format uses,
     // for the same reason: one output is read by a person, the other by `jq`.
-    const options: GlobalOptions = { pretty: process.stdout.isTTY === true, help: false, rest: [] }
+    const options: GlobalOptions = { pretty: stdoutIsTty, help: false, rest: [] }
     let index = 0
     for (; index < argv.length; index++) {
         const token = argv[index]
@@ -110,150 +111,104 @@ function parseGlobals(argv: string[]): GlobalOptions {
     return options
 }
 
-export async function runCompiledApp(app: CompiledApp): Promise<void> {
-    const globals = parseGlobals(Bun.argv.slice(2))
+// Returns the exit code the process should use, or `null` when this branch is LONG-LIVED (`serve`) and
+// the process must stay alive on the server's handles. Returning rather than calling `process.exit`
+// four times is what makes the dispatch testable in-process; the generated compile entry is the one
+// place that turns a code into an exit.
+export async function runCompiledApp(
+    app: CompiledApp,
+    options: RunCompiledAppOptions = {},
+): Promise<number | null> {
+    const write = options.write ?? ((text: string) => void process.stdout.write(text))
+    const writeError = options.writeError ?? ((text: string) => void process.stderr.write(text))
+    const stdoutIsTty = options.stdoutIsTty ?? process.stdout.isTTY === true
+    const globals = parseGlobals(options.argv ?? Bun.argv.slice(2), stdoutIsTty)
     const config = compiledAppConfig(app)
     const commands = cliCommands(config)
     const byName = new Map<string, CliCommand>()
     for (const command of commands) byName.set(command.name, command)
 
     const head = globals.rest[0]
-    // Branch on the ONE reserved list rather than on literals — see `RESERVED_CLI_COMMANDS`. A
-    // prompt-only name (`exit`) classifies as undefined here and falls through to the rpc table.
+    // Classify against the ONE reserved list rather than on literals — see `RESERVED_CLI_COMMANDS`. A
+    // prompt-only name (`exit`) classifies as undefined here and falls through to the rpc table, and
+    // the `'command'` overload says so in the TYPE, so nothing below has an `exit` branch to get wrong.
     const reserved = reservedCliCommand(head, 'command')
 
     // `--help` reaches the same text from either side of the subcommand (`app --help greet` and
     // `app greet --help`), so asking for help never accidentally RUNS the command it asked about.
+    // `parseGlobals` deliberately stops reading globals at the subcommand (so an rpc may own
+    // `--url`/`--token`), so the other side is re-checked per branch: `runOnce` for an rpc, and
+    // `reservedCliDispatch` for a reserved name — there, rather than here, because the prompt needs the
+    // identical gate and used to lack it.
     if (globals.help) {
         write(
             `${cliUsage(app.name, commands, head === undefined ? undefined : byName.get(head))}\n`,
         )
-        return
+        return CLI_EXIT_CODES.ok
     }
 
-    // `completion` wears two hats, and deliberately: `--line` is the CALLBACK the generated script
-    // invokes on every TAB, so keeping it here rather than under a second reserved name costs the app
-    // one shadowed rpc name instead of two. Both exit before anything boots — completing a command
-    // must never run the app's `onStart`.
-    if (reserved === 'completion') {
-        const lineFlag = globals.rest.indexOf('--line')
-        if (lineFlag !== -1) {
-            const { candidates } = completeCliLine({
-                line: globals.rest[lineFlag + 1] ?? '',
-                commands,
-                surface: 'command',
-            })
-            if (candidates.length > 0) write(`${candidates.join('\n')}\n`)
-            return
-        }
-        const requested = globals.rest[1]
-        const shell = COMPLETION_SHELLS.includes(requested as CompletionShell)
-            ? (requested as CompletionShell)
-            : undefined
-        if (shell === undefined) {
-            writeError(
-                `${app.name} completion — usage: ${app.name} completion <${COMPLETION_SHELLS.join('|')}>\n`,
-            )
-            process.exitCode = CLI_EXIT_CODES.usage
-            return
-        }
-        write(completionScript(shell, app.name))
-        return
-    }
-
-    if (reserved === 'help') {
-        const target = globals.rest[1] === undefined ? undefined : byName.get(globals.rest[1])
-        write(`${cliUsage(app.name, commands, target)}\n`)
-        return
-    }
-
-    // Re-pointing the binary, or changing who it is, touches a file and nothing else — never the app.
-    if (reserved === 'connect') {
-        process.exit(
-            await connectCommand({
-                appName: app.name,
-                argv: globals.rest.slice(1),
-                write,
-                writeError,
-            }),
-        )
-    }
-    if (reserved === 'disconnect') {
-        process.exit(await disconnectCommand({ appName: app.name, write }))
-    }
-    if (reserved === 'login' || reserved === 'logout') {
-        const resolvedFor = await resolveCliTarget({
+    // Where calls land, resolved AT MOST ONCE and only when something asks. `help` and `completion`
+    // answer off the command table alone, so neither reads the stored target nor builds a `CommandTarget`
+    // — and `CommandTarget` boots the embedded app only inside `origin()`, so even the branches that do
+    // build one run no `onStart` until they need a server.
+    let resolving: Promise<ResolvedCliTarget> | undefined
+    const resolved = (): Promise<ResolvedCliTarget> =>
+        (resolving ??= resolveCliTarget({
             appName: app.name,
             url: globals.url,
             token: globals.token,
-        })
-        process.exit(
-            reserved === 'login'
-                ? await loginCommand({
-                      appName: app.name,
-                      origin: resolvedFor.remote,
-                      argv: globals.rest.slice(1),
-                      write,
-                      writeError,
-                  })
-                : await logoutCommand({
-                      appName: app.name,
-                      origin: resolvedFor.remote,
-                      write,
-                      writeError,
-                  }),
-        )
+        }))
+
+    let target: CommandTarget | undefined
+    const ensureTarget = async (): Promise<CommandTarget> => {
+        if (target !== undefined) return target
+        const at = await resolved()
+        const built = commandTarget({ app, config, remote: at.remote })
+        target = built
+        // One registration for the whole process: a ctrl-c mid-command still runs the app's onStop
+        // teardown, whether or not anything is bound yet.
+        installShutdownHandlers({ url: '', stop: () => built.stop() })
+        return built
     }
 
-    // Host it. Long-lived: this branch must NOT exit when the function returns, and it goes through
-    // `serveCompiled` so the foreground server is the same one `abide start` runs — port resolution,
-    // lifecycle wrappers, warm pages and shutdown handling included.
-    if (reserved === 'serve') {
-        await serveCompiled(app, config, write)
-        return
-    }
-
-    const resolved = await resolveCliTarget({
-        appName: app.name,
-        url: globals.url,
-        token: globals.token,
-    })
-    const target = commandTarget({ app, config, remote: resolved.remote })
-    // One registration for the whole process: a ctrl-c mid-command still runs the app's onStop
-    // teardown, whether or not anything is bound yet.
-    installShutdownHandlers({ url: '', stop: () => target.stop() })
-
-    let code: number = CLI_EXIT_CODES.ok
+    let code: number | null = CLI_EXIT_CODES.ok
     try {
-        if (reserved === 'identity') {
-            code = await identityCommand({
-                origin: await target.origin(),
-                token: resolved.token,
+        if (reserved !== undefined) {
+            // ONE dispatch table, shared with the REPL (`reservedCliDispatch`). What differs by surface
+            // is supplied here rather than restated as a second ladder: `serve` hosts in the FOREGROUND
+            // and never returns, there is no session to detach a `logs` tail back to, and nothing needs
+            // re-resolving after `connect`/`login` because the process is about to exit.
+            code = await reservedCliDispatch(reserved, {
+                appName: app.name,
+                commands,
+                surface: 'command',
+                argv: globals.rest.slice(1),
                 pretty: globals.pretty,
                 write,
                 writeError,
-            })
-        } else if (reserved === 'logs') {
-            // `target.origin()` boots the embedded server when nothing is connected, so a bare `logs`
-            // tails THIS binary's own app — which is a real (if quiet) thing to do, and keeps the
-            // command meaning one thing whether or not a deployment is named.
-            code = await logsCommand({
-                origin: await target.origin(),
-                token: resolved.token,
-                argv: globals.rest.slice(1),
-                write,
-                writeError,
+                origin: async () => await (await ensureTarget()).origin(),
+                remote: async () => (await resolved()).remote,
+                token: async () => (await resolved()).token,
+                serve: async () => {
+                    // Through `serveCompiled` so the foreground server is the same one `abide start`
+                    // runs — port resolution, lifecycle wrappers, warm pages and shutdown handling
+                    // included. NULL, not a code: this branch is long-lived and the process must stay
+                    // alive on the server's handles.
+                    await serveCompiled(app, config, write, globals.rest.slice(1))
+                    return null
+                },
             })
         } else if (head === undefined) {
+            const at = await resolved()
             code = await interactiveCli({
                 name: app.name,
                 commands,
-                target,
-                token: resolved.token,
+                target: await ensureTarget(),
+                token: at.token,
                 flags: { url: globals.url, token: globals.token },
                 pretty: globals.pretty,
-                tty: process.stdin.isTTY === true,
-                input: Bun.stdin.stream(),
+                tty: options.stdinIsTty ?? process.stdin.isTTY === true,
+                input: options.input ?? Bun.stdin.stream(),
                 write,
                 writeError,
             })
@@ -263,17 +218,22 @@ export async function runCompiledApp(app: CompiledApp): Promise<void> {
                 globals,
                 byName,
                 name: app.name,
+                write,
+                writeError,
                 commands,
-                target,
-                token: resolved.token,
+                ensureTarget,
+                token: async () => (await resolved()).token,
             })
         }
     } finally {
-        await target.stop()
+        // `?.` because the text-only branches never built one — and building a target here purely to
+        // stop it would boot nothing but would read the stored file after the answer was already given.
+        await target?.stop()
     }
 
-    // Exit explicitly: a one-shot command must not linger because the app opened a handle in onStart.
-    process.exit(code)
+    // A one-shot command must not linger because the app opened a handle in `onStart`; the caller
+    // turns this code into the process exit.
+    return code
 }
 
 async function runOnce(input: {
@@ -281,38 +241,41 @@ async function runOnce(input: {
     globals: GlobalOptions
     byName: Map<string, CliCommand>
     name: string
+    write: (text: string) => void
+    writeError: (text: string) => void
     commands: CliCommand[]
-    target: CommandTarget
-    token: string | undefined
+    // Both deferred: an unknown command and a usage error answer without resolving a target or booting.
+    ensureTarget: () => Promise<CommandTarget>
+    token: () => Promise<string | undefined>
 }): Promise<number> {
     const command = input.byName.get(input.head)
     if (command === undefined) {
-        writeError(`${input.name}: unknown command "${input.head}"\n\n`)
-        writeError(`${cliUsage(input.name, input.commands)}\n`)
+        input.writeError(`${input.name}: unknown command "${input.head}"\n\n`)
+        input.writeError(`${cliUsage(input.name, input.commands)}\n`)
         return CLI_EXIT_CODES.usage
     }
 
     const commandArgv = input.globals.rest.slice(1)
     if (commandArgv.includes('--help') || commandArgv.includes('-h')) {
-        write(`${cliUsage(input.name, input.commands, command)}\n`)
+        input.write(`${cliUsage(input.name, input.commands, command)}\n`)
         return CLI_EXIT_CODES.ok
     }
 
     const parsed = parseCliArgs(command, commandArgv)
     if (parsed.errors.length > 0) {
-        for (const message of parsed.errors) writeError(`${input.name}: ${message}\n`)
-        writeError(`\n${cliUsage(input.name, input.commands, command)}\n`)
+        for (const message of parsed.errors) input.writeError(`${input.name}: ${message}\n`)
+        input.writeError(`\n${cliUsage(input.name, input.commands, command)}\n`)
         return CLI_EXIT_CODES.usage
     }
 
     return await callCliCommand({
         // Resolved here, after the command line is known to be good: a usage error never boots the app.
-        origin: await input.target.origin(),
-        token: input.token,
+        origin: await (await input.ensureTarget()).origin(),
+        token: await input.token(),
         command,
         args: parsed.args,
         pretty: input.globals.pretty,
-        write,
-        writeError,
+        write: input.write,
+        writeError: input.writeError,
     })
 }

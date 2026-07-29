@@ -1,0 +1,29 @@
+<script>
+  import { state } from "abide/shared/state"
+  import Star from "./IconStar.abide"
+  import Bolt from "./IconBolt.abide"
+
+  // A tag can be a MEMBER PATH. The head is an ordinary binding — here the `{#for}` item — and the
+  // TitleCase rule applies to the component's name, the last segment. So a row can carry its own
+  // renderer as data instead of the list branching on a `kind` field.
+  //
+  // Because the tag is an EXPRESSION over bindings and not an import, it is also REACTIVE: hand a row
+  // a different component and that one tag re-mounts in place. The `by row.label` key is unchanged, so
+  // the <li> is never rebuilt — only the icon inside it is.
+  let rows = state([
+    { label: "starred", Icon: Star },
+    { label: "fast", Icon: Bolt },
+  ])
+
+  function swapFirstIcon() {
+    const swapped = { ...rows[0], Icon: rows[0].Icon === Star ? Bolt : Star }
+    rows = [swapped, ...rows.slice(1)]
+  }
+</script>
+
+<button data-testid="member-swap" onclick={swapFirstIcon}>Swap the first row's icon</button>
+<ul data-testid="member-tags" class="member-rows">
+  {#for row of rows by row.label}
+    <li><row.Icon/> {row.label}</li>
+  {/for}
+</ul>

@@ -16,17 +16,16 @@
 // A rest segment is terminal (it consumes every remaining path segment); a rest that is not the last
 // pattern segment simply won't match paths that have segments after it.
 
+import { classifyRouteSegment, LITERAL, OPTIONAL, REQUIRED } from './routeSegmentKind.ts'
+
 export interface RouteMatch {
     pattern: string
     params: Record<string, string>
 }
 
-// Segment kind ranks — also the specificity order (lower = more specific).
-const LITERAL = 0
-const REQUIRED = 1
-const OPTIONAL = 2
-const REST = 3
-
+// Segment kinds + the bracket grammar come from `routeSegmentKind`, shared with `resolveUrl` — the two
+// are inverses (match a pathname / fill an href) and a disagreement makes a link no route can match.
+// The kind values double as the specificity rank sorted on below (lower = more specific).
 interface Segment {
     kind: number
     name: string
@@ -39,19 +38,10 @@ function segments(path: string): string[] {
     return trimmed.length === 0 ? [] : trimmed.split('/')
 }
 
-// Classify one pattern segment. Order matters — `[[name]]` and `[...name]` must be recognised before
-// the plain `[name]` form. Anything not matching a bracket form is a literal.
+// Classify one pattern segment, keeping the original text for the literal comparison below.
 function classify(segment: string): Segment {
-    if (segment.length > 4 && segment.startsWith('[[') && segment.endsWith(']]')) {
-        return { kind: OPTIONAL, name: segment.slice(2, -2), literal: segment }
-    }
-    if (segment.length > 5 && segment.startsWith('[...') && segment.endsWith(']')) {
-        return { kind: REST, name: segment.slice(4, -1), literal: segment }
-    }
-    if (segment.length > 2 && segment.startsWith('[') && segment.endsWith(']')) {
-        return { kind: REQUIRED, name: segment.slice(1, -1), literal: segment }
-    }
-    return { kind: LITERAL, name: '', literal: segment }
+    const { kind, name } = classifyRouteSegment(segment)
+    return { kind, name, literal: segment }
 }
 
 // Per-pattern classification cache. Route patterns come from the static page-route table (a small,

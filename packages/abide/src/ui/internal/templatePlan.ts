@@ -370,6 +370,31 @@ function rejectComponentCall(ctx: WalkState, expression: string): void {
     }
 }
 
+// `class:name={cond}` and `style:prop={value}` target ONE ELEMENT — they toggle a class on it or set a
+// property of its style. A component is not an element: it renders a subtree that may have several
+// roots (or none, if every root is inside an `{#if}`), so there is no node the directive could mean.
+//
+// Rejected HERE, in the build lane's planner, because that is the one gate both lanes ask
+// (`validateTemplate` runs `buildPlan` and reports what it throws), so `abide check`, the LSP and
+// `abide build` all agree by construction rather than by three switches remembering to.
+//
+// Before this, all three lanes disagreed about the same source: `emitCheck` typed the directive as a
+// component PROP (so the expression was type-checked and the author was told it was fine), while both
+// emitters silently dropped it. Nothing rendered, nothing complained, and no test covered it. Being
+// dropped is also why making this an error breaks nothing — a silently-ignored directive has no users
+// by construction. If the root-element behaviour is ever wanted, error → supported is a widening.
+function rejectElementOnlyDirectives(node: { name: string; attributes: AttributeNode[] }): void {
+    for (const attr of node.attributes) {
+        if (attr.type !== 'ClassDirective' && attr.type !== 'StyleDirective') continue
+        const directive = attr.type === 'ClassDirective' ? 'class' : 'style'
+        throw new Error(
+            `${directive}:${attr.name} is not valid on a component (<${node.name}/>) — ` +
+                `a ${directive}: directive targets one element, and a component renders a subtree. ` +
+                `Pass a prop and let the component place it: <${node.name} ${directive}={…}/>.`,
+        )
+    }
+}
+
 // One piece of a quoted attribute value: a literal run or a `{expr}` interpolation.
 type AttrPart = { literal: string } | { expr: string }
 
@@ -784,6 +809,7 @@ function walkLevelNodes(
             }
             case 'Component': {
                 skeleton += BLOCK_SKELETON
+                rejectElementOnlyDirectives(node)
                 const attrPlans = node.attributes.map((attr) => planAttribute(ctx, attr))
                 // A top-level `{#component Name()}` inside `<Foo>…</Foo>` is forwarded to Foo as its `Name`
                 // prop. Emit each as a caller-level component def (so it closes over the CALLER's scope) and
@@ -817,8 +843,13 @@ function walkLevelNodes(
                 // Resolve the tag HERE, where the level's bindings are known. A cell-/memo-named tag is
                 // reactive (re-mounts on identity change) and reads as a value; anything else resolves
                 // once, lexically or off `$scope`.
+                // A MEMBER tag (`<item.Icon/>`) is reactive too: it is an expression over bindings, not
+                // an import, so the component it names can change under a `{#for}` item reassignment or
+                // a cell head while the mount stays put.
                 const reactive =
-                    ctx.cellBindings.cells.has(node.name) || ctx.cellBindings.memos.has(node.name)
+                    node.name.includes('.') ||
+                    ctx.cellBindings.cells.has(node.name) ||
+                    ctx.cellBindings.memos.has(node.name)
                 const ref = rewriteExpr(ctx, node.name)
                 slots.push({
                     kind: 'component',

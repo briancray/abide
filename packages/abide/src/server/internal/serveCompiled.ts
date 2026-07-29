@@ -20,17 +20,23 @@ import type { LoadedApp } from './loadApp.ts'
 // `./app serve` registered every emitted server module twice and produced two distinct `LoadedApp`
 // objects — and `BUNDLE_CACHE` is a WeakMap keyed on the config identity, so they were two cache
 // entries for one app. Nothing was visibly broken; it was a trap the module split created.
+//
+// `argv` is PASSED rather than read off `Bun.argv` here. The dispatcher above it is fully injectable —
+// that is what makes the command surface testable in-process — and reading the real process argv from
+// inside one branch quietly opted that branch out: `runCompiledApp({ argv: ['serve', '--port', '9'] })`
+// resolved the port from whatever the TEST RUNNER was invoked with.
 export async function serveCompiled(
     app: CompiledApp,
     config: LoadedApp,
     write: (text: string) => void,
+    argv: string[] = Bun.argv.slice(2),
 ): Promise<ServeResult> {
     // The executable's own command line: `./server --port 8080`, else `PORT`, else 3000 — the same
     // resolution `abide start` performs, including binding the port directly (a clash is a loud
     // EADDRINUSE; production should fail rather than silently move).
     const running = await serve(app.dir, {
         dev: false,
-        port: parsePort(Bun.argv.slice(2)),
+        port: parsePort(argv),
         app: config,
         clientBuild: await embeddedClientBuild(app),
     })

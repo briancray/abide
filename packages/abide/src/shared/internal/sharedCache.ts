@@ -110,3 +110,45 @@ export function sharedCacheEvictIfNeeded(store: Map<string, unknown>): void {
         sizes.delete(key)
     }
 }
+
+// ---------------------------------------------------------------------------
+// The two TRANSITIONS, named
+// ---------------------------------------------------------------------------
+//
+// The verbs above are the mechanism; these are the two moments a caller actually has. They exist
+// because `memo.ts` drove the raw verbs by hand and the ORDER and COMPLETENESS of each sequence lived
+// at the call sites — `recordSize` + `evictIfNeeded` at four of them, and `unpin` + `recordSize` +
+// `evictIfNeeded` at two more, each behind its own `if (store !== undefined)`.
+//
+// Both omissions fail silently and neither is visible in a value:
+//   • skip `evictIfNeeded` → the store grows past `ABIDE_MAX_SHARED_CACHE_SIZE` and nothing says so.
+//   • skip `unpin` on a closed stream → the key stays pinned, so it is never evictable again. A
+//     permanent leak, and `evictIfNeeded` deliberately keeps counting pinned bytes, so it also drags
+//     the ceiling down for everything else.
+//
+// The `store === undefined` guard is folded in (a non-crossRequest memo has no shared store), so a
+// caller states the transition rather than the branch.
+
+// A value settled, or an OPEN stream grew: its size is now known and the store may need trimming.
+// Does NOT unpin — an open stream must stay pinned, which is what keeps a replay-in-progress alive.
+export function sharedCacheAccount(
+    store: Map<string, unknown> | undefined,
+    key: string,
+    bytes: number,
+): void {
+    if (store === undefined) return
+    sharedCacheRecordSize(store, key, bytes)
+    sharedCacheEvictIfNeeded(store)
+}
+
+// A stream CLOSED: its transcript is a plain sized value now, so it stops being pinned and becomes
+// LRU-evictable like any other entry.
+export function sharedCacheSettleStream(
+    store: Map<string, unknown> | undefined,
+    key: string,
+    bytes: number,
+): void {
+    if (store === undefined) return
+    sharedCacheUnpin(store, key)
+    sharedCacheAccount(store, key, bytes)
+}

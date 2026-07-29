@@ -34,7 +34,12 @@ shared runtime) instead of the whole app. Supersedes the "single non-minified bu
 6. **`mountPathname` is async; await the chunk BEFORE the dispose.** The destination chunk is loaded
    before the previous mount is disposed, so the dispose→hydrate window stays synchronous (no blank gap).
    A resident chunk resolves in a microtask (first load + same-route param nav are effectively sync). A
-   chunk-load failure returns false → the caller falls back to a full document load.
+   chunk-load failure returns false → the caller falls back to a full document load. It takes the nav
+   **generation** as a trailing `gen` (`mountPathname(path, seed?, gen?)`) and **re-checks `navGen`
+   after the chunk resolves**: a cold chunk is a network fetch, which is ample time for a newer nav to
+   start, and that nav owns the DOM by then — hydrating here would claim nodes it is in the middle of
+   replacing. So `false` now means three things, and the CALLER separates them by re-checking `navGen`
+   itself: a superseded nav must **stop**, where no match and a dead chunk fall back to a hard load.
 7. **`modulepreload` the whole STATIC boot graph (no first-load waterfall).** The build maps each pattern
    → its chunk filename (via the chain's unique index-prefixed slug), and `preloadGraphOf` walks the
    emitted bytes for static `import`/`from` specifiers to produce two lists: `bootChunks` (the loader
@@ -71,7 +76,8 @@ shared runtime) instead of the whole app. Supersedes the "single non-minified bu
 - **Nav** (`ui/navigate.ts`): async `mountPathname` (await chunk before dispose), soft-nav early prime.
 - **Document** (`server/internal/pages.ts`): `RenderDocumentOptions` gains `clientHref` / `cssHref` /
   `preloadHref`; the fixed script/link tags become hashed URLs.
-- **CLI** (`cli/main.ts`, `cli/serve.ts`): `abide build` writes every hashed file + `index.json` (entry,
+- **CLI** (`cli/build.ts` — `build()` moved out of `cli/main.ts` — and `cli/serve.ts`): `abide build`
+  writes every hashed file + `index.json` (entry,
   css, files, chunkByPattern) to `dist/_app/<hash>/` + a stable `dist/manifest.json` pointer; the outer
   hash is a digest of the manifest. `abide start` loads that build (`loadClientBuild` → `config.clientBuild`,
   building first if absent) so the router serves the exact artifacts with no bundler at boot; the router

@@ -24,6 +24,12 @@ import {
 } from 'typescript/unstable/ast'
 import { API, DiagnosticCategory, SymbolFlags } from 'typescript/unstable/sync'
 import { ABIDE_SEMANTIC_TOKENS_LEGEND } from '../ui/internal/ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
+import {
+    indexByGeneratedPath,
+    offsetToLineColumn,
+    type RawDiagnostic,
+    resolveAbidePosition,
+} from '../ui/internal/abideDiagnostic.ts'
 import type { Root } from '../ui/internal/ast.ts'
 import {
     CHECK_HEADER_LENGTH,
@@ -37,7 +43,8 @@ import { encodeSemanticTokens } from '../ui/internal/encodeSemanticTokens.ts'
 import { parse } from '../ui/internal/parse.ts'
 import { templateSemanticTokens } from '../ui/internal/templateSemanticTokens.ts'
 import { validateTemplate } from '../ui/internal/validateTemplate.ts'
-import { findAbideFiles, offsetToLineColumn, overlayFs, SUPPRESSED_CODES } from './check.ts'
+import { findAbideFiles, overlayFs, SUPPRESSED_CODES } from './check.ts'
+import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
 export interface LspServerOptions {
     projectRoot: string
@@ -63,13 +70,6 @@ interface LspDiagnostic {
     code: number
     source: string
     message: string
-}
-
-interface RawDiagnostic {
-    file: string
-    pos: number
-    code: number
-    text: string
 }
 
 // A generated check-module for one script-bearing `.abide` (its virtual `.ts` path + the map back).
@@ -467,22 +467,23 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
     const refresh = (): void => {
         if (engine === null || openDocs.size === 0) return
         const { files, modules, parseErrors } = lowerCurrent()
-        const byTs = new Map(modules.map((m) => [m.tsPath.toLowerCase(), m] as const))
+        // Indexing + map-back is `abideDiagnostic`, shared with `abide check` (see the note there on the
+        // two silent drops it owns). `byTs` stays in scope below for the hover/definition paths, which
+        // look modules up by the same canonicalized key.
+        const byTs = indexByGeneratedPath(modules)
         const openModulePaths = modules
             .filter((m) => openDocs.has(m.abidePath))
             .map((m) => m.tsPath)
         const raw = openModulePaths.length > 0 ? engine.diagnose(files, openModulePaths) : []
         const byFile = new Map<string, LspDiagnostic[]>()
         for (const diagnostic of raw) {
-            const module = byTs.get(diagnostic.file.toLowerCase())
-            if (module === undefined || diagnostic.pos < CHECK_HEADER_LENGTH) continue
-            const { line, column } = offsetToLineColumn(
-                module.source,
-                mapGenToOrig(module.segments, diagnostic.pos),
+            const resolved = resolveAbidePosition(diagnostic, byTs)
+            if (resolved === undefined) continue
+            const list = byFile.get(resolved.module.abidePath) ?? []
+            list.push(
+                toLspDiagnostic(resolved.line, resolved.column, diagnostic.code, diagnostic.text),
             )
-            const list = byFile.get(module.abidePath) ?? []
-            list.push(toLspDiagnostic(line, column, diagnostic.code, diagnostic.text))
-            byFile.set(module.abidePath, list)
+            byFile.set(resolved.module.abidePath, list)
         }
         // Publish for every OPEN doc (its errors, a parse error, or empty to clear stale squiggles).
         for (const abidePath of openDocs) {
@@ -622,6 +623,11 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                     | undefined
                 if (params?.rootUri) projectRoot = fileURLToPath(params.rootUri)
                 else if (params?.rootPath) projectRoot = params.rootPath
+                // An editor opening the project cold is the one moment we know the root — and the
+                // health companion (CO2.4) is gitignored, so on a fresh clone it does not exist yet.
+                // Not awaited: `initialize` must answer immediately, and the engine reads the file
+                // system per request, so a companion landing a tick later is a companion in time.
+                void writeHealthCompanion(projectRoot).catch(() => {})
                 engine = new LspEngine(projectRoot)
                 send({
                     jsonrpc: '2.0',

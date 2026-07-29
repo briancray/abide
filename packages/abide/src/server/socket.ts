@@ -109,13 +109,19 @@ export function socket<T, Args = void>(options: SocketOptions<T> = {}): Socket<T
     sock.publish = (...args: [...Room<Args>, message: T]): void => {
         ch.publish(room<Args>(args, 1), args[args.length - 1] as T)
     }
-    sock.peek = (...r: Room<Args>): T | undefined => ch.peek(room<Args>(r))
+    // The six probes forward STRAIGHT through, with no `room()` unpack: they take the key last-or-only,
+    // which is the same shape the channel takes, so there is nothing to re-position. They used to spell
+    // themselves `(...r: Room<Args>) => ch.peek(room<Args>(r))` — a spread that bought nothing (a void
+    // surface's `peek()` already collapses out of an omittable `void` parameter) and cost the socket its
+    // derivation from `ReactiveProbeSurface`, which is how the vocabulary drifted in the first place.
+    // `publish` above keeps its spread because its key is NOT last.
+    sock.peek = (args: Args): T | undefined => ch.peek(args)
     // Server chunks() = the in-window tail (what an SSR render paints / a fresh subscriber replays).
-    sock.chunks = (...r: Room<Args>): T[] | undefined => ch.chunks(room<Args>(r))
-    sock.pending = (...r: Room<Args>): boolean => ch.pending(room<Args>(r))
-    sock.refreshing = (...r: Room<Args>): boolean => ch.refreshing(room<Args>(r))
-    sock.done = (...r: Room<Args>): boolean => ch.done(room<Args>(r))
-    sock.error = (...r: Room<Args>): unknown | undefined => ch.error(room<Args>(r))
+    sock.chunks = (args: Args): T[] | undefined => ch.chunks(args)
+    sock.pending = (args: Args): boolean => ch.pending(args)
+    sock.refreshing = (args: Args): boolean => ch.refreshing(args)
+    sock.done = (args: Args): boolean => ch.done(args)
+    sock.error = (args: Args): unknown => ch.error(args)
     ;(sock as { __socket: SocketInternals<T, Args> }).__socket = {
         options,
         // Client-publish mediation lives HERE (the channel is pure pub/sub). `clientPublish === true` =

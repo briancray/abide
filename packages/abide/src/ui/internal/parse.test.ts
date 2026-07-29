@@ -212,6 +212,30 @@ describe('components vs elements by casing', () => {
     test('lowercase tag is an element', () => {
         expect(only<Element>('<section/>').type).toBe('Element')
     })
+
+    // The component's NAME is the last segment, so the head may be any binding — a `{#for}` item, a
+    // prop, a cell. Classified off the first character alone this was a literal `<item.Icon>` element.
+    test('member tag with a lowercase head is a component', () => {
+        const node = only<Component>('<item.Icon/>')
+        expect(node.type).toBe('Component')
+        expect(node.name).toBe('item.Icon')
+    })
+
+    test('member tag with a lowercase last segment is a parse error', () => {
+        expect(() => parse('<item.icon/>')).toThrow(/must be TitleCase/)
+        expect(() => parse('<Item.icon/>')).toThrow(/must be TitleCase/)
+    })
+
+    // `.` is legal in a custom-element name, so a hyphen keeps a tag in HTML.
+    test('a hyphenated dotted tag stays an element', () => {
+        expect(only<Element>('<my-el.foo/>').type).toBe('Element')
+    })
+
+    test('member tag closes by its full path', () => {
+        const node = only<Component>('<item.Icon>x</item.Icon>')
+        expect(node.name).toBe('item.Icon')
+        expect(() => parse('<item.Icon>x</Icon>')).toThrow(ParseError)
+    })
 })
 
 describe('attributes and directives', () => {

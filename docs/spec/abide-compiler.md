@@ -87,6 +87,14 @@ navigation**.
    nested `{#component X()}` inside `<Foo>…</Foo>` is forwarded to Foo as its `X` prop (the
    render-prop/named-slot mechanism). A cell- or memo-named tag (`const C = memo(…)`) is a **reactive**
    component that re-mounts on identity change. A component-valued prop types as `Component<Props>`.
+   A tag may also be a **member path** — `<item.Icon/>`, `<Icons.Chevron/>` — which renders the
+   component held there; the head is any binding in scope (a `{#for}` item, a prop, a cell), and
+   TitleCase applies to the component's NAME, i.e. the LAST segment (`<item.icon/>` is a parse error).
+   A member tag is reactive like a cell-named one: it is an expression over bindings rather than an
+   import, so the component behind it can change while the mount stays put. The discriminator is a
+   dot, and the tiebreaker against a dotted CUSTOM-ELEMENT name (`<my-el.foo>`, legal HTML) is the
+   hyphen — a hyphen keeps the tag an element. Classified off the first character alone,
+   `<item.Icon/>` used to emit a literal `<item.Icon>` element with no error at all.
 4. **`{...expr}` spread** — props onto components, attributes onto elements; reactive.
 5. **No `onMount`/`onDestroy`.** `<script>` body = setup; effect/`watch`/`bind:element`-fn
    teardown = cleanup. The emitted `mount` AND `render` run the setup preamble inside an open **effect
@@ -146,17 +154,121 @@ alive as it soundly can (remount only the part that actually diverges):
   `[id]`/query) → **whole chain kept alive (C6.3).** The client republishes `route()`
   optimistically and lets `route()`-driven bindings and param-keyed reads **re-fire reactively
   in place** — no dispose, no DOM swap, no re-hydration, so local `state`, scroll, focus, and
-  element state are all preserved. The server round-trip still happens (the `Abide-Nav` fetch)
-  but serves only as a **background middleware/redirect confirm**: if middleware short-circuits
-  the client follows the `{redirect}`; otherwise the streamed body is discarded (the kept
-  page's reads have already re-fetched reactively). Reads-only seed replay to fold that
-  re-fetch back onto the one round-trip is a possible future optimization, not shipped.
+  element state are all preserved. The server round-trip still happens (the `Abide-Nav` fetch);
+  if middleware short-circuits, the client follows the `{redirect}`. Otherwise the confirm is a
+  **full render of the destination**, and the client drains its frame stream for the trailing
+  `{kind:"seed"}` frame and **replays that seed's reads/streams into the LIVE mount's memos**
+  (`replaySeedIntoProxies`), re-adopting `identity` with it. The shell and `fill`/`append`
+  patches are dropped — they address DOM this nav deliberately did not adopt; once the memos hold
+  the new values, re-rendering is the reactive graph's job.
+
+  The seed used to be discarded here, on the premise that "the kept page's reads have already
+  re-fetched reactively". That holds only for a read the nav actually MOVED: a param-keyed read
+  lands on a new cache key and loads cold. A read taking no args and reading no `route()` has
+  nothing to re-fire ON — so on a nav to the URL you are already on, NOTHING re-fired, and the
+  server recomputed the whole page while the tab kept painting the value its ∞-`ttl` slot loaded
+  on first paint. The same nav shape rendered fresh when reached by nav-away-and-back, because
+  that path hydrates and hydration replays the seed; only the kept-mount path had no channel to
+  the memos. Replaying is that channel.
+
+  This is **not** a round-trip saving, and was never going to be one: the `route()` republish is
+  OPTIMISTIC, so a param-keyed read has already kicked its cold load by the time the confirm's
+  seed lands. Folding the two would mean blocking the republish on the server, which is the one
+  thing this nav shape exists not to do. `seed` is authoritative over a retained slot, so a
+  late-arriving seed overwrites; an identical value wakes nobody (§7.3).
+
+  A nav whose resolved target (path + query + **hash**) equals the current location touches
+  history not at all — no `pushState`, and no `replaceState` either, since the URL already IS the
+  target and a replace would only wipe the entry's own state (including `stampScroll`'s offset).
+  Pushing there stacked a second entry on one URL, so Back landed where it started.
 - **Cross-route nav** (destination is a different page pattern) → the client keeps every
   **outer layout it SHARES with the destination alive** (the longest common layout prefix —
   `sharedLayoutDepth`, the client mirrors it) and **grafts + claims only the diverging suffix**
   into the innermost kept layout's outlet. A fully-disjoint route (no shared layout) swaps the
   whole outlet. State in the kept prefix is preserved; the diverging suffix is naturally new —
   this is the scoped **remount** case (C6.2).
+
+A **traversal** (Back/Forward) is one of the three shapes above, not a fourth — but it cannot read
+its own `Abide-Nav` off `location`, because the browser moves `location` to the destination *before*
+firing `popstate`. So the client tracks the mounted route's path (`currentPath`) and names that. It
+used to send `location.pathname`, i.e. the destination announcing itself as its own origin: the
+server then answered `sharedLevels` for a from==to nav — the destination's FULL layout depth — while
+the client had computed `keep` against the route it actually had mounted. `partialCrossNav` reads
+that disagreement as "not the suffix I am set up to graft" and hard-loads, so **every cross-route
+Back/Forward whose two ends did not sit under the same layouts was a full document load**: the live
+chain discarded, hydration re-run, and the kept-layout state the graft exists to preserve gone with
+it. The content still came back — which is why a content-only assertion never caught it.
+
+**A nav that starts while another is streaming.** A partial cross-nav grafts the destination's shell
+at the START of its frame stream and CLAIMS it at the end — on a streaming destination, seconds
+apart. Two rules cover that window:
+
+- The route bookkeeping (`currentPattern`/`currentPrefixes`/`currentPath`) commits at the **graft**,
+  because that is when the DOM and `route()` become the destination's. It used to commit at the
+  claim, so for the whole window it named a route that had already left the screen and a nav
+  starting inside it was classified against that ghost — a Back to the route just departed matched
+  the stale pattern, was taken for a same-pattern param nav, and "kept" a mount showing the other
+  page: permanently wrong content under the right URL.
+- The two shapes that KEEP a live mount (param/query and partial cross-nav) additionally require the
+  mount to be **claimed**. A grafted-but-unclaimed subtree has no live effects to keep, and
+  `graftSuffix` is not re-entrant — it disposes a holder the claim has not yet repointed and inserts
+  before the same anchor, so a second graft would double-dispose and leave BOTH suffixes in the
+  document. A nav arriving in the window therefore takes the **full path**, which rebuilds
+  unconditionally and so is correct from any DOM state. This is deliberately gated on "has the DOM
+  been touched", not "is a nav in flight": a nav superseded *before* its shell landed left the DOM
+  alone, so it keeps its optimizations — that is the ordinary impatient-clicking case.
+
+A superseded nav must also STOP, so `navGen` is re-checked before every frame it applies, before the
+claim, and after the destination chunk resolves — not once after the fetch, which on a streaming body
+is a check made seconds before the mutations it was guarding.
+
+### C6-nav headers: `Abide-Nav` and `Abide-Nav-Keep`
+
+`Abide-Nav: <from-path>` names the route being LEFT, and its presence is what marks the request a soft
+nav. Absent it, the response is a full document.
+
+`Abide-Nav-Keep: <n>` is how many outer layout levels the client is KEEPING, and where it is sent it
+**decides** what the server renders (`levels.slice(keep)`). The router can derive a number of its own
+from `from` — `sharedLayoutDepth(from, to)` — and does for a caller that sends none, but that answers a
+**different question**: what the route TABLE permits, which is static. How much a live page can actually
+keep depends on facts only the client has — whether a chain is mounted at all, whether it has been
+claimed, whether the boundary record carries a `graftSuffix`. They coincide often enough that the
+derivation is a fine default, and diverge often enough that when the client sends a number it must win.
+
+This replaced a runtime reconciliation. The shell carries `sharedLevels`; the client used to compare it
+against its own `keep` and **hard-load on a mismatch** — two independent derivations of one number with a
+document load as the tiebreak. One number, one derivation, and the disagreement is unrepresentable; the
+check is gone. What remains beneath it is `claimSuffix`'s existing recovery: a suffix that cannot be
+claimed is fresh-mounted from the client's own levels, which is also what a genuinely skewed deployment
+now degrades to instead of reloading. *(Version skew is not otherwise detected. A build id on the nav
+response is the honest mechanism if that becomes load-bearing.)*
+
+**What each shape declares:**
+
+| Nav shape | `keep` | Why |
+| --- | --- | --- |
+| whole-container | `0` | replaces `#__abide-app` outright, so it keeps nothing |
+| partial cross-nav | the graft depth | the number it is about to graft at, by construction |
+| param/query move | every level it has | it keeps its whole chain; equals what the server would derive |
+| param/query, prefixes unknown | *(omitted)* | `0` would be a false claim and buy a full render for nothing |
+| **same-URL** | `0` | see below |
+
+A nav to the URL you are already on is a **refresh gesture**, and the layouts are part of what is on
+screen. Left to derive, a same-pattern nav skips every layout level (from == to, so the depth is that
+route's full depth) and renders the page alone — so only the page's reads reach the seed, and a
+**layout's** route-independent read would keep painting its first-paint value exactly as the page's did.
+`keep: 0` renders the whole tree so the seed carries those too. Same-URL only: a param MOVE should leave
+kept layouts alone (persisting is the point of keeping them) and would otherwise pay for a full render on
+every step of a carousel.
+
+Server-side the declared value is **clamped to the destination's own layout depth** — a client cannot
+keep levels that do not exist, and an unclamped over-count would slice past the end and ship an empty
+shell. A malformed value **falls back to the derivation** rather than erroring, because falling back
+renders more of the tree and more is always placeable. `Number('')` is `0`, so an empty value must be
+rejected *before* parsing, or the empty header reads as the field's most consequential value.
+
+Both nav responses `Vary` on **both** headers: the first picks document-vs-frame-stream, the second picks
+how much tree the stream carries.
 
 Mechanism:
 
@@ -168,8 +280,9 @@ Mechanism:
   stream, not a full document; (b) carries the current route → the server computes
   `sharedLayoutDepth(from, to)` (the longest common layout prefix) and renders **only the
   diverging suffix** `levels.slice(sharedLevels)` (the shared outer layouts are not
-  re-rendered). No header (first load / hard refresh / crawler / pasted link) → full document.
-  Server sends **`Vary: Abide-Nav`** so caches/CDN key the two response shapes separately.
+  re-rendered), **capped by `Abide-Nav-Keep`** where the client sends one (see the headers section
+  above). No header (first load / hard refresh / crawler / pasted link) → full document.
+  Server sends **`Vary: Abide-Nav, Abide-Nav-Keep`** so caches/CDN key the response shapes separately.
 - **Response (a streamed JSONL frame stream, §PR4):** `{kind:"shell", html, url, sharedLevels}`
   first — the diverging-suffix HTML plus how many outer layouts the client is keeping; then a
   patch frame per streamed subtree as it resolves (`fill`/`append`/`complete`, keyed by slot
@@ -210,10 +323,11 @@ Mechanism:
   auth). Each entry is onion middleware `(next) => Response` (`async (next) => { … return await
   next() }`, global wraps per-RPC wraps handler); `next()` takes no args (request via
   `request()`), so the passthrough is `next => next()`. A middleware can **observe** (log/trace)
-  and **decide** — short-circuit by returning a `Response` (`redirect`/`error`). **Auth is just
-  middleware**: a guard is a middleware that returns `error(403)` instead of calling `next`
-  (arg-level checks read `route().params`). This partially un-parks `app.ts` — at least its
-  per-request middleware chain is in this slice.
+  and **decide** — short-circuit by calling `redirect(...)`/`error(...)`, which **THROW** (both
+  return `never`); the chain renders a thrown outcome at its own status exactly as it renders a
+  returned `Response`, which is still admitted. **Auth is just middleware**: a guard is a middleware
+  that calls `error(403)` instead of calling `next` (arg-level checks read `route().params`). This
+  partially un-parks `app.ts` — at least its per-request middleware chain is in this slice.
 
 ## C7. Two-way binding
 
@@ -221,6 +335,12 @@ Mechanism:
    no hidden magic; coerces by input type — number inputs → `number`). Event handlers use
    **native `on*` attributes** (`oninput`/`onchange`/`onclick`), not `on:event`. `<select>`
    and other change-driven elements use `onchange`.
+   **On a COMPONENT the same syntax is an ordinary PROP** named `onclick` — there is no element to
+   attach a listener to, so passing it through is the only thing it can mean; the component places it
+   on an element of its own, or spreads it. Both emitters pass it. The SERVER used to drop it while
+   the client passed it, which is an isomorphism break rather than a missed optimisation: a component
+   that branches on the prop (`{onclick ? … : …}`) rendered one thing in the SSR HTML and the other
+   after hydrate, so the two paints disagreed about the props the component received.
 2. **`bind:group={cell}`** — radios write the selected value; checkbox groups maintain an
    **array** in the cell.
 3. **Derived `bind:value={{ get, set }}`** = the general primitive `bind:value={cell}` is
@@ -286,9 +406,27 @@ Mechanism:
    neither of which has a lifetime or a frame of its own — a second one in the same body, a second
    ROOT-level `<script>`, a nested `<script module>`, or an `import` (module-level wherever written, so
    one here could only look conditional) are all loud errors naming the fix.
+
+   **No `<script>` of ANY of the three kinds may carry an `export`** — module, instance, or
+   branch-local — and it is a loud error in **both** lanes (`abide check` and `abide build` ask the
+   one gate). None of the three is an ES module BOUNDARY: each body is inlined into the emitted
+   component's setup (`$ensureModule($scope)` / `render` / `mount`), so an `export` lands inside a
+   function and is a syntax error in the EMITTED module. The gate used to skip the keyword, which
+   made `export const x = 1` analyze and bind exactly as `const x = 1` — everything downstream
+   agreed the script was fine, and the only symptom was a parse failure over generated source. The
+   message names the fix, because nothing an `export` here could reach for is unavailable without
+   it: a top-level binding is already visible to the template and to every nested `<script>`, a prop
+   is `const { x } = props()`, and a value shared across FILES belongs in a `.ts` module you import.
 5. **Leaf directives:** `class:name={cond}` toggles a class reactively; `style:prop={val}`
    sets one style property reactively; `{html(expr)}` injects raw unescaped HTML (author
    owns XSS — all other `{expr}` is escaped by default); `{...expr}` spread (C4.4).
+   **`class:`/`style:` are ELEMENTS ONLY** — on a component either is a compile error in both lanes
+   (`templatePlan.rejectElementOnlyDirectives`), because the directive targets ONE element and a
+   component renders a subtree (possibly several roots, possibly none), so there is no node it could
+   name. The check lane used to type them as ordinary props while both emitters silently DROPPED
+   them, which is the worst pair available: the author was told the markup was valid and nothing
+   rendered. The message names the fix — pass a prop and let the component place it
+   (`<Card class={…}/>`).
 6. **Reference rewriting: a binding IS its value (ADR 0024).** `analyzeScope` classifies each simple
    declaration and rewrites every reference to it:
    - `let n = state(…)` / `state.shared(…)` / `memo(…).state()` → a **cell**: read `n` → `n()`, write
@@ -348,8 +486,9 @@ bespoke checker.
    TypeScript 7** (the svelte-check model). The `.abide`→TS transform emits a typed module; TS7
    checks it; **errors map back to `.abide` source spans.** No custom type-checker.
 2. **Every reactive expression is checked against real types** — `{user.naem}` → error;
-   `attr={expr}`, `on*={fn}` (handler arg types), `bind:value` (element value type), `class:`/
-   `style:`. Nothing is stringly-typed.
+   `attr={expr}`, `on*={fn}` (handler arg types on an ELEMENT; on a component the same attribute is a
+   PROP named `onclick` and is checked as one, C7.1), `bind:value` (element value type), `class:`/
+   `style:` (elements only — on a component both are an error, C9.5). Nothing is stringly-typed.
 3. **Isomorphic type flow reaches templates (§6).** `{user(args)}` is typed against the RPC's
    input/output via the client-proxy type (§6.2, type-only import) — args checked, awaited value
    typed, **from the server handler's signature, zero manual annotation.**

@@ -2,8 +2,9 @@
   import { state } from "abide/shared/state"
   import rpcBoom from "$server/rpc/rpcBoom"
 
-  // A handler that returns `error(status, message)` surfaces in the browser as a thrown HttpError —
-  // the caller catches it and reads `status`/`message`.
+  // `error(status, message)` THROWS an HttpError in the handler; the router renders it at that status
+  // and the browser proxy decodes the non-2xx back into the same HttpError — so the caller catches it
+  // here and reads `status`/`message`, exactly as an in-process caller would.
   let plainError = state(null)
 
   async function callBoom() {

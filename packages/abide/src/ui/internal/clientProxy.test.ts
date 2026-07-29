@@ -7,8 +7,9 @@ import { POST } from '../../server/POST.ts'
 import { clearTagRegistry } from '../../shared/internal/memoTags.ts'
 import { invalidate } from '../../shared/invalidate.ts'
 import { refresh } from '../../shared/refresh.ts'
+import type { ValidationErrorData } from '../../shared/ValidationErrorData.ts'
 import { createTestApp, type TestApp } from '../../test/createTestApp.ts'
-import { clientProxy, makeClientImports } from './clientProxy.ts'
+import { clearClientProxyCache, clientProxy, makeClientImports } from './clientProxy.ts'
 
 let running: TestApp | undefined
 
@@ -149,7 +150,11 @@ test('read proxy throws HttpError-like on non-2xx (404 unknown rpc)', async () =
     await expect(missing({})).rejects.toMatchObject({ name: 'HttpError', status: 404 })
 })
 
-test('read proxy throws on 422 validation failure', async () => {
+// A 422 must NARROW on the client, not merely arrive. The proxy reads a typed error's name off the
+// body's `name`, and the 422 used to be the one failure that spelled it `kind` — so this landed as an
+// HttpError with no kind at all and `fn.isError(e, 'ValidationError')` was silently false in the
+// browser while narrowing fine in-process. Asserting only `status` is what let that through.
+test('read proxy throws a 422 that narrows to ValidationError and carries its fields', async () => {
     const app = await boot({
         greet: GET((args: { name: string }) => `hello ${args.name}`, {
             schemas: {
@@ -165,7 +170,14 @@ test('read proxy throws on 422 validation failure', async () => {
         base: app.origin,
     }) as Rpc<{ name?: string }, string>
 
-    await expect(greet({})).rejects.toMatchObject({ name: 'HttpError', status: 422 })
+    const caught = await greet({}).then(
+        () => undefined,
+        (e: unknown) => e,
+    )
+    expect(caught).toMatchObject({ name: 'HttpError', status: 422 })
+    expect(greet.isError(caught, 'ValidationError')).toBe(true)
+    expect(greet.isError(caught, 'SomethingElse')).toBe(false)
+    expect((caught as { data: ValidationErrorData }).data.fields.name).toBeDefined()
 })
 
 test('makeClientImports builds a name -> proxy map', () => {
@@ -276,4 +288,30 @@ test('a throttled read proxy collapses spread-out refreshes into one refetch', a
     await until(() => calls === 3)
     await new Promise((resolve) => setTimeout(resolve, 120))
     expect(calls).toBe(3) // exactly one trailing refetch, not three
+})
+
+// A proxy is ONE object per (base, rpc name) for the life of the tab. Two comments already asserted
+// this — the tag-registration note here, and `refresh({ tags })`'s documented reach across args-keys "no
+// longer on screen" — while `makeClientImports` minted a fresh one per call, i.e. per page MOUNT.
+//
+// The tag registry is where that bit. `memo.ts` disposes a tagged memo's registration through an effect
+// scope or a request scope; a client proxy is in neither, on the stated premise that it is module-level
+// and so "stays registered for the process, which is exactly as long as it lives". Per-mount proxies do
+// not live that long, so every navigation left a permanent entry pinning a dead memo's whole slot map.
+// Identity is the honest assertion: the registry itself is not introspectable, but one proxy per name
+// is exactly what makes one registration per name true.
+test('makeClientImports returns the SAME proxy for a repeated (base, name) — one memo, one registration', () => {
+    const specs = { greet: { method: 'GET', read: true } }
+    const first = makeClientImports(specs, 'http://example.test')
+    const second = makeClientImports(specs, 'http://example.test')
+    expect(second.greet).toBe(first.greet)
+
+    // Keyed on base too: a cross-origin proxy (ABIDE_APP_URL) is a different endpoint with its own
+    // slots, and collapsing the two would serve one origin's cache to the other.
+    const elsewhere = makeClientImports(specs, 'http://other.test')
+    expect(elsewhere.greet).not.toBe(first.greet)
+
+    // …and the cache is module state, so tests have to be able to drop it.
+    clearClientProxyCache()
+    expect(makeClientImports(specs, 'http://example.test').greet).not.toBe(first.greet)
 })

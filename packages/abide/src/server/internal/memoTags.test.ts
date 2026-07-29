@@ -90,7 +90,7 @@ describe('cache tags — global invalidate({ tags })', () => {
         bindLikeCreateApp(readX, 'readX')
         bindLikeCreateApp(readY, 'readY')
 
-        // Seed one slot in each (shared reads require an active request scope).
+        // Seed one slot in each, through the request path a browser read would take.
         await runInScope(makeScope('readX'), () => readX({ id: 1 }))
         await runInScope(makeScope('readY'), () => readY({ id: 1 }))
         expect(callsX).toBe(1)

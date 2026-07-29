@@ -247,6 +247,49 @@ describe('branch-local <script> — gating', () => {
     })
 })
 
+// A `<script>` is not an ES module boundary — `emitSetup` inlines its body into `$ensureModule` /
+// `render` / `mount`, so an `export` lands inside a FUNCTION and the emitted module fails to parse.
+// The scanner used to skip the keyword, which made `export const x = 1` bind exactly like `const x = 1`:
+// every binding was right, the template read it, and the only symptom was a syntax error over generated
+// source. That is why the negatives below matter as much as the rejections — the gate reads a token
+// stream, and the cheap version of it (a substring/regex for `export`) rejects all three of them.
+describe('<script> — the export gate', () => {
+    const rejects = async (source: string): Promise<void> => {
+        await expect(loadEmittedServer(source)).rejects.toThrow('not an ES module boundary')
+    }
+
+    test('an export in <script module> is an error', async () => {
+        await rejects('<script module>export const shared = 1</script><p>{shared}</p>')
+    })
+
+    test('an export in the instance <script> is an error', async () => {
+        await rejects('<script>export let n = 1</script><p>{n}</p>')
+    })
+
+    test('an export in a branch-local <script> is an error', async () => {
+        await rejects('{#if true}<script>export const q = 2</script><p>{q}</p>{/if}')
+    })
+
+    test('export default and export type are errors too', async () => {
+        await rejects('<script>export default 1</script><p>x</p>')
+        await rejects('<script>export type Foo = { a: number }\nconst a = 1</script><p>{a}</p>')
+    })
+
+    test('the word export elsewhere is not', async () => {
+        expect(await render('<script>const o = { export: 1 }</script><p>{o.export}</p>')).toContain(
+            '<p>1',
+        )
+        expect(await render('<script>const s = "export const x = 1"</script><p>{s}</p>')).toContain(
+            'export const x = 1',
+        )
+        expect(
+            await render(
+                '<script>function f() { const exported = 1; return exported }</script><p>{f()}</p>',
+            ),
+        ).toContain('<p>1')
+    })
+})
+
 describe('nested <style>', () => {
     // The scope attribute of the element carrying `className`, or null when it has none.
     const scopeAttrOf = (host: HTMLElement, selector: string): string | null => {

@@ -2,7 +2,9 @@
   import { state } from "abide/shared/state"
   import tagProbes from "$server/rpc/tagProbes"
 
-  // The global tag probes are SERVER-side aggregates (the tag registry is server-only), so this RPC
+  // The global tag probes read on BOTH sides — tags are isomorphic, so a tagged read's browser memo
+  // registers too. This demo reaches them over an RPC because a server pass can observe the transition
+  // deterministically, not because the registry is server-only. This RPC
   // captures them across a load and a refresh in one pass and returns the four snapshots.
   let snap = state<{
     pendingDuringLoad: boolean

@@ -16,8 +16,8 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
 
 ## Coverage summary (verify phase)
 
-- **Total capabilities in this manifest: 187** (127 browser-facing PW/PW+RT, 58 runtime-only RT, 2 `unit`).
-  By status: **137 `[x]`, 7 `[~]`, 43 `[ ]`** — i.e. ~73% covered, and the manifest deliberately lists
+- **Total capabilities in this manifest: 201** (133 browser-facing PW/PW+RT, 62 runtime-only RT, 6 `unit`).
+  By status: **149 `[x]`, 9 `[~]`, 43 `[ ]`** — i.e. ~74% covered, and the manifest deliberately lists
   capabilities it does *not* yet cover, so a `[ ]` is a known gap rather than an oversight.
 - **Re-derive these with ONE parser, not by hand.** Three rows carry an escaped `\|` inside the
   capability cell and a fourth spells its kind `unit (checkTemplate.test.ts)`, so a naive
@@ -179,9 +179,12 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `json(data, init?)` → `TypedResponse<T>` | PW+RT | [x] (/rpc/responses) |
 | `jsonl(iterable, init?)` — `application/jsonl` stream (lazy, see-through) | PW+RT | [x] (/rpc/streaming; `{#for await x of rpc()}` + Start/restart via `.refresh()`) |
 | `sse(iterable, init?)` — `text/event-stream` stream (lazy, see-through, isomorphic) | PW+RT | [x] (/rpc/streaming; consumed via the RPC callable `{#for await}` **and** via native `EventSource`) |
-| `error(status, message?, init?)` | RT | [x] (/rpc/responses, caught in browser) |
-| `error.typed(name, status, schema?)` + `fn.isError(e, name)` narrowing | PW+RT | [x] (/rpc/responses; narrowed by `.kind`) |
-| `redirect(url, status=302, init?)` | PW+RT | [x] (/rpc/responses) |
+| `error(status, message?, init?)` → **`never`** — THROWS an `HttpError` rather than returning a `Response`, so the failure lands in the memo slot's ERROR channel (a returned one was retained as the slot's VALUE at `ttl: ∞`) and reaches an in-process caller as a `catch` | RT | [x] (/rpc/responses `rpcBoom`, caught in the browser; abide `server/rpcOutcome.test.ts` asserts the failure lands in the memo's error channel, not its value channel, and `server/response.test.ts` the rendering) |
+| `error.typed(name, status, schema?)` → a factory that THROWS; `fn.isError(e, name)` narrows the same on both sides (the browser proxy decodes the non-2xx back into the same `abide/shared/HttpError`) | PW+RT | [x] (/rpc/responses; narrowed by `.kind`) |
+| `redirect(url, status=302, init?)` → **`never`** — THROWS a `Redirect`; the router renders the 3xx + `Location` | PW+RT | [x] (/rpc/responses) |
+| A thrown outcome (`HttpError`/`Redirect`) is rendered at its OWN status BEFORE `onError` and never becomes the generic 500 — a declared 404 is not a bug in the app; `onError` may itself throw `error()`/`redirect()` to shape the reply | PW+RT | [x] (platform/lifecycle: this app's `onError` calls `error(500, …)` and the shaped body is asserted by e2e/platform.spec + e2e/streaming.spec; abide `server/internal/onError.test.ts` + `server/internal/router.test.ts`) |
+| `abide/shared/HttpError` / `abide/shared/Redirect` — the two classes the helpers throw and the router/browser proxy both decode; ONE class each side, which is what makes `catch` isomorphic | PW+RT | [~] (exercised end-to-end at /rpc/responses + platform/scope, but the docs app never imports either class by name — the type-level row is §12's `HttpError`/`ValidationErrorData`, still `[ ]`) |
+| The `OutcomeResponse` brand and `Payload<R>`'s outcome branch are RETIRED — a `throw` is `never` and a union absorbs it, so `GET(({ fail }) => fail ? error(503) : { greeting })` still infers `{ greeting }` with no brand | unit | [x] (abide `server/rpcOutcome.test.ts` "never reaches a caller as a value" + `server/response.test.ts`; `rpcBoom.ts` is the live instance — its success branch types as `{ ok: boolean }`) |
 | Baseline response headers stamped at one choke point (`nosniff`, `Referrer-Policy`; `Cache-Control: private, no-cache` + `Vary: Cookie` by default), each only when the response didn't set it | PW | [x] (/rpc/responses RawResponseDemo reads them off the untouched `Response` per helper) |
 | `raw`'s `init` reaches the underlying fetch (`{ redirect: "manual" }` → opaque response) | PW | [x] (/rpc/responses RawResponseDemo) |
 
@@ -192,6 +195,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `fn.raw(args, init?)` — raw `Response`, full bypass (reads AND mutations) | PW+RT | [x] (/rpc/reads `rpcGreet.raw`; /rpc/responses RawResponseDemo across all four helpers; platform/lifecycle `lifecycleThrow.raw({})` on a POST) |
 | bare call on a streaming handler → replay-then-live `AsyncIterable<C>` (client proxy decodes jsonl/sse by content-type → same memo → stream slot) | PW+RT | [x] (/rpc/streaming; browser `{#for await x of rpc()}` for jsonl + sse, verified streaming + re-run) |
 | `fn.peek` — reactive probe | PW | [x] (/rpc/reads) |
+| `StreamRead`/`StreamMutation` carry the WHOLE probe vocabulary, re-typed over the chunk — including `refreshing`, which `StreamRead` used to omit from its declaration while `makeRpc` assigned it all along. The six names are ONE declaration (`ReactiveValueProbes` + `ReactiveStreamProbes`) that `memo`, `channel`, `socket`, `Rpc` and `StreamRead` all derive from | RT | [x] (abide `shared/internal/reactiveReadSurface.test.ts` — a NAME LIST asserted against all six surfaces, at runtime, because each is assembled by assigning onto a callable and casting, so a type-level unification cannot guard itself) |
 | Read URL args — two forms: canonical `?__abide_args=<json>` blob (browser proxy / test app / MCP) OR flat per-field query params (`?key=beta&n=5`, curl-friendly; coerced to each input-schema field type, raw passthrough when undeclared) | RT | [ ] (abide `decodeQueryArgs`/router unit tests; no docs-app demo) |
 
 ## 4. Cache verbs + probes (isomorphic — `abide/shared/*`)
@@ -249,7 +253,9 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `{expr}` — reactive text (escaped) | PW | [x] (/templating/bindings) |
 | `{html(...)}` — raw | PW | [x] (/templating/bindings) |
 | `name={expr}` — reactive attribute | PW | [x] (/templating/bindings) |
-| `on<event>={fn}` — native listener (onclick/oninput/…) | PW | [x] (/templating/bindings) |
+| `on<event>={fn}` — native listener (onclick/oninput/…) on an ELEMENT | PW | [x] (/templating/bindings) |
+| `on<event>={fn}` on a COMPONENT is an ordinary PROP named `onclick` — there is no element to attach to, so the component places it; BOTH emitters pass it (the server used to drop it, so SSR and hydrate disagreed about the props a component received) | RT | [~] (abide `ui/internal/componentAttrLanes.test.ts` asserts the server and client lanes agree on the props object; the docs app has NO demo — no component here takes a handler prop, so nothing dogfoods it) |
+| `class:name={cond}` / `style:prop={value}` on a COMPONENT is a compile error in BOTH lanes (the directive targets one element; a component renders a subtree). It used to be typed as a real prop by `abide check` and silently DROPPED by both emitters | unit | [x] (abide `ui/internal/componentAttrLanes.test.ts` "…compile error in the check lane AND the build lane" + "the message names the fix"; one gate — `validateTemplate` runs `buildPlan` — so check and build reject the same thing by construction. Not hostable in the docs app: it does not compile) |
 | `bind:value` | PW | [x] (/templating/bindings) |
 | `bind:checked` | PW | [x] (/templating/bindings) |
 | `bind:group` | PW | [x] (/templating/bindings — radios + checkbox array) |
@@ -273,8 +279,12 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | Inline component `{#component Name()}` (TitleCase) invoked `<Name/>` + `<slot/>` + pass as prop | PW | [x] (/templating/components) |
 | Nested `{#component}` inside `<Foo>` → Foo's same-named prop (named slot) | PW | [x] (/templating/components) |
 | Reactive component — cell/memo-named tag `<C/>` (`const C = memo(…)`) re-mounts on change | PW | [x] (/templating/components) |
+| Member tag `<item.Icon/>` — the head is any binding, TitleCase applies to the LAST segment (`<item.icon/>` is a parse error; a hyphen keeps a dotted tag an element) | PW | [x] (/templating/components MemberTagDemo + e2e/control.spec) |
+| A member tag is REACTIVE — an expression over bindings, not an import, so it re-mounts on identity change (`templatePlan` marks every dotted tag reactive, and the emitter mounts it via `dynamicComponent`) | PW | [x] (MemberTagDemo's swap button hands row 0 a different component; e2e/control.spec pins the row's `<li>` first, so it asserts the TAG re-mounted rather than the list rebuilding the row — the `by` key is unchanged) |
+| `<item.icon/>` (lowercase last segment) is a PARSE ERROR; `<my-el.foo>` (hyphen) stays an element | unit | [x] (abide `ui/internal/parse.test.ts` "member tag with a lowercase last segment is a parse error" + "a hyphenated dotted tag stays an element"; the docs app cannot host either — one throws and the other is an ordinary element) |
 | Component-valued prop typing `Component<Props>` | unit (checkTemplate.test.ts) | [x] |
 | `<script>` / `<script module>` / nested branch-local scripts | PW | [~] |
+| An `export` in ANY of the three `<script>` kinds is a compile error in both lanes — none is an ES module boundary, each body is inlined into the emitted component's setup, so an `export` there lands inside a function. It used to be skipped by the scanner, and the only symptom was a parse failure over GENERATED source | unit | [x] (abide `ui/internal/nestedScopes.test.ts` "&lt;script&gt; — the export gate" covers module/instance/branch-local + `export default` + `export type`, and the negative cases — `{ export: 1 }`, the word inside a string literal, a local named `exported`; `ui/internal/laneAgreement.test.ts` asserts check and build agree. Not hostable in the docs app: it does not compile) |
 | A cell assignment whose RHS spans a LINE BREAK is one expression (ternary, operator, member chain, `instanceof`, `in`, template middles) — severing it sets the cell to the head and orphans the tail, silently | PW | [x] (/templating/scripts multiline demo + e2e/branch-scope.spec; `as` is unit-only — the operator forbids a preceding line break in TS itself) |
 | `<style>` component-scoped / nested subtree-scoped | PW | [x] (/templating/styling ScopedStyleDemo + e2e/styling.spec) |
 
@@ -299,6 +309,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | Optional `[[name]]` (absent → param omitted) + rest `[...name]` (`/`-joined) segments; precedence literal > required > optional > rest | PW | [x] (/pages/routing/blog/[[page]] bare+paged, /pages/routing/files/[...path], /pages/routing/files/latest exact-over-catch-all + e2e/routing.spec) |
 | `route()` → `{ kind, name, params, url, navigating }` (isomorphic) | PW+RT | [x] (/pages/routing pages assert kind/name/params/url) |
 | `navigate(target, opts)` — soft nav (same-route param/query = whole chain kept alive, no re-hydrate; cross-route sharing a layout prefix keeps shared layouts + grafts only the diverging suffix; disjoint = outlet swap) | PW | [x] (/pages/routing navigate() + soft-nav/back-forward e2e; /pages/layouts keep-alive + e2e/routing.spec persistence asserts) |
+| The CLIENT declares the kept layout depth (`Abide-Nav-Keep: <n>`) and where sent it **decides** the render (`levels.slice(keep)`, clamped to the route's own depth; malformed → fall back). The server's `sharedLayoutDepth(from, to)` answers what the route TABLE permits and is only the fallback for a caller that sends nothing — a live page's real keep depends on whether a chain is mounted/claimed/graftable, which the server cannot see. The two used to be derived independently and reconciled at runtime, with the client hard-loading on a mismatch; one derivation makes that unrepresentable. A same-URL nav sends `0`, so the whole tree renders and the seed carries the kept layouts' reads | PW | [x] (e2e/routing.spec: the Back-that-re-enters-a-layout-section test pins exactly the case where the two numbers disagree — it was a full document load before) |
 | `url(path, params?, query?)` — in-app href resolver (typed params + query string; drops absent optional `[[name]]`, expands rest `[...name]`, all-optional path → optional params arg) | PW+RT | [x] (/pages/routing hub builds [slug] hrefs + query strings + optional/rest hrefs; e2e asserts href + query round-trip via route().url) |
 | Static assets `src/ui/public/` | PW | [ ] |
 
@@ -339,7 +350,8 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | `env(schema)` / `env<T>()` — typed boot-validated config | RT | [x] (platform/config via platformConfig RPC; coercion asserted) |
 | `log(...)` + `.info/.warn/.error/.trace` + `.channel(name)` | RT | [~] (platformObserve calls log.info server-side) |
 | `trace()` → W3C traceparent | PW+RT | [x] (platform/observability renders trace() traceparent) |
-| `health()` → `Promise<{ reachable, version, ... }>` — isomorphic (server baseline in-proc; client `await`s a fetch of `/__abide/health`) | PW+RT | [x] (platform/observability + platform/lifecycle call `await health()`) |
+| `health()` → `Promise<HealthDocument & <onHealth fields>>` — isomorphic AND symmetric (server composes in-proc; client `await`s a fetch of `/__abide/health`); return type generated into `src/.abide/health.d.ts` | PW+RT | [x] (platform/observability + platform/lifecycle call `await health()`) |
+| The GENERATED `src/.abide/health.d.ts` really types the read — `(await health()).bootId` checks in this app and would be a compile error with no such hook (needs the tsconfig to name `"src/.abide/*.d.ts"`; an `include` wildcard never descends into a dot-directory) | PW+RT | [x] (`src/server/rpc/platformHealth.ts` reads `doc.bootId`/`doc.app` off the composed document in a `.ts`, where the checker is real, and e2e/platform.spec asserts the value reaches the browser. The two `.abide` demos CANNOT guard it — both hold the document in a `state(null)` cell that `emitCheck`'s widen resolves to `any`, so the companion is never consulted there) |
 | `online()` → reactive boolean (browser connectivity) | PW | [x] (platform/observability, offline-toggle) |
 | `reachable(host)` → await boolean | PW+RT | [x] (/memo/verbs: `cacheReachable`) |
 | `withJsonSchema(schema)` → `toJSONSchema()` | RT | [x] (`shared/withJsonSchema.test.ts`) |
@@ -360,8 +372,10 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | Log feed is inside the middleware chain and NOT on the WS mux (a browser-joinable log channel makes any XSS a log exfil) | RT | [ ] |
 | Log fan-out happens BEFORE the `DEBUG` gate — `logs --debug abide:rpc` lights a channel on a live deployment booted without it | RT | [ ] |
 | Declared RPC verb is ENFORCED — a mismatched method is a 405 carrying a derived `Allow` (`GET, HEAD` for a read); HEAD rides with GET | RT | [ ] |
+| Every GENERATED route gates its method through the same `enforceMethod` — a read-only framework route answers anything but `GET`/`HEAD` with 405 + `Allow: GET, HEAD`, and `/__abide/mcp` with `Allow: POST`. It had been written out per route class five times and omitted from three, so a `POST /openapi.json` carrying the abide client's shape cleared the CSRF gate and returned **200 with the spec document** (same for `/__abide/identity` and `/__abide/health`) | RT | [x] (abide `server/responseHeaders.test.ts` "405 Allow" — a `test.each` ENUMERATION over `/openapi.json`, `/__abide/identity`, `/__abide/health`, `/__abide/logs`, kept as a list precisely because the failure mode is a route class nobody remembered; `internal/logsRoute.test.ts` for the log feed. No docs-app demo) |
+| OpenAPI declares the 422 typed-error ENVELOPE once under `components/schemas` and references it from every operation's `422` response — the envelope, not the payload alone, so a described error is the shape a caller actually receives | RT | [x] (abide `server/openapi.test.ts` asserts the `422` response on both a read and a mutation operation; `server/loadApp.test.ts` + `server/multipart.test.ts` assert the router really answers 422 with it. The docs app renders only the operation PATHS, so the browser surface does not reach the envelope) |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` / per-RPC `maxBodySize` — declared oversize is a 413 before buffering, chunked re-checked after | RT | [ ] |
-| First-load HTML document carries `Vary: Abide-Nav` (it shares a URL with the soft-nav JSONL response) | PW | [ ] |
+| Both representations at one URL carry `Vary: Abide-Nav, Abide-Nav-Keep` — the first-load HTML document and the soft-nav JSONL frame stream (`NAV_VARY`); `from` picks document-vs-frame-stream, `keep` picks how much of the tree the stream carries, so a cache keyed on only one could serve a page fragment to a first load | PW | [ ] |
 | `<head>` `modulepreload`s the whole static boot graph + the matched route's chunk graph, each chunk named individually | PW | [ ] |
 | `/__abide/inspector` (gated) — **specced, NOT built** (config-observability CO2.7; no route, no env var) | RT | [ ] |
 | `/__abide/cli` (per-user install) — **specced, NOT built** (machine-surfaces MS3.5 parks it) | RT | [ ] |
@@ -409,25 +423,25 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | # | Bucket | Items | Playwright-relevant (PW / PW+RT) | Runtime-only (RT) |
 | --- | --- | --- | --- | --- |
 | 1 | RPC helpers — verbs | 20 | 10 | 10 |
-| 2 | Responses | 8 | 7 | 1 |
-| 3 | Call surface | 5 | 4 | 1 |
+| 2 | Responses | 11 | 9 | 1 |
+| 3 | Call surface | 6 | 4 | 2 |
 | 4 | Cache verbs + probes | 19 | 18 | 1 |
 | 5 | Reactivity (shared state/watch + UI) | 22 | 19 | 2 |
-| 6 | Template bindings / directives | 12 | 12 | 0 |
-| 7 | Control flow | 15 | 14 | 0 |
+| 6 | Template bindings / directives | 14 | 12 | 1 |
+| 7 | Control flow | 19 | 16 | 0 |
 | 8 | Async reads in templates | 6 | 6 | 0 |
-| 9 | Routing / navigation | 10 | 10 | 0 |
+| 9 | Routing / navigation | 11 | 11 | 0 |
 | 10 | Sockets | 11 | 7 | 4 |
 | 11 | Auth / request scope | 10 | 7 | 3 |
-| 12 | Config / observability | 10 | 5 | 5 |
-| 13 | Machine surfaces | 15 | 4 | 11 |
+| 12 | Config / observability | 11 | 6 | 5 |
+| 13 | Machine surfaces | 17 | 4 | 13 |
 | 14 | Agent | 6 | 1 | 5 |
 | 15 | CLI / build | 17 | 3 | 14 |
 | 16 | Testing harness | 1 | 0 | 1 |
-| | **Total** | **187** | **127 browser-facing** | **58 runtime-only** |
+| | **Total** | **201** | **133 browser-facing** | **62 runtime-only** |
 
 > Counts are mechanical — **run the parser in the coverage summary above**, don't split columns by
-> hand. PW + RT = 185; the other two are bucket 7's and bucket 15's `unit` rows, a kind outside the
+> hand. PW + RT = 195; the other six are the `unit` rows in buckets 2, 5, 6 and 7, a kind outside the
 > PW/RT taxonomy. **Re-derive after editing any table** — this summary silently drifted by 18 rows
 > once, and then by 31 more, because "re-derive" had no command attached to it. It does now, and the
 > three-way reconciliation (kinds = statuses = bucket column sums = total) is what makes a dropped
@@ -441,6 +455,10 @@ Notes:
   browser consuming an `AgentFrame` stream) and bucket 15 has three (`abide build` via
   `e2e/build-deploy.spec`, the server microbench, the raw SSR-emitter byte fixture). An artefact of a
   build or an agent stream that a browser observes is legitimately browser-facing.
+- Some capabilities are `unit` because the docs app **cannot host them**: `class:`/`style:` on a
+  component, an `export` in a `<script>`, and `<item.icon/>` are all COMPILE ERRORS, so a page that
+  demonstrated one would not build. Those rows cite the abide unit test that owns the gate instead —
+  a `[x]` there means the gate is guarded, not that this app exercises it.
 - Several capabilities (RPC verbs, responses, cache verbs, sockets, machine surfaces) are **PW+RT**:
   worth one browser test (the fetch/DOM path) *and* one runtime test (the raw HTTP / machine-surface path).
 - `abide/ui/html` and `abide/ui/props` are documented public UI imports but are provided through the

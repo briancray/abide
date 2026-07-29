@@ -24,6 +24,19 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // index tail, and the prefix keywords (`new`, `typeof`, `await`, …) only as a dangling operand. The
 // build lane used to apply one symmetric set in both roles, which is why the direction-specific
 // members had nowhere to live.
+//
+// The template kinds are the sharpest case of that asymmetry, and each of the three sits in a
+// DIFFERENT role. Only `TemplateMiddle` is symmetric: `}…${` both completes an operand and opens
+// another, so it dangles in either direction. `TemplateHead` (`` `a ${ ``) dangles
+// only FORWARD — the substitution expression is still owed — and `TemplateTail` (`` }` ``) only
+// BACKWARD, since it closes the literal and the expression is finished. `TemplateTail` in `afterPrev`
+// meant a line ending in one never ended the RHS, so
+//
+//     msg = `a ${b}`
+//     const after = 1
+//
+// put the `.set(…)`'s closing paren after `const after = 1` instead of after the literal: the RHS ran
+// on to the next comma, closing bracket or EOF, swallowing every following statement into the call.
 const BOTH_ROLES: readonly SyntaxKind[] = [
     SyntaxKind.DotToken,
     SyntaxKind.QuestionDotToken,
@@ -57,7 +70,6 @@ const BOTH_ROLES: readonly SyntaxKind[] = [
     SyntaxKind.AsKeyword,
     SyntaxKind.SatisfiesKeyword,
     SyntaxKind.TemplateMiddle,
-    SyntaxKind.TemplateTail,
 ]
 
 export const CONTINUATION_OPERATORS = {
@@ -71,6 +83,7 @@ export const CONTINUATION_OPERATORS = {
         SyntaxKind.YieldKeyword,
         SyntaxKind.DeleteKeyword,
         SyntaxKind.KeyOfKeyword,
+        SyntaxKind.TemplateHead,
     ]),
     // A line whose NEXT token is one of these continues the previous line (a call / index / member /
     // operator tail). Statements never BEGIN with these, so treating them as continuation cannot
@@ -79,5 +92,6 @@ export const CONTINUATION_OPERATORS = {
         ...BOTH_ROLES,
         SyntaxKind.OpenParenToken,
         SyntaxKind.OpenBracketToken,
+        SyntaxKind.TemplateTail,
     ]),
 } as const

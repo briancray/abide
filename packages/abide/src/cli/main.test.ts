@@ -149,6 +149,38 @@ describe('main — dispatch', () => {
         expect((await Bun.file(join(cwd, 'demo', 'package.json')).json()).name).toBe('demo')
     })
 
+    // `scaffold` runs `git init`, so the tree it writes IS a repo from the first command. Without a
+    // .gitignore the first `git add .` commits node_modules/, dist/, and — worse — the GENERATED
+    // src/.abide/health.d.ts, which the health-companion design (CO2.4) assumes is regenerated and
+    // never tracked. That invariant held in this monorepo only via the ROOT .gitignore, which a
+    // scaffolded app never sees. Asserted on the OUTPUT, not on the template, because the copy step
+    // names its root-level files one by one — a template dotfile nobody listed is silently not copied.
+    test('scaffold emits a .gitignore covering everything the framework generates', async () => {
+        const cwd = tempPath()
+        await run(['scaffold', 'demo', '--no-git', '--no-install', '--no-dev'], cwd)
+        const gitignore = Bun.file(join(cwd, 'demo', '.gitignore'))
+        expect(await gitignore.exists()).toBe(true)
+        const text = await gitignore.text()
+        for (const entry of ['node_modules/', 'dist/', 'src/.abide/', 'test-results/']) {
+            expect(text).toContain(entry)
+        }
+    })
+
+    // The generated health companion is what `src/.abide/` holds, and the template has one on disk
+    // (the starter is a real, built workspace package). It must never reach a scaffolded app: the copy
+    // skips `.abide/`, and the .gitignore above keeps a regenerated one out of the first commit.
+    test('scaffold does not copy the generated src/.abide/ output', async () => {
+        const cwd = tempPath()
+        await run(['scaffold', 'demo', '--no-git', '--no-install', '--no-dev'], cwd)
+        expect(await Bun.file(join(cwd, 'demo', 'src', '.abide', 'health.d.ts')).exists()).toBe(
+            false,
+        )
+        // …while the tsconfig still NAMES it, since an `include` wildcard skips dot-directories and a
+        // companion nothing includes types nothing.
+        const tsconfig = await Bun.file(join(cwd, 'demo', 'tsconfig.json')).text()
+        expect(tsconfig).toContain('src/.abide/*.d.ts')
+    })
+
     test('scaffold reads <name> past a value-taking flag', async () => {
         const cwd = tempPath()
         // `--out` is not a scaffold flag, but firstPositional must still not mistake its value for the
@@ -203,10 +235,13 @@ describe('reserved CLI commands — one list, four readers', () => {
             // The prompt sees every reserved name.
             expect(reservedCliCommand(name, 'prompt')).toBe(name)
             // The command line sees the ones that mean something there. `exit`/`quit` end a SESSION,
-            // so on a command line they fall through to the app's own rpcs.
-            expect(reservedCliCommand(name, 'command')).toBe(
-                entry.where === 'prompt' ? undefined : name,
-            )
+            // so on a command line they fall through to the app's own rpcs. Widened to `string` on
+            // purpose: asking as `'command'` NARROWS the return type to `CommandSurfaceReserved`, so
+            // the expected value below — which still ranges over `exit` — is not assignable to it.
+            // That narrowing is the point (it is what lets `reservedCliDispatch` be total with no dead
+            // `exit` branch), and this line asserts the runtime half of the same rule.
+            const onCommandLine: string | undefined = reservedCliCommand(name, 'command')
+            expect(onCommandLine).toBe(entry.where === 'prompt' ? undefined : name)
         }
         expect(reservedCliCommand('greet', 'command')).toBeUndefined()
         expect(reservedCliCommand('greet', 'prompt')).toBeUndefined()

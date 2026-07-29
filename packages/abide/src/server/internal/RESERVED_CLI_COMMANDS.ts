@@ -18,9 +18,15 @@
 //
 // This is the ONE list, because four places have to agree: the dispatcher (`runCompiledApp`), the REPL
 // (`interactiveCli`), the generated help (`cliUsage`) and the projection that warns an author their
-// rpc is shadowed (`cliCommands`). The first two reach it through `reservedCliCommand`, so a name they
-// intercept that is not here is a compile error; the other two read the table directly, so a name
-// added here shows up in help and in the warning with no second edit.
+// rpc is shadowed (`cliCommands`). The last two read the table directly, so a name added here shows up
+// in help and in the warning with no second edit. The first two used to reach it through
+// `reservedCliCommand` and then branch on the result in TWO hand-written ladders, which bought only
+// HALF the guarantee: a name they intercepted that was not here was a compile error, but a name here
+// that neither intercepted was nothing at all. `completion` was exactly that — declared `'both'`,
+// listed in `help`, warned about as shadowing an author's rpc, and answered `unknown command` at the
+// prompt. Both surfaces now dispatch through `reservedCliDispatch`, which is TOTAL over
+// `CommandSurfaceReserved`, so the guarantee runs both ways: an entry no surface answers does not
+// compile.
 //
 // `where` is the difference between the two surfaces, not decoration: `exit`/`quit` end a SESSION, so
 // they mean nothing on a command line and an rpc named `exit` stays callable as `app exit` — it is
@@ -76,3 +82,16 @@ export const RESERVED_CLI_COMMANDS = {
 // A name the binary keeps for itself. `'both'` names are intercepted on the command line AND at the
 // prompt; `'prompt'` names only at the prompt.
 export type ReservedCliCommand = keyof typeof RESERVED_CLI_COMMANDS
+
+// The names that mean something on a COMMAND LINE. DERIVED from `where` rather than restated, which is
+// what makes that field checked by the type system and not only at runtime: `reservedCliCommand(head,
+// 'command')` returns this, and `reservedCliDispatch` is total over it.
+export type CommandSurfaceReserved = {
+    [Name in ReservedCliCommand]: (typeof RESERVED_CLI_COMMANDS)[Name]['where'] extends 'both'
+        ? Name
+        : never
+}[ReservedCliCommand]
+
+// The rest: names that end a SESSION and so mean nothing as a subcommand. The prompt answers these
+// itself — they are loop control, not calls — and its own switch is total over this.
+export type PromptOnlyReserved = Exclude<ReservedCliCommand, CommandSurfaceReserved>

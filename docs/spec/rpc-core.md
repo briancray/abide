@@ -60,7 +60,15 @@ Opt-in deliberately crosses requests, so the auth-free property is made *structu
    **throws in dev and refuses to cache in prod** (throws or bypasses the cache — never
    caches the value). The "shared functions physically cannot see the request" guarantee
    holds in prod, not just dev, which is what prevents cross-user cache poisoning.
-4. **Bounding:** optional global byte ceiling `ABIDE_MAX_SHARED_CACHE_SIZE` with LRU
+4. **The read is reachable from ANY caller** — `crossRequest` means one slot for every
+   caller, wherever the call comes from: a request handler, a cron tick, an `abide run`
+   migration, an `onStart` warmer. It does **not** require an active request scope; (3) is
+   what makes the slot safe to share, since a value that cannot see the request is a value
+   with nothing user-specific in it. A caller-side gate was specced (shared-cache-plan §2.1
+   checkpoint (b)) and is **retracted**: it tested the presence of a scope, not any
+   authorization, and it covered only the value reads — `refresh`/`invalidate`/`publish`
+   never carried it, so it forbade reading a slot it permitted writing.
+5. **Bounding:** optional global byte ceiling `ABIDE_MAX_SHARED_CACHE_SIZE` with LRU
    eviction, **default = NO LIMIT (unbounded)**, opt-in bound. Unbounded-by-default over
    attacker-influenced args is a **consciously accepted** memory-exhaustion tradeoff for a
    tool-shaped framework; the env var is the operator mitigation. Byte-measure = serialized
@@ -342,7 +350,11 @@ One imported callable means two things:
    spooled/streamed, not fully buffered.
 5. **Validation failure = built-in typed error** `ValidationErrorData { issues, fields }`
    (422/400), narrowed like any §9 typed error — a well-known member of every RPC's error
-   union.
+   union. `ValidationErrorData` is the **PAYLOAD**, not the body: it is the typed error's `data`,
+   carried inside the §9.1 envelope (`{ status, statusText, message, name: 'ValidationError',
+   data }`). The distinction is worth the cross-reference because collapsing the two is exactly what
+   the OpenAPI projection did (machine-surfaces MS4.1), telling a generated client to read
+   `body.issues` off a body that carries `body.data.issues`.
 
 ### Client-side validation opt-in — **RETRACTED (ADR 0027 D9), never implemented**
 
@@ -392,11 +404,11 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    stays silently permissive. Codec-native types get known mappings (`Date` →
    `{ type: 'string', format: 'date-time' }`, etc.) so they're representable.
 4. **Output derivation unwraps the response wrapper:** `TypedResponse<T>`/`json(T)` → `T`;
-   `jsonl`/`sse` → element type; `redirect`/`error` union members excluded from success
-   schema. That exclusion is carried in the TYPE, not just the derivation: `error()`/`redirect()`
-   return an **`OutcomeResponse`** — a `Response` with an outcome brand — and `Payload<R>` maps it
-   to `never`. An outcome never reaches a caller as the resolved value (an error arrives as a
-   thrown `HttpError`, a redirect as a navigation), so a handler with a failing branch keeps its
+   `jsonl`/`sse` → element type; `redirect`/`error` contribute nothing to the success schema.
+   That exclusion needs no brand and no derivation rule, because there is no outcome VALUE to
+   exclude: `error()`/`redirect()` **throw** and are typed `never`, which a union absorbs on its
+   own. An outcome therefore never reaches a caller as the resolved value (an error arrives as a
+   thrown `HttpError`, a redirect as a navigation), and a handler with a failing branch keeps its
    success shape instead of widening to `Response | T`.
 5. **Derived at load, not per request.** `loadApp` runs ONE batched tsgo session over every
    RPC missing a hand-written schema at boot (sub-second for a whole app — grouped by tsconfig
@@ -408,9 +420,9 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    Output derivation unwraps the response wrapper (§11.4). A `json(T) | error()` union used to
    collapse to `Response` and erase `T` — a `TypedResponse<T>` is a subtype of `Response`, so the
    union reduced to the supertype — which forced "return the bare value in the success branch" as
-   a workaround. The `OutcomeResponse` brand (§11.4) removes it: an outcome is no longer a
-   supertype of a `TypedResponse<T>`, so the union does not reduce and `Payload` distributes over
-   it to plain `T`. Both `json(T) | error()` and `T | error()` now resolve to the success payload.
+   a workaround. Throwing outcomes (§11.4) remove it at the source: `error()`/`redirect()` are
+   typed `never`, so they are not union members at all and there is no supertype to reduce to.
+   Both `json(T) | error()` and `T | error()` resolve to the success payload.
    Opt out with `ABIDE_DERIVE_SCHEMAS=0`. Live derivation needs `node` on
    PATH (the tsgo bridge can't run under Bun); `abide dev`/`run` and the test app derive live.
    **Baked (§11.5):** `abide build` writes the derived schema map to `dist/schemas.json`, and

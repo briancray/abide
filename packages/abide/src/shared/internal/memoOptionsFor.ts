@@ -9,8 +9,8 @@
 // default, and an explicit `Infinity` would have to survive a JSON round trip it cannot make.
 //
 // `crossRequest` is deliberately NOT here, and it is the one field that must not be: it chooses which
-// STORE a server slot lives in, and a `crossRequest` memo fails closed outside a request scope
-// (`guardSharedRead`). A browser has no request to cross, so the proxy reads `policy.crossRequest` for
+// STORE a server slot lives in — the process-global one every caller shares, request or not.
+// A browser has no request to cross, so the proxy reads `policy.crossRequest` for
 // what it actually means there — whether to join the `(rpc,args)` broadcast channel — and the server
 // memo names the option itself. Isomorphic retention travels; a storage choice does not.
 

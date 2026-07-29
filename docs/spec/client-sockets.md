@@ -37,10 +37,16 @@ adds no durability the server never had.
 
    Probes are **zero-arg for a void (single-topic) socket**; a roomed socket (`Args`, ADR 0023)
    keys them by the room, exactly like an args-keyed memo — `peek(room)`/`chunks(room)`/… (on par
-   with the RPC read's `fn.peek(args)`). `publish(message)` above is that same rule, not a socket
-   affordance: the key is a `Room<Args>` positional on the SHARED surface (ADR 0023 §2 amendment), so
-   a void socket/channel and an argless memo all write `publish(value)` and a keyed one writes
-   `publish({ room }, value)`. `watch` — the other trailing-payload verb — behaves identically.
+   with the RPC read's `fn.peek(args)`). The six probes get that for free by taking `args: Args`
+   **last-or-only**, inherited from the shared `ReactiveProbeSurface` (`shared/internal/
+   reactiveReadSurface.ts`): TypeScript's omittable-`void`-parameter rule collapses `peek(args: void)`
+   to `peek()` with no `Room` machinery at all. The `Room<Args>` spread is for the verbs whose key is
+   NOT last — `publish`, `fn.watch`, `memo.state` — where a trailing payload would otherwise need an
+   `undefined` placeholder ahead of it. That is the rule (ADR 0023 §2 amendment), stated once on the
+   shared surface: a void socket/channel and an argless memo all write `publish(value)`, a keyed one
+   writes `publish({ room }, value)`. Since `Room<Args> = [Args] extends [void] ? [] : [args: Args]`
+   collapses to the same thing a trailing `args: Args` does, **no call site changes** — this is a
+   correction to which declaration owns which half of the rule, not a signature break.
 2. **Module-swap, parallel to the RPC proxy (rpc-core §6).** On the server a `.abide` imports the
    real `Socket` (in-proc hub). At build the bundler swaps a `server/sockets/*` import for a
    synthesized **client proxy** speaking the same surface over the WS mux. Keyed on **import

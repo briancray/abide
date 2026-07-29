@@ -117,15 +117,30 @@ the resolved fork at each branch is stated with its rationale.
   verbatim; delegate to Biome if ever needed).
 - Full template pretty-print: never via the type engine (standalone `.abide` printer only).
 
-## 3. Adjacent finding (tracked, NOT in #11 scope)
+## 3. Adjacent finding — LANDED
 
-The RUNTIME emitter rewrites TYPE-POSITION identifiers to `$scope.X` (`{(x as Foo).bar}` →
-`(x() as $scope.Foo).bar`; `(i: Item)` → `(i: $scope.Item)`; `v satisfies string` →
-`v satisfies $scope.string`). The intermediate `.ts` is not type-valid, but it is **harmless** — Bun
-strips types syntactically at build/SSR before resolution. #18 excluded the operators (`as`/
-`satisfies`) but not the type OPERAND after them. `emitCheck` is unaffected (verbatim copy, no
-`$scope` rewrite). Fix (optional, low-pri): teach `analyzeScope`'s free-identifier pass to skip
-type-position operands. Tracked in TODO.md.
+The RUNTIME emitter used to rewrite TYPE-POSITION identifiers as though they were values: to a cell
+READ (`props<{ rest?: string }>()` beside `const rest = memo(…)` emitted `props<{ rest()?: string }>()`)
+and to `$scope.X` (`{(x as Foo).bar}` → `(x() as $scope.Foo).bar`; `(i: Item)` → `(i: $scope.Item)`;
+`v satisfies string` → `v satisfies $scope.string`). #18 excluded the OPERATORS (`as`/`satisfies`) and
+not the type OPERAND after them. The `$scope` half was harmless — Bun strips types syntactically at
+build/SSR before resolution — but the cell half was a build failure, and an erratic one: a type-literal
+member whose annotation was NOT optional escaped by accident through `isObjectKey`'s `name:` test, so
+the same script broke or not depending on a `?`. `emitCheck` was never affected (verbatim copy, no
+`$scope` rewrite), which is why the check lane stayed green over source that could not build.
+
+`markTypeSkips` (`ui/internal/analyzeBindings.ts`) now returns the token indices belonging to a type,
+and **both** passes consume it — `rewriteCellRefs` and `rewriteFreeIdentifiers` — which is the point:
+one owner for "this identifier is a type name, not a read", rather than the same judgement written
+twice and drifting. Each branch is an ENTRY POINT into the shared `scanTypeOperand`/`scanAngle`
+walkers; the walkers own the grammar and stop at the first token they cannot classify, so a new entry
+point can only widen coverage and never run away.
+
+**Generic arrow type params (`<T,>(x: T) => x`) are deliberately NOT covered.** That `<` has no
+preceding name to prove it opens a type — it is indistinguishable, at this scanner's resolution, from
+a less-than — and guessing would mark real value tokens as types. Under-marking is the safe direction:
+an unmarked type token is rewritten (the old, visible failure) while an over-marked value token is
+silently left un-rewritten, which is a wrong READ that nothing reports.
 
 ## 4. Phasing (each PR gated per §1.12)
 

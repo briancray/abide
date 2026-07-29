@@ -2,6 +2,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { appLifecycle } from '../server/internal/appLifecycle.ts'
 import { loadApp } from '../server/internal/loadApp.ts'
+import { provideHealthSource } from '../shared/internal/healthSource.ts'
 
 // `abide run <file> [args…]` — run a script UNDER the abide server runtime, serving no HTTP (CL2).
 //
@@ -25,6 +26,14 @@ import { loadApp } from '../server/internal/loadApp.ts'
 export async function run(dir: string, file: string, args: string[] = []): Promise<void> {
     const target = isAbsolute(file) ? file : resolve(dir, file)
     const config = await loadApp(dir)
+    // The one boot that binds no server, so `createApp` never runs and never registers what `health()`
+    // composes from (CO2.4). A migration asking "is the app healthy" is asking about the app's own
+    // `onHealth`, not about an HTTP listener it deliberately does not have — so `run` provides the same
+    // source itself, clocked from load rather than from a bind that will not happen.
+    const withdrawHealthSource = provideHealthSource({
+        startedAt: Date.now(),
+        onHealth: config.onHealth,
+    })
     const booted = await appLifecycle(config, {
         // Nothing binds. `abide run` is the surface that proves the lifecycle contract is not the
         // HTTP server's — the script IS the workload, and it has not started until it is imported.
@@ -43,6 +52,7 @@ export async function run(dir: string, file: string, args: string[] = []): Promi
         process.argv = previousArgv
         // The script's own throw is what the caller should see, so teardown runs in `finally` and any
         // failure inside `onStop` is left to propagate only when the script itself succeeded.
+        withdrawHealthSource()
         await booted.stop()
     }
 }

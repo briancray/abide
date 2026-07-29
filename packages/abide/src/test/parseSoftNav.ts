@@ -10,6 +10,9 @@ export interface SoftNavEnvelope {
     html: string
     seed: unknown
     url?: string | undefined
+    // How many outer layout levels the server SKIPPED rendering (C6.2) — the number the client checks
+    // its own `keep` against, and the one `Abide-Nav-Keep` caps.
+    sharedLevels?: number | undefined
 }
 
 type PatchFrame = { kind: 'fill' | 'append'; id: number; html: string }
@@ -18,6 +21,7 @@ export async function parseSoftNav(response: Response): Promise<SoftNavEnvelope>
     const text = await response.text()
     let html = ''
     let url: string | undefined
+    let sharedLevels: number | undefined
     let seed: unknown = {}
     const patches: PatchFrame[] = []
     for (const line of text.split('\n')) {
@@ -28,10 +32,12 @@ export async function parseSoftNav(response: Response): Promise<SoftNavEnvelope>
             url?: string
             id?: number
             seed?: unknown
+            sharedLevels?: number
         }
         if (frame.kind === 'shell') {
             html = frame.html ?? ''
             url = frame.url
+            sharedLevels = frame.sharedLevels
         } else if (frame.kind === 'seed') {
             seed = frame.seed ?? {}
         } else if (
@@ -53,5 +59,5 @@ export async function parseSoftNav(response: Response): Promise<SoftNavEnvelope>
             html = html.replace(new RegExp(`(<template id="ab-l:${patch.id}")`), `${patch.html}$1`)
         }
     }
-    return { html, seed, url }
+    return { html, seed, url, sharedLevels }
 }

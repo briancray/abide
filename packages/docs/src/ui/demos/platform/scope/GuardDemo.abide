@@ -11,7 +11,8 @@
     const r = await platformGuard({ allow: "yes" })
     allowedOut = "allow=" + r.allow + " · passedGuard=" + r.passedGuard
   }
-  // Blocked call: layer 1 returns error(403) WITHOUT next() — a short-circuit; the handler never runs.
+  // Blocked call: layer 1 calls error(403) WITHOUT next() — it THROWS, the chain renders the 403, and
+  // the handler never runs.
   // The bare call `fn(args)` rejects with the HttpError carrying the short-circuited status, which we read off the
   // catch. NOTE: `fn.raw(args, init?)` (the untouched Response) is not implemented on the RPC callable
   // today (framework gap); catching `.load` is the honest way to observe the status from the callable.

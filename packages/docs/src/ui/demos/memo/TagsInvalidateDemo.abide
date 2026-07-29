@@ -5,7 +5,7 @@
   import cacheTagBust from "$server/rpc/cacheTagBust"
 
   // Two SHARED reads carry the "docs" tag. One global invalidate({ tags: ["docs"] }) — run server-side
-  // (the tag registry is server-only) through a POST RPC — drops BOTH slots, so a re-read of each
+  // through a POST RPC — drops BOTH slots, so a re-read of each
   // re-fetches and both run counts climb together.
   let result = state(null)
   async function load() {

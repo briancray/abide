@@ -15,16 +15,20 @@
 
 import { generateTraceparent } from './internal/generateTraceparent.ts'
 import { peekReactiveScope } from './internal/reactiveScope.ts'
+import { readClientTrace } from './internal/traceHolder.ts'
 
 export function trace(): string | undefined {
     const scope = peekReactiveScope()
-    if (scope === undefined) return undefined
     // Minting is REQUEST-scoped (ADR 0026): only a unit of work that is itself a server request may
-    // name a trace. Everywhere else — the browser's tab singleton above all — the answer is whatever
-    // was adopted, or nothing.
-    if (scope.requestScoped !== true) return scope.traceparent
-    if (scope.traceparent === undefined) {
-        scope.traceparent = generateTraceparent()
+    // name a trace. That path is unchanged — it reads and mints on the scope, per request.
+    if (scope !== undefined && scope.requestScoped === true) {
+        if (scope.traceparent === undefined) {
+            scope.traceparent = generateTraceparent()
+        }
+        return scope.traceparent
     }
-    return scope.traceparent
+    // Everywhere else — the browser's tab singleton above all — the answer is whatever was ADOPTED.
+    // Reading the holder SUBSCRIBES, so `{trace()}` re-renders when a navigation adopts a new id; it
+    // used to read a plain scope field and so showed the first page's id forever.
+    return readClientTrace()
 }

@@ -68,12 +68,31 @@ Scope: boot-time config (`env(schema)`) and the observability surface
    `log(...)` labels lines with the **app name** — `ABIDE_APP_NAME`, else the project
    `package.json` `name` (seeded at boot by `loadApp`), else `"abide"` — and is **always on** (it
    is the app's own stream). `.channel(name)` is a **named channel gated by the `debug`-npm
-   pattern**: server reads `DEBUG` (`DEBUG=cache,rpc` / `DEBUG=*`), the browser reads
+   pattern**: server reads `DEBUG` (`DEBUG=docs:cards,docs:db` / `DEBUG=*`), the browser reads
    `localStorage.debug`, so a channel is enable-able on **both** sides of the isomorphism. All
    framework internals log under the **`abide:*`** namespace, so `DEBUG=abide:*` lights up abide's
-   own diagnostics. The current channel set: `abide:rpc`, `abide:cache`, `abide:router`,
-   `abide:ssr`, `abide:socket`, `abide:identity`, `abide:agent`, `abide:mcp`, `abide:hydrate`,
-   `abide:stream`, `abide:bundle`, `abide:cli`.
+   own diagnostics. The current channel set: `abide:bundle`, `abide:cli`, `abide:health`,
+   `abide:hydrate`, `abide:identity`, `abide:memo`, `abide:router`, `abide:rpc`, `abide:socket`,
+   `abide:ssr`, `abide:stream`. It is the set that EXISTS, enumerable by grepping `log.channel(` —
+   this list had carried `abide:cache` (the channel is `abide:memo`; the rename came with ADR 0023's
+   cache→memo) alongside `abide:agent` and `abide:mcp`, neither of which any module has ever
+   opened, so `DEBUG=abide:mcp` lit nothing and reported nothing.
+   - **A bare name is QUALIFIED with the app name.** `log.channel('cards')` in an app called `docs`
+     labels and gates as **`docs:cards`** — an app's channels namespace under it exactly as the
+     framework's do under `abide:`, with no call site spelling the prefix (which is what an app used
+     to have to do, and one rename away from a `DEBUG=docs:*` that missed half its own channels).
+     A name that **already carries a namespace** (contains a `:`) is verbatim: that is what keeps
+     `abide:*` intact when the framework logs from inside an app called something else, and the
+     deliberate way to name a foreign namespace. The **qualified label is what gets gated**, so the
+     `DEBUG` pattern, the printed `[label]`, and a remote subscriber's `--debug` filter all spell a
+     channel the same way. Qualification happens at **emit** time, not when the logger is built —
+     framework modules call `.channel(...)` at module load and `ABIDE_APP_NAME` is seeded at boot.
+   - **The browser learns the name from the BUILD.** A tab has no environment to read, so the client
+     build bakes the resolved app name into the loader entry (`globalThis.__ABIDE_APP_NAME__`,
+     `clientBundle.loaderSource`) and `appName()` falls back to it. Without that seed the same
+     `log.channel('cards')` would label and gate as `docs:cards` on the server and `abide:cards` in
+     the browser — one channel with two names, on a primitive whose point is being the same on both
+     sides. Baked, so renaming the app takes a rebuild (as `ABIDE_RPC_TIMEOUT`'s browser half does).
    - **Level policy (one rule):** `error` **always emits**, bypassing gating, so operational
      failures surface even on a silent channel. `warn`/`info`/`trace` emit **only** when their
      channel is named (the default app channel counts as always-named → always on).
@@ -130,8 +149,27 @@ Scope: boot-time config (`env(schema)`) and the observability surface
      so a browser log line correlates with the server span that produced what it is logging about.
      The carrier is the **hydration seed** (`seed.trace`) on first load and on a full soft-nav —
      a document response's headers are not JS-readable — and the confirm response's `traceresponse`
-     header on a param/query nav, which keeps its mount and therefore has no seed. A malformed value
-     is dropped rather than adopted, so `trace()` is always a valid traceparent or `undefined`.
+     header on a param/query nav. That nav does now drain its confirm for the seed (C6-nav), whose
+     `trace` is the same id, but the header is read from the RESPONSE while the seed frame arrives
+     only once the whole render has streamed; adopting at the header keeps `trace()` from naming the
+     previous page's span for the length of a slow render. A malformed value is dropped rather than
+     adopted, so `trace()` is always a valid traceparent or `undefined`.
+   - **The browser half is REACTIVE**, so a binding that reads `{trace()}` re-renders when a nav
+     adopts a new id. It is the third **ADOPTED AMBIENT** (`shared/internal/adoptedAmbient.ts`),
+     beside `route()` and `identity()` — one shape: read reactively, adopt from OUTSIDE (seed, nav
+     header, `/__abide/identity` fetch), never mint, drop an invalid value rather than take it.
+     `trace` was the one that was NOT one: it lived as a plain field on the reactive scope, so a
+     binding rendered the first page's id and then showed it forever, and a component that mounted
+     its own scope lost it entirely. Three files that each stated a resemblance to the other two were
+     three files free to drift, and they had — `route` alone skipped validation, `trace` alone was
+     unreactive. The two axes that genuinely differ are PARAMETERS: how strict `isValid` is (a
+     `route` is constructed internally by `navigate`, an `identity`/`trace` arrives as untrusted
+     text) and whether an extra `changed` guard sits over the cell's identity check (`identity`
+     compares by value, since every nav decodes a fresh principal object; `route` deliberately does
+     not, which is what makes a same-route param nav republish; `trace` needs none, a traceparent
+     being a string). Only the browser half changed — `trace()` still reads the request scope and
+     still MINTS there, because by ADR 0026 only a unit of work that is itself a server request may
+     name a trace.
    - **An RPC call from the browser CARRIES it — as a child span.** The proxy sends `traceparent`
      with the page's trace id and a **fresh span id**, which is what W3C asks of a caller (the
      `parent-id` field is "the id of this request as known by the caller"): re-sending the span it
@@ -156,9 +194,29 @@ Scope: boot-time config (`env(schema)`) and the observability surface
    **request-scoped** (reads `identity()`/`context()`), and `reachable: false` or a throw answers
    **503** (carrying `Retry-After: 30` so a probe backs off instead of hammering an unhealthy app).
    `/__abide/health` is the probe endpoint (load balancers / monitors). The isomorphic
-   `health()` (from `abide/shared/health`) is **async**: on the server it resolves the baseline
-   `{ reachable, version }` in-proc (the route composes its stub from it); on the client `await
-   health()` fetches `/__abide/health`, yielding the full merged document.
+   `health()` (from `abide/shared/health`) is **async** and returns the SAME DOCUMENT on both sides:
+   on the server it composes it in-proc — baseline, bind clock, `onHealth` merged over them — and on
+   the client `await health()` fetches `/__abide/health`. The route is a wrapper that picks the status
+   code and nothing else, so a probe's GET and an in-proc caller cannot describe the app differently.
+   It was asymmetric (the server answered `{ reachable, version }` and the ROUTE composed the rest),
+   which meant the server-side call could not report whether the app was healthy, only that it existed
+   — and left the return type an index-signature bag, since with the app fields present on one side
+   and absent on the other nothing but `unknown` was true of both. `createApp` PROVIDES the hook and
+   the clock to a registration slot in `shared/` (`provideHealthSource`, the arrangement
+   `defaultAgentSurface` uses for `agent()`) because `shared/` may not name `server/`; the
+   registration is a stack, so a stopped app stops answering. `abide run` binds no server and so
+   provides its own, clocked from load. The reach is what changed: the hook now runs on **every**
+   server-side `health()`, not only inside the route — so a hook that reads `identity()` and is called
+   from a scope-free caller (a migration, a warmer) throws there, which is the existing throw-fails-
+   closed rule (`reachable: false` + 503) rather than a new failure mode.
+   - **The RETURN TYPE is generated** (`src/.abide/health.d.ts`, written by `dev`/`check`/`lsp`/
+     `build`): a module augmentation carrying `Awaited<ReturnType<typeof onHealth>>` into the
+     `HealthAugmentation` seam, so `(await health()).db` is typed in the app that declares it and a
+     compile error in the app that does not. The derivation is TypeScript's own — nothing reads a type
+     at generation time, so the companion cannot drift from the hook it describes. **A tsconfig
+     `include` wildcard never descends into a dot-directory**, so the scaffolded tsconfig names
+     `"src/.abide/*.d.ts"` explicitly; without that entry the companion is written, never read, and
+     `health()` silently keeps typing as the bare baseline (the writer warns on `abide:health`).
 6. **Connectivity probes:** `online()` = a **reactive** boolean (navigator.onLine + last-known
    reachability) for driving offline UI; `reachable(host)` = an `await`ed actual reachability
    check.

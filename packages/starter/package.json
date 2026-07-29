@@ -9,7 +9,7 @@
     "compile": "abide compile",
     "seed": "abide run src/server/scripts/seed.ts",
     "typecheck": "tsc --noEmit",
-    "abide-check": "abide check .",
+    "abide-check": "abide check",
     "e2e": "playwright test",
     "e2e:ci": "playwright test --workers=1 --retries=1"
   },

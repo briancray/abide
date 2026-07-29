@@ -3,10 +3,12 @@ import { pending } from 'abide/shared/pending'
 import { refreshing } from 'abide/shared/refreshing'
 import cacheTagSlow from './cacheTagSlow'
 
-// The GLOBAL tag PROBES — server-side reactive aggregates: true if ANY shared slot carrying the tag is
-// pending / refreshing. The tag registry is server-only, so they read meaningfully here (not in the
-// browser). This handler captures both transitions in one deterministic pass — a slot goes pending
-// SYNCHRONOUSLY when its load starts, and refreshing when it revalidates over a retained value.
+// The GLOBAL tag PROBES — reactive aggregates: true if ANY slot carrying the tag is pending /
+// refreshing. Exposed through a READ here because this handler captures both transitions in one
+// deterministic pass — not because the probes are server-only. They are not: tags stopped requiring
+// `crossRequest` and are isomorphic, so a tagged read's BROWSER memo registers too and these
+// aggregates answer on both sides. A slot goes pending SYNCHRONOUSLY when its load starts, and
+// refreshing when it revalidates over a retained value.
 export default GET(
     async () => {
         cacheTagSlow.invalidate() // drop any retained slot

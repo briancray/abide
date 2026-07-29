@@ -11,14 +11,20 @@
 // CHANNELS + GATING. Every line carries a channel label. The root `log(...)` uses the DEFAULT
 // channel — the app name (`ABIDE_APP_NAME`, else the `__ABIDE_APP_NAME__` global, else "abide") —
 // and is always on: it is the app's own stream. `.channel(name)` produces a NAMED channel gated by
-// the `debug`-npm pattern (server: `DEBUG=cache,rpc` / `DEBUG=*`; browser: `localStorage.debug`),
-// so framework internals — all under the `abide:*` namespace — stay quiet until `DEBUG=abide:*`
-// asks for them. ONE exception: `error` always emits regardless of gating, so operational failures
-// surface even on a silent channel.
+// the `debug`-npm pattern (server: `DEBUG=docs:cards,docs:db` / `DEBUG=*`; browser:
+// `localStorage.debug`), so framework internals — all under the `abide:*` namespace — stay quiet
+// until `DEBUG=abide:*` asks for them. ONE exception: `error` always emits regardless of gating, so
+// operational failures surface even on a silent channel.
+//
+// A BARE name is QUALIFIED with the app name: `log.channel('cards')` in an app called `docs` labels
+// and gates as `docs:cards`. An app's channels therefore namespace under it exactly as abide's do
+// under `abide:` without the app spelling its own prefix at every call site (which is how it used to
+// be done, and one rename away from a `DEBUG=docs:*` that misses half its own channels).
 //
 // `trace` is referenced only inside the emit path (never at module load) so this module never
 // participates in an import cycle with the request scope.
 
+import { appName } from './internal/appName.ts'
 import { debugPatternMatches } from './internal/debugPatternMatches.ts'
 import { formatLogLine } from './internal/formatLogLine.ts'
 import { isBrowser } from './internal/isBrowser.ts'
@@ -42,15 +48,14 @@ export interface Logger extends ChannelLogger {
     channel(name: string): ChannelLogger
 }
 
-// The DEFAULT channel label — the app's own stream. Server boot sets `ABIDE_APP_NAME` from the
-// project's package.json (loadApp); the client bootstrap may seed the `__ABIDE_APP_NAME__` global.
-// Falls back to "abide" for bare scripts and un-named contexts.
-function defaultChannel(): string {
-    const fromEnv = readEnv('ABIDE_APP_NAME')
-    if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv
-    const fromGlobal = (globalThis as { __ABIDE_APP_NAME__?: string }).__ABIDE_APP_NAME__
-    if (typeof fromGlobal === 'string' && fromGlobal.length > 0) return fromGlobal
-    return 'abide'
+// A bare channel name is namespaced under the app (`'cards'` → `'docs:cards'`); a name that already
+// carries a namespace is verbatim. That escape is what keeps the framework's own `abide:*` channels
+// intact when they are logged from inside an app called something else — and it is the deliberate
+// way to name a foreign namespace. Resolved at EMIT time, not when the logger is built: framework
+// modules call `log.channel(...)` at module load, and the app name is seeded later, at boot.
+function qualifyChannel(name: string): string {
+    if (name.includes(':')) return name
+    return `${appName()}:${name}`
 }
 
 // The active debug spec: `DEBUG` on the server, `localStorage.debug` in the browser (the debug-npm
@@ -88,9 +93,14 @@ function formatArg(arg: unknown): string {
 }
 
 function emit(level: LogLevel, channel: string | undefined, args: unknown[]): void {
+    // The QUALIFIED label is what gets gated, not the name as written, so `DEBUG=docs:*` lights the
+    // app's own channels and a remote subscriber's `--debug` filter — which matches the record's
+    // label — spells them the same way the terminal prints them.
+    const label = channel === undefined ? appName() : qualifyChannel(channel)
+
     // A named channel is gated by the debug spec; `error` bypasses gating so failures always
     // surface. The default channel (undefined) is the app's own stream and always emits.
-    const toStdout = channel === undefined || level === 'error' || channelEnabled(channel)
+    const toStdout = channel === undefined || level === 'error' || channelEnabled(label)
 
     // THE GATE IS NOT THE FAN-OUT. A gated line is still offered to the log feed, so `logs --debug
     // abide:rpc` can light a framework channel on a LIVE deployment that was booted without it — the
@@ -98,8 +108,6 @@ function emit(level: LogLevel, channel: string | undefined, args: unknown[]): vo
     // message string when the feed is on; with the feed off (the default) this is one property load
     // and the early return below is exactly today's behaviour.
     if (!toStdout && !logFeed.enabled) return
-
-    const label = channel ?? defaultChannel()
 
     if (isBrowser) {
         if (!toStdout) return

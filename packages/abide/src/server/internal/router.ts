@@ -22,6 +22,7 @@
 import { health } from '../../shared/health.ts'
 import { identity } from '../../shared/identity.ts'
 import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
+import { provideHealthSource } from '../../shared/internal/healthSource.ts'
 import { IDENTITY_ROUTE } from '../../shared/internal/IDENTITY_ROUTE.ts'
 import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
 import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
@@ -36,6 +37,7 @@ import {
     publishMemoFrame,
 } from '../../shared/internal/memoChannels.ts'
 import type { MuxDownstream } from '../../shared/internal/muxDownstream.ts'
+import { NAV_HEADERS, NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
 import { positiveEnvBytes } from '../../shared/internal/positiveEnvBytes.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
@@ -45,8 +47,6 @@ import { subscriptionKey } from '../../shared/internal/subscriptionKey.ts'
 import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
 import { validateStandard } from '../../shared/StandardSchema.ts'
-import { validationError } from '../../shared/ValidationErrorData.ts'
-import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { jsonl } from '../jsonl.ts'
 import { clientPublishAllowed, type ErasedSocket } from '../socket.ts'
@@ -80,8 +80,10 @@ import {
 } from './cors.ts'
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { provideDefaultAgentSurface } from './defaultAgentSurface.ts'
+import { enforceMethod } from './enforceMethod.ts'
+import { errorResponse } from './errorResponse.ts'
 import { isProd } from './isProd.ts'
-import { sharedLayoutDepth } from './layouts.ts'
+import { applicableLayoutPrefixes, sharedLayoutDepth } from './layouts.ts'
 import { logFeedSettings } from './logFeedSettings.ts'
 import { logsRoute } from './logsRoute.ts'
 import type { Mutation, Rpc, RpcMeta, StreamRead } from './makeRpc.ts'
@@ -89,6 +91,7 @@ import { handleMcp } from './mcp.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { negotiateEncoding } from './negotiateEncoding.ts'
 import { buildOpenApi } from './openapi.ts'
+import { outcomeResponse } from './outcomeResponse.ts'
 import { renderPage, streamPageDocument, streamSoftNav } from './pages.ts'
 import { projectFormText } from './projectFormText.ts'
 import { buildRegistry } from './registry.ts'
@@ -104,13 +107,15 @@ import { rpcTools } from './rpcTools.ts'
 import { servePublicFile } from './servePublicFile.ts'
 import { staticAssetType } from './staticAssetType.ts'
 import { validateFiles } from './validateFiles.ts'
+import { validationError } from './validationError.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
-// The wire form of a tripped run deadline (ADR 0028 D7). Built through `error.typed` so the body carries
-// the name the client narrows on, rather than a hand-rolled shape that would drift from every other
-// typed error.
-const TIMEOUT_RESPONSE = error.typed('TimeoutError', 504)
+// The wire form of a tripped run deadline (ADR 0028 D7). Built through the same `kind` the authoring-side
+// `error.typed` carries, so the body holds the name the client narrows on rather than a hand-rolled shape
+// that would drift from every other typed error. It is BUILT, not thrown — the deadline has already
+// escaped as a throw by the time transport answers it, and re-throwing here would re-enter `handleUncaught`.
+const TIMEOUT_RESPONSE = (): Response => errorResponse(504, undefined, { kind: 'TimeoutError' })
 
 // One config's page-pattern list, derived once. `matchRoute` needs the full pattern array on every
 // nav — twice on a soft-nav, which also matches the `Abide-Nav` origin path — and an app's pages are
@@ -184,7 +189,7 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
     const mediaType = contentType.split(';', 1)[0]?.trim() ?? ''
     const hasNonSimpleShape = mediaType === 'application/json' || hasAbideHeader
     if (!hasNonSimpleShape) {
-        return error(
+        return errorResponse(
             403,
             'CSRF: mutations require Content-Type: application/json or an x-abide header.',
         )
@@ -205,7 +210,10 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
                 claimedOrigin = new URL(claimed).origin
                 appHost = new URL(appUrl).origin
             } catch {
-                return error(403, 'CSRF: could not verify request Origin/Referer against APP_URL.')
+                return errorResponse(
+                    403,
+                    'CSRF: could not verify request Origin/Referer against APP_URL.',
+                )
             }
             // A mismatch is rejected UNLESS this RPC opted into cross-origin access for it (the
             // `crossOrigin` allowlist) — CORS is the sanctioned way to admit a foreign origin.
@@ -213,7 +221,7 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
                 claimedOrigin !== appHost &&
                 corsAllowOrigin(cors ?? NO_CORS, claimedOrigin) === undefined
             ) {
-                return error(403, 'CSRF: request Origin/Referer does not match APP_URL.')
+                return errorResponse(403, 'CSRF: request Origin/Referer does not match APP_URL.')
             }
         }
     }
@@ -275,11 +283,23 @@ async function applyIdentityCookie(scope: RequestScope, response: Response): Pro
     response.headers.append('set-cookie', await identityCookieHeader(scope.identity))
 }
 
-// Last-resort handler for an error that escaped the middleware/dispatch chain (a genuine bug — typed
-// error/redirect responses are returned, not thrown). Runs in request scope, so the app's `onError`
-// can read request()/route()/identity() ambiently. The hook may return a Response to shape the client
-// reply; anything else (or a throwing hook) falls back to a generic 500 that never leaks the detail.
+// Last-resort handler for an error that escaped the middleware/dispatch chain. Runs in request scope, so
+// the app's `onError` can read request()/route()/identity() ambiently. The hook may return a Response to
+// shape the client reply; anything else (or a throwing hook) falls back to a generic 500 that never leaks
+// the detail.
+//
+// This is also the DESERIALIZING half of transport: `error()`/`redirect()` throw (`rpc = memo + transport`
+// — a handler is a memo body, and a memo's failure channel is a throw), so a deliberate outcome arrives
+// here as a `Redirect`/`HttpError` and is rendered at its own status. Both are answered BEFORE `onError`,
+// alongside the tripped-deadline case below, on the same rule: a declared 404 or a login redirect is not a
+// bug in the app, so it must not fire the app's error hook nor collapse into the generic 500 — which is
+// exactly what a thrown failure used to do, losing its status on the way out.
 async function handleUncaught(caught: unknown, config: AppConfig): Promise<Response> {
+    // A DELIBERATE outcome: rendered at the status the handler asked for (a 3xx + Location for a redirect),
+    // carrying a typed failure's name/data so `fn.isError(e, name)` narrows the same on both sides after
+    // the browser proxy decodes it back.
+    const outcome = outcomeResponse(caught)
+    if (outcome !== undefined) return outcome
     // A tripped run deadline is not a bug in the app, so it is answered before `onError` and never
     // reaches the generic 500 (ADR 0028 D7). It leaves as a TYPED error so the two sides of an
     // isomorphic call agree: the browser proxy's `fn.isError(e, 'TimeoutError')` narrows on the body's
@@ -298,10 +318,16 @@ async function handleUncaught(caught: unknown, config: AppConfig): Promise<Respo
             const custom = await onError(caught)
             if (custom instanceof Response) return custom
         } catch (hookError) {
+            // The hook shapes the reply by RETURNING a Response or by calling `error(...)`/`redirect(...)`,
+            // which throw — both are deliberate, so both shape it. Only an UNEXPECTED throw from the hook
+            // falls through to the generic 500; a hook that fails while reporting a failure cannot be
+            // trusted to have produced a reply.
+            const shaped = outcomeResponse(hookError)
+            if (shaped !== undefined) return shaped
             log.channel('abide:router').error('onError hook threw:', hookError)
         }
     }
-    return error(500, 'Internal Server Error')
+    return errorResponse(500, 'Internal Server Error')
 }
 
 // A route is anything carrying `__rpc` metadata — a value handler produces Rpc (Mutation extends it),
@@ -353,15 +379,22 @@ export interface AppConfig {
     // serves these artifacts as-is and NEVER runs `Bun.build` at request time — production serves the
     // exact output of `abide build`. Absent in dev/test → the client is built in-memory on first use.
     clientBuild?: ClientBuild
-    // CO2.4: the app-defined health hook (`src/app.ts` export `onHealth`). Runs INSIDE request scope on
-    // every `GET /__abide/health`, takes no args, and returns fields merged over the framework stub
-    // (`{ reachable, version, startedAt, uptime }`) — app fields win, so it can force `reachable: false`.
-    // A thrown hook (or a returned `reachable: false`) makes the endpoint answer 503. Non-object returns
-    // are ignored (stub passes through). Unlike onStart/onStop this is router-consumed, so it lives here.
-    onHealth?: () => unknown | Promise<unknown>
+    // CO2.4: the app-defined health hook (`src/app.ts` export `onHealth`). Takes no args and returns the
+    // fields merged over the framework baseline (`{ reachable, version, startedAt, uptime }`) — app
+    // fields win, so it can force `reachable: false`. A thrown hook (or a returned `reachable: false`)
+    // makes the endpoint answer 503; a non-object return is ignored. Unlike onStart/onStop it is not
+    // lifecycle, so it lives here — but the router no longer CALLS it: `createApp` hands it to
+    // `provideHealthSource`, and `health()` composes the document for the route and for an in-proc
+    // caller alike. Inside `GET /__abide/health` that call is still in request scope, so the hook still
+    // reads `identity()`/`context()`.
+    // Explicitly `| undefined` (not just optional): `abide dev` reassigns it on every reload, and an app
+    // that DROPS its hook has to be able to write the absence back under exactOptionalPropertyTypes.
+    onHealth?: (() => unknown | Promise<unknown>) | undefined
     // The app-defined error hook (`src/app.ts` export `onError`). Runs INSIDE request scope when the
-    // middleware/dispatch chain THROWS an unexpected error (a typed `error(...)`/`redirect(...)` return
-    // is a Response, not a throw, so it never reaches here). May return a `Response` to shape what the
+    // middleware/dispatch chain THROWS an UNEXPECTED error. A deliberate `error(...)`/`redirect(...)` also
+    // throws, but carries `HttpError`/`Redirect` and is rendered at its own status before this hook, so it
+    // never reaches here — a declared 404 is not a bug and must not fire the app's error hook.
+    // May return a `Response` to shape what the
     // client gets; returning nothing falls back to a generic 500. A throwing onError is itself caught
     // and falls back to 500. This is the outermost net for genuine bugs — not a substitute for
     // middleware auth or typed errors.
@@ -601,7 +634,7 @@ async function socketHttpFace(
     sockets: Record<string, ErasedSocket>,
 ): Promise<Response> {
     const sock = sockets[name]
-    if (sock === undefined) return error(404, `Unknown socket: ${name}`)
+    if (sock === undefined) return errorResponse(404, `Unknown socket: ${name}`)
 
     const method = request.method.toUpperCase()
     if (method === 'GET' || method === 'HEAD') {
@@ -609,7 +642,7 @@ async function socketHttpFace(
     }
     if (method === 'POST') {
         if (!clientPublishAllowed(sock.__socket.options.clientPublish)) {
-            return error(403, `socket: client publish is disabled for ${name}.`)
+            return errorResponse(403, `socket: client publish is disabled for ${name}.`)
         }
         const body = await request.text()
         const message = body.length > 0 ? JSON.parse(body) : undefined
@@ -617,11 +650,16 @@ async function socketHttpFace(
             // The WS-less HTTP face operates on the void room (no room selector in the URL).
             await sock.__socket.ingressPublish(undefined, message)
         } catch (caught) {
-            return error(400, caught instanceof Error ? caught.message : 'socket publish rejected')
+            return errorResponse(
+                400,
+                caught instanceof Error ? caught.message : 'socket publish rejected',
+            )
         }
         return json({ ok: true })
     }
-    return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD, POST' } })
+    return errorResponse(405, `Method not allowed: ${method}`, {
+        headers: { allow: 'GET, HEAD, POST' },
+    })
 }
 
 export interface App {
@@ -633,9 +671,25 @@ export interface App {
 // C6-nav: a soft-nav request is a GET/HEAD nav carrying the `Abide-Nav: <currentPath>` header —
 // the client already has the document shell and wants only the next page's inner HTML + seed.
 function isSoftNav(request: Request): boolean {
-    if (request.headers.get('abide-nav') === null) return false
+    if (request.headers.get(NAV_HEADERS.from) === null) return false
     const method = request.method.toUpperCase()
     return method === 'GET' || method === 'HEAD'
+}
+
+// C6-nav: how many outer layout levels the client says it is KEEPING (`NAV_HEADERS.keep`). Absent — an
+// older browser bundle, or any non-browser caller — leaves the router's own `sharedLayoutDepth`
+// derivation to stand. A malformed or negative value is treated as absent for the same reason: falling
+// back renders MORE of the tree, which is always placeable, so there is no outcome worth a 400 in it.
+function navKeepDeclared(request: Request): number | null {
+    const raw = request.headers.get(NAV_HEADERS.keep)
+    if (raw === null) return null
+    // Before `Number`, because `Number('')` is `0` — an empty header would otherwise read as the most
+    // consequential value the field has ("keep nothing"), which is the opposite of saying nothing.
+    const text = raw.trim()
+    if (text.length === 0) return null
+    const value = Number(text)
+    if (!Number.isInteger(value) || value < 0) return null
+    return value
 }
 
 // A soft-nav that a middleware short-circuited with a redirect Response is surfaced to the client as
@@ -671,11 +725,7 @@ function routeInfo(url: URL, method: string): { kind: RouteKind; name: string } 
 // and is NOT this — an upgrade cannot travel through the response pipeline.
 const SOCKET_FACE_PREFIX = '/__abide/sockets/'
 
-async function dispatch(
-    scope: RequestScope,
-    config: AppConfig,
-    startedAt: number,
-): Promise<Response> {
+async function dispatch(scope: RequestScope, config: AppConfig): Promise<Response> {
     const routes = config.routes ?? {}
     const url = scope.route.url
 
@@ -685,6 +735,8 @@ async function dispatch(
     // `identity.refresh()` and a compiled binary's `identity` subcommand both read it. Inside the
     // middleware chain like every other route, so an app that gates its surface gates this too.
     if (url.pathname === IDENTITY_ROUTE) {
+        const rejected = enforceMethod(scope.request, ['GET'])
+        if (rejected !== undefined) return rejected
         return Response.json(identity())
     }
 
@@ -692,33 +744,19 @@ async function dispatch(
     // like `/__abide/identity` above — an app that gates its surface gates its logs too, which is the
     // whole authorization story for this route.
     if (url.pathname === LOGS_ROUTE) {
-        const method = scope.request.method.toUpperCase()
-        if (method !== 'GET' && method !== 'HEAD')
-            return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD' } })
+        const rejected = enforceMethod(scope.request, ['GET'])
+        if (rejected !== undefined) return rejected
         return logsRoute(url, scope.request.signal)
     }
 
     if (url.pathname === '/__abide/health') {
-        // Framework stub (CO2.4): the isomorphic baseline (`reachable`, running abide `version`) plus the
-        // server-only lifetime fields. The app's `onHealth` (request-scoped) is merged ON TOP — its fields
-        // win, so it may force `reachable: false`; a thrown hook fails closed to unhealthy.
-        const stub = {
-            ...(await health()),
-            startedAt: new Date(startedAt).toISOString(),
-            uptime: Date.now() - startedAt,
-        }
-        let result: Record<string, unknown> = stub
-        const onHealth = config.onHealth
-        if (onHealth !== undefined) {
-            try {
-                const extra = await onHealth()
-                if (extra !== null && typeof extra === 'object')
-                    result = { ...stub, ...(extra as Record<string, unknown>) }
-            } catch (caught) {
-                log.channel('abide:health').error('onHealth threw:', caught)
-                result = { ...stub, reachable: false }
-            }
-        }
+        const rejected = enforceMethod(scope.request, ['GET'])
+        if (rejected !== undefined) return rejected
+        // CO2.4: the whole document — baseline, bind clock, and the app's `onHealth` fields merged over
+        // it — is composed by `health()` itself, which this request scope makes request-scoped for the
+        // hook (it reads `identity()`/`context()`). All that is left here is the status code, so an
+        // in-proc `await health()` and a probe's GET can never describe the app differently.
+        const result = await health()
         const unhealthy = result.reachable === false
         // Give a probing client/proxy a concrete back-off instead of hammering an unhealthy app.
         return json(result, {
@@ -733,13 +771,16 @@ async function dispatch(
     // `<script type="module" src="/__abide/chunk/<loader>-<hash>.js">` (the loader lazily imports the
     // matched route's chunk); the stylesheet is linked only when the app bundled CSS.
     if (url.pathname.startsWith(CHUNK_PREFIX)) {
+        const rejected = enforceMethod(scope.request, ['GET'])
+        if (rejected !== undefined) return rejected
+        // This route is the one that still needs the verb AFTER the gate: it builds the body itself, so
+        // it has to drop it for HEAD (and state `Content-Length` for the representation a GET would have
+        // returned). Everywhere else the gate is the only reader of the method.
         const method = scope.request.method.toUpperCase()
-        if (method !== 'GET' && method !== 'HEAD')
-            return error(405, `Method not allowed: ${method}`, { headers: { allow: 'GET, HEAD' } })
         const name = url.pathname.slice(CHUNK_PREFIX.length)
         const build = await clientBuildFor(config)
         const asset = build.files.get(name)
-        if (asset === undefined) return error(404, `Not found: ${url.pathname}`)
+        if (asset === undefined) return errorResponse(404, `Not found: ${url.pathname}`)
         const contentType = staticAssetType(name)?.type ?? 'text/javascript; charset=utf-8'
         const headers: Record<string, string> = {
             'content-type': contentType,
@@ -779,6 +820,8 @@ async function dispatch(
     // through the middleware onion (dispatch runs inside it), so the app can gate it with
     // middleware — no framework-default auth (DX8).
     if (url.pathname === '/openapi.json') {
+        const rejected = enforceMethod(scope.request, ['GET'])
+        if (rejected !== undefined) return rejected
         return json(buildOpenApi(buildRegistry(config)))
     }
 
@@ -848,19 +891,36 @@ async function dispatch(
                 // true)` awaits blocking reads (a throw still 500s below) and returns the SHELL. Vary on the
                 // header so caches key first-load vs soft-nav.
                 if (isSoftNav(scope.request)) {
-                    // C6.2: how many outer layouts the client is KEEPING (shared with the route it sent in
-                    // `Abide-Nav`). Render only the diverging suffix; the client grafts + claims it into the
-                    // innermost kept layout's outlet. 0 (no shared layout / unknown origin) renders full.
-                    const fromPath = scope.request.headers.get('abide-nav')
+                    // C6.2: how many outer layouts the client is KEEPING. Render only the diverging
+                    // suffix; the client grafts + claims it into the innermost kept layout's outlet.
+                    //
+                    // The CLIENT's number wins where it sends one (`NAV_HEADERS.keep`), because only the
+                    // client knows it: `sharedLayoutDepth` answers what the route TABLE permits, which is
+                    // static, while what a live page can keep depends on whether a chain is mounted at
+                    // all, whether it has been claimed, whether the boundary carries a `graftSuffix`. The
+                    // two used to be derived independently and reconciled at runtime — the client checked
+                    // the shell's `sharedLevels` against its own and hard-loaded on a mismatch. One
+                    // number, one derivation, and the disagreement is now unrepresentable.
+                    //
+                    // Clamped to the destination's OWN layout depth: a client cannot keep levels that do
+                    // not exist, and an unclamped over-count would slice past the end and ship an empty
+                    // shell. The `Abide-Nav` derivation remains the answer for a client that sends no
+                    // number — a browser too old to, or any other caller.
+                    const fromPath = scope.request.headers.get(NAV_HEADERS.from)
                     const fromMatch = fromPath !== null ? matchRoute(patterns, fromPath) : null
-                    const sharedLevels =
+                    const layoutConfig = config.layouts ?? {}
+                    const derivedLevels =
                         fromMatch !== null
-                            ? sharedLayoutDepth(
-                                  fromMatch.pattern,
-                                  match.pattern,
-                                  config.layouts ?? {},
-                              )
+                            ? sharedLayoutDepth(fromMatch.pattern, match.pattern, layoutConfig)
                             : 0
+                    const declared = navKeepDeclared(scope.request)
+                    const sharedLevels =
+                        declared === null
+                            ? derivedLevels
+                            : Math.min(
+                                  declared,
+                                  applicableLayoutPrefixes(match.pattern, layoutConfig).length,
+                              )
                     const shell = await renderPage(
                         source,
                         config,
@@ -879,7 +939,7 @@ async function dispatch(
                         status: 200,
                         headers: {
                             'content-type': 'application/jsonl',
-                            vary: 'Abide-Nav',
+                            vary: NAV_VARY,
                         },
                     })
                 }
@@ -909,7 +969,7 @@ async function dispatch(
                         // the soft-nav half used to, which left a cache free to serve a page fragment
                         // to a first load. `Vary: Cookie` (the identity-scoped default) does not key
                         // these apart; nothing about the cookie differs between them.
-                        vary: 'Abide-Nav',
+                        vary: NAV_VARY,
                     },
                 })
             } catch (caught) {
@@ -917,15 +977,15 @@ async function dispatch(
                     `page render failed for "${match.pattern}":`,
                     caught,
                 )
-                return error(500, 'Page render failed.')
+                return errorResponse(500, 'Page render failed.')
             }
         }
-        return error(404, `Not found: ${url.pathname}`)
+        return errorResponse(404, `Not found: ${url.pathname}`)
     }
 
     const route = routes[scope.route.name]
     if (route === undefined) {
-        return error(404, `Unknown rpc: ${scope.route.name}`)
+        return errorResponse(404, `Unknown rpc: ${scope.route.name}`)
     }
 
     const meta = route.__rpc
@@ -936,7 +996,7 @@ async function dispatch(
     // HEAD is the one derived verb: it IS GET minus the body (ADR 0027 D6), so it reaches a GET rpc.
     const requestMethod = scope.request.method.toUpperCase()
     if (requestMethod !== meta.method && !(requestMethod === 'HEAD' && meta.method === 'GET')) {
-        return error(405, `Method not allowed: ${requestMethod}`, {
+        return errorResponse(405, `Method not allowed: ${requestMethod}`, {
             headers: { allow: allowHeaderFor(route) },
         })
     }
@@ -968,7 +1028,7 @@ async function dispatch(
         // length (chunked bodies) can't be trusted, so the real guard is the post-buffer check below.
         const declared = contentLength !== null ? Number(contentLength) : Number.NaN
         if (Number.isFinite(declared) && declared > maxBodySize) {
-            return error(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
+            return errorResponse(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
         }
         const contentType = (scope.request.headers.get('content-type') ?? '').toLowerCase()
         if (contentType.startsWith('multipart/form-data')) {
@@ -979,7 +1039,10 @@ async function dispatch(
             // Enforce maxBodySize against the ACTUAL byte count too — a chunked or length-spoofed body
             // slips past the Content-Length check above, so measure what we actually buffered.
             if (Buffer.byteLength(body) > maxBodySize) {
-                return error(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
+                return errorResponse(
+                    413,
+                    `Request body exceeds maxBodySize (${maxBodySize} bytes).`,
+                )
             }
             args = body.length > 0 ? JSON.parse(body) : {}
         }
@@ -1237,17 +1300,20 @@ export function createApp(config: AppConfig = {}): App {
             // connection so `@rpc:` cache-channel joins can re-authorize against it per subscribe (§2.3).
             if (url.pathname === '/__abide/sockets') {
                 if (!socketOriginAllowed(request)) {
-                    return exit(error(403, 'CSWSH: WebSocket Origin does not match APP_URL.'), {
-                        scope: undefined,
-                        cors: undefined,
-                    })
+                    return exit(
+                        errorResponse(403, 'CSWSH: WebSocket Origin does not match APP_URL.'),
+                        {
+                            scope: undefined,
+                            cors: undefined,
+                        },
+                    )
                 }
                 const connData: SocketConnectionData = {
                     request,
                     identity: await resolveIdentity(request),
                 }
                 if (srv.upgrade(request, { data: connData })) return undefined
-                return exit(error(426, 'Expected a WebSocket upgrade request.'), {
+                return exit(errorResponse(426, 'Expected a WebSocket upgrade request.'), {
                     scope: undefined,
                     cors: undefined,
                 })
@@ -1310,7 +1376,7 @@ export function createApp(config: AppConfig = {}): App {
                 return exit(
                     cors !== undefined
                         ? preflightResponse(cors, request)
-                        : error(405, 'Method not allowed: OPTIONS', {
+                        : errorResponse(405, 'Method not allowed: OPTIONS', {
                               headers: { allow: allowHeaderFor(matched) },
                           }),
                     { scope: undefined, cors: undefined },
@@ -1323,7 +1389,7 @@ export function createApp(config: AppConfig = {}): App {
                     ? socketPolicy.get(info.name)
                     : undefined
             const chain = compose(policy?.middleware ?? socketChain ?? globalMiddleware, () =>
-                dispatch(scope, config, startedAt),
+                dispatch(scope, config),
             )
 
             // A pre-stage rather than part of `exit`: it REPLACES the response (a raw 3xx is opaque to
@@ -1332,7 +1398,7 @@ export function createApp(config: AppConfig = {}): App {
                 info.kind === 'nav' && isSoftNav(request) && isRedirectResponse(response)
                     ? json(
                           { redirect: response.headers.get('location') ?? '', seed: {} },
-                          { headers: { vary: 'Abide-Nav' } },
+                          { headers: { vary: NAV_VARY } },
                       )
                     : response
 
@@ -1426,7 +1492,19 @@ export function createApp(config: AppConfig = {}): App {
     // This process is now serving THIS app, so this is what `agent()` means by "the app's tools"
     // (AG2.2). A thunk, so a process that never calls `agent()` never walks the routes; withdrawn on
     // `stop()`, so a stopped app is not still answering as the default for whatever boots next.
-    const withdrawAgentSurface = provideDefaultAgentSurface(() => rpcTools(config))
+    const withdrawAgentSurface = provideDefaultAgentSurface(() => rpcTools(config, origin))
+
+    // …and this is what `health()` means by "the app" (CO2.4): the bind clock plus the app's own hook.
+    // Withdrawn on `stop()` by the same rule — a stopped app must not keep answering for its health.
+    // A getter, not a captured value: `abide dev` reloads by swapping `config`'s properties in place
+    // while this router keeps running, so an `onHealth` read at bind would be the one the app had when
+    // the process started and no save would ever replace it.
+    const withdrawHealthSource = provideHealthSource({
+        startedAt,
+        get onHealth() {
+            return config.onHealth
+        },
+    })
 
     return {
         // Public App surface keeps `Bun.Server<undefined>`; the WS-data generic is internal (see above).
@@ -1434,6 +1512,7 @@ export function createApp(config: AppConfig = {}): App {
         origin,
         async stop(): Promise<void> {
             withdrawAgentSurface()
+            withdrawHealthSource()
             await server.stop(true)
         },
     }

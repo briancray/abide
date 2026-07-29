@@ -18,8 +18,10 @@
 import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannels.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { TAG_CHANNEL_PREFIX } from '../../shared/internal/tagChannelName.ts'
+import { log } from '../../shared/log.ts'
 import type { Socket } from '../socket.ts'
 import { compose, type Middleware } from './middleware.ts'
+import { outcomeResponse } from './outcomeResponse.ts'
 import { buildRegistry } from './registry.ts'
 import { type Principal, type RequestScope, type RouteKind, runInScope } from './requestScope.ts'
 import type { AppConfig } from './router.ts'
@@ -184,6 +186,17 @@ async function reauthorize(
         slots: new Map<string, unknown>(),
     }
     const chain = compose(middleware, () => AUTHORIZED_SENTINEL)
-    const result = await runInScope(scope, chain)
+    // A middleware short-circuits by THROWING (`error(403)`/`redirect(...)`), so a throw is a DENY, not a
+    // crashed join — the sentinel comparison alone would let it escape and take the subscribe with it.
+    // Fail CLOSED on any throw, deliberate or not: this is an authorization gate, and the safe reading of
+    // "the chain did not reach its terminal" is that it did not authorize.
+    let result: Response
+    try {
+        result = await runInScope(scope, chain)
+    } catch (caught) {
+        if (outcomeResponse(caught) === undefined)
+            log.channel('abide:socket').error(`channel authorization threw for ${name}:`, caught)
+        return false
+    }
     return result === AUTHORIZED_SENTINEL
 }

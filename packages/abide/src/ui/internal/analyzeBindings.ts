@@ -33,9 +33,11 @@
 //   • Arrow-function parameters (`x =>` and `(a, b) =>`, simple names) → shadow over the arrow body
 //     (block or expression).
 //   • Declaration/param/function/class NAMES at their declaration site are never rewritten.
+//   • TS TYPE POSITIONS are excluded from the rewrite by `markTypeSkips` — a cell name in a type is a
+//     type name, not a read. See that function for the entry points it covers and the one it does not.
 //   NOT supported (best-effort, documented): destructuring binding patterns (`const {n} = …`,
-//   `({n}) =>`), `catch (n)` bindings, TS type annotations, and regex literals (the raw scanner does
-//   not re-scan `/…/` — division is fine, regex bodies are not specially protected). Multi-line
+//   `({n}) =>`), `catch (n)` bindings, and regex literals (the raw scanner does not re-scan `/…/` —
+//   division is fine, regex bodies are not specially protected). Multi-line
 //   statement/RHS boundaries follow the same line-break (ASI) heuristic as `transformScript.ts`.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
@@ -888,12 +890,14 @@ export function rewriteCellRefs(code: string, bindings: CellBindings): string {
     const { enclBraceOpen, isObjectBrace } = braces
     const named = (name: string): boolean => cellNames.has(name) || memoNames.has(name)
     const { declNameIdx, shadows } = buildShadowedBindings(tokens, braces, named)
+    const typeSkips = markTypeSkips(tokens, braces)
 
     // Is `tokens[i]` (a cell-named Identifier) a genuine reference we should rewrite?
     const isCellRef = (i: number): boolean => {
         const prev = i > 0 ? tokenAt(tokens, i - 1).kind : undefined
         if (prev === K.DotToken || prev === K.QuestionDotToken) return false // member/property access
         if (declNameIdx.has(i)) return false // declaration / parameter name
+        if (typeSkips.has(i)) return false // type position — a type name is never a value read
         if (isShadowed(shadows, tokenAt(tokens, i).text, i)) return false
         return true
     }
@@ -1257,10 +1261,15 @@ function scanTypeAtom(
             skip.add(i + 1)
             i += 2
         }
-        // Generic arguments `Foo<…>`.
+        // Generic arguments `Foo<…>`. Scanned into a scratch set and merged only on success: a bailing
+        // `scanAngle` has already marked every identifier it walked past, and keeping those would
+        // OVER-mark (silently masking a real value reference) — the one direction the safety invariant
+        // above forbids.
         if (tokens[i]?.kind === K.LessThanToken) {
-            const after = scanAngle(tokens, i, matchClose, skip)
+            const angleSkip = new Set<number>()
+            const after = scanAngle(tokens, i, matchClose, angleSkip)
             if (after < 0) return i // couldn't match — stop cleanly before the `<`.
+            for (const idx of angleSkip) skip.add(idx)
             i = after
         }
         // Postfix array / indexed access `Foo[]`, `Foo['x']`, `Foo[K]`.
@@ -1301,35 +1310,282 @@ function scanTypeAtom(
     return -1
 }
 
-// Mark the full type operand (a chain of atoms joined by `|`/`&`) that begins at `start`.
+// Mark the full type operand (a chain of atoms joined by `|`/`&`) that begins at `start`. Returns the
+// index just past the operand, or -1 when `start` is not a recognizable type — callers that need to
+// know what FOLLOWS a type (`) : T =>`) test the return; the rest ignore it.
 function scanTypeOperand(
     tokens: Tok[],
     start: number,
     matchClose: Map<number, number>,
     skip: Set<number>,
-): void {
+): number {
     let i = start
     for (;;) {
         const after = scanTypeAtom(tokens, i, matchClose, skip)
-        if (after < 0) return
+        if (after < 0) return i === start ? -1 : i
         const next = tokens[after]?.kind
         if (next === K.BarToken || next === K.AmpersandToken) {
             i = after + 1 // union / intersection stays in type position
             continue
         }
-        return
+        return after
     }
 }
 
-// The token indices that belong to a TYPE (the operand of an `as`/`satisfies`) — skipped by the
-// free-identifier passes so a type name is never rewritten to `$scope.<name>`.
-function markTypeSkips(tokens: Tok[], matchClose: Map<number, number>): Set<number> {
-    const skip = new Set<number>()
-    for (let i = 0; i < tokens.length; i++) {
-        const k = tokenAt(tokens, i).kind
-        if (k === K.AsKeyword || k === K.SatisfiesKeyword)
+// Does token `i` begin a statement? Used to tell a `type X = …` DECLARATION from a value binding that
+// happens to be named `type` (`type = 5`, `f(type)`), which the scanner hands us as the same kind.
+function atStatementStart(tokens: Tok[], i: number): boolean {
+    if (i === 0) return true
+    if (tokenAt(tokens, i).nl) return true
+    const prev = tokenAt(tokens, i - 1).kind
+    return (
+        prev === K.SemicolonToken ||
+        prev === K.OpenBraceToken ||
+        prev === K.CloseBraceToken ||
+        prev === K.ExportKeyword ||
+        prev === K.DeclareKeyword
+    )
+}
+
+// Mark the annotation colons of ONE parameter list `(`…`)` plus its return type. Only called on a span
+// already proven to be a parameter list (it follows `function`, or its `)` is followed by `=>`), so a
+// colon at the list's own bracket depth is an annotation. The depth test is what keeps a DESTRUCTURING
+// RENAME out (`function f({ rest: local })` — that colon sits one bracket deeper), while still reaching
+// the annotation on a destructured param (`function f({ a }: { rest: string })`).
+function markParamTypes(
+    tokens: Tok[],
+    open: number,
+    close: number,
+    braces: BraceInfo,
+    skip: Set<number>,
+): void {
+    const { matchClose, bracketDepth } = braces
+    const innerDepth = numberAt(bracketDepth, open) + 1
+    for (let i = open + 1; i < close; i++) {
+        if (tokenAt(tokens, i).kind === K.ColonToken && numberAt(bracketDepth, i) === innerDepth) {
             scanTypeOperand(tokens, i + 1, matchClose, skip)
+        }
     }
+    if (tokens[close + 1]?.kind === K.ColonToken)
+        scanTypeOperand(tokens, close + 2, matchClose, skip) // return type
+}
+
+// Mark the annotations on the DIRECT members of a class body or an object literal — the method form
+// `m(a: T): R {…}`, which neither the `function` nor the arrow entry point can see.
+//
+// `isClassBody` gates PROPERTY annotations (`x: T`). They exist only in a class: inside an object
+// literal `x: v` is a VALUE, and marking that would silently stop a cell read from being rewritten —
+// which is the one failure no value assertion catches. It is also why this walks members rather than
+// scanning for `name (` anywhere: a call statement followed by a block (`f(a ? b : c)\n{ … }`) has the
+// same token shape, and inside a plain block there is no member position to match.
+function markMemberTypes(
+    tokens: Tok[],
+    open: number,
+    close: number,
+    braces: BraceInfo,
+    skip: Set<number>,
+    isClassBody: boolean,
+): void {
+    const { matchClose, bracketDepth } = braces
+    const innerDepth = numberAt(bracketDepth, open) + 1
+    for (let i = open + 1; i < close; i++) {
+        if (numberAt(bracketDepth, i) !== innerDepth) continue
+        // A member NAME — including a `#private` one, which is not identifier-like and would otherwise
+        // hide the annotation that follows it (`#p: rest`).
+        const nameKind = tokenAt(tokens, i).kind
+        if (!isIdentifierLike(nameKind) && nameKind !== K.PrivateIdentifier) continue
+        const nextKind = tokens[i + 1]?.kind
+        if (nextKind === K.OpenParenToken) {
+            const paramClose = matchClose.get(i + 1)
+            if (paramClose !== undefined) markParamTypes(tokens, i + 1, paramClose, braces, skip)
+            continue
+        }
+        if (!isClassBody) continue
+        // `x: T` / `x?: T` — a class PROPERTY annotation.
+        const colon =
+            nextKind === K.ColonToken
+                ? i + 1
+                : nextKind === K.QuestionToken && tokens[i + 2]?.kind === K.ColonToken
+                  ? i + 2
+                  : -1
+        if (colon !== -1) scanTypeOperand(tokens, colon + 1, matchClose, skip)
+    }
+}
+
+// The body `{` of the `class` whose keyword is at `classIdx`, or -1. The first `{` at the keyword's own
+// bracket depth — which a generic heritage clause (`extends Base<{ a: 1 }>`) can spoof, since angle
+// brackets carry no depth. Picking the wrong brace finds no members and marks nothing, so the spoof
+// costs coverage rather than correctness.
+function classBodyOpen(tokens: Tok[], classIdx: number, braces: BraceInfo): number {
+    const baseDepth = numberAt(braces.bracketDepth, classIdx)
+    for (let i = classIdx + 1; i < tokens.length; i++) {
+        const kind = tokenAt(tokens, i).kind
+        if (kind === K.OpenBraceToken && numberAt(braces.bracketDepth, i) === baseDepth) return i
+        if (kind === K.SemicolonToken && numberAt(braces.bracketDepth, i) === baseDepth) return -1
+    }
+    return -1
+}
+
+// The token indices that belong to a TYPE — skipped by `rewriteCellRefs` and the free-identifier passes
+// so a type name is never rewritten to a cell READ (`rest` → `rest()`) or to `$scope.<name>`.
+//
+// A cell name in a type position is not exotic: props and cells share a component's vocabulary, so
+// `const rest = memo(…)` beside `props<{ rest?: string }>()` is ordinary authoring — and it used to emit
+// `props<{ rest()?: string }>()`, a build failure. (Type-literal members whose annotation is NOT optional
+// escaped by accident, via `isObjectKey`'s `name:` test — so the same script broke or not depending on a
+// `?`.)
+//
+// Each branch below is an ENTRY POINT into the shared `scanTypeOperand`/`scanAngle` walkers; the walkers
+// own the grammar and stop at the first token they cannot classify, so a new entry point can only widen
+// coverage, never run away. Deliberately NOT covered (under-marking is the safe direction): generic
+// arrow type params (`<T,>(x: T) => x`), whose `<` has no preceding name to prove it opens a type.
+function markTypeSkips(tokens: Tok[], braces: BraceInfo): Set<number> {
+    const { matchClose, matchOpen } = braces
+    const skip = new Set<number>()
+    const n = tokens.length
+
+    for (let i = 0; i < n; i++) {
+        const k = tokenAt(tokens, i).kind
+
+        // `x as T` / `x satisfies T`
+        if (k === K.AsKeyword || k === K.SatisfiesKeyword) {
+            scanTypeOperand(tokens, i + 1, matchClose, skip)
+            continue
+        }
+
+        // `let|const|var <pattern>: T` — the pattern is a name or a balanced `{…}`/`[…]`. Only the first
+        // declarator is walked; a second annotated declarator on one statement is rare, and missing it
+        // just leaves today's behaviour.
+        if (k === K.LetKeyword || k === K.ConstKeyword || k === K.VarKeyword) {
+            let j = i + 1
+            const pk = tokens[j]?.kind
+            if (pk === K.OpenBraceToken || pk === K.OpenBracketToken) {
+                const close = matchClose.get(j)
+                if (close === undefined) continue
+                j = close + 1
+            } else if (pk !== undefined && isIdentifierLike(pk)) {
+                j++
+            } else continue
+            if (tokens[j]?.kind === K.ColonToken) scanTypeOperand(tokens, j + 1, matchClose, skip)
+            continue
+        }
+
+        // `type X<…> = T` — everything right of the `=` is type, so mark the whole RHS extent rather
+        // than walking it as an operand (a conditional/mapped type would stop the walker early).
+        if (k === K.TypeKeyword && atStatementStart(tokens, i)) {
+            const nameIdx = i + 1
+            const nameKind = tokens[nameIdx]?.kind
+            if (nameKind === undefined || !isIdentifierLike(nameKind)) continue
+            let j = nameIdx + 1
+            if (tokens[j]?.kind === K.LessThanToken) {
+                const angleSkip = new Set<number>()
+                const after = scanAngle(tokens, j, matchClose, angleSkip)
+                if (after < 0) continue
+                for (const idx of angleSkip) skip.add(idx)
+                j = after
+            }
+            if (tokens[j]?.kind !== K.EqualsToken) continue
+            skip.add(i)
+            skip.add(nameIdx)
+            const end = rhsExtent(tokens, j + 1)
+            for (let m = j + 1; m <= end; m++)
+                if (isIdentifierLike(tokenAt(tokens, m).kind)) skip.add(m)
+            continue
+        }
+
+        // `interface X<…> extends Y { … }` — head and body are entirely type.
+        if (k === K.InterfaceKeyword) {
+            let open = -1
+            for (let m = i + 1; m < n; m++) {
+                const mk = tokenAt(tokens, m).kind
+                if (mk === K.OpenBraceToken) {
+                    open = m
+                    break
+                }
+                if (mk === K.SemicolonToken) break
+            }
+            if (open === -1) continue
+            const close = matchClose.get(open)
+            if (close === undefined) continue
+            for (let m = i + 1; m < open; m++)
+                if (isIdentifierLike(tokenAt(tokens, m).kind)) skip.add(m)
+            markInner(tokens, open, close, skip)
+            continue
+        }
+
+        // Type ARGUMENTS of a call / `new` / tagged template: `props<{…}>()`, `new Map<K, V>()`,
+        // `fn<T>\`…\``. The trailing `(`/template is what distinguishes them from a `<` comparison —
+        // and it is the same disambiguation TypeScript itself applies in a `.ts` file, so `a<b,c>(d)`
+        // is a generic call here for the same reason it is one there.
+        if (k === K.LessThanToken && i > 0 && isIdentifierLike(tokenAt(tokens, i - 1).kind)) {
+            const angleSkip = new Set<number>()
+            const after = scanAngle(tokens, i, matchClose, angleSkip)
+            if (after < 0) continue
+            const nextKind = tokens[after]?.kind
+            if (
+                nextKind === K.OpenParenToken ||
+                nextKind === K.NoSubstitutionTemplateLiteral ||
+                nextKind === K.TemplateHead
+            ) {
+                for (const idx of angleSkip) skip.add(idx)
+            }
+            continue
+        }
+
+        // Class member annotations — method params/returns and property types.
+        if (k === K.ClassKeyword) {
+            const open = classBodyOpen(tokens, i, braces)
+            if (open === -1) continue
+            const close = matchClose.get(open)
+            if (close !== undefined) markMemberTypes(tokens, open, close, braces, skip, true)
+            continue
+        }
+
+        // Object-literal SHORTHAND methods (`{ m(a: T) {…} }`). The `{ m: (a: T) => … }` spelling is
+        // already covered by the arrow entry point below.
+        if (k === K.OpenBraceToken && braces.isObjectBrace.has(i)) {
+            const close = matchClose.get(i)
+            if (close !== undefined) markMemberTypes(tokens, i, close, braces, skip, false)
+            continue
+        }
+
+        // Parameter annotations + return type of a `function` declaration/expression.
+        if (k === K.FunctionKeyword) {
+            let p = i + 1
+            while (p < n && tokenAt(tokens, p).kind !== K.OpenParenToken) {
+                if (tokenAt(tokens, p).kind === K.OpenBraceToken) break // body reached — no param list
+                p++
+            }
+            if (p >= n || tokenAt(tokens, p).kind !== K.OpenParenToken) continue
+            const close = matchClose.get(p)
+            if (close !== undefined) markParamTypes(tokens, p, close, braces, skip)
+            continue
+        }
+
+        // Parameter annotations of an arrow. A `)` immediately before `=>` is a parameter list by the JS
+        // grammar — there is no other production for it.
+        if (k === K.EqualsGreaterThanToken && i > 0) {
+            if (tokenAt(tokens, i - 1).kind !== K.CloseParenToken) continue
+            const open = matchOpen.get(i - 1)
+            if (open !== undefined) markParamTypes(tokens, open, i - 1, braces, skip)
+            continue
+        }
+
+        // An arrow carrying a RETURN annotation puts the type between `)` and `=>`, so the branch above
+        // cannot see it. `) : <type> =>` is unambiguous — no other production ends a parenthesized span
+        // with an annotation followed by an arrow — so proving the `=>` follows the type proves the
+        // parens are a parameter list.
+        if (k === K.CloseParenToken && tokens[i + 1]?.kind === K.ColonToken) {
+            const returnSkip = new Set<number>()
+            const after = scanTypeOperand(tokens, i + 2, matchClose, returnSkip)
+            if (after < 0 || tokens[after]?.kind !== K.EqualsGreaterThanToken) continue
+            const open = matchOpen.get(i)
+            if (open === undefined) continue
+            for (const idx of returnSkip) skip.add(idx)
+            markParamTypes(tokens, open, i, braces, skip)
+        }
+    }
+
     return skip
 }
 
@@ -1353,14 +1609,14 @@ export function rewriteFreeIdentifiers(
     const braces = analyzeBraces(tokens)
     const { enclBraceOpen, isObjectBrace } = braces
     const { declNameIdx, shadows } = buildShadowedBindings(tokens, braces, () => true)
-    const typeSkips = markTypeSkips(tokens, braces.matchClose)
+    const typeSkips = markTypeSkips(tokens, braces)
 
     let out = ''
     let cursor = 0
     for (let i = 0; i < tokens.length; i++) {
         const t = tokenAt(tokens, i)
         if (!isIdentifierLike(t.kind)) continue
-        if (typeSkips.has(i)) continue // type operand of `as`/`satisfies` — not a value reference
+        if (typeSkips.has(i)) continue // type position — not a value reference
         const name = t.text
         if (declared.has(name)) continue
         if (GLOBALS.has(name)) continue
@@ -1577,6 +1833,51 @@ function matchingParen(text: string, open: number): number {
     return -1
 }
 
+// Does `source` open an ARGLESS arrow thunk — `() => …` or `(): T => …`?
+//
+// This used to be `/^\(\s*\)\s*=>/`, which matched only the un-annotated form. An annotated memo then
+// fell through to `memoKind`'s `null` = "opaque" branch and bound as a plain const, so a bare `{d}`
+// read the memo OBJECT instead of its value — with `abide check` green, since the check lane types the
+// binding through `__abideUnwrap` and never consults this classifier.
+//
+// The annotation is not PARSED, only stepped over to an arrow, and the distinction matters: a return
+// type may be a function type carrying its own `=>` (`(): (x: number) => string => body`), so telling
+// the type's arrow from the body's would need TypeScript's own greedy-parse-then-reparameterise rule
+// (`((x: number) => string) => String` is a parenthesised type, `(x: number) => string` a parameter
+// list — the same `)` precedes both). None of that is needed for a yes/no answer: an expression
+// opening `()` followed by `:` can only be an argless arrow with a return type, so ANY depth-zero
+// arrow after it confirms one. Requiring the arrow at all is the cheap guard against garbage.
+function isArglessArrowThunk(source: string): boolean {
+    if (source.charAt(0) !== '(') return false
+    const close = matchingParen(source, 0)
+    if (close === -1) return false
+    if (source.slice(1, close).trim() !== '') return false // takes args — not a thunk
+
+    let index = close + 1
+    while (index < source.length && /\s/.test(source.charAt(index))) index++
+    if (source.startsWith('=>', index)) return true
+    if (source.charAt(index) !== ':') return false
+
+    let depth = 0
+    for (index++; index < source.length; index++) {
+        const char = source.charAt(index)
+        if (char === "'" || char === '"' || char === '`') {
+            index++
+            while (index < source.length && source.charAt(index) !== char) {
+                if (source.charAt(index) === '\\') index++
+                index++
+            }
+            continue
+        }
+        if (char === '(' || char === '[' || char === '{') depth++
+        else if (char === ')' || char === ']' || char === '}') {
+            depth--
+            if (depth < 0) return false // ran past the initializer — never a thunk
+        } else if (depth === 0 && char === '=' && source.charAt(index + 1) === '>') return true
+    }
+    return false
+}
+
 // Recognise a `memo(...)` initializer and classify it (ADR 0024 §5), where `memoLocal` is the local bound
 // to `abide/shared/memo`.
 //   'cell' — `memo(…).state()`: the WRITABLE projection, indistinguishable from `state(…)` at the
@@ -1605,7 +1906,9 @@ function memoKind(init: string, memoLocal: string): 'memo' | 'cell' | null {
     if (transform !== undefined && /^async\b/.test(transform)) return null
     // The source is always an ARGLESS THUNK (ADR 0025) — that is the whole rule, with or without a
     // transform. A node reference or an object literal here is not a source and never classifies.
-    if (/^\(\s*\)\s*=>/.test(source)) return 'memo'
+    // Either spelling may carry a return type annotation; the `function` form tolerates one for free
+    // (nothing after the `()` is matched), the arrow form has to skip it.
+    if (isArglessArrowThunk(source)) return 'memo'
     if (/^function\s*\*?\s*\(\s*\)/.test(source)) return 'memo'
     return null
 }
@@ -1687,11 +1990,20 @@ function scanTopLevel(source: string): StatementRecord[] {
                 i++
                 continue
             }
-            if (kind === K.ExportKeyword) {
-                i++
-                atStart = true
-                continue
-            }
+            // A `<script>` runs once per module or once per instance, but it is never an ES module
+            // BOUNDARY: `emitSetup` inlines its body into `$ensureModule($scope)` / `render` / `mount`,
+            // where an `export` is a syntax error in EMITTED code — so the author got a parse failure
+            // over generated source instead of a diagnostic on the line they wrote. It used to be
+            // skipped here, which made `export const x = 1` analyze as `const x = 1` and bind
+            // correctly, so everything downstream agreed the script was fine.
+            if (kind === K.ExportKeyword)
+                throw scriptGateError(
+                    'a <script> is not an ES module boundary — its body is inlined into the ' +
+                        'component setup, so an `export` there is a syntax error in the emitted ' +
+                        'module. Drop it: a top-level binding is already visible to the template and ' +
+                        'to every nested <script>, a prop is `const { x } = props()`, and a value ' +
+                        'shared across FILES belongs in a `.ts` module you import.',
+                )
             if (kind === K.ImportKeyword) {
                 const { lastIdx, nextIdx } = stmtSpan(i)
                 const rawText = source.slice(t.start, tokenAt(tokens, lastIdx).end)

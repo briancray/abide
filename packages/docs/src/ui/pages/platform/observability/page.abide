@@ -26,11 +26,11 @@
   <aside class="aside">
     <p><code>bundled()</code> is true only inside the desktop bundle, false in a browser — the other one-import probe, called straight in the template.</p>
   </aside>
-  <Demo id="health" title="health() — the merged health document" client="src/ui/demos/platform/observability/HealthFetchDemo.abide" tab="client">
+  <Demo id="health" title="health() — the merged health document" server="src/server/rpc/platformHealth.ts" client="src/ui/demos/platform/observability/HealthFetchDemo.abide" tab="client">
     <HealthFetchDemo />
   </Demo>
   <aside class="aside">
-    <p>Same shape, one step out: <code>health()</code> is isomorphic, so the same call returns the framework baseline in-process on the server and fetches the full merged <code>/__abide/health</code> document from the browser. App fields from <code>onHealth()</code> merge over the stub.</p>
+    <p>Same shape, one step out: <code>health()</code> is isomorphic, and the document is the same on both sides — composed in-process on the server, fetched from <code>/__abide/health</code> in the browser. App fields from <code>onHealth()</code> merge over the baseline either way, and their TYPES come from a generated <code>src/.abide/health.d.ts</code>, so <code>(await health()).bootId</code> is a typed read in this app and a compile error in one with no such hook. The second line proves it rather than asserting it: the server tab is an RPC that calls the same <code>health()</code> and reads <code>doc.bootId</code> straight off the document, where the checker is real. The browser half above cannot — it holds the document in a cell that widens to <code>any</code>, so nothing there consults the generated companion.</p>
   </aside>
   <Demo id="observe" title="trace() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/observability/ObserveDemo.abide" tab="server">
     <ObserveDemo />
@@ -47,7 +47,7 @@
     <p>A browser RPC call carries it as a CHILD span — same trace id, fresh span id, which is what W3C asks of a caller — so the handler's work joins the page's trace. Click Run again above and the <code>traceId</code> holds while the span half moves. A navigation deliberately carries nothing: a nav is a new operation, and propagating would grow one immortal trace per tab.</p>
   </aside>
   <Demo id="log" title="default channel + <code>log.channel(name)</code> gating" server="src/server/rpc/platformLog.ts" client="src/ui/demos/platform/observability/LogDemo.abide" tab="server">
-    <p><code>log</code> is isomorphic structured logging. Every line carries a <strong>channel</strong> label. The bare <code>log()</code> / <code>.info</code> / <code>.warn</code> / <code>.error</code> / <code>.trace</code> uses the <strong>default channel</strong> — the app name (<code>docs</code> here, from <code>package.json</code>) — and is always on. <code>log.channel(name)</code> names a channel gated by <code>DEBUG</code> (debug-npm style; the browser reads <code>localStorage.debug</code>), so framework internals under <code>abide:*</code> and verbose app channels stay quiet until asked for. <code>error</code> always emits, even on a gated channel. This RPC logs server-side (browser never sees the lines) and returns the fact that it logged:</p>
+    <p><code>log</code> is isomorphic structured logging. Every line carries a <strong>channel</strong> label. The bare <code>log()</code> / <code>.info</code> / <code>.warn</code> / <code>.error</code> / <code>.trace</code> uses the <strong>default channel</strong> — the app name (<code>docs</code> here, from <code>package.json</code>) — and is always on. <code>log.channel(name)</code> names a channel gated by <code>DEBUG</code> (debug-npm style; the browser reads <code>localStorage.debug</code>), so framework internals under <code>abide:*</code> and verbose app channels stay quiet until asked for. A bare name is <strong>namespaced under the app</strong> for you — <code>channel('cards')</code> labels and gates as <code>docs:cards</code>, and <code>DEBUG=docs:*</code> lights every channel this app owns. <code>error</code> always emits, even on a gated channel. This RPC logs server-side (browser never sees the lines) and returns the fact that it logged:</p>
     <LogDemo />
   </Demo>
   <aside class="aside">

@@ -24,7 +24,9 @@
 //
 // The opt-in server CROSS-REQUEST cache (`memo: { crossRequest: true }`, rpc-core §2) is wired
 // here: a shared memo stores its slots in the process-global `sharedStore()` and runs its handler
-// fail-closed (scope-exited + ambient-guarded), server-only. A crossRequest memo's verbs also fire an
+// fail-closed (scope-exited), server-only. It is reachable from ANY caller — a request, a cron tick,
+// an `abide run` script, `onStart` — because one slot for every caller is what the option means, and
+// the scope-exited body is what makes that slot safe to share. A crossRequest memo's verbs also fire an
 // injectable, TRANSPORT-FREE `notify` sink (rpc-core §8 broadcast, PR2): the memo just calls it —
 // `createApp` binds it to the actual channel publish (the memo never imports transport). A crossRequest
 // memo declaring `tags` (PR4) registers itself in the server tag registry so the global
@@ -58,10 +60,10 @@ import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.t
 import { type Room, room } from './internal/room.ts'
 import { markSettled } from './internal/settledRead.ts'
 import {
+    sharedCacheAccount,
     sharedCacheBounded,
-    sharedCacheEvictIfNeeded,
     sharedCachePin,
-    sharedCacheRecordSize,
+    sharedCacheSettleStream,
     sharedCacheTouch,
     sharedCacheUnpin,
     sharedStore,
@@ -242,7 +244,8 @@ export interface MemoOptions {
     // Opt-in server cross-request cache (rpc-core §2). Server-only; INERT on the client (a
     // crossRequest-flagged client memo behaves like a normal client memo). Slots live in the
     // process-global `sharedStore()` keyed only by args — safe ONLY for functions pure over their args.
-    // Enforced fail-closed: the handler runs outside the request scope and a read requires an active one.
+    // Enforced fail-closed: the handler runs OUTSIDE the request scope, so it cannot see the caller.
+    // The READ is unrestricted — every caller addresses the same slot, request scope or not.
     //
     // NAMED `crossRequest`, not `shared` (ADR 0027 D5). `state.shared(key)` is the other `shared`, and
     // the two were exact MIRROR IMAGES on the isomorphism axis — `state.shared` is client-real and
@@ -731,14 +734,23 @@ export function memo<Args, T>(
         return exitScope(() => untrack(call))
     }
 
-    // Fail-closed checkpoint (b), rpc-core §2: a crossRequest read must run inside an active request scope
-    // (an authorized caller). A bare script/cron read has no gate and no client to serve, so it
-    // throws rather than silently touching the cross-request store. Server-only; inert on the client.
-    function guardSharedRead(): void {
-        if (crossRequest && reactiveScope().requestScoped !== true) {
-            throw new Error('crossRequest memo read requires an active request scope')
-        }
-    }
+    // There is NO ambient-entry guard on a crossRequest read. `crossRequest` means "one slot, every
+    // caller, wherever it is called from" — a cron tick, an `abide run` migration, an `onStart` warmer
+    // and a request handler all address the same slot, which is the whole point of opting into the
+    // process-global store.
+    //
+    // It used to throw outside a request scope, on a "the caller must be authorized" reading (the
+    // shared-cache plan's checkpoint (b)). The mechanism never delivered that: the check was
+    // `requestScoped === true`, the mere PRESENCE of a scope, so an unauthenticated request passed it
+    // exactly as an authenticated one did — authorization for an rpc is its middleware, on the HTTP
+    // path, and in-process server code could read `sharedStore()` directly anyway. What it did deliver
+    // was an inconsistency: `fn.refresh()`/`.invalidate()`/`.publish()`/`.pending()`/`.error()` never
+    // carried it, so a cron job could refresh a slot it was forbidden to read.
+    //
+    // Checkpoint (a) is the real fail-closed property and is untouched: a crossRequest body runs
+    // scope-exited (`runBody`, and `exitScope(runLoad)` on the async path), so it cannot read
+    // `identity()`/`cookies()`/`request()`/`context()` and the value it produces is identity-free by
+    // construction. Nothing user-specific is in the store to serve to an ungated reader.
 
     // Move a bounded slot to MRU on read so LRU eviction drops least-recently-read first.
     function touchOnRead(slot: Slot<Args, T>): void {
@@ -1065,8 +1077,7 @@ export function memo<Args, T>(
     function recordAndEvict(slot: Slot<Args, T>, value: T): void {
         const store = boundedStore(slots())
         if (store === undefined) return
-        sharedCacheRecordSize(store, slot.key, measureBytes(value))
-        sharedCacheEvictIfNeeded(store)
+        sharedCacheAccount(store, slot.key, measureBytes(value))
     }
 
     // Byte-account an AUTO slot's value against the shared ceiling. A `crossRequest` auto slot lives in
@@ -1324,8 +1335,8 @@ export function memo<Args, T>(
             stream.markOverflowed() // abort + drop replay eligibility; buffer stops growing
             return
         }
-        sharedCacheRecordSize(store, slot.key, stream.bytes)
-        sharedCacheEvictIfNeeded(store) // evicts OTHER closed slots; this open stream is pinned
+        // Accounts the open stream's growth; evicts OTHER closed slots (this one stays pinned).
+        sharedCacheAccount(store, slot.key, stream.bytes)
     }
 
     function startStream(
@@ -1390,11 +1401,7 @@ export function memo<Args, T>(
         if (tail === undefined) {
             stream.close()
             slot.loadedAt = Date.now()
-            if (store !== undefined) {
-                sharedCacheUnpin(store, slot.key)
-                sharedCacheRecordSize(store, slot.key, stream.bytes)
-                sharedCacheEvictIfNeeded(store)
-            }
+            sharedCacheSettleStream(store, slot.key, stream.bytes)
             bumpStreamTick(slot)
             return stream
         }
@@ -1436,11 +1443,7 @@ export function memo<Args, T>(
                     slot.loadedAt = Date.now()
                     slot.expired = isTimeoutError(stream.error)
                     // The transcript is now a CLOSED value: unpin (LRU-evictable) and record its final size.
-                    if (store !== undefined) {
-                        sharedCacheUnpin(store, slot.key)
-                        sharedCacheRecordSize(store, slot.key, stream.bytes)
-                        sharedCacheEvictIfNeeded(store)
-                    }
+                    sharedCacheSettleStream(store, slot.key, stream.bytes)
                 }
                 bumpStreamTick(slot) // reflect the terminal (done/error) to reactive probes
             }
@@ -1582,7 +1585,6 @@ export function memo<Args, T>(
     // An AUTO-TRACKED slot's bare read is the VALUE, not a promise (ADR 0024 §3), and an error state throws
     // where the classic path rejects — the synchronous analog.
     const c = ((args: Args) => {
-        guardSharedRead()
         const slot = ensureSlot(args)
         // A backing that THIS read created is already fresh. Expiring it would run the body twice for one
         // read, because `resolveMode`'s classifying probe is itself a fill and `ttl: 0` stales every stamp
@@ -1611,7 +1613,6 @@ export function memo<Args, T>(
     // the MOST-RECENT chunk (replayable-streams.md §4), reactive on chunk arrival. Use `chunks()` for the
     // whole transcript.
     c.peek = (args: Args): T | undefined => {
-        guardSharedRead()
         const slot = ensureSlot(args)
         // Expire on the same terms as the bare read. `peek` already kicks a load on a cold pulled slot,
         // so serving a value the ttl has retired would make the two reads disagree about the same slot.
@@ -1657,14 +1658,12 @@ export function memo<Args, T>(
     // Reactive stream probes (replayable-streams.md §4): full transcript snapshot, closed? (`peek()` above
     // gives the most-recent chunk — the "current value").
     c.chunks = (args: Args): unknown[] | undefined => {
-        guardSharedRead()
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return undefined // a synchronous derivation has no transcript
         touchOnRead(slot)
         return readStreamReactive(slot, (chunks) => chunks.slice())
     }
     c.done = (args: Args): boolean => {
-        guardSharedRead()
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return false
         touchOnRead(slot)
@@ -1675,7 +1674,6 @@ export function memo<Args, T>(
         args: Args,
         from: number,
     ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean } => {
-        guardSharedRead()
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return { cursor: undefined, fresh: true }
         const state = slot.state.untracked()

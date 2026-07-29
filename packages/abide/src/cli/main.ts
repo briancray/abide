@@ -14,18 +14,12 @@
 // `dev`/`start` return the running `ServeResult` (the process stays alive on Bun.serve's handles);
 // `build`/`scaffold` return undefined after their one-shot work.
 
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { BundleWindow } from '../bundle/BundleWindow.ts'
 import { CLI_EXIT_CODES } from '../server/internal/CLI_EXIT_CODES.ts'
-import {
-    buildClient,
-    type ClientBuild,
-    ENCODING_EXTENSION,
-    loadClientBuild,
-} from '../server/internal/clientBundle.ts'
-import { loadApp, writeBakedSchemas } from '../server/internal/loadApp.ts'
+import { build, ensureClientBuild } from './build.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { check } from './check.ts'
 import { compile } from './compile.ts'
@@ -95,76 +89,6 @@ async function runStep(
     }
 }
 
-// Build the code-split client and write every content-hashed file (loader entry + per-route chunks +
-// shared chunks + CSS), plus a manifest, into dist/_app/<hash>/ (BP1.3, TODO #6). Returns the absolute
-// output dir. The outer hash is a deterministic digest of the manifest (entry + sorted filenames), so
-// the same source yields the same dir (immutable long-cache, reproducible builds).
-export async function build(dir: string): Promise<string> {
-    // Drop any prior baked schema map so this build derives FRESH from the current source (§11.5),
-    // rather than loadApp reusing a stale `dist/schemas.json`.
-    await rm(join(dir, 'dist', 'schemas.json'), { force: true })
-    const config = await loadApp(dir)
-    config.dev = false // production build → minify the client bundle (TODO #6).
-    const built = await buildClient(config)
-    const names = [...built.files.keys()].sort()
-    // Which encodings each asset ships as a sidecar. Part of the manifest — and therefore part of the
-    // hash below — because the set of representations served at a URL is part of what that URL IS: a
-    // build that gains brotli must land in a fresh immutable directory, not overwrite an old one that
-    // clients and shared caches still hold identity bytes for.
-    const encodings: Record<string, string[]> = {}
-    for (const name of names) {
-        const asset = built.files.get(name)
-        if (asset === undefined) continue
-        const available: string[] = []
-        if (asset.brotli !== null) available.push('brotli')
-        if (asset.gzip !== null) available.push('gzip')
-        if (available.length > 0) encodings[name] = available
-    }
-    const manifest = {
-        entry: built.entry,
-        css: built.cssFile ?? null,
-        files: names,
-        encodings,
-        chunkByPattern: Object.fromEntries(built.chunkByPattern),
-    }
-    const hash = new Bun.CryptoHasher('sha256')
-        .update(JSON.stringify(manifest))
-        .digest('hex')
-        .slice(0, 16)
-    const outDir = join(dir, 'dist', '_app', hash)
-    await mkdir(outDir, { recursive: true })
-    for (const name of names) {
-        const asset = built.files.get(name)
-        if (asset === undefined) continue
-        await Bun.write(join(outDir, name), asset.identity)
-        if (asset.brotli !== null)
-            await Bun.write(join(outDir, name + ENCODING_EXTENSION.brotli), asset.brotli)
-        if (asset.gzip !== null)
-            await Bun.write(join(outDir, name + ENCODING_EXTENSION.gzip), asset.gzip)
-    }
-    const record = JSON.stringify({ hash, ...manifest }, null, 2)
-    await Bun.write(join(outDir, 'index.json'), record)
-    // Stable top-level pointer so `abide start` finds the current build without scanning hash dirs.
-    await Bun.write(join(dir, 'dist', 'manifest.json'), record)
-    // Bake the type-derived schemas (§11.5) alongside the manifest, so `abide start` (and a future
-    // source-less `compile`/`cli`) merges them at boot without a tsgo pass. `config.routes` already
-    // carry the freshly-derived schemas from the `loadApp` above.
-    if (config.routes !== undefined) await writeBakedSchemas(dir, config.routes)
-    return outDir
-}
-
-// Ensure a production client build exists on disk (build it if missing) and load it for serving, so
-// `abide start` serves the EXACT `abide build` artifacts with no bundler at boot.
-async function ensureClientBuild(dir: string): Promise<ClientBuild> {
-    let built = await loadClientBuild(dir)
-    if (built === undefined) {
-        await build(dir)
-        built = await loadClientBuild(dir)
-    }
-    if (built === undefined) throw new Error('abide start: failed to produce a client build')
-    return built
-}
-
 // Read the optional declarative window config (BU3) from `src/bundle/window.ts` if present. Returns
 // the default export (a BundleWindow) or an empty config when the file is absent. Dynamic-imported so
 // a project without a bundle window still bundles.
@@ -192,9 +116,21 @@ export async function bundle(dir: string): Promise<string> {
 
 // The single default starter (CL1.2) lives as a real, dogfooded workspace package — `packages/starter`
 // — so it type-checks, lints, and runs like any authored app instead of hiding in code as strings.
-// `scaffold` copies its src/tsconfig verbatim, swapping only the app name and the `workspace:*` abide
-// dep for a published range. Resolved relative to this file: `src/cli` → up three → `packages/`.
+// `scaffold` copies its `src/` + the root files below verbatim, swapping only the app name and the
+// `workspace:*` abide dep for a published range. Resolved relative to this file: `src/cli` → up three
+// → `packages/`.
 const STARTER_DIR = join(import.meta.dir, '../../../starter')
+
+// Root-level template files copied verbatim. NAMED rather than globbed, because the template dir also
+// holds the monorepo-only e2e harness (`playwright.config.ts`, `e2e/`, `scripts/`) that cannot ship in
+// a scaffolded app — see the package.json stripping below.
+//
+// `.gitignore` is load-bearing, not tidiness: `scaffold` runs `git init` (unless `--no-git`), so
+// without one the first `git add .` in a fresh app commits `node_modules/`, `dist/`, and the GENERATED
+// `src/.abide/health.d.ts` — which the whole health-companion design (CO2.4) assumes is regenerated,
+// never tracked. That invariant held in this monorepo only via the ROOT `.gitignore`, which no
+// scaffolded app ever sees.
+const STARTER_ROOT_FILES = ['tsconfig.json', '.gitignore'] as const
 
 // Copy the starter package into a fresh `name/` project. Returns the project root.
 export async function scaffold(dir: string, name: string): Promise<string> {
@@ -208,8 +144,10 @@ export async function scaffold(dir: string, name: string): Promise<string> {
         await Bun.write(join(root, 'src', relative), Bun.file(join(srcDir, relative)))
     }
 
-    // tsconfig verbatim; package.json rewritten with the app name + a published abide range.
-    await Bun.write(join(root, 'tsconfig.json'), Bun.file(join(STARTER_DIR, 'tsconfig.json')))
+    // tsconfig + .gitignore verbatim; package.json rewritten with the app name + a published abide range.
+    for (const file of STARTER_ROOT_FILES) {
+        await Bun.write(join(root, file), Bun.file(join(STARTER_DIR, file)))
+    }
     const pkg = await Bun.file(join(STARTER_DIR, 'package.json')).json()
     pkg.name = name
     if (pkg.dependencies?.abide) pkg.dependencies.abide = '^0.0.0'

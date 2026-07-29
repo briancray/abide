@@ -1,3 +1,6 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the rewriter's INPUT and OUTPUT are source
+// text, so a `${…}` inside a quoted string here is the fixture, not a mis-quoted template literal.
+
 import { describe, expect, test } from 'bun:test'
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
@@ -110,6 +113,48 @@ describe('rewriteCellRefs assignment', () => {
 
         test('but a genuine statement boundary still ends the RHS', () => {
             expect(rewriteCellRefs('n = 1\nm = 2', CELLS('n', 'm'))).toBe('n.set( 1)\nm.set( 2)')
+        })
+    })
+
+    // The template kinds are role-asymmetric (see CONTINUATION_OPERATORS). `TemplateTail` used to be
+    // in `afterPrev`, so a line ENDING in one never ended the RHS — the closing paren landed after the
+    // following statements instead of after the literal, which is a syntax error only if what got
+    // swallowed happens to be one. Assert both directions: a tail ends an RHS, a head does not.
+    describe('a template literal on the RHS', () => {
+        test('ends the RHS at its closing backtick', () => {
+            expect(rewriteCellRefs('n = `a ${b}`\nconst after = 1', CELLS('n'))).toBe(
+                'n.set( `a ${b}`)\nconst after = 1',
+            )
+        })
+
+        test('ends it after the LAST substitution', () => {
+            expect(rewriteCellRefs('n = `a ${b} c ${d}`\nconst after = 1', CELLS('n'))).toBe(
+                'n.set( `a ${b} c ${d}`)\nconst after = 1',
+            )
+        })
+
+        test('ends it with no substitution at all', () => {
+            expect(rewriteCellRefs('n = `plain`\nconst after = 1', CELLS('n'))).toBe(
+                'n.set( `plain`)\nconst after = 1',
+            )
+        })
+
+        test('is not severed when a substitution spans lines', () => {
+            expect(rewriteCellRefs('n = `a ${\n  b\n}`\nconst after = 1', CELLS('n'))).toBe(
+                'n.set( `a ${\n  b\n}`)\nconst after = 1',
+            )
+        })
+
+        test('keeps a member access on the literal', () => {
+            expect(rewriteCellRefs('n = `x`.length\nconst after = 1', CELLS('n'))).toBe(
+                'n.set( `x`.length)\nconst after = 1',
+            )
+        })
+
+        test('works as a compound-assignment RHS', () => {
+            expect(rewriteCellRefs('n += `a ${b}`\nconst after = 1', CELLS('n'))).toBe(
+                'n.set(n() + ( `a ${b}`))\nconst after = 1',
+            )
         })
     })
 })
@@ -247,16 +292,13 @@ describe('rewriteCellRefs literals are protected', () => {
         expect(rewriteCellRefs('`n and n`', CELLS('n'))).toBe('`n and n`')
     })
     test('template substitution IS rewritten, surrounding text is not', () => {
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional literal template-syntax data
         expect(rewriteCellRefs('`x${n}y`', CELLS('n'))).toBe('`x${n()}y`')
     })
     test('multiple template substitutions', () => {
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional literal template-syntax data
         expect(rewriteCellRefs('`${n}-${m}`', CELLS('n', 'm'))).toBe('`${n()}-${m()}`')
     })
     test('template tail text matching a cell name is not rewritten', () => {
         // After `${a}` the literal `n` is template tail text, not code.
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional literal template-syntax data
         expect(rewriteCellRefs('`${a}n`', CELLS('a', 'n'))).toBe('`${a()}n`')
     })
     test('cell in a line comment is not rewritten', () => {
@@ -370,6 +412,109 @@ describe('rewriteFreeIdentifiers type-position operands', () => {
 
     test('assertion inside a ternary branch', () => {
         expect(rw('x ? y as T : z')).toBe('$s.x ? $s.y as T : $s.z')
+    })
+})
+
+// ---------------------------------------------------------------------------
+// rewriteCellRefs — a cell name in a TYPE position is not a read
+// ---------------------------------------------------------------------------
+
+// Props and cells share a component's vocabulary, so `const rest = memo(…)` beside
+// `props<{ rest?: string }>()` is ordinary authoring — and it used to emit `props<{ rest()?: string }>()`,
+// a build failure. Non-optional members escaped by accident (`isObjectKey`'s `name:` test), so the same
+// script broke or not depending on a `?`.
+describe('rewriteCellRefs type positions', () => {
+    const rw = (code: string) => rewriteCellRefs(code, CELLS('count', 'n'))
+    const rwMemo = (code: string) => rewriteCellRefs(code, MEMOS('rest'))
+
+    test('type arguments of a call — the props<{…}>() case', () => {
+        expect(rwMemo('const { a } = props<{ rest?: string }>()')).toBe(
+            'const { a } = props<{ rest?: string }>()',
+        )
+        expect(rw('const { a } = props<{ count: number }>()')).toBe(
+            'const { a } = props<{ count: number }>()',
+        )
+    })
+
+    test('type arguments of a `new` expression', () => {
+        expect(rwMemo('const m = new Map<string, rest>()')).toBe(
+            'const m = new Map<string, rest>()',
+        )
+    })
+
+    test('declaration annotations', () => {
+        expect(rwMemo('let x: rest = null')).toBe('let x: rest = null')
+        expect(rwMemo('let x: { rest?: string } = y')).toBe('let x: { rest?: string } = y')
+    })
+
+    test('type alias body', () => {
+        expect(rw('type T = Array<count>')).toBe('type T = Array<count>')
+        expect(rw('type T = { count?: string } | n')).toBe('type T = { count?: string } | n')
+    })
+
+    test('interface body', () => {
+        expect(rw('interface Foo { count?: number; n: string }')).toBe(
+            'interface Foo { count?: number; n: string }',
+        )
+    })
+
+    test('function parameter annotations and return type', () => {
+        expect(rwMemo('function f(p: { rest: number }): rest { return 1 }')).toBe(
+            'function f(p: { rest: number }): rest { return 1 }',
+        )
+    })
+
+    test('arrow parameter annotations, with and without a return type', () => {
+        expect(rw('const g = (p: { count: number }) => 1')).toBe(
+            'const g = (p: { count: number }) => 1',
+        )
+        expect(rwMemo('const g = (p: rest): rest => 1')).toBe('const g = (p: rest): rest => 1')
+    })
+
+    // The safety invariant, in the direction that MATTERS: over-marking would silently stop rewriting a
+    // real cell read, which no value assertion catches (the emitted code still reads the right name — it
+    // just reads the CELL instead of its value, and never subscribes).
+    test('values around type positions stay rewritten', () => {
+        expect(rw('type X = string; const v = count')).toBe('type X = string; const v = count()')
+        expect(rw('interface I { a: string }\nconst v = count')).toBe(
+            'interface I { a: string }\nconst v = count()',
+        )
+        expect(rw('const v = a < count && b > (n)')).toBe('const v = a < count() && b > (n())')
+        expect(rw('const v = cond ? count : n')).toBe('const v = cond ? count() : n()')
+        expect(rw('const v = { a: count, b: n }')).toBe('const v = { a: count(), b: n() }')
+    })
+
+    test('a destructuring RENAME is not an annotation', () => {
+        expect(rwMemo('function f({ rest: local }) { return local }')).toBe(
+            'function f({ rest: local }) { return local }',
+        )
+    })
+
+    test('class member annotations — methods, properties, `#private` fields', () => {
+        expect(rwMemo('class C { m(a: rest): rest { return 1 } }')).toBe(
+            'class C { m(a: rest): rest { return 1 } }',
+        )
+        expect(rwMemo('class C { x: rest = 1 }')).toBe('class C { x: rest = 1 }')
+        expect(rwMemo('class C { #p: rest }')).toBe('class C { #p: rest }')
+    })
+
+    test('object-literal shorthand method annotations', () => {
+        expect(rwMemo('const o = { m(a: rest) { return 1 } }')).toBe(
+            'const o = { m(a: rest) { return 1 } }',
+        )
+    })
+
+    // The counterpart guard: an object literal's `key: value` is a VALUE, so the member walker that
+    // reads a CLASS `x: T` as an annotation must not read this one the same way.
+    test('object-literal property VALUES are still rewritten', () => {
+        expect(rw('const v = { a: count, b: n }')).toBe('const v = { a: count(), b: n() }')
+        expect(rw('send({ tag: 1, value: count })')).toBe('send({ tag: 1, value: count() })')
+        expect(rw('const v = { outer: { inner: count } }')).toBe(
+            'const v = { outer: { inner: count() } }',
+        )
+        expect(rw('const v = { m(x) { return count }, a: n }')).toBe(
+            'const v = { m(x) { return count() }, a: n() }',
+        )
     })
 })
 
@@ -689,6 +834,68 @@ describe('analyzeBindings memo bindings', () => {
         )
         expect([...analysis.cellBindings.memos]).toEqual(['d'])
         expect([...analysis.cellBindings.cells]).toEqual([])
+    })
+
+    // A return type annotation is ordinary TypeScript, and the classifier used to miss it entirely:
+    // the binding fell through to "opaque", a bare `{d}` read the memo OBJECT, and `abide check` stayed
+    // green because the check lane types the binding through `__abideUnwrap` rather than this
+    // classifier. Nothing but the emit lane could see the difference, so the guard belongs here.
+    test('an annotated argless thunk is auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo((): number => 1)",
+        )
+        expect([...analysis.cellBindings.memos]).toEqual(['d'])
+    })
+
+    // Both spellings of a function-type return: the parenthesised type and the bare one. They differ in
+    // WHICH depth-zero arrow comes first (the body's vs the type's) and `)` precedes both, so any rule
+    // that tried to tell them apart would have to reparameterise the group the way TypeScript does.
+    // These two pin that the classifier does not try — the first depth-zero arrow answers either way.
+    test('a parenthesised FUNCTION-TYPE annotation is auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo((): ((x: number) => string) => String)",
+        )
+        expect([...analysis.cellBindings.memos]).toEqual(['d'])
+    })
+
+    test('an UNPARENTHESISED function-type annotation is auto-called too', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo((): (x: number) => string => String)",
+        )
+        expect([...analysis.cellBindings.memos]).toEqual(['d'])
+    })
+
+    // A comma-bearing type argument must survive the param split (`skipTypeArguments`) before the
+    // annotation skip ever runs — otherwise the source is truncated at `Map<string` and classifies as
+    // opaque for a reason that has nothing to do with the annotation.
+    test('a generic annotation with a top-level comma is auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo((): Map<string, number> => m)",
+        )
+        expect([...analysis.cellBindings.memos]).toEqual(['d'])
+    })
+
+    test('an annotated argless FUNCTION expression is auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo(function (): number { return 1 })",
+        )
+        expect([...analysis.cellBindings.memos]).toEqual(['d'])
+    })
+
+    // The annotation skip must not widen what classifies: an annotated ASYNC body is still a promise
+    // read that would blank the SSR text, and an annotated ARGED handler is still args-keyed.
+    test('an annotated ASYNC body is still NOT auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo(async (): Promise<number> => 1)",
+        )
+        expect([...analysis.cellBindings.memos]).toEqual([])
+    })
+
+    test('an annotated ARGED handler is still NOT auto-called', () => {
+        const analysis = scopeOf(
+            "import { memo } from 'abide/shared/memo'; const d = memo((args: Args): string => args.id)",
+        )
+        expect([...analysis.cellBindings.memos]).toEqual([])
     })
 
     test('memo(…).state() is a writable CELL, not an auto-called memo', () => {

@@ -1,5 +1,7 @@
-// The app-level `onError` hook: the outermost net for an unexpected throw during request dispatch.
-// A typed error/redirect is a returned Response (not a throw) and never reaches onError.
+// The app-level `onError` hook: the outermost net for an UNEXPECTED throw during request dispatch.
+// A deliberate `error(...)`/`redirect(...)` also throws, but is rendered at its own status before this
+// hook, so it never reaches onError — a declared 404 is not a bug in the app. The hook itself may shape
+// the reply either way: by RETURNING a Response, or by calling `error(...)`, which throws.
 
 import { describe, expect, test } from 'bun:test'
 import { identity } from '../../shared/identity.ts'

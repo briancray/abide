@@ -1,9 +1,12 @@
 import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { DELETE } from '../server/DELETE.ts'
 import { error } from '../server/error.ts'
 import { GET } from '../server/GET.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
+import { PATCH } from '../server/PATCH.ts'
 import { POST } from '../server/POST.ts'
+import { PUT } from '../server/PUT.ts'
 import { identity } from '../shared/identity.ts'
 import { createTestApp, identityCookie, type TestApp } from './createTestApp.ts'
 
@@ -73,6 +76,26 @@ describe('createTestApp routing', () => {
         })
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual({ total: 4 })
+    })
+
+    // The router ENFORCES the declared verb (405 + `Allow`), so the proxy has to send the verb the
+    // rpc was declared with. It used to hardcode POST, which made every non-POST mutation unreachable.
+    test('PUT/PATCH/DELETE mutations are reachable through the rpc proxy', async () => {
+        const app = await start({
+            routes: {
+                replace: PUT(async (args: { id: string }) => ({ verb: 'PUT', id: args.id })),
+                tweak: PATCH(async (args: { id: string }) => ({ verb: 'PATCH', id: args.id })),
+                remove: DELETE(async (args: { id: string }) => ({ verb: 'DELETE', id: args.id })),
+            },
+        })
+        const replace = app.rpc.replace
+        const tweak = app.rpc.tweak
+        const remove = app.rpc.remove
+        if (replace === undefined || tweak === undefined || remove === undefined)
+            throw new Error('verb rpcs not registered')
+        expect(await replace({ id: 'a' })).toEqual({ verb: 'PUT', id: 'a' })
+        expect(await tweak({ id: 'b' })).toEqual({ verb: 'PATCH', id: 'b' })
+        expect(await remove({ id: 'c' })).toEqual({ verb: 'DELETE', id: 'c' })
     })
 
     test('unknown rpc 404s', async () => {

@@ -131,10 +131,14 @@ guard discriminate request kind **without parsing internal paths** (paths are an
 not the discriminator).
 
 - **Middleware signature:** `async middleware(next) { … return await next() }`. `next()` takes
-  **no args** (request via `request()`); short-circuit by returning a `Response`
-  (`error(...)` / `redirect(...)`). **Auth is just middleware** — a guard is a middleware that
-  returns `error(403)` instead of calling `next`; there is no separate `auth:` property and no
-  `ctx` object.
+  **no args** (request via `request()`); short-circuit by calling `error(...)` / `redirect(...)`,
+  which **THROW** (both return `never`) — the chain renders a thrown outcome at its own status
+  exactly as it renders a returned `Response`, which is still admitted. **Auth is just middleware**
+  — a guard is a middleware that calls `error(403)` instead of calling `next`; there is no separate
+  `auth:` property and no `ctx` object. Because the denial is a throw, the **per-subscribe
+  channel/room re-authorization** reads *any* throw as a DENY and fails closed: it runs the chain to
+  a terminal sentinel, and a short-circuit never reaches it, so a sentinel comparison alone would let
+  the throw escape and take the subscribe (and the connection) with it.
 - **Request kind/name/params come from the isomorphic `route()`** → `{ kind, name, params,
   url, navigating }` (FD2), derived from the request URL and available in middleware and
   templates alike (`page` is retired). `identity()` and `request()` are ambient accessors.

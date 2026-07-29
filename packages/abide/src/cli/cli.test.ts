@@ -3,7 +3,8 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadClientBuild } from '../server/internal/clientBundle.ts'
-import { build, scaffold } from './main.ts'
+import { build } from './build.ts'
+import { scaffold } from './main.ts'
 import { type ServeResult, serve } from './serve.ts'
 
 const FIXTURE_DIR = join(import.meta.dir, '../server/__fixtures__/app')
@@ -132,7 +133,7 @@ describe('scaffold — writes a minimal starter project', () => {
 
 describe('build — content-addressed split client', () => {
     test('writes every hashed chunk + a manifest into dist/_app/<hash>/', async () => {
-        const outDir = await build(FIXTURE_DIR)
+        const { outDir } = await build(FIXTURE_DIR)
         expect(outDir).toContain(join('dist', '_app'))
 
         // The manifest names the content-hashed loader entry + every emitted file.

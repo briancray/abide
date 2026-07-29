@@ -38,7 +38,13 @@ the app's own RPCs as tools — consumed with the same streaming primitives as a
    first-class.**
 4. **`AgentSurface` = the tool/capability surface exposed to the agent** — the app's **RPCs
    presented as callable tools** (reusing the MS2 tool schemas: one args object → `inputSchema`,
-   §13.2), executed **in-process** during the loop so the agent can *act on the app*.
+   §13.2), executed **inside the loop** — the caller never re-drives — so the agent can *act on
+   the app*. In-PROCESS, over the app's own **loopback HTTP face** (`callOwnRpc`, the same door
+   the MCP tools use), never by invoking the rpc callable: the callable is only the HANDLER, and
+   both `schemas.input` validation and the rpc's own `middleware` are composed by the ROUTER. This
+   is not an implementation detail — it is what makes AG1.7 below true rather than aspirational,
+   and the distinction is worth spelling out because "executed in-process" once read as "invoked
+   directly", which is how a tool surface whose caller is a model came to run neither gate.
 5. **`agent()` runs the full tool-use loop internally** — LLM → tool-call frame → execute tool →
    tool-result frame → LLM continues → … until done — streaming every frame throughout (not
    single-turn; the caller doesn't re-drive).
@@ -51,6 +57,13 @@ the app's own RPCs as tools — consumed with the same streaming primitives as a
    `identity()` (§13.4/AU7). abide itself does not authorize tool calls (DX8); the app's middleware
    does. The agent can only do what that identity's middleware allows; no privilege escalation via
    the agent.
+   - **The credentials come from the ENCLOSING request scope, and absent one the call goes
+     anonymous.** `callOwnRpc` forwards the `authorization`/`cookie` headers of the request the
+     `agent()` run happens to sit inside; with no such request — a cron tick, an `onStart` warmer, an
+     `abide run` script — it sends neither and the middleware chain sees an anonymous caller. That is
+     the fail-closed answer and the reason there is no ambient elevation: an agent driven by nobody
+     must not be able to act as a principal nobody presented. An unattended run that legitimately
+     needs standing therefore has to be given one explicitly, by the app.
 
 ## AG2. Engine contract, tools, lifecycle, approval
 

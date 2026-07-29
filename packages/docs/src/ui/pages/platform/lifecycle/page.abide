@@ -16,10 +16,10 @@
     <p><code>health()</code> is isomorphic, so this fetches the live <code>/__abide/health</code> and shows the merged document: the framework stub (<code>reachable</code>, <code>version</code>, <code>startedAt</code>, <code>uptime</code>) plus what <code>onHealth()</code> merged over it. A non-empty <code>bootId</code> is the proof that <code>onStart</code> ran and seeded it before the server bound.</p>
   </aside>
   <Demo id="lifecycle-error" title="onError — shape an uncaught throw" server="src/server/rpc/lifecycleThrow.ts" client="src/ui/demos/platform/lifecycle/LifecycleErrorDemo.abide" tab="server">
-    <p>The RPC below <code>throw</code>s an unexpected error — not a typed <code>error()</code> Response. <code>onError(error)</code> (request-scoped) catches it and returns the Response the client sees, instead of an opaque crash. The button posts to it and shows the shaped status + message.</p>
+    <p>The RPC below <code>throw</code>s an unexpected error — not a typed <code>error()</code>, which also throws but is rendered at its own status before the hook. <code>onError(error)</code> (request-scoped) catches it and returns the Response the client sees, instead of an opaque crash. The button posts to it and shows the shaped status + message.</p>
     <LifecycleErrorDemo />
   </Demo>
   <aside class="aside">
-    <p>An RPC that throws. <code>.raw()</code> bypasses the memo and returns the untouched <code>Response</code>, so what you see is exactly the status and body <code>onError</code> shaped — a typed <code>error()</code> would never reach the hook, because it is a Response, not a throw.</p>
+    <p>An RPC that throws. <code>.raw()</code> bypasses the memo and returns the untouched <code>Response</code>, so what you see is exactly the status and body <code>onError</code> shaped — a typed <code>error()</code> would never reach the hook. Not because it isn't a throw (it is one), but because it throws an <code>HttpError</code>, which the router renders at the status the handler asked for <em>before</em> the hook is consulted: a declared 404 is not a bug in the app.</p>
   </aside>
 </main>

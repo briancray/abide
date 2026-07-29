@@ -161,6 +161,24 @@ at which point retention + `peek`/`refresh`/`refreshing` behave exactly like a r
 and the client memo; `memo: false` bypasses the client memo too). Cross-callable invalidation is
 unchanged — a mutation handler still invalidates *other* reads by calling their verbs (`todos.invalidate()`).
 
+**The probe vocabulary is ONE declaration, not a symmetry maintained by hand.**
+`shared/internal/reactiveReadSurface.ts` declares it once — `ReactiveValueProbes<T, A>` (`peek`,
+`pending`, `refreshing`, `error`) and `ReactiveStreamProbes<C, A>` (`chunks`, `done`), composed at the
+primitive arity as `ReactiveProbeSurface<Args, T>` — and `SocketSurface`, `RpcCallSurface` and
+`StreamRead` all EXTEND them. It had been hand-copied into five interfaces that extended nothing, which
+is the same rot ADR 0027 names (a rule stated at the root and enforced one layer short of the leaves)
+surviving at the type level after D4 fixed the runtime half, and it had already drifted (see the
+streaming surface below). Two axes had to become parameters first, and each spelling is load-bearing
+rather than something to normalize: **ARITY** — a memo/channel/socket takes `[args: Args]`, the key
+last-or-only, so TypeScript's omittable-`void`-parameter rule collapses `peek(args: void)` to `peek()`
+for free, while an RPC takes `RpcCallArgs<Args>` with the slot OPTIONAL, because a zero-arg rpc infers
+`Args = unknown` rather than `void` and gets no such collapse; and **CARDINALITY** — a value read has
+no transcript, so the two halves stay separate interfaces and `RpcCallSurface` takes only the value
+one, since folding them would put `chunks`/`done` on every scalar rpc. `refresh`/`invalidate`/`watch`
+are deliberately NOT in this seam but one level up on `ReactiveReadSurface`: a socket implements none
+of them, and folding the verbs down would widen its public surface with three members nothing
+implements.
+
 ### 2. TTL semantics: the clock starts at "settled" — resolve for a value, CLOSE for a stream; slots are ref-counted while open
 `ttl` = how long a **settled** slot is retained. For a value, settled = resolved (`loadedAt` at fn
 resolve, unchanged, `memo.ts:255`). For a stream, settled = **closed** (last chunk buffered +
@@ -284,13 +302,20 @@ wire.
 **Streaming read surface + reactive peek (typed, built).** `GET`/`HEAD` return a **conditional** type:
 a handler yielding `AsyncIterable<C>` produces a `StreamRead<Args, C>`, a value handler the usual
 `Rpc<Args, T>`. `StreamRead` keeps `peek` as the canonical "current value" read (so it means the same
-thing on both surfaces) and drops the meaningless value verbs (`publish`/`snapshot`):
+thing on both surfaces) and drops the meaningless value verbs (`publish`/`snapshot`). It does not
+*replace* the value probes, it **re-types** them over the CHUNK: `StreamRead` extends
+`ReactiveValueProbes<C, …>` + `ReactiveStreamProbes<C, …>` (the one declaration of §1), so the surface
+is all **six**:
 - `fn.peek(args): C | undefined` — the non-blocking **most-recent chunk** (a stream's "current value"),
   reactive (re-renders as chunks arrive; reading it also kicks the source). This is the "just the latest
   value" read — `peek()` *is* the latest, no `.at(-1)`.
 - `fn.chunks(args): C[] | undefined` — a reactive snapshot (copy) of the **whole transcript** so far, for
   rendering history or joining deltas — the genuinely different need a scalar `peek` can't serve.
 - `fn.done(args): boolean` / `fn.error(args)` — reactive closed/failed probes.
+- `fn.pending(args): boolean` / `fn.refreshing(args): boolean` — no chunk yet / re-acquiring over a
+  retained transcript. `refreshing` was the drift the shared declaration exposed: `StreamRead` declared
+  no `refreshing` while `Rpc` next door did, for no stated reason, though `makeRpc`'s `attachSurface`
+  had been assigning it all along. Enumerating four of six here is what let the fifth go missing.
 
 Reactivity rides a **separate per-slot `streamTick` state** bumped on each chunk push and on the
 terminal — kept distinct from the state-machine `state` the bare read subscribes to, so per-chunk

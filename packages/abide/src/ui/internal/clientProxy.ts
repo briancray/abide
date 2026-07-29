@@ -21,68 +21,23 @@ import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
 import { applyTagFrame } from '../../shared/internal/memoTags.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
-import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import type {
     MutationCallSurface,
     RpcCallOptions,
     RpcCallSurface,
 } from '../../shared/internal/rpcSurface.ts'
+import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
+import { toHttpError } from '../../shared/internal/toHttpError.ts'
 import { withAbort } from '../../shared/internal/withAbort.ts'
 import { type MemoOptions, memo } from '../../shared/memo.ts'
 import { applyMemoFrame } from './applyMemoFrame.ts'
 import { subscribeMemoChannel, subscribeTagChannel } from './mux.ts'
 
-// An HttpError-like carrier for a non-2xx RPC response. Mirrors the `abide/shared/HttpError`
-// shape (status/statusText/kind?/data?) so client code can narrow on it without importing the
-// server error module.
-class HttpErrorLike extends Error {
-    readonly status: number
-    readonly statusText: string
-    readonly kind?: string
-    readonly data?: unknown
-
-    constructor(
-        status: number,
-        statusText: string,
-        message: string,
-        kind?: string,
-        data?: unknown,
-    ) {
-        super(message)
-        this.name = 'HttpError'
-        this.status = status
-        this.statusText = statusText
-        if (kind !== undefined) this.kind = kind
-        if (data !== undefined) this.data = data
-    }
-}
-
+// Address is `rpcUrl` (shared with the CLI, the loopback door and stream resume); HEADERS are this
+// module's own, because a browser's are genuinely different from a CLI's.
 function readUrl(base: string, name: string, args: unknown): string {
-    const query =
-        args !== undefined
-            ? `?${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
-            : ''
-    return `${base}/__abide/rpc/${name}${query}`
-}
-
-// Turn a non-2xx Response into an HttpError-like. The abide error body is
-// `{ status, statusText, message, ... }` (or a typed-error body with `name`/`data`); fall back
-// to the response status line when the body is not the expected JSON shape.
-async function toHttpError(response: Response): Promise<HttpErrorLike> {
-    let body: Record<string, unknown> | undefined
-    try {
-        const parsed = await response.json()
-        if (parsed !== null && typeof parsed === 'object') body = parsed as Record<string, unknown>
-    } catch {
-        body = undefined
-    }
-    const status = typeof body?.status === 'number' ? body.status : response.status
-    const statusText = typeof body?.statusText === 'string' ? body.statusText : response.statusText
-    const message =
-        typeof body?.message === 'string' ? body.message : statusText || `HTTP ${status}`
-    const kind = typeof body?.name === 'string' ? body.name : undefined
-    return new HttpErrorLike(status, statusText, message, kind, body?.data)
+    return rpcUrl(base, name, { args })
 }
 
 function isRead(method: string): boolean {
@@ -358,6 +313,30 @@ export function clientProxy<Args = unknown, T = unknown>(
     return rpc
 }
 
+// ONE proxy per `(base, rpc name)` for the life of the tab. Two places already asserted this and
+// neither was true: the tag registration above ("one registration per rpc, since a client proxy is a
+// module singleton"), and the documented reach of `refresh({ tags })` ("slots live for the tab, so this
+// reaches args-keys no longer on screen"). `makeClientImports` is called from `buildPageScope`, i.e.
+// once per MOUNT, so before this cache every navigation minted a fresh proxy — a fresh memo, a fresh
+// slot map, a fresh tag registration.
+//
+// The registration is the sharp end. `memo.ts` disposes it through an effect scope or a request scope,
+// and a client proxy is in neither — its own comment says so, on the premise that client proxies are
+// module-level and "stay registered for the process, which is exactly as long as [they] live". Per-mount
+// proxies live for one navigation, so every nav left a permanent entry in a process-global registry that
+// nothing drains, each pinning its whole slot map through the `selectSlots`/`dropSlot` closures. After N
+// navigations a `refresh({ tags })` re-ran N generations of dead memos.
+//
+// Keyed on base too: a cross-origin proxy (`ABIDE_APP_URL`) is a different endpoint with different
+// slots, and collapsing the two would serve one origin's cache to the other.
+const clientProxyCache = new Map<string, unknown>()
+
+// Drop every cached proxy — TESTS ONLY, and required by them: the cache is module state, so without
+// this one test's warmed slots are the next test's starting cache. The sibling of `clearTagRegistry`.
+export function clearClientProxyCache(): void {
+    clientProxyCache.clear()
+}
+
 // Build the imports map injected into a page's client mount: RPC name -> its client proxy. Each
 // spec carries the verb, kind, and cache policy harvested from the server module's `__rpc` meta.
 export function makeClientImports(
@@ -379,19 +358,25 @@ export function makeClientImports(
 ): Record<string, unknown> {
     const imports: Record<string, unknown> = {}
     for (const [name, spec] of Object.entries(specs)) {
-        // Forwarded VERBATIM: the spec is the server's normalized policy, and `clientProxy` runs it back
-        // through the same normalizer. Filling in defaults here (`spec.ttl ?? null`, `spec.memo !==
-        // false`) is what made the browser's policy a second derivation of the server's.
-        imports[name] = clientProxy(name, spec.method, {
-            base: base ?? '',
-            crossRequest: spec.crossRequest,
-            memo: spec.memo,
-            ttl: spec.ttl,
-            tags: spec.tags,
-            throttle: spec.throttle,
-            debounce: spec.debounce,
-            timeout: spec.timeout,
-        })
+        const key = `${base ?? ''} ${name}`
+        let proxy = clientProxyCache.get(key)
+        if (proxy === undefined) {
+            // Forwarded VERBATIM: the spec is the server's normalized policy, and `clientProxy` runs it
+            // back through the same normalizer. Filling in defaults here (`spec.ttl ?? null`, `spec.memo
+            // !== false`) is what made the browser's policy a second derivation of the server's.
+            proxy = clientProxy(name, spec.method, {
+                base: base ?? '',
+                crossRequest: spec.crossRequest,
+                memo: spec.memo,
+                ttl: spec.ttl,
+                tags: spec.tags,
+                throttle: spec.throttle,
+                debounce: spec.debounce,
+                timeout: spec.timeout,
+            })
+            clientProxyCache.set(key, proxy)
+        }
+        imports[name] = proxy
     }
     return imports
 }

@@ -1,0 +1,25 @@
+# Copied verbatim into every scaffolded app (`abide scaffold` runs `git init`, so without this the
+# first `git add .` commits node_modules/, the build output, and the generated types).
+
+# dependencies
+node_modules/
+
+# build output — `abide build` / `compile` / `bundle` all write here
+dist/
+
+# generated types — `abide dev`/`check`/`lsp`/`build` write src/.abide/health.d.ts. The framework
+# treats this as generated-and-gitignored; a committed copy goes stale the moment onHealth changes.
+src/.abide/
+
+# local config — Bun auto-loads .env, so keep secrets out of the repo
+.env
+.env.*
+!.env.example
+
+# test output (Playwright, if you add it)
+test-results/
+playwright-report/
+
+# os / editor
+.DS_Store
+*.log

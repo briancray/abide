@@ -24,6 +24,6 @@
     <GuardDemo />
   </Demo>
   <aside class="aside">
-    <p>Middleware is the layer around a handler — and the reason <code>context()</code> exists, since it is how a layer hands something down. A per-RPC <code>middleware</code> array composes an onion: the first layer authorizes, either returning an <code>error(403)</code> to short-circuit (the handler never runs) or calling <code>next()</code>. Both buttons hit the real router pipeline in the browser.</p>
+    <p>Middleware is the layer around a handler — and the reason <code>context()</code> exists, since it is how a layer hands something down. A per-RPC <code>middleware</code> array composes an onion: the first layer authorizes, either calling <code>error(403)</code> to short-circuit (it <strong>throws</strong>, so the handler never runs and the chain renders the 403) or calling <code>next()</code>. Both buttons hit the real router pipeline in the browser.</p>
   </aside>
 </main>

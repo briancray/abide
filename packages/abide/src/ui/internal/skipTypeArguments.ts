@@ -8,6 +8,8 @@
 // close), and the next non-space character is one that can follow a type (`(`, `=`, `,`, a closer, a
 // union/intersection bar, `;`, or end of input). `a < b, c > d` fails the second test and stays a
 // comparison; `c >= d` fails the first (a `>` glued to `=` is the operator, never a type close).
+import { skipQuoted } from './skipQuoted.ts'
+
 export function skipTypeArguments(text: string, openIndex: number): number {
     if (text[openIndex] !== '<') return -1
     let angleDepth = 0
@@ -35,16 +37,4 @@ export function skipTypeArguments(text: string, openIndex: number): number {
         } else if (char === ';' && bracketDepth === 0) return -1 // a statement end is never inside a type
     }
     return -1
-}
-
-function skipQuoted(text: string, openIndex: number): number {
-    const quote = text[openIndex]
-    for (let index = openIndex + 1; index < text.length; index++) {
-        if (text[index] === '\\') {
-            index++
-            continue
-        }
-        if (text[index] === quote) return index
-    }
-    return text.length
 }

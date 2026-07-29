@@ -207,6 +207,26 @@ test('inline components: <slot/>, tag invocation, render-props, spread, named sl
     await expect(page.getByTestId('reactive-status')).toHaveText('Pending…')
     await page.getByTestId('reactive-toggle').click()
     await expect(page.getByTestId('reactive-status')).toHaveText('Done ✓')
+
+    // A MEMBER tag <row.Icon/>: each row renders the component it carries as data.
+    const memberRows = page.getByTestId('member-tags').locator('li')
+    await expect(memberRows).toHaveCount(2)
+    await expect(memberRows.nth(0).getByTestId('member-icon-star')).toHaveCount(1)
+    await expect(memberRows.nth(1).getByTestId('member-icon-bolt')).toHaveCount(1)
+
+    // …and it is REACTIVE, which the two assertions above cannot see: a dotted tag is an expression
+    // over bindings, not an import, so the emitter mounts it as a dynamic component that re-mounts on
+    // identity change. Hand row 0 a different component and only the icon swaps.
+    const firstRow = memberRows.nth(0)
+    await firstRow.evaluate((li) => li.setAttribute('data-pin', 'ROW0'))
+    await page.getByTestId('member-swap').click()
+    await expect(firstRow.getByTestId('member-icon-bolt')).toHaveCount(1)
+    await expect(firstRow.getByTestId('member-icon-star')).toHaveCount(0)
+    // The row's key never changed, so the <li> is the SAME live node — the re-mount is the tag's, not
+    // the list's. Without this the assertion above would also pass on a full rebuild of the row.
+    await expect(firstRow).toHaveAttribute('data-pin', 'ROW0')
+    // The untouched row is untouched.
+    await expect(memberRows.nth(1).getByTestId('member-icon-bolt')).toHaveCount(1)
 })
 
 test('an inline component invoked — and defined — inside {#for}/{#if}', async ({ page }) => {

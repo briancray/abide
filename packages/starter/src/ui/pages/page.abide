@@ -1,4 +1,4 @@
-<script>
+<script module>
   import greet from '$server/rpc/greet'
 </script>
 <h1>{await greet({ name: 'world' })}</h1>
