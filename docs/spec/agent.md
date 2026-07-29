@@ -41,7 +41,10 @@ the app's own RPCs as tools — consumed with the same streaming primitives as a
    §13.2), executed **inside the loop** — the caller never re-drives — so the agent can *act on
    the app*. In-PROCESS, over the app's own **loopback HTTP face** (`callOwnRpc`, the same door
    the MCP tools use), never by invoking the rpc callable: the callable is only the HANDLER, and
-   both `schemas.input` validation and the rpc's own `middleware` are composed by the ROUTER. This
+   `schemas.input` validation is composed by the ROUTER, so args a MODEL wrote would reach the
+   handler unvalidated. (The rpc's own `middleware` used to be the other half of this and no longer
+   is — it runs per READ from every door, `auth.md` §AU7 — so what the loopback still buys is input
+   validation, which is exactly the gate a model-written arg needs.) This
    is not an implementation detail — it is what makes AG1.7 below true rather than aspirational,
    and the distinction is worth spelling out because "executed in-process" once read as "invoked
    directly", which is how a tool surface whose caller is a model came to run neither gate.

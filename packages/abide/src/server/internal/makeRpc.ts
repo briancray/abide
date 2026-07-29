@@ -152,11 +152,22 @@ export interface RpcMeta<Args, T> {
 // can name it without importing `server/`; `Rpc` is that surface PLUS the server-only construction meta.
 export type { MutationCallArgs, RpcCallArgs }
 
-// The isomorphic call surface (probes, verbs, hydration seams) plus the ONE member that is genuinely
-// server-side: the construction meta the router reads. The browser proxy implements everything in
-// `RpcCallSurface` and has no `__rpc`, which is exactly where this line is drawn.
+// How a chained read runs: the runner receives the args (which rung of middleware applies can depend on
+// them being present) and the un-chained producer, and returns the produced value — or throws, when a
+// middleware short-circuited. Installed by `createApp`, which is the only place an rpc's route NAME and the
+// app's global middleware are both known.
+export type RpcChainRunner<Args, T> = (args: Args, produce: () => Promise<T>) => Promise<T>
+
+// The isomorphic call surface (probes, verbs, hydration seams) plus the members that are genuinely
+// server-side: the construction meta the router reads, the chain hook `createApp` installs, and the
+// un-chained entry the router invokes. The browser proxy implements everything in `RpcCallSurface` and has
+// none of these three, which is exactly where this line is drawn.
 export interface Rpc<Args, T> extends RpcCallSurface<Args, T> {
     readonly __rpc: RpcMeta<Args, T>
+    // Install the middleware chain this rpc's reads run under. Called once per route at boot.
+    bindChain(runner: RpcChainRunner<Args, T>): void
+    // The memo call with NO chain — for the router, which composes the chain around all of dispatch.
+    bare(args: Args): Promise<T>
 }
 
 // A STREAMING read — a handler that yields an `AsyncIterable<C>` (replayable-streams.md §4). The read
@@ -245,7 +256,21 @@ function attachSurface<Args, T>(
     read: boolean,
     timeout: number,
     setBroadcast: (sink: MemoNotify) => void,
+    setChain: (runner: RpcChainRunner<Args, T>) => void,
+    bare: (args: Args) => Promise<T>,
 ): void {
+    callable.bindChain = setChain
+    // The call WITHOUT the middleware chain — what the ROUTER invokes, because it composes the chain itself
+    // around the whole of dispatch (so arg decoding and `schemas.input` validation happen INSIDE
+    // authorization, where a 422 must not precede a 403). Every other caller goes through the chained call.
+    // Two entry points over one producer is what keeps the chain running exactly once per read whichever
+    // door it came through.
+    //
+    // It is the FACTORY's producer, handed in rather than rebuilt from the memo here — a mutation's producer
+    // is not simply "call the memo". A `FormData` body bypasses the memo entirely (a raw FormData throws in
+    // `canonicalKey`), as does `memo: false`, and rebuilding this as a bare memo call silently routed every
+    // multipart upload through the memo instead.
+    callable.bare = bare
     callable.peek = (args: Args): T | undefined => backing.peek(args)
     callable.pending = (args: Args): boolean => backing.pending(args)
     callable.refreshing = (args: Args): boolean => backing.refreshing(args)
@@ -362,16 +387,40 @@ export function makeRead<Args, T>(
     }
     const backing = memo<Args, T>(fn, memoOptions)
 
+    // The middleware chain this read runs under, installed by `createApp` (the only place the route NAME and
+    // the app's global middleware are both known). Unbound — a hand-built rpc with no app around it — is a
+    // direct memo call, which is what keeps `makeRpc` transport-free and unit-testable on its own.
+    let chain: RpcChainRunner<Args, T> | undefined
+
     // A caller's `signal` detaches THEIR wait and leaves the run alone (ADR 0028 D3) — the run belongs
     // to the memo slot, which other callers are coalesced onto.
+    //
+    // The chain wraps the CALL, not the memo body. `middleware` is `(next) => Response` — tracing, rate
+    // limiting, context population, auth — so it is part of what a READ means and runs per read, from any
+    // door. It cannot wrap the body: a memo coalesces by ARGS, so two principals reading the same args share
+    // one run, and a chain inside would let the first caller's authorization stand in for the second's.
+    const produce = (args: Args): Promise<T> => settleRead(() => backing(args))
     const rpc = ((args: Args, options?: RpcCallOptions): Promise<T> =>
         withAbort(
-            settleRead(() => backing(args)),
+            chain === undefined ? produce(args) : chain(args, () => produce(args)),
             options?.signal,
         )) as unknown as Rpc<Args, T>
-    attachSurface(rpc, backing, fn, method, options, true, timeout, (sink) => {
-        broadcast = sink
-    })
+    attachSurface(
+        rpc,
+        backing,
+        fn,
+        method,
+        options,
+        true,
+        timeout,
+        (sink) => {
+            broadcast = sink
+        },
+        (runner) => {
+            chain = runner
+        },
+        produce,
+    )
     return rpc
 }
 
@@ -413,26 +462,44 @@ export function makeMutation<Args, R>(
     }
     const backing = memo<Args, T>(handler, memoOptions)
 
-    const mutation = ((args: Args | FormData, options?: RpcCallOptions): Promise<T> => {
-        // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw
-        // FormData throws in canonicalKey), and `memo: false` opts the call out entirely → run the
-        // handler directly (at-least-once). Otherwise route through the memo (coalesce/retain).
-        if (!memoed || (typeof FormData !== 'undefined' && args instanceof FormData)) {
-            // The memo-bypass path still gets its deadline (ADR 0028): `memo: false` opts out of
-            // coalescing and retention, not out of being bounded — and with no slot there is nothing else
-            // left to bound it.
-            return withAbort(
-                Promise.resolve(withDeadline(handler(args as Args), timeout)),
-                options?.signal,
-            )
-        }
-        return withAbort(
-            settleRead(() => backing(args as Args)),
+    let chain: RpcChainRunner<Args, T> | undefined
+
+    // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw FormData
+    // throws in canonicalKey), and `memo: false` opts the call out entirely → run the handler directly
+    // (at-least-once). Otherwise route through the memo (coalesce/retain).
+    //
+    // Hoisted out of the callable so `bare` IS this function: the router's door and the chained door must
+    // differ in the chain and in NOTHING else, and a second copy of this branch is how the multipart bypass
+    // came to exist on only one of them.
+    const produce = (args: Args | FormData): Promise<T> =>
+        !memoed || (typeof FormData !== 'undefined' && args instanceof FormData)
+            ? // The memo-bypass path still gets its deadline (ADR 0028): with no slot there is nothing else
+              // left to bound it.
+              Promise.resolve(withDeadline(handler(args as Args), timeout))
+            : settleRead(() => backing(args as Args))
+
+    const mutation = ((args: Args | FormData, options?: RpcCallOptions): Promise<T> =>
+        withAbort(
+            // The chain wraps EITHER path. A `memo: false` mutation opts out of coalescing and retention —
+            // not out of being observed or authorized, the same reason it keeps its deadline.
+            chain === undefined ? produce(args) : chain(args as Args, () => produce(args)),
             options?.signal,
-        )
-    }) as unknown as Rpc<Args, T>
-    attachSurface(mutation, backing, handler, method, options, false, timeout, (sink) => {
-        broadcast = sink
-    })
+        )) as unknown as Rpc<Args, T>
+    attachSurface(
+        mutation,
+        backing,
+        handler,
+        method,
+        options,
+        false,
+        timeout,
+        (sink) => {
+            broadcast = sink
+        },
+        (runner) => {
+            chain = runner
+        },
+        produce,
+    )
     return mutation as unknown as MutationSurface<Args, R>
 }

@@ -165,7 +165,8 @@ second-param idea from the interview was rejected in favor of imported ambient a
 - **The `app.ts` middleware chain is where authorization happens (FD1).** `app.ts` exports
   `export const middleware = [(next) => Response, …]` — an **onion** of `(next) => Response`
   functions, onion-composed (global wraps per-RPC wraps handler). It runs on **every server-
-  touching request except static assets**. `next()` takes **no args** (reach the request via
+  touching request except static assets** — and an rpc's OWN rung runs per READ rather than per
+  request, from doors that are not requests at all (see "TWO RUNGS" below). `next()` takes **no args** (reach the request via
   `request()`); **short-circuit by calling `error(403)` / `redirect(...)`, which THROW** (both
   return `never`), or by returning a `Response` directly — the chain renders a thrown outcome at
   its own status exactly as it renders a returned one; `return next()` passes through. A
@@ -185,6 +186,36 @@ second-param idea from the interview was rejected in favor of imported ambient a
   logged; a declared 403 is the gate doing its job.
 - **Per-RPC middleware** uses the same shape: `POST(fn, { middleware: [(next) => …] })`. Global
   middleware wraps per-RPC middleware wraps the handler.
+- **TWO RUNGS, AND THEY DIFFER IN PERIODICITY, not only in nesting.** The nesting above is the composition
+  order; this is how often each runs, and it is the axis the "every server-touching request" wording above
+  does not capture.
+  - **An rpc's OWN `middleware` is per READ.** `Middleware` is `(next) => Response` — tracing, rate
+    limiting, context population, response post-processing, *and* auth — so it is part of what a read
+    MEANS, and a read that skips it is not merely unauthorized, it is unobserved. It therefore runs from
+    every door of a built app: HTTP, page SSR, a handler reading a sibling rpc, a cron tick.
+  - **The global `app.ts` chain is per REQUEST.** A read inside a request does not re-run it; otherwise a
+    page with eight reads counts nine hits in a rate limiter and logs nine lines for one request.
+    `owesGlobalChain()` (`currentScope() === undefined`) is the discriminator — the rule the `@rpc:`
+    channel join already followed, since a socket join is inside no request.
+  - **The chain wraps the CALL, never the memo body.** A memo coalesces by ARGS, not by identity, so a
+    chain inside the body would let the first caller's authorization stand in for the next caller's. The
+    router composes the chain around the whole of dispatch and invokes the un-chained `route.bare(args)`,
+    which is also what puts arg decoding and `schemas.input` validation INSIDE authorization: **a 422 never
+    precedes a 403.**
+  - A short-circuit reaches an in-process caller as a **thrown `HttpError`** (whether the middleware threw
+    `error(403)` or returned a `Response`) — `throughChain` decodes it with the same `toHttpError` the
+    browser proxy uses, so `fn.isError(e, name)` narrows identically on both sides. Inside a page render a
+    deliberate outcome is rendered at its own status rather than collapsing into a 500.
+  - **Where it does NOT run**, enumerated from the call sites: the chain is installed by `createApp`, so
+    `abide run` (which never calls it) and an `onStart` warmer reading before `await start()` run NEITHER
+    rung — see CL2 in `cli-lifecycle.md`, and treat it as an open question rather than a settled exemption.
+    `fn.raw()` is the other gap, by construction: it calls the handler, not the chained producer.
+  - **The chain runs in the CALLER's scope** — nothing installs an rpc-shaped one. So from a non-HTTP door
+    `route()` answers the caller's route: at page SSR `kind` is `'nav'` and `name` is the page pattern, and
+    the guard spelled below as `route().name === 'deleteUser'` does not fire there. Scope-free,
+    `route()`/`identity()`/`request()` throw. The `@rpc:` join is the one door that synthesizes a scope
+    (`channelAuth`, via `runInScope` over a synthetic rpc request). **Gate on the middleware's arguments,
+    not on `route()`, for a guard that must hold from every door.**
 - **Uniform across surfaces (§13.4):** RPC, nav, socket-connect, and HTTP-face socket ops all
   pass the same chain. `clients.*` is **reachability/curation, not access control** — an
   unauthorized call must **fail your authz middleware**, not merely be hidden. abide authorizes
@@ -235,6 +266,16 @@ user code), exploiting abide's fetch-based RPC model:
    simple `Content-Type`), which the client proxy always sends. A cross-site `<form>` **cannot**
    set those; a cross-site `fetch` that tries triggers a **CORS preflight** that fails under
    the crossOrigin-closed default (§14.3). The server **rejects mutations lacking the shape.**
+   The custom header is `x-abide`, and it has ONE owner — `shared/internal/CSRF_HEADER.ts` —
+   because for a **multipart** mutation it is the only thing that admits the request:
+   `multipart/form-data` is a CORS-simple content type a cross-site `<form>` CAN send, so the
+   `Content-Type` half of the shape does not apply. Three modules are therefore parties to one
+   fact and must agree — the gate that READS it, the CLI that WRITES it, and `cors.ts`, which
+   ADVERTISES it in the default `Access-Control-Allow-Headers`
+   (`content-type, authorization, x-abide, traceparent`). The third is the one that fails
+   quietly: every same-origin test clears the gate on `application/json` and never consults the
+   allowlist, so drift there surfaces only as a browser preflight failure on a cross-origin
+   multipart mutation. **An app that overrides `crossOrigin.headers` must keep `x-abide` in it.**
 3. **Origin/Referer verified against `APP_URL` on mutations** — defense-in-depth for SameSite
    edge cases / older browsers. The unforgeable `Origin` is preferred; when a browser omits it the
    check falls back to the `Referer`'s origin (when **neither** is present the mutation is admitted —

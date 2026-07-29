@@ -50,9 +50,18 @@ test('cookies(): an RPC reads a browser-set cookie back through the request scop
 test('context(): a per-RPC middleware stamps the carrier bag the handler reads back', async ({
     page,
 }) => {
+    // THE SSR BYTES FIRST, AND SEPARATELY, because that is the door that can regress.
+    //
+    // An rpc's own `middleware` runs PER READ from every door, so the in-process read `ContextDemo`
+    // makes during page render runs `stamp` too. This assertion used to be a click-then-check, and the
+    // comment said "SSR in-proc reads bypass it" — which stopped being true, and the click meant the
+    // test passed off the seed either way. It distinguished nothing about the door it named. Reading
+    // the raw document is what pins the in-process rung.
+    const document = await page.request.get('/platform/scope').then((response) => response.text())
+    expect(document).toContain('context.stampedBy = platformContext.middleware')
+
     await page.goto('/platform/scope')
-    // A real browser fetch runs through the router + per-RPC middleware (SSR in-proc reads bypass it),
-    // which stamps the carrier bag the handler returns.
+    // And the HTTP door, over a real browser fetch, stamps the bag the same way.
     await page.locator('#read-context-btn').click()
     await expect(page.locator('#context-block')).toContainText(
         'context.stampedBy = platformContext.middleware',

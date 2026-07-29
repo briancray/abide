@@ -19,34 +19,22 @@
 // handler that already returned
 // a Response passes through untouched; a bare value is wrapped in `json()`.
 
-import { health } from '../../shared/health.ts'
-import { identity } from '../../shared/identity.ts'
+import { CSRF_HEADER } from '../../shared/internal/CSRF_HEADER.ts'
 import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
-import { HEALTH_ROUTE } from '../../shared/internal/HEALTH_ROUTE.ts'
 import { provideHealthSource } from '../../shared/internal/healthSource.ts'
-import { IDENTITY_ROUTE } from '../../shared/internal/IDENTITY_ROUTE.ts'
 import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
-import { asStandardSchema } from '../../shared/internal/jsonSchema.ts'
-import { LOGS_ROUTE } from '../../shared/internal/LOGS_ROUTE.ts'
 import { logFeed } from '../../shared/internal/logFeed.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
-import { matchRoute } from '../../shared/internal/matchRoute.ts'
 import {
     type MemoFrame,
     memoChannelName,
     publishMemoFrame,
 } from '../../shared/internal/memoChannels.ts'
-import { NAV_HEADERS, NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
-import { positiveEnvBytes } from '../../shared/internal/positiveEnvBytes.ts'
-import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
 import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
-import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
 import { SOCKET_FACE_PREFIX, SOCKETS_ROUTE } from '../../shared/internal/SOCKETS_ROUTE.ts'
-import { STREAM_RESUME, STREAM_RESUME_HEADER } from '../../shared/internal/STREAM_RESUME_HEADER.ts'
-import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
-import { validateStandard } from '../../shared/StandardSchema.ts'
 import { json } from '../json.ts'
 import type { AppConfig, Route } from './appConfig.ts'
 import { applyResponseCompression } from './applyResponseCompression.ts'
@@ -61,8 +49,6 @@ import {
 } from './auth.ts'
 import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import type { SocketConnectionData } from './channelAuth.ts'
-import { clientBuildFor } from './clientBundle.ts'
-import { compressionMode } from './compressionMode.ts'
 import {
     applyCors,
     corsAllowOrigin,
@@ -70,24 +56,15 @@ import {
     normalizeCrossOrigin,
     preflightResponse,
 } from './cors.ts'
-import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { provideDefaultAgentSurface } from './defaultAgentSurface.ts'
 import { enforceMethod, methodNotAllowed } from './enforceMethod.ts'
 import { errorResponse } from './errorResponse.ts'
 import { isProd } from './isProd.ts'
-import { applicableLayoutPrefixes, sharedLayoutDepth } from './layouts.ts'
 import { logFeedSettings } from './logFeedSettings.ts'
-import { logsRoute } from './logsRoute.ts'
-import type { Mutation, Rpc, RpcMeta } from './makeRpc.ts'
-import { handleMcp } from './mcp.ts'
+import type { Rpc } from './makeRpc.ts'
 import { compose, type Middleware } from './middleware.ts'
-import { navKeepLevels } from './navKeepLevels.ts'
-import { negotiateEncoding } from './negotiateEncoding.ts'
-import { buildOpenApi } from './openapi.ts'
+import { isSoftNav } from './navRoute.ts'
 import { outcomeResponse } from './outcomeResponse.ts'
-import { renderPage, streamPageDocument, streamSoftNav } from './pages.ts'
-import { projectFormText } from './projectFormText.ts'
-import { buildRegistry } from './registry.ts'
 import {
     anonymousPrincipal,
     makeRequestScope,
@@ -97,20 +74,23 @@ import {
     type RouteKind,
     runInScope,
 } from './requestScope.ts'
+import {
+    GATE_IN_HANDLER,
+    type RouteClass,
+    resolveAppClass,
+    resolveFrameworkClass,
+} from './routeClass.ts'
+import { owesGlobalChain, rpcChainFor, throughChain } from './rpcChain.ts'
+import { allowedMethodsFor } from './rpcRoute.ts'
 import { rpcTools } from './rpcTools.ts'
 import { servePublicFile } from './servePublicFile.ts'
 import {
     type SocketConnection,
-    socketHttpFace,
     socketOriginAllowed,
     wsPublish,
     wsSubscribe,
     wsUnsubscribe,
 } from './socketMux.ts'
-import { staticAssetType } from './staticAssetType.ts'
-import { streamResponseFor } from './streamResponse.ts'
-import { validateFiles } from './validateFiles.ts'
-import { validationError } from './validationError.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -119,39 +99,6 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 // that would drift from every other typed error. It is BUILT, not thrown — the deadline has already
 // escaped as a throw by the time transport answers it, and re-throwing here would re-enter `handleUncaught`.
 const TIMEOUT_RESPONSE = (): Response => errorResponse(504, undefined, { kind: 'TimeoutError' })
-
-// One config's page-pattern list, derived once. `matchRoute` needs the full pattern array on every
-// nav — twice on a soft-nav, which also matches the `Abide-Nav` origin path — and an app's pages are
-// fixed for its lifetime, so rebuilding it with `Object.keys` per request is pure allocation. Weakly
-// keyed on the config so a dev-server config swap simply re-derives.
-const PAGE_PATTERNS = new WeakMap<AppConfig, string[]>()
-
-function pagePatternsOf(config: AppConfig, pages: Record<string, string>): string[] {
-    let patterns = PAGE_PATTERNS.get(config)
-    if (patterns === undefined) {
-        patterns = Object.keys(pages)
-        PAGE_PATTERNS.set(config, patterns)
-    }
-    return patterns
-}
-
-// A streaming read result is an AsyncIterable of decoded chunks (a ReplayableStream `consume()` cursor);
-// the router transport-encodes it (jsonl/sse). A plain value/object is not async-iterable.
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-    return (
-        value !== null &&
-        typeof value === 'object' &&
-        typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
-    )
-}
-
-// Content-addressed client assets. The one route class that is NOT traced: it is a static byte
-// response with no handler, no identity, and an immutable long-cache — minting a trace id per chunk
-// fetch would spend entropy and two response headers on something no span will ever join, and the
-// immutable response is shared across users, so a per-request header on it is a lie. A production
-// build DOES vary it on `Accept-Encoding` (precompressed brotli/gzip), which is not a per-request
-// header in that sense: it selects among fixed representations of the same content-addressed bytes and
-// stays identity-free, so the response is still shared across every client that negotiates alike.
 
 // Does the LAST path segment carry an extension? The cheap synchronous gate in front of the
 // `src/ui/public/**` lookup — a page route (`/memo`, `/users/7`) has none and never reaches the
@@ -181,7 +128,7 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
     if (!MUTATING_METHODS.has(request.method.toUpperCase())) return undefined
 
     const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
-    const hasAbideHeader = request.headers.get('x-abide') !== null
+    const hasAbideHeader = request.headers.get(CSRF_HEADER) !== null
     // Compare the BASE media type (before any `;` parameters), never a substring: a cross-site simple
     // request can smuggle `application/json` inside a spoofable parameter (e.g.
     // `multipart/form-data; boundary=application/json`) and `.includes` would wrongly clear the gate.
@@ -193,7 +140,7 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
     if (!hasNonSimpleShape) {
         return errorResponse(
             403,
-            'CSRF: mutations require Content-Type: application/json or an x-abide header.',
+            `CSRF: mutations require Content-Type: application/json or an ${CSRF_HEADER} header.`,
         )
     }
 
@@ -239,21 +186,6 @@ const NO_CORS: NormalizedCors = {
     headers: '',
     credentials: false,
     maxAge: 0,
-}
-
-// The methods an rpc route admits, derived from its DECLARED verb — the whole gate, since a handler
-// serves exactly one. HEAD is not in the list: `enforceMethod` derives it from GET (ADR 0027 D6), so
-// there is no second statement of that rule here. An unmatched name has no declared verb to report,
-// so it names the full set.
-//
-// This used to be `allowHeaderFor`, a HEADER — five independent literals, none agreeing. Returning the
-// method LIST instead is what lets the rpc gate be `enforceMethod` rather than a hand-rolled compare
-// that re-implemented the HEAD rule next to a helper written to own it.
-const ANY_RPC_METHOD = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
-
-function allowedMethodsFor(route: Route | undefined): readonly string[] {
-    const meta = route?.__rpc
-    return meta === undefined ? ANY_RPC_METHOD : [meta.method]
 }
 
 // After dispatch, refresh (or clear) the rolling abide-identity cookie for browser identities.
@@ -343,30 +275,6 @@ export interface App {
     stop(): Promise<void>
 }
 
-// C6-nav: a soft-nav request is a GET/HEAD nav carrying the `Abide-Nav: <currentPath>` header —
-// the client already has the document shell and wants only the next page's inner HTML + seed.
-function isSoftNav(request: Request): boolean {
-    if (request.headers.get(NAV_HEADERS.from) === null) return false
-    const method = request.method.toUpperCase()
-    return method === 'GET' || method === 'HEAD'
-}
-
-// C6-nav: how many outer layout levels the client says it is KEEPING (`NAV_HEADERS.keep`). Absent — an
-// older browser bundle, or any non-browser caller — leaves the router's own `sharedLayoutDepth`
-// derivation to stand. A malformed or negative value is treated as absent for the same reason: falling
-// back renders MORE of the tree, which is always placeable, so there is no outcome worth a 400 in it.
-function navKeepDeclared(request: Request): number | null {
-    const raw = request.headers.get(NAV_HEADERS.keep)
-    if (raw === null) return null
-    // Before `Number`, because `Number('')` is `0` — an empty header would otherwise read as the most
-    // consequential value the field has ("keep nothing"), which is the opposite of saying nothing.
-    const text = raw.trim()
-    if (text.length === 0) return null
-    const value = Number(text)
-    if (!Number.isInteger(value) || value < 0) return null
-    return value
-}
-
 // A soft-nav that a middleware short-circuited with a redirect Response is surfaced to the client as
 // a `{ redirect }` envelope (the client performs the navigation) rather than an opaque 3xx.
 function isRedirectResponse(response: Response): boolean {
@@ -449,128 +357,40 @@ async function socketConnectScope(
     }
 }
 
+// Gate the method a route class declares, then let it answer. `GATE_IN_HANDLER` is the two classes whose
+// 405 must follow a match that can 404 (an unknown socket name, an unregistered rpc) — they state the
+// reason where they return it.
+function gateAndHandle(
+    routeClass: RouteClass,
+    scope: RequestScope,
+    config: AppConfig,
+): Response | Promise<Response> {
+    const methods = routeClass.methods(scope, config)
+    if (methods !== GATE_IN_HANDLER) {
+        const rejected = enforceMethod(scope.request, methods)
+        if (rejected !== undefined) return rejected
+    }
+    return routeClass.handle(scope, config)
+}
+
+// THE DISPATCH LADDER. Framework rungs, then the public-file probe, then app rungs — the precedence stated
+// once, in `routeClass.ts`, where each rung's methods and handler are declared together.
 async function dispatch(scope: RequestScope, config: AppConfig): Promise<Response> {
-    const routes = config.routes ?? {}
     const url = scope.route.url
 
-    // AU3 / the isomorphic `identity()`: the caller's OWN resolved principal — what the ladder already
-    // decided this request is, handed back verbatim. It discloses nothing they do not hold (their next
-    // request IS this identity), which is what makes it safe to answer without ceremony; a browser's
-    // `identity.refresh()` and a compiled binary's `identity` subcommand both read it. Inside the
-    // middleware chain like every other route, so an app that gates its surface gates this too.
-    if (url.pathname === IDENTITY_ROUTE) {
-        const rejected = enforceMethod(scope.request, ['GET'])
-        if (rejected !== undefined) return rejected
-        return Response.json(identity())
-    }
+    const frameworkClass = resolveFrameworkClass(scope)
+    if (frameworkClass !== undefined) return gateAndHandle(frameworkClass, scope, config)
 
-    // The log feed (opt-in; 404 when this deployment did not enable it). Inside the middleware chain
-    // like `/__abide/identity` above — an app that gates its surface gates its logs too, which is the
-    // whole authorization story for this route.
-    if (url.pathname === LOGS_ROUTE) {
-        const rejected = enforceMethod(scope.request, ['GET'])
-        if (rejected !== undefined) return rejected
-        return logsRoute(url, scope.request.signal)
-    }
-
-    if (url.pathname === HEALTH_ROUTE) {
-        const rejected = enforceMethod(scope.request, ['GET'])
-        if (rejected !== undefined) return rejected
-        // CO2.4: the whole document — baseline, bind clock, and the app's `onHealth` fields merged over
-        // it — is composed by `health()` itself, which this request scope makes request-scoped for the
-        // hook (it reads `identity()`/`context()`). All that is left here is the status code, so an
-        // in-proc `await health()` and a probe's GET can never describe the app differently.
-        const result = await health()
-        const unhealthy = result.reachable === false
-        // Give a probing client/proxy a concrete back-off instead of hammering an unhealthy app.
-        return json(result, {
-            status: unhealthy ? 503 : 200,
-            ...(unhealthy ? { headers: { 'retry-after': '30' } } : {}),
-        })
-    }
-
-    // Content-addressed client assets (TODO #6): the code-split loader entry + per-route chunks + shared
-    // chunks + the bundled CSS, each served by its content-hashed filename under `/__abide/chunk/`. Every
-    // name embeds a content hash, so the response is immutable + long-cacheable. renderDocument injects
-    // `<script type="module" src="/__abide/chunk/<loader>-<hash>.js">` (the loader lazily imports the
-    // matched route's chunk); the stylesheet is linked only when the app bundled CSS.
-    if (url.pathname.startsWith(CHUNK_PREFIX)) {
-        const rejected = enforceMethod(scope.request, ['GET'])
-        if (rejected !== undefined) return rejected
-        // This route is the one that still needs the verb AFTER the gate: it builds the body itself, so
-        // it has to drop it for HEAD (and state `Content-Length` for the representation a GET would have
-        // returned). Everywhere else the gate is the only reader of the method.
-        const method = scope.request.method.toUpperCase()
-        const name = url.pathname.slice(CHUNK_PREFIX.length)
-        const build = await clientBuildFor(config)
-        const asset = build.files.get(name)
-        if (asset === undefined) return errorResponse(404, `Not found: ${url.pathname}`)
-        const contentType = staticAssetType(name)?.type ?? 'text/javascript; charset=utf-8'
-        const headers: Record<string, string> = {
-            'content-type': contentType,
-            // Content-addressed → the bytes for this URL never change; cache aggressively.
-            'cache-control': 'public, max-age=31536000, immutable',
-        }
-        // A production build precompresses this asset; dev serves identity only, and `ABIDE_COMPRESS=off`
-        // withholds the variants a build did produce. `Vary` is stamped only when the URL genuinely has
-        // more than one representation — an incompressible asset answers identically to every client, so
-        // advertising variance would split cache entries for nothing.
-        const offered = compressionMode() !== 'off'
-        const hasBrotli = offered && asset.brotli !== null
-        const hasGzip = offered && asset.gzip !== null
-        const encoding = negotiateEncoding(
-            scope.request.headers.get('accept-encoding'),
-            hasBrotli,
-            hasGzip,
-        )
-        let body = asset.identity
-        if (hasBrotli || hasGzip) {
-            headers.vary = 'Accept-Encoding'
-            if (encoding === 'br' && asset.brotli !== null) {
-                headers['content-encoding'] = 'br'
-                body = asset.brotli
-            } else if (encoding === 'gzip' && asset.gzip !== null) {
-                headers['content-encoding'] = 'gzip'
-                body = asset.gzip
-            }
-        }
-        // HEAD is GET minus the body, but its `Content-Length` must still describe the representation
-        // that a GET would return — so it is stated explicitly rather than left to the empty body.
-        if (method === 'HEAD') headers['content-length'] = String(body.byteLength)
-        return new Response(method === 'HEAD' ? null : body, { status: 200, headers })
-    }
-
-    // MS4: the OpenAPI 3.1 document, derived from the registry. Served by default and reached
-    // through the middleware onion (dispatch runs inside it), so the app can gate it with
-    // middleware — no framework-default auth (DX8).
-    if (url.pathname === '/openapi.json') {
-        const rejected = enforceMethod(scope.request, ['GET'])
-        if (rejected !== undefined) return rejected
-        return json(buildOpenApi(buildRegistry(config)))
-    }
-
-    // MS2: the MCP server (JSON-RPC 2.0 over HTTP POST), derived from the registry. Like OpenAPI it
-    // is reached through the middleware onion so the app can gate it — no framework-default auth
-    // (MS2.5/DX8).
-    if (url.pathname === '/__abide/mcp') {
-        return handleMcp(scope.request, config)
-    }
-
-    // S3.2: the per-socket HTTP face, in the onion for the same reason OpenAPI and MCP are — the app
-    // gates it with middleware. `route()` reports `socket-subscribe`/`socket-publish`, so a middleware
-    // can tell a subscribe from a publish. Iterating a socket here does NOT hit the SSR
-    // snapshot-then-complete path: that keys off `reactiveScope().rendering`, which only a page render
-    // sets, so the SSE subscribe stays live.
-    if (scope.route.kind === 'socket-subscribe' || scope.route.kind === 'socket-publish') {
-        return socketHttpFace(scope.request, scope.route.name, config.sockets ?? {})
-    }
-
-    // `src/ui/public/**` served at its literal path. Placed AFTER the framework-generated routes (so a
-    // file can never shadow `/openapi.json` or `/__abide/*`) and BEFORE page SSR (so an app can serve a
-    // real `/favicon.ico` without a page pattern intercepting it). Falls through when nothing matches.
-    // The `looksLikeFile` guard is SYNCHRONOUS and runs first on purpose: without it every request —
-    // every RPC, every page nav — would allocate a promise and take a microtask tick to `await` a lookup
-    // that answers "no" for anything without a file extension. A public asset always has one.
+    // `src/ui/public/**` served at its literal path — the rung BETWEEN the two resolvers, which is where
+    // its precedence has a reason rather than an order: after everything the framework owns (so a file can
+    // never shadow `/openapi.json` or `/__abide/*`) and before everything the app owns (so an app can serve
+    // a real `/favicon.ico` without a page pattern intercepting it). Falls through when nothing matches,
+    // which is why it is not a route class.
+    //
+    // The `looksLikeFile` guard is SYNCHRONOUS and runs first on purpose: without it every request — every
+    // RPC, every page nav — would allocate a promise and take a microtask tick to `await` a lookup that
+    // answers "no" for anything without a file extension. A public asset always has one. Its own 405 lives
+    // INSIDE `servePublicFile`, after the file is known to exist, for the reason stated there.
     if (
         (config.dir !== undefined || config.publicFiles !== undefined) &&
         looksLikeFile(url.pathname)
@@ -584,268 +404,9 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
         if (publicResponse !== undefined) return publicResponse
     }
 
-    if (scope.route.kind !== 'rpc') {
-        // M5b nav page SSR (C6/C6-nav). GET/HEAD only; match the pathname against page patterns
-        // (`/users/[id]`), extracting route params so route().params.id works during SSR. Runs inside
-        // the request scope + middleware onion (dispatch is the chain terminal), so a short-circuiting
-        // middleware blocks the page like any other request.
-        const pages = config.pages ?? {}
-        const patterns = pagePatternsOf(config, pages)
-        const match = matchRoute(patterns, url.pathname)
-        if (match !== null) {
-            // The tenth route class, and the one `enforceMethod` did not reach: this branch hand-rolled
-            // the GET/HEAD comparison and let anything else FALL THROUGH to the catch-all 404. So a
-            // `POST /users/7` against an app with a `/users/[id]` page answered 404 with no `Allow`,
-            // where every sibling class answers 405 + `Allow: GET, HEAD`.
-            const rejected = enforceMethod(scope.request, ['GET'])
-            if (rejected !== undefined) return rejected
-            log.channel('abide:router').trace(
-                `page ${match.pattern}${scope.route.navigating ? ' (soft-nav)' : ''}`,
-            )
-            // Set the matched pattern as the route name and its extracted params before rendering.
-            scope.route.name = match.pattern
-            scope.route.params = match.params
-            const source = pages[match.pattern]
-            if (source === undefined) {
-                // Unreachable: match.pattern came from the pages key list, so it is always a live key.
-                throw new Error(`Matched page pattern has no source: ${match.pattern}`)
-            }
-            // TODO #7: an uncaught render error (a page/layout that throws with no `{#try}` boundary around
-            // it) returns a controlled 500 rather than leaking Bun's default handler. A layout that WANTS to
-            // contain an inner-page error still opts in by wrapping `{children()}` in `{#try}{:catch}`.
-            try {
-                // C6-nav soft-nav: an `Abide-Nav` header requests the inner page (not the full document),
-                // STREAMED as a JSONL frame stream (streaming-ssr-plan.md PR4) — shell → out-of-order patches →
-                // seed — so a slow read shows the shell then streams in, same as first load. `renderPage(…,
-                // true)` awaits blocking reads (a throw still 500s below) and returns the SHELL. Vary on the
-                // header so caches key first-load vs soft-nav.
-                if (isSoftNav(scope.request)) {
-                    // C6.2: how many outer layouts the client is KEEPING (`navKeepLevels`, which owns
-                    // the precedence and the clamp). Render only the diverging suffix; the client grafts
-                    // + claims it into the innermost kept layout's outlet.
-                    const fromPath = scope.request.headers.get(NAV_HEADERS.from)
-                    const fromMatch = fromPath !== null ? matchRoute(patterns, fromPath) : null
-                    const layoutConfig = config.layouts ?? {}
-                    const sharedLevels = navKeepLevels(
-                        navKeepDeclared(scope.request),
-                        fromMatch !== null
-                            ? sharedLayoutDepth(fromMatch.pattern, match.pattern, layoutConfig)
-                            : 0,
-                        applicableLayoutPrefixes(match.pattern, layoutConfig).length,
-                    )
-                    const shell = await renderPage(
-                        source,
-                        config,
-                        match.pattern,
-                        true,
-                        sharedLevels,
-                    )
-                    const body = streamSoftNav(
-                        shell,
-                        reactiveScope(),
-                        config,
-                        url.pathname + url.search,
-                        sharedLevels,
-                    )
-                    return new Response(body, {
-                        status: 200,
-                        headers: {
-                            'content-type': 'application/jsonl',
-                            vary: NAV_VARY,
-                        },
-                    })
-                }
-
-                // First load = full SSR document (C6.4), STREAMED (streaming-ssr-plan.md PR2): `renderPage(…,
-                // true)` awaits blocking reads (a throw here still returns a controlled 500 below) and returns
-                // the SHELL; `streamPageDocument` flushes head → shell → out-of-order patches → seed+tail.
-                const shell = await renderPage(source, config, match.pattern, true)
-                // Boot from the content-hashed loader entry; link the client stylesheet only when the app
-                // actually bundled CSS (TODO #6/#20). Both URLs are immutable + content-addressed.
-                const build = await clientBuildFor(config)
-                const routeChunks = build.routeChunks.get(match.pattern)
-                const body = streamPageDocument(shell, reactiveScope(), config, {
-                    devReloadScript: config.devReloadScript,
-                    clientHref: `${CHUNK_PREFIX}${build.entry}`,
-                    bootHrefs: build.bootChunks.map((name) => `${CHUNK_PREFIX}${name}`),
-                    cssHref:
-                        build.cssFile !== undefined ? `${CHUNK_PREFIX}${build.cssFile}` : undefined,
-                    preloadHrefs: routeChunks?.map((name) => `${CHUNK_PREFIX}${name}`),
-                })
-                return new Response(body, {
-                    status: 200,
-                    headers: {
-                        'content-type': 'text/html; charset=utf-8',
-                        // Same URL as the soft-nav JSONL response above, differing only by the
-                        // `Abide-Nav` request header — so BOTH representations must declare it. Only
-                        // the soft-nav half used to, which left a cache free to serve a page fragment
-                        // to a first load. `Vary: Cookie` (the identity-scoped default) does not key
-                        // these apart; nothing about the cookie differs between them.
-                        vary: NAV_VARY,
-                    },
-                })
-            } catch (caught) {
-                log.channel('abide:router').error(
-                    `page render failed for "${match.pattern}":`,
-                    caught,
-                )
-                return errorResponse(500, 'Page render failed.')
-            }
-        }
-        return errorResponse(404, `Not found: ${url.pathname}`)
-    }
-
-    const route = routes[scope.route.name]
-    if (route === undefined) {
-        return errorResponse(404, `Unknown rpc: ${scope.route.name}`)
-    }
-
-    const meta = route.__rpc
-    // The declared verb is ENFORCED, not just advertised. `auth.md` §AU8 grounds the whole
-    // SameSite=Lax argument on "mutations are never on GET" — the top-level cross-site GET that Lax
-    // still admits carries the identity cookie and skips the CSRF gate (`csrfReject` exempts reads),
-    // so a mutation reachable over GET is a CSRF hole no matter what the handler was declared as.
-    // HEAD is the one derived verb: it IS GET minus the body (ADR 0027 D6), so it reaches a GET rpc.
-    const denied = enforceMethod(scope.request, [meta.method])
-    if (denied !== undefined) return denied
-    log.channel('abide:rpc').trace(`dispatch ${meta.method} ${scope.route.name}`)
-    applyRunDeadlineSignal(scope, meta)
-    let args: unknown
-    // A mutation carrying a `multipart/form-data` body is a file upload (TODO #8): the args are a
-    // `FormData` (a `File` rides in it, never in a JSON args object), passed straight to the handler.
-    let isMultipart = false
-    if (meta.read) {
-        // Reads carry args in the URL two ways: the canonical `__abide_args` JSON blob (what the
-        // browser proxy / test app / MCP / channel-auth emit), or FLAT query params (`?key=beta`, the
-        // hand-testable form) decoded + schema-coerced when the blob is absent.
-        const raw = url.searchParams.get(RPC_QUERY_PARAMS.args)
-        args =
-            raw !== null
-                ? JSON.parse(raw)
-                : decodeQueryArgs(url.searchParams, meta.options.schemas?.input)
-    } else {
-        // maxBodySize is enforced on the mutation body up front via Content-Length (multipart streams
-        // can lie about length, but a declared oversize is rejected before we buffer it). The per-RPC
-        // option is an OVERRIDE of `ABIDE_MAX_REQUEST_BODY_SIZE` — which was documented in two places
-        // and read nowhere, so an rpc that declared no ceiling buffered an unbounded body. Unset, the
-        // env read yields Infinity, which is the same "no ceiling" this had before, now stated once.
-        const maxBodySize =
-            meta.options.maxBodySize ?? positiveEnvBytes('ABIDE_MAX_REQUEST_BODY_SIZE')
-        const contentLength = scope.request.headers.get('content-length')
-        // A finite, oversized declared length is rejected before buffering. A non-numeric or absent
-        // length (chunked bodies) can't be trusted, so the real guard is the post-buffer check below.
-        const declared = contentLength !== null ? Number(contentLength) : Number.NaN
-        if (Number.isFinite(declared) && declared > maxBodySize) {
-            return errorResponse(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`)
-        }
-        const contentType = (scope.request.headers.get('content-type') ?? '').toLowerCase()
-        if (contentType.startsWith('multipart/form-data')) {
-            isMultipart = true
-            args = await scope.request.formData()
-        } else {
-            const body = await scope.request.text()
-            // Enforce maxBodySize against the ACTUAL byte count too — a chunked or length-spoofed body
-            // slips past the Content-Length check above, so measure what we actually buffered.
-            if (Buffer.byteLength(body) > maxBodySize) {
-                return errorResponse(
-                    413,
-                    `Request body exceeds maxBodySize (${maxBodySize} bytes).`,
-                )
-            }
-            args = body.length > 0 ? JSON.parse(body) : {}
-        }
-    }
-
-    if (isMultipart) {
-        // Multipart: the `files` schema validates the uploaded file fields; the JSON `input` schema (TODO
-        // #8 follow-up) validates the multipart TEXT fields — a `File` never rides in the JSON args, so we
-        // project only the non-File fields and validate that object. The handler still receives the raw
-        // `FormData` untouched (validation is a gate only). Both failures narrow to the same
-        // ValidationErrorData (422) shape as the JSON input path.
-        const filesSchema = meta.options.schemas?.files
-        if (filesSchema !== undefined) {
-            const issues = validateFiles(args as FormData, filesSchema)
-            if (issues.length > 0) return validationError(issues)
-        }
-        const inputSchema = meta.options.schemas?.input
-        if (inputSchema !== undefined) {
-            const textArgs = projectFormText(args as FormData, inputSchema)
-            const validated = await validateStandard(asStandardSchema(inputSchema), textArgs)
-            if (!validated.ok) return validationError(validated.issues)
-        }
-    } else {
-        // M8a input validation — runs on the server for EVERY non-multipart request before the handler.
-        // On failure the handler never runs; the caller gets a 422 that narrows to ValidationErrorData.
-        const inputSchema = meta.options.schemas?.input
-        if (inputSchema !== undefined) {
-            const validated = await validateStandard(asStandardSchema(inputSchema), args)
-            if (!validated.ok) return validationError(validated.issues)
-            args = validated.value
-        }
-    }
-
-    // Resumable stream replay (replayable-streams.md §5): `?__abide_from=<count>` asks to resume a RETAINED stream
-    // transcript from chunk `count` (replay `chunks[count..]` then live). If the transcript is gone, we fall
-    // through to a fresh run and flag it so the client REPLACES its painted prefix instead of appending.
-    let resumeFresh = false
-    const fromRaw = meta.read ? url.searchParams.get(RPC_QUERY_PARAMS.from) : null
-    if (fromRaw !== null && /^\d+$/.test(fromRaw)) {
-        // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased at this dispatch boundary; `unknown` breaks assignability through RpcMeta's invariant Args.
-        const resumable = route as Rpc<any, any> & {
-            resumeStream(
-                a: unknown,
-                f: number,
-            ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean }
-        }
-        const resumed = resumable.resumeStream(args, Number(fromRaw))
-        if (!resumed.fresh && resumed.cursor !== undefined) {
-            // Re-served through the SAME encoding decision the fresh run makes — including the
-            // `Accept` rung, which this half used to skip, so an untagged source resumed as jsonl
-            // after having been served as sse.
-            const response = streamResponseFor(resumed.cursor, scope.request)
-            response.headers.set(STREAM_RESUME_HEADER, STREAM_RESUME.live)
-            return response
-        }
-        resumeFresh = true
-    }
-
-    const result = meta.read
-        ? // biome-ignore lint/suspicious/noExplicitAny: existential rpc — concrete Args/T erased at dispatch; `unknown` breaks assignability through RpcMeta's invariant Args.
-          await (route as Rpc<any, any>)(args)
-        : // biome-ignore lint/suspicious/noExplicitAny: existential mutation — concrete Args/T erased at dispatch; `unknown` breaks assignability through RpcMeta's invariant Args.
-          await (route as Mutation<any, any>)(args)
-
-    // Streams and other raw Responses pass through untouched — nothing to validate or shape.
-    if (result instanceof Response) return result
-
-    // A streaming read whose slot holds a ReplayableStream resolves to an AsyncIterable of DECODED chunks
-    // (replayable-streams.md §4): the ROUTER applies the transport encoding downstream, once per HTTP
-    // consumer. The handler's chosen encoding (jsonl(...)/sse(...)) wins; else `Accept: text/event-stream`
-    // selects SSE; else application/jsonl.
-    if (isAsyncIterable(result)) {
-        const response = streamResponseFor(result, scope.request)
-        // A `?__abide_from=` resume whose transcript was gone → a fresh run from 0; the client must REPLACE.
-        if (resumeFresh) response.headers.set(STREAM_RESUME_HEADER, STREAM_RESUME.fresh)
-        return response
-    }
-
-    // M8a output validation — DEV ONLY contract-drift catch. A mismatch logs loudly but never becomes
-    // a client error.
-    const outputSchema = meta.options.schemas?.output
-    if (outputSchema !== undefined && !isProd()) {
-        const checked = await validateStandard(asStandardSchema(outputSchema), result)
-        if (!checked.ok) {
-            log.channel('abide:rpc').warn(
-                `output schema mismatch for rpc "${scope.route.name}":`,
-                checked.issues,
-            )
-        }
-    }
-
-    // Output-shaping (§5.2) — trim the wire result to the declared output schema so undeclared fields
-    // (e.g. a `passwordHash` the handler over-returned) never leak. Applied in ALL environments. A
-    // Standard Schema or absent schema is not shapeable → the value passes through unchanged.
-    return json(shapeToSchema(result, jsonSchemaOf(outputSchema)))
+    const appClass = resolveAppClass(scope, config)
+    if (appClass === undefined) return errorResponse(404, `Not found: ${url.pathname}`)
+    return gateAndHandle(appClass, scope, config)
 }
 
 export function createApp(config: AppConfig = {}): App {
@@ -865,8 +426,39 @@ export function createApp(config: AppConfig = {}): App {
     for (const routeDef of Object.values(routes)) {
         routePolicy.set(routeDef, {
             cors: normalizeCrossOrigin(routeDef.__rpc.options.crossOrigin),
-            middleware: [...globalMiddleware, ...(routeDef.__rpc.options.middleware ?? [])],
+            middleware: rpcChainFor(routeDef, config, true),
         })
+    }
+
+    // AND THE SAME CHAIN FOR AN IN-PROCESS READ. `middleware` is `(next) => Response` — tracing, rate
+    // limiting, context population, auth — so it is part of what a READ means, not of what HTTP means, and
+    // it runs per read from whichever door the read came through. Installed here because this is the only
+    // place an rpc's route NAME and the app's global middleware are both known (the same reason
+    // `bindBroadcast` is installed here), and `makeRpc` stays transport-free.
+    //
+    // TWO RUNGS, decided PER CALL rather than at boot (`owesGlobalChain`): the rpc's own middleware always
+    // runs; the global chain runs only when the caller is not already inside a request that ran it. During
+    // page SSR it has run, so a page with eight reads does not count nine hits in a rate limiter; from a
+    // cron tick nothing has run, so both rungs do. This is the rule `channelAuth` already applies to a WS
+    // subscribe.
+    //
+    // BEING HERE IS ALSO THE LIMIT: this is the only install site, so a door that never builds an app is
+    // unchained. `abide run` never calls `createApp`, and `bootApp` calls it inside the `start()` thunk, so
+    // a migration and a pre-`start()` `onStart` warmer run neither rung — see `rpcChain.ts`'s header, which
+    // enumerates that gap rather than leaving "every door" to be read as unconditional.
+    //
+    // The ROUTER does not go through this: it invokes `route.bare(args)` inside the chain it composes above,
+    // so arg decoding and `schemas.input` validation stay INSIDE authorization (a 422 must not precede a
+    // 403) and the chain still runs exactly once.
+    for (const routeDef of Object.values(routes)) {
+        const own = routeDef.__rpc.options.middleware ?? []
+        // Nothing to run and nothing to decide → leave the callable unwrapped rather than paying a closure
+        // and a `currentScope()` read per call for an empty list.
+        if (own.length === 0 && globalMiddleware.length === 0) continue
+        // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
+        ;(routeDef as Rpc<any, any>).bindChain((_args, produce) =>
+            throughChain(rpcChainFor(routeDef, config, owesGlobalChain()), produce),
+        )
     }
 
     // The socket analog of `routePolicy`. A socket's own `middleware` authorizes its subscribes and
@@ -965,6 +557,11 @@ export function createApp(config: AppConfig = {}): App {
             //
             // Trace is minted FIRST so stages 2 and 6 — which run before the request scope exists —
             // can still stamp it. `reactiveScope().traceparent` is unreachable there; the local is not.
+            // `/__abide/chunk/` is the ONE route class that gets no trace: a static byte response with
+            // no handler, no identity and an immutable long-cache, joined by no span. Minting an id per
+            // chunk fetch would spend entropy and two headers on nothing, and the immutable bytes are
+            // shared across users, so a per-request header on them is a lie. Stated here because this is
+            // where the mint happens; `chunkAsset.ts` points back at it.
             const incomingTrace = request.headers.get('traceparent')
             const propagatedTrace =
                 incomingTrace !== null && TRACEPARENT_PATTERN.test(incomingTrace)
@@ -1256,37 +853,6 @@ export function createApp(config: AppConfig = {}): App {
             await server.stop(true)
         },
     }
-}
-
-// Hand an rpc handler its RUN deadline through the `Request` it already reads (ADR 0028 D5). No new
-// ambient accessor: a handler writes the completely standard `fetch(url, { signal: request().signal })`
-// and gets both halves of the rule, because the substituted signal is composed from them:
-//
-//     crossRequest  →  AbortSignal.timeout(T)
-//     otherwise     →  AbortSignal.any([AbortSignal.timeout(T), <the incoming request's signal>])
-//
-// The fork is D4. A NON-crossRequest slot lives in this request's own scope, so when the client aborts,
-// every reader of that slot is dying with the request and the run can never be observed — kill it. A
-// crossRequest slot lives in the process-global store and a DIFFERENT request will read the fill, so the
-// originating request's death is not the run's death; only the deadline ends it.
-//
-// ORDER IS LOAD-BEARING, in both directions. It must run AFTER route resolution (the timeout is
-// per-rpc) and BEFORE the body is read below — constructing a `Request` from one whose body is already
-// disturbed throws. The construction also transfers the body to the new object, which is why the scope's
-// request is REPLACED rather than shadowed: the body read further down must happen on the new one.
-//
-// Two things this deliberately does not reach, recorded rather than papered over: a `crossRequest`
-// handler runs scope-exited (`memo.ts`) so `request()` is unavailable to it at all, and an rpc invoked
-// IN-PROCESS during page SSR never passes through here — its `request()` is the page's, carrying the
-// page's client-abort signal but no deadline component. Both are still bounded at the waiter by the
-// memo's own deadline; what they lack is the cooperative teardown signal.
-function applyRunDeadlineSignal(scope: RequestScope, meta: RpcMeta<unknown, unknown>): void {
-    if (meta.timeout <= 0) return // unbounded by declaration — nothing to arm
-    const memoOption = meta.options.memo
-    const crossRequest = memoOption !== false && memoOption?.crossRequest === true
-    const deadline = AbortSignal.timeout(meta.timeout)
-    const signal = crossRequest ? deadline : AbortSignal.any([deadline, scope.request.signal])
-    scope.request = new Request(scope.request, { signal })
 }
 
 // Re-exported so the app-shape types are still reachable from the module that CONSUMES them.

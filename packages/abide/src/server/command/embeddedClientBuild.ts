@@ -5,9 +5,9 @@
 // negotiates `Accept-Encoding` inside a binary exactly as it does off disk — the router cannot tell
 // the difference, which is the point.
 
-import type { ChunkAsset, ClientBuild } from './clientBundle.ts'
+import type { ChunkAsset, ClientBuild } from '../internal/clientBundle.ts'
+import { preloadGraphOf } from '../internal/preloadGraphOf.ts'
 import type { CompiledApp } from './compiledAppConfig.ts'
-import { preloadGraphOf } from './preloadGraphOf.ts'
 
 export async function embeddedClientBuild(app: CompiledApp): Promise<ClientBuild> {
     const files = new Map<string, ChunkAsset>()

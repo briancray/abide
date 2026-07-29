@@ -156,9 +156,10 @@ not the discriminator).
 - **WS runs middleware only at `socket-connect`.** In-connection subscribe/publish do **not**
   re-enter the middleware chain (no per-message HTTP request); authorized in-connection.
   - **Exception — `@rpc:` cache-invalidation channels (rpc-core §8.4 / shared-cache-plan §2.3).**
-    Joining a `@rpc:<rpc>:<key>` cache channel re-runs THAT rpc's read gate (`compose(global,
-    rpc.middleware)`) with the connection's identity and the subscribe frame's raw `args`, **per
-    subscribe** — because middleware may enforce per-args row-level authz (joining `profile:B`
+    Joining a `@rpc:<rpc>:<key>` cache channel re-runs THAT rpc's read gate — `rpcChainFor(route,
+    config, true)`, the one definition of that chain rather than a second spelling of it, and both
+    rungs because a socket join is inside no request — with the connection's identity and the
+    subscribe frame's raw `args`, **per subscribe** — because middleware may enforce per-args row-level authz (joining `profile:B`
     must pass `profile`'s chain for `{id:B}`). Bare user-socket subscribes stay connect-authed.
 - Raw path remains available via `request()` for escape-hatch cases; discrimination is via
   typed `route().kind`, stable against internal path changes.

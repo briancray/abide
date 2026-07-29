@@ -100,7 +100,7 @@ function entrySource(input: {
         // `abide/...` through its node_modules, and abide must land in the bundle exactly once — two
         // copies would give the reactive graph, the memo registry and the request scope two homes.
         // Same reason the emitted page modules keep importing `abide/ui/internal/serverRuntime`.
-        'import { runCompiledApp } from "abide/server/internal/runCompiledApp"',
+        'import { runCompiledApp } from "abide/server/command/runCompiledApp"',
         '',
     ]
 

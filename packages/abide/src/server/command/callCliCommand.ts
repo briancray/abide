@@ -11,6 +11,7 @@
 // reach stdout as one JSON value per line); errors go to stderr as a JSON object, and the exit code
 // names the failure class.
 
+import { CSRF_HEADER } from '../../shared/internal/CSRF_HEADER.ts'
 import { isStreamContentType } from '../../shared/internal/decodeStreamResponse.ts'
 import { readLines } from '../../shared/internal/readLines.ts'
 import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
@@ -36,7 +37,7 @@ function requestInit(options: CliCallOptions): RequestInit {
     // A mutation carries its args in the body and must present the abide client's non-simple request
     // shape — `content-type: application/json` plus `x-abide`, which is what the CSRF gate reads.
     headers['content-type'] = 'application/json'
-    headers['x-abide'] = '1'
+    headers[CSRF_HEADER] = '1'
     return {
         method: options.command.method,
         headers,

@@ -128,8 +128,10 @@ the known shortcuts and gaps. Ordered by impact.
    (b) **layout-level error boundaries** — a layout CAN contain a throwing inner page by wrapping
    `{children()}` in `{#try}{:catch}` (server `try/catch` chunk + client try plan); tested. Plus a
    safe hardening: an uncaught page/layout render error now returns a controlled **500** (`error(500)`
-   + loud log) instead of leaking Bun's default handler (`server/internal/router.ts` nav-render
-   try/catch). An **implicit** boundary (auto-wrap / a `{:error}` slot) remains a parked design
+   + loud log) instead of leaking Bun's default handler (`server/internal/navRoute.ts` nav-render
+   try/catch). A **DELIBERATE** outcome is excluded from that: `error(404)`/`redirect('/login')` from
+   the page's own script, or from a read whose middleware short-circuited, is RETHROWN and rendered at
+   its own status — a declared 404 or a login redirect is not a render failure. An **implicit** boundary (auto-wrap / a `{:error}` slot) remains a parked design
    decision (needs a fallback-UI + status + hydrate-reconcile spec). (c) `props()` shared across
    layers — accepted (no supported way to pass distinct props to a layout).
 8. ~~**File uploads (multipart / `files` schema)** deferred.~~ **DONE** — RPCs accept `FormData`

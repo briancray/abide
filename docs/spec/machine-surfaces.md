@@ -35,12 +35,15 @@ manifests; every surface derives from the same RPC + socket metadata.
    `readOnlyHint: true`; POST/PUT/PATCH/DELETE → mutating (destructive hints as appropriate) so
    clients know read vs write.
    - **A tool call dispatches over the app's OWN HTTP loopback** (`callOwnRpc`), not by invoking
-     the rpc callable. The callable is only the HANDLER: `schemas.input` validation and the rpc's
-     own `middleware` are both composed by the **ROUTER** — the validate step ahead of `dispatch`,
-     and `routePolicy` at mount — so an in-process call had NEITHER. The declared input schema was
-     advertised to the model and never enforced against what it sent back, and an rpc whose
-     authorization IS its middleware ran unauthorized. That is a bad trade at every surface and a
-     disqualifying one here, where the caller is a model and the args are its own output. One
+     the rpc callable, **because the args were written by a MODEL and are therefore untrusted.**
+     `schemas.input` validation is composed by the **ROUTER** — the validate step ahead of
+     `dispatch` — so an in-process call would advertise the declared input schema to the model and
+     never enforce what it sent back. That is a bad trade at every surface and a disqualifying one
+     here, where the caller is a model and the args are its own output.
+     The rpc's own `middleware` is **no longer** half of this argument: since it runs per READ from
+     any door (`auth.md` §AU7, "TWO RUNGS"), an in-process call IS authorized. Input validation
+     still belongs to the doors that admit caller-supplied args, and a model is one — that is the
+     whole of what the loopback still buys. One
      loopback request applies the whole chain verbatim — CSRF, CORS, identity, middleware, input
      validation, the memo, the run deadline, output shaping — with no second copy of any of it. The
      request carries the incoming MCP request's credentials and a CHILD `traceparent`, uses the
@@ -65,8 +68,9 @@ manifests; every surface derives from the same RPC + socket metadata.
    machine surfaces. `clients.mcp` controls *reachability/curation* only — it does **not** make a
    tool anonymous-callable or closed-by-default. `/__abide/mcp` is HTTP, so every MCP request runs
    the **same middleware chain** as browser/CLI — and since MS2.1 that is true PER TOOL and not only
-   of the MCP envelope: the tool call is its own loopback request, so the rpc's own `middleware` and
-   `schemas.input` run on it. It used to be true only of the envelope, which made "reachability, not
+   of the MCP envelope: the tool call is its own loopback request, so `schemas.input` runs on it, and
+   the rpc's own `middleware` runs on it because it runs per READ from every door (`auth.md` §AU7).
+   The envelope-only version made "reachability, not
    authorization" a claim about a gate that did not exist on this surface. If you want the MCP
    surface gated, write that
    middleware (bearer via `ABIDE_APP_TOKEN` or a user token → resolve `identity()`, AU6, is the
@@ -160,7 +164,8 @@ Five decisions the design left open, resolved by the implementation:
 
 1. **Self-hosted mode calls its embedded server over LOOPBACK HTTP, not in-process, and hosts
    LAZILY.** The route callables are right there and calling them directly would be faster — and
-   would answer a different question. Going over the wire means middleware, identity, the CSRF gate, schema validation, the
+   would answer a different question. Going over the wire means identity, the CSRF gate, schema
+   validation, the global middleware rung, the
    memo and the run deadline all behave exactly as they do for a deployed request, so the CLI is a
    third client of the same face rather than a second implementation of it. `serve()` on port `0`,
    stopped when the command ends — and nothing binds until a call actually needs it, so `--help`, a

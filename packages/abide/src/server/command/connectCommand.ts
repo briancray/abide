@@ -14,8 +14,8 @@
 // With no url it REPORTS instead of setting, so `connect` is also how you answer "what am I talking
 // to?" — which a bare run cannot show you once the answer lives in a file.
 
+import { normalizeOrigin } from '../internal/normalizeOrigin.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
-import { normalizeOrigin } from './normalizeOrigin.ts'
 import { readCliTarget } from './readCliTarget.ts'
 import { writeCliTarget } from './writeCliTarget.ts'
 

@@ -16,10 +16,10 @@
 // at all — it goes straight to `serveCompiled`, since it has nothing to do afterwards.
 
 import { type ServeResult, serve } from '../../cli/serve.ts'
-import type { ClientBuild } from './clientBundle.ts'
+import type { ClientBuild } from '../internal/clientBundle.ts'
+import type { LoadedApp } from '../internal/loadApp.ts'
 import type { CompiledApp } from './compiledAppConfig.ts'
 import { embeddedClientBuild } from './embeddedClientBuild.ts'
-import type { LoadedApp } from './loadApp.ts'
 
 export interface CommandTarget {
     // The origin to call. Boots the embedded server on FIRST use; a remote target never boots.

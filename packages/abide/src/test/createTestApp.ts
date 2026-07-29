@@ -25,6 +25,7 @@ import type { Principal } from '../server/internal/requestScope.ts'
 import { type App, createApp, type Route } from '../server/internal/router.ts'
 import { seal } from '../server/internal/seal.ts'
 import type { ErasedSocket } from '../server/socket.ts'
+import { CSRF_HEADER } from '../shared/internal/CSRF_HEADER.ts'
 import { HEALTH_ROUTE } from '../shared/internal/HEALTH_ROUTE.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { parseMuxFrame } from '../shared/internal/parseMuxFrame.ts'
@@ -284,7 +285,7 @@ function bind(
                     // with the `x-abide` header so the CSRF gate admits it — no content-type header.
                     response = await doFetch(rpcUrl('', property), {
                         method,
-                        headers: { 'x-abide': '1' },
+                        headers: { [CSRF_HEADER]: '1' },
                         body: args,
                     })
                 } else {

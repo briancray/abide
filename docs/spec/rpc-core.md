@@ -23,7 +23,11 @@ unless it explicitly says "transport" or "HTTP."
   functions** (a Stripe SDK call, a DB driver, a pure computation) and get identical
   ergonomics.
 - Design `memo` as genuinely standalone/public with a clean seam; RPC = `memo` +
-  (serialization, network fetch, SSR in-proc dispatch, schema validation).
+  (serialization, network fetch, SSR in-proc dispatch, schema validation) + **the `middleware`
+  chain**. The chain is on this list because it is a property of the READ, not of transport
+  (`auth.md` §AU7): it wraps the CALL — never the memo body, since a memo coalesces by ARGS and one
+  caller's authorization must not stand in for the next caller's — and so it runs from every door,
+  not only the HTTP one. Serialization and the fetch are transport; the chain is the rpc.
 
 ## 2. Cache scope (the security-critical decision)
 

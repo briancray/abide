@@ -135,6 +135,15 @@ a declared 403 is the gate working.
 **Under `abide run`:** `onStart`/`onStop` **run** (the script needs the booted runtime); the
 **middleware chain does not** (no requests). So `run` = boot lifecycle without the request path.
 
+That was written when the chain had only its per-REQUEST rung, and `auth.md` §AU7 has since split it:
+an rpc's OWN `middleware` runs per READ, from doors that are not requests. `run` does not reach that
+rung either, and for a mechanical reason rather than a decided one — the chain is installed by
+`createApp`, which `run` deliberately never calls (it binds no server). **A migration's reads
+therefore run unauthorized and untraced; authorize in the script.** Whether the per-read rung should
+follow the read into `run` is OPEN: it would make a gated read fail inside a migration that has no
+identity to present, which is either the correct fail-closed answer or a broken migration depending
+on what the rung is for. Recorded here so the next reader finds a question, not a silent gap.
+
 ---
 
 ## Deferred / parked (rule before implementation)

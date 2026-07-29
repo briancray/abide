@@ -13,7 +13,6 @@
 import { json } from '../json.ts'
 import type { Socket } from '../socket.ts'
 import { callOwnRpc } from './callOwnRpc.ts'
-import { enforceMethod } from './enforceMethod.ts'
 import type { RpcEntry, SocketEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
@@ -240,10 +239,10 @@ function envelope(id: unknown, outcome: Outcome): Record<string, unknown> {
     return { jsonrpc: '2.0', id: id ?? null, result: outcome.result }
 }
 
+// The method gate is DECLARED, not called here: `MCP_CLASS` in `routeClass.ts` states `POST`, and
+// `dispatch` enforces it before this runs. It used to be this function's first statement, which made it
+// the one route class that both owned its gate and had no reason to.
 export async function handleMcp(request: Request, config: AppConfig): Promise<Response> {
-    const denied = enforceMethod(request, ['POST'])
-    if (denied !== undefined) return denied
-
     let body: unknown
     try {
         body = await request.json()

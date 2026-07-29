@@ -33,6 +33,7 @@ import {
     runInScope,
 } from './requestScope.ts'
 import type { AppConfig } from './router.ts'
+import { rpcChainFor } from './rpcChain.ts'
 
 // Identity + request resolved ONCE at the WS upgrade (cookie/bearer via the same ladder as HTTP)
 // and carried on the connection for the life of the socket. Every `@rpc:` join re-authorizes
@@ -120,12 +121,18 @@ export async function authorizeChannelJoin(
     // ARGS-SPOOF DEFENSE: the presented args must be exactly the ones that name this channel.
     if (memoChannelName(rpcName, presentedArgs) !== channelName) return false
 
-    const globalMiddleware = config.middleware ?? []
-    const rpcMiddleware = route.__rpc.options.middleware ?? []
-    return reauthorize('rpc', rpcName, `${RPC_ROUTE_PREFIX}${rpcName}`, presentedArgs, connData, [
-        ...globalMiddleware,
-        ...rpcMiddleware,
-    ])
+    // BOTH rungs: a WS subscribe is not inside an HTTP request, so the global chain has not run for it.
+    // Composed through the one shared definition (`rpcChainFor`) rather than spelled out here — this and
+    // `createApp` used to state the same list independently, which is two places that had to agree about
+    // something whose whole job is authorization.
+    return reauthorize(
+        'rpc',
+        rpcName,
+        `${RPC_ROUTE_PREFIX}${rpcName}`,
+        presentedArgs,
+        connData,
+        rpcChainFor(route, config, true),
+    )
 }
 
 // Decide whether `connData.identity` may join a USER SOCKET's room `roomArgs`. This is the socket

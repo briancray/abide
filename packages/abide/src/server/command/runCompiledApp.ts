@@ -31,6 +31,7 @@
 // called, and which side of the collision won would depend on parse order.
 
 import { installShutdownHandlers } from '../../cli/installShutdownHandlers.ts'
+import { normalizeOrigin } from '../internal/normalizeOrigin.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { callCliCommand } from './callCliCommand.ts'
 import { type CliCommand, cliCommands } from './cliCommands.ts'
@@ -38,7 +39,6 @@ import { cliUsage } from './cliUsage.ts'
 import { type CommandTarget, commandTarget } from './commandTarget.ts'
 import { type CompiledApp, compiledAppConfig } from './compiledAppConfig.ts'
 import { interactiveCli } from './interactiveCli.ts'
-import { normalizeOrigin } from './normalizeOrigin.ts'
 import { parseCliArgs } from './parseCliArgs.ts'
 import { reservedCliCommand } from './reservedCliCommand.ts'
 import { reservedCliDispatch } from './reservedCliDispatch.ts'

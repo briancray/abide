@@ -14,9 +14,9 @@
 import type { JSONSchema, JSONSchemaType } from '../../shared/internal/jsonSchema.ts'
 import { singleType } from '../../shared/internal/jsonSchema.ts'
 import { log } from '../../shared/log.ts'
+import { buildRegistry } from '../internal/registry.ts'
+import type { AppConfig } from '../internal/router.ts'
 import { RESERVED_CLI_COMMANDS } from './RESERVED_CLI_COMMANDS.ts'
-import { buildRegistry } from './registry.ts'
-import type { AppConfig } from './router.ts'
 
 export interface CliCommandField {
     name: string

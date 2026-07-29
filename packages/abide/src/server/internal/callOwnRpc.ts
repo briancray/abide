@@ -1,10 +1,14 @@
 // callOwnRpc — call one of THIS app's rpcs over its OWN HTTP face, from inside the process.
 //
-// The machine surfaces dispatch this way rather than invoking the rpc callable, because the callable is
-// only the HANDLER. `schemas.input` validation and the rpc's own `middleware` are both composed by the
-// ROUTER — the validate step ahead of `dispatch`, and `routePolicy` at mount — so an in-process call has
-// NEITHER. For a caller that is a model choosing what to invoke, with args it wrote itself, that is the
+// The machine surfaces dispatch this way rather than invoking the rpc callable, because the args were
+// written by a MODEL and are therefore untrusted: `schemas.input` validation is applied by the ROUTER (the
+// validate step ahead of `dispatch`), so an in-process call would advertise a schema to the model and never
+// enforce what it sent back. For a caller choosing what to invoke, with args it wrote itself, that is the
 // difference between "reachability, not authorization" and no authorization at all.
+//
+// The rpc's own `middleware` is no longer half of that argument — it runs per READ from any door now
+// (`rpcChain.ts`), so an in-process call is authorized. Input validation still belongs to the doors that
+// admit caller-supplied args, and a model is one; that is the whole of what this loopback still buys.
 //
 // One loopback request means the whole chain applies verbatim — CSRF, CORS, identity, middleware, input
 // validation, the memo, the run deadline, output shaping — with no second copy of any of it living here.

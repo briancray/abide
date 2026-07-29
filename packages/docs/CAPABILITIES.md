@@ -161,7 +161,7 @@ Import `abide/server/{VERB}`; handler takes one positional object arg. Reads →
 | Streaming mutation — a POST yielding `jsonl` consumed via `{#for await x of mutation()}` | PW+RT | [x] (/rpc/streaming streaming-mutation; `rpcStreamJob`) |
 | RPC `opts.schemas` (input/output/files; type-derived when absent) | RT | [ ] |
 | RPC `opts.clients` (browser/mcp/cli reachability; `validate`) | RT | [ ] |
-| RPC `opts.middleware` (per-RPC onion) | RT | [ ] |
+| RPC `opts.middleware` (per-RPC onion) — runs **per READ, from every door** | PW+RT | [x] (platform/scope: `platformContext` declares `middleware: [stamp]` and `ContextDemo` reads it at page render, so `platform.spec.ts` asserts the stamp in the **raw SSR bytes** as well as after a browser fetch; `rpcChain.test.ts` covers the rungs, once-per-read, and short-circuit → `HttpError`) |
 | RPC `opts.cache` (ttl/shared/tags) | PW+RT | [ ] |
 | RPC `opts.memo` normalization — ONE `rpcMemoPolicy` feeds the server memo, the wire spec and the browser proxy, so a read's two memos cannot disagree | RT | [x] (abide `ui/internal/clientProxy.test.ts` counts handler RUNS on both sides of one rpc) |
 | `memo: false` is verb-dependent — a MUTATION bypasses the bare call, a READ stays memo-backed at `ttl: 0` (retains nothing, still coalesces, probes stay live) | RT | [x] (abide `clientProxy.test.ts` "a memo:false read has the same peek policy on the server and in the browser") |
@@ -338,8 +338,8 @@ Import `abide/server/socket`; HTTP face `/__abide/sockets/<name>`.
 | `cookies()` → `Bun.CookieMap` | PW+RT | [x] (platform/scope reads browser cookie via platformScope RPC) |
 | `request()` → `Request` | RT | [ ] |
 | `server()` → Bun.serve instance | RT | [ ] |
-| `context()` → per-request mutable carrier bag | RT | [x] (platform/scope: per-RPC middleware stamps context(), handler reads it) |
-| `middleware` = auth (short-circuit `Response`) | PW+RT | [x] (platform/scope GuardDemo: layer1 returns `error(403)` without `next()`, blocking the handler) |
+| `context()` → per-request mutable carrier bag | PW+RT | [x] (platform/scope: per-RPC middleware stamps context(), handler reads it — twice per visit now, once at SSR and once on the click, since the rpc's middleware runs per read) |
+| `middleware` = auth (short-circuit) | PW+RT | [x] (platform/scope GuardDemo: layer1 returns `error(403)` without `next()`, blocking the handler). Over HTTP the short-circuit is that `Response`; reaching an **in-process** caller it is a thrown `HttpError` (`rpcChain.test.ts`), which is why `fn.isError` narrows the same on both sides |
 | `app.ts` `onStart(start)` / `onStop(stop)` — boot/teardown wrappers | PW+RT | [x] (platform/lifecycle: docs app.ts wraps boot, seeds bootId surfaced via onHealth; serveLifecycle.test) |
 | `app.ts` `onHealth()` — merged over `/__abide/health` stub (`reachable`/`version`/`uptime`/`startedAt`) | PW+RT | [x] (platform/lifecycle: /__abide/health shows app + bootId fields) |
 | `app.ts` `onError(error)` — shape an uncaught request throw | PW+RT | [x] (platform/lifecycle: throwing RPC → onError-shaped 500) |

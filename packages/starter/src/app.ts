@@ -2,6 +2,12 @@
 // a guard calls `error(403)` instead of calling next(). `error(...)`/`redirect(...)` THROW — they are
 // typed `never`, not Response-returning — and the chain renders the throw at its own status. So the
 // short-circuit is the call itself; there is nothing to `return`.
+//
+// THIS array is the PER-REQUEST rung: it runs once for the unit of work, so a page with eight reads
+// is eight reads inside ONE pass of it. An rpc's own `middleware` — `GET(fn, { middleware: [...] })` —
+// is the PER-READ rung, and it runs from every door the read comes through, page SSR and a sibling
+// handler's read included, not only over HTTP. Put "this request" concerns (tracing, rate limiting a
+// visitor) here; put "this read" concerns (authorizing these args) on the rpc.
 import { error } from 'abide/server/error'
 
 export const middleware = []

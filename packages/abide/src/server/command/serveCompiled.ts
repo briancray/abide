@@ -9,9 +9,9 @@
 import { installShutdownHandlers } from '../../cli/installShutdownHandlers.ts'
 import { parsePort } from '../../cli/parsePort.ts'
 import { type ServeResult, serve } from '../../cli/serve.ts'
+import type { LoadedApp } from '../internal/loadApp.ts'
 import type { CompiledApp } from './compiledAppConfig.ts'
 import { embeddedClientBuild } from './embeddedClientBuild.ts'
-import type { LoadedApp } from './loadApp.ts'
 
 // Takes the ALREADY-BUILT config rather than calling `compiledAppConfig` itself — which is what
 // `commandTarget`, the other door, has always done. `compiledAppConfig` is not pure: it assigns

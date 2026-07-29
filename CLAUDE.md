@@ -97,13 +97,37 @@ the OpenAPI operation summary, the MCP tool description, and the CLI's `help`.
 - **`clients`** = *reachability only*, typed `boolean | { browser?, mcp?, cli? }` — which surfaces
   reach it. **Not authorization** — auth is `middleware`. The three flags gate surface **generation**
   (OpenAPI omission, MCP tool list, CLI registration, client-bundle inclusion) at build time;
-  middleware runs per-request and can short-circuit. Different mechanism, different time.
+  middleware runs per read (see below) and can short-circuit. Different mechanism, different time.
   `false` withholds all three (the raw HTTP endpoint still exists — again, not auth); `true`/absent
   leaves all three reachable. An unrecognized key or a non-boolean flag **warns** on `abide:rpc`
   rather than being dropped in silence. There is no `clients.browser.validate` — it was advertised,
   never implemented, and is retracted (ADR 0027 D9): `clients` is reachability, and shipping a
   validator is a *bundling* decision that belongs next to `schemas`.
-- **`middleware`**: `Array<(next) => Response>` run for this RPC (composed inside the global chain).
+- **`middleware`**: `Array<(next) => Response>` — run **PER READ, not per request**, and no longer only
+  over HTTP. `middleware` is not just auth: it is tracing, rate limiting, request-context population and
+  response post-processing too, so a read that skips it is not merely unauthorized, it is unobserved. An
+  in-process read — page SSR, a handler calling a sibling rpc, a cron tick — therefore runs it, where
+  previously only the router did (`makeRpc` builds handler + memo + deadline; the chain was transport's).
+  The chain wraps the **CALL**, never the memo body: a memo coalesces by ARGS, so a chain inside the body
+  would let the first caller's authorization stand in for the next caller's. **Two rungs, two scopes:**
+  this rpc's own middleware runs per READ; the app's global `config.middleware` is per REQUEST and runs
+  only when the caller is not already inside a request that ran it — otherwise a page with eight reads
+  would count nine hits in a rate limiter. That is the rule a WS subscribe already followed. A
+  short-circuit reaches an in-process caller as a thrown `HttpError` (whether the middleware threw
+  `error(403)` or returned a `Response`), and inside a page render a deliberate `error()`/`redirect()` is
+  rendered at its own status rather than collapsing into a 500.
+  **Two exceptions, both from the call sites rather than inferred.** (a) The chain is installed by
+  `createApp`, so a door that never builds an app has none: **`abide run`** boots through `appLifecycle`
+  with no `createApp` at all, and an `onStart` warmer reading *before* `await start()` is inside the same
+  window — a read from either runs NEITHER rung. A migration's reads are therefore unauthorized and
+  unobserved; do the authorizing in the script. (b) **`fn.raw()`** calls the handler directly, so it
+  bypasses the chain along with the memo.
+  **The chain runs in the CALLER's scope**, which is what the middleware's own ambients answer from: from
+  a non-HTTP door `route()` reports the caller's route, so during page SSR an rpc's middleware sees
+  `kind: 'nav'` and the page's pattern — a guard written as `route().name === '<rpc>'` does not fire
+  there. Outside a request entirely, `route()`/`identity()`/`request()` throw. The WS `@rpc:` join is the
+  one door that synthesizes an rpc-shaped scope (`channelAuth`); gate on the middleware's **arguments**
+  rather than on `route()` if it must hold from every door.
 - **`memo`** (unified across verbs; `docs/spec/replayable-streams.md`): `ttl` (ms; **reads** default ∞,
   **mutations** default `0` = coalesce identical concurrent in-flight calls, retain nothing — a mutation
   that sets `memo: { ttl }` retains like a read on **both** the server and client memo, so its
@@ -162,8 +186,8 @@ the OpenAPI operation summary, the MCP tool description, and the CLI's `help`.
   composed signal on **`request().signal`** — no new ambient — so the abort is COOPERATIVE: ignore it and
   the run continues, only the caller is released. A trip is a typed **`TimeoutError` / 504**
   (`fn.isError(e, 'TimeoutError')` narrows both sides) and the slot is **EXPIRED, not disposed**:
-  `fn.error()` still reports it while the next read runs cold. `.raw()` bypasses the memo, not the
-  deadline.
+  `fn.error()` still reports it while the next read runs cold. `.raw()` bypasses the memo and the
+  `middleware` chain, not the deadline.
 - **`crossOrigin`**: CORS opt-in, **default closed** (no `Access-Control-*`; a cross-origin mutation is
   CSRF-rejected). `true` = allow any origin; `{ origin?: string | string[] | boolean, methods?, headers?,
   credentials?, maxAge? }` = an allowlist (`origin` string/array is exact; `true`/omitted = any). When
@@ -293,7 +317,7 @@ mux. Full design + transport protocol: `docs/spec/client-sockets.md`.
 ### Beyond the browser
 | Import | Signature |
 | --- | --- |
-| `abide/server/agent` | `agent(engine, messages, options?)` → `AgentFrame` stream. `options`: `{ model?, system?, tools?, approval?, … }`. **`tools` defaults to the app's own `clients.mcp` RPCs**; `[]` = none, `[...]` = a subset. `clients.mcp` IS the gate — an agent's tool set is the MCP tool set by definition — so an rpc withheld from MCP is withheld here, by the same declaration, and naming `tools` is the OVERRIDE rather than the way in. Reachability, not authorization: a tool that IS reachable still runs its middleware on every call — literally, because a tool call goes out over the app's **OWN HTTP loopback** (`callOwnRpc`) rather than invoking the callable. The callable is only the HANDLER; `schemas.input` validation and the rpc's `middleware` are composed by the ROUTER, so an in-process call had the memo and the handler but NOT the request — neither ran, and the declared input schema was advertised to the model and never enforced against what it sent back. One loopback request applies the whole chain verbatim (CSRF, identity, middleware, validation, memo, run deadline) with no second copy of any of it. Consequences of that door: a non-2xx is a THROW (an error tool-result the model can correct from, not a "result" for a call the app refused), a streaming rpc is DRAINED into an array (a model reads a VALUE, not a cursor), and outside a request scope the call goes **anonymous** — it inherits the enclosing request's credentials when there is one, and there is no ambient elevation to a principal nobody presented. MCP dispatches through the same door. `agent()` itself imports no registry (it stays usable with no app at all, where the default is `[]`) — `createApp` provides the surface, lazily. Types: `NeutralMessage`, `AgentFrame`, `AgentSurface`, `AgentEngine`. Ships a Claude engine (Anthropic Messages API over `fetch`) + a Claude Code engine (spawns the local `claude` CLI via `Bun.spawn`; **self-contained** — runs its own loop, engine tools OFF by default). |
+| `abide/server/agent` | `agent(engine, messages, options?)` → `AgentFrame` stream. `options`: `{ model?, system?, tools?, approval?, … }`. **`tools` defaults to the app's own `clients.mcp` RPCs**; `[]` = none, `[...]` = a subset. `clients.mcp` IS the gate — an agent's tool set is the MCP tool set by definition — so an rpc withheld from MCP is withheld here, by the same declaration, and naming `tools` is the OVERRIDE rather than the way in. Reachability, not authorization: a tool that IS reachable still runs its middleware on every call — and the loopback's remaining reason is now narrower than it was. A tool call goes out over the app's **OWN HTTP loopback** (`callOwnRpc`) rather than invoking the callable, because the args were written by a MODEL and are therefore untrusted: `schemas.input` validation is applied by the ROUTER, so an in-process call would advertise a schema to the model and never enforce what it sent back. The rpc's `middleware` is no longer part of that argument — it runs per read from any door now (see `middleware` above) — but input validation still belongs to the doors that admit caller-supplied args, and a model is one. One loopback request applies the whole chain verbatim (CSRF, identity, middleware, validation, memo, run deadline) with no second copy of any of it. Consequences of that door: a non-2xx is a THROW (an error tool-result the model can correct from, not a "result" for a call the app refused), a streaming rpc is DRAINED into an array (a model reads a VALUE, not a cursor), and outside a request scope the call goes **anonymous** — it inherits the enclosing request's credentials when there is one, and there is no ambient elevation to a principal nobody presented. MCP dispatches through the same door. `agent()` itself imports no registry (it stays usable with no app at all, where the default is `[]`) — `createApp` provides the surface, lazily. Types: `NeutralMessage`, `AgentFrame`, `AgentSurface`, `AgentEngine`. Ships a Claude engine (Anthropic Messages API over `fetch`) + a Claude Code engine (spawns the local `claude` CLI via `Bun.spawn`; **self-contained** — runs its own loop, engine tools OFF by default). |
 | `abide/server/appDataDir` | `appDataDir()` → per-user data dir |
 
 ## Isomorphic — `abide/shared/*`
@@ -349,7 +373,7 @@ value change still wakes them (`docs/spec/rpc-core.md` §7.3–7.4).
 | `abide/shared/done` | `done(iterable)` → reactive boolean: has a `{#for await}`-consumed stream finished? |
 | `abide/shared/online` | `online()` → reactive connectivity boolean (true on server; tracks `navigator.onLine`) |
 | `abide/shared/ValidationErrorData` | `{ issues, fields }` — the `data` MEMBER, not the whole 422 body. The WIRE ENVELOPE a generated client reads is the typed-error shape every failure travels as: `{ status, statusText, message, name: 'ValidationError', data: { issues, fields } }` (declared once in the OpenAPI document under `components/schemas` and referenced from every operation's 422). It was described there as `{ issues, fields }` alone, so a generated client looked for `fields` one level above where it travels |
-| `abide/shared/HttpError` | `HttpError` + `HttpErrorOptions` — the failure an rpc travels as, ONE class on both sides: what a handler's `error(...)` throws, what a `catch` narrows on, and what `fn.isError(e, name)` is built over after the browser proxy decodes a non-2xx back into it. `HttpErrorOptions` is `{ kind?, data?, headers?, statusText? }` — a typed error's name rides on **`kind`**, not `name`, because `name` is the JS `Error` discriminator and stays `'HttpError'`; the `isTypedError` predicate accepts either, so a platform `DOMException` still narrows on `name` |
+| `abide/shared/HttpError` | `HttpError` + `HttpErrorOptions` — the failure an rpc travels as, ONE class on both sides: what a handler's `error(...)` throws, what a `catch` narrows on, and what `fn.isError(e, name)` is built over after a non-2xx is decoded back into it — by the browser proxy on the wire, and by `throughChain` on the server when a middleware short-circuits an in-process read, which is what makes the two sides narrow identically. `HttpErrorOptions` is `{ kind?, data?, headers?, statusText? }` — a typed error's name rides on **`kind`**, not `name`, because `name` is the JS `Error` discriminator and stays `'HttpError'`; the `isTypedError` predicate accepts either, so a platform `DOMException` still narrows on `name` |
 | `abide/shared/Redirect` | `Redirect` — the navigation a handler leaves through, as a throw. Its own class rather than a 3xx `HttpError`: a redirect is not an error, but it leaves the value channel the same way one does |
 | `abide/shared/route` | `route()` (see above) |
 | `abide/shared/identity` | `identity()` (see above) |
@@ -387,7 +411,7 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 | `fn(args)` | **the read** — awaitable `Promise<T>` (coalesced + cached; SSR in-proc → browser fetch). Also subscribes the caller, so `{await fn()}` re-awaits on invalidate. A mutation call is the same, but posts args in the body (default `ttl:0` retains nothing) |
 | `fn(args, { signal })` | the same read with a caller-owned abort. It detaches **THIS waiter only** — the author's `timeout` owns the work, a caller's signal owns their wait — so it never strands the other callers coalesced onto the slot (a call that BYPASSES the memo — a `memo: false` mutation, or a `FormData` body — has no slot and one consumer, so it does cancel the request outright; a `memo: false` READ is still slot-backed at `ttl: 0` and so detaches the waiter only). This is why no per-call timeout option exists: `fn(args, { signal: AbortSignal.timeout(500) })` is one. Zero-arg: `fn(undefined, { signal })` |
 | `fn.peek(args)` | reactive `T \| undefined` snapshot — subscribes + kicks a coalesced load; the non-blocking display read |
-| `fn.raw(args, init?)` | raw `Response`, full bypass of the memo. It is the RESPONSE surface, so a deliberate `error()`/`redirect()` is **rendered as that Response** rather than rethrown — matching the browser proxy's `.raw`, which hands a non-2xx back untouched (no parse, no `!ok` throw), so the two sides answer the same shape. An unexpected error still propagates: only transport turns a genuine bug into a 500, and doing it here would disguise one as a normal response |
+| `fn.raw(args, init?)` | raw `Response`, full bypass of the memo — and, server-side, of the `middleware` chain with it: `.raw` calls the handler, so it is the one read surface that is neither coalesced nor authorized. It is the RESPONSE surface, so a deliberate `error()`/`redirect()` is **rendered as that Response** rather than rethrown — matching the browser proxy's `.raw`, which hands a non-2xx back untouched (no parse, no `!ok` throw), so the two sides answer the same shape. An unexpected error still propagates: only transport turns a genuine bug into a 500, and doing it here would disguise one as a normal response |
 | `memo.state(args, initial)` | the WRITABLE PROJECTION of one slot (`memo` only): a live cell over that slot whose `set` IS `publish`, so a local write is provisional until the next re-fill. The key is a `Room` positional and the `initial` trails it (`m.state(initial)` argless, `m.state({id}, initial)` keyed) — required on an **async** memo because a cold slot has no value and `State<T>` is invariant, so widening the read would also let `set` forge the not-loaded sentinel. A **sync** memo needs none: it is never pending and rethrows, so its read is already `T`-or-throw |
 | `fn.refresh(args?)` / `fn.invalidate(args?)` / `fn.publish(args, v)` | surface verbs (partial match) |
 | `fn.peek` / `fn.pending` / `fn.refreshing` / `fn.error` / `fn.watch` | reactive probes |
@@ -453,9 +477,13 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 ## App module — `src/app.ts`
 `export const middleware = [(next) => Response, …]` (onion; `next()` needs no args; return a
 `Response` — or call `error(403)`/`redirect(...)`, which THROW — to short-circuit; **auth is
-middleware**). A thrown outcome is rendered by the chain exactly as a returned `Response` is, on every
-surface middleware runs on: the HTTP path, and the per-subscribe channel/room re-authorization, where it
-counts as a DENY and fails closed. Plus lifecycle hooks (async-capable, awaited):
+middleware**). This is the **per-REQUEST** rung — an rpc's own `opts.middleware` is the per-READ one, and
+the global chain deliberately does not re-run for a read inside a request that already ran it. It DOES run
+for a read from outside any request (a cron tick), where there is no request scope to read from, so a
+global middleware reaching for `request()`/`identity()` throws on that path. A thrown outcome is rendered
+by the chain exactly as a returned `Response` is, on every surface middleware runs on: the HTTP path, a
+scope-free in-process read, and the per-subscribe channel/room re-authorization, where it counts as a DENY
+and fails closed. Plus lifecycle hooks (async-capable, awaited):
 `onStart(start)` / `onStop(stop)` **wrap** the real boot/teardown — do setup, then `await start()`
 (the socket binds only inside it, so nothing serves until setup finishes); returning without calling
 `start()` is a breakout (app never boots). `onStop(stop)` mirrors it (drain, then `await stop()`;

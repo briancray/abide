@@ -13,7 +13,7 @@
 // with a token and then overriding just the URL keeps the credential (which is usually what a
 // staging/production pair wants) — and `--token` alone re-credentials a stored target.
 
-import { normalizeOrigin } from './normalizeOrigin.ts'
+import { normalizeOrigin } from '../internal/normalizeOrigin.ts'
 import { readCliTarget } from './readCliTarget.ts'
 
 export interface ResolvedCliTarget {

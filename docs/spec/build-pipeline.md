@@ -66,7 +66,7 @@ reload, never a divergent runtime ("consistent runtime between dev and build").
      process must stay alive on the server's handles — and the GENERATED ENTRY is the one place that
      turns a code into an exit. Returning it rather than exiting four times over is what makes the
      dispatch testable in-process.
-   - The entry imports abide as a PACKAGE SPECIFIER (`abide/server/internal/runCompiledApp`), not a
+   - The entry imports abide as a PACKAGE SPECIFIER (`abide/server/command/runCompiledApp`), not a
      path resolved from the running CLI: the app's own modules resolve `abide` through its
      `node_modules`, and two copies in one bundle would give the reactive graph, the memo registry
      and the request scope two homes.

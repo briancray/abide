@@ -451,7 +451,10 @@ to claim the type. So:
   (+ `RpcCallArgs`, `MutationCallArgs`), the isomorphic call surface both sides really implement.
 - `server/internal/makeRpc.ts` — `Rpc<Args, T> extends RpcCallSurface<Args, T>` adding the one
   server-only member, `readonly __rpc`. Public `Rpc` is structurally unchanged; this is a pure
-  refactor, not an API change.
+  refactor, not an API change. *(Since amended: the per-read middleware chain added two more
+  server-only members, `bindChain` and `bare`. The seam this decision draws — everything in
+  `RpcCallSurface` is isomorphic, the server-only members sit above it — is unchanged and is what
+  made room for them; the count is not "one" any more.)*
 - `clientProxy` now returns `RpcCallSurface | MutationCallSurface` and the cast stops being a lie.
 
 This is the type-level statement of CLAUDE.md's "isometric RPC consumption" section, which described

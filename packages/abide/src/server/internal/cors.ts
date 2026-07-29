@@ -7,13 +7,16 @@
 // With `credentials: true` the `*` wildcard is illegal per the Fetch spec, so we echo the concrete
 // request Origin (and add `Vary: Origin`).
 
+import { CSRF_HEADER } from '../../shared/internal/CSRF_HEADER.ts'
 import { appendVary } from './applyResponseHeaders.ts'
 
 const DEFAULT_METHODS = 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS'
 // `traceparent` is in the default allowlist so a cross-origin caller CAN carry trace context (CO2.3)
 // without every app having to spell it out. The browser proxy still declines to volunteer one
 // cross-origin (see `clientProxy`'s `traceHeaders`) — this admits the callers that choose to.
-const DEFAULT_HEADERS = 'content-type, authorization, x-abide, traceparent'
+// `x-abide` is INTERPOLATED, not spelled: the gate that demands it and this allowlist that admits
+// it are one fact, and a cross-origin multipart mutation is admitted by nothing else.
+const DEFAULT_HEADERS = `content-type, authorization, ${CSRF_HEADER}, traceparent`
 const DEFAULT_MAX_AGE = 600
 
 export type CrossOriginOption =

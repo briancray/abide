@@ -2,6 +2,7 @@
 // `crossOrigin` opt-in), the required `Allow` on a 405, and SSE stream headers.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { CSRF_HEADER } from '../shared/internal/CSRF_HEADER.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { GET } from './GET.ts'
 import { POST } from './POST.ts'
@@ -187,6 +188,56 @@ describe('CORS via crossOrigin', () => {
             })
             expect(read.headers.get('access-control-allow-origin')).toBe('*')
             await read.text()
+        } finally {
+            await app.stop()
+        }
+    })
+
+    // THE CSRF HEADER AND THE ALLOWLIST ARE ONE FACT.
+    //
+    // `multipart/form-data` is a CORS "simple" content type a cross-site `<form>` CAN send, so a
+    // multipart mutation is admitted by NOTHING but the `x-abide` header. That makes the gate that
+    // demands it and the preflight allowlist that admits it two halves of one rule — and the allowlist
+    // half fails quietly: every same-origin test clears the gate on `content-type: application/json`
+    // and never consults it, so dropping the name there breaks only cross-origin callers, as a browser
+    // CORS error whose cause lives in another file.
+    //
+    // Asserted against the CONSTANT, not a literal, so this cannot drift into agreeing with itself.
+    test('a preflight advertises the CSRF header the gate demands', async () => {
+        const app = await createTestApp({
+            routes: { open: POST(() => ({ ok: true }), { crossOrigin: true }) },
+        })
+        try {
+            const preflight = await app.fetch('/__abide/rpc/open', {
+                method: 'OPTIONS',
+                headers: {
+                    origin: FOREIGN,
+                    'access-control-request-method': 'POST',
+                    'access-control-request-headers': CSRF_HEADER,
+                },
+            })
+            expect(preflight.status).toBe(204)
+            expect(preflight.headers.get('access-control-allow-headers')).toContain(CSRF_HEADER)
+
+            // ...and the gate really does admit a multipart mutation on that header alone.
+            const body = new FormData()
+            body.set('field', 'value')
+            const admitted = await app.fetch('/__abide/rpc/open', {
+                method: 'POST',
+                headers: { origin: FOREIGN, [CSRF_HEADER]: '1' },
+                body,
+            })
+            expect(admitted.status).not.toBe(403)
+            await admitted.text()
+
+            // Without it, the same request is the CSRF rejection the header exists to gate.
+            const rejected = await app.fetch('/__abide/rpc/open', {
+                method: 'POST',
+                headers: { origin: FOREIGN },
+                body,
+            })
+            expect(rejected.status).toBe(403)
+            await rejected.text()
         } finally {
             await app.stop()
         }
