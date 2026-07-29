@@ -430,6 +430,81 @@ export function documentTail(
     )
 }
 
+// What a retained render writes to. `disconnected` is the ONE answer to "did the reader leave?" — the
+// two transports used to ask it two different ways (a `cancel()` handler setting a flag vs. probing
+// `controller.desiredSize`), and the soft-nav half had no `cancel()` handler at all, so a client that
+// aborted before the first patch was invisible to it until an enqueue happened to fail.
+interface RetainedRenderWriter {
+    readonly disconnected: boolean
+    write(chunk: string): void
+}
+
+// THE RETAIN/RELEASE DISCIPLINE FOR A REPLY THAT OUTLIVES ITS REQUEST, stated once.
+//
+// A streamed reply is still producing bytes after `runInScope` returns, so the request scope is held
+// open past it (ADR 0026) and must be released exactly once, whatever the writer does. Both transports
+// need that, and both used to spell it out: `streamPageDocument` in a `finally` — with a comment
+// recording that the teardown escaping a throw had already stranded a scope once — and `streamSoftNav`
+// as two bare statements after an unguarded `collectSeed`, which throws by design
+// (`renderStateOrThrow`). A stranded scope keeps its effect subscriptions on module-level `state` and
+// is reported only by `watchForLeakedRetain`'s 60s timer, in dev, so nothing observable through the
+// response would have caught it.
+//
+// The writer is the argument: the two differ only in what a chunk IS (document bytes vs. a JSONL
+// frame) and in whether a drain error still emits a trailer. Everything around that — retain,
+// disconnect detection, close, teardown — is this module's.
+function streamRetainedRender(
+    ctx: ReactiveScope,
+    label: string,
+    body: (out: RetainedRenderWriter) => Promise<void>,
+): ReadableStream<Uint8Array> {
+    retainScope(ctx)
+    const encoder = new TextEncoder()
+    let gone = false
+    // A reader can leave mid-reply — navigate on, close the tab, abort the fetch — and a streamed page
+    // is open for as long as its slowest read. That is a disconnect, not a render failure, so it is
+    // traced rather than logged as an error: every abandoned load of a streamed page would otherwise
+    // cry wolf.
+    const markGone = (): void => {
+        if (gone) return
+        gone = true
+        log.channel('abide:stream').trace(`reader left mid-stream (${label})`)
+    }
+    return new ReadableStream<Uint8Array>({
+        async start(controller) {
+            const out: RetainedRenderWriter = {
+                get disconnected(): boolean {
+                    if (!gone && controller.desiredSize === null) markGone()
+                    return gone
+                },
+                write(chunk: string): void {
+                    if (out.disconnected) return
+                    try {
+                        controller.enqueue(encoder.encode(chunk))
+                    } catch {
+                        // Bun cancelled the stream between the probe and the enqueue.
+                        markGone()
+                    }
+                },
+            }
+            try {
+                await body(out)
+                if (!out.disconnected) controller.close()
+            } catch (caught) {
+                if (out.disconnected) return
+                log.channel('abide:stream').error(`${label} failed:`, caught)
+            } finally {
+                // The request's work ends HERE for a streamed reply, not at `runInScope`.
+                enterScope(ctx, closeRenderState)
+                releaseScope(ctx)
+            }
+        },
+        cancel() {
+            markGone()
+        },
+    })
+}
+
 // The streaming SSR transport (PR2). Serves `head → shell → out-of-order patches → tail` over a
 // `ReadableStream`. The shell (first-load render of the SHELL string, with `<abide-slot>` placeholders
 // for any read that blocked past the deadline) flushes immediately; each deferred subtree streams as a
@@ -445,46 +520,21 @@ export function streamPageDocument(
     opts?: RenderDocumentOptions,
 ): ReadableStream<Uint8Array> {
     const stream = enterScope(ctx, () => renderState()?.stream)
-    // This reply is still producing bytes after `runInScope` returns, so hold the context open past it
-    // (ADR 0026). Released in the `finally` below, whichever way the drain ends.
-    retainScope(ctx)
-    const encoder = new TextEncoder()
     const head = documentHead(opts)
-    // A reader can leave mid-reply — navigate on, close the tab, abort the fetch — and a streamed page
-    // is open for as long as its slowest read. Bun cancels the stream, and the NEXT enqueue throws
-    // "Invalid state: Controller is already closed". That is a disconnect, not a render failure, so it
-    // is traced rather than logged as an error: every abandoned load of a streamed page would otherwise
-    // cry wolf. It also has to unwind properly — the throw used to escape past `releaseScope` and
-    // strand the retained request scope (ADR 0026), which is why the teardown is now a `finally`.
-    let cancelled = false
-    return new ReadableStream<Uint8Array>({
-        async start(controller) {
-            const enc = (chunk: string): void => controller.enqueue(encoder.encode(chunk))
-            try {
-                enc(head)
-                enc(shell)
-                if (
-                    stream !== undefined &&
-                    (stream.deferred.length > 0 || stream.streamers.length > 0)
-                ) {
-                    await enterScope(ctx, async () => {
-                        for await (const patch of drainPatches(stream)) enc(documentPatch(patch))
-                    })
+    return streamRetainedRender(ctx, 'streaming SSR drain', async (out) => {
+        out.write(head)
+        out.write(shell)
+        if (stream !== undefined && (stream.deferred.length > 0 || stream.streamers.length > 0)) {
+            await enterScope(ctx, async () => {
+                for await (const patch of drainPatches(stream)) {
+                    if (out.disconnected) break // client gone — stop draining
+                    out.write(documentPatch(patch))
                 }
-                const seed = enterScope(ctx, () => collectSeed(config))
-                enc(documentTail(seed, opts))
-                controller.close()
-            } catch (caught) {
-                if (cancelled) log.channel('abide:stream').trace('reader left mid-stream')
-                else log.channel('abide:stream').error('streaming SSR drain failed:', caught)
-            } finally {
-                enterScope(ctx, closeRenderState)
-                releaseScope(ctx) // the request's work ends HERE for a streamed reply, not at runInScope
-            }
-        },
-        cancel() {
-            cancelled = true
-        },
+            })
+        }
+        // A drain error skips the tail: a document missing its seed is worse than a truncated one.
+        const seed = enterScope(ctx, () => collectSeed(config))
+        out.write(documentTail(seed, opts))
     })
 }
 
@@ -505,56 +555,32 @@ export function streamSoftNav(
     sharedLevels = 0,
 ): ReadableStream<Uint8Array> {
     const stream = enterScope(ctx, () => renderState()?.stream)
-    retainScope(ctx) // see streamPageDocument — the drain outlives runInScope (ADR 0026)
-    const encoder = new TextEncoder()
-    return new ReadableStream<Uint8Array>({
-        async start(controller) {
-            // The client can navigate away / abort mid-stream (e.g. a soft-nav's background middleware
-            // confirm never reads the body — it only wants the redirect envelope). That's EXPECTED, not a
-            // server fault: a cancelled controller reports `desiredSize === null`, so stop writing rather
-            // than throwing/logging. Only a genuine render error surfaces below.
-            let disconnected = false
-            const frame = (obj: unknown): void => {
-                if (disconnected || controller.desiredSize === null) {
-                    disconnected = true
-                    return
-                }
-                try {
-                    controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`))
-                } catch {
-                    disconnected = true
-                }
+    // The client can navigate away / abort mid-stream (e.g. a soft-nav's background middleware confirm
+    // never reads the body — it only wants the redirect envelope). That's EXPECTED, not a server fault,
+    // and `out.disconnected` absorbs it.
+    return streamRetainedRender(ctx, 'streaming soft-nav drain', async (out) => {
+        const frame = (obj: unknown): void => out.write(`${JSON.stringify(obj)}\n`)
+        // `sharedLevels` > 0: the shell is only the diverging suffix; the client keeps that many outer
+        // layout instances alive and grafts this into the innermost kept layout's outlet (C6.2).
+        frame({ kind: 'shell', html: shell, url: urlPath, sharedLevels })
+        try {
+            if (
+                stream !== undefined &&
+                (stream.deferred.length > 0 || stream.streamers.length > 0)
+            ) {
+                await enterScope(ctx, async () => {
+                    for await (const patch of drainPatches(stream)) {
+                        if (out.disconnected) break // client gone — stop draining
+                        frame({ kind: patch.op, id: patch.id, html: patch.html }) // "fill" | "append"
+                    }
+                })
             }
-            // `sharedLevels` > 0: the shell is only the diverging suffix; the client keeps that many outer
-            // layout instances alive and grafts this into the innermost kept layout's outlet (C6.2).
-            frame({ kind: 'shell', html: shell, url: urlPath, sharedLevels })
-            try {
-                if (
-                    stream !== undefined &&
-                    (stream.deferred.length > 0 || stream.streamers.length > 0)
-                ) {
-                    await enterScope(ctx, async () => {
-                        for await (const patch of drainPatches(stream)) {
-                            if (disconnected) break // client gone — stop draining
-                            frame({ kind: patch.op, id: patch.id, html: patch.html }) // "fill" | "append"
-                        }
-                    })
-                }
-            } catch (caught) {
-                // A genuine render/drain error — a client disconnect is already absorbed by `frame`.
-                log.channel('abide:stream').error('streaming soft-nav drain failed:', caught)
-            }
-            if (!disconnected) {
-                const seed = enterScope(ctx, () => collectSeed(config))
-                frame({ kind: 'seed', seed })
-                try {
-                    controller.close()
-                } catch {
-                    // Raced with a client disconnect between the guard and here — nothing to do.
-                }
-            }
-            enterScope(ctx, closeRenderState)
-            releaseScope(ctx)
-        },
+        } catch (caught) {
+            // A drain error still emits the seed — unlike first load, the client has already swapped the
+            // shell in and needs the seed to hydrate what DID render.
+            log.channel('abide:stream').error('streaming soft-nav drain failed:', caught)
+        }
+        if (!out.disconnected)
+            frame({ kind: 'seed', seed: enterScope(ctx, () => collectSeed(config)) })
     })
 }
