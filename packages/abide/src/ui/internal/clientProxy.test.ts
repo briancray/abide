@@ -83,11 +83,22 @@ test('a memo:false read has the same peek policy on the server and in the browse
     const app = await boot(routes)
 
     // SERVER: `peek` subscribes and kicks a load; nothing is retained, so the second peek loads again.
+    //
+    // EACH KICK IS AWAITED TO SETTLEMENT BEFORE THE NEXT ONE. `calls` is incremented by the HANDLER, so it
+    // rises the moment a request reaches it — which is BEFORE the caller's slot has a value. Polling it to
+    // decide "the first load finished" therefore released while the load was still in flight, and the
+    // second `peek` coalesced onto it (correctly — at ttl:0 identical CONCURRENT calls still share one run),
+    // so no second request was ever made and the next poll waited out its 2s deadline. That was a ~1-in-5
+    // hang on the client half, where a loopback round trip makes the in-flight window wide.
+    //
+    // `await fn(args)` joins the in-flight run rather than starting one, so awaiting it adds no work — and
+    // if that ever stopped being true, the exact-count assertion at the end of the test is what catches it.
     routes.tick.peek({ id: 1 })
-    await until(() => calls === 1)
+    await routes.tick({ id: 1 })
     routes.tick.peek({ id: 1 })
-    await until(() => calls === 2)
+    await routes.tick({ id: 1 })
     const serverRuns = calls
+    expect(serverRuns).toBe(2)
 
     // The wire spec the client bundle actually ships for this rpc. `ttl: 0`, not `null` — the whole
     // divergence was this one field, and `memo` stays true because a READ still routes through the
@@ -104,9 +115,9 @@ test('a memo:false read has the same peek policy on the server and in the browse
         { id: number; run: number }
     >
     proxy.peek({ id: 1 })
-    await until(() => calls === 1)
+    await proxy({ id: 1 })
     proxy.peek({ id: 1 })
-    await until(() => calls === 2)
+    await proxy({ id: 1 })
 
     expect(calls).toBe(serverRuns)
 })
@@ -242,6 +253,9 @@ test('makeClientImports threads tags from the spec into the proxy memo', async (
 
 // Wait for a condition instead of sleeping a guessed interval — the suite runs in parallel, so a
 // fixed sleep sized on an idle machine turns into an intermittent failure under load.
+// Poll a condition to a deadline. When the condition reads a MONOTONE counter, write it as `>=` rather
+// than `===`: an overshoot can never become true again, so exact equality converts "more work happened
+// than expected" into a deadline timeout that names no cause. Assert the exact count separately, after.
 async function until(condition: () => boolean, timeoutMs = 2000): Promise<void> {
     const deadline = Date.now() + timeoutMs
     while (!condition()) {

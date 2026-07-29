@@ -159,6 +159,10 @@ describe('the safety invariant: only ever UNDER-mark', () => {
         ['a plain expression', 'a + b * c', ['a', 'b', 'c']],
         ['a call', 'compute(first, second)', ['compute', 'first', 'second']],
         ['a member chain', 'thing.field.other', ['thing']],
+        // The `${}` belongs to the SOURCE BEING ANALYSED, not to this file — the point of the case is
+        // that a free identifier inside a template placeholder is still found. Making it a real template
+        // literal would substitute at test-build time and the fixture would no longer contain a `${}`.
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: it is the fixture's syntax, not ours.
         ['a template literal', 'render(`a ${value} b`)', ['render', 'value']],
         ['an object literal', 'const o = { key: value }', ['value']],
         ['an array literal', 'const list = [first, second]', ['first', 'second']],

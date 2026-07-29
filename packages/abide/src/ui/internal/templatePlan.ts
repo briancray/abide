@@ -17,7 +17,7 @@
 import type { BindingAnalysis, NestedScript } from './analyzeBindings.ts'
 import { type CellBindings, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
-import { type AttrPart, attributeParts } from './attributeParts.ts'
+import { attributeParts } from './attributeParts.ts'
 import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 import { escapeHtml } from './serverRuntime.ts'

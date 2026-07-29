@@ -57,6 +57,10 @@ const awaitBlock: ServerChunk = {
     kind: 'awaitBlock',
     expr: 'p',
     pending: [],
+    // `then`/`catch`/`finally` are the `{#await}` block's own BRANCH NAMES (the template grammar's
+    // `{:then}`/`{:catch}`/`{:finally}`), so this is the plan node's real shape and renaming the field
+    // would rename the grammar. Nothing awaits a plan node — it is data read by the emitters.
+    // biome-ignore lint/suspicious/noThenProperty: a branch name from the template grammar, not a thenable.
     then: null,
     catch: null,
     finally: null,

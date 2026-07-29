@@ -60,14 +60,29 @@ describe('abide run', () => {
         const port = probe.port
         probe.stop(true)
 
+        // THE PROBE IS A BIND, NOT A FETCH, AND IT IS SYNCHRONOUS — both halves are load-bearing.
+        //
+        // Synchronous because of a `bun test --parallel` bug (Bun 1.3.14): under `--parallel`, `await
+        // import(specifier)` resolves WITHOUT waiting for the imported module's top-level await to settle.
+        // The fixture used to `await fetch(...)` at the top level and assign afterwards, so `run()` returned
+        // before the assignment ran and the test read `undefined` — reliably, on every parallel run, which
+        // is the package's own `test` script. Reproducible in six lines with no abide involved, and correct
+        // under the plain `bun` runtime, so `abide run`'s own `await import` is unaffected. Keeping the
+        // fixture free of top-level await sidesteps it entirely rather than pinning a bug's shape.
+        //
+        // A bind because it is the stronger claim: `Bun.serve` on a taken port throws EADDRINUSE
+        // synchronously, so this asserts the port is genuinely UNBOUND. A failed `fetch` only said nothing
+        // answered, which a bound-but-broken listener would also satisfy.
         const file = await script(
-            // The `${}` belongs to the SCRIPT being written to disk, not to this file — making this a
-            // template literal would substitute at test-build time and the fixture would read the wrong port.
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: see above — it is the fixture's syntax.
-            'const reachable = await fetch(`http://127.0.0.1:${Bun.env.PORT}/__abide/health`)\n' +
-                '    .then(() => true)\n' +
-                '    .catch(() => false)\n' +
-                "process.env.__ABIDE_RAN = reachable ? 'served' : 'unserved'\n",
+            'let bound\n' +
+                'try {\n' +
+                '    const probe = Bun.serve({ port: Number(Bun.env.PORT), fetch: () => new Response("x") })\n' +
+                '    probe.stop(true)\n' +
+                '    bound = false\n' +
+                '} catch {\n' +
+                '    bound = true\n' +
+                '}\n' +
+                "process.env.__ABIDE_RAN = bound ? 'served' : 'unserved'\n",
         )
         const previousPort = Bun.env.PORT
         Bun.env.PORT = String(port)
