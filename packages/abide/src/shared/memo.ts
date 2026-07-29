@@ -496,45 +496,6 @@ function isStreamSource(value: unknown): value is AsyncIterable<unknown> {
     )
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    if (value === null || typeof value !== 'object') return false
-    const prototype = Object.getPrototypeOf(value)
-    return prototype === Object.prototype || prototype === null
-}
-
-// A selector's canonical keys, computed ONCE per verb call. `selectSlots` scans every slot of the memo,
-// so deriving the selector side inside the per-slot match recomputed identical `canonicalKey(selector…)`
-// values (each with its own alloc) for every slot — O(slots × selectorKeys) → O(slots + selectorKeys).
-type CompiledSelector =
-    | { kind: 'object'; keys: string[]; values: string[] }
-    | { kind: 'exact'; canonical: string }
-
-function _compileSelector(selector: unknown): CompiledSelector {
-    if (isPlainObject(selector)) {
-        const keys = Object.keys(selector)
-        const values: string[] = []
-        for (let i = 0; i < keys.length; i++) values.push(canonicalKey(selector[keys[i] as string]))
-        return { kind: 'object', keys, values }
-    }
-    return { kind: 'exact', canonical: canonicalKey(selector) }
-}
-
-// Superset match (§8.2): a selector object matches a slot whose args include every selector
-// key with a canonically-equal value. Non-object selectors fall back to exact key equality.
-function _matchesSelector(slotArgs: unknown, compiled: CompiledSelector): boolean {
-    if (compiled.kind === 'object') {
-        if (!isPlainObject(slotArgs)) return false
-        const keys = compiled.keys
-        for (let i = 0; i < keys.length; i++) {
-            const key = keys[i] as string
-            if (!(key in slotArgs)) return false
-            if (canonicalKey(slotArgs[key]) !== compiled.values[i]) return false
-        }
-        return true
-    }
-    return canonicalKey(slotArgs) === compiled.canonical
-}
-
 // `fn.length` reports 0 for `(args = {}) => …` and `(...args) => …` too, which would silently reclassify
 // an args-keyed memo as auto-tracked (ADR 0024 §Consequences). Only a genuinely EMPTY parameter list may
 // take the auto path, so read the list out of the source text and refuse the false zeros loudly. The form
