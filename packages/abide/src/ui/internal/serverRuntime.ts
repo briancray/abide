@@ -13,6 +13,12 @@ import {
     reactiveScope,
     serverDefaultScope,
 } from '../../shared/internal/reactiveScope.ts'
+import {
+    attributeDisposition,
+    directiveIsOn,
+    isSpreadHandler,
+    styleDirectiveApplies,
+} from './attributeDisposition.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // Re-exported so the emitted server `{#for await}` can flip the `done(source)` probe when it fully
@@ -214,12 +220,9 @@ export function attrBuilder(): AttributeBuilder {
 }
 
 function applyAttributeValue(builder: AttributeBuilder, name: string, value: unknown): void {
-    if (value === false || value === null || value === undefined) return // omit
-    if (value === true) {
-        builder.setAttribute(name, true)
-        return
-    }
-    builder.setAttribute(name, String(value))
+    const disposition = attributeDisposition(value)
+    if (disposition.kind === 'omit') return
+    builder.setAttribute(name, disposition.kind === 'bare' ? true : disposition.text)
 }
 
 export function applyStatic(builder: AttributeBuilder, name: string, value: string | null): void {
@@ -232,12 +235,11 @@ export function applyExpr(builder: AttributeBuilder, name: string, value: unknow
 }
 
 export function applyClassDir(builder: AttributeBuilder, name: string, condition: unknown): void {
-    if (condition) builder.addClass(name)
+    if (directiveIsOn(condition)) builder.addClass(name)
 }
 
 export function applyStyleDir(builder: AttributeBuilder, name: string, value: unknown): void {
-    if (value !== false && value !== null && value !== undefined)
-        builder.addStyle(`${name}: ${String(value)}`)
+    if (styleDirectiveApplies(value)) builder.addStyle(`${name}: ${String(value)}`)
 }
 
 // Resolve a bound value through its accessor exactly as the client `boundAccessor` does: a writable
@@ -283,7 +285,7 @@ export function applyBind(builder: AttributeBuilder, name: string, value: unknow
 export function applySpread(builder: AttributeBuilder, spread: unknown): void {
     if (spread !== null && typeof spread === 'object') {
         for (const [key, value] of Object.entries(spread as Record<string, unknown>)) {
-            if (typeof value === 'function') continue // drop handlers server-side
+            if (isSpreadHandler(value)) continue // no live node to attach to
             applyAttributeValue(builder, key, value)
         }
     }

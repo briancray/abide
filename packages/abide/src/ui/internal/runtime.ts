@@ -24,6 +24,7 @@ import {
 import { peekSettled } from '../../shared/internal/settledRead.ts'
 import { streamTranscriptOf } from '../../shared/internal/streamTranscript.ts'
 import { log } from '../../shared/log.ts'
+import { attributeDisposition, isSpreadHandler } from './attributeDisposition.ts'
 import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { insert, nextSibling, remove } from './domOps.ts'
 import {
@@ -387,13 +388,16 @@ export function htmlBlock(
 const FORM_PROPERTY_NAMES = new Set(['value', 'checked', 'selected', 'disabled'])
 
 export function applyAttribute(element: Element, name: string, value: unknown): void {
-    if (value === false || value === null || value === undefined) {
+    const disposition = attributeDisposition(value)
+    // The DOM-only half stays here: a form property has to be MIRRORED onto the node, because the
+    // attribute is only the initial value once the user has touched the control.
+    if (disposition.kind === 'omit') {
         element.removeAttribute(name)
         if (FORM_PROPERTY_NAMES.has(name))
             (element as unknown as Record<string, unknown>)[name] = false
         return
     }
-    if (value === true) {
+    if (disposition.kind === 'bare') {
         element.setAttribute(name, '')
         if (FORM_PROPERTY_NAMES.has(name))
             (element as unknown as Record<string, unknown>)[name] = true
@@ -403,7 +407,7 @@ export function applyAttribute(element: Element, name: string, value: unknown): 
         ;(element as unknown as Record<string, unknown>).value = value
         return
     }
-    element.setAttribute(name, String(value))
+    element.setAttribute(name, disposition.text)
 }
 
 // A reactive effect that suppresses its FIRST apply under hydration — the server already serialized
@@ -457,8 +461,12 @@ export function spread(element: Element, read: () => unknown): Disposer {
         const nextHandlerKeys: string[] = []
         if (value !== null && typeof value === 'object') {
             for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-                if (typeof entry === 'function' && /^on[a-z]/.test(key)) {
-                    // Event props attach unconditionally — free during the walk (decision 7).
+                if (isSpreadHandler(entry)) {
+                    // A function is never an attribute — the server drops it for want of a live node,
+                    // and here it is assigned as a PROPERTY, which is how `onclick` and friends wire up
+                    // natively. Attaching unconditionally is free during the walk (decision 7). The test
+                    // used to be `/^on[a-z]/.test(key)`, so `onClick` fell through to `setAttribute` and
+                    // wrote the function's source text into the DOM, where a browser executes it.
                     ;(element as unknown as Record<string, unknown>)[key] = entry
                     nextHandlerKeys.push(key)
                     continue
