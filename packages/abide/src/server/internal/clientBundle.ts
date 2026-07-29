@@ -41,6 +41,7 @@ import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
+import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import { preloadGraphOf } from './preloadGraphOf.ts'
 import { buildRegistry } from './registry.ts'
@@ -457,7 +458,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
             target: 'browser',
             splitting: true,
             minify: config.dev === false,
-            publicPath: '/__abide/chunk/',
+            publicPath: CHUNK_PREFIX,
             naming: {
                 entry: '[name]-[hash].[ext]',
                 chunk: '[name]-[hash].[ext]',

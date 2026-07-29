@@ -22,6 +22,7 @@
 // everything" failure mode. `routeChunks` excludes anything already in `bootChunks` so a shared
 // dependency is never preloaded twice in one document.
 
+import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import type { ChunkAsset } from './clientBundle.ts'
 
 export interface PreloadGraph {
@@ -40,7 +41,13 @@ export interface PreloadGraph {
 // (`from"/__abide/chunk/loader-<hash>.js"`) — the exact strings the document needs — so this cannot
 // drift from what the browser will actually request. Bun's output is minified, so the forms to match
 // are `import"…"`, `import{…}from"…"` and `export{…}from"…"`.
-const STATIC_IMPORT = /(?:\bfrom|\bimport)\s*["']\/__abide\/chunk\/([^"']+)["']/g
+// Built from `CHUNK_PREFIX` rather than restating it. `publicPath` rewrote these specifiers to that
+// prefix at build time, so a rename that moved the route and the compression opt-out — which is what
+// the constant already owns — would have left this pattern matching nothing: an EMPTY preload graph,
+// no `modulepreload` links, and the boot waterfall back (392ms on the docs app), with no test to
+// notice, since `preloadGraphOf` has none. The prefix carries no regex metacharacter, and `new RegExp`
+// needs no escaping of `/`.
+const STATIC_IMPORT = new RegExp(`(?:\\bfrom|\\bimport)\\s*["']${CHUNK_PREFIX}([^"']+)["']`, 'g')
 
 function staticGraphOf(root: string, files: Map<string, ChunkAsset>, skip: Set<string>): string[] {
     const decoder = new TextDecoder()

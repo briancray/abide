@@ -39,6 +39,7 @@ import { NAV_HEADERS, NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
 import { positiveEnvBytes } from '../../shared/internal/positiveEnvBytes.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
+import { STREAM_RESUME, STREAM_RESUME_HEADER } from '../../shared/internal/STREAM_RESUME_HEADER.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
@@ -801,7 +802,7 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
             // `Accept` rung, which this half used to skip, so an untagged source resumed as jsonl
             // after having been served as sse.
             const response = streamResponseFor(resumed.cursor, scope.request)
-            response.headers.set('x-abide-stream-resume', 'live')
+            response.headers.set(STREAM_RESUME_HEADER, STREAM_RESUME.live)
             return response
         }
         resumeFresh = true
@@ -823,7 +824,7 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
     if (isAsyncIterable(result)) {
         const response = streamResponseFor(result, scope.request)
         // A `?__abide_from=` resume whose transcript was gone → a fresh run from 0; the client must REPLACE.
-        if (resumeFresh) response.headers.set('x-abide-stream-resume', 'fresh')
+        if (resumeFresh) response.headers.set(STREAM_RESUME_HEADER, STREAM_RESUME.fresh)
         return response
     }
 

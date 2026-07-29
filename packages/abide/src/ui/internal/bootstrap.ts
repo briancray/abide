@@ -28,6 +28,7 @@ import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
 import { identityAmbient } from '../../shared/internal/identityAmbient.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
+import { STREAM_RESUME, STREAM_RESUME_HEADER } from '../../shared/internal/STREAM_RESUME_HEADER.ts'
 import { traceAmbient } from '../../shared/internal/traceAmbient.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
@@ -119,7 +120,7 @@ export async function* resumeStreamSource(
     if (!response.ok || response.body === null) return
     // `fresh` = the retained transcript was gone, so this response is a full run from 0. The prefix it
     // replaces is already installed, so hand the whole slot back for a re-run rather than appending.
-    if (response.headers.get('x-abide-stream-resume') === 'fresh') {
+    if (response.headers.get(STREAM_RESUME_HEADER) === STREAM_RESUME.fresh) {
         onFresh()
         return
     }
