@@ -468,3 +468,113 @@ describe('socket transport — CSWSH', () => {
         TEST_TIMEOUT,
     )
 })
+
+describe('socket-connect — the GLOBAL middleware chain runs at the UPGRADE', () => {
+    // `auth.md` §13.4: "RPC, nav, socket-connect, and HTTP-face socket ops all pass the same chain."
+    // That was false. The upgrade returned before the chain was composed, so NO middleware ran for a
+    // WebSocket — and `authorizeSocketJoin` admitted any socket declaring no `middleware` of its own,
+    // on the stated premise that "the global chain already ran at the WS upgrade". It had not.
+    //
+    // The observable was: an app whose only global middleware is `requireLogin` answers an anonymous
+    // rpc with 401 and admits the same anonymous caller to a socket subscribe, plus every message
+    // published to it. No test could see it, because no socket test declared global middleware and no
+    // auth test opened a socket.
+    const requireLogin: Middleware = (next) => {
+        if (!identity().authenticated) error(401, 'login required')
+        return next()
+    }
+
+    test(
+        'an unauthenticated upgrade is REFUSED when global middleware denies',
+        async () => {
+            // No per-socket middleware: this is exactly the "connect-authed" socket whose only gate is
+            // the connect chain.
+            const feed = socket<string>({ channel: { tail: 2 } })
+            const app = await start({ middleware: [requireLogin], sockets: { feed } })
+
+            const response = await app.fetch('/__abide/sockets', {
+                headers: { upgrade: 'websocket', connection: 'Upgrade' },
+            })
+            expect(response.status).toBe(401)
+            await response.text()
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'an AUTHENTICATED caller still upgrades and subscribes',
+        async () => {
+            // The gate must admit, not just deny — a fix that refused everyone would pass the test above.
+            const feed = socket<string>({ channel: { tail: 2 } })
+            const app = await start({ middleware: [requireLogin], sockets: { feed } })
+
+            const authed = app.as({ id: 'user', authenticated: true })
+            const c = authed.socket()
+            openClients.push(c)
+            const s = c.subscribe<string>('feed', undefined)
+            await c.ready()
+            expect(await withTimeout(c.ack('feed', undefined), TEST_TIMEOUT, 'ack')).toBe('ok')
+
+            feed.publish('hello')
+            expect(await take(s, 1, TEST_TIMEOUT)).toEqual(['hello'])
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'with NO global middleware the upgrade is open, as before',
+        async () => {
+            // The fix must not turn "the app wrote no auth" into "nothing connects". abide authorizes
+            // nothing for you; if you write no middleware, everything reachable is callable.
+            const feed = socket<string>({ channel: { tail: 2 } })
+            const app = await start({ sockets: { feed } })
+
+            const c = client(app)
+            c.subscribe('feed', undefined)
+            await c.ready()
+            expect(await withTimeout(c.ack('feed', undefined), TEST_TIMEOUT, 'ack')).toBe('ok')
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'the chain sees `route().kind === "socket-connect"`',
+        async () => {
+            // The kind exists again BECAUSE the chain runs here — a middleware branching on the surface
+            // it is gating needs to be able to name this one.
+            let seen: string | undefined
+            const observe: Middleware = (next) => {
+                seen = route().kind
+                return next()
+            }
+            const feed = socket<string>({ channel: { tail: 2 } })
+            const app = await start({ middleware: [observe], sockets: { feed } })
+
+            const c = client(app)
+            c.subscribe('feed', undefined)
+            await c.ready()
+            expect(seen).toBe('socket-connect')
+        },
+        TEST_TIMEOUT,
+    )
+
+    test(
+        'a middleware that THROWS anything other than a deliberate outcome fails CLOSED',
+        async () => {
+            // An authorization gate must read "the chain did not reach its terminal" as "it did not
+            // authorize" — never as "proceed". A bug in an auth middleware must not open the socket.
+            const boom: Middleware = () => {
+                throw new Error('middleware bug')
+            }
+            const feed = socket<string>({ channel: { tail: 2 } })
+            const app = await start({ middleware: [boom], sockets: { feed } })
+
+            const response = await app.fetch('/__abide/sockets', {
+                headers: { upgrade: 'websocket', connection: 'Upgrade' },
+            })
+            expect(response.status).toBeGreaterThanOrEqual(500)
+            await response.text()
+        },
+        TEST_TIMEOUT,
+    )
+})

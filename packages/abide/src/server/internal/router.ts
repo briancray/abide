@@ -397,6 +397,57 @@ function routeInfo(url: URL, method: string): { kind: RouteKind; name: string } 
 // and is NOT this — an upgrade cannot travel through the response pipeline.
 const SOCKET_FACE_PREFIX = '/__abide/sockets/'
 
+// The multiplexed WS mux itself (the socket HTTP FACE is the `/…/<name>` prefix above).
+const SOCKET_MUX_ROUTE = '/__abide/sockets'
+
+// The terminal of the socket-connect chain. Compared by IDENTITY, so a middleware returning its own
+// response — of ANY status — reads as the short-circuit it is.
+const UPGRADE_ADMITTED = new Response(null, { status: 101 })
+
+// The request scope a `socket-connect` middleware runs in. Deliberately NOT the full HTTP scope: an
+// upgrade has no response to write a rolling identity cookie onto (a successful upgrade returns
+// `undefined`), so the cookie-lifecycle fields are absent rather than present-and-ignored.
+//
+// Identity resolution FAILS CLOSED to anonymous. A tampered token that will not unseal must reach the
+// chain as "nobody", so an app's `requireLogin` denies it — degrading to anonymous is what makes the
+// gate meaningful, where throwing here would 500 and letting it through would be the bug this fixes.
+async function socketConnectScope(
+    request: Request,
+    url: URL,
+    srv: Bun.Server<SocketConnectionData>,
+    propagatedTrace: string | undefined,
+): Promise<RequestScope> {
+    const cookies = new Bun.CookieMap(request.headers.get('cookie') ?? '')
+    let identity: Principal
+    try {
+        identity = await resolveIdentity(request)
+    } catch {
+        identity = anonymousPrincipal()
+    }
+    return {
+        request,
+        cookies,
+        identity,
+        identityStateless: isMachineBearer(request),
+        identityCleared: false,
+        identityDirty: false,
+        identityExpiresAt: undefined,
+        bag: {},
+        route: {
+            kind: 'socket-connect',
+            name: SOCKET_MUX_ROUTE,
+            params: {},
+            url,
+            navigating: false,
+        },
+        // The WS-data generic is a socket-transport concern only; the public `server()` surface stays
+        // `Bun.Server<undefined>`.
+        server: srv as unknown as Bun.Server<undefined>,
+        slots: new Map<string, unknown>(),
+        traceparent: propagatedTrace,
+    }
+}
+
 async function dispatch(scope: RequestScope, config: AppConfig): Promise<Response> {
     const routes = config.routes ?? {}
     const url = scope.route.url
@@ -946,10 +997,24 @@ export function createApp(config: AppConfig = {}): App {
                 )
             }
 
-            // Multiplexed socket WS upgrade (sockets.md S3.1). CSWSH-gated before the upgrade. Identity
-            // is resolved ONCE here (same cookie/bearer ladder as the HTTP path) and carried on the
-            // connection so `@rpc:` cache-channel joins can re-authorize against it per subscribe (§2.3).
-            if (url.pathname === '/__abide/sockets') {
+            // Multiplexed socket WS upgrade (sockets.md S3.1). CSWSH-gated, then the GLOBAL middleware
+            // chain, then the upgrade. Identity is resolved ONCE here (same cookie/bearer ladder as the
+            // HTTP path) and carried on the connection so `@rpc:` cache-channel joins can re-authorize
+            // against it per subscribe (§2.3).
+            //
+            // THE CHAIN RUNS HERE, and did not used to. `auth.md` §13.4 says "RPC, nav, socket-connect,
+            // and HTTP-face socket ops all pass the same chain", and S4.4 says WS runs it at
+            // `socket-connect` — but this branch returned before the chain was ever composed, so no
+            // middleware ran for a WebSocket at all. `authorizeSocketJoin` then admitted any socket
+            // declaring no `middleware` of its own, on the stated premise that "the global chain already
+            // ran at the WS upgrade". It had not. An app whose only global middleware was `requireLogin`
+            // answered an anonymous rpc with 401 and admitted the same anonymous caller to a socket
+            // subscribe — and to every message published to it.
+            //
+            // Only the GLOBAL chain: a socket's own `middleware` is the per-ROOM refinement and needs
+            // room args, which no connection has (one connection carries many rooms). That runs at
+            // subscribe, in `authorizeSocketJoin`, and now genuinely layers on top of a connect gate.
+            if (url.pathname === SOCKET_MUX_ROUTE) {
                 if (!socketOriginAllowed(request)) {
                     return exit(
                         errorResponse(403, 'CSWSH: WebSocket Origin does not match APP_URL.'),
@@ -959,9 +1024,38 @@ export function createApp(config: AppConfig = {}): App {
                         },
                     )
                 }
+                const connectScope = await socketConnectScope(request, url, srv, propagatedTrace)
+                let admitted: Response
+                try {
+                    admitted = await runInScope(
+                        connectScope,
+                        compose(globalMiddleware, () => UPGRADE_ADMITTED),
+                    )
+                } catch (caught) {
+                    // A middleware short-circuits by THROWING (`error(401)`/`redirect(...)`). Render it
+                    // as the reply. Fail CLOSED on anything else: this is an authorization gate, and the
+                    // safe reading of "the chain did not reach its terminal" is that it did not
+                    // authorize — never that the upgrade may proceed.
+                    const rendered = outcomeResponse(caught)
+                    if (rendered === undefined)
+                        log.channel('abide:socket').error(
+                            'socket-connect middleware threw:',
+                            caught,
+                        )
+                    return exit(rendered ?? (await handleUncaught(caught, config)), {
+                        scope: undefined,
+                        cors: undefined,
+                    })
+                }
+                // A middleware may legitimately return its own 2xx, and returning ANY response instead
+                // of the terminal's IS the short-circuit — so the sentinel is compared by IDENTITY,
+                // never by status.
+                if (admitted !== UPGRADE_ADMITTED)
+                    return exit(admitted, { scope: undefined, cors: undefined })
+
                 const connData: SocketConnectionData = {
                     request,
-                    identity: await resolveIdentity(request),
+                    identity: connectScope.identity,
                 }
                 if (srv.upgrade(request, { data: connData })) return undefined
                 return exit(errorResponse(426, 'Expected a WebSocket upgrade request.'), {

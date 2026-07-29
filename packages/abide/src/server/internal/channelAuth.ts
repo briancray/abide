@@ -137,8 +137,15 @@ export async function authorizeSocketJoin(
     config: AppConfig,
 ): Promise<boolean> {
     const socketMiddleware = sock.__socket.options.middleware ?? []
-    // No per-room gate configured → connect-authed (today's behavior). The global chain already ran at
-    // the WS upgrade; without socket `middleware` there is no per-room refinement to enforce.
+    // No per-room gate configured → connect-authed. The global chain already ran at the WS upgrade
+    // (`router.ts`, the `SOCKET_MUX_ROUTE` branch), so this caller has already passed the app's own
+    // authorization; without socket `middleware` there is no per-room refinement left to enforce.
+    //
+    // That premise was written here before it was TRUE. The upgrade used to return before the chain was
+    // composed, so no middleware ran for a WebSocket at all — and this line then admitted every
+    // connect-authed socket to a caller the app's `requireLogin` had never seen. Whatever this returns
+    // rests entirely on the connect gate existing; if that branch ever stops running the chain, this
+    // `true` becomes an open door again.
     if (socketMiddleware.length === 0) return true
     const globalMiddleware = config.middleware ?? []
     return reauthorize(
