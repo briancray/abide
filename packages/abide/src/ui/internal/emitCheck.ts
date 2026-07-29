@@ -25,8 +25,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
 import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
-import { skipQuoted } from './skipQuoted.ts'
-import { skipTypeArguments } from './skipTypeArguments.ts'
+import { skipQuoted, splitTopLevel, topLevelAssignmentIndex } from './scanText.ts'
 
 // A verbatim span of the generated file: [genStart, genEnd) maps to original offset `origStart`.
 export interface Segment {
@@ -821,7 +820,7 @@ function emitDeclarators(
     emitOriginal: (absStart: number, text: string) => void,
     emitSynthetic: (text: string) => void,
 ): void {
-    for (const part of splitTopLevelCommas(rawDeclarators)) {
+    for (const part of splitTopLevel(rawDeclarators)) {
         const text = part.text
         const partAbs = absBase + part.start
         const equalsIndex = topLevelAssignmentIndex(text)
@@ -851,67 +850,6 @@ function emitDeclarators(
 // ---------------------------------------------------------------------------
 // String utilities (depth + quote aware)
 // ---------------------------------------------------------------------------
-
-interface CommaPart {
-    text: string
-    start: number
-}
-
-function splitTopLevelCommas(text: string): CommaPart[] {
-    const parts: CommaPart[] = []
-    let depth = 0
-    let start = 0
-    for (let index = 0; index < text.length; index++) {
-        const char = text[index]
-        if (char === undefined) break
-        if (char === "'" || char === '"' || char === '`') {
-            index = skipQuoted(text, index)
-            continue
-        }
-        if (char === '{' || char === '[' || char === '(') depth++
-        else if (char === '}' || char === ']' || char === ')') depth--
-        else if (char === '<' && depth === 0) {
-            // A type-argument list is one unit: `channel<T, Args>(…)` is a single declarator, not two.
-            const end = skipTypeArguments(text, index)
-            if (end !== -1) index = end - 1
-        } else if (char === ',' && depth === 0) {
-            parts.push({ text: text.slice(start, index), start })
-            start = index + 1
-        }
-    }
-    parts.push({ text: text.slice(start), start })
-    return parts
-}
-
-// Index of the first top-level assignment `=`, skipping the `=` that belongs to a comparison/arrow token
-// (`==`, `===`, `!=`, `>=`, `<=`, `=>`). Needed so a function-type ANNOTATION (`let f: () => void = fn`)
-// splits at the real assignment, not at the `=` inside its `=>`.
-function topLevelAssignmentIndex(text: string): number {
-    let depth = 0
-    for (let index = 0; index < text.length; index++) {
-        const char = text[index]
-        if (char === undefined) break
-        if (char === "'" || char === '"' || char === '`') {
-            index = skipQuoted(text, index)
-            continue
-        }
-        if (char === '{' || char === '[' || char === '(') depth++
-        else if (char === '}' || char === ']' || char === ')') depth--
-        else if (depth === 0 && char === '=') {
-            const prev = text[index - 1]
-            const next = text[index + 1]
-            const partOfOperator =
-                next === '=' ||
-                next === '>' ||
-                prev === '=' ||
-                prev === '!' ||
-                prev === '<' ||
-                prev === '>'
-            if (!partOfOperator) return index
-        }
-    }
-    return -1
-}
 
 // ---------------------------------------------------------------------------
 // Bidirectional offset mapping

@@ -17,8 +17,8 @@ import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { bindPattern } from './bindPattern.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
+import { splitParams } from './scanText.ts'
 import { applyStatic, attrBuilder } from './serverRuntime.ts'
-import { splitParams } from './splitParams.ts'
 import type { AttrPlan, ServerChunk, TemplatePlan } from './templatePlan.ts'
 
 // RPC route imports follow the `src/server/rpc/<name>.ts` file convention, so their specifier carries a

@@ -44,7 +44,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { Root, Script, TemplateNode } from './ast.ts'
 import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
-import { splitParams } from './splitParams.ts'
+import { matchingBracket, splitParams, topLevelIndexOf } from './scanText.ts'
 
 const K = SyntaxKind
 
@@ -1652,17 +1652,6 @@ export function rewriteFreeIdentifiers(
 // analyzeBindings — top-level `<script>` walk (imports, cells, bindings, setup code)
 // ---------------------------------------------------------------------------
 
-function topLevelIndexOf(text: string, target: string): number {
-    let depth = 0
-    for (let index = 0; index < text.length; index++) {
-        const char = text[index]
-        if (char === '{' || char === '[' || char === '(') depth++
-        else if (char === '}' || char === ']' || char === ')') depth--
-        else if (depth === 0 && char === target) return index
-    }
-    return -1
-}
-
 export function extractBindingNames(pattern: string): string[] {
     const trimmed = pattern.trim()
     if (trimmed === '') return []
@@ -1811,28 +1800,6 @@ function callOpenIndex(rest: string): number {
     return rest.charAt(index) === '(' ? index : -1
 }
 
-// Index of the `)` matching the `(` at `open`, skipping string/template literals, or -1.
-function matchingParen(text: string, open: number): number {
-    let depth = 0
-    for (let index = open; index < text.length; index++) {
-        const char = text.charAt(index)
-        if (char === "'" || char === '"' || char === '`') {
-            index++
-            while (index < text.length && text.charAt(index) !== char) {
-                if (text.charAt(index) === '\\') index++
-                index++
-            }
-            continue
-        }
-        if (char === '(' || char === '[' || char === '{') depth++
-        else if (char === ')' || char === ']' || char === '}') {
-            depth--
-            if (depth === 0) return index
-        }
-    }
-    return -1
-}
-
 // Does `source` open an ARGLESS arrow thunk — `() => …` or `(): T => …`?
 //
 // This used to be `/^\(\s*\)\s*=>/`, which matched only the un-annotated form. An annotated memo then
@@ -1849,7 +1816,7 @@ function matchingParen(text: string, open: number): number {
 // arrow after it confirms one. Requiring the arrow at all is the cheap guard against garbage.
 function isArglessArrowThunk(source: string): boolean {
     if (source.charAt(0) !== '(') return false
-    const close = matchingParen(source, 0)
+    const close = matchingBracket(source, 0)
     if (close === -1) return false
     if (source.slice(1, close).trim() !== '') return false // takes args — not a thunk
 
@@ -1893,7 +1860,7 @@ function memoKind(init: string, memoLocal: string): 'memo' | 'cell' | null {
     const rest = init.slice(bare[0].length)
     const open = callOpenIndex(rest)
     if (open === -1) return null
-    const close = matchingParen(rest, open)
+    const close = matchingBracket(rest, open)
     if (close === -1) return null
 
     const after = rest.slice(close + 1).trim()

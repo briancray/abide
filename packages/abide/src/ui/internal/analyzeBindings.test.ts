@@ -563,6 +563,22 @@ describe('analyzeBindings cell recognition', () => {
         expect(analysis.cellNames.size).toBe(0)
     })
 
+    // A declarator list is split by the SHARED scanner (`scanText`), so text inside a string literal
+    // can no longer be mistaken for a binding. The build lane used to split naively while the check lane
+    // skipped strings, so this script bound a phantom `y` that the template then emitted as a bare
+    // lexical reference — a ReferenceError at mount, with `abide check` green.
+    test('a comma inside a string literal does not fabricate a binding', () => {
+        const analysis = analyzeBindings(parse('<script>let a = "x,y", b = 1</script><p>{a}</p>'))
+        expect([...analysis.declared].sort()).toEqual(['a', 'b'])
+    })
+
+    test('a comma inside a nested template substitution does not fabricate a binding', () => {
+        const analysis = analyzeBindings(
+            parse('<script>let x = `a${`b,c`}d`, y = 1</script><p>{x}</p>'),
+        )
+        expect([...analysis.declared].sort()).toEqual(['x', 'y'])
+    })
+
     test('dual-script root: module + instance', () => {
         const root = parse(
             "<script module>import { state } from 'abide/shared/state'; let g = state(1)</script>" +

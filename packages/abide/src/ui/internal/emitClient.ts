@@ -18,7 +18,7 @@ import { bindLazyPattern } from './bindLazyPattern.ts'
 import { bindPattern } from './bindPattern.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
-import { splitParams } from './splitParams.ts'
+import { splitParams } from './scanText.ts'
 import type { AttrPlan, ClientPlan, DynamicSlot, TemplatePlan } from './templatePlan.ts'
 
 // Slot kinds that occupy a single `<!---->` leaf position in a level (a value node + its anchor).
