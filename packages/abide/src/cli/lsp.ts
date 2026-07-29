@@ -29,8 +29,9 @@ import {
     offsetToLineColumn,
     type RawDiagnostic,
     resolveAbidePosition,
+    resolveAbideRange,
 } from '../ui/internal/abideDiagnostic.ts'
-import { CHECK_HEADER_LENGTH, mapGenToOrig, mapOrigToGen } from '../ui/internal/emitCheck.ts'
+import { mapOrigToGen } from '../ui/internal/emitCheck.ts'
 import { encodeSemanticTokens } from '../ui/internal/encodeSemanticTokens.ts'
 import {
     type LoweredModule,
@@ -585,13 +586,13 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
     ): object | null => {
         const module = byTs.get(decl.file.toLowerCase())
         if (module !== undefined) {
-            if (decl.pos < CHECK_HEADER_LENGTH) return null
-            return makeLocation(
-                module.abidePath,
-                module.source,
-                mapGenToOrig(module.segments, decl.pos),
-                mapGenToOrig(module.segments, decl.end),
-            )
+            // Through the shared range map-back: this used to map `decl.end` RAW, and a generated end
+            // offset lands on a half-open segment boundary, so it snapped forward to an unrelated later
+            // token. Hover had the correction; the path backing go-to-definition and find-references
+            // did not.
+            const span = resolveAbideRange(module, decl.pos, decl.end)
+            if (span === undefined) return null
+            return makeLocation(module.abidePath, module.source, span.start, span.end)
         }
         if (decl.file.endsWith('.abide.d.ts')) {
             return {
@@ -694,19 +695,14 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                         // Map the hovered token's generated span back to the `.abide` so the editor
                         // highlights just that token (e.g. `blurb` in `{cap.blurb}`), not the whole
                         // interpolation. Omit the range on a synthetic/unmapped token.
+                        const span = resolveAbideRange(target.module, info.start, info.end)
                         let range: object | undefined
-                        if (info.start >= CHECK_HEADER_LENGTH && info.end > info.start) {
-                            const originStart = mapGenToOrig(target.module.segments, info.start)
-                            // Map the last char (inclusive), then + 1 — the generated end offset lands on
-                            // a segment boundary (`mapGenToOrig`'s end is exclusive) and would mis-map.
-                            const originEnd = mapGenToOrig(target.module.segments, info.end - 1) + 1
-                            if (originStart >= 0 && originEnd > originStart) {
-                                const start = offsetToLineColumn(target.module.source, originStart)
-                                const end = offsetToLineColumn(target.module.source, originEnd)
-                                range = {
-                                    start: { line: start.line - 1, character: start.column - 1 },
-                                    end: { line: end.line - 1, character: end.column - 1 },
-                                }
+                        if (span !== undefined) {
+                            const start = offsetToLineColumn(target.module.source, span.start)
+                            const end = offsetToLineColumn(target.module.source, span.end)
+                            range = {
+                                start: { line: start.line - 1, character: start.column - 1 },
+                                end: { line: end.line - 1, character: end.column - 1 },
                             }
                         }
                         result = {

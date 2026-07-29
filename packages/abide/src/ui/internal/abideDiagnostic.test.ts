@@ -9,8 +9,9 @@ import {
     indexByGeneratedPath,
     offsetToLineColumn,
     resolveAbidePosition,
+    resolveAbideRange,
 } from './abideDiagnostic.ts'
-import { CHECK_HEADER_LENGTH } from './emitCheck.ts'
+import { CHECK_HEADER_LENGTH, mapGenToOrig } from './emitCheck.ts'
 
 // A module whose segment map is the identity SHIFTED BY THE HEADER: generated offset
 // `CHECK_HEADER_LENGTH + n` maps to source offset `n`. That is the real relationship `emitCheck`
@@ -104,6 +105,53 @@ describe('indexByGeneratedPath + resolveAbidePosition', () => {
                 { file: '/p/anything.ts', pos: CHECK_HEADER_LENGTH, code: 1, text: 'x' },
                 indexByGeneratedPath([]),
             ),
+        ).toBeUndefined()
+    })
+})
+
+// The RANGE map-back, whose trap is the EXCLUSIVE END. `mapGenToOrig`'s segments are half-open, so a
+// generated end offset lands ON a boundary and is not inside the segment it terminates — it snaps
+// FORWARD to the next segment's origin. Hover carried the "map the last char, then +1" correction with
+// a comment; `declToLocation`, which backs BOTH go-to-definition and find-references, mapped the end
+// raw, so those two could report a range ending at an unrelated later token.
+describe('resolveAbideRange', () => {
+    // Two verbatim spans with a GAP in the original — the shape `emitCheck` produces whenever it
+    // injects synthetic scaffolding between two user expressions. `a`'s generated end is exactly `b`'s
+    // generated start, which is where a raw end-offset map goes wrong.
+    const twoSegments: GeneratedModule = {
+        abidePath: '/p/X.abide',
+        tsPath: '/p/x.ts',
+        source: 'aaaa....................bbbb',
+        segments: [
+            { genStart: CHECK_HEADER_LENGTH, genEnd: CHECK_HEADER_LENGTH + 4, origStart: 0 },
+            { genStart: CHECK_HEADER_LENGTH + 4, genEnd: CHECK_HEADER_LENGTH + 8, origStart: 24 },
+        ],
+    }
+
+    test('a span ending on a segment boundary stays inside its own segment', () => {
+        // The whole of the first segment: generated [H, H+4) → original [0, 4).
+        expect(
+            resolveAbideRange(twoSegments, CHECK_HEADER_LENGTH, CHECK_HEADER_LENGTH + 4),
+        ).toEqual({ start: 0, end: 4 })
+        // Mapping the end RAW is what the bug did: `mapGenToOrig(segments, H+4)` is 24, the SECOND
+        // segment's origin, so the range ran from 0 to 24 — across twenty characters the span never
+        // covered. Asserted here so the guard states the wrong answer it exists to exclude.
+        expect(mapGenToOrig(twoSegments.segments, CHECK_HEADER_LENGTH + 4)).toBe(24)
+    })
+
+    test('a span inside one segment maps straight through', () => {
+        expect(
+            resolveAbideRange(twoSegments, CHECK_HEADER_LENGTH + 1, CHECK_HEADER_LENGTH + 3),
+        ).toEqual({ start: 1, end: 3 })
+    })
+
+    test('the header, an empty span and an inverted span are all drops', () => {
+        expect(resolveAbideRange(twoSegments, 0, CHECK_HEADER_LENGTH + 4)).toBeUndefined()
+        expect(
+            resolveAbideRange(twoSegments, CHECK_HEADER_LENGTH, CHECK_HEADER_LENGTH),
+        ).toBeUndefined()
+        expect(
+            resolveAbideRange(twoSegments, CHECK_HEADER_LENGTH + 4, CHECK_HEADER_LENGTH + 1),
         ).toBeUndefined()
     })
 })

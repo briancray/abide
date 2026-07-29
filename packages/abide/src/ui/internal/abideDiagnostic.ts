@@ -63,6 +63,28 @@ export function resolveAbidePosition<M extends GeneratedModule>(
     return { module, ...offsetToLineColumn(module.source, origin) }
 }
 
+// Map a generated module's SPAN back to a `.abide` span. `undefined` means "not the author's code" —
+// the same two drops `resolveAbidePosition` makes, plus an empty or inverted span.
+//
+// The exclusive END is the trap, and it is why this is a function rather than two calls to
+// `mapGenToOrig`. That map's segments are half-open, so a generated end offset lands ON a boundary and
+// is not inside the segment it terminates — it snaps forward to the NEXT segment's origin, which is
+// somewhere else in the file entirely. So the last character is mapped INCLUSIVELY and one is added
+// back. Hover carried that correction with a comment explaining it; `declToLocation` — which backs
+// BOTH go-to-definition and find-references — mapped `decl.end` raw, so those two features could
+// highlight a range that starts at the definition and ends at an unrelated later token.
+export function resolveAbideRange(
+    module: GeneratedModule,
+    genStart: number,
+    genEnd: number,
+): { start: number; end: number } | undefined {
+    if (genStart < CHECK_HEADER_LENGTH || genEnd <= genStart) return undefined
+    const start = mapGenToOrig(module.segments, genStart)
+    const end = mapGenToOrig(module.segments, genEnd - 1) + 1
+    if (start < 0 || end <= start) return undefined
+    return { start, end }
+}
+
 // A UTF-16 offset into `source` as 1-based line/column. Lives here rather than in `check.ts` (which is
 // where the LSP used to import it from, making a CLI command double as the LSP's library) because it is
 // part of this one step and has no other caller.
