@@ -1518,10 +1518,55 @@ describe('memo — the SWR refetch clock', () => {
         })
     })
 
-    // A slot has ONE refetch window and two implementations of it — `slot.clock` on the pulled path,
-    // the auto backing's gate on the derivation path. `cancelClock` reached only the first, because
-    // the gate lived in a closure the slot could not see, so `invalidate`/`disposeSlot` left a timer
-    // armed that outlives the thing it was scheduled for.
+    // `MemoOptions.throttle` documents the window as "`refreshing()` is TRUE and the retained value
+    // keeps being served", and `debounce` is declared "identical in every other respect". The
+    // derivation path returned a constant `false` — justified by "an auto fill is synchronous, so it
+    // is never revalidating over a stale value", which is true of an UNGATED derivation and false of a
+    // gated one, since serving `admitted` while a newer fill waits is exactly that. A spinner that
+    // stayed dark until the trailing edge reads as a dropped keystroke.
+    test('a gated derivation reports refreshing() while it withholds a newer value', async () => {
+        await withScope(async () => {
+            const query = state('a')
+            const slow = memo(() => query(), { debounce: 80 })
+            const spinner: boolean[] = []
+            effect(() => {
+                slow()
+            })
+            effect(() => {
+                spinner.push(slow.refreshing())
+            })
+            expect(spinner).toEqual([false])
+
+            query.set('b') // arms the trailing admission — a revalidation is now outstanding
+            await tick()
+            expect(slow.refreshing()).toBe(true)
+            expect(slow()).toBe('a') // ...and the admitted value keeps being served
+            expect(spinner).toEqual([false, true])
+
+            await delay(140)
+            expect(slow.refreshing()).toBe(false)
+            expect(slow()).toBe('b')
+            expect(spinner).toEqual([false, true, false])
+        })
+    })
+
+    test('an UNGATED derivation still reports refreshing() false', async () => {
+        await withScope(async () => {
+            const query = state('a')
+            const plain = memo(() => query())
+            effect(() => {
+                plain()
+            })
+            query.set('b')
+            await tick()
+            expect(plain.refreshing()).toBe(false)
+        })
+    })
+
+    // A slot has ONE refetch window and two carriers of it — `slot.window` on the pulled path, the
+    // auto backing's `gate` on the derivation path. `cancelClock` reached only the first, because the
+    // gate lived in a closure the slot could not see, so `invalidate`/`disposeSlot` left a timer armed
+    // that outlives the thing it was scheduled for.
     //
     // This asserts the WORK, not the value, and it has to: the stale timer reads its source at FIRE
     // time, so it publishes the same value the invalidate re-run already produced and the identity

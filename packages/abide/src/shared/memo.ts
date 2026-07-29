@@ -55,7 +55,7 @@ import {
     reactiveScope,
     serverDefaultScope,
 } from './internal/reactiveScope.ts'
-import { refetchClockDecision } from './internal/refetchClock.ts'
+import { type RefetchWindow, refetchWindow } from './internal/refetchClock.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
 import { type Room, room } from './internal/room.ts'
@@ -167,19 +167,11 @@ interface Slot<Args, T> {
     // and vanish, and a `loadedAt` stamp cannot express it: `isExpired` short-circuits on `ttl ===
     // Infinity` before consulting the clock, and `Infinity` is exactly a read's default ttl.
     expired: boolean
-    // The SWR refetch clock's per-slot window (`MemoOptions.throttle`/`debounce`). Allocated lazily on
-    // the first gated trigger, so a memo with no clock configured — every memo today — carries one
-    // undefined field and never builds this.
-    clock?: RefetchClock
-}
-
-// One slot's refetch window. `timer` non-undefined means a deferred load is ALREADY scheduled, which is
-// what makes throttle coalesce (a further trigger sees it and returns) and debounce restart (it clears
-// and re-arms). `lastRunAt` is the leading edge: the ms epoch of the last load this clock started, so
-// the throttle window is measured from a load that a TRIGGER caused rather than from any load at all.
-interface RefetchClock {
-    timer: ReturnType<typeof setTimeout> | undefined
-    lastRunAt: number
+    // The SWR refetch clock's per-slot window (`MemoOptions.throttle`/`debounce`) on the PULLED path.
+    // Allocated lazily on the first gated trigger, so a memo with no clock configured — every memo
+    // today — carries one undefined field and never builds this. The derivation path's window is the
+    // auto backing's `gate`; `cancelClock` and `refreshing()` each ask both.
+    window?: RefetchWindow
 }
 
 // One run of an AUTO-TRACKED fill. `run` counts fills of this slot. `deferred` carries the produced value
@@ -205,27 +197,23 @@ interface AutoBacking<T> {
     // The run `merged` is currently SERVING. Equal to `fill`'s latest except while a refetch clock is
     // holding a newer fill back, which is exactly when a `publish` override must not stamp the live one.
     currentRun: () => number
-    // Drop a pending gated publication. The gate itself stays closed over `createAutoBacking`, so
-    // before this existed it was reachable from exactly one place — the request-scope disposer — and
-    // `cancelClock` could not see it. That is why `invalidate` cancelled a scheduled revalidation on
-    // the pulled path and not on the auto path, against the stated rule (deferring a discard would
-    // serve known-wrong data), and why `disposeSlot` left a timer holding a disposed computed.
-    cancelGate: () => void
+    // This backing's refetch window, or undefined when no clock is configured. Exposed rather than
+    // closed over, because a slot's two windows must be reachable from the same two places: `cancelClock`
+    // (an `invalidate` used to leave a scheduled auto publication armed, because it could only see the
+    // pulled one) and `refreshing()` (which reported a constant `false` here for the same reason).
+    gate: RefetchWindow | undefined
 }
 
 // The refetch clock on a DERIVATION: one gated auto backing's publication window. `admitted` is the
 // fill `merged` serves; `null` until the first pull, which publishes immediately (a derivation with
-// nothing yet to show is the auto-path twin of a cold load).
-//
-// Structurally close to `RefetchClock` but deliberately not shared with it: that one gates a CALL and
-// holds nothing, this one gates a PUBLICATION and holds the value being withheld. Merging them would
-// mean one shape where half the fields are dead on each path.
+// nothing yet to show is the auto-path twin of a cold load). The TIMING is the shared `RefetchWindow`;
+// what stays here is the state the pulled path has no equivalent of — a call gates and holds nothing,
+// a publication gates and holds the value being withheld.
 interface AutoGate<T> {
     tick: State<number>
     admitted: AutoFill<T> | null
-    timer: ReturnType<typeof setTimeout> | undefined
-    lastRunAt: number
     source: Computed<AutoFill<T>> | undefined
+    window: RefetchWindow
 }
 
 // SERVER-ONLY broadcast sink (rpc-core §8, PR2). A crossRequest memo calls this when a verb changes a
@@ -889,66 +877,27 @@ export function memo<Args, T>(
             startLoad(slot, true)
             return
         }
-        let clock = slot.clock
-        if (clock === undefined) {
-            clock = { timer: undefined, lastRunAt: 0 }
-            slot.clock = clock
+        let window = slot.window
+        if (window === undefined) {
+            window = refetchWindow({
+                isDebounce: clockIsDebounce,
+                ms: clockMs,
+                fire: () => startLoad(slot, true),
+                serving: () => slot.state.untracked().status === 'value',
+            })
+            slot.window = window
         }
-        const now = Date.now()
-        const decision = refetchClockDecision(
-            clockIsDebounce,
-            clockMs,
-            clock.lastRunAt,
-            clock.timer !== undefined,
-            now,
-        )
-        if (decision.kind === 'coalesce') return
-        if (decision.kind === 'fire') {
-            clock.lastRunAt = now
-            startLoad(slot, true)
-            return
-        }
-        if (decision.kind === 'restart' && clock.timer !== undefined) clearTimeout(clock.timer)
-        armRefreshing(slot)
-        clock.timer = deferFire(slot, decision.ms)
+        window.trigger()
     }
 
-    function deferFire(slot: Slot<Args, T>, ms: number): ReturnType<typeof setTimeout> {
-        const timer = setTimeout(() => {
-            const clock = slot.clock
-            if (clock === undefined) return // cancelled out from under us (invalidate / dispose)
-            clock.timer = undefined
-            clock.lastRunAt = Date.now()
-            startLoad(slot, true)
-        }, ms)
-        // A deferred revalidation must not by itself hold the process open — the same reasoning as the
-        // stream watchdog, and the same isomorphic guard (browser `setTimeout` returns a number).
-        timer.unref?.()
-        return timer
-    }
-
-    // Raise the refreshing axis for a revalidation that is outstanding but has not STARTED. Only over a
-    // retained value, mirroring `startLoad`'s keepStale branch: with nothing to serve there is no stale
-    // read to mark as refreshing. An equal set is a no-op in the cell, so re-triggering inside a debounce
-    // window wakes nobody.
-    function armRefreshing(slot: Slot<Args, T>): void {
-        if (slot.state.untracked().status === 'value') slot.refreshing.set(true)
-    }
-
-    // Drop a scheduled revalidation. Called wherever the slot stops being the thing that was scheduled:
-    // `invalidate` (the value is now known-wrong, so revalidating it eagerly is worse than the lazy
-    // reload the drop already arranges) and `disposeSlot` (the timer would otherwise outlive the slot,
-    // holding its closure and firing a load into a cache entry nothing can reach). Lowering `refreshing`
-    // is left to the caller — `dropSlot`/`disposeSlot` both write a state, and `setState` clears it.
+    // Drop a scheduled revalidation, on BOTH of a slot's windows — the pulled one and the derivation
+    // gate. A slot has one refetch window conceptually and two possible carriers, and cancelling only
+    // the first is why an `invalidate` used to leave a scheduled auto publication armed. Lowering
+    // `refreshing` is left to the caller: `dropSlot`/`disposeSlot` both write a state, and `setState`
+    // clears it.
     function cancelClock(slot: Slot<Args, T>): void {
-        // BOTH clocks. A slot has one refetch window but two implementations of it — `slot.clock` on
-        // the pulled path, the auto backing's gate on the derivation path — and cancelling only the
-        // first is why an `invalidate` left a scheduled auto publication armed.
-        slot.auto?.cancelGate()
-        const clock = slot.clock
-        if (clock === undefined || clock.timer === undefined) return
-        clearTimeout(clock.timer)
-        clock.timer = undefined
+        slot.auto?.gate?.cancel()
+        slot.window?.cancel()
     }
 
     // ---- The same clock, on the AUTO-TRACKED (derivation) path -----------------------------------
@@ -958,58 +907,32 @@ export function memo<Args, T>(
     // trivial to run, and the expensive work downstream sees only admitted values.
 
     function createAutoGate(): AutoGate<T> {
-        return { tick: state(0), admitted: null, timer: undefined, lastRunAt: 0, source: undefined }
-    }
-
-    // May a moved fill be published immediately? Called from inside `merged`, so a `true` is honoured by
-    // a plain field write — no state write happens during a computation. Debounce is never leading-edge
-    // by definition; throttle is, once the window since the last admission has elapsed. The FIRST
-    // publication does not stamp `lastRunAt`, so the first real change still fires on the leading edge —
-    // the same rule the loading path follows, where a cold load is not a trigger.
-    function autoAdmitsNow(gate: AutoGate<T>): boolean {
-        const now = Date.now()
-        const decision = refetchClockDecision(
-            clockIsDebounce,
-            clockMs,
-            gate.lastRunAt,
-            gate.timer !== undefined,
-            now,
-        )
-        if (decision.kind !== 'fire') return false
-        gate.lastRunAt = now
-        return true
-    }
-
-    function armAutoAdmit(gate: AutoGate<T>): void {
-        const decision = refetchClockDecision(
-            clockIsDebounce,
-            clockMs,
-            gate.lastRunAt,
-            gate.timer !== undefined,
-            Date.now(),
-        )
-        // `fire` cannot reach here — the caller only arms after `autoAdmitsNow` declined, which is the
-        // same decision one tick earlier. `coalesce` means a trailing admission is already pending.
-        if (decision.kind === 'fire' || decision.kind === 'coalesce') return
-        if (decision.kind === 'restart' && gate.timer !== undefined) clearTimeout(gate.timer)
-        gate.timer = deferAdmit(gate, decision.ms)
-    }
-
-    function deferAdmit(gate: AutoGate<T>, ms: number): ReturnType<typeof setTimeout> {
-        const timer = setTimeout(() => {
-            gate.timer = undefined
-            gate.lastRunAt = Date.now()
-            const source = gate.source
-            if (source === undefined) return
-            // Read the fill at FIRE time, not at arm time: several changes may land inside one window
-            // and the NEWEST is what should be published. `untracked()` recomputes a dirty computed, so
-            // this is genuinely the latest — and `merged`'s next `fill()` returns that same cached
-            // object, so the identity compare there sees no move and the gate does not re-arm.
-            gate.admitted = source.untracked()
-            gate.tick.set(gate.tick.untracked() + 1)
-        }, ms)
-        timer.unref?.()
-        return timer
+        const gate: AutoGate<T> = {
+            tick: state(0),
+            admitted: null,
+            source: undefined,
+            window: undefined as unknown as RefetchWindow,
+        }
+        gate.window = refetchWindow({
+            isDebounce: clockIsDebounce,
+            ms: clockMs,
+            fire: (deferred) => {
+                const source = gate.source
+                if (source === undefined) return
+                // Read the fill at FIRE time, not at arm time: several changes may land inside one
+                // window and the NEWEST is what should be published. `untracked()` recomputes a dirty
+                // computed, so this is genuinely the latest — and `merged`'s next `fill()` returns that
+                // same cached object, so the identity compare there sees no move and the gate does not
+                // re-arm.
+                gate.admitted = source.untracked()
+                // A LEADING-edge admission happens inside `merged`'s own run, so it is a plain field
+                // write into the computation that is about to return that very value — bumping the tick
+                // there would be a state write during a computation, and there is nobody to wake who is
+                // not already awake. A trailing one fires from a timer and must wake `merged` itself.
+                if (deferred) gate.tick.set(gate.tick.untracked() + 1)
+            },
+        })
+        return gate
     }
 
     // On settle, record the value's JSON byte size and evict LRU entries over the ceiling — but only
@@ -1118,12 +1041,9 @@ export function memo<Args, T>(
                     gate.admitted = live
                 } else if (live !== gate.admitted) {
                     // A dependency (or a refresh/invalidate bumping `version`) moved the fill past what
-                    // is published. Throttle's LEADING EDGE publishes it right here — we are inside
-                    // `merged`'s own run, so admitting is a plain field write and needs no wake-up,
-                    // which is what keeps a state write out of a computation. Otherwise arm the window
-                    // and keep serving the admitted value until it fires.
-                    if (autoAdmitsNow(gate)) gate.admitted = live
-                    else armAutoAdmit(gate)
+                    // is published. Throttle's LEADING EDGE publishes it right here; otherwise the
+                    // window arms and the admitted value keeps being served until it fires.
+                    gate.window.trigger()
                 }
                 base = gate.admitted
             }
@@ -1159,17 +1079,20 @@ export function memo<Args, T>(
             onScopeDispose(() => {
                 // The gate's timer closes over `fill`, so it has to go first or a pending admission
                 // would fire into a disposed computed at the end of the request.
-                cancelGate()
+                gate?.window.cancel()
                 merged.dispose()
                 fill.dispose()
             })
         }
-        const cancelGate = (): void => {
-            if (gate?.timer === undefined) return
-            clearTimeout(gate.timer)
-            gate.timer = undefined
+        return {
+            version,
+            fill,
+            override,
+            merged,
+            filled: () => ranOnce,
+            currentRun,
+            gate: gate?.window,
         }
-        return { version, fill, override, merged, filled: () => ranOnce, currentRun, cancelGate }
     }
 
     // Decide this slot's fill path, exactly once. Only the value the FIRST run produces distinguishes a
@@ -1635,10 +1558,18 @@ export function memo<Args, T>(
         return { cursor: undefined, fresh: true } // slot gone/evicted → caller runs fresh from 0
     }
 
+    // A revalidation is outstanding on either of the two axes a slot has: a load that has STARTED
+    // (`slot.refreshing`, raised by `startLoad`'s keepStale branch), or one the refetch window is
+    // holding back. The second used to be reachable only on the pulled path, where the window's
+    // deferred bit was hand-copied into `slot.refreshing` — so a derivation returned a constant
+    // `false` here, and `memo(() => q(), { debounce: 300 })` never reported refreshing at all, against
+    // what `MemoOptions.throttle` documents and `debounce` inherits. One window, asked the same way on
+    // both paths.
     c.refreshing = (args: Args): boolean => {
         const slot = ensureSlot(args)
-        if (slot.auto !== undefined) return false
-        return slot.refreshing()
+        const auto = slot.auto
+        if (auto !== undefined) return auto.gate?.deferred() ?? false
+        return slot.refreshing() || (slot.window?.deferred() ?? false)
     }
 
     c.refresh = (args?: Partial<Args> | Args): void => {
