@@ -47,44 +47,90 @@ function fail(message: string): never {
     process.exit(1)
 }
 
-const input =
+// Diagnostics are DEBOUNCED, and `exit` clears the pending timer — so the frames cannot all be written
+// in one burst with `exit` on the end. That is what this script used to do, and the server (correctly)
+// shut down before the debounce fired, so nothing was ever published and the failure read as "the LSP
+// produced no diagnostics" rather than "we never waited for them". Write, read until the publishes we
+// need have arrived, then write the next thing.
+const proc = Bun.spawn(['node', LSP], { cwd: DOCS, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' })
+
+const reader = proc.stdout.getReader()
+const decoder = new TextDecoder()
+let seen = ''
+const received: Array<Record<string, unknown>> = []
+
+// Read until `done(received)` is satisfied, or the stream ends.
+async function readUntil(done: () => boolean, what: string): Promise<void> {
+    while (!done()) {
+        const chunk = await reader.read()
+        if (chunk.done) fail(`the server closed while waiting for ${what}`)
+        seen += decoder.decode(chunk.value, { stream: true })
+        received.length = 0
+        received.push(...parseFrames(seen))
+    }
+}
+
+const publishedFor = (page: string): Record<string, unknown> | undefined =>
+    received.findLast(
+        (m) =>
+            m.method === 'textDocument/publishDiagnostics' &&
+            (m.params as { uri?: string }).uri === pathToFileURL(page).href,
+    )
+
+proc.stdin.write(
     frame({
         jsonrpc: '2.0',
         id: 1,
         method: 'initialize',
         params: { rootUri: pathToFileURL(DOCS).href },
     }) +
-    CLEAN_PAGES.map((page) =>
-        frame({
-            jsonrpc: '2.0',
-            method: 'textDocument/didOpen',
-            params: {
-                textDocument: {
-                    uri: pathToFileURL(page).href,
-                    languageId: 'abide',
-                    version: 1,
-                    text: readFileSync(page, 'utf8'),
+        CLEAN_PAGES.map((page) =>
+            frame({
+                jsonrpc: '2.0',
+                method: 'textDocument/didOpen',
+                params: {
+                    textDocument: {
+                        uri: pathToFileURL(page).href,
+                        languageId: 'abide',
+                        version: 1,
+                        text: readFileSync(page, 'utf8'),
+                    },
                 },
-            },
-        }),
-    ).join('') +
-    // Break the first page's UNSAVED buffer — its last publish must now carry the error.
+            }),
+        ).join(''),
+)
+await readUntil(
+    () => CLEAN_PAGES.every((page) => publishedFor(page) !== undefined),
+    'the didOpen diagnostics',
+)
+
+// Break the first page's UNSAVED buffer — its next publish must now carry the error.
+const editedUri = pathToFileURL(EDITED_PAGE).href
+const beforeEdit = received.filter((m) => m.method === 'textDocument/publishDiagnostics').length
+proc.stdin.write(
     frame({
         jsonrpc: '2.0',
         method: 'textDocument/didChange',
         params: {
-            textDocument: { uri: pathToFileURL(EDITED_PAGE).href, version: 2 },
+            textDocument: { uri: editedUri, version: 2 },
             contentChanges: [{ text: BAD_BUFFER }],
         },
-    }) +
-    frame({ jsonrpc: '2.0', method: 'exit' })
+    }),
+)
+await readUntil(
+    () =>
+        received.filter((m) => m.method === 'textDocument/publishDiagnostics').length > beforeEdit &&
+        (publishedFor(EDITED_PAGE)?.params as { diagnostics?: unknown[] })?.diagnostics?.length !==
+            0,
+    'the didChange diagnostics',
+)
 
-const proc = Bun.spawn(['node', LSP], { cwd: DOCS, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' })
-proc.stdin.write(input)
+proc.stdin.write(frame({ jsonrpc: '2.0', method: 'exit' }))
 proc.stdin.end()
-const out = await new Response(proc.stdout).text()
+reader.releaseLock()
 await proc.exited
 
+const out = seen
 const publishes = parseFrames(out).filter((m) => m.method === 'textDocument/publishDiagnostics')
 // Last publish per uri wins (didChange supersedes didOpen for the edited page).
 const lastByUri = new Map<string, Array<{ code: number }>>()
@@ -105,7 +151,6 @@ for (const page of CLEAN_PAGES.slice(1)) {
 }
 
 // (2) The edited page's unsaved buffer must surface the TS2339.
-const editedUri = pathToFileURL(EDITED_PAGE).href
 const editedDiagnostics = lastByUri.get(editedUri) ?? []
 if (!editedDiagnostics.some((d) => d.code === 2339))
     fail(

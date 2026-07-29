@@ -38,6 +38,7 @@ import {
 } from '../ui/internal/lowerProject.ts'
 import { templateSemanticTokens } from '../ui/internal/templateSemanticTokens.ts'
 import { findAbideFiles, overlayFs, SUPPRESSED_CODES } from './check.ts'
+import { lspCapabilities } from './LSP_FEATURES.ts'
 import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
 export interface LspServerOptions {
@@ -275,7 +276,19 @@ class LspEngine {
         const snapshot = this.snapshot(files, open)
         const project = snapshot.getDefaultProjectForFile(file)
         if (project === undefined) return []
-        const info = project.checker.getCompletionsAtPosition(file, position)
+        // tsgo THROWS `completion list needs auto imports` at a position whose completion list would
+        // need auto-import entries, and its `CompletionOptions` (`triggerCharacter`/`includeSymbol`)
+        // has no way to ask for them or to decline them. So the error is not a bug to fix here, it is
+        // a capability this API cannot express yet — degrade to the entries we can serve rather than
+        // failing the request. Kept narrow: anything else rethrows to the handler boundary, which
+        // answers it as a JSON-RPC error.
+        let info: ReturnType<typeof project.checker.getCompletionsAtPosition>
+        try {
+            info = project.checker.getCompletionsAtPosition(file, position)
+        } catch (caught) {
+            if (!(caught instanceof Error) || !caught.message.includes('auto imports')) throw caught
+            return []
+        }
         if (info === undefined) return []
         // `undefined` fields are dropped by JSON.stringify, so the wire `CompletionItem`s stay clean.
         return info.entries.map((entry) => ({
@@ -596,7 +609,7 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
         return makeLocation(file, source, decl.pos, decl.end)
     }
 
-    const handle = (message: JsonRpcMessage): boolean => {
+    const dispatch = (message: JsonRpcMessage): boolean => {
         switch (message.method) {
             case 'initialize': {
                 const params = message.params as
@@ -613,19 +626,15 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
                 send({
                     jsonrpc: '2.0',
                     id: message.id,
+                    // Derived from `LSP_FEATURES`, so a feature cannot be advertised without a
+                    // handler or handled without being advertised.
                     result: {
-                        capabilities: {
-                            textDocumentSync: { openClose: true, change: 1, save: true },
-                            hoverProvider: true,
-                            definitionProvider: true,
-                            completionProvider: { triggerCharacters: ['.'] },
-                            signatureHelpProvider: { triggerCharacters: ['(', ','] },
-                            referencesProvider: true,
+                        capabilities: lspCapabilities({
                             semanticTokensProvider: {
                                 legend: ABIDE_SEMANTIC_TOKENS_LEGEND,
                                 full: true,
                             },
-                        },
+                        }),
                     },
                 })
                 return false
@@ -827,6 +836,37 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
         }
     }
 
+    // A HANDLER'S THROW MUST NOT KILL THE SERVER.
+    //
+    // It did. `dispatch` was called straight from the read loop, so anything it threw propagated out of
+    // `lspServer` and ended the process — and a real one was reachable: tsgo raises
+    // `completion list needs auto imports` from `getCompletionsAtPosition`, so typing `.` at the wrong
+    // position took down the whole language server. Not the completion request — the SERVER: every
+    // later request went unanswered because there was nothing left to answer them, and the editor lost
+    // diagnostics, hover and go-to-definition until it restarted the sidecar.
+    //
+    // A request gets a JSON-RPC error so the client stops waiting (an LSP client with no timeout waits
+    // forever on a request that never answers); a notification has no id to answer, so it is dropped
+    // after a note on stderr. Either way the loop continues, which is the whole point: one bad position
+    // in one file is not a reason to stop serving the other twenty.
+    const handle = (message: JsonRpcMessage): boolean => {
+        try {
+            return dispatch(message)
+        } catch (caught) {
+            const detail = caught instanceof Error ? caught.message : String(caught)
+            if (message.id !== undefined) {
+                send({
+                    jsonrpc: '2.0',
+                    id: message.id,
+                    error: { code: -32603, message: `${message.method} failed: ${detail}` },
+                })
+            } else {
+                process.stderr.write(`abide lsp: ${message.method} failed: ${detail}\n`)
+            }
+            return false
+        }
+    }
+
     const reader = options.read.getReader()
     let buffer = new Uint8Array(0)
     for (;;) {
@@ -864,11 +904,29 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
 }
 
 // node entry: `node lsp.ts` (the process `abide lsp` forwards to). Wires real stdio.
+//
+// The writes are COUNTED and drained before the process is allowed to end. `process.stdout` to a PIPE
+// is asynchronous in node, and `send` is fire-and-forget, so when `exit` broke the read loop the
+// process ended with frames still sitting in the kernel buffer — silently DROPPING replies that had
+// already been produced. It looked like "the last few requests were never handled", which is a very
+// different bug from the one it was.
+//
+// It needs a burst to show: two requests answered and six did not, because the earlier writes had
+// already flushed. That is why it survived — every existing test sends at most two requests, and an
+// editor sends them one at a time with think-time in between. A batch driver (the capability-parity
+// test, `packages/docs/scripts/lsp-dogfood.ts`) writes every frame at once and loses most of the
+// replies.
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
     const read = Readable.toWeb(process.stdin) as unknown as ReadableStream<Uint8Array>
-    void lspServer({
-        projectRoot: process.cwd(),
-        read,
-        write: (bytes) => void process.stdout.write(bytes),
-    })
+    let pending = 0
+    let onDrained: (() => void) | null = null
+    const write = (bytes: Uint8Array): void => {
+        pending++
+        process.stdout.write(bytes, () => {
+            pending--
+            if (pending === 0 && onDrained !== null) onDrained()
+        })
+    }
+    await lspServer({ projectRoot: process.cwd(), read, write })
+    if (pending > 0) await new Promise<void>((resolve) => (onDrained = resolve))
 }

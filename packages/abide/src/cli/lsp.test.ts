@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { LSP_FEATURES } from './LSP_FEATURES.ts'
 
 const LSP = fileURLToPath(new URL('./lsp.ts', import.meta.url))
 
@@ -527,3 +528,81 @@ test('cross-file import hovers to its real type and stays resolved after didChan
     expect(target?.uri.toLowerCase()).toBe(pathToFileURL(widgetPath).href.toLowerCase())
     expect(target?.range.start.line).toBe(4) // `export default function widget(): Widget {`
 }, 30_000)
+
+// CAPABILITY↔HANDLER PARITY. The advertised capabilities and the implemented methods were two lists
+// related by convention, and both failure modes are silent in opposite directions: a handler with no
+// capability is dead code the editor never calls, and a capability with no handler makes the editor
+// send a request that is never answered — which an LSP client with no timeout waits on forever.
+//
+// `capabilities` is now derived from `LSP_FEATURES`, so the first direction is structural. This asserts
+// the second against the REAL server: every method the table names must answer, and the reply must
+// carry the request id (a response, not a stray notification).
+test('every advertised capability has a handler that answers', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'abide-lsp-'))
+    cleanupDirs.push(root)
+    writeFileSync(join(root, 'tsconfig.json'), TSCONFIG)
+    const pagePath = join(root, 'src/ui/pages/p/page.abide')
+    mkdirSync(dirname(pagePath), { recursive: true })
+    const source = "<script>\nconst greeting = 'hi'\n</script>\n<p>{greeting}</p>\n"
+    writeFileSync(pagePath, source)
+    const uri = pathToFileURL(pagePath).href
+
+    const proc = Bun.spawn(['node', LSP], {
+        cwd: root,
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    const methods = Object.keys(LSP_FEATURES)
+    // A position inside `{greeting}` on the template line, so every feature has something to answer
+    // about rather than answering null because the cursor sits in whitespace.
+    const position = { line: 3, character: 4 }
+    let input =
+        frame({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { rootUri: pathToFileURL(root).href },
+        }) +
+        frame({
+            jsonrpc: '2.0',
+            method: 'textDocument/didOpen',
+            params: {
+                textDocument: { uri, languageId: 'abide', version: 1, text: source },
+            },
+        })
+    for (const [index, method] of methods.entries()) {
+        input += frame({
+            jsonrpc: '2.0',
+            id: 100 + index,
+            method,
+            // `references` wants a context; the others ignore the extra field.
+            params: {
+                textDocument: { uri },
+                position,
+                context: { includeDeclaration: true },
+            },
+        })
+    }
+    input += frame({ jsonrpc: '2.0', method: 'exit' })
+
+    proc.stdin.write(input)
+    proc.stdin.end()
+    const messages = parseFrames(await new Response(proc.stdout).text())
+    await proc.exited
+
+    // The initialize reply advertises exactly the table's capabilities (plus the lifecycle sync).
+    const init = messages.find((m) => m.id === 1)
+    const capabilities = (init?.result as { capabilities?: Record<string, unknown> } | undefined)
+        ?.capabilities
+    if (capabilities === undefined) throw new Error('expected an initialize response')
+    for (const feature of Object.values(LSP_FEATURES)) {
+        expect(capabilities[feature.capability]).toBeDefined()
+    }
+
+    // …and every one of them answers.
+    const unanswered = methods.filter(
+        (_method, index) => messages.find((m) => m.id === 100 + index) === undefined,
+    )
+    expect(unanswered).toEqual([])
+}, 60_000)
