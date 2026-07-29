@@ -189,7 +189,9 @@ second-param idea from the interview was rejected in favor of imported ambient a
   pass the same chain. `clients.*` is **reachability/curation, not access control** — an
   unauthorized call must **fail your authz middleware**, not merely be hidden. abide authorizes
   nothing for you; **if you write no middleware, everything reachable is callable.**
-- **Socket transport nuance (S4.4):** WS runs the middleware chain only at `socket-connect`;
+- **Socket transport nuance (S4.4):** ⚠ **CONTRADICTED BY THE CODE — see `sockets.md` §4.** The WS
+  upgrade runs NO middleware chain at all; the claim below (and the "uniform across surfaces" bullet
+  above) describes a gate that does not exist. WS runs the middleware chain only at `socket-connect`;
   in-connection publish/subscribe are authorized in-connection (publish → handler, subscribe →
   connect-auth). HTTP-face socket ops run the chain per request.
 

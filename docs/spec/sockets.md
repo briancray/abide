@@ -107,6 +107,19 @@ replayable*. Declarative by default (validated pass-through relay); server logic
    | WebSocket | once, at `socket-connect` (the upgrade) | in-connection: publish → handler; subscribe → connect-auth |
    | HTTP face (SSE/POST) | **per request** (`socket-subscribe` / `socket-publish`) | the per-request middleware chain |
 
+   > **⚠ CONTRADICTED BY THE CODE (verified 2026-07-29).** The WebSocket row above is not what
+   > `router.ts` does. The upgrade (`url.pathname === '/__abide/sockets'`) runs the CSWSH origin check
+   > and `resolveIdentity`, then upgrades — and RETURNS before the middleware chain is composed. **No
+   > middleware runs at `socket-connect`, global or otherwise.** `authorizeSocketJoin` then returns
+   > `true` for any socket declaring no `middleware` of its own, on the stated premise that "the global
+   > chain already ran at the WS upgrade" (`channelAuth.ts`) — which is false.
+   >
+   > Reproduced: an app whose only global middleware is `requireLogin` answers an anonymous HTTP rpc
+   > with **401** and admits the same anonymous caller to a `socket()` subscribe with **ok**. See
+   > `auth.md` §13.4, which makes the same claim ("RPC, nav, socket-connect, and HTTP-face socket ops
+   > all pass the same chain"). Left standing rather than silently rewritten because the fix is a
+   > DESIGN choice — run the chain at the upgrade, or retract the uniformity claim — not a doc edit.
+
    - **No `canPublish` predicate** — connect auth gates *who*, `clientPublish` gates *on/off*,
      the handler gates *content*. Three levers, no fourth.
    - **`canSubscribe` PARKED** — default subscribe authz = connect-time auth + exposure
@@ -145,9 +158,11 @@ not the discriminator).
 - **`route().kind` is a discriminated union** the framework populates from routing:
   - `'nav'` — page navigation; `name`/`params` = route + params.
   - `'rpc'` — RPC call; `name` = rpc name, `params` = the args object.
-  - `'socket-connect'` — WS upgrade to the mux (no specific socket named yet).
   - `'socket-subscribe'` / `'socket-publish'` — HTTP-face ops; `name` = socket name.
-  - `'stream'` — §12 streaming read (if distinguished).
+  - ~~`'socket-connect'` — WS upgrade to the mux~~ and ~~`'stream'` — §12 streaming read (if
+    distinguished)~~ — **REMOVED.** Neither was ever produced, so branching on either type-checked and
+    could never run. The upgrade returns before `routeInfo` and builds no scope; a streaming rpc
+    reports `'rpc'`, which is the honest answer (same handler, same name, same authorization).
 - **A middleware can observe (log/trace) and decide (allow / `redirect` / `error`)** (C6-nav.2).
 - **WS runs middleware only at `socket-connect`.** In-connection subscribe/publish do **not**
   re-enter the middleware chain (no per-message HTTP request); authorized in-connection.
