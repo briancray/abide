@@ -8,6 +8,7 @@
 // imports (and memoizes) a pattern's chunk, deduping concurrent loads so a soft-nav that primes the
 // chunk early doesn't double-fetch it.
 
+import type { RpcSpecInput } from '../../shared/internal/rpcSpec.ts'
 import type { Level } from './compose.ts'
 import type { SocketSpec } from './socketProxy.ts'
 
@@ -32,18 +33,7 @@ export interface PageEntry {
 // the chunk's content-hashed `/__abide/chunk/<name>-<hash>.js` URL at build time.
 export type PageLoader = () => Promise<{ default: PageEntry }>
 
-export type RpcSpecs = Record<
-    string,
-    {
-        method: string
-        read: boolean
-        crossRequest?: boolean
-        memo?: boolean
-        ttl?: number | null
-        tags?: string[]
-        timeout?: number
-    }
->
+export type RpcSpecs = Record<string, RpcSpecInput>
 
 export type SocketSpecs = Record<string, SocketSpec>
 

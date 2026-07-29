@@ -11,6 +11,7 @@
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
+import type { RpcSpec } from '../../shared/internal/rpcSpec.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { clientPublishAllowed } from '../socket.ts'
@@ -34,39 +35,11 @@ export interface Clients {
 // can see a shape nobody declared. Two documented behaviours had rotted behind it — see `resolveClients`.
 export type ClientsOption = boolean | Clients
 
-export interface RpcEntry {
+// The bilateral half is `RpcSpec` — the fields that cross into the client bundle, declared once so
+// the six places that used to spell them cannot disagree (they had: `throttle`/`debounce` were missing
+// from one). What is added here is BUILD-ONLY: it never reaches the browser.
+export interface RpcEntry extends RpcSpec {
     name: string
-    method: string
-    read: boolean
-    // Opt-in server cross-request cache (rpc-core §2). Surfaced so the client bundle can flag the read
-    // proxy: a crossRequest read auto-subscribes to its broadcast channel (shared-cache-plan §2.5).
-    crossRequest: boolean
-    // Whether the bare CALL routes through the memo. The client proxy mirrors it: `false` means the call
-    // bypasses the client memo (direct fetch, at-least-once). It is NOT simply `memo !== false` — under
-    // `memo: false` a MUTATION bypasses while a READ still routes through at ttl:0, which is what the
-    // server does, so the flag carries the normalizer's verb-aware answer (`rpcMemoPolicy`).
-    memo: boolean
-    // Retained-value TTL the client memo should use (ms). `null` = Infinity (retain until invalidate) —
-    // a read's default; a mutation defaults to `0` (coalesce concurrent, retain nothing), as does
-    // `memo: false` on either verb. Symmetry: an author who sets `memo: { ttl }` gets that retention on
-    // both sides, and one who sets `memo: false` gets NO retention on both sides.
-    ttl: number | null
-    // Cache tags (rpc-core §8). Carried to the client for the same reason `ttl` is: the tag verbs are
-    // isomorphic, so a `refresh({ tags })`/`invalidate({ tags })` in the browser has to be able to
-    // select this read's client memo. Omitted when the author declared none.
-    tags?: string[]
-    // The SWR refetch clock (rpc-core §3), carried for the same reason `ttl` and `tags` are: it is
-    // bilateral, and the client half is the one that matters most — a broadcast storm calling
-    // `fn.refresh()` is a browser-side stream of triggers. Omitted when the author declared neither, so
-    // the common spec stays two fields lighter in the bundle.
-    throttle?: number
-    debounce?: number
-    // The resolved run deadline in ms (ADR 0028), `0` when unbounded. Surfaced so the browser proxy
-    // arms the SAME number the server does — bilateral means two independent enforcements (D6), not one
-    // timer with two ends. BAKED at build time: `ABIDE_RPC_TIMEOUT` retunes the server on deploy while
-    // the browser keeps whatever `abide build` wrote, which is accepted because the client half is a UX
-    // bound and a deploy-time retune of a UX bound does not earn a hydration-seed field.
-    timeout: number
     inputSchema?: JSONSchema
     outputSchema?: JSONSchema
     clients: Clients

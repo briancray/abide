@@ -202,3 +202,43 @@ test('tree-shaking: the loader carries specs only for RPCs a page imports', asyn
     expect(loader).toContain('alpha')
     expect(loader).not.toContain('bravo')
 })
+
+// THE BILATERAL FIELDS ACTUALLY REACH THE LOADER.
+//
+// The wire spec used to be spelled six times — `RpcEntry`, this function's return type, its local, the
+// `pageRegistry` type at the `registerPages` → `makeClientImports` boundary, `clientProxy`'s opts —
+// with nothing connecting them, and the wire itself is JSON concatenated into the loader, so nothing
+// type-checked the crossing either. It had already drifted: `throttle`/`debounce`, the most recent
+// fields added, were absent from the `pageRegistry` copy and rode through as untyped extra properties.
+//
+// One `RpcSpec` now connects the ends at the type level. This asserts the other end — that a field
+// declared bilateral is EMITTED — because a shared type cannot catch an emitter that stops writing one.
+test('the loader carries every bilateral policy field the author configured', async () => {
+    const build = await buildClient({
+        routes: {
+            tuned: GET(() => 'v', {
+                memo: { ttl: 5_000, tags: ['t'], debounce: 250 },
+                timeout: 9_000,
+            }),
+        },
+        pages: {
+            '/': "<script>import tuned from '../../server/rpc/tuned'</script><p>{await tuned()}</p>",
+        },
+    })
+    const entry = build.files.get(build.entry)
+    if (entry === undefined) throw new Error('no loader entry')
+    const loader = new TextDecoder().decode(entry.identity)
+    // Parsed rather than substring-matched: the emitted map is a JS object literal whose formatting is
+    // the bundler's business, and the claim is about the FIELDS.
+    const source = /var RPC_SPECS = (\{[\s\S]*?\});/.exec(loader)?.[1]
+    if (source === undefined) throw new Error('no RPC_SPECS in the loader entry')
+    const specs = new Function(`return ${source}`)() as Record<string, Record<string, unknown>>
+    expect(specs.tuned).toMatchObject({
+        method: 'GET',
+        read: true,
+        ttl: 5_000,
+        tags: ['t'],
+        debounce: 250,
+        timeout: 9_000,
+    })
+})

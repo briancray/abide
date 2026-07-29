@@ -22,6 +22,7 @@ import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
 import { applyTagFrame } from '../../shared/internal/memoTags.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
+import type { RpcSpecInput, RpcSpecPolicyInput } from '../../shared/internal/rpcSpec.ts'
 import type {
     MutationCallSurface,
     RpcCallOptions,
@@ -102,16 +103,7 @@ export function clientProxy<Args = unknown, T = unknown>(
     // explicit `undefined` so a caller can forward the spec straight through — re-deriving a default
     // here to satisfy `exactOptionalPropertyTypes` is how a fourth copy of the policy grew in
     // `makeClientImports`.
-    opts?: {
-        base?: string | undefined
-        crossRequest?: boolean | undefined
-        memo?: boolean | undefined
-        ttl?: number | null | undefined
-        tags?: string[] | undefined
-        throttle?: number | undefined
-        debounce?: number | undefined
-        timeout?: number | undefined
-    },
+    opts?: RpcSpecPolicyInput & { base?: string | undefined },
 ): RpcCallSurface<Args, T> | MutationCallSurface<Args, T> {
     const base = opts?.base ?? ''
     const read = isRead(method)
@@ -340,20 +332,7 @@ export function clearClientProxyCache(): void {
 // Build the imports map injected into a page's client mount: RPC name -> its client proxy. Each
 // spec carries the verb, kind, and cache policy harvested from the server module's `__rpc` meta.
 export function makeClientImports(
-    specs: Record<
-        string,
-        {
-            method: string
-            read: boolean
-            crossRequest?: boolean
-            memo?: boolean
-            ttl?: number | null
-            tags?: string[]
-            throttle?: number
-            debounce?: number
-            timeout?: number
-        }
-    >,
+    specs: Record<string, RpcSpecInput>,
     base?: string,
 ): Record<string, unknown> {
     const imports: Record<string, unknown> = {}

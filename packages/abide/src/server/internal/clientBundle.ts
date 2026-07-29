@@ -35,6 +35,7 @@ import { promisify } from 'node:util'
 import { brotliCompress, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
 import { appName } from '../../shared/internal/appName.ts'
+import type { RpcSpec } from '../../shared/internal/rpcSpec.ts'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
@@ -111,37 +112,8 @@ const BUNDLE_CACHE = new WeakMap<AppConfig, Promise<ClientBuild>>()
 // RPCs some page actually IMPORTS (by local name matching a route name) are emitted; un-imported RPCs
 // never reach the client bundle. REACHABILITY: symmetric with socketSpecs — importing a
 // `clients.browser: false` RPC into a UI script is a BUILD ERROR, not a silent inclusion.
-function rpcSpecs(
-    config: AppConfig,
-    importedNames: Set<string>,
-): Record<
-    string,
-    {
-        method: string
-        read: boolean
-        crossRequest: boolean
-        memo: boolean
-        ttl: number | null
-        tags?: string[]
-        throttle?: number
-        debounce?: number
-        timeout: number
-    }
-> {
-    const specs: Record<
-        string,
-        {
-            method: string
-            read: boolean
-            crossRequest: boolean
-            memo: boolean
-            ttl: number | null
-            tags?: string[]
-            throttle?: number
-            debounce?: number
-            timeout: number
-        }
-    > = {}
+function rpcSpecs(config: AppConfig, importedNames: Set<string>): Record<string, RpcSpec> {
+    const specs: Record<string, RpcSpec> = {}
     for (const entry of buildRegistry(config).rpcs) {
         if (!importedNames.has(entry.name)) continue
         if (entry.clients.browser === false) {
