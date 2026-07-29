@@ -17,6 +17,7 @@
 
 import { memoChannelName, RPC_CHANNEL_PREFIX } from '../../shared/internal/memoChannels.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
 import { SOCKET_FACE_PREFIX } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { TAG_CHANNEL_PREFIX } from '../../shared/internal/tagChannelName.ts'
 import { log } from '../../shared/log.ts'
@@ -121,7 +122,7 @@ export async function authorizeChannelJoin(
 
     const globalMiddleware = config.middleware ?? []
     const rpcMiddleware = route.__rpc.options.middleware ?? []
-    return reauthorize('rpc', rpcName, `/__abide/rpc/${rpcName}`, presentedArgs, connData, [
+    return reauthorize('rpc', rpcName, `${RPC_ROUTE_PREFIX}${rpcName}`, presentedArgs, connData, [
         ...globalMiddleware,
         ...rpcMiddleware,
     ])

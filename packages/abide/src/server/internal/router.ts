@@ -39,6 +39,7 @@ import {
 import { NAV_HEADERS, NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
 import { positiveEnvBytes } from '../../shared/internal/positiveEnvBytes.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
 import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
 import { SOCKET_FACE_PREFIX, SOCKETS_ROUTE } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { STREAM_RESUME, STREAM_RESUME_HEADER } from '../../shared/internal/STREAM_RESUME_HEADER.ts'
@@ -380,8 +381,8 @@ function routeInfo(url: URL, method: string): { kind: RouteKind; name: string } 
     // `/__abide/sockets`, `/__abide/health`, and `/__abide/mcp` — so the `/rpc/*` URL space is free
     // for app pages. Checked after the exact `/__abide/*` endpoints in `dispatch`, none of which
     // share this prefix.
-    if (pathname.startsWith('/__abide/rpc/')) {
-        return { kind: 'rpc', name: pathname.slice('/__abide/rpc/'.length) }
+    if (pathname.startsWith(RPC_ROUTE_PREFIX)) {
+        return { kind: 'rpc', name: pathname.slice(RPC_ROUTE_PREFIX.length) }
     }
     // The per-socket HTTP face (sockets.md S3.2). Classified HERE rather than short-circuited in
     // `fetch`, so it reaches the same policy stack every other route does. Subscribe and publish are
@@ -665,10 +666,10 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
                 const routeChunks = build.routeChunks.get(match.pattern)
                 const body = streamPageDocument(shell, reactiveScope(), config, {
                     devReloadScript: config.devReloadScript,
-                    clientHref: `/__abide/chunk/${build.entry}`,
+                    clientHref: `${CHUNK_PREFIX}${build.entry}`,
                     bootHrefs: build.bootChunks.map((name) => `${CHUNK_PREFIX}${name}`),
                     cssHref:
-                        build.cssFile !== undefined ? `/__abide/chunk/${build.cssFile}` : undefined,
+                        build.cssFile !== undefined ? `${CHUNK_PREFIX}${build.cssFile}` : undefined,
                     preloadHrefs: routeChunks?.map((name) => `${CHUNK_PREFIX}${name}`),
                 })
                 return new Response(body, {

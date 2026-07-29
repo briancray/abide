@@ -18,6 +18,7 @@
 // `new URL(...)`, because an empty base has no origin to resolve against.
 
 import { RPC_QUERY_PARAMS } from './RPC_QUERY_PARAMS.ts'
+import { RPC_ROUTE_PREFIX } from './RPC_ROUTE_PREFIX.ts'
 
 export interface RpcUrlOptions {
     // A READ's arguments, carried as the canonical JSON blob. Omit for a mutation (args go in the body)
@@ -34,5 +35,5 @@ export function rpcUrl(base: string, name: string, options: RpcUrlOptions = {}):
         params.push(`${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(options.args))}`)
     }
     const query = params.length === 0 ? '' : `?${params.join('&')}`
-    return `${base}/__abide/rpc/${name}${query}`
+    return `${base}${RPC_ROUTE_PREFIX}${name}${query}`
 }

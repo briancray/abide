@@ -29,6 +29,7 @@ import { HEALTH_ROUTE } from '../shared/internal/HEALTH_ROUTE.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { parseMuxFrame } from '../shared/internal/parseMuxFrame.ts'
 import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
+import { rpcUrl } from '../shared/internal/rpcUrl.ts'
 import { SOCKETS_ROUTE } from '../shared/internal/SOCKETS_ROUTE.ts'
 import { subscriptionKey } from '../shared/internal/subscriptionKey.ts'
 
@@ -277,17 +278,17 @@ function bind(
                         args !== undefined
                             ? `?${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
                             : ''
-                    response = await doFetch(`/__abide/rpc/${property}${query}`, { method })
+                    response = await doFetch(`${rpcUrl('', property)}${query}`, { method })
                 } else if (args instanceof FormData) {
                     // TODO #8 multipart upload: send the FormData as the raw body (fetch sets the boundary)
                     // with the `x-abide` header so the CSRF gate admits it — no content-type header.
-                    response = await doFetch(`/__abide/rpc/${property}`, {
+                    response = await doFetch(rpcUrl('', property), {
                         method,
                         headers: { 'x-abide': '1' },
                         body: args,
                     })
                 } else {
-                    response = await doFetch(`/__abide/rpc/${property}`, {
+                    response = await doFetch(rpcUrl('', property), {
                         method,
                         headers: { 'content-type': 'application/json' },
                         body: JSON.stringify(args ?? {}),

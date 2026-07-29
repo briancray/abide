@@ -13,6 +13,7 @@
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { singleType } from '../../shared/internal/jsonSchema.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
+import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
 import type { Registry, RpcEntry } from './registry.ts'
 
 // A permissive schema — "any value" — used wherever the registry has no concrete JSON Schema.
@@ -124,7 +125,7 @@ export function buildOpenApi(registry: Registry): Record<string, unknown> {
     for (const entry of registry.rpcs) {
         // MS1.4: `browser: false` withholds the RPC from OpenAPI; absent/true exposes it.
         if (entry.clients.browser === false) continue
-        const path = `/__abide/rpc/${entry.name}`
+        const path = `${RPC_ROUTE_PREFIX}${entry.name}`
         const verb = entry.method.toLowerCase()
         const item = paths[path] ?? {}
         item[verb] = operationForRpc(entry)

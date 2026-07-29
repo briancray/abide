@@ -4,6 +4,7 @@
 // the binary actually accepts: a flag exists in the help exactly when the parser knows it. With a
 // `command` it is that subcommand's flag list; without, the program overview.
 
+import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
 import type { CliCommand } from './cliCommands.ts'
 import { RESERVED_CLI_COMMANDS } from './RESERVED_CLI_COMMANDS.ts'
 
@@ -66,7 +67,9 @@ function flagLine(command: CliCommand): string[] {
 
 export function cliUsage(name: string, commands: CliCommand[], command?: CliCommand): string {
     if (command !== undefined) {
-        const lines = [`${name} ${command.name} — ${command.method} /__abide/rpc/${command.name}`]
+        const lines = [
+            `${name} ${command.name} — ${command.method} ${RPC_ROUTE_PREFIX}${command.name}`,
+        ]
         if (command.doc !== undefined) lines.push('', command.doc)
         lines.push('', 'Flags:', ...flagLine(command))
         return lines.join('\n')
