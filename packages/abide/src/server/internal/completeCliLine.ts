@@ -109,8 +109,12 @@ export function completeCliLine(input: {
     // are values, not names — there is nothing to enumerate, so offering the app's flags there would
     // be actively wrong.
     if (command === undefined) {
-        if (head === 'serve') return offer(['--port'])
-        if (head === 'login') return offer(['--token'])
+        // A reserved command's flags come off the ONE table, not a hardcoded list here. This used to
+        // name `serve` and `login` and nothing else, so `logs` — which has more flags than any other
+        // command on either surface — offered none of them.
+        const entry = RESERVED_CLI_COMMANDS[head as keyof typeof RESERVED_CLI_COMMANDS]
+        const flags = entry !== undefined && 'flags' in entry ? entry.flags : undefined
+        if (flags !== undefined) return offer([...flags])
         return { candidates: [], partial }
     }
 

@@ -10,10 +10,15 @@ import { RESERVED_CLI_COMMANDS } from './RESERVED_CLI_COMMANDS.ts'
 // The reserved names, listed in help alongside the app's own — read off the one table rather than
 // restated, so help lists exactly what the dispatcher and the REPL intercept. They WIN over an rpc of
 // the same name; see `RESERVED_CLI_COMMANDS` for why.
-const BUILT_INS: [string, string][] = Object.entries(RESERVED_CLI_COMMANDS).map(([name, entry]) => [
-    name,
-    entry.description,
-])
+// The grammar comes off the table's `flags`/`args` rather than out of the description prose, so a
+// spelling the parser accepts cannot be one help never mentions — which is what `-f`, `-n` and
+// `--channel` on `logs` were.
+const BUILT_INS: [string, string][] = Object.entries(RESERVED_CLI_COMMANDS).map(([name, entry]) => {
+    const grammar: string[] = []
+    if ('args' in entry && entry.args !== undefined) grammar.push(entry.args)
+    if ('flags' in entry && entry.flags !== undefined) grammar.push(...entry.flags)
+    return [grammar.length === 0 ? name : `${name} ${grammar.join(' ')}`, entry.description]
+})
 
 const OPTIONS: [string, string][] = [
     ['--url <origin>', 'target a deployment for THIS run (over ABIDE_APP_URL, over `connect`)'],

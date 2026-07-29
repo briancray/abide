@@ -31,14 +31,27 @@
 // `where` is the difference between the two surfaces, not decoration: `exit`/`quit` end a SESSION, so
 // they mean nothing on a command line and an rpc named `exit` stays callable as `app exit` — it is
 // only unreachable from the prompt. The shadow warning says which of the two it is.
+//
+// `flags` is here for the same reason the names are. `cliUsage` and `completeCliLine` both open by
+// declaring flag drift impossible, and both are right about the APP's commands — those project from
+// `cliCommands`, so a handler that gains a field gains a flag in help and at the prompt with no second
+// edit. Neither was true of the reserved half of the same surface: the flags lived in `description`
+// PROSE, so `logs` advertised five and its parser accepted eight (`-f`/`--follow`, `-n`, `--channel`
+// were spelled nowhere a user could find them), and completion hardcoded a list for exactly two names
+// and offered nothing for the rest — including `logs`, which has more flags than any other.
+//
+// So the flags are DATA, and the description says what the command is for rather than restating its
+// grammar. `args` is the positional tail, for the four commands that take one.
 export const RESERVED_CLI_COMMANDS = {
     serve: {
         where: 'both',
-        description: 'host the app in the foreground (--port <n>)',
+        description: 'host the app in the foreground',
+        flags: ['--port'],
     },
     connect: {
         where: 'both',
-        description: 'point at a deployment until `disconnect` (<url>; bare = show where)',
+        description: 'point at a deployment until `disconnect`; bare = show where',
+        args: '<url>',
     },
     disconnect: {
         where: 'both',
@@ -46,7 +59,8 @@ export const RESERVED_CLI_COMMANDS = {
     },
     login: {
         where: 'both',
-        description: 'remember a credential for the deployment you point at (--token <t>)',
+        description: 'remember a credential for the deployment you point at',
+        flags: ['--token'],
     },
     logout: {
         where: 'both',
@@ -58,16 +72,30 @@ export const RESERVED_CLI_COMMANDS = {
     },
     logs: {
         where: 'both',
-        description:
-            'stream logs from the deployment (--tail <n> --level <l> --debug <pat> --trace <id> --no-follow)',
+        description: 'stream logs from the deployment',
+        // Every spelling the parser accepts, including the three that used to appear nowhere: `-f`,
+        // `-n` and `--channel` (an alias of `--debug`).
+        flags: [
+            '--tail',
+            '--level',
+            '--debug',
+            '--channel',
+            '--trace',
+            '--follow',
+            '-f',
+            '--no-follow',
+            '-n',
+        ],
     },
     help: {
         where: 'both',
         description: 'this help; `help <command>` for one command',
+        args: '[command]',
     },
     completion: {
         where: 'both',
-        description: 'print the shell completion script (bash|zsh|fish)',
+        description: 'print the shell completion script',
+        args: '<bash|zsh|fish>',
     },
     exit: {
         where: 'prompt',
@@ -77,7 +105,10 @@ export const RESERVED_CLI_COMMANDS = {
         where: 'prompt',
         description: 'leave the interactive session — alias of `exit` (interactive only)',
     },
-} as const satisfies Record<string, { where: 'both' | 'prompt'; description: string }>
+} as const satisfies Record<
+    string,
+    { where: 'both' | 'prompt'; description: string; flags?: readonly string[]; args?: string }
+>
 
 // A name the binary keeps for itself. `'both'` names are intercepted on the command line AND at the
 // prompt; `'prompt'` names only at the prompt.

@@ -18,8 +18,10 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { CliCommand } from './cliCommands.ts'
+import { cliUsage } from './cliUsage.ts'
 import type { CommandTarget } from './commandTarget.ts'
 import type { CompiledApp } from './compiledAppConfig.ts'
+import { completeCliLine } from './completeCliLine.ts'
 import { interactiveCli } from './interactiveCli.ts'
 import { RESERVED_CLI_COMMANDS } from './RESERVED_CLI_COMMANDS.ts'
 import { runCompiledApp } from './runCompiledApp.ts'
@@ -133,5 +135,50 @@ describe('the prompt-only names stay prompt-only', () => {
         const { code, text } = await onCommandLine([name])
         expect(text).toContain('unknown command')
         expect(code).toBe(2)
+    })
+})
+
+// THE FLAGS, NOT JUST THE NAMES.
+//
+// `cliUsage` and `completeCliLine` both open by declaring flag drift impossible, and both are right
+// about the APP's commands — those project from `cliCommands`, so a handler that gains a field gains a
+// flag in help and at the prompt with no second edit. Neither was true of the reserved half of the
+// same surface: the flags lived in `description` prose, so `logs` advertised five while its parser
+// accepted eight, and completion hardcoded a list for `serve` and `login` and offered nothing for the
+// rest — including `logs`, which has more flags than any other command on either surface.
+//
+// Driven off the TABLE, so a flag added there is asserted on both projections with no second edit.
+describe("a reserved command's flags reach both projections", () => {
+    const WITH_FLAGS: [string, readonly string[]][] = []
+    for (const [name, entry] of Object.entries(RESERVED_CLI_COMMANDS)) {
+        if ('flags' in entry) WITH_FLAGS.push([name, entry.flags])
+    }
+
+    test('every declared flag appears in the generated help', () => {
+        const help = cliUsage('demoapp', [])
+        for (const [name, flags] of WITH_FLAGS) {
+            for (const flag of flags) {
+                expect(`${name}:${help}`).toContain(flag)
+            }
+        }
+    })
+
+    test('every declared flag is offered at the prompt', () => {
+        for (const [name, flags] of WITH_FLAGS) {
+            // An empty partial, so the single-dash aliases are in scope too — typing `--` filters them
+            // out, which is the completer working, not a gap.
+            const { candidates } = completeCliLine({
+                line: `${name} `,
+                commands: [],
+                surface: 'command',
+            })
+            expect([name, [...candidates].sort()]).toEqual([name, [...flags].sort()])
+        }
+    })
+
+    // The three spellings the `logs` parser accepts that its prose never mentioned.
+    test('the `logs` aliases the parser accepts are among them', () => {
+        const flags = RESERVED_CLI_COMMANDS.logs.flags as readonly string[]
+        for (const alias of ['-f', '-n', '--channel']) expect(flags).toContain(alias)
     })
 })
