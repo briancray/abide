@@ -42,6 +42,7 @@
 
 import type { SyntaxKind } from 'typescript/unstable/ast'
 import type { Root, Script, TemplateNode } from './ast.ts'
+import { SCOPE_PROVIDED_SPECIFIERS } from './SCOPE_PROVIDED.ts'
 import { matchingBracket, splitParams, topLevelIndexOf } from './scanText.ts'
 import {
     analyzeBraces,
@@ -169,23 +170,6 @@ export interface BindingAnalysis {
     // diagnostic. The build lane had resolved the local correctly the whole time.
     propsLocal: string
 }
-
-// Framework specifiers that MUST resolve through the injected `$scope` (request/instance-scoped:
-// recording/seeded `state`, per-request `route`/`identity`, the client `navigate`, …) rather than a
-// real module import. Every OTHER `abide/shared|ui/*` import is a pass-through real module (M3b).
-const SCOPE_PROVIDED_SPECIFIERS = new Set<string>([
-    'abide/shared/state',
-    'abide/ui/props',
-    'abide/shared/watch',
-    'abide/shared/route',
-    'abide/shared/identity',
-    'abide/shared/url',
-    'abide/ui/navigate',
-    'abide/server/request',
-    'abide/server/cookies',
-    'abide/server/context',
-    'abide/server/server',
-])
 
 // An ordinary import is the DEFAULT: its local stays lexical (`declared`) and both emitters re-emit the
 // statement verbatim, with the specifier rewritten to an absolute path (`resolvePassThroughImport`).

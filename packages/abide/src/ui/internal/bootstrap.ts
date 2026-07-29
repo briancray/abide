@@ -45,6 +45,7 @@ import {
     type SocketSpecs,
 } from './pageRegistry.ts'
 import { isHydrating } from './runtime.ts'
+import type { ClientScopeBindings } from './SCOPE_PROVIDED.ts'
 import { makeSeededState } from './seededState.ts'
 import { makeClientSocketImports } from './socketProxy.ts'
 
@@ -215,11 +216,20 @@ export function buildPageScope(
         identity: _identity,
         ...props
     } = seed
-    imports.route = route
-    imports.identity = identity
-    imports.url = url
-    imports.navigate = navigate
-    return { ...imports, state: makeSeededState(seed, isHydrating), watch, props: () => props }
+    // THE CLIENT HALF of `SCOPE_PROVIDED`, typed by the table so a specifier added there without a
+    // binding here is a compile error rather than a `$scope["x"]` that is `undefined` on mount. Spread
+    // LAST, so a standard accessor name always resolves to the accessor rather than to an rpc that
+    // happens to share it.
+    const bindings: ClientScopeBindings = {
+        state: makeSeededState(seed, isHydrating),
+        watch,
+        props: () => props,
+        route,
+        identity,
+        url,
+        navigate,
+    }
+    return { ...imports, ...bindings }
 }
 
 // Bootstrap a page in the browser from its AOT-emitted client `hydrate`. Returns a cleanup function

@@ -35,6 +35,7 @@ import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
 import { HYDRATION_ELEMENT_ID } from '../../ui/internal/HYDRATION_ELEMENT_ID.ts'
 import { closeRenderState, openRenderState, renderState } from '../../ui/internal/renderState.ts'
+import type { ServerScopeBindings } from '../../ui/internal/SCOPE_PROVIDED.ts'
 import { SITE_PATH } from '../../ui/internal/SITE_PATH.ts'
 import { escapeHtml, Raw } from '../../ui/internal/serverRuntime.ts'
 import {
@@ -42,15 +43,18 @@ import {
     documentPatch,
     drainPatches,
 } from '../../ui/internal/streamScheduler.ts'
+import { context } from '../context.ts'
 import { cookies } from '../cookies.ts'
 import { request } from '../request.ts'
+import { server } from '../server.ts'
 import type { Socket } from '../socket.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import type { Rpc } from './makeRpc.ts'
 import type { AppConfig, Route } from './router.ts'
 
-// Build the imports map: RPC callables by route name, socket instances by socket name, then the
-// ambient accessors (added last so a standard accessor name always resolves to the accessor). A
+// Build the imports map: RPC callables by route name, socket instances by socket name. The framework
+// ambients are added by `serverScopeBindings` LAST, at the point the scope is assembled, so a standard
+// accessor name always resolves to the accessor rather than to an rpc that happens to share it. A
 // `.abide` that imports a socket from `server/sockets/<name>.ts` reads the REAL isomorphic `Socket`
 // off `$scope` during SSR — its `[Symbol.asyncIterator]` is snapshot-then-complete under render (CS5).
 //
@@ -69,12 +73,28 @@ function pageImports(
     for (const [name, sock] of Object.entries(sockets)) {
         imports[name] = sock
     }
-    imports.route = route
-    imports.url = url
-    imports.identity = identity
-    imports.request = request
-    imports.cookies = cookies
     return imports
+}
+
+// THE SERVER HALF of `SCOPE_PROVIDED`. Typed by the table, so a specifier added there without a
+// binding here is a compile error rather than a `$scope["x"]` that is `undefined` at first render —
+// which is what `abide/server/context` and `abide/server/server` were, listed as scope-provided and
+// supplied by nobody.
+function serverScopeBindings(state: unknown): ServerScopeBindings {
+    return {
+        // The shared ROOT recorder (bucket 0), created once per render in `renderPage` — page + all
+        // layout levels record into it; `<Component/>` adapters branch off via `.forComponent()`.
+        state,
+        watch,
+        props: () => ({}),
+        route,
+        url,
+        identity,
+        request,
+        cookies,
+        context,
+        server,
+    }
 }
 
 // Render a page source to its inner SSR HTML inside the active request scope, through the AOT-emitted
@@ -159,11 +179,7 @@ async function renderLevel(
     const emitted = await loadEmittedServer(level, dirs[index])
     const scope: Record<string, unknown> = {
         ...imports,
-        // `imports.state` is the shared ROOT recorder (bucket 0), created once per render in renderPage —
-        // page + all layout levels record into it; `<Component/>` adapters branch off via `.forComponent()`.
-        state: imports.state,
-        watch,
-        props: () => ({}),
+        ...serverScopeBindings(imports.state),
     }
     if (index + 1 < levels.length) {
         scope.children = async (): Promise<Raw> =>

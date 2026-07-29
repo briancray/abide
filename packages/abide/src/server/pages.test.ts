@@ -363,3 +363,39 @@ test('a STREAMED page defers disposal until the drain completes, then disposes e
 
     await app.stop()
 })
+
+// SCOPE-PROVIDED SPECIFIERS AND WHO SUPPLIES THEM.
+//
+// Being on `SCOPE_PROVIDED` means the emitters REFUSE to emit a real import for a specifier and write
+// `const x = $scope["x"]` instead — a promise that something puts `x` in the scope. `context` and
+// `server` were on that list and supplied by NEITHER scope builder, so importing either compiled
+// cleanly, type-checked cleanly (the check lane copies the import verbatim), and threw
+// `context is not a function` on first render. The table now names each specifier's supplying side and
+// the two builders are typed from it, so an unsupplied entry is a compile error; this asserts the
+// other half — that every server-side name actually resolves to its accessor at render.
+test('every server-side scope-provided ambient resolves during SSR', async () => {
+    const app = await createTestApp({
+        pages: {
+            '/': [
+                '<script>',
+                "import { request } from 'abide/server/request'",
+                "import { cookies } from 'abide/server/cookies'",
+                "import { context } from 'abide/server/context'",
+                "import { server } from 'abide/server/server'",
+                'const reached = [',
+                '  typeof request().url,',
+                '  typeof cookies().get,',
+                '  typeof context(),',
+                '  typeof server().port,',
+                "].join(',')",
+                '</script><main>{reached}</main>',
+            ].join('\n'),
+        },
+    })
+    try {
+        const html = await (await app.fetch('/')).text()
+        expect(html).toContain('string,function,object,number')
+    } finally {
+        await app.stop()
+    }
+})
