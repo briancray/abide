@@ -116,6 +116,35 @@ describe('rewriteCellRefs assignment', () => {
         })
     })
 
+    // The same rule, asked by the DECLARATION scan — which is what decides the answers below and did
+    // not apply it. A depth-0 line break ended the statement unconditionally, so a declarator list
+    // broken across lines lost every binding after the break: `b` was neither declared nor a cell,
+    // `{b}` rendered empty, and `b = 5` was never rewritten to `.set()`. Nothing threw, and the check
+    // lane — whose own copy of the rule was correct — stayed green over it.
+    describe('a multi-line declarator list keeps every binding', () => {
+        const bindings = (script: string): { declared: string[]; cells: string[] } => {
+            const analysis = analyzeBindings(parse(`<script>${script}</script><p>x</p>`))
+            return { declared: [...analysis.declared], cells: [...analysis.cellNames] }
+        }
+
+        test('plain declarators', () => {
+            expect(bindings('let a = 1,\n    b = 2').declared).toEqual(['a', 'b'])
+        })
+
+        test('cells', () => {
+            expect(bindings('let a = state(1),\n    b = state(2)').cells).toEqual(['a', 'b'])
+        })
+
+        test('the break may fall before the comma', () => {
+            expect(bindings('let a = 1\n    , b = 2').declared).toEqual(['a', 'b'])
+        })
+
+        test('and a genuine boundary still ends the declaration', () => {
+            expect(bindings('let a = 1\nlet b = 2').declared).toEqual(['a', 'b'])
+            expect(bindings('let a = 1\nb.c()').declared).toEqual(['a'])
+        })
+    })
+
     // The template kinds are role-asymmetric (see CONTINUATION_OPERATORS). `TemplateTail` used to be
     // in `afterPrev`, so a line ENDING in one never ended the RHS — the closing paren landed after the
     // following statements instead of after the literal, which is a syntax error only if what got

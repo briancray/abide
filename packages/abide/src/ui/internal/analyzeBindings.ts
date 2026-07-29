@@ -42,7 +42,6 @@
 
 import type { SyntaxKind } from 'typescript/unstable/ast'
 import type { Root, Script, TemplateNode } from './ast.ts'
-import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
 import { matchingBracket, splitParams, topLevelIndexOf } from './scanText.ts'
 import {
     analyzeBraces,
@@ -53,6 +52,7 @@ import {
     K,
     numberAt,
     rhsExtent,
+    statementExtent,
     type Tok,
     tokenAt,
     tokenize,
@@ -1191,23 +1191,6 @@ function scanTopLevel(source: string): StatementRecord[] {
     let atStart = true
     let i = 0
 
-    // Scan forward from statement-keyword index `kw` to the statement end. Returns the last statement
-    // token index and the index to resume at (past any `;`).
-    const stmtSpan = (kw: number): { lastIdx: number; nextIdx: number } => {
-        let localDepth = 0
-        let lastIdx = kw
-        for (let p = kw + 1; p < n; p++) {
-            const t = tokenAt(tokens, p)
-            const kind = t.kind
-            if (localDepth === 0 && t.nl) return { lastIdx, nextIdx: p }
-            if (localDepth === 0 && kind === K.SemicolonToken) return { lastIdx, nextIdx: p + 1 }
-            if (isOpen(kind)) localDepth++
-            else if (isClose(kind)) localDepth--
-            lastIdx = p
-        }
-        return { lastIdx, nextIdx: n }
-    }
-
     const blockBodyEnd = (kw: number): number => {
         let localDepth = 0
         let seenBody = false
@@ -1249,7 +1232,7 @@ function scanTopLevel(source: string): StatementRecord[] {
                         'shared across FILES belongs in a `.ts` module you import.',
                 )
             if (kind === K.ImportKeyword) {
-                const { lastIdx, nextIdx } = stmtSpan(i)
+                const { lastIdx, nextIdx } = statementExtent(tokens, i)
                 const rawText = source.slice(t.start, tokenAt(tokens, lastIdx).end)
                 const terminator =
                     nextIdx > 0 &&
@@ -1273,7 +1256,7 @@ function scanTopLevel(source: string): StatementRecord[] {
                 continue
             }
             if (kind === K.LetKeyword || kind === K.ConstKeyword || kind === K.VarKeyword) {
-                const { lastIdx, nextIdx } = stmtSpan(i)
+                const { lastIdx, nextIdx } = statementExtent(tokens, i)
                 const rawDeclarators = source.slice(t.end, tokenAt(tokens, lastIdx).end)
                 records.push({
                     kind: 'var',

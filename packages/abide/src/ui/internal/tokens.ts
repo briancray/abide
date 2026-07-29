@@ -256,8 +256,75 @@ export function analyzeBraces(tokens: Tok[]): BraceInfo {
     return { matchClose, matchOpen, enclBraceOpen, isObjectBrace, bracketDepth }
 }
 
+// ---------------------------------------------------------------------------
+// Statement boundaries
+// ---------------------------------------------------------------------------
+
+// IS THE LINE BREAK BEFORE TOKEN `index` A STATEMENT BOUNDARY? — the ASI rule, stated once.
+//
+// A depth-0 line break ends a statement only when the expression is complete on BOTH sides of it;
+// otherwise it is a mid-expression wrap (`a\n  .b()`, `c ?\n  x`, `a +\n  b`) that JS keeps as one
+// statement. `CONTINUATION_OPERATORS` already owns WHICH tokens continue; this owns the two-sided
+// question asked of them, because asking it correctly is where the copies drifted, not the set.
+export function isStatementBreak(tokens: Tok[], index: number): boolean {
+    const token = tokenAt(tokens, index)
+    if (!token.nl || index === 0) return false
+    return (
+        !CONTINUATION_OPERATORS.afterPrev.has(tokenAt(tokens, index - 1).kind) &&
+        !CONTINUATION_OPERATORS.atNext.has(token.kind)
+    )
+}
+
+export interface StatementExtent {
+    // Last token of the statement, EXCLUDING a terminating `;`.
+    lastIdx: number
+    // Where a token-walking caller resumes: past a terminating `;`, else the next statement's first token.
+    nextIdx: number
+    // Source offset just past the statement, INCLUDING a terminating `;`. What a caller copying
+    // verbatim source needs, so the `;` is consumed rather than re-emitted.
+    end: number
+}
+
+// Extent of the statement opened by the keyword at `keywordIdx` (`let`/`const`/`var`).
+//
+// THREE scanners used to answer this and only two applied the ASI rule. The one that did not was the
+// build lane's DECLARATION scan — the one that decides what a `<script>` binds — so
+//
+//     let a = 1,
+//         b = 2
+//
+// declared `a` alone: `b` was neither a binding nor a cell, `{b}` rendered empty, and `b = 5` was
+// never rewritten to `.set()`. No throw, no hydration mismatch, and `abide check` green over it,
+// because the check lane's own copy DID apply the rule. That is the same shape
+// `CONTINUATION_OPERATORS` was written to end; the fix landed on `rhsExtent` and stopped one caller
+// short.
+//
+// The keyword itself seeds the scan as the previous token: it never trails a continuation, so the
+// first line break after it is governed only by whatever follows.
+export function statementExtent(tokens: Tok[], keywordIdx: number): StatementExtent {
+    const n = tokens.length
+    let depth = 0
+    let lastIdx = keywordIdx
+    for (let p = keywordIdx + 1; p < n; p++) {
+        const t = tokenAt(tokens, p)
+        const kind = t.kind
+        if (depth === 0) {
+            if (isStatementBreak(tokens, p))
+                return { lastIdx, nextIdx: p, end: tokenAt(tokens, lastIdx).end }
+            if (kind === K.SemicolonToken) return { lastIdx, nextIdx: p + 1, end: t.end }
+        }
+        if (isOpen(kind)) depth++
+        else if (isClose(kind)) depth--
+        lastIdx = p
+    }
+    return { lastIdx, nextIdx: n, end: tokenAt(tokens, lastIdx).end }
+}
+
 // Extent of an assignment/compound RHS starting at token `start`; returns the last RHS token index.
 // Stops at a depth-0 comma/semicolon, an enclosing bracket close, or a statement-boundary line break.
+// The `j > start` guard is the one thing an RHS asks that a statement does not: the token BEFORE the
+// RHS is the assignment operator, and a compound one (`+=`) is not a continuation operator, so
+// without it `n +=\n 1` would read the line break as a boundary and truncate to an empty RHS.
 export function rhsExtent(tokens: Tok[], start: number): number {
     let depth = 0
     let last = start
@@ -266,15 +333,7 @@ export function rhsExtent(tokens: Tok[], start: number): number {
         const kind = t.kind
         if (depth === 0) {
             if (kind === K.CommaToken || kind === K.SemicolonToken) return j > start ? j - 1 : start
-            // A line break is a statement boundary ONLY when neither side is a continuation operator —
-            // otherwise the expression continues onto the next line (JS ASI), so keep scanning.
-            if (
-                t.nl &&
-                j > start &&
-                !CONTINUATION_OPERATORS.afterPrev.has(tokenAt(tokens, j - 1).kind) &&
-                !CONTINUATION_OPERATORS.atNext.has(kind)
-            )
-                return j - 1
+            if (j > start && isStatementBreak(tokens, j)) return j - 1
         }
         if (isOpen(kind)) depth++
         else if (isClose(kind)) {
