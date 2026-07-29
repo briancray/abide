@@ -31,10 +31,7 @@ import {
     type RawDiagnostic,
     resolveAbidePosition,
 } from '../ui/internal/abideDiagnostic.ts'
-import type { Root } from '../ui/internal/ast.ts'
-import { componentDts, emitCheck, type Segment } from '../ui/internal/emitCheck.ts'
-import { parse } from '../ui/internal/parse.ts'
-import { validateTemplate } from '../ui/internal/validateTemplate.ts'
+import { lowerProject } from '../ui/internal/lowerProject.ts'
 import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
 // A single mapped diagnostic against a `.abide` file. `line`/`column` are 1-based.
@@ -73,13 +70,6 @@ export const SUPPRESSED_CODES = new Set<number>([
 
 // One raw diagnostic as returned by the TS7 pass (before source mapping).
 // The generated TS for one `.abide` file plus everything needed to map its diagnostics back.
-interface Generated {
-    abidePath: string
-    tsPath: string
-    source: string
-    code: string
-    segments: Segment[]
-}
 
 // ---------------------------------------------------------------------------
 // Top-level entry
@@ -90,55 +80,33 @@ export async function check(dir: string): Promise<CheckResult> {
     // against the same document its editor sees, and a check on a fresh clone (where `src/.abide/` is
     // gitignored and therefore absent) is not a different check from one on a dev machine.
     await writeHealthCompanion(dir)
-    const abideFiles = findAbideFiles(dir)
-    const toCheck: Generated[] = []
-    const diagnostics: CheckDiagnostic[] = []
-    // In-memory virtual files served to the type engine via an `fs` overlay (NO disk writes): each
-    // `.abide` → its typed `<file>.abide.d.ts` companion (cross-file component typing, PR2) + each
-    // script-bearing `.abide` → its generated `__abide_check_*.ts`. A verbatim `import X from "./X.abide"`
-    // then resolves to the companion (its typed default) instead of the ambient `declare module "*.abide"`
-    // (any). This is the `TypeEngine` overlay the `lsp` sidecar reuses (PR3).
-    const virtualFiles: Record<string, string> = {}
-
-    for (const abidePath of abideFiles) {
-        const source = await Bun.file(abidePath).text()
-        let root: Root
-        try {
-            root = parse(source, { filename: abidePath })
-        } catch (parseError) {
-            // A parse failure is itself a check failure — surface it at the reported position if we have one.
-            const position = parseError as { line?: number; column?: number }
-            diagnostics.push({
-                file: abidePath,
-                line: position.line ?? 1,
-                column: position.column ?? 1,
-                code: 0,
-                message: parseError instanceof Error ? parseError.message : String(parseError),
-            })
-            continue
-        }
-        // The build lane's structural gates, asked here so `abide check` rejects exactly what
-        // `abide build` rejects. Without this the check lane ran off `parse` alone and was silent on
-        // four constructs the build hard-throws on — a green check followed by a failing build.
-        const verdict = validateTemplate(root)
-        if (!verdict.legal) {
-            diagnostics.push({
-                file: abidePath,
-                line: 1,
-                column: 1,
-                code: 0,
-                message: verdict.rejected,
-            })
-            continue
-        }
-        virtualFiles[`${abidePath}.d.ts`] = componentDts(source, root, verdict.analysis)
-        if (root.moduleScript === null && root.instanceScript === null) continue
-        toCheck.push(buildGenerated(abidePath, source, root))
-    }
-
-    // Each generated module is a virtual sibling of its `.abide` (so relative imports resolve
-    // identically); the type engine reads them through the `fs` overlay — nothing touches disk.
-    for (const entry of toCheck) virtualFiles[entry.tsPath] = entry.code
+    // One lowering loop, shared with `abide lsp` (`ui/internal/lowerProject.ts`) so the editor and CI
+    // cannot disagree about what a project's types are. The two Bun-only pieces stay HERE, where only
+    // Bun reaches them: the file read, and the content-hashed virtual path.
+    const lowered = lowerProject({
+        abideFiles: findAbideFiles(dir),
+        readSource: (abidePath) => {
+            try {
+                return readFileSync(abidePath, 'utf8')
+            } catch {
+                return undefined
+            }
+        },
+        tsPathFor: (abidePath) =>
+            join(
+                dirname(abidePath),
+                `__abide_check_${basename(abidePath).replace(/[^\w]/g, '_')}_${Bun.hash(abidePath).toString(36)}.ts`,
+            ),
+    })
+    const toCheck = lowered.modules
+    const virtualFiles = lowered.files
+    const diagnostics: CheckDiagnostic[] = lowered.failures.map((failure) => ({
+        file: failure.abidePath,
+        line: failure.line,
+        column: failure.column,
+        code: 0,
+        message: failure.message,
+    }))
 
     const rawDiagnostics =
         toCheck.length > 0
@@ -227,16 +195,6 @@ export function findAbideFiles(dir: string): string[] {
 // ---------------------------------------------------------------------------
 // Generation (parse -> transformed TS + offset segment map)
 // ---------------------------------------------------------------------------
-
-function buildGenerated(abidePath: string, source: string, root: Root): Generated {
-    const { code, segments } = emitCheck(source, root)
-    const directory = dirname(abidePath)
-    const tsPath = join(
-        directory,
-        `__abide_check_${basename(abidePath).replace(/[^\w]/g, '_')}_${Bun.hash(abidePath).toString(36)}.ts`,
-    )
-    return { abidePath, tsPath, source, code, segments }
-}
 
 // ---------------------------------------------------------------------------
 // Offset mapping

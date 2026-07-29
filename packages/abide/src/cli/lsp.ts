@@ -30,19 +30,13 @@ import {
     type RawDiagnostic,
     resolveAbidePosition,
 } from '../ui/internal/abideDiagnostic.ts'
-import type { Root } from '../ui/internal/ast.ts'
-import {
-    CHECK_HEADER_LENGTH,
-    componentDts,
-    emitCheck,
-    mapGenToOrig,
-    mapOrigToGen,
-    type Segment,
-} from '../ui/internal/emitCheck.ts'
+import { CHECK_HEADER_LENGTH, mapGenToOrig, mapOrigToGen } from '../ui/internal/emitCheck.ts'
 import { encodeSemanticTokens } from '../ui/internal/encodeSemanticTokens.ts'
-import { parse } from '../ui/internal/parse.ts'
+import {
+    type LoweredModule,
+    lowerProject as sharedLowerProject,
+} from '../ui/internal/lowerProject.ts'
 import { templateSemanticTokens } from '../ui/internal/templateSemanticTokens.ts'
-import { validateTemplate } from '../ui/internal/validateTemplate.ts'
 import { findAbideFiles, overlayFs, SUPPRESSED_CODES } from './check.ts'
 import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
@@ -73,12 +67,8 @@ interface LspDiagnostic {
 }
 
 // A generated check-module for one script-bearing `.abide` (its virtual `.ts` path + the map back).
-interface CheckModule {
-    abidePath: string
-    tsPath: string
-    source: string
-    segments: Segment[]
-}
+// The shared lowering's own record — `abide check` reads exactly the same one.
+type CheckModule = LoweredModule
 
 interface ParseError {
     line: number
@@ -113,49 +103,40 @@ function lineColumnToOffset(source: string, line: number, character: number): nu
 // revision) so an unchanged buffer lowers to a byte-identical overlay — the engine keys its warm-API
 // reuse on that. Freshness comes from the engine recreating the API when the overlay changes, NOT from
 // churning paths (see `LspEngine.snapshot`).
-function lowerProject(dir: string, overrides: Record<string, string>): LoweredProject {
-    const files: Record<string, string> = {}
-    const modules: CheckModule[] = []
-    const parseErrors = new Map<string, ParseError>()
-    for (const abidePath of findAbideFiles(dir)) {
-        let source: string
-        try {
+// The shared lowering (`ui/internal/lowerProject.ts`), with the LSP's two differences supplied as
+// parameters: a reader that serves UNSAVED editor buffers ahead of disk — which is the whole point of
+// a language server, and the reason this cannot simply call `abide check` — and its own virtual path
+// scheme. `abide check` supplies a Bun reader and a content-hashed path against the same loop, so the
+// editor and CI cannot disagree about what a project's types are.
+function lowerCurrentProject(dir: string, overrides: Record<string, string>): LoweredProject {
+    const lowered = sharedLowerProject({
+        abideFiles: findAbideFiles(dir),
+        readSource: (abidePath) => {
             const override = overrides[abidePath]
-            source = override !== undefined ? override : readFileSync(abidePath, 'utf8')
-        } catch {
-            continue
-        }
-        let root: Root
-        try {
-            root = parse(source, { filename: abidePath })
-        } catch (error) {
-            const position = error as { line?: number; column?: number }
-            parseErrors.set(abidePath, {
-                line: position.line ?? 1,
-                column: position.column ?? 1,
-                message: error instanceof Error ? error.message : String(error),
-            })
-            continue
-        }
-        // The build lane's structural gates (see `validateTemplate`). Reported through the same
-        // channel as a parse error so the editor shows what `abide build` would reject, rather than
-        // going green on a template that cannot be built.
-        const verdict = validateTemplate(root)
-        if (!verdict.legal) {
-            parseErrors.set(abidePath, { line: 1, column: 1, message: verdict.rejected })
-            continue
-        }
-        files[`${abidePath}.d.ts`] = componentDts(source, root, verdict.analysis)
-        if (root.moduleScript === null && root.instanceScript === null) continue
-        const { code, segments } = emitCheck(source, root)
-        const tsPath = join(
-            dirname(abidePath),
-            `__abide_lsp_${basename(abidePath).replace(/[^\w]/g, '_')}.ts`,
-        )
-        files[tsPath] = code
-        modules.push({ abidePath, tsPath, source, segments })
+            if (override !== undefined) return override
+            try {
+                return readFileSync(abidePath, 'utf8')
+            } catch {
+                return undefined
+            }
+        },
+        tsPathFor: (abidePath) =>
+            join(
+                dirname(abidePath),
+                `__abide_lsp_${basename(abidePath).replace(/[^\w]/g, '_')}.ts`,
+            ),
+    })
+    const parseErrors = new Map<string, ParseError>()
+    for (const failure of lowered.failures) {
+        // A build-lane rejection is reported through the same channel as a parse error, so the editor
+        // shows what `abide build` would reject rather than going green on an unbuildable template.
+        parseErrors.set(failure.abidePath, {
+            line: failure.line,
+            column: failure.column,
+            message: failure.message,
+        })
     }
-    return { files, modules, parseErrors }
+    return { files: lowered.files, modules: lowered.modules, parseErrors }
 }
 
 // ---------------------------------------------------------------------------
@@ -461,7 +442,7 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
     const lowerCurrent = (): LoweredProject => {
         const overrides: Record<string, string> = {}
         for (const [path, content] of buffers) overrides[path] = content
-        return lowerProject(projectRoot, overrides)
+        return lowerCurrentProject(projectRoot, overrides)
     }
 
     const refresh = (): void => {
