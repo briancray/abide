@@ -528,9 +528,14 @@ test('Back to a tall page restores the deep offset the browser clamps against th
     await expect(page.locator('h1')).toHaveText('File-based routing & navigation')
     // Left alone the browser lands at the short page's max scroll (`short - viewport`, ~815); the
     // correction puts it back near 3000. Asserted as a BAND, not an exact pixel: once we restore, the
-    // browser's own scroll anchoring can nudge a few px as late CSS/images settle above the viewport.
-    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(2900)
-    expect(await page.evaluate(() => Math.round(window.scrollY))).toBeLessThan(3100)
+    // browser's own scroll anchoring nudges as late CSS/images settle above the viewport.
+    //
+    // The band is ±300, not ±100. Under a loaded parallel run the nudge measured 124px — inside the
+    // phenomenon this comment already describes, outside the window, and it flaked on an unchanged
+    // tree. What the assertion has to DISCRIMINATE is the corrected offset (~3000) from the clamped one
+    // (~815), and ±300 does that with the same certainty while leaving anchoring room to move.
+    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(2700)
+    expect(await page.evaluate(() => Math.round(window.scrollY))).toBeLessThan(3300)
 
     // `scrollRestoration` is untouched, so the browser still owns reload / bfcache / anchors.
     expect(await page.evaluate(() => history.scrollRestoration)).toBe('auto')

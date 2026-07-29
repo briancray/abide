@@ -4,6 +4,7 @@ import {
     type RequestScope,
     runInScope,
 } from '../server/internal/requestScope.ts'
+import { settled, stopAll, tick, wakeups } from '../test/internal/wakeups.ts'
 import { effect, state } from './internal/reactive.ts'
 import {
     createReactiveScope,
@@ -13,8 +14,6 @@ import {
 } from './internal/reactiveScope.ts'
 import { memo } from './memo.ts'
 
-// Effect re-runs are microtask-batched; a macrotask tick guarantees they have flushed.
-const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 // Every test runs inside a fresh cache context so slots never leak between tests.
@@ -123,31 +122,20 @@ describe('memo — refresh / invalidate', () => {
             const load = memo(async ({ id }: { id: number }) => `user-${id}`)
             await load({ id: 1 })
 
-            let valueReads = 0
-            let refreshingReads = 0
-            const stopValue = effect(() => {
-                valueReads++
-                load.peek({ id: 1 })
-            })
-            const stopRefreshing = effect(() => {
-                refreshingReads++
-                load.refreshing({ id: 1 })
-            })
-            await tick()
-            const settledValue = valueReads
-            const settledRefreshing = refreshingReads
+            const value = wakeups(() => load.peek({ id: 1 }))
+            const spinner = wakeups(() => load.refreshing({ id: 1 }))
+            await settled(value, spinner)
 
             for (let i = 0; i < 3; i++) {
                 load.refresh({ id: 1 })
                 await tick()
             }
             // The value never changed, so nothing reading it should have run again.
-            expect(valueReads).toBe(settledValue)
+            expect(value.count).toBe(0)
             // The flag went up and down each time, so its reader should have.
-            expect(refreshingReads).toBeGreaterThan(settledRefreshing)
+            expect(spinner.count).toBeGreaterThan(0)
             expect(load.refreshing({ id: 1 })).toBe(false)
-            stopValue()
-            stopRefreshing()
+            stopAll(value, spinner)
         })
     })
 
@@ -191,19 +179,14 @@ describe('memo — refresh / invalidate', () => {
             const load = memo(async () => `v${++calls}`)
             await load()
             const seen: (string | undefined)[] = []
-            let reads = 0
-            const dispose = effect(() => {
-                reads++
-                seen.push(load.peek())
-            })
-            await tick()
-            const settled = reads
+            const value = wakeups(() => seen.push(load.peek()))
+            await settled(value)
 
             load.refresh()
             await tick()
-            expect(reads).toBe(settled + 1)
+            expect(value.count).toBe(1)
             expect(seen.at(-1)).toBe('v2')
-            dispose()
+            value.stop()
         })
     })
 
@@ -296,25 +279,20 @@ describe('memo — publish', () => {
         await withScope(async () => {
             const c = memo(async ({ id }: { id: number }) => `user-${id}`)
             await c({ id: 1 })
-            let reads = 0
             const seen: (string | undefined)[] = []
-            const dispose = effect(() => {
-                reads++
-                seen.push(c.peek({ id: 1 }))
-            })
-            await tick()
-            const settled = reads
+            const value = wakeups(() => seen.push(c.peek({ id: 1 })))
+            await settled(value)
 
             for (let i = 0; i < 3; i++) c.publish({ id: 1 }, 'user-1')
             await tick()
-            expect(reads).toBe(settled)
+            expect(value.count).toBe(0)
 
             // A genuinely different value still propagates — the cutoff must not swallow a real write.
             c.publish({ id: 1 }, 'CHANGED')
             await tick()
-            expect(reads).toBe(settled + 1)
+            expect(value.count).toBe(1)
             expect(seen.at(-1)).toBe('CHANGED')
-            dispose()
+            value.stop()
         })
     })
 
