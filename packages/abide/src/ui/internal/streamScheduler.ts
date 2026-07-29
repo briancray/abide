@@ -25,6 +25,7 @@ import type {
 } from './renderState.ts'
 import { renderState } from './renderState.ts'
 import { STREAM_SENTINEL } from './STREAM_SENTINEL.ts'
+import { abideAppendItem, abideFillSlot } from './streamPatchDom.ts'
 
 // The race sentinel the deadline resolves to. Identity-compared, so it can never collide with a read
 // value (a read resolving to this exact symbol is impossible — it is module-private).
@@ -363,34 +364,40 @@ export type Patch =
     | { op: 'fill'; id: number; html: string }
     | { op: 'append'; id: number; html: string }
 
-// The idempotent move-scripts (defined once, re-run per id): fill a slot, append into a list, or flag a
-// list complete (so hydration CLAIMS its items instead of re-iterating). Both patches address a
-// `<template>` SENTINEL by id and insert BEFORE it — the sentinel is parse-legal in every parent (a
-// wrapper element would be foster-parented out of a table section), so the patched nodes always land at
-// the block's real position. `fill` additionally clears the pending fallback: the run of nodes between
-// the sentinel and its opening `<!--ab-p:N-->` comment. If that comment is missing (impossible from this
-// emitter — belt-and-braces so a bad walk can never delete a parent's unrelated children) it removes
-// NOTHING and still inserts, degrading to duplicate content rather than data loss.
+// The first-load move-scripts, DEFINED ONCE per document — `documentPatchPreamble` writes the two DOM
+// ops into the page and each patch then costs one call. They used to be inlined into every patch and
+// deduplicated at runtime by `window.$abidePatch=window.$abidePatch||…`, which meant the whole body
+// travelled once per streamed item; a fifty-row `{#for await}` shipped fifty copies of it.
+//
+// The ops themselves come from `streamPatchDom.ts`, stringified — the same functions `navigate`
+// imports and calls directly for a soft nav, so the geometry has one implementation instead of a
+// readable one and a minified one that had to be kept in step by hand.
+export function documentPatchPreamble(): string {
+    return (
+        `<script>(function(){` +
+        `var F=${String(abideFillSlot)};var A=${String(abideAppendItem)};` +
+        `window.$abideFill=function(n){var t=document.querySelector('template[data-ab-patch="'+n+'"]');` +
+        `if(t){F(n,t.content,'${STREAM_SENTINEL.pending}',document);t.remove();}};` +
+        `window.$abideAppend=function(n){var t=document.querySelector('template[data-ab-append="'+n+'"]');` +
+        `if(t){A(n,t.content,'${STREAM_SENTINEL.list}',document);t.remove();}};` +
+        `})()</script>`
+    )
+}
+
+// One out-of-order patch as document bytes: the content in a `<template>` the parser will not render,
+// then the call that moves it. Requires `documentPatchPreamble()` to have been written earlier in the
+// document — the transport does that before the first patch.
 export function documentPatch(patch: Patch): string {
     if (patch.op === 'fill') {
         return (
             `<template data-ab-patch="${patch.id}">${patch.html}</template>` +
-            `<script>window.$abidePatch=window.$abidePatch||function(n){` +
-            `var t=document.querySelector('template[data-ab-patch="'+n+'"]'),s=document.getElementById('${STREAM_SENTINEL.pending}'+n);` +
-            `if(!t||!s)return;var p=s.parentNode,d=[],x=s.previousSibling,f=0;` +
-            `while(x){if(x.nodeType===8&&x.data==='${STREAM_SENTINEL.pending}'+n){f=1;break;}d.push(x);x=x.previousSibling;}` +
-            `if(f)for(var i=0;i<d.length;i++)p.removeChild(d[i]);` +
-            `p.insertBefore(t.content,s);t.remove();` +
-            `};$abidePatch(${patch.id})</script>`
+            `<script>$abideFill(${patch.id})</script>`
         )
     }
     if (patch.op === 'append') {
         return (
             `<template data-ab-append="${patch.id}">${patch.html}</template>` +
-            `<script>window.$abideAppend=window.$abideAppend||function(n){` +
-            `var t=document.querySelector('template[data-ab-append="'+n+'"]'),l=document.getElementById('${STREAM_SENTINEL.list}'+n);` +
-            `if(t&&l&&l.parentNode){l.parentNode.insertBefore(t.content,l);t.remove();}` +
-            `};$abideAppend(${patch.id})</script>`
+            `<script>$abideAppend(${patch.id})</script>`
         )
     }
     throw new Error(`documentPatch: unknown patch op ${(patch as { op: string }).op}`)

@@ -41,6 +41,7 @@ import { escapeHtml, Raw } from '../../ui/internal/serverRuntime.ts'
 import {
     createRenderStream,
     documentPatch,
+    documentPatchPreamble,
     drainPatches,
 } from '../../ui/internal/streamScheduler.ts'
 import { context } from '../context.ts'
@@ -541,6 +542,9 @@ export function streamPageDocument(
         out.write(head)
         out.write(shell)
         if (stream !== undefined && (stream.deferred.length > 0 || stream.streamers.length > 0)) {
+            // The move-scripts, once per document rather than once per patch — written only on a page
+            // that actually defers something.
+            out.write(documentPatchPreamble())
             await enterScope(ctx, async () => {
                 for await (const patch of drainPatches(stream)) {
                     if (out.disconnected) break // client gone — stop draining

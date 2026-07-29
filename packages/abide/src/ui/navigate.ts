@@ -53,6 +53,7 @@ import {
     pageSpecs,
 } from './internal/pageRegistry.ts'
 import { STREAM_SENTINEL } from './internal/STREAM_SENTINEL.ts'
+import { abideAppendItem, abideFillSlot } from './internal/streamPatchDom.ts'
 
 const CONTAINER_ID = HYDRATION_ELEMENT_ID.container
 
@@ -240,52 +241,16 @@ export function disposeActive(): void {
 // unit testing — the browser end-state is otherwise seed-masked (hydrate re-renders from the seed).
 export function applyPatchFrame(frame: Record<string, unknown>): boolean {
     const id = frame.id
-    if (frame.kind === 'fill') {
-        if (typeof id === 'number' && typeof frame.html === 'string') {
-            const sentinel = document.getElementById(`${STREAM_SENTINEL.pending}${id}`)
-            const parent = sentinel?.parentNode
-            if (sentinel != null && parent != null) {
-                // Clear the pending fallback — the run of nodes back to the opening `<!--ab-p:N-->`
-                // sentinel — then insert the patch in its place. A missing opening sentinel (impossible
-                // from the emitter) removes nothing rather than walking off into unrelated siblings.
-                const stale: ChildNode[] = []
-                let found = false
-                for (
-                    let node = sentinel.previousSibling;
-                    node !== null;
-                    node = node.previousSibling
-                ) {
-                    if (
-                        node.nodeType === 8 &&
-                        (node as Comment).data === `${STREAM_SENTINEL.pending}${id}`
-                    ) {
-                        found = true
-                        break
-                    }
-                    stale.push(node as ChildNode)
-                }
-                if (found) for (const node of stale) parent.removeChild(node)
-                const template = document.createElement('template')
-                template.innerHTML = frame.html
-                parent.insertBefore(template.content, sentinel)
-            }
-        }
-        return true
+    const patch =
+        frame.kind === 'fill' ? abideFillSlot : frame.kind === 'append' ? abideAppendItem : null
+    if (patch === null) return false
+    if (typeof id === 'number' && typeof frame.html === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = frame.html
+        const prefix = frame.kind === 'fill' ? STREAM_SENTINEL.pending : STREAM_SENTINEL.list
+        patch(id, template.content, prefix, document)
     }
-    if (frame.kind === 'append') {
-        if (typeof id === 'number' && typeof frame.html === 'string') {
-            // Insert BEFORE the list's trailing `<template>` sentinel — document order is item order.
-            const sentinel = document.getElementById(`${STREAM_SENTINEL.list}${id}`)
-            const parent = sentinel?.parentNode
-            if (sentinel != null && parent != null) {
-                const template = document.createElement('template')
-                template.innerHTML = frame.html
-                parent.insertBefore(template.content, sentinel)
-            }
-        }
-        return true
-    }
-    return false
+    return true
 }
 
 // A same-chain CROSS-ROUTE soft-nav: stream the server's diverging-suffix shell, graft it into the kept

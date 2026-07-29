@@ -8,12 +8,14 @@
 //                 `<template id="ab-l:N">`; an `append` patch inserts before it, so document order is
 //                 item order at O(1) per patch.
 //
-// Four surfaces read these prefixes and only one of them is normal TypeScript: the emitter
-// (`streamScheduler`), the first-load move-scripts it builds as a MINIFIED STRING (`documentPatch` —
-// same DOM ops, run by the parser), the soft-nav applier that redoes those ops in JS
-// (`navigate.applyPatchFrame`, because a fetched body's inline scripts don't auto-run), and the claim
-// walk that strips the sentinels on hydrate (`runtime.unwrapStreamSlot` / `streamSentinelBefore`). A
-// prefix changed in three of the four is a stranded placeholder that never fills, with no error
-// anywhere. The move-script copy is a template string assembled at emit time, so it interpolates this
-// constant like any other caller rather than restating it.
+// Three surfaces read these prefixes: the emitter (`streamScheduler`), the DOM ops both transports run
+// over them (`streamPatchDom` — imported directly by the soft-nav applier, stringified into the
+// first-load preamble by `documentPatchPreamble`), and the claim walk that strips the sentinels on
+// hydrate (`runtime.unwrapStreamSlot` / `streamSentinelBefore`). A prefix changed in two of the three
+// is a stranded placeholder that never fills, with no error anywhere.
+//
+// It used to be four, because the two transports each implemented the geometry: the readable
+// TypeScript one and a hand-minified string one that had to be kept in step by hand, and only the
+// first was tested. They are one now, so this constant reaches the ops as a PARAMETER — the
+// stringified functions can close over nothing.
 export const STREAM_SENTINEL = { pending: 'ab-p:', list: 'ab-l:' } as const

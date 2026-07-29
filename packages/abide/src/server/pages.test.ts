@@ -92,7 +92,7 @@ test('a slow {#await} block streams as an out-of-order patch (PR2)', async () =>
     // ...and the resolved value arrives LATER as an out-of-order <template> patch + move-script.
     expect(body).toContain('<template data-ab-patch="0">')
     expect(stripAnchors(body)).toContain('<b>PATCHED</b>')
-    expect(body).toContain('$abidePatch(0)')
+    expect(body).toContain('$abideFill(0)')
     // Ordering: the slot precedes its patch, and the value streamed (only inside the patch, not the shell).
     expect(body.indexOf('<template id="ab-p:0"></template>')).toBeLessThan(
         body.indexOf('<template data-ab-patch="0">'),

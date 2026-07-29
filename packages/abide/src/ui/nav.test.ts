@@ -390,6 +390,7 @@ test('navigate(url(...query)) carries the query into the address and route().url
 
 import { routeAmbient } from '../shared/internal/routeAmbient.ts'
 import { registerPages } from './internal/pageRegistry.ts'
+import { documentPatch, documentPatchPreamble } from './internal/streamScheduler.ts'
 import { isKnownPage } from './navigate.ts'
 
 test('isKnownPage: only real page patterns are soft-nav targets (not /openapi.json, /rpc/*)', () => {
@@ -464,4 +465,52 @@ test('applyPatchFrame: a non-patch kind is not a patch, and a missing anchor is 
     // There is no `complete` op — it stamped `data-ab-done`, which nothing read — so a stale server
     // sending one is simply not a patch.
     expect(applyPatchFrame({ kind: 'complete', id: 99 })).toBe(false)
+})
+
+// THE FIRST-LOAD HALF OF THE SAME GEOMETRY.
+//
+// The five cases above cover the soft-nav applier. The first-load move-scripts were a second
+// implementation of the identical DOM algorithm — written as a minified JS string, run by the parser,
+// and tested by nothing, which is the wrong way round: the soft-nav copy runs only after a nav, the
+// string copy runs on every streamed page. Both now call the same `streamPatchDom` ops, so these two
+// tests reach the ops THROUGH the emitted script and the cases above cover the default path for free.
+//
+// Executing the preamble as a `Function` is the honest test of the embedding: it proves the emitted
+// text is valid standalone JS (the functions close over nothing) and that the wrappers hand it the
+// right sentinel prefixes — the two things stringification could get wrong.
+// `window` is passed in rather than read: the test preload deletes the global (so the isomorphic
+// modules take their server branch), while the emitted script is browser code and `window` is
+// `globalThis` there. Everything else it touches — `document`, the globals the wrappers define — is
+// reached exactly as the parser would reach it.
+function runDocumentScripts(html: string): void {
+    document.body.innerHTML = html
+    for (const script of Array.from(document.body.querySelectorAll('script'))) {
+        new Function('window', script.textContent ?? '')(globalThis)
+    }
+}
+
+test('documentPatch: the emitted first-load `fill` script runs the shared DOM op', () => {
+    runDocumentScripts(
+        `<div id="host"><!--ab-p:7--><span>loading</span><template id="ab-p:7"></template></div>` +
+            documentPatchPreamble() +
+            documentPatch({ op: 'fill', id: 7, html: '<b data-v>runs: 3</b>' }),
+    )
+    const host = document.getElementById('host')
+    expect(host?.querySelector('b[data-v]')?.textContent).toBe('runs: 3')
+    expect(host?.querySelector('span')).toBeNull() // the pending fallback was replaced
+    expect(document.getElementById('ab-p:7')?.previousSibling?.nodeName).toBe('B')
+    // The carrier `<template>` removes itself, so hydration never sees it.
+    expect(document.querySelector('template[data-ab-patch="7"]')).toBeNull()
+})
+
+test('documentPatch: the emitted first-load `append` script appends before the list sentinel', () => {
+    runDocumentScripts(
+        `<ul id="host"><li>a</li><template id="ab-l:2"></template></ul>` +
+            documentPatchPreamble() +
+            documentPatch({ op: 'append', id: 2, html: '<li>b</li>' }) +
+            documentPatch({ op: 'append', id: 2, html: '<li>c</li>' }),
+    )
+    expect(document.getElementById('host')?.innerHTML).toBe(
+        '<li>a</li><li>b</li><li>c</li><template id="ab-l:2"></template>',
+    )
 })
