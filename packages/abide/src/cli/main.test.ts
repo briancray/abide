@@ -25,7 +25,7 @@ import type { Route } from '../server/internal/router.ts'
 import { firstPositional } from './firstPositional.ts'
 import { flagAbsent } from './flagAbsent.ts'
 import { flagValue } from './flagValue.ts'
-import { main } from './main.ts'
+import { DEV_COMMANDS, main } from './main.ts'
 
 const tempDirs: string[] = []
 
@@ -94,6 +94,30 @@ describe('main — argv helpers', () => {
 })
 
 describe('main — dispatch', () => {
+    // The table IS the help. `abide --help` used to be a hand-written template literal restating all
+    // nine command names, their flags and their descriptions, with nothing tying it to the `if` chain
+    // that dispatched them — so adding a branch and forgetting the string (or the reverse) compiled
+    // clean. That is the `completion` failure `RESERVED_CLI_COMMANDS.ts` records for the compiled
+    // binary, which had been solved there and left standing here.
+    test('every dispatchable command appears in the generated usage, and nothing else does', async () => {
+        const lines: string[] = []
+        await main([], { cwd: process.cwd(), write: (l) => lines.push(l), writeError: () => {} })
+        const usage = lines.join('\n')
+
+        const listed = [...usage.matchAll(/^ {2}abide (\S+)/gm)].map((m) => m[1])
+        expect(new Set(listed)).toEqual(new Set(Object.keys(DEV_COMMANDS)))
+    })
+
+    test('each command lists its own invocation and summary verbatim', async () => {
+        const lines: string[] = []
+        await main([], { cwd: process.cwd(), write: (l) => lines.push(l), writeError: () => {} })
+        const usage = lines.join('\n')
+        for (const command of Object.values(DEV_COMMANDS)) {
+            expect(usage).toContain(command.invocation)
+            expect(usage).toContain(command.summary)
+        }
+    })
+
     test('a bare invocation prints usage on stdout and succeeds', async () => {
         const result = await run([])
         expect(result.out).toContain('abide — isomorphic type-safe framework')

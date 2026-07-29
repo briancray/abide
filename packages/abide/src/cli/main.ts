@@ -32,23 +32,34 @@ import { parsePort } from './parsePort.ts'
 import { run } from './run.ts'
 import { type ServeResult, serve } from './serve.ts'
 
-const USAGE = `abide — isomorphic type-safe framework
+// THE COMMAND TABLE. One entry per subcommand, carrying its own usage line, its summary and its
+// implementation — so `abide --help` is GENERATED from the same rows the dispatcher reads.
+//
+// This used to be a flat `if (command === '…')` chain plus a `USAGE` template literal restating all
+// nine names, their flags and their descriptions. Nothing tied the two: adding a branch and forgetting
+// the string (or the reverse) compiled clean. That is exactly the failure `RESERVED_CLI_COMMANDS.ts`
+// records for the COMPILED binary — where `completion` ended up listed in help, warned about as
+// shadowing an author's rpc, and `unknown command` at the prompt — solved there and left standing
+// here, forty lines away.
+interface CommandContext {
+    // Everything after the subcommand. `abide run` treats its own tail as the SCRIPT's.
+    rest: string[]
+    cwd: string
+    write: (line: string) => void
+    writeError: (line: string) => void
+    usage: () => string
+}
 
-Usage:
-  abide dev [--port <n>]      start the dev server (watch + live-reload)
-  abide build                 build the content-addressed client bundle into dist/_app/<hash>/
-  abide start [--port <n>]    serve the app (no watch)
-  abide scaffold <name>       create a starter project, then git init + install + dev
-  abide run <file> [args…]    run a script under the abide runtime (no HTTP; onStart/onStop run)
-  abide check                 type-check .abide script bodies (best-effort, via TS7)
-  abide lsp                   run the .abide language server over stdio (diagnostics)
-  abide compile               build the standalone executable (app + assets embedded)
-  abide bundle                build the desktop launcher into dist/bundle/ (host platform)
+interface DevCommand {
+    // The invocation, as help prints it (`abide dev [--port <n>]`).
+    invocation: string
+    summary: string
+    run: (context: CommandContext) => Promise<ServeResult | undefined>
+}
 
-The executable IS the app: run it bare for the interactive REPL, with an rpc name to call that
-rpc, or "serve" to host it.
-
-Options:
+// Cross-cutting flags. These stay hand-written because they are not per-command in the way the rows
+// above are — several commands read `--port`, and `compile` owns four of its own.
+const USAGE_OPTIONS = `Options:
   --port <n>                  listen port (default: PORT env or 3000; dev hops to the next open port)
   --target <triple>           compile: bun target (e.g. bun-linux-x64; default: host)
   --out <path>                compile: output executable path (default: dist/<app name>);
@@ -58,6 +69,20 @@ Options:
   --no-install                scaffold: skip bun install
   --no-dev                    scaffold: skip starting the dev server
   -h, --help                  show this help`
+
+function usageText(): string {
+    let lines = ''
+    for (const command of Object.values(DEV_COMMANDS))
+        lines += `  ${command.invocation.padEnd(26)}${command.summary}\n`
+    return `abide — isomorphic type-safe framework
+
+Usage:
+${lines}
+The executable IS the app: run it bare for the interactive REPL, with an rpc name to call that
+rpc, or "serve" to host it.
+
+${USAGE_OPTIONS}`
+}
 
 // Where the dispatcher reads its project from and writes its output to. Injectable so a test drives
 // `main` in-process; the defaults are the shell's.
@@ -194,6 +219,191 @@ async function forwardLsp(cwd: string): Promise<void> {
     await Promise.allSettled([pumpIn, pumpOut])
 }
 
+export const DEV_COMMANDS: Record<string, DevCommand> = {
+    dev: {
+        invocation: 'abide dev [--port <n>]',
+        summary: 'start the dev server (watch + live-reload)',
+        run: async ({ cwd, rest, write }) => {
+            const running = await serve(cwd, { dev: true, port: parsePort(rest) })
+            installShutdownHandlers(running)
+            write(`abide dev — ${running.url}`)
+            return running
+        },
+    },
+
+    build: {
+        invocation: 'abide build',
+        summary: 'build the content-addressed client bundle into dist/_app/<hash>/',
+        run: async ({ cwd, write }) => {
+            const outDir = await build(cwd)
+            write(`abide build — ${outDir}`)
+            return undefined
+        },
+    },
+
+    start: {
+        invocation: 'abide start [--port <n>]',
+        summary: 'serve the app (no watch)',
+        run: async ({ cwd, rest, write }) => {
+            // Serve the client artifacts produced by `abide build` (building them if absent) — no
+            // bundler runs at request time.
+            const clientBuild = await ensureClientBuild(cwd)
+            const running = await serve(cwd, { dev: false, port: parsePort(rest), clientBuild })
+            installShutdownHandlers(running)
+            write(`abide start — ${running.url}`)
+            return running
+        },
+    },
+
+    scaffold: {
+        invocation: 'abide scaffold <name>',
+        summary: 'create a starter project, then git init + install + dev',
+        run: async ({ cwd, rest, write, writeError, usage }) => {
+            const name = firstPositional(rest)
+            if (name === undefined || name.length === 0) {
+                // A missing <name> is a wrong command line, not a request for help: stderr + `usage`.
+                writeError('abide scaffold: missing project <name>.\n')
+                writeError(usage())
+                process.exitCode = CLI_EXIT_CODES.usage
+                return undefined
+            }
+            const root = await scaffold(cwd, name)
+            write(`abide scaffold — created ${root}`)
+
+            if (flagAbsent(rest, '--no-git')) await runStep(['git', 'init'], root, writeError)
+            if (flagAbsent(rest, '--no-install')) {
+                const installed = await runStep(['bun', 'install'], root, writeError)
+                if (!installed) {
+                    // Booting the dev server against an app whose deps (including abide) never
+                    // installed fails deep in module resolution with a confusing stack — stop cleanly
+                    // and signal failure.
+                    writeError(
+                        'abide scaffold: `bun install` failed — skipping the dev server. Fix the install, then run `bun run dev`.',
+                    )
+                    process.exitCode = CLI_EXIT_CODES.failed
+                    write(`  cd ${name} && bun install && bun run dev`)
+                    return undefined
+                }
+            }
+
+            if (flagAbsent(rest, '--no-dev')) {
+                const running = await serve(root, { dev: true, port: parsePort(rest) })
+                installShutdownHandlers(running)
+                write(`abide dev — ${running.url}`)
+                return running
+            }
+
+            write(`  cd ${name} && bun run dev`)
+            return undefined
+        },
+    },
+
+    // CL2. Everything the app needs is loaded (config/env validated, rpc + socket modules imported,
+    // lifecycle hooks run) and nothing is served — for migrations, cron tasks, one-off maintenance.
+    run: {
+        invocation: 'abide run <file> [args…]',
+        summary: 'run a script under the abide runtime (no HTTP; onStart/onStop run)',
+        run: async ({ cwd, rest, writeError }) => {
+            const file = rest[0]
+            if (file === undefined) {
+                writeError('abide run — usage: abide run <file> [args…]')
+                process.exitCode = CLI_EXIT_CODES.usage
+                return undefined
+            }
+            const target = isAbsolute(file) ? file : join(cwd, file)
+            if (!(await Bun.file(target).exists())) {
+                writeError(`abide run — no such file: ${file}`)
+                process.exitCode = CLI_EXIT_CODES.usage
+                return undefined
+            }
+            // Everything after the file is the SCRIPT's, not abide's — including anything that looks
+            // like an abide flag. `abide run migrate.ts --port 5` passes `--port 5` to the migration.
+            // A throw from the script itself propagates with its stack rather than becoming an exit
+            // code: for a failed migration the stack IS the report.
+            await run(cwd, target, rest.slice(1))
+            return undefined
+        },
+    },
+
+    check: {
+        invocation: 'abide check',
+        summary: 'type-check .abide script bodies (best-effort, via TS7)',
+        run: async ({ cwd, write, writeError }) => {
+            const result = await check(cwd)
+            if (result.ok) {
+                write('abide check — no type errors in .abide script bodies')
+                return undefined
+            }
+            for (const diagnostic of result.diagnostics) {
+                writeError(
+                    `${diagnostic.file}:${diagnostic.line}:${diagnostic.column} — TS${diagnostic.code}: ${diagnostic.message}`,
+                )
+            }
+            writeError(
+                `\nabide check — ${result.diagnostics.length} error${result.diagnostics.length === 1 ? '' : 's'}`,
+            )
+            // A type error is a real failure, not a wrong command line — `failed`, not `usage`.
+            process.exitCode = CLI_EXIT_CODES.failed
+            return undefined
+        },
+    },
+
+    lsp: {
+        invocation: 'abide lsp',
+        summary: 'run the .abide language server over stdio (diagnostics)',
+        run: async ({ cwd }) => {
+            // The tsgo `API` can't open its pipe under Bun, so by default forward stdio to
+            // `node lsp.ts` (a persistent server). `bunCanHostTsgo()` flips to in-process the day Bun
+            // can host it — revert = drop the forwarder branch. `ABIDE_LSP_INPROCESS=1` forces
+            // in-process (for that future / testing).
+            if (bunCanHostTsgo()) {
+                await lspServer({
+                    projectRoot: cwd,
+                    read: Bun.stdin.stream(),
+                    write: (bytes) => void process.stdout.write(bytes),
+                })
+            } else {
+                await forwardLsp(cwd)
+            }
+            return undefined
+        },
+    },
+
+    // ONE build. The executable it produces serves (`serve`), dispatches rpcs as subcommands, and
+    // runs interactive — chosen when it RUNS, so there is nothing to pick here.
+    compile: {
+        invocation: 'abide compile',
+        summary: 'build the standalone executable (app + assets embedded)',
+        run: async ({ cwd, rest, write }) => {
+            // `--platforms` with no value (or a trailing flag after it) means the default release set.
+            const platforms = rest.includes('--platforms')
+                ? (flagValue(rest, '--platforms')?.split(',').filter(Boolean) ?? [])
+                : undefined
+            const built = await compile(cwd, {
+                target: flagValue(rest, '--target'),
+                out: flagValue(rest, '--out'),
+                platforms,
+            })
+            for (const outfile of built) write(`abide compile — ${outfile}`)
+            return undefined
+        },
+    },
+
+    bundle: {
+        invocation: 'abide bundle',
+        summary: 'build the desktop launcher into dist/bundle/ (host platform)',
+        run: async ({ cwd, write }) => {
+            const outDir = await bundle(cwd)
+            write(`abide bundle — ${outDir}`)
+            write(`  run: bun ${join(outDir, 'launch.ts')}`)
+            write(
+                `  note: native windowing is best-effort (system webview binary or default browser)`,
+            )
+            return undefined
+        },
+    },
+}
+
 export async function main(
     argv: string[],
     options: MainOptions = {},
@@ -204,157 +414,18 @@ export async function main(
     const write = options.write ?? ((line: string): void => console.info(line))
     const writeError = options.writeError ?? ((line: string): void => console.error(line))
 
-    if (command === 'dev') {
-        const running = await serve(cwd, { dev: true, port: parsePort(rest) })
-        installShutdownHandlers(running)
-        write(`abide dev — ${running.url}`)
-        return running
-    }
-
-    if (command === 'start') {
-        // Serve the client artifacts produced by `abide build` (building them if absent) — no bundler
-        // runs at request time.
-        const clientBuild = await ensureClientBuild(cwd)
-        const running = await serve(cwd, { dev: false, port: parsePort(rest), clientBuild })
-        installShutdownHandlers(running)
-        write(`abide start — ${running.url}`)
-        return running
-    }
-
-    // CL2. Everything the app needs is loaded (config/env validated, rpc + socket modules imported,
-    // lifecycle hooks run) and nothing is served — for migrations, cron tasks, one-off maintenance.
-    if (command === 'run') {
-        const file = rest[0]
-        if (file === undefined) {
-            writeError('abide run — usage: abide run <file> [args…]')
-            process.exitCode = CLI_EXIT_CODES.usage
-            return undefined
-        }
-        const target = isAbsolute(file) ? file : join(cwd, file)
-        if (!(await Bun.file(target).exists())) {
-            writeError(`abide run — no such file: ${file}`)
-            process.exitCode = CLI_EXIT_CODES.usage
-            return undefined
-        }
-        // Everything after the file is the SCRIPT's, not abide's — including anything that looks like
-        // an abide flag. `abide run migrate.ts --port 5` passes `--port 5` to the migration. A throw
-        // from the script itself propagates with its stack rather than becoming an exit code: for a
-        // failed migration the stack IS the report.
-        await run(cwd, target, rest.slice(1))
-        return undefined
-    }
-
-    if (command === 'build') {
-        const outDir = await build(cwd)
-        write(`abide build — ${outDir}`)
-        return undefined
-    }
-
-    if (command === 'check') {
-        const result = await check(cwd)
-        if (result.ok) {
-            write('abide check — no type errors in .abide script bodies')
-            return undefined
-        }
-        for (const diagnostic of result.diagnostics) {
-            writeError(
-                `${diagnostic.file}:${diagnostic.line}:${diagnostic.column} — TS${diagnostic.code}: ${diagnostic.message}`,
-            )
-        }
-        writeError(
-            `\nabide check — ${result.diagnostics.length} error${result.diagnostics.length === 1 ? '' : 's'}`,
-        )
-        // A type error is a real failure, not a wrong command line — `failed`, not `usage`.
-        process.exitCode = CLI_EXIT_CODES.failed
-        return undefined
-    }
-
-    if (command === 'lsp') {
-        // The tsgo `API` can't open its pipe under Bun, so by default forward stdio to `node lsp.ts` (a
-        // persistent server). `bunCanHostTsgo()` flips to in-process the day Bun can host it — revert = drop
-        // the forwarder branch. `ABIDE_LSP_INPROCESS=1` forces in-process (for that future / testing).
-        if (bunCanHostTsgo()) {
-            await lspServer({
-                projectRoot: cwd,
-                read: Bun.stdin.stream(),
-                write: (bytes) => void process.stdout.write(bytes),
-            })
-        } else {
-            await forwardLsp(cwd)
-        }
-        return undefined
-    }
-
-    // ONE build. The executable it produces serves (`serve`), dispatches rpcs as subcommands, and
-    // runs interactive — chosen when it RUNS, so there is nothing to pick here.
-    if (command === 'compile') {
-        // `--platforms` with no value (or a trailing flag after it) means the default release set.
-        const platforms = rest.includes('--platforms')
-            ? (flagValue(rest, '--platforms')?.split(',').filter(Boolean) ?? [])
-            : undefined
-        const built = await compile(cwd, {
-            target: flagValue(rest, '--target'),
-            out: flagValue(rest, '--out'),
-            platforms,
-        })
-        for (const outfile of built) write(`abide compile — ${outfile}`)
-        return undefined
-    }
-
-    if (command === 'bundle') {
-        const outDir = await bundle(cwd)
-        write(`abide bundle — ${outDir}`)
-        write(`  run: bun ${join(outDir, 'launch.ts')}`)
-        write(`  note: native windowing is best-effort (system webview binary or default browser)`)
-        return undefined
-    }
-
-    if (command === 'scaffold') {
-        const name = firstPositional(rest)
-        if (name === undefined || name.length === 0) {
-            // A missing <name> is a wrong command line, not a request for help: stderr + `usage`.
-            writeError('abide scaffold: missing project <name>.\n')
-            writeError(USAGE)
-            process.exitCode = CLI_EXIT_CODES.usage
-            return undefined
-        }
-        const root = await scaffold(cwd, name)
-        write(`abide scaffold — created ${root}`)
-
-        if (flagAbsent(rest, '--no-git')) await runStep(['git', 'init'], root, writeError)
-        if (flagAbsent(rest, '--no-install')) {
-            const installed = await runStep(['bun', 'install'], root, writeError)
-            if (!installed) {
-                // Booting the dev server against an app whose deps (including abide) never installed
-                // fails deep in module resolution with a confusing stack — stop cleanly and signal failure.
-                writeError(
-                    'abide scaffold: `bun install` failed — skipping the dev server. Fix the install, then run `bun run dev`.',
-                )
-                process.exitCode = CLI_EXIT_CODES.failed
-                write(`  cd ${name} && bun install && bun run dev`)
-                return undefined
-            }
-        }
-
-        if (flagAbsent(rest, '--no-dev')) {
-            const running = await serve(root, { dev: true, port: parsePort(rest) })
-            installShutdownHandlers(running)
-            write(`abide dev — ${running.url}`)
-            return running
-        }
-
-        write(`  cd ${name} && bun run dev`)
-        return undefined
-    }
+    const entry = command === undefined ? undefined : DEV_COMMANDS[command]
+    if (entry !== undefined)
+        return await entry.run({ rest, cwd, write, writeError, usage: usageText })
 
     // Asking for help is a success; getting the command wrong is not. They used to share this branch
     // and both exit 0 — so `abide biuld` in a CI script printed the usage text and reported success.
     if (command === undefined || command === '-h' || command === '--help') {
-        write(USAGE)
+        write(usageText())
         return undefined
     }
     writeError(`abide: unknown command "${command}".\n`)
-    writeError(USAGE)
+    writeError(usageText())
     process.exitCode = CLI_EXIT_CODES.usage
     return undefined
 }
