@@ -226,6 +226,19 @@ function deriveProps(source: string, root: Root, propsLocal: string): string {
 // Every name the component's own script OWNS: each import BINDING (the local name — `X as Y` owns `Y`)
 // plus each locally declared type (`type`/`interface`/`enum`/`class`). Driven by the TS scanner rather
 // than a regex so a name sitting inside a string or a comment cannot leak in as a binding.
+//
+// This does NOT use `BindingAnalysis.declared`, even though `deriveProps` next door now takes the
+// analysis and the import half looks like a duplicate of `ImportBinding.named[].local`. It is not a
+// duplicate: the build lane tracks the names a TEMPLATE EXPRESSION can resolve, so `declared` carries
+// neither type declarations nor type-only imports. Measured on
+// `import type { File } from './m.ts'; type Notification = …; const { item } = props<…>()`, `declared`
+// is `["item", "props"]` — every name this function exists to shadow is absent.
+//
+// Consuming it would therefore un-shadow exactly the names the shadowing was written for. The
+// companion carries no imports, so an owned type is MEANT to degrade to `any` — and it only degrades
+// when TS cannot resolve the name, while the DOM lib declares `File`, `Event`, `Request`, `Text`,
+// `Node`… so an unshadowed owned `File` types the prop as the BROWSER's `File`: not unchecked, checked
+// against the wrong type, at every call site, silently. Two different questions, two walks.
 function ownedNames(source: string, root: Root): Set<string> {
     const names = new Set<string>()
     const scripts: Script[] = []
