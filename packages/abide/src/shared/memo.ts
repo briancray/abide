@@ -69,6 +69,7 @@ import {
     sharedCacheUnpin,
     sharedStore,
 } from './internal/sharedCache.ts'
+import { createSlotIndex } from './internal/slotIndex.ts'
 import { tagStreamTranscript } from './internal/streamTranscript.ts'
 import { withDeadline } from './internal/withDeadline.ts'
 import { log } from './log.ts'
@@ -508,7 +509,7 @@ type CompiledSelector =
     | { kind: 'object'; keys: string[]; values: string[] }
     | { kind: 'exact'; canonical: string }
 
-function compileSelector(selector: unknown): CompiledSelector {
+function _compileSelector(selector: unknown): CompiledSelector {
     if (isPlainObject(selector)) {
         const keys = Object.keys(selector)
         const values: string[] = []
@@ -520,7 +521,7 @@ function compileSelector(selector: unknown): CompiledSelector {
 
 // Superset match (§8.2): a selector object matches a slot whose args include every selector
 // key with a canonically-equal value. Non-object selectors fall back to exact key equality.
-function matchesSelector(slotArgs: unknown, compiled: CompiledSelector): boolean {
+function _matchesSelector(slotArgs: unknown, compiled: CompiledSelector): boolean {
     if (compiled.kind === 'object') {
         if (!isPlainObject(slotArgs)) return false
         const keys = compiled.keys
@@ -763,16 +764,7 @@ export function memo<Args, T>(
     // THIS memo's own slots within one backing store, so a verb never has to scan the whole store.
     // Keyed by the store Map itself (as `sharedCache`'s sidecars are), which makes the index per-request
     // on the server and per-tab on the client, and lets it die with the store it indexes.
-    const ownSlots = new WeakMap<Map<string, unknown>, Map<string, Slot<Args, T>>>()
-
-    function ownSlotsIn(cache: Map<string, unknown>): Map<string, Slot<Args, T>> {
-        let own = ownSlots.get(cache)
-        if (own === undefined) {
-            own = new Map<string, Slot<Args, T>>()
-            ownSlots.set(cache, own)
-        }
-        return own
-    }
+    const slotIndex = createSlotIndex<Slot<Args, T>>()
 
     function ensureSlot(args: Args): Slot<Args, T> {
         const cache = slots()
@@ -790,37 +782,15 @@ export function memo<Args, T>(
                 expired: false,
             }
             cache.set(slotKey, slot)
-            ownSlotsIn(cache).set(slotKey, slot)
+            slotIndex.add(cache, slot)
         }
         return slot
     }
 
-    // Every slot belonging to this memo in the active context (optionally filtered by selector).
-    //
-    // Reads the memo's OWN index rather than scanning the backing store: the store holds every memo's
-    // slots for the whole request, so scanning it made each verb O(all slots in the context) — and
-    // `snapshot()` is called once per read route by the SSR seed collector, which turned that into
-    // O(routes x slots) per page render.
-    //
-    // The index is a cache, not the truth: `sharedCacheEvictIfNeeded` deletes from the store directly
-    // (LRU), so an indexed slot can already be gone. Each entry is confirmed against the store by
-    // identity and a stale one is dropped here — one Map lookup per OWN slot, still nothing per foreign
-    // slot. Confirming by identity (not just presence) also drops a slot some later `ensureSlot`
-    // replaced under the same key.
+    // Every slot belonging to this memo in the active context (optionally filtered by selector). The
+    // index and its confirm-by-identity self-heal live in `internal/slotIndex.ts`.
     function selectSlots(selector: Partial<Args> | Args | undefined): Slot<Args, T>[] {
-        const cache = slots()
-        const own = ownSlotsIn(cache)
-        const result: Slot<Args, T>[] = []
-        // Compile the selector's canonical keys once, not per slot scanned.
-        const compiled = selector === undefined ? undefined : compileSelector(selector)
-        for (const [slotKey, slot] of own) {
-            if (cache.get(slotKey) !== slot) {
-                own.delete(slotKey) // evicted (or superseded) behind our back — self-heal
-                continue
-            }
-            if (compiled === undefined || matchesSelector(slot.args, compiled)) result.push(slot)
-        }
-        return result
+        return slotIndex.select(slots(), selector, selector !== undefined)
     }
 
     function isExpired(slot: Slot<Args, T>): boolean {
@@ -1306,7 +1276,7 @@ export function memo<Args, T>(
         cache.delete(slot.key)
         // Drop it from the own-slot index too. `selectSlots` would self-heal this, but a long-lived
         // shared store churning stream slots should not accumulate dead index entries between verbs.
-        ownSlotsIn(cache).delete(slot.key)
+        slotIndex.forget(cache, slot.key)
     }
 
     // Last consumer of a stream slot detached (ref-count hit 0). Dispose a settled ttl:0 slot; for a
