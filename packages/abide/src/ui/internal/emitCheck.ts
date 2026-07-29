@@ -15,7 +15,7 @@
 // component attribute expressions, and control-flow bindings — all typed in the correct lexical scope.
 // Component invocations are checked for VALUE validity (each prop expression) but the component itself
 // is opaque (the `.abide` ambient module types the default import as `any`); CROSS-file typed component
-// signatures are PR2. Quoted attribute-value interpolation (`title="x {n}"`) is deferred. A BRANCH-LOCAL
+// signatures are PR2. A BRANCH-LOCAL
 // `<script>` is emitted inside the braces its block opened, which is both the right lexical scope (TS
 // then types every reference below it and none above) and the only position that keeps the segment map
 // monotonic — hoisting it above earlier siblings would emit their source spans out of order.
@@ -25,6 +25,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
 import type { BindingAnalysis } from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
+import { attributeParts } from './attributeParts.ts'
 import { skipQuoted, splitTopLevel, topLevelAssignmentIndex } from './scanText.ts'
 import { isClose, isOpen, statementExtent, tokenAt, tokenize } from './tokens.ts'
 
@@ -444,9 +445,18 @@ function walkNode(node: TemplateNode, e: WalkEmit): void {
 function emitAttributes(attributes: AttributeNode[], e: WalkEmit): void {
     for (const attribute of attributes) {
         switch (attribute.type) {
-            case 'StaticAttribute':
-                // `name="v"` / boolean — no expression to check (quoted-value `{n}` interpolation is a PR1 gap).
+            case 'StaticAttribute': {
+                // `name="v"` / boolean carries no expression — but a quoted value INTERPOLATES
+                // (`title="Count: {n}"`), and each of those is a real read at runtime. The check lane
+                // used to treat the whole value as opaque text, so a typo'd identifier inside one was
+                // invisible to `abide check` and to every LSP feature built on the same lowering.
+                const parts = attributeParts(attribute)
+                if (parts === null) break
+                for (const part of parts) {
+                    if ('expr' in part) refExpr({ start: part.start, end: part.end }, part.expr, e)
+                }
                 break
+            }
             case 'ExpressionAttribute':
             case 'EventAttribute':
             case 'SpreadAttribute':
@@ -471,11 +481,38 @@ function emitComponentCall(node: Extract<TemplateNode, { type: 'Component' }>, e
     e.emitSynthetic('({')
     for (const attr of node.attributes) {
         switch (attr.type) {
-            case 'StaticAttribute':
-                e.emitSynthetic(
-                    ` ${JSON.stringify(attr.name)}: ${attr.value === null ? 'true' : JSON.stringify(attr.value)},`,
-                )
+            case 'StaticAttribute': {
+                // An INTERPOLATED prop is not a string literal, and typing it as one was a false
+                // positive on legal code: `<Card count="{n}"/>` is identical to `count={n}` (the build
+                // lane says so — a value that is exactly one `{expr}` plans as a bare expression), so a
+                // component declaring `count: number` reported an error at every call site. A mixed
+                // value (`label="a {n} b"`) is a `string`, and the concatenation is what says so.
+                const parts = attributeParts(attr)
+                if (parts === null) {
+                    e.emitSynthetic(
+                        ` ${JSON.stringify(attr.name)}: ${attr.value === null ? 'true' : JSON.stringify(attr.value)},`,
+                    )
+                    break
+                }
+                e.emitSynthetic(` ${JSON.stringify(attr.name)}: (`)
+                const only = parts.length === 1 ? parts[0] : undefined
+                if (only !== undefined && 'expr' in only) {
+                    e.emitExpr(only.start, only.end, only.expr)
+                } else {
+                    e.emitSynthetic('""')
+                    for (const part of parts) {
+                        e.emitSynthetic(' + ')
+                        if ('literal' in part) e.emitSynthetic(JSON.stringify(part.literal))
+                        else {
+                            e.emitSynthetic('(')
+                            e.emitExpr(part.start, part.end, part.expr)
+                            e.emitSynthetic(')')
+                        }
+                    }
+                }
+                e.emitSynthetic('),')
                 break
+            }
             // An `on<event>` on a component IS a prop (a component has no element to attach a native
             // listener to), so it types exactly like an expression attribute. Both emitters now pass it;
             // the server used to drop it, which made this the one lane that told the author the truth.

@@ -600,6 +600,7 @@ export function parse(
         let valueKind: 'none' | 'expr' | 'static' = 'none'
         let expression = ''
         let staticValue: string | null = null
+        let staticValueStart: number | null = null
 
         skipWhitespace()
         if (source[pos] === '=') {
@@ -615,11 +616,13 @@ export function parse(
             } else if (valueChar === '"' || valueChar === "'") {
                 const valueStart = pos
                 staticValue = readQuotedValue(valueChar)
+                staticValueStart = valueStart + 1 // past the opening quote
                 emit(valueStart, pos, 'string')
                 valueKind = 'static'
             } else {
                 const valueStart = pos
                 staticValue = readUnquotedValue()
+                staticValueStart = valueStart
                 emit(valueStart, pos, 'string')
                 valueKind = 'static'
             }
@@ -661,7 +664,14 @@ export function parse(
         if (valueKind === 'expr') {
             return { type: 'ExpressionAttribute', name, expression, start, end }
         }
-        return { type: 'StaticAttribute', name, value: staticValue, start, end }
+        return {
+            type: 'StaticAttribute',
+            name,
+            value: staticValue,
+            valueStart: staticValueStart,
+            start,
+            end,
+        }
     }
 
     // A directive value is `{expr}` or shorthand (none). A static value is invalid there.

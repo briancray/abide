@@ -17,6 +17,7 @@
 import type { BindingAnalysis, NestedScript } from './analyzeBindings.ts'
 import { type CellBindings, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
+import { type AttrPart, attributeParts } from './attributeParts.ts'
 import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 import { escapeHtml } from './serverRuntime.ts'
@@ -420,97 +421,18 @@ function rejectElementOnlyDirectives(node: { name: string; attributes: Attribute
 }
 
 // One piece of a quoted attribute value: a literal run or a `{expr}` interpolation.
-type AttrPart = { literal: string } | { expr: string }
 
 // Skip a JS string / template literal at `s[i]` (its opening quote), returning the index just past
 // the closing quote. Honours backslash escapes; template-literal `${…}` recurses through the balanced
 // brace scan so a `}` inside an embedded expression doesn't end the string early.
-function skipAttrString(s: string, i: number): number {
-    const quote = s[i]
-    if (quote === undefined) return i
-    i++
-    while (i < s.length) {
-        const c = s[i]
-        if (c === undefined) break
-        if (c === '\\') {
-            i += 2
-            continue
-        }
-        if (quote === '`' && c === '$' && s[i + 1] === '{') {
-            i = scanBalancedBrace(s, i + 2) + 1
-            continue
-        }
-        if (c === quote) return i + 1
-        i++
-    }
-    return i
-}
-
-// From `start` (just inside a `{`), scan to the matching top-level `}` and return its index. Balanced
-// over (), [], {} and skips strings/template literals — mirrors the parser's scanBalancedUntilBrace.
-function scanBalancedBrace(s: string, start: number): number {
-    let depth = 0
-    let i = start
-    while (i < s.length) {
-        const c = s[i]
-        if (c === undefined) break
-        if (c === "'" || c === '"' || c === '`') {
-            i = skipAttrString(s, i)
-            continue
-        }
-        if (c === '(' || c === '[' || c === '{') {
-            depth++
-            i++
-            continue
-        }
-        if (c === ')' || c === ']') {
-            depth--
-            i++
-            continue
-        }
-        if (c === '}') {
-            if (depth === 0) return i
-            depth--
-            i++
-            continue
-        }
-        i++
-    }
-    return i
-}
-
-// Split a quoted attribute value into literal + `{expr}` interpolation parts, or null when it has no
-// interpolation (pure static). Mirrors element-content interpolation: `{` starts an expression; a
-// literal brace is written `{'{'}` (or, in `html()` text, an HTML entity).
-function splitAttrValue(value: string): AttrPart[] | null {
-    if (!value.includes('{')) return null
-    const parts: AttrPart[] = []
-    let i = 0
-    let literalStart = 0
-    while (i < value.length) {
-        if (value[i] === '{') {
-            if (i > literalStart) parts.push({ literal: value.slice(literalStart, i) })
-            const exprStart = i + 1
-            const close = scanBalancedBrace(value, exprStart)
-            parts.push({ expr: value.slice(exprStart, close).trim() })
-            i = close + 1
-            literalStart = i
-        } else {
-            i++
-        }
-    }
-    if (literalStart < value.length) parts.push({ literal: value.slice(literalStart) })
-    return parts
-}
-
 function planAttribute(ctx: WalkState, attr: AttributeNode): AttrPlan {
     switch (attr.type) {
         case 'StaticAttribute': {
             // A quoted attribute value may carry `{expr}` interpolations (`title="Count: {n}"`), including
             // on a component prop. Compile it to a reactive `expr` attribute that concatenates the parts;
             // a value that is exactly `{expr}` is identical to `name={expr}`. No interpolation → static.
-            const parts = attr.value === null ? null : splitAttrValue(attr.value)
-            if (parts?.some((part) => 'expr' in part)) {
+            const parts = attributeParts(attr)
+            if (parts !== null) {
                 const only = parts.length === 1 ? parts[0] : undefined
                 if (only && 'expr' in only) {
                     return { kind: 'expr', name: attr.name, expr: rewriteExpr(ctx, only.expr) }

@@ -44,6 +44,11 @@ export interface StaticAttribute extends Span {
     type: 'StaticAttribute'
     name: string
     value: string | null
+    // Absolute source offset of the first character of `value` (past an opening quote), or null for a
+    // boolean attribute with no value. Carried because a quoted value may INTERPOLATE (`title="a {n}"`)
+    // and the check lane copies user expressions verbatim — an expression it cannot locate exactly in
+    // the source is one it cannot emit at all. See `attributeParts.ts`.
+    valueStart: number | null
 }
 
 // `name={expr}` — reactive attribute; `expression` is the raw source between the braces.

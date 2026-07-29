@@ -8,6 +8,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { emitCheck } from '../ui/internal/emitCheck.ts'
+import { parse } from '../ui/internal/parse.ts'
 import { check } from './check.ts'
 
 const TSCONFIG = JSON.stringify({
@@ -480,4 +482,53 @@ test('a `T | null` memo binding is CHECKED, not widened to any', async () => {
     const result = await check(await makeProject(files))
     expect(result.ok).toBe(false)
     expect(result.diagnostics.some((d) => d.code === 18047 && d.line === 5)).toBe(true)
+})
+
+// QUOTED-ATTRIBUTE INTERPOLATION (`title="Count: {n}"`) is documented public grammar, and the check
+// lane used to treat the whole value as opaque text — so an expression inside one was never emitted,
+// never type-checked, and invisible to every LSP feature built on the same lowering.
+test('an expression inside a quoted attribute value is type-checked and mapped to its line', async () => {
+    const page =
+        '<script>\n' + // 1
+        'const count = 5\n' + // 2  (number)
+        '</script>\n' + // 3
+        '<p title="Count: {count.toUpperCase()}">x</p>\n' // 4  number has no toUpperCase
+    const root = await makeProject({ 'src/ui/pages/p/page.abide': page })
+    const result = await check(root)
+    expect(result.ok).toBe(false)
+    const diag = result.diagnostics.find((d) => d.code === 2339)
+    expect(diag).toBeDefined()
+    expect(diag?.line).toBe(4)
+})
+
+// The LSP half of the same gap. Hover, go-to-definition, rename and find-references all answer from
+// the check lowering by mapping a source offset into it, so an expression the lowering never emitted
+// was unreachable to every one of them — the identifier was, quite literally, not in the file the
+// editor queries. Asserted on the lowering rather than on a diagnostic because a free identifier is
+// not itself an error in a template (a text interpolation does not report one either).
+test('an expression inside a quoted attribute value is emitted into the check lowering', () => {
+    const page =
+        "<script>\nconst count = 5\n</script>\n<p title='Count: {count}' id='plain'>x</p>\n"
+    const lowered = emitCheck(page, parse(page))
+    expect(lowered.code).toContain('__ref(count)')
+    // A value with no interpolation stays opaque text — nothing to check, nothing emitted.
+    expect(lowered.code).not.toContain('plain')
+})
+
+// The other direction, and the more damaging one: an interpolated PROP was typed as the literal
+// string `"{n}"`, so a component declaring `count: number` reported an error at every call site of a
+// form the build lane compiles to exactly `count={n}`.
+test('an interpolated component prop types as its expression, not as a string literal', async () => {
+    const root = await makeProject({
+        'src/ui/Card.abide':
+            "<script>\nimport { props } from 'abide/ui/props'\nconst { count, label } = props<{ count: number; label: string }>()\n</script>\n<b>{label}{count}</b>\n",
+        'src/ui/pages/p/page.abide':
+            '<script>\n' + // 1
+            "import Card from '../../Card.abide'\n" + // 2
+            'const n = 5\n' + // 3
+            '</script>\n' + // 4
+            '<Card count="{n}" label="a {n} b"/>\n', // 5  legal: count is number, label is string
+    })
+    const result = await check(root)
+    expect(result.diagnostics.filter((d) => d.line === 5)).toEqual([])
 })
