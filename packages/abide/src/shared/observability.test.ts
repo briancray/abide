@@ -4,10 +4,9 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { GET } from '../server/GET.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { health } from './health.ts'
-import { adoptTrace } from './internal/adoptTrace.ts'
 import { outgoingTraceparent } from './internal/outgoingTraceparent.ts'
 import { createReactiveScope, enterScope } from './internal/reactiveScope.ts'
-import { clearClientTrace } from './internal/traceHolder.ts'
+import { traceAmbient } from './internal/traceAmbient.ts'
 import { log } from './log.ts'
 import { online } from './online.ts'
 import { reachable } from './reachable.ts'
@@ -362,7 +361,7 @@ describe('trace — the adopted (client) trace', () => {
         enterScope(createReactiveScope(), () => {
             expect(trace()).toBeUndefined()
             const fromServer = `00-${'c'.repeat(32)}-${'d'.repeat(16)}-01`
-            adoptTrace(fromServer)
+            traceAmbient.adopt(fromServer)
             expect(trace()).toBe(fromServer)
         })
     })
@@ -371,8 +370,8 @@ describe('trace — the adopted (client) trace', () => {
         enterScope(createReactiveScope(), () => {
             const first = `00-${'1'.repeat(32)}-${'2'.repeat(16)}-01`
             const second = `00-${'3'.repeat(32)}-${'4'.repeat(16)}-01`
-            adoptTrace(first)
-            adoptTrace(second)
+            traceAmbient.adopt(first)
+            traceAmbient.adopt(second)
             expect(trace()).toBe(second)
         })
     })
@@ -380,10 +379,10 @@ describe('trace — the adopted (client) trace', () => {
     test('a malformed or absent value is dropped, leaving the previous trace standing', () => {
         enterScope(createReactiveScope(), () => {
             const good = `00-${'e'.repeat(32)}-${'f'.repeat(16)}-01`
-            adoptTrace(good)
-            adoptTrace('nonsense')
-            adoptTrace(null)
-            adoptTrace(undefined)
+            traceAmbient.adopt(good)
+            traceAmbient.adopt('nonsense')
+            traceAmbient.adopt(null)
+            traceAmbient.adopt(undefined)
             expect(trace()).toBe(good)
         })
     })
@@ -393,7 +392,7 @@ describe('trace — the outgoing (client → server) child span', () => {
     test('keeps the trace id and flags, mints a NEW span id (W3C: the caller names the span)', () => {
         enterScope(createReactiveScope(), () => {
             const page = `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`
-            adoptTrace(page)
+            traceAmbient.adopt(page)
             const outgoing = outgoingTraceparent()
             if (outgoing === undefined) throw new Error('expected an outgoing traceparent')
             expect(outgoing).toMatch(TRACEPARENT)
@@ -407,7 +406,7 @@ describe('trace — the outgoing (client → server) child span', () => {
 
     test('two calls in one trace get two different spans', () => {
         enterScope(createReactiveScope(), () => {
-            adoptTrace(`00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`)
+            traceAmbient.adopt(`00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`)
             expect(outgoingTraceparent()).not.toBe(outgoingTraceparent())
         })
     })
@@ -422,7 +421,7 @@ describe('trace — the outgoing (client → server) child span', () => {
         // The assertion is unchanged, and it is the one that matters: with nothing adopted we return
         // undefined rather than MINTING a parent locally. A client-invented id would name a trace no
         // server span belongs to.
-        clearClientTrace()
+        traceAmbient.clear()
         enterScope(createReactiveScope(), () => {
             expect(outgoingTraceparent()).toBeUndefined()
         })

@@ -32,15 +32,15 @@
 // the top on the SHELL frame unless `keepScroll`; back/forward stays the browser's (`scrollRestoration`
 // is left `'auto'`) and abide only corrects the clamp it can't see — see `settleScroll`/`stampScroll`.
 
-import { adoptIdentity } from '../shared/internal/adoptIdentity.ts'
-import { adoptTrace } from '../shared/internal/adoptTrace.ts'
 import { commonPrefixLength } from '../shared/internal/commonPrefixLength.ts'
 import { decodeJsonlStream } from '../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../shared/internal/hydrationSeed.ts'
+import { identityAmbient } from '../shared/internal/identityAmbient.ts'
 import { matchRoute } from '../shared/internal/matchRoute.ts'
 import { NAV_HEADERS } from '../shared/internal/NAV_HEADERS.ts'
-import { setClientRoute } from '../shared/internal/routeHolder.ts'
+import { routeAmbient } from '../shared/internal/routeAmbient.ts'
 import type { RouteInfo } from '../shared/internal/routeInfo.ts'
+import { traceAmbient } from '../shared/internal/traceAmbient.ts'
 import { bootstrapPage, buildPageScope, replaySeedIntoProxies } from './internal/bootstrap.ts'
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
 import { HYDRATED_ATTRIBUTE } from './internal/HYDRATED_ATTRIBUTE.ts'
@@ -193,7 +193,7 @@ export async function mountPathname(
         activeChain()
         activeChain = null
     }
-    setClientRoute(info)
+    routeAmbient.adopt(info)
 
     // One hydrate path for first load and soft-nav (decision 6): claim the SSR (initial) or the
     // innerHTML-swapped (soft-nav) server DOM in place rather than fresh-mounting over it.
@@ -350,7 +350,7 @@ async function partialCrossNav(
                 // layouts' `route()` bindings update while the just-disposed old suffix can't misfire.
                 firstNode =
                     boundary.graftSuffix?.(typeof frame.html === 'string' ? frame.html : '') ?? null
-                setClientRoute(routeInfoFor(dest.pattern, target, dest.params))
+                routeAmbient.adopt(routeInfoFor(dest.pattern, target, dest.params))
                 // The DOM and `route()` ARE the destination's from here, so the bookkeeping that describes
                 // them has to be too — it used to be committed at end-of-stream, which on a streaming page
                 // left `currentPattern` naming a route that had already left the screen. A nav starting in
@@ -422,7 +422,7 @@ async function softLoad(
         mountClaimed &&
         destMatch.pattern === currentPattern
     ) {
-        setClientRoute(routeInfoFor(destMatch.pattern, target, destMatch.params))
+        routeAmbient.adopt(routeInfoFor(destMatch.pattern, target, destMatch.params))
         currentPath = target.pathname
         try {
             // A nav to the URL you are ALREADY on is a refresh gesture, and the layouts are part of
@@ -449,7 +449,7 @@ async function softLoad(
             // this navigation actually made (the seed below carries the same id, but only once the
             // whole render has streamed). Without it `trace()` would keep answering with the previous
             // page's id, which is worse than a stale route: it points at the wrong span.
-            adoptTrace(confirm.headers.get('traceresponse'))
+            traceAmbient.adopt(confirm.headers.get('traceresponse'))
             const type = confirm.headers.get('content-type') ?? ''
             if (!type.includes('application/jsonl') && type.includes('application/json')) {
                 const envelope = (await confirm.json().catch(() => null)) as {
@@ -483,7 +483,7 @@ async function softLoad(
             // AU3: a nav is a fresh request whose middleware may have resolved someone else. A full nav
             // re-adopts through `buildPageScope`; this path never gets there, so it was the one nav shape
             // that left `identity()` answering for the request BEFORE it. An identical re-adopt wakes nobody.
-            adoptIdentity(seed.identity)
+            identityAmbient.adopt(seed.identity)
         } catch {
             // Offline / network failure: the optimistic route update stands (the page is already live).
         }

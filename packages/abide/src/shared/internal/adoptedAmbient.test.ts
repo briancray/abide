@@ -1,15 +1,16 @@
-// The ADOPTED AMBIENT shape, and the two axes its three users configure differently.
+// The ADOPTED AMBIENT shape, and the axes its three users configure differently.
 //
-// `route`, `identity` and `trace` each solved this separately and drifted on exactly these two axes:
-// whether an incoming value is validated before it is installed, and whether an equal value wakes
-// readers. Both are now parameters, so the drift is a decision each holder states rather than an
-// accident. These assert the shape; the per-holder choices are asserted through the holders.
+// `route`, `identity` and `trace` each solved this separately and drifted on exactly these axes:
+// whether an incoming value is validated before it is installed, whether an equal value wakes readers,
+// and — once the READ LADDER moved here — what the server rung is and what "nobody has said" means.
+// All four are now parameters, so the drift is a decision each ambient states rather than an accident.
+// These assert the shape; the per-ambient choices are asserted through the ambients.
 
 import { describe, expect, test } from 'bun:test'
 import { watch } from '../watch.ts'
 import { adoptedAmbient } from './adoptedAmbient.ts'
-import { clearClientIdentity, readClientIdentity, setClientIdentity } from './identityHolder.ts'
-import { clearClientTrace, readClientTrace, setClientTrace } from './traceHolder.ts'
+import { identityAmbient } from './identityAmbient.ts'
+import { traceAmbient } from './traceAmbient.ts'
 
 const isString = (value: unknown): value is string => typeof value === 'string'
 
@@ -26,6 +27,51 @@ describe('the shape', () => {
         expect(ambient.read()).toBe('a')
         ambient.clear()
         expect(ambient.read()).toBeUndefined()
+    })
+
+    // THE LADDER. It used to be written out in `route.ts`, `identity.ts` and `trace.ts` — three
+    // spellings of "the scope's answer, then the adopted one, then the tail", with only the tail
+    // legitimately differing. Nothing held the first two rungs in step.
+    describe('the read ladder', () => {
+        test('the scope rung wins over an adopted value', () => {
+            let scoped: string | undefined = 'from-scope'
+            const ambient = adoptedAmbient<string>({ isValid: isString, fromScope: () => scoped })
+            ambient.adopt('adopted')
+            expect(ambient.read()).toBe('from-scope')
+            scoped = undefined
+            expect(ambient.read()).toBe('adopted')
+        })
+
+        test('with nothing on either rung, `absent` decides', () => {
+            const silent = adoptedAmbient<string>({ isValid: isString })
+            expect(silent.read()).toBeUndefined()
+
+            const loud = adoptedAmbient<string, never>({
+                isValid: isString,
+                absent: () => {
+                    throw new Error('nobody has said')
+                },
+            })
+            expect(() => loud.read()).toThrow('nobody has said')
+            loud.adopt('a')
+            expect(loud.read()).toBe('a') // ...and `absent` is not consulted once a rung answers
+        })
+
+        // `read()` consults the scope first and applies `absent` last, so it can never answer "has
+        // anything been adopted" — on a server request it reports the request, and with a throwing
+        // `absent` it does not return at all. `identity`'s error-message picker asks exactly that.
+        test('`adopted()` reports the middle rung alone', () => {
+            const ambient = adoptedAmbient<string, string>({
+                isValid: isString,
+                fromScope: () => 'from-scope',
+                absent: () => 'floor',
+            })
+            expect(ambient.read()).toBe('from-scope')
+            expect(ambient.adopted()).toBeUndefined()
+            ambient.adopt('adopted')
+            expect(ambient.read()).toBe('from-scope')
+            expect(ambient.adopted()).toBe('adopted')
+        })
     })
 
     // The rule that makes an ambient safe to feed off the wire: an invalid value is DROPPED and the
@@ -121,33 +167,33 @@ describe('the `changed` axis', () => {
 
 describe('identity — validates off the wire, compares by VALUE', () => {
     test('a fresh object with equal fields does NOT wake (every nav decodes a new principal)', async () => {
-        clearClientIdentity()
-        setClientIdentity({ id: 'u1', authenticated: true })
+        identityAmbient.clear()
+        identityAmbient.adopt({ id: 'u1', authenticated: true })
         let runs = 0
         const stop = watch(() => {
-            readClientIdentity()
+            identityAmbient.read()
             runs++
         })
         await flush()
         const baseline = runs
-        setClientIdentity({ id: 'u1', authenticated: true }) // different object, same value
+        identityAmbient.adopt({ id: 'u1', authenticated: true }) // different object, same value
         await flush()
         expect(runs).toBe(baseline)
 
-        setClientIdentity({ id: 'u2', authenticated: true })
+        identityAmbient.adopt({ id: 'u2', authenticated: true })
         await flush()
         expect(runs).toBeGreaterThan(baseline)
         stop()
-        clearClientIdentity()
+        identityAmbient.clear()
     })
 
     test('a malformed principal is dropped, leaving the previous identity standing', () => {
-        clearClientIdentity()
-        setClientIdentity({ id: 'real', authenticated: false })
-        setClientIdentity({ id: 42, authenticated: false } as never)
-        setClientIdentity({ authenticated: true } as never)
-        expect(readClientIdentity()?.id).toBe('real')
-        clearClientIdentity()
+        identityAmbient.clear()
+        identityAmbient.adopt({ id: 'real', authenticated: false })
+        identityAmbient.adopt({ id: 42, authenticated: false } as never)
+        identityAmbient.adopt({ authenticated: true } as never)
+        expect(identityAmbient.read()?.id).toBe('real')
+        identityAmbient.clear()
     })
 })
 
@@ -155,31 +201,31 @@ describe('trace — now an adopted ambient, so it is REACTIVE', () => {
     // The behaviour this unification changed. `trace` used to be a plain field on the reactive scope,
     // so a binding reading it rendered once and then showed a stale id forever.
     test('a reader wakes when a new traceparent is adopted', async () => {
-        clearClientTrace()
+        traceAmbient.clear()
         const first = `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`
         const second = `00-${'c'.repeat(32)}-${'d'.repeat(16)}-01`
-        setClientTrace(first)
+        traceAmbient.adopt(first)
         let seen: string | undefined
         const stop = watch(() => {
-            seen = readClientTrace()
+            seen = traceAmbient.read()
         })
         await flush()
         expect(seen).toBe(first)
 
-        setClientTrace(second)
+        traceAmbient.adopt(second)
         await flush()
         expect(seen).toBe(second)
         stop()
-        clearClientTrace()
+        traceAmbient.clear()
     })
 
     test('a malformed traceparent is dropped — the invariant is "valid or undefined"', () => {
-        clearClientTrace()
+        traceAmbient.clear()
         const good = `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`
-        setClientTrace(good)
-        setClientTrace('not-a-traceparent')
-        setClientTrace('')
-        expect(readClientTrace()).toBe(good)
-        clearClientTrace()
+        traceAmbient.adopt(good)
+        traceAmbient.adopt('not-a-traceparent')
+        traceAmbient.adopt('')
+        expect(traceAmbient.read()).toBe(good)
+        traceAmbient.clear()
     })
 })

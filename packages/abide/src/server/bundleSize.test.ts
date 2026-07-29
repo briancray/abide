@@ -87,7 +87,7 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // client-side `refresh/invalidate({ tags })` is the feature, so the registry and the join belong in the
     // browser. Some of the delta is comment bytes only this dev build counts; that split is not measured,
     // so do not read the number as shipped code. 123→128 KB is the isomorphic `identity()` (~3.8 KB
-    // unminified, measured at 125.7 KB): the accessor, the tab's reactive holder, `adoptIdentity`, and
+    // unminified, measured at 125.7 KB): the accessor, the tab's reactive ambient, and
     // the seed field's plumbing. Also NOT waste — a component reading `identity()` in the browser is the
     // feature, and the alternative (thread the principal down as a prop from every page) costs more
     // bytes in app code than it saves in framework code. That 125.7 KB reading ALSO carries a second,

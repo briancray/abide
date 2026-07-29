@@ -6,7 +6,6 @@
 // route() (name/url/params) updates. fetch is stubbed to return the server's soft-nav JSON envelope.
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { clearClientRoute, setClientRoute } from '../shared/internal/routeHolder.ts'
 import { route } from '../shared/route.ts'
 import { url } from '../shared/url.ts'
 import { bootstrapApp } from './internal/bootstrap.ts'
@@ -94,7 +93,7 @@ beforeEach(async () => {
     // Build the REAL anchored SSR HTML the client hydrates. Static pages render context-free; the
     // param page reads route() during render, so seed the client route to /users/42 for it, then reset.
     HOME_HTML = await home.render({})
-    setClientRoute({
+    routeAmbient.adopt({
         kind: 'nav',
         name: '/users/[id]',
         params: { id: '42' },
@@ -102,7 +101,7 @@ beforeEach(async () => {
         navigating: false,
     })
     const userHtml = await user.render({ route })
-    clearClientRoute()
+    routeAmbient.clear()
     counterValue = 1
     navSeed = {}
     ENVELOPE_HTML = {
@@ -171,7 +170,7 @@ afterEach(() => {
     document.body.innerHTML = ''
     // The client-route holder is a module global; reset it so it doesn't leak into other test files
     // (where route() outside a request scope must still throw).
-    clearClientRoute()
+    routeAmbient.clear()
 })
 
 test('initial bootstrap mounts the page for the current location', () => {
@@ -389,6 +388,7 @@ test('navigate(url(...query)) carries the query into the address and route().url
     expect(container().textContent).toContain('user 42')
 })
 
+import { routeAmbient } from '../shared/internal/routeAmbient.ts'
 import { registerPages } from './internal/pageRegistry.ts'
 import { isKnownPage } from './navigate.ts'
 

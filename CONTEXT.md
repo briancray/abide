@@ -19,16 +19,25 @@ reactive on the client, and each arrives from outside — the hydration seed, a 
 a `/__abide/identity` fetch. The browser never invents one: a client-minted value names something no
 server agrees with.
 
-The shape is `shared/internal/adoptedAmbient.ts`; each holder supplies two parameters:
+The whole ambient is `shared/internal/adoptedAmbient.ts` — including the READ LADDER: **the request
+scope's answer, else the adopted one, else this ambient's policy for "nobody has said"**. Each of the
+three (`routeAmbient` / `identityAmbient` / `traceAmbient`) is that shape with four parameters, and
+`shared/{route,identity,trace}.ts` are the public naming seams over them, nothing more.
 
 - **`isValid`** — how much of the wire shape must be present. A malformed value is **dropped** and the
   previous one stands, because the invariant callers rely on is "a valid value or `undefined`".
 - **`changed`** — an optional extra guard over the cell's own identity check, for a value decoded fresh
   each time. `identity` supplies one (a fresh-but-equal principal must not wake readers); `route`
   supplies none (fresh-object-per-nav IS the change signal, which is what republishes a param nav).
+- **`fromScope`** — the server rung. Two of the three read a field; `trace()` alone also *mints* there,
+  which is request-scoped by ADR 0026 and is why this is a callback rather than a key.
+- **`absent`** — where the three legitimately part company: `route` throws, `identity` returns a frozen
+  anonymous floor in the browser and throws on the server (so a `crossRequest` memo body fails closed),
+  `trace` answers `undefined`. Its return type flows out through `read()`, so an ambient that throws
+  reads as `T` and one that does not reads as `T | undefined`.
 
-On the **server**, `route()`/`identity()`/`trace()` read the request scope instead, and `trace()` alone
-also *mints* there — minting is request-scoped by ADR 0026.
+`read()` is the ladder; `adopted()` is the middle rung alone, for the one caller that asks whether
+anything has been adopted rather than what the answer is.
 
 ## Lane
 

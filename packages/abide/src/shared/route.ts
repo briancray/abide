@@ -1,23 +1,14 @@
-// Isomorphic accessor for the current route info. On the SERVER it reads the active request's reactive
-// context (`runInScope` copies the router's `RouteInfo` onto it). On the CLIENT (no request) it reads
-// the reactive client-route holder set by bootstrap/soft-nav — reading it inside a binding subscribes,
-// so route().params/name/url changes re-render dependents. Throws only when neither source is
-// available (called outside a request and before client bootstrap).
+// Isomorphic accessor for the current route info. The read LADDER — request scope, then the value the
+// browser adopted, then the ambient's own answer for "nobody has said" — lives on the ADOPTED AMBIENT
+// (`internal/routeAmbient.ts`), shared with `identity()` and `trace()`. This module is the public
+// naming seam (`abide/shared/route`) and nothing else.
 //
-// Reads the CONTEXT, not the request scope (ADR 0026), so `shared/` names nothing in `server/`.
-// `peekReactiveScope` rather than `reactiveScope` because the no-context case is a legitimate answer here and
-// must not install the process-global default scope on the way to throwing.
+// On the CLIENT, reading it inside a binding subscribes, so route().params/name/url changes re-render
+// dependents. It throws only when neither rung answers (called outside a request and before bootstrap).
 
-import { peekReactiveScope } from './internal/reactiveScope.ts'
-import { readClientRoute } from './internal/routeHolder.ts'
+import { routeAmbient } from './internal/routeAmbient.ts'
 import type { RouteInfo } from './internal/routeInfo.ts'
 
 export function route(): RouteInfo {
-    const active = peekReactiveScope()?.route
-    if (active !== undefined) return active
-    const client = readClientRoute()
-    if (client !== undefined) return client
-    throw new Error(
-        'route(): no active request scope — call it inside a request handler or after client bootstrap.',
-    )
+    return routeAmbient.read()
 }

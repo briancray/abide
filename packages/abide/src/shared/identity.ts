@@ -26,24 +26,18 @@
 //   has changed the cookie) and wake every reader. On the server it is a no-op, since the scope was
 //   resolved from the live request and cannot be stale.
 
-import { adoptIdentity } from './internal/adoptIdentity.ts'
 import { IDENTITY_ROUTE } from './internal/IDENTITY_ROUTE.ts'
-import { readClientIdentity } from './internal/identityHolder.ts'
+import { identityAmbient } from './internal/identityAmbient.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import type { Principal } from './internal/principal.ts'
 import { peekReactiveScope } from './internal/reactiveScope.ts'
-
-// The floor the browser answers with before anything has been adopted. One frozen object rather than a
-// fresh `anonymousPrincipal()` per call: a new id on every read would make `identity().id` unstable and
-// wake value-comparing readers forever.
-const NOT_YET_KNOWN: Principal = Object.freeze({ id: '', authenticated: false })
 
 // Whether this caller is on the CLIENT side of the isomorphism. `isBrowser` is the honest answer in a
 // real browser; an ADOPTED identity is the answer everywhere the client runtime is exercised without a
 // `window` (the test suite, a DOM emulator), and it is a sound one — only the client holder is ever
 // adopted into. Used solely to pick which mistake the error message names.
 function onClientSide(): boolean {
-    return isBrowser || readClientIdentity() !== undefined
+    return isBrowser || identityAmbient.adopted() !== undefined
 }
 
 function writer(): (next: Partial<Principal> | undefined) => void {
@@ -63,34 +57,24 @@ export const identity: {
     set(p: Partial<Principal>): void
     clear(): void
     refresh(): Promise<Principal>
-} = Object.assign(
-    (): Principal => {
-        const active = peekReactiveScope()?.identity
-        if (active !== undefined) return active
-        const adopted = readClientIdentity()
-        if (adopted !== undefined) return adopted
-        if (isBrowser) return NOT_YET_KNOWN
-        throw new Error('identity(): no active request scope — call it inside a request handler.')
+} = Object.assign((): Principal => identityAmbient.read(), {
+    set(p: Partial<Principal>): void {
+        writer()(p)
     },
-    {
-        set(p: Partial<Principal>): void {
-            writer()(p)
-        },
-        clear(): void {
-            writer()(undefined)
-        },
-        // Re-ask the server. The identity cookie is HttpOnly, so a browser cannot read who it has
-        // become after a login mutation — only the server can say, and this is the asking.
-        async refresh(): Promise<Principal> {
-            const scoped = peekReactiveScope()?.identity
-            if (scoped !== undefined) return scoped
-            const response = await fetch(IDENTITY_ROUTE, {
-                headers: { accept: 'application/json' },
-            })
-            if (!response.ok) return identity()
-            const principal = (await response.json()) as Principal
-            adoptIdentity(principal)
-            return identity()
-        },
+    clear(): void {
+        writer()(undefined)
     },
-)
+    // Re-ask the server. The identity cookie is HttpOnly, so a browser cannot read who it has
+    // become after a login mutation — only the server can say, and this is the asking.
+    async refresh(): Promise<Principal> {
+        const scoped = peekReactiveScope()?.identity
+        if (scoped !== undefined) return scoped
+        const response = await fetch(IDENTITY_ROUTE, {
+            headers: { accept: 'application/json' },
+        })
+        if (!response.ok) return identity()
+        const principal = (await response.json()) as Principal
+        identityAmbient.adopt(principal)
+        return identity()
+    },
+})

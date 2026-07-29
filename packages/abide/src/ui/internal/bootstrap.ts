@@ -23,12 +23,12 @@
 // any remaining keys become mount props.
 
 import { identity } from '../../shared/identity.ts'
-import { adoptIdentity } from '../../shared/internal/adoptIdentity.ts'
-import { adoptTrace } from '../../shared/internal/adoptTrace.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
 import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
+import { identityAmbient } from '../../shared/internal/identityAmbient.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
+import { traceAmbient } from '../../shared/internal/traceAmbient.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
@@ -198,11 +198,11 @@ export function buildPageScope(
     // CO2.3: adopt the rendering request's traceparent onto the tab scope, so a browser `trace()` (and
     // every log line, which auto-correlates on it) names the server span that produced this page. Runs
     // on first load AND on a full soft-nav's sub-hydrate, each carrying its own request's id.
-    adoptTrace(seed.trace)
+    traceAmbient.adopt(seed.trace)
     // AU3: adopt the rendering request's principal onto the tab, so a browser `identity()` answers the
     // same thing the SSR pass did — and re-adopt on every full soft-nav, since a nav is a fresh request
     // whose middleware may well have resolved someone else.
-    adoptIdentity(seed.identity)
+    identityAmbient.adopt(seed.identity)
     // Strip ALL internal seed sections — `reads`, `states`, `streams`, `trace` and `identity` are
     // hydration plumbing, not page props. Leaving `states`/`streams` in would make client `props()`
     // return an encoded blob / handoff records while the server's `props()` returns `{}` — an

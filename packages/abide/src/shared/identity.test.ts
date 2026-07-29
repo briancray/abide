@@ -11,16 +11,15 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createTestApp } from '../test/createTestApp.ts'
 import { identity } from './identity.ts'
-import { adoptIdentity } from './internal/adoptIdentity.ts'
 import { IDENTITY_ROUTE } from './internal/IDENTITY_ROUTE.ts'
-import { clearClientIdentity } from './internal/identityHolder.ts'
+import { identityAmbient } from './internal/identityAmbient.ts'
 import { watch } from './watch.ts'
 
 // Effects re-run on a scheduled flush, not synchronously — a wake-up assertion has to wait for it.
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 afterEach(() => {
-    clearClientIdentity()
+    identityAmbient.clear()
 })
 
 describe('identity() — server', () => {
@@ -79,12 +78,12 @@ describe('identity() — server', () => {
 
 describe('identity() — browser', () => {
     test('answers from what the server adopted, with no request scope in sight', () => {
-        adoptIdentity({ id: 'u1', authenticated: true, email: 'a@b.c' })
+        identityAmbient.adopt({ id: 'u1', authenticated: true, email: 'a@b.c' })
         expect(identity()).toMatchObject({ id: 'u1', authenticated: true, email: 'a@b.c' })
     })
 
     test('is REACTIVE — a real change wakes readers, an identical re-adopt does not', async () => {
-        adoptIdentity({ id: 'u1', authenticated: true })
+        identityAmbient.adopt({ id: 'u1', authenticated: true })
         let runs = 0
         const stop = watch(() => {
             identity()
@@ -94,11 +93,11 @@ describe('identity() — browser', () => {
 
         // Same principal, fresh object — every navigation decodes one of these out of its seed. Waking
         // every `identity()` binding per nav to say nothing changed is the bug this guards.
-        adoptIdentity({ id: 'u1', authenticated: true })
+        identityAmbient.adopt({ id: 'u1', authenticated: true })
         await tick()
         expect(runs).toBe(1)
 
-        adoptIdentity({ id: 'u2', authenticated: true })
+        identityAmbient.adopt({ id: 'u2', authenticated: true })
         await tick()
         expect(runs).toBe(2)
         // Disposed before the holder is cleared: a live reader would otherwise re-run against "nobody
@@ -107,18 +106,18 @@ describe('identity() — browser', () => {
     })
 
     test('a malformed principal off the wire is dropped, leaving the last good one standing', () => {
-        adoptIdentity({ id: 'u1', authenticated: true })
-        adoptIdentity({ id: 42, authenticated: true } as unknown as {
+        identityAmbient.adopt({ id: 'u1', authenticated: true })
+        identityAmbient.adopt({ id: 42, authenticated: true } as unknown as {
             id: string
             authenticated: boolean
         })
-        adoptIdentity(null)
+        identityAmbient.adopt(null)
         expect(identity().id).toBe('u1')
     })
 
     test('set/clear throw on the client and name the fix, rather than silently doing nothing', () => {
         // A hydrated tab: the server's principal has been adopted, and there is no request scope.
-        adoptIdentity({ id: 'u1', authenticated: true })
+        identityAmbient.adopt({ id: 'u1', authenticated: true })
         expect(() => identity.set({ id: 'forged' })).toThrow(/cannot seal an identity/)
         expect(() => identity.clear()).toThrow(/cannot seal an identity/)
     })
