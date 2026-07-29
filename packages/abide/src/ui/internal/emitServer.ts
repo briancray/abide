@@ -209,10 +209,16 @@ function bodyExpr(analysis: BindingAnalysis, chunks: ServerChunk[]): string {
 // and reverted — it broke streaming SSR, because a `{#for await}`/`{#await}` reached through a
 // collapsed frame stopped seeing the per-render stream scope and silently fell back to a fully
 // buffered drain. So the predicate is deliberately CONSERVATIVE: any streaming participant anywhere in
-// the subtree (a component, an `{#await}` block, a `{#for await}`) keeps the whole level's IIFE. The
-// blocks that own their own IIFE (`if`/`switch`/`try`/sync `for`) are transparent — inlining the level
-// ABOVE them does not change the frame they run in — so we recurse through them rather than bail.
-function inlinableChildren(chunks: ServerChunk[]): boolean {
+// the subtree — an `{#await}` block, a `{#for await}`, a hoisted `componentDef`, a branch-local
+// `<script>` — keeps the whole level's IIFE. Everything that owns its own frame, or is transparent to
+// the one it runs in (`if`/`switch`/`try`/sync `for`/`element`/`component`), is recursed THROUGH
+// rather than bailed on: inlining the level above them does not change the frame they run in.
+//
+// EXPORTED for its own test. It is the guard against a SILENT regression — collapsing a frame around a
+// streaming block produces byte-identical HTML and merely stops streaming it — and `emitServer` exports
+// only `emitServerModule`, so until now the rule was reachable only by compiling a template, rendering
+// it, and watching for the absence of progressive output.
+export function inlinableChildren(chunks: ServerChunk[]): boolean {
     for (const chunk of chunks) {
         switch (chunk.kind) {
             case 'static':
@@ -253,8 +259,10 @@ function inlinableChildren(chunks: ServerChunk[]): boolean {
                 if (!inlinableChildren(chunk.children)) return false
                 if (chunk.catch && !inlinableChildren(chunk.catch.children)) return false
                 break
-            // `component` (may render a streaming child), `awaitBlock` (streams), `componentDef`
-            // (hoisted registration the parent frame must own) all keep the frame.
+            // What is left keeps the frame: `awaitBlock` (streams), and `componentDef` (a hoisted
+            // registration the parent frame must own). `component` is NOT among them — it is handled
+            // above, transparently. This comment used to say it was, contradicting the case ten lines
+            // up; the case is right and the comment was left behind when it was added.
             default:
                 return false
         }
