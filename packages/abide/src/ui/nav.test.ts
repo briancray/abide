@@ -389,6 +389,7 @@ test('navigate(url(...query)) carries the query into the address and route().url
 })
 
 import { routeAmbient } from '../shared/internal/routeAmbient.ts'
+import { asSoftNavFrame } from '../shared/internal/softNavFrame.ts'
 import { registerPages } from './internal/pageRegistry.ts'
 import { documentPatch, documentPatchPreamble } from './internal/streamScheduler.ts'
 import { isKnownPage } from './navigate.ts'
@@ -416,11 +417,14 @@ test('isKnownPage: only real page patterns are soft-nav targets (not /openapi.js
 // — never `patch` — so the client's frame consumers must apply those exact kinds). `applyPatchFrame`
 // mirrors the first-load move-scripts (`documentPatch`) from JS. Before the fix the consumers branched
 // on a dead `patch` kind, so `append`/`complete` had NO client implementation at all.
+//
+// CLASSIFYING a frame is `asSoftNavFrame`'s job now, not this function's — the frame union is the wire
+// protocol and lives in `shared/internal/softNavFrame.ts`, so `applyPatchFrame` receives a frame that
+// is already known to be a patch and no longer answers "was it one".
 test('applyPatchFrame: `fill` replaces the fallback between the {#await} slot sentinels', () => {
     document.body.innerHTML =
         '<div id="host"><!--ab-p:7--><span>loading</span><template id="ab-p:7"></template></div>'
-    const applied = applyPatchFrame({ kind: 'fill', id: 7, html: '<b data-v>runs: 3</b>' })
-    expect(applied).toBe(true)
+    applyPatchFrame({ kind: 'fill', id: 7, html: '<b data-v>runs: 3</b>' })
     const host = document.getElementById('host')
     expect(host?.querySelector('b[data-v]')?.textContent).toBe('runs: 3')
     expect(host?.querySelector('span')).toBeNull() // the pending fallback was replaced
@@ -430,8 +434,8 @@ test('applyPatchFrame: `fill` replaces the fallback between the {#await} slot se
 
 test('applyPatchFrame: `append` inserts items before the list sentinel (#ab-l:<id>)', () => {
     document.body.innerHTML = '<ul id="host"><li>a</li><template id="ab-l:2"></template></ul>'
-    expect(applyPatchFrame({ kind: 'append', id: 2, html: '<li>b</li>' })).toBe(true)
-    expect(applyPatchFrame({ kind: 'append', id: 2, html: '<li>c</li>' })).toBe(true)
+    applyPatchFrame({ kind: 'append', id: 2, html: '<li>b</li>' })
+    applyPatchFrame({ kind: 'append', id: 2, html: '<li>c</li>' })
     expect(document.getElementById('host')?.innerHTML).toBe(
         '<li>a</li><li>b</li><li>c</li><template id="ab-l:2"></template>',
     )
@@ -450,21 +454,38 @@ test('applyPatchFrame: `append` puts a streamed <tr> inside the real <tbody>', (
     const sentinel = document.createElement('template')
     sentinel.id = 'ab-l:9'
     host?.appendChild(sentinel)
-    expect(applyPatchFrame({ kind: 'append', id: 9, html: '<tr><td>row</td></tr>' })).toBe(true)
+    applyPatchFrame({ kind: 'append', id: 9, html: '<tr><td>row</td></tr>' })
     expect(host?.querySelector('tr > td')?.textContent).toBe('row')
     expect(host?.querySelector('tr')?.parentElement?.tagName).toBe('TBODY')
 })
 
-test('applyPatchFrame: a non-patch kind is not a patch, and a missing anchor is a safe no-op', () => {
+test('applyPatchFrame: a missing anchor is a safe no-op', () => {
     document.body.innerHTML = ''
-    expect(applyPatchFrame({ kind: 'shell', html: '<p/>' })).toBe(false)
-    expect(applyPatchFrame({ kind: 'seed', seed: {} })).toBe(false)
-    // Missing anchor: still classified as a patch (true), but touches nothing / never throws.
-    expect(applyPatchFrame({ kind: 'fill', id: 99, html: '<b/>' })).toBe(true)
-    expect(applyPatchFrame({ kind: 'append', id: 99, html: '<li/>' })).toBe(true)
-    // There is no `complete` op — it stamped `data-ab-done`, which nothing read — so a stale server
-    // sending one is simply not a patch.
-    expect(applyPatchFrame({ kind: 'complete', id: 99 })).toBe(false)
+    expect(() => applyPatchFrame({ kind: 'fill', id: 99, html: '<b/>' })).not.toThrow()
+    expect(() => applyPatchFrame({ kind: 'append', id: 99, html: '<li/>' })).not.toThrow()
+})
+
+// The wire protocol's own narrowing, which the three reader loops used to do by hand — each testing
+// `typeof frame.html === 'string'` / `typeof frame.sharedLevels === 'number'` and casting the seed.
+test('asSoftNavFrame narrows the wire, and declines what it does not know', () => {
+    expect(asSoftNavFrame({ kind: 'fill', id: 7, html: '<b/>' })).toEqual({
+        kind: 'fill',
+        id: 7,
+        html: '<b/>',
+    })
+    // A server predating `sharedLevels` trimmed nothing, which is what `0` means.
+    expect(asSoftNavFrame({ kind: 'shell', html: '<p/>', url: '/a' })).toEqual({
+        kind: 'shell',
+        html: '<p/>',
+        url: '/a',
+        sharedLevels: 0,
+    })
+    // There is no `complete` op — it stamped `data-ab-done`, which nothing read. An unrecognised kind
+    // (a server NEWER than this bundle) is declined rather than thrown on, so a rolling deploy ignores
+    // a frame instead of aborting the nav.
+    expect(asSoftNavFrame({ kind: 'complete', id: 99 })).toBeUndefined()
+    expect(asSoftNavFrame({ kind: 'fill', id: 'seven', html: '<b/>' })).toBeUndefined()
+    expect(asSoftNavFrame(null)).toBeUndefined()
 })
 
 // THE FIRST-LOAD HALF OF THE SAME GEOMETRY.

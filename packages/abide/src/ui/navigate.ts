@@ -40,6 +40,7 @@ import { matchRoute } from '../shared/internal/matchRoute.ts'
 import { NAV_HEADERS } from '../shared/internal/NAV_HEADERS.ts'
 import { routeAmbient } from '../shared/internal/routeAmbient.ts'
 import type { RouteInfo } from '../shared/internal/routeInfo.ts'
+import { asSoftNavFrame, type SoftNavPatchFrame } from '../shared/internal/softNavFrame.ts'
 import { traceAmbient } from '../shared/internal/traceAmbient.ts'
 import { bootstrapPage, buildPageScope, replaySeedIntoProxies } from './internal/bootstrap.ts'
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
@@ -239,18 +240,12 @@ export function disposeActive(): void {
 // nothing read — `done()` lives in `shared/internal/iterableDone.ts` and has no DOM path. Returns true when the frame was a patch (so the consumer
 // loops can treat every non-shell/non-seed frame uniformly). A missing anchor is a no-op. Exported for
 // unit testing — the browser end-state is otherwise seed-masked (hydrate re-renders from the seed).
-export function applyPatchFrame(frame: Record<string, unknown>): boolean {
-    const id = frame.id
-    const patch =
-        frame.kind === 'fill' ? abideFillSlot : frame.kind === 'append' ? abideAppendItem : null
-    if (patch === null) return false
-    if (typeof id === 'number' && typeof frame.html === 'string') {
-        const template = document.createElement('template')
-        template.innerHTML = frame.html
-        const prefix = frame.kind === 'fill' ? STREAM_SENTINEL.pending : STREAM_SENTINEL.list
-        patch(id, template.content, prefix, document)
-    }
-    return true
+export function applyPatchFrame(frame: SoftNavPatchFrame): void {
+    const isFill = frame.kind === 'fill'
+    const template = document.createElement('template')
+    template.innerHTML = frame.html
+    const prefix = isFill ? STREAM_SENTINEL.pending : STREAM_SENTINEL.list
+    ;(isFill ? abideFillSlot : abideAppendItem)(frame.id, template.content, prefix, document)
 }
 
 // A same-chain CROSS-ROUTE soft-nav: stream the server's diverging-suffix shell, graft it into the kept
@@ -298,7 +293,9 @@ async function partialCrossNav(
     let firstNode: Node | null = null
     let grafted = false
     try {
-        for await (const frame of decodeJsonlStream(response.body)) {
+        for await (const raw of decodeJsonlStream(response.body)) {
+            const frame = asSoftNavFrame(raw)
+            if (frame === undefined) continue
             // Re-checked EVERY frame, not once after the fetch: a streamed destination holds this loop
             // open for the whole render, and a nav that started meanwhile owns the DOM. Applying a graft
             // or a patch on top of it would corrupt the newer page. Bailing after the graft leaves
@@ -313,8 +310,7 @@ async function partialCrossNav(
                 // fresh-mounting the suffix from the client's own levels.
                 // Dispose the outgoing suffix + graft the shell, THEN publish the new route — so the kept
                 // layouts' `route()` bindings update while the just-disposed old suffix can't misfire.
-                firstNode =
-                    boundary.graftSuffix?.(typeof frame.html === 'string' ? frame.html : '') ?? null
+                firstNode = boundary.graftSuffix?.(frame.html) ?? null
                 routeAmbient.adopt(routeInfoFor(dest.pattern, target, dest.params))
                 // The DOM and `route()` ARE the destination's from here, so the bookkeeping that describes
                 // them has to be too — it used to be committed at end-of-stream, which on a streaming page
@@ -328,7 +324,7 @@ async function partialCrossNav(
                 grafted = true
                 settleScroll(opts)
             } else if (frame.kind === 'seed') {
-                seed = frame.seed as HydrationSeed
+                seed = frame.seed
             } else {
                 applyPatchFrame(frame)
             }
@@ -440,8 +436,9 @@ async function softLoad(
             // no matching slot sentinels, and re-rendering is the reactive graph's job once the memos hold
             // the new values.
             let seed: HydrationSeed | undefined
-            for await (const frame of decodeJsonlStream(confirm.body)) {
-                if (frame.kind === 'seed') seed = frame.seed as HydrationSeed
+            for await (const raw of decodeJsonlStream(confirm.body)) {
+                const frame = asSoftNavFrame(raw)
+                if (frame?.kind === 'seed') seed = frame.seed
             }
             if (gen !== navGen || seed === undefined) return // superseded while the render streamed
             replaySeedIntoProxies(seed, pageBase() ?? '')
@@ -548,7 +545,9 @@ async function softLoad(
     let seed: HydrationSeed | undefined
     let navUrl = target.pathname + target.search
     try {
-        for await (const frame of decodeJsonlStream(response.body)) {
+        for await (const raw of decodeJsonlStream(response.body)) {
+            const frame = asSoftNavFrame(raw)
+            if (frame === undefined) continue
             if (gen !== navGen) return // superseded mid-stream — the newer nav owns the container
             if (frame.kind === 'shell') {
                 // The request asked for `keep: 0`, so a TRIMMED shell means the server did not honour it
@@ -556,12 +555,12 @@ async function softLoad(
                 // suffix into the container would drop every layout above it, so hard-load instead: the
                 // pre-header behaviour, kept exactly where it is still the only correct answer. This is
                 // the one nav shape with no `sharedLevels` agreement to check, so it checks it hardest.
-                if (typeof frame.sharedLevels === 'number' && frame.sharedLevels > 0) {
+                if (frame.sharedLevels > 0) {
                     location.href = path
                     return
                 }
-                if (typeof frame.html === 'string') container.innerHTML = frame.html
-                if (typeof frame.url === 'string') navUrl = frame.url
+                container.innerHTML = frame.html
+                if (frame.url !== '') navUrl = frame.url
                 // The container IS the destination's now — keep the outgoing-route header truthful for a
                 // nav that starts before this one hydrates (`handlePopState` reads it).
                 currentPath = target.pathname

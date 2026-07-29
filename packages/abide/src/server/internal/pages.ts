@@ -25,6 +25,7 @@ import {
     retainScope,
 } from '../../shared/internal/reactiveScope.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
+import type { SoftNavFrame } from '../../shared/internal/softNavFrame.ts'
 import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
 import type { State, StateFactory } from '../../shared/state.ts'
@@ -579,7 +580,9 @@ export function streamSoftNav(
     // never reads the body — it only wants the redirect envelope). That's EXPECTED, not a server fault,
     // and `out.disconnected` absorbs it.
     return streamRetainedRender(ctx, 'streaming soft-nav drain', async (out) => {
-        const frame = (obj: unknown): void => out.write(`${JSON.stringify(obj)}\n`)
+        // Typed by `SoftNavFrame`, so a field this producer stops sending is a compile error at
+        // every reader rather than a silent `undefined` at whichever one forgot to guard it.
+        const frame = (obj: SoftNavFrame): void => out.write(`${JSON.stringify(obj)}\n`)
         // `sharedLevels` > 0: the shell is only the diverging suffix; the client keeps that many outer
         // layout instances alive and grafts this into the innermost kept layout's outlet (C6.2).
         frame({ kind: 'shell', html: shell, url: urlPath, sharedLevels })
