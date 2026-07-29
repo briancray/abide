@@ -19,7 +19,11 @@ import { bindPattern } from './bindPattern.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
 import { splitParams } from './scanText.ts'
-import type { AttrPlan, ClientPlan, DynamicSlot, TemplatePlan } from './templatePlan.ts'
+import type { ClientPlan, DynamicSlot, SlotKind, TemplatePlan } from './templatePlan.ts'
+
+// One variant of the slot union, by kind — so each `gen*` declares the payload it actually reads and
+// the compiler checks the planner supplied it.
+type SlotOf<K extends SlotKind> = Extract<DynamicSlot, { kind: K }>
 
 // Slot kinds that occupy a single `<!---->` leaf position in a level (a value node + its anchor).
 const LEAF_KINDS = new Set<string>(['interpolation', 'await'])
@@ -357,8 +361,7 @@ class ClientEmitter {
     }
 
     // The OPEN `<!--[-->` anchor variable for a block/component slot (its close anchor is `slot.path`).
-    private openRef(slot: DynamicSlot, nav: (p: number[]) => string): string {
-        const path = slot.path
+    private openRef(path: number[], nav: (p: number[]) => string): string {
         const last = path[path.length - 1]
         if (last === undefined) throw new Error('block/component slot path must be non-empty')
         const openPath = [...path.slice(0, -1), last - 1]
@@ -379,24 +382,19 @@ class ClientEmitter {
     // whole preamble runs inside an effect scope this level owns. Disposing that scope on unmount is
     // what makes a `watch` in a branch script a real per-branch/per-iteration lifecycle hook — the same
     // contract the root script gets from `mount`, one level down.
-    private genNestedScript(slot: DynamicSlot): string {
-        const setup = slot.meta.setup
-        if (setup === undefined) throw new Error('script slot is missing its setup code')
+    private genNestedScript(slot: SlotOf<'script'>): string {
         return (
             `  $scope = Object.create($scope);\n` +
             `  const $branch = $rt.openEffectScope();\n` +
-            `  try {\n${indent(setup, 4)}  } finally {\n` +
+            `  try {\n${indent(slot.setup, 4)}  } finally {\n` +
             `    $rt.closeEffectScope($branch);\n` +
             `  }\n` +
             `  $sink.push(() => $rt.disposeEffectScope($branch));\n`
         )
     }
 
-    private genComponentDef(slot: DynamicSlot): string {
-        const name = slot.meta.name
-        if (name === undefined) throw new Error('component-def slot is missing its name')
-        const params = slot.meta.params ?? ''
-        const patterns = params.trim() === '' ? [] : splitParams(params)
+    private genComponentDef(slot: SlotOf<'componentDef'>): string {
+        const patterns = slot.params.trim() === '' ? [] : splitParams(slot.params)
         // LAZY, not a copy: `$args[0]` is the caller's props object, whose every key is a getter over
         // the caller's scope. Copying the values out here reads each getter once, under the `untrack`
         // that wraps the factory call — so the body would render a snapshot and never re-read it. See
@@ -404,11 +402,9 @@ class ClientEmitter {
         let binds = ''
         for (const [i, pattern] of patterns.entries())
             binds += `    ${bindLazyPattern('$s', pattern, `$args[${i}]`)}\n`
-        const body = slot.meta.body
-        if (body === undefined) throw new Error('component-def slot is missing its body')
-        const bodyId = this.idFor(body)
+        const bodyId = this.idFor(slot.body)
         return (
-            `  $scope[${JSON.stringify(name)}] = (...$args) => ({ mount: ($p, $a) => {\n` +
+            `  $scope[${JSON.stringify(slot.name)}] = (...$args) => ({ mount: ($p, $a) => {\n` +
             `    const $s = Object.create($scope);\n` +
             // The component-invocation convention passes the caller's children factory as the 2nd arg,
             // so `<slot/>` (which resolves `$scope.children`) is filled automatically — a component need
@@ -425,24 +421,23 @@ class ClientEmitter {
         nav: (p: number[]) => string,
         parentOf: (p: number[]) => string,
     ): string {
-        const expr = slot.expr ?? ''
         switch (slot.kind) {
             case 'interpolation':
-                return `  $sink.push($rt.interpolate(${parentOf(slot.path)}, ${nav(slot.path)}, () => (${expr}), ${slot.prefixLen ?? 0}));\n`
+                return `  $sink.push($rt.interpolate(${parentOf(slot.path)}, ${nav(slot.path)}, () => (${slot.expr}), ${slot.prefixLen}));\n`
             case 'html':
-                return `  $sink.push($rt.htmlBlock(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, () => (${expr})));\n`
+                return `  $sink.push($rt.htmlBlock(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, () => (${slot.expr})));\n`
             case 'await':
-                return `  $sink.push($rt.awaitText(${parentOf(slot.path)}, ${nav(slot.path)}, () => (${expr}), ${slot.prefixLen ?? 0}));\n`
+                return `  $sink.push($rt.awaitText(${parentOf(slot.path)}, ${nav(slot.path)}, () => (${slot.expr}), ${slot.prefixLen}));\n`
             case 'attr':
-                return `  $sink.push($rt.setAttr(${nav(slot.path)}, ${JSON.stringify(slot.meta.name)}, () => (${expr})));\n`
+                return `  $sink.push($rt.setAttr(${nav(slot.path)}, ${JSON.stringify(slot.name)}, () => (${slot.expr})));\n`
             case 'event':
-                return `  $sink.push($rt.listen(${nav(slot.path)}, ${JSON.stringify(slot.meta.event)}, () => (${expr})));\n`
+                return `  $sink.push($rt.listen(${nav(slot.path)}, ${JSON.stringify(slot.event)}, () => (${slot.expr})));\n`
             case 'class':
-                return `  $sink.push($rt.toggleClass(${nav(slot.path)}, ${JSON.stringify(slot.meta.name)}, () => (${expr})));\n`
+                return `  $sink.push($rt.toggleClass(${nav(slot.path)}, ${JSON.stringify(slot.name)}, () => (${slot.expr})));\n`
             case 'style':
-                return `  $sink.push($rt.setStyleProp(${nav(slot.path)}, ${JSON.stringify(slot.meta.name)}, () => (${expr})));\n`
+                return `  $sink.push($rt.setStyleProp(${nav(slot.path)}, ${JSON.stringify(slot.name)}, () => (${slot.expr})));\n`
             case 'spread':
-                return `  $sink.push($rt.spread(${nav(slot.path)}, () => (${expr})));\n`
+                return `  $sink.push($rt.spread(${nav(slot.path)}, () => (${slot.expr})));\n`
             case 'bind':
                 return this.genBind(slot, nav)
             case 'if':
@@ -462,12 +457,9 @@ class ClientEmitter {
         }
     }
 
-    private genBind(slot: DynamicSlot, nav: (p: number[]) => string): string {
+    private genBind(slot: SlotOf<'bind'>, nav: (p: number[]) => string): string {
         const el = nav(slot.path)
-        const name = slot.meta.name
-        if (name === undefined) throw new Error('bind slot is missing its name')
-        const expr = slot.expr
-        if (expr === null) throw new Error('bind slot is missing its expression')
+        const { name, expr } = slot
         if (name === 'element') {
             return `  { const $d = $rt.bindElement(${el}, (${expr})); if ($d !== undefined) $sink.push($d); }\n`
         }
@@ -478,52 +470,41 @@ class ClientEmitter {
     }
 
     private genIf(
-        slot: DynamicSlot,
+        slot: SlotOf<'if'>,
         nav: (p: number[]) => string,
         parentOf: (p: number[]) => string,
     ): string {
-        const branchPlans = slot.meta.branches
-        if (branchPlans === undefined) throw new Error('if slot is missing its branches')
-        const branches = branchPlans
+        const branches = slot.branches
             .map((b) => {
                 const condition = b.expr === null ? 'null' : `() => (${b.expr})`
                 return `{ condition: ${condition}, body: ${this.blockFn(b.plan, '$scope')} }`
             })
             .join(', ')
-        return `  $sink.push($rt.ifBlock(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, [${branches}]));\n`
+        return `  $sink.push($rt.ifBlock(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, [${branches}]));\n`
     }
 
     private genSwitch(
-        slot: DynamicSlot,
+        slot: SlotOf<'switch'>,
         nav: (p: number[]) => string,
         parentOf: (p: number[]) => string,
     ): string {
-        const casePlans = slot.meta.branches
-        if (casePlans === undefined) throw new Error('switch slot is missing its cases')
-        const cases = casePlans
+        const cases = slot.branches
             .map((c) => {
                 const test = c.expr === null ? 'null' : `() => (${c.expr})`
                 return `{ test: ${test}, body: ${this.blockFn(c.plan, '$scope')} }`
             })
             .join(', ')
-        const leadingPlan = slot.meta.leading
-        if (leadingPlan === undefined) throw new Error('switch slot is missing its leading nodes')
-        const leading = this.blockFn(leadingPlan, '$scope')
-        return `  $sink.push($rt.switchBlock(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, () => (${slot.meta.discriminant}), ${leading}, [${cases}]));\n`
+        const leading = this.blockFn(slot.leading, '$scope')
+        return `  $sink.push($rt.switchBlock(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, () => (${slot.discriminant}), ${leading}, [${cases}]));\n`
     }
 
     private genFor(
-        slot: DynamicSlot,
+        slot: SlotOf<'for'>,
         nav: (p: number[]) => string,
         parentOf: (p: number[]) => string,
     ): string {
-        const item = slot.meta.item
-        if (item === undefined) throw new Error('for slot is missing its item pattern')
-        const index = slot.meta.index ?? null
-        const key = slot.meta.key ?? null
-        const body = slot.meta.body
-        if (body === undefined) throw new Error('for slot is missing its body')
-        const bodyId = this.idFor(body)
+        const { item, index, key } = slot
+        const bodyId = this.idFor(slot.body)
 
         let keyFor: string
         if (key === null) {
@@ -551,7 +532,7 @@ class ClientEmitter {
         // Anything in the loop body that owns state gets a DISTINCT seed bucket per iteration — a
         // component, or a branch-local `<script>` (see emitServer's `for`). Only emitted when the body
         // has one: this allocates per item.
-        if (slot.meta.hasComponent === true || slot.meta.hasScript === true)
+        if (slot.hasComponent || slot.hasScript)
             createItem +=
                 '    if ($scope.state && $scope.state.forItem) $child.state = $scope.state.forItem($index);\n'
         createItem += `    ${bindLazyPattern('$child', item, '$itemState()')}\n`
@@ -568,8 +549,8 @@ class ClientEmitter {
         createItem += '    };\n  }'
 
         let catchFn = 'null'
-        if (slot.meta.catch) {
-            const c = slot.meta.catch
+        if (slot.catch !== null) {
+            const c = slot.catch
             const child = c.param
                 ? `(() => { const $c = Object.create($scope); ${bindPattern('$c', c.param, '$error')} return $c; })()`
                 : '$scope'
@@ -577,9 +558,9 @@ class ClientEmitter {
         }
 
         return (
-            `  $sink.push($rt.forBlock(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, {\n` +
-            `    read: () => (${slot.meta.iterable}),\n` +
-            `    isAwait: ${slot.meta.await ? 'true' : 'false'},\n` +
+            `  $sink.push($rt.forBlock(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, {\n` +
+            `    read: () => (${slot.iterable}),\n` +
+            `    isAwait: ${slot.await ? 'true' : 'false'},\n` +
             `    keyFor: ${keyFor},\n` +
             `    createItem: ${createItem},\n` +
             `    catch: ${catchFn},\n` +
@@ -588,23 +569,21 @@ class ClientEmitter {
     }
 
     private genAwaitBlock(
-        slot: DynamicSlot,
+        slot: SlotOf<'awaitBlock'>,
         nav: (p: number[]) => string,
         parentOf: (p: number[]) => string,
     ): string {
-        const pendingPlan = slot.meta.pending
-        if (pendingPlan === undefined)
-            throw new Error('await block slot is missing its pending branch')
-        const pending = this.blockFn(pendingPlan, '$scope')
-        const thenFn = slot.meta.then
-            ? `($value) => ${this.paramBlockFn(slot.meta.then.plan, slot.meta.then.param, '$value')}`
+        const pending = this.blockFn(slot.pending, '$scope')
+        const thenClause = slot.then
+        const thenFn = thenClause
+            ? `($value) => ${this.paramBlockFn(thenClause.plan, thenClause.param, '$value')}`
             : 'null'
-        const catchFn = slot.meta.catch
-            ? `($error) => ${this.paramBlockFn(slot.meta.catch.plan, slot.meta.catch.param, '$error')}`
+        const catchFn = slot.catch
+            ? `($error) => ${this.paramBlockFn(slot.catch.plan, slot.catch.param, '$error')}`
             : 'null'
-        const finallyFn = slot.meta.finally ? this.blockFn(slot.meta.finally, '$scope') : 'null'
+        const finallyFn = slot.finally ? this.blockFn(slot.finally, '$scope') : 'null'
         return (
-            `  $sink.push($rt.awaitBlock(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, () => (${slot.expr}), {\n` +
+            `  $sink.push($rt.awaitBlock(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, () => (${slot.expr}), {\n` +
             `    pending: ${pending},\n` +
             `    then: ${thenFn},\n` +
             `    catch: ${catchFn},\n` +
@@ -614,18 +593,16 @@ class ClientEmitter {
     }
 
     private genTry(
-        slot: DynamicSlot,
+        slot: SlotOf<'try'>,
         nav: (p: number[]) => string,
         parentOf: (p: number[]) => string,
     ): string {
-        const bodyPlan = slot.meta.body
-        if (bodyPlan === undefined) throw new Error('try slot is missing its body')
-        const body = this.blockFn(bodyPlan, '$scope')
-        const catchFn = slot.meta.catch
-            ? `($error) => ${this.paramBlockFn(slot.meta.catch.plan, slot.meta.catch.param, '$error')}`
+        const body = this.blockFn(slot.body, '$scope')
+        const catchFn = slot.catch
+            ? `($error) => ${this.paramBlockFn(slot.catch.plan, slot.catch.param, '$error')}`
             : 'null'
-        const finallyFn = slot.meta.finally ? this.blockFn(slot.meta.finally, '$scope') : 'null'
-        return `  $sink.push($rt.tryBlock(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${body}, ${catchFn}, ${finallyFn}));\n`
+        const finallyFn = slot.finally ? this.blockFn(slot.finally, '$scope') : 'null'
+        return `  $sink.push($rt.tryBlock(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, ${body}, ${catchFn}, ${finallyFn}));\n`
     }
 
     // A BlockFn whose scope carries an optional single param binding.
@@ -636,15 +613,13 @@ class ClientEmitter {
     }
 
     private genComponent(
-        slot: DynamicSlot,
+        slot: SlotOf<'component'>,
         nav: (p: number[]) => string,
         parentOf: (p: number[]) => string,
     ): string {
-        const name = slot.meta.name
-        if (name === undefined) throw new Error('component slot is missing its name')
-        const attrs = slot.meta.attrs ?? []
+        const name = slot.name
         let props = '  {\n    const $props = {};\n'
-        for (const attr of attrs as AttrPlan[]) {
+        for (const attr of slot.attrs) {
             switch (attr.kind) {
                 case 'static':
                     props += `    $props[${JSON.stringify(attr.name)}] = ${attr.value === null ? 'true' : JSON.stringify(attr.value)};\n`
@@ -667,23 +642,17 @@ class ClientEmitter {
             }
         }
         let childrenFn = 'null'
-        if (slot.meta.hasChildren) {
-            const body = slot.meta.body
-            if (body === undefined)
-                throw new Error('component slot with children is missing its body')
-            childrenFn = `() => (${this.mountable(body, '$scope')})`
-        }
+        if (slot.hasChildren) childrenFn = `() => (${this.mountable(slot.body, '$scope')})`
         // A cell- or memo-named tag (`<C/>` where `const C = memo(() => …)`) is a REACTIVE component:
         // read it in an effect and re-mount on identity change. Otherwise resolve the component once.
         // Both the reactive flag and the reference itself come from the plan — `templatePlan` is the
         // only place that knows this tag's LEVEL, and a branch-local `<script>`'s bindings live on
         // `$scope` rather than lexically.
-        const ref = slot.meta.ref
-        if (ref === undefined) throw new Error('component slot is missing its resolved reference')
-        if (slot.meta.reactive === true) {
-            props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${ref}), $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
+        const { ref, siteId } = slot
+        if (slot.reactive) {
+            props += `    $sink.push($rt.dynamicComponent(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, () => (${ref}), $props, ${childrenFn}, $scope, ${siteId}));\n`
         } else {
-            props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${ref}, $props, ${childrenFn}, $scope, ${slot.meta.siteId ?? -1}));\n`
+            props += `    $sink.push($rt.component(${parentOf(slot.path)}, ${this.openRef(slot.path, nav)}, ${nav(slot.path)}, ${JSON.stringify(name)}, ${ref}, $props, ${childrenFn}, $scope, ${siteId}));\n`
         }
         props += '  }\n'
         return props

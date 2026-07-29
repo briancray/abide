@@ -29,24 +29,7 @@ const BLOCK_SKELETON = `<!--${BLOCK_ANCHOR.open}--><!--${BLOCK_ANCHOR.close}-->`
 // Public types
 // ---------------------------------------------------------------------------
 
-export type SlotKind =
-    | 'interpolation'
-    | 'html'
-    | 'await'
-    | 'attr'
-    | 'event'
-    | 'class'
-    | 'style'
-    | 'bind'
-    | 'spread'
-    | 'if'
-    | 'for'
-    | 'awaitBlock'
-    | 'switch'
-    | 'try'
-    | 'component'
-    | 'componentDef'
-    | 'script'
+export type SlotKind = DynamicSlot['kind']
 
 // The tag name of a DYNAMIC element (one with its own dynamic attrs or dynamic descendants), keyed by
 // its child-index `path` within the template level. Threaded to the client emitter so the hydrate walk
@@ -63,48 +46,89 @@ export interface ClientPlan {
     elementTags?: ElementTag[]
 }
 
-export interface DynamicSlot {
-    kind: SlotKind
-    path: number[] // child-index path to the target (element for attrs; anchor for leaves/blocks)
-    expr: string | null // primary rewritten expression
-    // Leaf slots only (interp/html/await): the UTF-16 length of the immediately-preceding static text
-    // node (0 when the previous sibling is a comment/element/block/none). Threaded to `claimText` so
-    // hydration can split the server's merged `static+value` text node at the right offset (plan §1).
-    prefixLen?: number
-    meta: SlotMeta
-}
-
-// Kind-specific slot payloads (loosely a bag; documented per kind).
-export interface SlotMeta {
-    name?: string // attr / class / style / bind / component name
-    event?: string // event name (without `on`)
-    attrs?: AttrPlan[] // component props
-    branches?: BranchPlan[] // if / switch
-    discriminant?: string // switch
-    leading?: ClientPlan // switch leading nodes
-    pending?: ClientPlan // await block
-    then?: ClausePlan | null
-    catch?: ClausePlan | null
-    finally?: ClientPlan | null
-    body?: ClientPlan // component children / try / component-def
-    hasChildren?: boolean // component
-    await?: boolean // for
-    item?: string // for item pattern
-    index?: string | null // for index name
-    iterable?: string // for iterable (rewritten)
-    key?: string | null // for key (rewritten)
-    params?: string // component params
-    siteId?: number // component: its stable per-module site id (see `WalkState.nextSiteId`)
-    // for: does the body invoke a component, or own a branch-local `<script>`? Either one needs a
-    // per-item `state` factory, so that each iteration's cells get their own hydration-seed bucket.
-    hasComponent?: boolean
-    hasScript?: boolean
-    // component: the rewritten expression that RESOLVES the tag (`Card`, `$scope.Row`, `$scope.C()`),
-    // decided here where the level's bindings are known rather than re-derived per emitter.
-    ref?: string
-    reactive?: boolean // component: a cell-/memo-named tag, which re-mounts on identity change
-    setup?: string // script: the branch-local `<script>` preamble (analyzeBindings.NestedScript)
-}
+// `path` is the child-index path to the target — the element for an attr slot, the CLOSE anchor for a
+// leaf or block. Every slot carries one; nothing else is shared, so each kind declares exactly its own
+// payload and `emitClient` reads those fields without re-narrowing.
+//
+// This used to be `{ kind, path, expr: string | null, meta: SlotMeta }` where `SlotMeta` was 20
+// all-optional fields — a bag holding the union of every kind's payload. Its sibling `ServerChunk` was
+// already a discriminated union, and the difference showed: `emitServer` reads its chunks directly,
+// while `emitClient` carried SEVENTEEN runtime throws (`'if slot is missing its branches'`, `'for slot
+// is missing its item pattern'`) whose only job was to re-narrow the bag the planner had just widened.
+// A missing field was a mount-time crash in generated code rather than a compile error in the compiler.
+// The bag also stored two fields twice — a `for`'s iterable and a `switch`'s discriminant lived in both
+// `expr` and `meta` — which is what an untyped carrier invites.
+export type DynamicSlot =
+    // Leaves. `prefixLen` is the UTF-16 length of the immediately-preceding static text node (0 when the
+    // previous sibling is a comment/element/block/none), threaded to `claimText` so hydration can split
+    // the server's merged `static+value` text node at the right offset (plan §1). `html` has none: raw
+    // markup has no single text-split point, and its extent is read from the server's anchors instead.
+    | { kind: 'interpolation'; path: number[]; expr: string; prefixLen: number }
+    | { kind: 'await'; path: number[]; expr: string; prefixLen: number }
+    | { kind: 'html'; path: number[]; expr: string }
+    // Element attributes and directives.
+    | { kind: 'attr'; path: number[]; expr: string; name: string }
+    | { kind: 'class'; path: number[]; expr: string; name: string }
+    | { kind: 'style'; path: number[]; expr: string; name: string }
+    | { kind: 'bind'; path: number[]; expr: string; name: string }
+    | { kind: 'event'; path: number[]; expr: string; name: string; event: string }
+    | { kind: 'spread'; path: number[]; expr: string }
+    // Blocks.
+    | { kind: 'if'; path: number[]; branches: BranchPlan[] }
+    | {
+          kind: 'for'
+          path: number[]
+          await: boolean
+          item: string
+          index: string | null
+          iterable: string
+          key: string | null
+          body: ClientPlan
+          catch: ClausePlan | null
+          // Does the body invoke a component, or own a branch-local `<script>`? Either one needs a
+          // per-item `state` factory, so each iteration's cells get their own hydration-seed bucket.
+          hasComponent: boolean
+          hasScript: boolean
+      }
+    | {
+          kind: 'awaitBlock'
+          path: number[]
+          expr: string
+          pending: ClientPlan
+          then: ClausePlan | null
+          catch: ClausePlan | null
+          finally: ClientPlan | null
+      }
+    | {
+          kind: 'switch'
+          path: number[]
+          discriminant: string
+          leading: ClientPlan
+          branches: BranchPlan[]
+      }
+    | {
+          kind: 'try'
+          path: number[]
+          body: ClientPlan
+          catch: ClausePlan | null
+          finally: ClientPlan | null
+      }
+    | {
+          kind: 'component'
+          path: number[]
+          name: string
+          // The rewritten expression that RESOLVES the tag (`Card`, `$scope.Row`, `$scope.C()`), decided
+          // here where the level's bindings are known rather than re-derived per emitter.
+          ref: string
+          reactive: boolean // a cell-/memo-named tag, which re-mounts on identity change
+          attrs: AttrPlan[]
+          body: ClientPlan
+          hasChildren: boolean
+          siteId: number // stable per-module site id (see `WalkState.nextSiteId`)
+      }
+    // Zero-DOM registrations, hoisted to the head of their level: `path` is `[]`.
+    | { kind: 'componentDef'; path: number[]; name: string; params: string; body: ClientPlan }
+    | { kind: 'script'; path: number[]; setup: string }
 
 export interface BranchPlan {
     expr: string | null // condition / case test (rewritten); null = else/default
@@ -633,7 +657,7 @@ function walkLevelNodes(
     // first node in source (analyzeBindings enforces it), so hoisting changes no ordering — it only
     // keeps the emitters from having to find it among the chunks.
     if (script !== null) {
-        slots.push({ kind: 'script', path: [], expr: null, meta: { setup: script.setupCode } })
+        slots.push({ kind: 'script', path: [], setup: script.setupCode })
         server.push({ kind: 'script', setup: script.setupCode })
     }
     // Whether the position at `childIndex - 1` is a still-"open" static Text node that a subsequent
@@ -646,10 +670,10 @@ function walkLevelNodes(
     let openText = false
     let textRun = 0
 
-    const pushLeaf = (kind: SlotKind, expr: string): void => {
+    const pushLeaf = (kind: 'interpolation' | 'await', expr: string): void => {
         const prefixLen = openText ? textRun : 0
         skeleton += '<!---->'
-        slots.push({ kind, path: [childIndex], expr, prefixLen, meta: {} })
+        slots.push({ kind, path: [childIndex], expr, prefixLen })
         childIndex++
     }
 
@@ -660,7 +684,7 @@ function walkLevelNodes(
     // single text-split point (`runtime.htmlBlock` never had one).
     const pushHtmlSlot = (expr: string): void => {
         skeleton += `<!--${HTML_ANCHOR.open}--><!--${HTML_ANCHOR.close}-->`
-        slots.push({ kind: 'html', path: [childIndex + 1], expr, meta: {} })
+        slots.push({ kind: 'html', path: [childIndex + 1], expr })
         childIndex += 2
     }
 
@@ -673,15 +697,15 @@ function walkLevelNodes(
         slots.push({
             kind: 'component',
             path: [childIndex + 1],
-            expr: null,
-            meta: {
-                name: 'children',
-                ref: '$scope.children',
-                reactive: false,
-                attrs: [],
-                body: toClientPlan(emptyBody),
-                hasChildren: false,
-            },
+            name: 'children',
+            ref: '$scope.children',
+            reactive: false,
+            attrs: [],
+            body: toClientPlan(emptyBody),
+            hasChildren: false,
+            // No site id: `children` is the layout-composition outlet, not a `.abide` adapter — every
+            // composed level records into the ROOT bucket (see compose.childComponent).
+            siteId: -1,
         })
         server.push({
             kind: 'component',
@@ -763,20 +787,21 @@ function walkLevelNodes(
                 for (const ap of attrPlans) {
                     if (ap.kind === 'static') continue
                     if (ap.kind === 'spread')
-                        slots.push({ kind: 'spread', path: elemPath, expr: ap.expr, meta: {} })
+                        slots.push({ kind: 'spread', path: elemPath, expr: ap.expr })
                     else if (ap.kind === 'event')
                         slots.push({
                             kind: 'event',
                             path: elemPath,
                             expr: ap.expr,
-                            meta: { event: ap.event, name: ap.name },
+                            name: ap.name,
+                            event: ap.event,
                         })
                     else
                         slots.push({
                             kind: attrKindToSlot(ap.kind),
                             path: elemPath,
                             expr: ap.expr,
-                            meta: { name: ap.name },
+                            name: ap.name,
                         })
                 }
                 let childServer: ServerChunk[] = []
@@ -821,8 +846,9 @@ function walkLevelNodes(
                     slots.push({
                         kind: 'componentDef',
                         path: [],
-                        expr: null,
-                        meta: { name: def.name, params: def.params, body: toClientPlan(defSub) },
+                        name: def.name,
+                        params: def.params,
+                        body: toClientPlan(defSub),
                     })
                     server.push({
                         kind: 'componentDef',
@@ -854,16 +880,13 @@ function walkLevelNodes(
                 slots.push({
                     kind: 'component',
                     path: [childIndex + 1],
-                    expr: null,
-                    meta: {
-                        name: node.name,
-                        ref,
-                        reactive,
-                        attrs: attrPlans,
-                        body: toClientPlan(sub),
-                        hasChildren,
-                        siteId,
-                    },
+                    name: node.name,
+                    ref,
+                    reactive,
+                    attrs: attrPlans,
+                    body: toClientPlan(sub),
+                    hasChildren,
+                    siteId,
                 })
                 server.push({
                     kind: 'component',
@@ -889,13 +912,7 @@ function walkLevelNodes(
                 slots.push({
                     kind: 'if',
                     path: [childIndex + 1],
-                    expr: null,
-                    meta: {
-                        branches: branches.map((b) => ({
-                            expr: b.expr,
-                            plan: toClientPlan(b.sub),
-                        })),
-                    },
+                    branches: branches.map((b) => ({ expr: b.expr, plan: toClientPlan(b.sub) })),
                 })
                 server.push({
                     kind: 'if',
@@ -914,21 +931,18 @@ function walkLevelNodes(
                 slots.push({
                     kind: 'for',
                     path: [childIndex + 1],
-                    expr: iterable,
-                    meta: {
-                        await: node.await,
-                        item: node.item,
-                        index: node.index,
-                        iterable,
-                        key,
-                        body: toClientPlan(bodySub),
-                        catch:
-                            catchNode && catchSub
-                                ? { param: catchNode.param, plan: toClientPlan(catchSub) }
-                                : null,
-                        hasComponent: bodySub.hasComponent,
-                        hasScript: bodySub.hasScript,
-                    },
+                    await: node.await,
+                    item: node.item,
+                    index: node.index,
+                    iterable,
+                    key,
+                    body: toClientPlan(bodySub),
+                    catch:
+                        catchNode && catchSub
+                            ? { param: catchNode.param, plan: toClientPlan(catchSub) }
+                            : null,
+                    hasComponent: bodySub.hasComponent,
+                    hasScript: bodySub.hasScript,
                 })
                 server.push({
                     kind: 'for',
@@ -960,19 +974,17 @@ function walkLevelNodes(
                     kind: 'awaitBlock',
                     path: [childIndex + 1],
                     expr,
-                    meta: {
-                        pending: toClientPlan(pendingSub),
-                        // biome-ignore lint/suspicious/noThenProperty: await-block branch name, not a thenable
-                        then:
-                            thenNode && thenSub
-                                ? { param: thenNode.param, plan: toClientPlan(thenSub) }
-                                : null,
-                        catch:
-                            catchNode && catchSub
-                                ? { param: catchNode.param, plan: toClientPlan(catchSub) }
-                                : null,
-                        finally: finallySub ? toClientPlan(finallySub) : null,
-                    },
+                    pending: toClientPlan(pendingSub),
+                    // biome-ignore lint/suspicious/noThenProperty: await-block branch name, not a thenable
+                    then:
+                        thenNode && thenSub
+                            ? { param: thenNode.param, plan: toClientPlan(thenSub) }
+                            : null,
+                    catch:
+                        catchNode && catchSub
+                            ? { param: catchNode.param, plan: toClientPlan(catchSub) }
+                            : null,
+                    finally: finallySub ? toClientPlan(finallySub) : null,
                 })
                 server.push({
                     kind: 'awaitBlock',
@@ -1004,12 +1016,9 @@ function walkLevelNodes(
                 slots.push({
                     kind: 'switch',
                     path: [childIndex + 1],
-                    expr: discriminant,
-                    meta: {
-                        discriminant,
-                        leading: toClientPlan(leadingSub),
-                        branches: cases.map((c) => ({ expr: c.expr, plan: toClientPlan(c.sub) })),
-                    },
+                    discriminant,
+                    leading: toClientPlan(leadingSub),
+                    branches: cases.map((c) => ({ expr: c.expr, plan: toClientPlan(c.sub) })),
                 })
                 server.push({
                     kind: 'switch',
@@ -1028,15 +1037,12 @@ function walkLevelNodes(
                 slots.push({
                     kind: 'try',
                     path: [childIndex + 1],
-                    expr: null,
-                    meta: {
-                        body: toClientPlan(bodySub),
-                        catch:
-                            catchNode && catchSub
-                                ? { param: catchNode.param, plan: toClientPlan(catchSub) }
-                                : null,
-                        finally: finallySub ? toClientPlan(finallySub) : null,
-                    },
+                    body: toClientPlan(bodySub),
+                    catch:
+                        catchNode && catchSub
+                            ? { param: catchNode.param, plan: toClientPlan(catchSub) }
+                            : null,
+                    finally: finallySub ? toClientPlan(finallySub) : null,
                 })
                 server.push({
                     kind: 'try',
@@ -1056,8 +1062,9 @@ function walkLevelNodes(
                 slots.push({
                     kind: 'componentDef',
                     path: [],
-                    expr: null,
-                    meta: { name: node.name, params: node.params, body: toClientPlan(sub) },
+                    name: node.name,
+                    params: node.params,
+                    body: toClientPlan(sub),
                 })
                 server.push({
                     kind: 'componentDef',
@@ -1089,7 +1096,9 @@ function walkLevelNodes(
     return { skeleton, slots, server, elementTags, hasComponent, hasScript }
 }
 
-function attrKindToSlot(kind: 'expr' | 'class' | 'style' | 'bind'): SlotKind {
+function attrKindToSlot(
+    kind: 'expr' | 'class' | 'style' | 'bind',
+): 'attr' | 'class' | 'style' | 'bind' {
     if (kind === 'expr') return 'attr'
     return kind
 }
