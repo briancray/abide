@@ -124,6 +124,39 @@ test('cross-file: a wrong-typed prop passed to a props<T>() component is caught'
     ).toBe(true)
 })
 
+// The props local is resolved from the IMPORT, not assumed to be spelled `props`. `componentDts` used
+// to find the props type with `/\bprops\s*</` over raw source, with its own comment conceding "`props`
+// assumed un-aliased" — so an aliased import fell through to the OPEN `Record<string, unknown>` and the
+// component stopped being checked at every call site, silently. The build lane had resolved the local
+// correctly the whole time; the check lane now reads its answer instead of guessing.
+//
+// This fixture imports the REAL `abide/ui/props` specifier (mapped to the shim through tsconfig
+// `paths`, the way an app's own aliases resolve) because that specifier is what the resolution keys
+// on — a relative shim import is not a props import to either lane.
+test('cross-file: an ALIASED props import still closes the props type', async () => {
+    const files = {
+        'tsconfig.json': JSON.stringify({
+            ...JSON.parse(TSCONFIG),
+            compilerOptions: {
+                ...JSON.parse(TSCONFIG).compilerOptions,
+                baseUrl: '.',
+                paths: { 'abide/ui/props': ['./src/lib/props.ts'] },
+            },
+        }),
+        'src/lib/props.ts': PROPS_SHIM,
+        'src/ui/components/Card.abide':
+            "<script>import { props as p } from 'abide/ui/props'\nconst { title = '', count = 0 } = p<{ title?: string; count?: number }>()</script><div>{title}{count}</div>\n",
+        'src/ui/pages/p/page.abide':
+            '<script>\nimport Card from \'../../components/Card.abide\'\n</script>\n<Card title="ok" count={"nope"} />\n', // 4: count expects number
+    }
+    const root = await makeProject(files)
+    const result = await check(root)
+    expect(result.ok).toBe(false)
+    expect(
+        result.diagnostics.some((d) => d.line === 4 && d.file.endsWith('pages/p/page.abide')),
+    ).toBe(true)
+})
+
 test('cross-file: an unknown prop on a closed props<T>() component is caught', async () => {
     const files = {
         'src/lib/props.ts': PROPS_SHIM,

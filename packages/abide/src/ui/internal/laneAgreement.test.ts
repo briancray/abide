@@ -30,7 +30,8 @@ function buildLane(source: string): string | undefined {
 // this, after `parse`, before lowering — so agreement here is agreement in both commands.
 function checkLane(source: string): string | undefined {
     try {
-        return validateTemplate(parse(source, { filename: 'lane.abide' }))
+        const verdict = validateTemplate(parse(source, { filename: 'lane.abide' }))
+        return verdict.legal ? undefined : verdict.rejected
     } catch (parseError) {
         return parseError instanceof Error ? parseError.message : String(parseError)
     }

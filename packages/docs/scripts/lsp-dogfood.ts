@@ -15,7 +15,7 @@ const LSP = fileURLToPath(new URL('../../abide/src/cli/lsp.ts', import.meta.url)
 // Real, script-bearing, check-clean pages (cross-file component + RPC usage).
 const CLEAN_PAGES = [
     'src/ui/pages/rpc/page.abide',
-    'src/ui/pages/machines/page.abide',
+    'src/ui/pages/platform/machines/page.abide',
     'src/ui/pages/platform/config/page.abide',
 ].map((p) => join(DOCS, p))
 const EDITED_PAGE = CLEAN_PAGES[0] ?? ''

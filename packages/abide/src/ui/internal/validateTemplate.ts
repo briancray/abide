@@ -1,4 +1,4 @@
-import { analyzeBindings } from './analyzeBindings.ts'
+import { analyzeBindings, type BindingAnalysis } from './analyzeBindings.ts'
 import type { Root } from './ast.ts'
 import { buildPlan } from './templatePlan.ts'
 
@@ -17,15 +17,29 @@ import { buildPlan } from './templatePlan.ts'
 // check and the wrong one for a runtime. What they must not keep separate is which templates are
 // LEGAL. That question is the build lane's, and this is the one place the check lane asks it.
 //
-// Returns the rejection message, or undefined when the template passes. Positions are not carried:
+// Returns the rejection message, or the ANALYSIS when the template passes. Positions are not carried:
 // the gates throw plain Errors naming the fix, and the caller reports them at the file head. Giving
 // them offsets means threading a position through every gate, which is worth doing when one of these
 // messages is common enough to be annoying — not before.
-export function validateTemplate(root: Root): string | undefined {
+//
+// The analysis is returned rather than dropped because the check lane needs it and was re-deriving a
+// WORSE copy from raw source text: `componentDts` found the props type with a regex over an assumed-
+// un-aliased `props`, so `import { props as p }` silently opened a component's props type. This
+// already ran that analysis and threw it away. Handing it back is what makes the two lanes share one
+// READING of the script while keeping their separate lowerings.
+export type TemplateVerdict =
+    | { legal: true; analysis: BindingAnalysis }
+    | { legal: false; rejected: string }
+
+export function validateTemplate(root: Root): TemplateVerdict {
     try {
-        buildPlan(root, analyzeBindings(root))
-        return undefined
+        const analysis = analyzeBindings(root)
+        buildPlan(root, analysis)
+        return { legal: true, analysis }
     } catch (rejected) {
-        return rejected instanceof Error ? rejected.message : String(rejected)
+        return {
+            legal: false,
+            rejected: rejected instanceof Error ? rejected.message : String(rejected),
+        }
     }
 }

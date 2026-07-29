@@ -140,12 +140,12 @@ function lowerProject(dir: string, overrides: Record<string, string>): LoweredPr
         // The build lane's structural gates (see `validateTemplate`). Reported through the same
         // channel as a parse error so the editor shows what `abide build` would reject, rather than
         // going green on a template that cannot be built.
-        const rejected = validateTemplate(root)
-        if (rejected !== undefined) {
-            parseErrors.set(abidePath, { line: 1, column: 1, message: rejected })
+        const verdict = validateTemplate(root)
+        if (!verdict.legal) {
+            parseErrors.set(abidePath, { line: 1, column: 1, message: verdict.rejected })
             continue
         }
-        files[`${abidePath}.d.ts`] = componentDts(source, root)
+        files[`${abidePath}.d.ts`] = componentDts(source, root, verdict.analysis)
         if (root.moduleScript === null && root.instanceScript === null) continue
         const { code, segments } = emitCheck(source, root)
         const tsPath = join(

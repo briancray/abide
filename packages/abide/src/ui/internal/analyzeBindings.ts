@@ -148,6 +148,15 @@ export interface BindingAnalysis {
     // This is the "M3b module-swap resolution": scope-provided primitives (state/props/route/…) still
     // route through `$scope`; everything else in `abide/shared|ui/*` resolves as a genuine module.
     moduleImports: ImportBinding[]
+    // The local name `props` was imported under, resolved from the import bindings rather than assumed.
+    // The INSTANCE script's wins where both declare one — that is where a component's props are read.
+    //
+    // Published because the CHECK lane needs the same answer and was guessing at it: `componentDts`
+    // matched `/\bprops\s*</` against raw source with a comment conceding "`props` assumed
+    // un-aliased", so `import { props as p }` silently degraded a component's props type from its
+    // declared shape to the open `Record<string, unknown>` — cross-file prop checking went dark with no
+    // diagnostic. The build lane had resolved the local correctly the whole time.
+    propsLocal: string
 }
 
 // Framework specifiers that MUST resolve through the injected `$scope` (request/instance-scoped:
@@ -2032,6 +2041,9 @@ function scanTopLevel(source: string): StatementRecord[] {
 
 interface RawScript {
     imports: ImportBinding[]
+    // The local name `props` was imported UNDER. `import { props as p }` binds `p`, and the whole
+    // props-detection story keys on it — `isPropsInit` below, and the check lane's `componentDts`.
+    propsLocal: string
     bindings: Binding[]
     cells: Set<string>
     memos: Set<string>
@@ -2174,6 +2186,7 @@ function analyzeScript(content: string): RawScript {
         cssImports,
         componentImports,
         moduleImports,
+        propsLocal,
         strippedCode,
     }
 }
@@ -2425,5 +2438,6 @@ export function analyzeBindings(root: Root): BindingAnalysis {
         cssImports,
         componentImports,
         moduleImports,
+        propsLocal: instanceRaw?.propsLocal ?? moduleRaw?.propsLocal ?? 'props',
     }
 }

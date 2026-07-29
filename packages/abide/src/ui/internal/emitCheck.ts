@@ -23,9 +23,15 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
+import type { BindingAnalysis } from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
 import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
 import { skipQuoted, splitTopLevel, topLevelAssignmentIndex } from './scanText.ts'
+
+// A local name is an identifier, so this only ever has to neutralise `$`.
+function escapeForRegExp(name: string): string {
+    return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 // A verbatim span of the generated file: [genStart, genEnd) maps to original offset `origStart`.
 export interface Segment {
@@ -194,14 +200,20 @@ function scanBalancedAngle(text: string, ltIndex: number): number {
 
 // The props type for a component's default export. Explicit `props<T>()` → `T` (CLOSED — strict, per
 // the graduated model: unknown props error); otherwise `Record<string, unknown>` (OPEN — accepts
-// anything, zero false positives). `props` assumed un-aliased (the documented import name).
-function deriveProps(source: string, root: Root): string {
+// anything, zero false positives).
+//
+// `propsLocal` comes from the BUILD lane's analysis rather than being assumed. This used to match
+// `/\bprops\s*</` with a comment conceding "`props` assumed un-aliased" — so
+// `import { props as p }` fell through to the open `Record<string, unknown>` and a component's
+// declared props stopped being checked at every call site, with no diagnostic. The build lane had
+// resolved the local correctly the whole time (`localForSpecifier`); the two lanes now read it once.
+function deriveProps(source: string, root: Root, propsLocal: string): string {
     const scripts: Script[] = []
     if (root.moduleScript !== null) scripts.push(root.moduleScript)
     if (root.instanceScript !== null) scripts.push(root.instanceScript)
     for (const script of scripts) {
         const content = source.slice(script.contentStart, script.contentEnd)
-        const match = /\bprops\s*</.exec(content)
+        const match = new RegExp(`\\b${escapeForRegExp(propsLocal)}\\s*<`).exec(content)
         if (match !== null) {
             const lt = match.index + match[0].length - 1
             const gt = scanBalancedAngle(content, lt)
@@ -294,8 +306,8 @@ function referencedTypeNames(propsText: string): Set<string> {
 // with `any` here, which is what makes the documented degradation true for those names too. Only owned
 // names — an unshadowed `Date`/`Promise`/`Map` is the global the author meant, and stays checked.
 // `Component` is exempt: the companion declares it (shadowing would be a duplicate identifier).
-export function componentDts(source: string, root: Root): string {
-    const props = deriveProps(source, root)
+export function componentDts(source: string, root: Root, analysis: BindingAnalysis): string {
+    const props = deriveProps(source, root, analysis.propsLocal)
     const owned = ownedNames(source, root)
     let shadows = ''
     for (const name of referencedTypeNames(props))

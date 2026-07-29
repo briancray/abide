@@ -20,6 +20,12 @@ import { type ComponentResolver, emitModuleSource, loadEmitted } from './emit.ts
 import { parse } from './parse.ts'
 import { validateTemplate } from './validateTemplate.ts'
 
+// The build lane's rejection message for a source, or undefined when it is legal.
+function rejection(source: string): string | undefined {
+    const verdict = validateTemplate(parse(source))
+    return verdict.legal ? undefined : verdict.rejected
+}
+
 const strip = (html: string): string => html.replace(/<!--\[-->|<!--\]-->|<!---->/g, '')
 
 // Reports the prop names it was handed, so a dropped prop is visible in the OUTPUT of both lanes.
@@ -73,12 +79,12 @@ describe('attribute kinds that are REJECTED on a component', () => {
         // One gate, asked twice: `validateTemplate` runs `buildPlan` and reports what it throws, so
         // `abide check`/the LSP reject exactly what `abide build` rejects — by construction, not by
         // three switches agreeing.
-        expect(validateTemplate(parse(source))).toContain('not valid on a component')
+        expect(rejection(source)).toContain('not valid on a component')
         expect(() => emitModuleSource(source)).toThrow(/not valid on a component/)
     })
 
     test('the message names the fix rather than only the rule', () => {
-        const message = validateTemplate(parse(`${CARD}<Card class:active={true}/>`)) ?? ''
+        const message = rejection(`${CARD}<Card class:active={true}/>`) ?? ''
         expect(message).toContain('targets one element')
         expect(message).toContain('<Card class={…}/>')
     })
@@ -89,6 +95,6 @@ describe('attribute kinds that are REJECTED on a component', () => {
         ['class:', '<b class:active={true}>x</b>'],
         ['style:', '<b style:color={"red"}>x</b>'],
     ])('%s on a real ELEMENT is untouched', (_kind, source) => {
-        expect(validateTemplate(parse(source))).toBeUndefined()
+        expect(rejection(source)).toBeUndefined()
     })
 })
