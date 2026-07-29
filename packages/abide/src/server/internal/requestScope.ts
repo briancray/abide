@@ -61,7 +61,9 @@ export interface RequestScope {
     identityExpiresAt?: number | undefined
     bag: Record<string, unknown>
     route: RouteInfo
-    server?: Bun.Server<undefined>
+    // Explicitly `| undefined` for the same reason `traceparent` is: every construction site SETS the
+    // key, so the scope object is built in one shape.
+    server?: Bun.Server<undefined> | undefined
     slots: Map<string, unknown>
     // W3C Trace Context (CO2.3). The router's SEED from an incoming `traceparent` header, copied onto
     // the reactive scope by `runInScope`. Since ADR 0026 the context is the mutable home — `trace()`
@@ -71,6 +73,49 @@ export interface RequestScope {
     // there is no incoming header, so the scope object is built in one shape. Under
     // `exactOptionalPropertyTypes` a bare `?:` would reject that assignment.
     traceparent?: string | undefined
+}
+
+// THE ONE CONSTRUCTION SITE for a request scope.
+//
+// There are two callers and they had drifted. The router set every field — its comment records that
+// even `traceparent` is set to `undefined` explicitly "so the scope object is built in one shape" —
+// while `channelAuth.reauthorize`, which rebuilds the scope a normal request would have run in so it
+// can re-run the SAME middleware chain, omitted `server`, `traceparent`, and the four identity flags.
+// Every one of them is optional on the interface, so nothing caught it.
+//
+// That mattered because `reauthorize` FAILS CLOSED on any throw. A global middleware calling
+// `server()` throws "no Bun server bound to the current request scope" there and silently denies
+// every `@rpc:` cache-channel join and every roomed socket subscribe — reported only on the
+// DEBUG-gated `abide:socket` channel. Same middleware, same identity, different verdict depending on
+// which door the caller came through, which is the one thing that module exists to prevent.
+//
+// Taking the parts as REQUIRED arguments is the enforcement: a second caller cannot omit a field by
+// not mentioning it, and a new field is a compile error at both sites rather than an `undefined` at
+// one of them.
+export function makeRequestScope(parts: {
+    request: Request
+    cookies: Bun.CookieMap
+    identity: Principal
+    route: RouteInfo
+    server: Bun.Server<undefined> | undefined
+    traceparent: string | undefined
+    identityStateless: boolean
+    identityExpiresAt: number | undefined
+}): RequestScope {
+    return {
+        request: parts.request,
+        cookies: parts.cookies,
+        identity: parts.identity,
+        identityStateless: parts.identityStateless,
+        identityCleared: false,
+        identityDirty: false,
+        identityExpiresAt: parts.identityExpiresAt,
+        bag: {},
+        route: parts.route,
+        server: parts.server,
+        slots: new Map<string, unknown>(),
+        traceparent: parts.traceparent,
+    }
 }
 
 // Per-request scope storage. Separate from M1's reactive scope so accessors can retrieve the

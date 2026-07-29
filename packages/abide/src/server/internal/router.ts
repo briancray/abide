@@ -89,6 +89,7 @@ import { projectFormText } from './projectFormText.ts'
 import { buildRegistry } from './registry.ts'
 import {
     anonymousPrincipal,
+    makeRequestScope,
     type Principal,
     type RequestScope,
     type RouteInfo,
@@ -1056,6 +1057,10 @@ export function createApp(config: AppConfig = {}): App {
                 const connData: SocketConnectionData = {
                     request,
                     identity: connectScope.identity,
+                    // Carried so a per-room re-authorization can rebuild the SAME scope this upgrade
+                    // ran in. Without it a global middleware calling `server()` threw inside the
+                    // re-auth, which fails closed — silently denying every join.
+                    server: srv as unknown as Bun.Server<undefined>,
                 }
                 if (srv.upgrade(request, { data: connData })) return undefined
                 return exit(errorResponse(426, 'Expected a WebSocket upgrade request.'), {
@@ -1089,25 +1094,18 @@ export function createApp(config: AppConfig = {}): App {
                 identity = anonymousPrincipal()
                 scopeError = caught
             }
-            const scope: RequestScope = {
+            const scope: RequestScope = makeRequestScope({
                 request,
                 cookies,
                 identity,
                 identityStateless: isMachineBearer(request),
-                identityCleared: false,
-                identityDirty: false,
                 identityExpiresAt,
-                bag: {},
                 route,
                 // The WS-data generic (SocketConnectionData) is a socket-transport concern only; the
                 // public server()/scope.server surface stays `Bun.Server<undefined>` (unchanged API).
                 server: srv as unknown as Bun.Server<undefined>,
-                slots: new Map<string, unknown>(),
-                // Always present (undefined when there is no incoming traceparent) rather than spread in
-                // conditionally: this object is read by every ambient accessor on every request, so it is
-                // built once in its final shape instead of transitioning hidden classes.
                 traceparent: propagatedTrace,
-            }
+            })
 
             const matched = info.kind === 'rpc' ? routes[info.name] : undefined
             const policy = matched !== undefined ? routePolicy.get(matched) : undefined

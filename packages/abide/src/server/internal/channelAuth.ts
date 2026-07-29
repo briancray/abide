@@ -23,7 +23,13 @@ import type { Socket } from '../socket.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { outcomeResponse } from './outcomeResponse.ts'
 import { buildRegistry } from './registry.ts'
-import { type Principal, type RequestScope, type RouteKind, runInScope } from './requestScope.ts'
+import {
+    makeRequestScope,
+    type Principal,
+    type RequestScope,
+    type RouteKind,
+    runInScope,
+} from './requestScope.ts'
 import type { AppConfig } from './router.ts'
 
 // Identity + request resolved ONCE at the WS upgrade (cookie/bearer via the same ladder as HTTP)
@@ -32,6 +38,8 @@ import type { AppConfig } from './router.ts'
 export interface SocketConnectionData {
     request: Request
     identity: Principal
+    // The bound server, so `reauthorize` can build a scope with the same `server()` the upgrade had.
+    server: Bun.Server<undefined> | undefined
 }
 
 // A unique 200 Response that is returned ONLY when the composed chain reaches its terminal
@@ -174,12 +182,14 @@ async function reauthorize(
     const url = new URL(path, new URL(connData.request.url).origin)
     url.searchParams.set(RPC_QUERY_PARAMS.args, JSON.stringify(presentedArgs))
     const syntheticRequest = new Request(url, { method: 'GET', headers: connData.request.headers })
-    const scope: RequestScope = {
+    // Built through the shared factory, so this scope has the SAME shape the router's does. It used to
+    // be a second object literal that omitted `server`, `traceparent` and the identity flags — and this
+    // gate fails closed on any throw, so a global middleware calling `server()` denied every join.
+    const scope: RequestScope = makeRequestScope({
         request: syntheticRequest,
         cookies: new Bun.CookieMap(connData.request.headers.get('cookie') ?? ''),
         // Copy so a middleware `identity.set()` on one join cannot bleed into the next subscribe.
         identity: { ...connData.identity },
-        bag: {},
         route: {
             kind,
             name,
@@ -190,8 +200,13 @@ async function reauthorize(
             url,
             navigating: false,
         },
-        slots: new Map<string, unknown>(),
-    }
+        server: connData.server,
+        // A join is its own unit of work, so it joins the CONNECTION's trace when the upgrade carried
+        // one rather than inventing an unrelated id.
+        traceparent: connData.request.headers.get('traceparent') ?? undefined,
+        identityStateless: false,
+        identityExpiresAt: undefined,
+    })
     const chain = compose(middleware, () => AUTHORIZED_SENTINEL)
     // A middleware short-circuits by THROWING (`error(403)`/`redirect(...)`), so a throw is a DENY, not a
     // crashed join — the sentinel comparison alone would let it escape and take the subscribe with it.

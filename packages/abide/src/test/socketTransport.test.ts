@@ -6,9 +6,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { error } from '../server/error.ts'
 import type { Middleware } from '../server/internal/middleware.ts'
+import { request } from '../server/request.ts'
+import { server } from '../server/server.ts'
 import { socket } from '../server/socket.ts'
 import { identity } from '../shared/identity.ts'
 import { route } from '../shared/route.ts'
+import { trace } from '../shared/trace.ts'
 import { createTestApp, type SocketClient, type TestApp } from './createTestApp.ts'
 
 const TEST_TIMEOUT = 5000
@@ -574,6 +577,49 @@ describe('socket-connect — the GLOBAL middleware chain runs at the UPGRADE', (
             })
             expect(response.status).toBeGreaterThanOrEqual(500)
             await response.text()
+        },
+        TEST_TIMEOUT,
+    )
+})
+
+// THE SCOPE A ROOM RE-AUTHORIZATION RUNS IN IS THE SAME SHAPE AS A REQUEST'S.
+//
+// `reauthorize` rebuilds the scope a normal request for this socket would have run in, so it can re-run
+// the SAME middleware chain — and it used to build a second object literal that omitted `server`,
+// `traceparent` and the identity flags. Every one is optional on `RequestScope`, so nothing caught it.
+//
+// The gate fails CLOSED on any throw, which turns the omission into a silent denial: a global
+// middleware calling `server()` throws "no Bun server bound to the current request scope" here and
+// every roomed subscribe is refused, reported only on the DEBUG-gated `abide:socket` channel. Same
+// middleware, same identity, different verdict depending on which door the caller came through — the
+// one thing this module exists to prevent.
+describe('socket transport — the re-auth scope', () => {
+    test(
+        'a middleware reading the request ambients authorizes a room join, as it does an HTTP request',
+        async () => {
+            const feed = socket<string, { room: string }>({
+                channel: { tail: 2 },
+                // Present so the join takes the per-room re-auth path at all: with no socket
+                // middleware the join is connect-authed and never rebuilds a scope.
+                middleware: [(next) => next()],
+            })
+            // Every ambient the router's scope carries. `server()` is the one that THREW.
+            const touchesAmbients: Middleware = (next) => {
+                server()
+                trace()
+                identity()
+                request()
+                return next()
+            }
+            const app = await start({ sockets: { feed }, middleware: [touchesAmbients] })
+
+            const c = client(app)
+            const a = c.subscribe<string>('feed', { room: 'a' })
+            await c.ready()
+            await delay(30)
+
+            feed.publish({ room: 'a' }, 'admitted')
+            expect(await take(a, 1, TEST_TIMEOUT)).toEqual(['admitted'])
         },
         TEST_TIMEOUT,
     )
