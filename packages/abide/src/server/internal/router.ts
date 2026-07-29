@@ -39,14 +39,11 @@ import { NAV_HEADERS, NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
 import { positiveEnvBytes } from '../../shared/internal/positiveEnvBytes.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { reactiveScope } from '../../shared/internal/reactiveScope.ts'
-import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
 import { validateStandard } from '../../shared/StandardSchema.ts'
 import { json } from '../json.ts'
-import { jsonl } from '../jsonl.ts'
-import { sse } from '../sse.ts'
 import type { AppConfig, Route } from './appConfig.ts'
 import { applyResponseCompression } from './applyResponseCompression.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
@@ -107,6 +104,7 @@ import {
     wsUnsubscribe,
 } from './socketMux.ts'
 import { staticAssetType } from './staticAssetType.ts'
+import { streamResponseFor } from './streamResponse.ts'
 import { validateFiles } from './validateFiles.ts'
 import { validationError } from './validationError.ts'
 
@@ -794,12 +792,10 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
         }
         const resumed = resumable.resumeStream(args, Number(fromRaw))
         if (!resumed.fresh && resumed.cursor !== undefined) {
-            // Re-serve the resumed transcript in the handler's ORIGINAL encoding (sse resumes as sse),
-            // mirroring the fresh-run path below.
-            const response =
-                streamEncodingOf(resumed.cursor) === 'sse'
-                    ? sse(resumed.cursor)
-                    : jsonl(resumed.cursor)
+            // Re-served through the SAME encoding decision the fresh run makes — including the
+            // `Accept` rung, which this half used to skip, so an untagged source resumed as jsonl
+            // after having been served as sse.
+            const response = streamResponseFor(resumed.cursor, scope.request)
             response.headers.set('x-abide-stream-resume', 'live')
             return response
         }
@@ -820,11 +816,7 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
     // consumer. The handler's chosen encoding (jsonl(...)/sse(...)) wins; else `Accept: text/event-stream`
     // selects SSE; else application/jsonl.
     if (isAsyncIterable(result)) {
-        const encoding = streamEncodingOf(result)
-        const accept = (scope.request.headers.get('accept') ?? '').toLowerCase()
-        const useSse =
-            encoding === 'sse' || (encoding === undefined && accept.includes('text/event-stream'))
-        const response = useSse ? sse(result) : jsonl(result)
+        const response = streamResponseFor(result, scope.request)
         // A `?__abide_from=` resume whose transcript was gone → a fresh run from 0; the client must REPLACE.
         if (resumeFresh) response.headers.set('x-abide-stream-resume', 'fresh')
         return response

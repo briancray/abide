@@ -102,6 +102,41 @@ describe('resumable stream replay (?__abide_from=count)', () => {
         await app.stop()
     })
 
+    // A BARE async generator carries no encoding, so `Accept` chooses — and the resume path used to
+    // skip that rung entirely, serving jsonl to a client the fresh read had just served sse. Same
+    // slot, same transcript, two content types. No value assertion can see it: both encodings decode
+    // to the same chunks, and only the `content-type` differs.
+    test('a resume is served in the SAME encoding the fresh read was, including via Accept', async () => {
+        const app = await createTestApp({
+            routes: {
+                bare: GET(
+                    async function* (_a: Record<string, never>) {
+                        for (let i = 0; i < 3; i++) yield i
+                    },
+                    { memo: { crossRequest: true, ttl: 10_000 } },
+                ),
+            },
+        })
+        const accept = { accept: 'text/event-stream' }
+
+        const fresh = await app.fetch(`/__abide/rpc/bare${argsQuery({})}`, { headers: accept })
+        expect(fresh.headers.get('content-type')).toContain('text/event-stream')
+        await fresh.text()
+
+        const resume = await app.fetch(`/__abide/rpc/bare${argsQuery({})}&__abide_from=1`, {
+            headers: accept,
+        })
+        expect(resume.headers.get('x-abide-stream-resume')).toBe('live')
+        expect(resume.headers.get('content-type')).toContain('text/event-stream')
+        await resume.text()
+
+        // ...and with no `Accept`, both halves default to jsonl.
+        const plain = await app.fetch(`/__abide/rpc/bare${argsQuery({})}&__abide_from=1`)
+        expect(plain.headers.get('content-type')).toContain('application/jsonl')
+        await plain.text()
+        await app.stop()
+    })
+
     test("?__abide_from=N with no retained transcript runs fresh from 0 and flags 'fresh' (client replaces)", async () => {
         let runs = 0
         const app = await createTestApp({
