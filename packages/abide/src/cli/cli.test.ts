@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadClientBuild } from '../server/internal/clientBundle.ts'
 import { build } from './build.ts'
-import { scaffold } from './main.ts'
+import { main, scaffold } from './main.ts'
 import { type ServeResult, serve } from './serve.ts'
 
 const FIXTURE_DIR = join(import.meta.dir, '../server/__fixtures__/app')
@@ -132,6 +132,23 @@ describe('scaffold — writes a minimal starter project', () => {
 })
 
 describe('build — content-addressed split client', () => {
+    // `build` answers a `BuildResult`, not a path. The dispatcher named the binding `outDir` and
+    // interpolated the whole record, so `abide build` reported `abide build — [object Object]` — the
+    // one line a user reads to find out where the bundle went. Asserted through `main` because the
+    // defect was entirely in the dispatcher's reporting; `build` itself was always right.
+    test('the COMMAND reports the output directory, not a stringified record', async () => {
+        const lines: string[] = []
+        await main(['build'], {
+            cwd: FIXTURE_DIR,
+            write: (line) => lines.push(line),
+            writeError: () => {},
+        })
+        const reported = lines.find((line) => line.startsWith('abide build — '))
+        expect(reported).toBeDefined()
+        expect(reported).not.toContain('[object Object]')
+        expect(reported).toContain(join('dist', '_app'))
+    })
+
     test('writes every hashed chunk + a manifest into dist/_app/<hash>/', async () => {
         const { outDir } = await build(FIXTURE_DIR)
         expect(outDir).toContain(join('dist', '_app'))

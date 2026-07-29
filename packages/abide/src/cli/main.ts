@@ -235,7 +235,9 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         invocation: 'abide build',
         summary: 'build the content-addressed client bundle into dist/_app/<hash>/',
         run: async ({ cwd, write }) => {
-            const outDir = await build(cwd)
+            // `build` answers a `BuildResult`, not a path — the binding was named `outDir` and
+            // interpolated whole, so this line printed `abide build — [object Object]`.
+            const { outDir } = await build(cwd)
             write(`abide build — ${outDir}`)
             return undefined
         },
