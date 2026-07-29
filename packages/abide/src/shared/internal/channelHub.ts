@@ -25,6 +25,21 @@ export interface ChannelHubOptions {
     maxAge?: number
 }
 
+// THE RETENTION DEFAULTS, resolved once. `registry.ts` re-derived the same two (`tail ?? 0`,
+// `maxAge ?? Infinity`) to decide what to SHIP to the browser, while these are what the server hub
+// actually RUNS on — so changing a default here would have retained on the server and shipped the old
+// number to the tab, and the only observable is the retention DEPTH, which a value test never sees.
+// The same bilateral-drift class the RPC lane was bitten by twice.
+export function resolveChannelRetention(options: ChannelHubOptions): {
+    tail: number
+    maxAge: number
+} {
+    return {
+        tail: typeof options.tail === 'number' ? options.tail : 0,
+        maxAge: typeof options.maxAge === 'number' ? options.maxAge : Number.POSITIVE_INFINITY,
+    }
+}
+
 export class ChannelHub<T> {
     private readonly tailSize: number
     private readonly maxAge: number
@@ -35,8 +50,9 @@ export class ChannelHub<T> {
     private last: TailEntry<T> | undefined
 
     constructor(options: ChannelHubOptions) {
-        this.tailSize = options.tail ?? 0
-        this.maxAge = options.maxAge ?? Infinity
+        const retention = resolveChannelRetention(options)
+        this.tailSize = retention.tail
+        this.maxAge = retention.maxAge
     }
 
     // Publish — append to the tail buffer and fan out. The mediator, if any, ran in the socket layer above (S1.3).

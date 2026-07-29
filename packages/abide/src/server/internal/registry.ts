@@ -9,6 +9,7 @@
 // left undefined here — its JSON Schema is not available without type-derivation, which a build
 // step attaches later. Surfaces treat a missing schema permissively.
 
+import { resolveChannelRetention } from '../../shared/internal/channelHub.ts'
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import type { RpcSpec } from '../../shared/internal/rpcSpec.ts'
@@ -193,8 +194,9 @@ function deriveRegistry(config: AppConfig): Registry {
             // way to the browser. The wire spec used to call this `ttl`, which put the one word the
             // rename exists to avoid back into the payload — and left `socketSpecs`/`SocketSpec`
             // reading like a memo retention knob when it is a per-MESSAGE age window.
-            tail: typeof options.channel?.tail === 'number' ? options.channel.tail : 0,
-            maxAge: typeof options.channel?.maxAge === 'number' ? options.channel.maxAge : Infinity,
+            // Resolved by the CHANNEL's own resolver, so what is shipped and what the server hub runs
+            // on cannot be two different numbers.
+            ...resolveChannelRetention(options.channel ?? {}),
             clients: resolveClients(options.clients, `socket "${name}"`),
         }
         const messageSchema = jsonSchemaOf(options.schema)

@@ -13,17 +13,13 @@ import { ChannelHub } from '../../shared/internal/channelHub.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
 import { state } from '../../shared/internal/reactive.ts'
 import { room } from '../../shared/internal/room.ts'
+import { decodeMaxAge, type SocketSpec } from '../../shared/internal/socketSpec.ts'
 import type { SocketSurface, SocketSurfaceMembers } from '../../shared/internal/socketSurface.ts'
 import { muxPublish, muxSubscribe } from './mux.ts'
 
-// The per-socket spec shipped in the client bundle (client-sockets.md CS7). `tail` sizes the
-// `chunks()` cap; `maxAge` windows `peek()`; `clientPublish` gates `.publish()`.
-export interface SocketSpec {
-    clientPublish: boolean
-    tail: number
-    // Milliseconds, or `null` for Infinity/sticky (JSON can't carry Infinity, so it serialises to null).
-    maxAge: number | null
-}
+// The wire spec is declared in `shared/internal/socketSpec.ts`, beside the RPC one, so the encode and
+// decode halves of `Infinity ↔ null` cannot be two expressions that merely happen to be inverses.
+export type { SocketSpec }
 
 // The reactive lifecycle state (CS4.1). `idle` = never subscribed / torn down (→ `done()`).
 type Status = 'idle' | 'pending' | 'live' | 'refreshing' | 'error'
@@ -52,8 +48,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
     // The hub keeps the two separate: `tail` bounds retention, each cursor keeps its own default FIFO.
     const hub = new ChannelHub<unknown>({
         tail: spec.tail,
-        // JSON cannot carry Infinity, so the wire spells sticky as `null`.
-        maxAge: spec.maxAge ?? Infinity,
+        maxAge: decodeMaxAge(spec.maxAge),
     })
     const status = state<Status>('idle')
     // What this proxy genuinely ADDS over the hub: reactivity. The hub's retained state is plain BY

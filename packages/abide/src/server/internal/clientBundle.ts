@@ -36,6 +36,7 @@ import { brotliCompress, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
 import { appName } from '../../shared/internal/appName.ts'
 import type { RpcSpec } from '../../shared/internal/rpcSpec.ts'
+import { encodeMaxAge, type SocketSpec } from '../../shared/internal/socketSpec.ts'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
@@ -143,12 +144,8 @@ function rpcSpecs(config: AppConfig, importedNames: Set<string>): Record<string,
 // page IMPORTS reach the bundle. REACHABILITY (CS6.1): importing a `clients.browser: false` socket into
 // a UI script is a BUILD ERROR — it has no browser proxy, so a bare `$scope` read would be `undefined`
 // at mount; failing loudly at build time is the contract. `maxAge: Infinity` (sticky) serialises to `null`.
-function socketSpecs(
-    config: AppConfig,
-    importedNames: Set<string>,
-): Record<string, { clientPublish: boolean; tail: number; maxAge: number | null }> {
-    const specs: Record<string, { clientPublish: boolean; tail: number; maxAge: number | null }> =
-        {}
+function socketSpecs(config: AppConfig, importedNames: Set<string>): Record<string, SocketSpec> {
+    const specs: Record<string, SocketSpec> = {}
     for (const entry of buildRegistry(config).sockets) {
         if (!importedNames.has(entry.name)) continue
         if (entry.clients.browser === false) {
@@ -159,7 +156,7 @@ function socketSpecs(
         specs[entry.name] = {
             clientPublish: entry.clientPublish,
             tail: entry.tail,
-            maxAge: Number.isFinite(entry.maxAge) ? entry.maxAge : null,
+            maxAge: encodeMaxAge(entry.maxAge),
         }
     }
     return specs

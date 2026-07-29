@@ -9,6 +9,7 @@ import { expect, test } from 'bun:test'
 import { GET } from '../server/GET.ts'
 import { buildClient } from '../server/internal/clientBundle.ts'
 import type { AppConfig } from '../server/internal/router.ts'
+import { socket } from '../server/socket.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { bootstrapPage } from '../ui/internal/bootstrap.ts'
 import { loadEmitted } from '../ui/internal/emit.ts'
@@ -241,4 +242,40 @@ test('the loader carries every bilateral policy field the author configured', as
         debounce: 250,
         timeout: 9_000,
     })
+})
+
+// THE RETENTION KNOBS REACH THE BROWSER AS THE SERVER RESOLVED THEM.
+//
+// `tail` and `maxAge` are bilateral: the server hub runs on them and the browser hub is built from
+// what the bundle shipped. They used to be resolved TWICE — `ChannelHub`'s own `?? 0` / `?? Infinity`,
+// and a second derivation in `registry.ts` deciding what to ship — so changing a default would have
+// retained on the server and shipped the old number to the tab. The only observable is the retention
+// DEPTH, which is why this asserts the SHIPPED SPEC rather than any message.
+test('a socket ships the channel retention the server hub runs on, Infinity as null', async () => {
+    const sticky = socket<string>({ channel: { tail: 4 } }) // maxAge unset → Infinity → null on the wire
+    const windowed = socket<string>({ channel: { tail: 1, maxAge: 5_000 } })
+    const plain = socket<string>({}) // both defaulted
+    const build = await buildClient({
+        sockets: { sticky, windowed, plain },
+        pages: {
+            '/': [
+                '<script>',
+                "import sticky from '../../server/sockets/sticky'",
+                "import windowed from '../../server/sockets/windowed'",
+                "import plain from '../../server/sockets/plain'",
+                '</script>',
+                '<p>{sticky.peek()}{windowed.peek()}{plain.peek()}</p>',
+            ].join('\n'),
+        },
+    })
+    const entry = build.files.get(build.entry)
+    if (entry === undefined) throw new Error('no loader entry')
+    const loader = new TextDecoder().decode(entry.identity)
+    const source = /var SOCKET_SPECS = (\{[\s\S]*?\});/.exec(loader)?.[1]
+    if (source === undefined) throw new Error('no SOCKET_SPECS in the loader entry')
+    const specs = new Function(`return ${source}`)() as Record<string, Record<string, unknown>>
+    expect(specs.sticky).toMatchObject({ tail: 4, maxAge: null })
+    expect(specs.windowed).toMatchObject({ tail: 1, maxAge: 5_000 })
+    // The defaults are the CHANNEL's, not a second set: tail 0, sticky.
+    expect(specs.plain).toMatchObject({ tail: 0, maxAge: null })
 })
