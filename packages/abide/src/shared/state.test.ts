@@ -201,3 +201,42 @@ describe('state.shared — the cross-tab BroadcastChannel path', () => {
         expect(typeof cell()).toBe('function')
     })
 })
+
+// THE SERVER BRANCH — the one that prevents a cross-request state leak, and the one this suite
+// structurally cannot reach.
+//
+// Every test above takes the CLIENT branch, because `test/happydom.ts` gives the process a `document`.
+// That is deliberate and is what makes the cross-tab cases possible — but it means `makeShared`'s
+// `!hasDom` branch, whose whole job is "a process-global registry would hand one request's state to the
+// next", has no coverage at all. The two side predicates disagreeing under test is what buys the
+// coverage above and costs this.
+//
+// So it runs in a child `bun` with no preload and therefore no DOM — the same technique `log.test.ts`
+// uses to reach the browser half of an isomorphic module, in the opposite direction.
+describe('state.shared with no DOM (the server)', () => {
+    test('two renders asking for one key do NOT share a slot', async () => {
+        const probe = Bun.spawn(
+            ['bun', `${import.meta.dir}/__fixtures__/serverSharedStateProbe.ts`],
+            { stdout: 'pipe', stderr: 'pipe' },
+        )
+        const [stdout, stderr] = await Promise.all([
+            new Response(probe.stdout).text(),
+            new Response(probe.stderr).text(),
+        ])
+        const marker = stdout.indexOf('@@')
+        if (marker === -1) throw new Error(`the no-DOM probe produced no result: ${stderr}`)
+        const result = JSON.parse(stdout.slice(marker + 2)) as {
+            hadDom: boolean
+            first: string
+            second: string
+            third: string
+        }
+
+        expect(result.hadDom).toBe(false)
+        // The write landed on the writer's own cell…
+        expect(result.first).toBe('written by the first render')
+        // …and nowhere else. On the client both of these would read the written value.
+        expect(result.second).toBe('initial')
+        expect(result.third).toBe('initial')
+    }, 20_000)
+})

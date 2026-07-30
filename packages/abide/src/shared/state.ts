@@ -11,6 +11,11 @@
 // file rule intact). The cell is CALLABLE — `count()` reads and `count.set(x)` writes, exactly the
 // atom's own call/`set`/`untracked`.
 
+// `hasDom`, not `isBrowser`: what `.shared` needs is a DOCUMENT (a process-wide registry it may keep, and
+// a `BroadcastChannel` to sync it across tabs), and on the abide server a process-global registry would
+// leak one request's state into another's — so there `.shared` must stay per-render. The two predicates
+// differ under `bun test` on purpose; `internal/hasDom.ts` states which gate wants which.
+import { hasDom } from './internal/hasDom.ts'
 import { type State as ReactiveState, state as reactiveState } from './internal/reactive.ts'
 
 // Global-registry brand so `analyzeBindings.ts` recognises a cell by identity without a shared import.
@@ -18,11 +23,6 @@ const STATE_CELL = Symbol.for('abide.ui.stateCell')
 
 // The reactive kinds a cell can be. Both are OWNED and writable — derivation is `memo`'s job (ADR 0024).
 type StateKind = 'state' | 'shared'
-
-// Client (browser DOM) vs SSR (bun, no DOM). `document` is the reliable discriminator: present in a
-// real browser AND under the test DOM, absent on the abide server — where a process-global shared
-// registry would leak one request's state into another's, so `.shared` must stay per-render there.
-const isClient = typeof document !== 'undefined'
 
 // A callable branded reactive cell — the atom's shape (`()` tracks, `set()` publishes, `untracked()` reads
 // untracked) plus the kind brand.
@@ -63,7 +63,7 @@ let sharedChannel: BroadcastChannel | undefined
 let channelResolved = false
 
 function ensureChannel(): BroadcastChannel | undefined {
-    if (!isClient) return undefined
+    if (!hasDom) return undefined
     if (!channelResolved) {
         channelResolved = true
         try {
@@ -83,7 +83,7 @@ function ensureChannel(): BroadcastChannel | undefined {
 }
 
 function makeShared<T>(key: string, initial: T): State<T> {
-    if (!isClient) {
+    if (!hasDom) {
         // Server: isolated per-render cell (no cross-request registry).
         const backing = reactiveState<T>(initial)
         const cell = (() => backing()) as State<T>
