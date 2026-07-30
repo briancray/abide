@@ -70,6 +70,7 @@ import {
     sharedStore,
 } from './internal/sharedCache.ts'
 import { createSlotIndex } from './internal/slotIndex.ts'
+import { armStreamDeadline } from './internal/streamDeadline.ts'
 import { tagStreamTranscript } from './internal/streamTranscript.ts'
 import { withDeadline } from './internal/withDeadline.ts'
 import { log } from './log.ts'
@@ -94,40 +95,6 @@ interface SlotState<T> {
     // Set only when status === "stream": the shared replay buffer this slot fans out (§4).
     stream?: ReplayableStream<unknown>
 }
-
-// The idle clock behind a streaming run's deadline (ADR 0028 D1). One timer for the whole stream,
-// restarted in place on every chunk via `refresh()` — no allocation per chunk, and `unref` so a stream
-// awaiting its next chunk never by itself holds the process open (which would break `abide run` and any
-// short-lived script). `ms` of 0 arms nothing and hands back inert no-ops, so an unbounded stream pays
-// neither the timer nor a branch per chunk beyond one already-monomorphic call.
-function armStreamDeadline(ms: number, onIdle: () => void): { progress(): void; cancel(): void } {
-    if (!Number.isFinite(ms) || ms <= 0) return INERT_STREAM_DEADLINE
-    let timer = setTimeout(onIdle, ms)
-    timer.unref?.()
-    // `refresh()` restarts a timer IN PLACE, which is what keeps a hot stream from allocating one per
-    // chunk — but it is a Node/Bun `Timeout` method and this module is ISOMORPHIC: in the browser
-    // `setTimeout` returns a number, `timer.refresh()` throws, and the throw lands in the pump's catch,
-    // which fails the transcript. That is a whole-stream break with a per-chunk cause, and no unit test
-    // sees it (happy-dom takes the same server path) — the docs-app e2e suite is what caught it. So the
-    // capability is probed ONCE here and each branch stays monomorphic, rather than re-arming blindly
-    // on the server too.
-    const refreshable = typeof (timer as { refresh?: unknown }).refresh === 'function'
-    return {
-        progress: refreshable
-            ? () => {
-                  timer.refresh()
-              }
-            : () => {
-                  clearTimeout(timer)
-                  timer = setTimeout(onIdle, ms)
-              },
-        cancel: () => {
-            clearTimeout(timer)
-        },
-    }
-}
-
-const INERT_STREAM_DEADLINE = { progress: (): void => {}, cancel: (): void => {} }
 
 interface Slot<Args, T> {
     args: Args
