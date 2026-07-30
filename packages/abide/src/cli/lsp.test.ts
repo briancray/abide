@@ -248,6 +248,97 @@ test('hover returns the TS type at a template position; definition jumps templat
     expect(firstLocation.range.start.line).toBe(1)
 }, 30_000)
 
+// THE CASE TRAP, ON EVERY FEATURE THAT RESOLVES A POSITION.
+//
+// tsgo canonicalizes the path it reports on a case-insensitive filesystem, so a generated module whose
+// name carries uppercase can come back in a different case than it went in — and a case-sensitive lookup
+// then DROPS the result rather than throwing. `abideDiagnostic` owns the keying for exactly that reason,
+// and its header claimed `indexByGeneratedPath` was "the only way" to build the map; it was a comment,
+// and two handlers rebuilt the index inline instead. Re-keying would have fixed diagnostics and left
+// go-to-definition and find-references quietly broken.
+//
+// So this drives all three through ONE uppercase-named component: a feature that starts dropping its
+// results is a red test rather than a silently dead editor feature.
+test('hover, definition and references all resolve on an UPPERCASE-named component', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'abide-lsp-Case-'))
+    cleanupDirs.push(root)
+    writeFileSync(join(root, 'tsconfig.json'), TSCONFIG)
+    // A capitalised FILE name, which is the ordinary spelling for a component, and enough on its own to
+    // make the generated module's path differ in case from what tsgo reports back.
+    const componentPath = join(root, 'src/ui/components/MyWidget.abide')
+    mkdirSync(dirname(componentPath), { recursive: true })
+    const source = '<script>\nconst label: string = "hi"\n</script>\n<p>{label.length}</p>\n'
+    writeFileSync(componentPath, source)
+    const uri = pathToFileURL(componentPath).href
+    const at = { line: 3, character: 6 } // inside `{label.length}`
+
+    const proc = Bun.spawn(['node', LSP], {
+        cwd: root,
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
+    proc.stdin.write(
+        frame({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { rootUri: pathToFileURL(root).href },
+        }) +
+            frame({
+                jsonrpc: '2.0',
+                method: 'textDocument/didOpen',
+                params: { textDocument: { uri, languageId: 'abide', version: 1, text: source } },
+            }) +
+            frame({
+                jsonrpc: '2.0',
+                id: 2,
+                method: 'textDocument/hover',
+                params: { textDocument: { uri }, position: at },
+            }) +
+            frame({
+                jsonrpc: '2.0',
+                id: 3,
+                method: 'textDocument/definition',
+                params: { textDocument: { uri }, position: at },
+            }) +
+            frame({
+                jsonrpc: '2.0',
+                id: 4,
+                method: 'textDocument/references',
+                params: { textDocument: { uri }, position: at },
+            }) +
+            frame({ jsonrpc: '2.0', method: 'exit' }),
+    )
+    proc.stdin.end()
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    const messages = parseFrames(out)
+
+    const hover = messages.find((m) => m.id === 2)?.result as {
+        contents?: { value?: string }
+    } | null
+    expect(hover?.contents?.value ?? '').toContain('string')
+
+    // Both of these go through `declToLocation`, which is where the index was being rebuilt.
+    const definitions = messages.find((m) => m.id === 3)?.result as Array<{
+        uri: string
+        range: { start: { line: number } }
+    }> | null
+    expect(definitions).not.toBeNull()
+    expect(definitions?.[0]?.uri).toBe(uri)
+    expect(definitions?.[0]?.range.start.line).toBe(1)
+
+    const references = messages.find((m) => m.id === 4)?.result as Array<{
+        uri: string
+        range: { start: { line: number } }
+    }> | null
+    expect(references).not.toBeNull()
+    // The script declaration AND the template usage, both mapped back into the `.abide` itself.
+    expect(references?.every((r) => r.uri === uri)).toBe(true)
+    expect((references ?? []).map((r) => r.range.start.line).sort()).toEqual([1, 3])
+}, 30_000)
+
 test('completion returns member entries; signature-help resolves the call parameters', async () => {
     const root = mkdtempSync(join(tmpdir(), 'abide-lsp-'))
     cleanupDirs.push(root)

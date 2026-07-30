@@ -15,7 +15,9 @@
 //      means nothing.
 //
 // So the index and the lookup are ONE thing here, and callers cannot build the map with the wrong
-// keying — `indexByGeneratedPath` is the only way to get a map `resolveAbidePosition` accepts.
+// keying — `indexByGeneratedPath` is the only way to get a map the lookups accept, which is now a TYPE
+// (`GeneratedIndex`, branded) rather than a claim in this comment. It was the claim for a while, and the
+// claim was false; see the note on the brand below.
 // Formatting is deliberately left out: the two lanes emit different diagnostic shapes (a CLI record vs
 // an LSP `Diagnostic`), and that is a real difference, unlike this.
 
@@ -39,14 +41,26 @@ export interface GeneratedModule {
     segments: Segment[]
 }
 
-// Index generated modules for lookup by the path tsgo will report. The ONLY way to build a map
-// `resolveAbidePosition` takes, so trap (1) cannot be reintroduced by a caller keying it directly.
+// A map keyed the way tsgo will report — and BRANDED, so `indexByGeneratedPath` is structurally the only
+// way to produce one. The claim above ("callers cannot build the map with the wrong keying") was a
+// comment, and it was false: the lookups took a bare `Map<string, M>`, so `lsp.ts` rebuilt the index
+// inline — `new Map(modules.map((m) => [m.tsPath.toLowerCase(), m]))` — in two of its handlers, and one of
+// its comments described a sharing of `byTs` that did not exist (the shared one is a `const` inside
+// `refresh()`). Trap (1) fails by DROPPING a result, so re-keying would have fixed diagnostics and left
+// go-to-definition and find-references quietly broken.
+declare const GENERATED_INDEX: unique symbol
+
+export type GeneratedIndex<M extends GeneratedModule> = Map<string, M> & {
+    readonly [GENERATED_INDEX]: true
+}
+
 export function indexByGeneratedPath<M extends GeneratedModule>(
     modules: Iterable<M>,
-): Map<string, M> {
+): GeneratedIndex<M> {
     const index = new Map<string, M>()
     for (const module of modules) index.set(module.tsPath.toLowerCase(), module)
-    return index
+    // The one cast: the brand is a type-level marker with no runtime member, which is what makes it free.
+    return index as GeneratedIndex<M>
 }
 
 // Resolve a raw diagnostic to its `.abide` module and 1-based line/column. `undefined` means "not the
@@ -54,7 +68,7 @@ export function indexByGeneratedPath<M extends GeneratedModule>(
 // the synthetic header. Both are drops, but they are now drops made in one place with a stated reason.
 export function resolveAbidePosition<M extends GeneratedModule>(
     raw: RawDiagnostic,
-    index: Map<string, M>,
+    index: GeneratedIndex<M>,
 ): { module: M; line: number; column: number } | undefined {
     const module = index.get(raw.file.toLowerCase())
     if (module === undefined) return undefined

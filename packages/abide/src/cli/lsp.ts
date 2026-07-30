@@ -25,6 +25,7 @@ import {
 import { API, DiagnosticCategory, SymbolFlags } from 'typescript/unstable/sync'
 import { ABIDE_SEMANTIC_TOKENS_LEGEND } from '../ui/internal/ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import {
+    type GeneratedIndex,
     indexByGeneratedPath,
     offsetToLineColumn,
     type RawDiagnostic,
@@ -71,6 +72,28 @@ interface LspDiagnostic {
 // A generated check-module for one script-bearing `.abide` (its virtual `.ts` path + the map back).
 // The shared lowering's own record — `abide check` reads exactly the same one.
 type CheckModule = LoweredModule
+
+// ONE POSITION, EVERYTHING THE FIVE HANDLERS CAN ASK ABOUT IT.
+//
+// A `.abide` position resolves to a generated-module offset, and each LSP feature then asks the checker
+// one question at that offset. The four values every question needs (the lowered overlay, the open set,
+// the generated file, the offset) are the SAME four for all five, so the handlers took them as a record
+// and spelled the call each time — which is also how two of them came to rebuild the generated-module
+// index by hand instead of using the one this carries.
+interface PositionQuery {
+    module: CheckModule
+    // Built by `indexByGeneratedPath` — the only producer of the branded type `declToLocation` accepts.
+    index: GeneratedIndex<CheckModule>
+    type(): { type: string; documentation: string; start: number; end: number } | null
+    definitions(): Array<{ file: string; pos: number; end: number }>
+    references(): Array<{ file: string; pos: number; end: number }>
+    completions(): ReturnType<LspEngine['completionsAt']>
+    signature(): {
+        label: string
+        parameters: Array<{ label: string }>
+        activeParameter: number
+    } | null
+}
 
 interface ParseError {
     line: number
@@ -508,17 +531,15 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
     }
 
     // Lower the project with current buffers and map a request's `.abide` (line, character) to the
-    // generated-module offset it corresponds to. Null when off an open doc or on a non-mapped (synthetic)
-    // span. `open` is the open docs' generated modules (the checker's `openFiles`).
-    const resolvePosition = (
-        params: unknown,
-    ): {
-        files: Record<string, string>
-        modules: CheckModule[]
-        module: CheckModule
-        gen: number
-        open: string[]
-    } | null => {
+    // generated-module offset it corresponds to, as a QUERY over that position. Null when off an open doc
+    // or on a non-mapped (synthetic) span.
+    //
+    // The five position handlers used to take a data record and each spell the same ritual: re-check
+    // `engine !== null` (already checked here, repeated only because tsc cannot narrow a closure) and pass
+    // `target.files, target.open, target.module.tsPath, target.gen` verbatim. Two of them ALSO rebuilt the
+    // generated-module index inline, which is the drift `abideDiagnostic`'s brand now makes
+    // unrepresentable — it is built here, once, by the one function allowed to.
+    const resolvePosition = (params: unknown): PositionQuery | null => {
         if (engine === null) return null
         const path = documentPath(params)
         const position = (params as { position?: { line: number; character: number } } | undefined)
@@ -536,12 +557,17 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
             gen = previous === -1 ? -1 : previous + 1
         }
         if (gen === -1) return null
+        const open = modules.filter((m) => openDocs.has(m.abidePath)).map((m) => m.tsPath)
+        const at = engine
+        const file = module.tsPath
         return {
-            files,
-            modules,
             module,
-            gen,
-            open: modules.filter((m) => openDocs.has(m.abidePath)).map((m) => m.tsPath),
+            index: indexByGeneratedPath(modules),
+            type: () => at.typeAt(files, open, file, gen),
+            definitions: () => at.definitionAt(files, open, file, gen),
+            references: () => at.referencesAt(files, open, file, gen),
+            completions: () => at.completionsAt(files, open, file, gen),
+            signature: () => at.signatureAt(files, open, file, gen),
         }
     }
 
@@ -582,7 +608,7 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
     // `byTs` is keyed lowercase — tsgo canonicalizes `handle.path` on a case-insensitive filesystem.
     const declToLocation = (
         decl: { file: string; pos: number; end: number },
-        byTs: Map<string, CheckModule>,
+        byTs: GeneratedIndex<CheckModule>,
     ): object | null => {
         const module = byTs.get(decl.file.toLowerCase())
         if (module !== undefined) {
@@ -683,13 +709,8 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
             case 'textDocument/hover': {
                 const target = resolvePosition(message.params)
                 let result: object | null = null
-                if (target !== null && engine !== null) {
-                    const info = engine.typeAt(
-                        target.files,
-                        target.open,
-                        target.module.tsPath,
-                        target.gen,
-                    )
+                if (target !== null) {
+                    const info = target.type()
                     if (info !== null) {
                         const value = `\`\`\`typescript\n${info.type}\n\`\`\`${info.documentation ? `\n\n${info.documentation}` : ''}`
                         // Map the hovered token's generated span back to the `.abide` so the editor
@@ -717,18 +738,10 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
             case 'textDocument/definition': {
                 const target = resolvePosition(message.params)
                 let result: object[] | null = null
-                if (target !== null && engine !== null) {
-                    const byTs = new Map(
-                        target.modules.map((m) => [m.tsPath.toLowerCase(), m] as const),
-                    )
+                if (target !== null) {
                     const locations: object[] = []
-                    for (const decl of engine.definitionAt(
-                        target.files,
-                        target.open,
-                        target.module.tsPath,
-                        target.gen,
-                    )) {
-                        const location = declToLocation(decl, byTs)
+                    for (const decl of target.definitions()) {
+                        const location = declToLocation(decl, target.index)
                         if (location !== null) locations.push(location)
                     }
                     if (locations.length > 0) result = locations
@@ -739,16 +752,8 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
             case 'textDocument/completion': {
                 const target = resolvePosition(message.params)
                 let result: object | null = null
-                if (target !== null && engine !== null) {
-                    result = {
-                        isIncomplete: false,
-                        items: engine.completionsAt(
-                            target.files,
-                            target.open,
-                            target.module.tsPath,
-                            target.gen,
-                        ),
-                    }
+                if (target !== null) {
+                    result = { isIncomplete: false, items: target.completions() }
                 }
                 send({ jsonrpc: '2.0', id: message.id, result })
                 return false
@@ -756,13 +761,8 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
             case 'textDocument/signatureHelp': {
                 const target = resolvePosition(message.params)
                 let result: object | null = null
-                if (target !== null && engine !== null) {
-                    const info = engine.signatureAt(
-                        target.files,
-                        target.open,
-                        target.module.tsPath,
-                        target.gen,
-                    )
+                if (target !== null) {
+                    const info = target.signature()
                     if (info !== null)
                         result = {
                             signatures: [{ label: info.label, parameters: info.parameters }],
@@ -776,17 +776,9 @@ export async function lspServer(options: LspServerOptions): Promise<void> {
             case 'textDocument/references': {
                 const target = resolvePosition(message.params)
                 const result: object[] = []
-                if (target !== null && engine !== null) {
-                    const byTs = new Map(
-                        target.modules.map((m) => [m.tsPath.toLowerCase(), m] as const),
-                    )
-                    for (const reference of engine.referencesAt(
-                        target.files,
-                        target.open,
-                        target.module.tsPath,
-                        target.gen,
-                    )) {
-                        const location = declToLocation(reference, byTs)
+                if (target !== null) {
+                    for (const reference of target.references()) {
+                        const location = declToLocation(reference, target.index)
                         if (location !== null) result.push(location)
                     }
                 }
