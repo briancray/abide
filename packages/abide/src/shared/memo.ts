@@ -70,6 +70,7 @@ import {
     sharedStore,
 } from './internal/sharedCache.ts'
 import { createSlotIndex } from './internal/slotIndex.ts'
+import { isRetentionStale, type RetainedKind, stampRetained } from './internal/slotRetention.ts'
 import { armStreamDeadline } from './internal/streamDeadline.ts'
 import { tagStreamTranscript } from './internal/streamTranscript.ts'
 import { withDeadline } from './internal/withDeadline.ts'
@@ -724,20 +725,21 @@ export function memo<Args, T>(
         return slotIndex.select(slots(), selector, selector !== undefined)
     }
 
+    // The LOADING path's view of retention: read what `slot.state` is holding, then ask the one predicate
+    // (`internal/slotRetention.ts`). The stream rule is the interesting translation — an OPEN stream is
+    // retained whatever the ttl, and a CLOSED one runs the ttl clock from CLOSE, which is already true of
+    // the stamp (`loadedAt` is written when the ReplayableStream settles, not when `fn` resolved).
     function isExpired(slot: Slot<Args, T>): boolean {
-        // Checked before the ttl short-circuit: a deadline expires a slot regardless of retention policy.
-        if (slot.expired) return true
-        if (ttl === Infinity) return false
+        return isRetentionStale(slot, ttl, retainedByState(slot))
+    }
+
+    function retainedByState(slot: Slot<Args, T>): RetainedKind {
         const state = slot.state.untracked()
         if (state.status === 'stream') {
-            // An OPEN stream is retained regardless of ttl (§2); a CLOSED one expires on the ttl-from-close
-            // clock (`loadedAt` is stamped when the ReplayableStream settles, not when `fn` resolved).
             const stream = state.stream
-            if (stream === undefined || !stream.settled) return false
-            return Date.now() - slot.loadedAt >= ttl
+            return stream !== undefined && stream.settled ? 'value' : 'openStream'
         }
-        if (state.status !== 'value' && state.status !== 'error') return false
-        return Date.now() - slot.loadedAt >= ttl
+        return state.status === 'value' || state.status === 'error' ? 'value' : 'nothing'
     }
 
     // Writing a state that is observably identical to the current one must not wake anybody. The cell
@@ -1111,10 +1113,11 @@ export function memo<Args, T>(
     // Guarded on `ttl !== Infinity` FIRST so the default derivation — every `memo(() => …)` with no
     // retention named — pays one number compare and never reads the clock on its hottest path.
     function autoExpire(slot: Slot<Args, T>, auto: AutoBacking<T>): void {
-        if (ttl === Infinity || !auto.filled()) return
-        const now = Date.now()
-        if (now - slot.loadedAt < ttl) return
-        slot.loadedAt = now
+        // `auto.filled()` is this path's "what is retained": the backing has produced a value, which
+        // `slot.state` does not show because the auto path leaves it idle. Everything after that — the
+        // `Infinity` short-circuit, the clock, the deadline flag — is the shared predicate's.
+        if (!isRetentionStale(slot, ttl, auto.filled() ? 'value' : 'nothing')) return
+        stampRetained(slot)
         autoRefill(auto, false)
     }
 
