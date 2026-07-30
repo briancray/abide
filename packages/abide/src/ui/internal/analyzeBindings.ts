@@ -44,6 +44,7 @@ import type { SyntaxKind } from 'typescript/unstable/ast'
 import type { Root, Script, TemplateNode } from './ast.ts'
 import { SCOPE_PROVIDED_SPECIFIERS } from './SCOPE_PROVIDED.ts'
 import { matchingBracket, splitParams, topLevelIndexOf } from './scanText.ts'
+import { childListsOf } from './templateChildren.ts'
 import {
     analyzeBraces,
     type BraceInfo,
@@ -1592,43 +1593,19 @@ function walkNestedScripts(
         childCells = { cells, memos }
     }
 
-    const block = (children: TemplateNode[]): void =>
-        walkNestedScripts(children, 'block', childCells, lexical, collect)
-    const inline = (children: TemplateNode[]): void =>
-        walkNestedScripts(children, 'element', childCells, lexical, collect)
-
+    // WHERE the children are is `templateChildren.ts`'s table; what this walk does with each list is its
+    // own. `site` is the one thing it needs from there: an element's or component's children (and the
+    // whitespace gap before the first `{:case}`) are folded into the PARENT level, so they cannot host a
+    // branch-local `<script>`, while every block body becomes its own level and can.
     for (const node of nodes) {
-        switch (node.type) {
-            case 'Element':
-            case 'Component':
-                inline(node.children)
-                break
-            case 'IfBlock':
-                for (const branch of node.branches) block(branch.children)
-                break
-            case 'ForBlock':
-                block(node.children)
-                if (node.catch !== null) block(node.catch.children)
-                break
-            case 'AwaitBlock':
-                block(node.pending)
-                if (node.then !== null) block(node.then.children)
-                if (node.catch !== null) block(node.catch.children)
-                if (node.finally !== null) block(node.finally.children)
-                break
-            case 'SwitchBlock':
-                // `leading` is the gap between `{#switch}` and the first `{:case}` — whitespace, not a body.
-                inline(node.leading)
-                for (const arm of node.cases) block(arm.children)
-                break
-            case 'TryBlock':
-                block(node.children)
-                if (node.catch !== null) block(node.catch.children)
-                if (node.finally !== null) block(node.finally.children)
-                break
-            case 'ComponentBlock':
-                block(node.children)
-                break
+        for (const list of childListsOf(node)) {
+            walkNestedScripts(
+                list.nodes,
+                list.site === 'inline' ? 'element' : 'block',
+                childCells,
+                lexical,
+                collect,
+            )
         }
     }
 }

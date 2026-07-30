@@ -27,6 +27,7 @@ import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 import { BRACKETED_POSITIONS } from './SLOT_FOOTPRINT.ts'
 import { escapeHtml } from './serverRuntime.ts'
+import { childListsOf } from './templateChildren.ts'
 
 // The clone skeleton's placeholder for one block/component: the paired anchors with an EMPTY body. The
 // server paints content between them; the claim walk reconciles the two by depth-counting the pair.
@@ -376,40 +377,12 @@ function levelScript(ctx: WalkState, nodes: TemplateNode[]): NestedScript | null
 // Collect every component name declared or imported in this template, at any nesting depth. A nested
 // `{#component}` inside `<Foo>…</Foo>` is a render-prop for Foo but is still defined at the caller's level,
 // so a flat set over the whole tree is the right granularity.
+// Where the children are is `templateChildren.ts`'s table (this walk ignores `site` — a definition
+// counts wherever it appears); what to collect is this function's own.
 function collectComponentNames(nodes: TemplateNode[], into: Set<string>): void {
     for (const node of nodes) {
-        switch (node.type) {
-            case 'ComponentBlock':
-                into.add(node.name)
-                collectComponentNames(node.children, into)
-                break
-            case 'Element':
-            case 'Component':
-                collectComponentNames(node.children, into)
-                break
-            case 'IfBlock':
-                for (const branch of node.branches) collectComponentNames(branch.children, into)
-                break
-            case 'ForBlock':
-                collectComponentNames(node.children, into)
-                if (node.catch !== null) collectComponentNames(node.catch.children, into)
-                break
-            case 'AwaitBlock':
-                collectComponentNames(node.pending, into)
-                if (node.then !== null) collectComponentNames(node.then.children, into)
-                if (node.catch !== null) collectComponentNames(node.catch.children, into)
-                if (node.finally !== null) collectComponentNames(node.finally.children, into)
-                break
-            case 'SwitchBlock':
-                collectComponentNames(node.leading, into)
-                for (const arm of node.cases) collectComponentNames(arm.children, into)
-                break
-            case 'TryBlock':
-                collectComponentNames(node.children, into)
-                if (node.catch !== null) collectComponentNames(node.catch.children, into)
-                if (node.finally !== null) collectComponentNames(node.finally.children, into)
-                break
-        }
+        if (node.type === 'ComponentBlock') into.add(node.name)
+        for (const list of childListsOf(node)) collectComponentNames(list.nodes, into)
     }
 }
 

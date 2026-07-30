@@ -1,6 +1,7 @@
 import { createScanner, SyntaxKind, tokenIsIdentifierOrKeyword } from 'typescript/unstable/ast'
 import type { Root, TemplateNode, TemplateToken, TemplateTokenType } from './ast.ts'
 import { parse } from './parse.ts'
+import { childListsOf } from './templateChildren.ts'
 
 // The LSP's highlight tokens for a `.abide` component. Three passes over the same source, all from the
 // ONE parse walk:
@@ -39,38 +40,12 @@ export function templateSemanticTokens(source: string): TemplateToken[] {
 // Every `<script>` body's [contentStart, contentEnd) — the root scripts and any nested branch-local ones.
 function scriptBodies(nodes: TemplateNode[]): Array<readonly [number, number]> {
     const spans: Array<readonly [number, number]> = []
+    // Where the children are is `templateChildren.ts`'s table (`site` is irrelevant here — a `<script>`
+    // body is highlighted wherever it sits); which node carries a body is this function's own.
     const visit = (list: TemplateNode[]): void => {
         for (const node of list) {
-            switch (node.type) {
-                case 'Script':
-                    spans.push([node.contentStart, node.contentEnd])
-                    break
-                case 'Element':
-                case 'Component':
-                case 'ForBlock':
-                case 'ComponentBlock':
-                    visit(node.children)
-                    if (node.type === 'ForBlock' && node.catch !== null) visit(node.catch.children)
-                    break
-                case 'IfBlock':
-                    for (const branch of node.branches) visit(branch.children)
-                    break
-                case 'AwaitBlock':
-                    visit(node.pending)
-                    if (node.then !== null) visit(node.then.children)
-                    if (node.catch !== null) visit(node.catch.children)
-                    if (node.finally !== null) visit(node.finally.children)
-                    break
-                case 'SwitchBlock':
-                    visit(node.leading)
-                    for (const arm of node.cases) visit(arm.children)
-                    break
-                case 'TryBlock':
-                    visit(node.children)
-                    if (node.catch !== null) visit(node.catch.children)
-                    if (node.finally !== null) visit(node.finally.children)
-                    break
-            }
+            if (node.type === 'Script') spans.push([node.contentStart, node.contentEnd])
+            for (const children of childListsOf(node)) visit(children.nodes)
         }
     }
     visit(nodes)
