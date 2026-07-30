@@ -32,6 +32,17 @@ In each case the fix was to make the claim a TYPE rather than a comment: a decla
 rule the next call site restates — and the failure is always silent, because the copy that drifts is the
 copy nobody was looking at.
 
+**Where a type cannot connect the copies, a LANE has to.** `emitCheck`'s `HEADER` declares the check
+lane's `__AbideState`/`__AbideMemo` as TEXT, and `__abideUnwrap`'s overloads resolve by matching the real
+`State`/`SyncMemo` against those shapes — so a renamed member on the real type leaves the shim compiling
+and silently stops the unwrap matching, at which point every bare cell reads as the cell OBJECT and both
+`abide check` and the editor lose their types on the primitive the language is built around. A test that
+declares a TS copy of the shim cannot guard that: it is one more statement of the same shape, and drift
+between it and the string is invisible. The guard is a FIXTURE that goes through the real lane —
+`__fixtures__/app/src/ui/pages/shim/page.abide` reads members off a cell's and a memo's VALUE, so
+`abide check` fails the moment the shapes part company. It was being caught only by the docs app, one
+package away, with nothing pointing at it.
+
 ## Adopted ambient
 
 A value the **server resolved** that the browser **adopts and never mints**.
@@ -227,6 +238,15 @@ So the per-slot verbs are functions — `slotPending` / `slotRefreshing` / `slot
 `dropSlot`, which already was one and is why the aggregate built on it had no bug — and the callable's
 probes and the tag aggregates both call them.
 
+**Retention is the same shape of question** (`shared/internal/slotRetention.ts`): "is this slot stale?" had
+two predicates over one stamp, because the two fill paths hold the value somewhere different — `isExpired`
+reads `slot.state`, and the auto path leaves that idle, so `autoExpire` compared `loadedAt` itself. What
+differs is not the question but WHAT THE SLOT IS HOLDING, which each caller already knows, so that is the
+argument and there is one predicate. Its clock is a defaulted PARAMETER rather than a module-level holder a
+test swaps: a default holding the function (`clock = Date.now`) is a reference and not a call, so the
+`Infinity` short-circuit still reads no clock, while a global a test mutates outlives the file that set it
+and leaves the next file in the process asserting nothing.
+
 The other axis a fill path has is TRACKING, and it is a **parameter, not a reason to restate a rule**:
 `runFillBody(call, untracked)` is the single statement of fail-closed checkpoint (a) (a `crossRequest`
 body runs scope-exited on every path, so it cannot bake one caller's identity into a shared value). It
@@ -251,6 +271,14 @@ comes first, and each time one was stated twice the two drifted:
 The rule is the same both times: the two substrates share the classification and keep the ACTION. A
 boolean bind therefore takes the property it mirrors as a parameter — an `<input>` carries the state on
 `.checked`, an `<option>` on `.selected` — which is also why `selected` cannot be folded into `checked`.
+
+**Which side am I on is TWO questions, and they disagree under test on purpose.** `isBrowser` asks whether
+a `window` exists and gates server-only machinery (the request scope, the shared cache); `hasDom` asks
+whether a `document` does and gates DOM-shaped capability (whether `state.shared` may keep a process-wide
+registry and sync it across tabs). `test/happydom.ts` installs happy-dom's globals and then deletes
+`window`, which is what makes the cross-tab tests reachable and every `isBrowser` gate take its server
+branch. The cost is the other half — a branch only the *other* side can reach needs a child process to
+test it (`log.test.ts` for the browser half, `state.test.ts`'s no-DOM probe for the server half).
 
 ## Client artifact
 

@@ -29,7 +29,6 @@ import { CSRF_HEADER } from '../shared/internal/CSRF_HEADER.ts'
 import { HEALTH_ROUTE } from '../shared/internal/HEALTH_ROUTE.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { parseMuxFrame } from '../shared/internal/parseMuxFrame.ts'
-import { RPC_QUERY_PARAMS } from '../shared/internal/RPC_QUERY_PARAMS.ts'
 import { rpcUrl } from '../shared/internal/rpcUrl.ts'
 import { SOCKETS_ROUTE } from '../shared/internal/SOCKETS_ROUTE.ts'
 import { subscriptionKey } from '../shared/internal/subscriptionKey.ts'
@@ -275,11 +274,14 @@ function bind(
                 const method = route?.__rpc.method ?? 'POST'
                 let response: Response
                 if (read) {
-                    const query =
-                        args !== undefined
-                            ? `?${RPC_QUERY_PARAMS.args}=${encodeURIComponent(JSON.stringify(args))}`
-                            : ''
-                    response = await doFetch(`${rpcUrl('', property)}${query}`, { method })
+                    // Through `rpcUrl`, which exists so a fifth caller does not rediscover the query
+                    // encoding — this one rebuilt the `__abide_args` blob inline while importing the
+                    // helper on the next line, so the test app was the fifth statement of a wire format
+                    // whose other half is the router's `decodeQueryArgs`.
+                    response = await doFetch(
+                        args === undefined ? rpcUrl('', property) : rpcUrl('', property, { args }),
+                        { method },
+                    )
                 } else if (args instanceof FormData) {
                     // TODO #8 multipart upload: send the FormData as the raw body (fetch sets the boundary)
                     // with the `x-abide` header so the CSRF gate admits it — no content-type header.
