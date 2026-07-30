@@ -671,17 +671,32 @@ export function memo<Args, T>(
         return undefined
     }
 
-    // Run `fn` for the KEYED SYNC path — untracked (its args are the whole dependency set) and, when the
-    // value is destined for the shared store, scope-exited. The other two paths carry the same rule at
-    // their own call sites, because each needs a different half of it: the classic path wraps a promise
-    // (`exitScope(runLoad)`), and the auto backing must stay tracked, so it exits the scope alone.
+    // FAIL-CLOSED CHECKPOINT (a), rpc-core §2 — ONE statement, for all three fill paths.
     //
-    // Fail-closed checkpoint (a) is not a property of the ASYNC path, it is a property of `crossRequest`:
-    // a handler whose value outlives the request must not be able to read that request's ambients, or the
-    // first caller's identity is what every later caller gets served. Both sync paths reach the shared
-    // store now, so both owe the same isolation.
-    function runBody<R>(call: () => R): R {
-        if (!crossRequest) return untrack(call)
+    // A `crossRequest` body must not be able to read the calling request's ambients: its value outlives
+    // that request and is served to every later caller, so an `identity()` read inside it would bake the
+    // first caller's principal into what everyone else gets. `exitScope` clears the AsyncLocalStorage
+    // request scope, so those ambients THROW and the value is identity-free by construction — the read
+    // rejects rather than caching something user-specific, in dev and in prod alike.
+    //
+    // This is a property of `crossRequest`, not of the async path, and `CLAUDE.md` promises the strong
+    // form: "a crossRequest body runs scope-exited on EVERY path". It used to be written out three times
+    // — here, `startLoad`'s `crossRequest ? exitScope(runLoad) : runLoad()`, and the auto backing's
+    // `crossRequest ? exitScope(() => fn(slot.args)) : fn(slot.args)` — because each path needs a
+    // different answer on the OTHER axis, tracking. That axis is a parameter, not a reason to restate a
+    // security invariant: two of the three statements had no test (every fail-closed test in
+    // `sharedCache.test.ts` uses an `async` body, i.e. the loading path), so a refactor of either sync
+    // path was one deletion away from silently caching a per-user value, with nothing in any VALUE to
+    // show it.
+    //
+    // `untracked` is what differs, and why differs per caller: the KEYED SYNC path untracks because its
+    // args are the whole dependency set; the LOADING path does not, because its caller already did
+    // (`c()` wraps `coalescedLoad` in `untrack`); the AUTO backing must not, because reading its body is
+    // how the memo learns its inputs — reactive tracking is a separate stack from the request scope, so
+    // the ambients throw while the dependency edges are still recorded.
+    function runFillBody<R>(call: () => R, untracked: boolean): R {
+        if (!crossRequest) return untracked ? untrack(call) : call()
+        if (!untracked) return exitScope(call)
         return exitScope(() => untrack(call))
     }
 
@@ -699,7 +714,7 @@ export function memo<Args, T>(
     // carried it, so a cron job could refresh a slot it was forbidden to read.
     //
     // Checkpoint (a) is the real fail-closed property and is untouched: a crossRequest body runs
-    // scope-exited (`runBody`, and `exitScope(runLoad)` on the async path), so it cannot read
+    // scope-exited on every fill path (`runFillBody`), so it cannot read
     // `identity()`/`cookies()`/`request()`/`context()` and the value it produces is identity-free by
     // construction. Nothing user-specific is in the store to serve to an ungated reader.
 
@@ -856,11 +871,10 @@ export function memo<Args, T>(
                 }
             })()
 
-        // Fail-closed checkpoint (a), rpc-core §2: a crossRequest handler runs OUTSIDE the request scope, so
-        // identity()/cookies()/request()/context() throw if it touches request scope → the read rejects
-        // (error slot) and the value is never cached, in dev AND prod. A nested non-shared memo lands in
-        // the neutral default scope. Non-shared memos keep running in the ambient scope.
-        const promise = crossRequest ? exitScope(runLoad) : runLoad()
+        // Fail-closed checkpoint (a) — see `runFillBody`. Not untracked here: the caller already is
+        // (`c()` wraps `coalescedLoad`). A nested non-shared memo lands in the neutral default scope;
+        // non-shared memos keep running in the ambient scope.
+        const promise = runFillBody(runLoad, false)
 
         slot.inflight = promise
         return promise
@@ -969,11 +983,9 @@ export function memo<Args, T>(
             ranOnce = true
             let produced: Promise<T> | T
             try {
-                // Same fail-closed isolation as the other two paths, but NOT via `runBody`: this body must
-                // stay TRACKED, since reading it is how the memo learns its inputs. `exitScope` clears the
-                // AsyncLocalStorage request scope only — reactive tracking is a separate stack — so the
-                // ambients throw while the dependency edges are still recorded.
-                produced = crossRequest ? exitScope(() => fn(slot.args)) : fn(slot.args)
+                // Fail-closed checkpoint (a) — see `runFillBody`. TRACKED, because reading this body is
+                // how the memo learns its inputs.
+                produced = runFillBody(() => fn(slot.args), false)
             } catch (caught) {
                 return {
                     run: runs,
@@ -1392,7 +1404,7 @@ export function memo<Args, T>(
 
         let produced: Promise<T> | T
         try {
-            produced = runBody(() => fn(slot.args))
+            produced = runFillBody(() => fn(slot.args), true)
         } catch (caught) {
             keyedSync = true
             slot.loadedAt = Date.now()

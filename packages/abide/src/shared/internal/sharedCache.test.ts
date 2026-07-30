@@ -173,6 +173,77 @@ describe('fail-closed checkpoint (a) — handler isolation', () => {
     })
 })
 
+// CHECKPOINT (a) ACROSS ALL THREE FILL MODES. `CLAUDE.md` promises the strong form — "a crossRequest
+// body runs scope-exited on EVERY path" — and a slot has three ways to fill: the loading path, a KEYED
+// SYNC body (`memo(({n}) => …)`, which is what every `GET(({n}) => …, { memo: { crossRequest: true } })`
+// produces), and an argless AUTO-TRACKED derivation.
+//
+// Every other fail-closed test in this file uses an `async` body, so it exercises the loading path and
+// only the loading path. The rule was written out once per path, and two of the three statements were
+// unguarded — a refactor of either sync path was one deletion away from caching a per-user value in the
+// process-global store, with nothing in any VALUE to show it. The rule has one statement now
+// (`runFillBody`); this is the matrix that holds it to all three.
+//
+// The two sync modes fail SYNCHRONOUSLY rather than as a rejected promise, which is the point of asking
+// each mode in its own terms: `rejects.toThrow` would pass vacuously on a body that never returns one.
+describe('fail-closed checkpoint (a) — every fill mode, not just the loading path', () => {
+    test('a KEYED SYNC body cannot read request scope, and caches nothing', () => {
+        const c = memo(({ n }: { n: number }) => `secret-for-${identity().id}-${n}`, {
+            crossRequest: true,
+        })
+        expect(() =>
+            runInScope(makeScope({ identity: { id: 'user-A', authenticated: true } }), () =>
+                c({ n: 1 }),
+            ),
+        ).toThrow(/no active request scope/)
+        expect(hasCachedValue()).toBe(false)
+    })
+
+    test('an AUTO-TRACKED body cannot read request scope, and caches nothing', () => {
+        const c = memo(() => `secret-for-${identity().id}`, { crossRequest: true })
+        expect(() =>
+            runInScope(makeScope({ identity: { id: 'user-B', authenticated: true } }), () => c()),
+        ).toThrow(/no active request scope/)
+        expect(hasCachedValue()).toBe(false)
+    })
+
+    // The full accessor set, on the two modes that had no coverage at all. One shared slot per accessor
+    // per mode, so a mode that leaked only `cookies()` (say) is still visible.
+    for (const [name, read] of [
+        ['identity', () => identity().id],
+        ['request', () => request().url],
+        ['cookies', () => JSON.stringify(cookies().toJSON())],
+        ['context', () => Object.keys(context()).join(',')],
+    ] as const) {
+        test(`keyed sync + auto-tracked both throw on ${name}()`, () => {
+            const keyed = memo(({ n }: { n: number }) => `${read()}${n}`, { crossRequest: true })
+            const auto = memo(() => read(), { crossRequest: true })
+            expect(() => runInScope(makeScope(), () => keyed({ n: 1 }))).toThrow(
+                /no active request scope/,
+            )
+            expect(() => runInScope(makeScope(), () => auto())).toThrow(/no active request scope/)
+            expect(hasCachedValue()).toBe(false)
+        })
+    }
+
+    // The positive half: a body that is pure over its args still caches on the sync paths, so the
+    // isolation is not being achieved by breaking them.
+    test('a pure KEYED SYNC body caches and serves from the shared store', () => {
+        let runs = 0
+        const c = memo(
+            ({ n }: { n: number }) => {
+                runs++
+                return n + 100
+            },
+            { crossRequest: true },
+        )
+        expect(runInScope(makeScope(), () => c({ n: 7 }))).toBe(107)
+        expect(runInScope(makeScope(), () => c({ n: 7 }))).toBe(107)
+        expect(runs).toBe(1)
+        expect(hasCachedValue()).toBe(true)
+    })
+})
+
 // ADR 0026 gate. The fail-closed guarantee is about to stop being maintained by entering and exiting
 // the scope ALS and the reactive scope in lockstep, and start resting on their SLOT-MAP IDENTITY. These
 // cases pin the guarantee itself so the mechanism swap underneath cannot quietly weaken it: every
