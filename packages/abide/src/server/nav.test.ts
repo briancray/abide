@@ -92,7 +92,7 @@ test('a soft-nav request (Abide-Nav header) returns a streamed JSONL envelope of
 // independently and reconciled at runtime, with the client hard-loading on a disagreement.
 test('Abide-Nav-Keep decides the shared-layout depth: a client keeping nothing gets the whole tree', async () => {
     const app = await createTestApp({
-        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        layouts: { '/': '<div class="chrome"><slot/></div>' },
         pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
     })
 
@@ -117,7 +117,7 @@ test('Abide-Nav-Keep decides the shared-layout depth: a client keeping nothing g
 
 test('a declared depth is clamped to the route’s own, and a malformed one falls back to the derivation', async () => {
     const app = await createTestApp({
-        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        layouts: { '/': '<div class="chrome"><slot/></div>' },
         pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
     })
 
@@ -149,7 +149,7 @@ test('a declared depth is clamped to the route’s own, and a malformed one fall
 // yet claimed, can keep 0, and the server has no way to know that.
 test('a client may declare a SHALLOWER keep than the route table permits', async () => {
     const app = await createTestApp({
-        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        layouts: { '/': '<div class="chrome"><slot/></div>' },
         pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
     })
 
@@ -177,7 +177,7 @@ test('a same-pattern nav seeds only the PAGE by default, and the layouts too whe
             body: GET(() => ({ where: 'page' })),
         },
         layouts: {
-            '/': "<script>import chrome from 'abide-rpc:chrome'</script><div>{(await chrome()).where}{children()}</div>",
+            '/': "<script>import chrome from 'abide-rpc:chrome'</script><div>{(await chrome()).where}<slot/></div>",
         },
         pages: {
             '/a': "<script>import body from 'abide-rpc:body'</script><p>{(await body()).where}</p>",
@@ -207,7 +207,7 @@ test('a same-pattern nav seeds only the PAGE by default, and the layouts too whe
 
 test('a nav response varies on BOTH nav headers — each picks a different representation', async () => {
     const app = await createTestApp({
-        layouts: { '/': '<div class="chrome">{children()}</div>' },
+        layouts: { '/': '<div class="chrome"><slot/></div>' },
         pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
     })
 

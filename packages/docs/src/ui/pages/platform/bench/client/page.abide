@@ -1,5 +1,6 @@
 <script module>
   import Panel from "$ui/components/Panel.abide"
+  import benchFrontend from "$server/rpc/benchFrontend"
   import benchFrontendClient from "$server/rpc/benchFrontendClient"
   import { state } from "abide/shared/state"
   import { benchBudget } from "@abide/bench/benchBudget"
@@ -11,10 +12,18 @@
     return ns.toFixed(0) + " ns"
   }
 
-  // abide ÷ vanilla — what the framework costs over the same DOM work written by hand.
+  // abide ÷ vanilla — what the framework costs over the same DOM work written by hand. A `†` marks a row
+  // whose ratio is squashed toward 1.00× by the timing loop's own floor (the render bench sets the flag).
   function fmtRatio(row) {
     if (row.ratio === null || row.ratio === undefined) return "—"
-    return row.ratio.toFixed(2) + "×"
+    return row.ratio.toFixed(2) + "×" + (row.nearFloor ? " †" : "")
+  }
+
+  // A bare multiplier, for the two DERIVED tables below: their ratios are computed here from figures this
+  // page measured, rather than carried on a bench row that also knows whether it sat near the floor.
+  function fmtX(value) {
+    if (value === null || value === undefined) return "—"
+    return value.toFixed(2) + "×"
   }
 
   function range(n) {
@@ -158,6 +167,28 @@
     return { nsPerOp: (elapsedMs * 1e6) / batch, iters: batch }
   }
 
+  // HTML parse timing (browser) — the first-load cost that is neither `render` nor `hydrate`: the browser
+  // turning served markup into nodes. `measureHydrate` deliberately keeps it off its clock (a hydrate
+  // figure should be the anchor walk and nothing else), which is exactly why it has to be measured
+  // somewhere: a first-load total that omits it is not a first load, and adopt-vs-build is not a fair
+  // comparison without it, since building the DOM by hand parses no markup at all. Timed for BOTH sides'
+  // markup — abide's carries hydration anchor comments the hand-written string does not, so parsing them
+  // is not the same op. A fresh detached host per iteration: nothing is reused and no layout is triggered.
+  function measureParse(html) {
+    for (let i = 0; i < WARMUP; i++) document.createElement("div").innerHTML = html
+    let iters = 0
+    let totalMs = 0
+    const budget = benchBudget(BUDGET)
+    do {
+      const host = document.createElement("div")
+      const t0 = performance.now()
+      host.innerHTML = html
+      totalMs += performance.now() - t0
+      iters++
+    } while (budget.more(totalMs * 1e6, iters))
+    return { nsPerOp: (totalMs * 1e6) / iters, iters }
+  }
+
   // Adaptive reactive-update timing (browser). A fresh host is mounted OUTSIDE the timed span each round
   // (so mount cost never pollutes the update mean), then a bounded batch of clicks — each a state change
   // flushed to the DOM — is timed as one clock-pair (÷ batch) to blunt the coarse clock. Mirrors the
@@ -201,6 +232,10 @@
   let unmountRows = state([])
   let hydrateRows = state([])
   let updateRows = state([])
+  // Derived tables: adopt-vs-build (both halves measured in this tab) and the whole first load (the
+  // server's render joined to them).
+  let buildAdoptRows = state([])
+  let firstLoadRows = state([])
   let running = state(false)
   let failed = state(false)
 
@@ -215,6 +250,8 @@
     unmountRows = []
     hydrateRows = []
     updateRows = []
+    buildAdoptRows = []
+    firstLoadRows = []
     try {
       const bundle = await benchFrontendClient()
       const url = URL.createObjectURL(new Blob([bundle.js], { type: "text/javascript" }))
@@ -286,7 +323,10 @@
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
 
-      // Hydrate pass — attach to server-rendered HTML (first-load interactivity).
+      // Hydrate pass — attach to server-rendered HTML (first-load interactivity). Alongside the walk it
+      // times the browser's PARSE of both sides' markup (abide's anchored SSR output, and the baseline's
+      // hand-concatenated string built right here from the same scope) — the two figures the derived
+      // tables below are missing, and the reason each of them can carry a vanilla column at all.
       const hydrates = []
       for (const scenario of bundle.scenarios) {
         if (scenario.html === null) continue
@@ -298,14 +338,44 @@
         if (entry === undefined || scope === undefined)
           throw new Error("bench scenario has no compiled entry or client scope, add it to scopesFor — " + scenario.name)
         const { nsPerOp, iters } = measureHydrate(entry.hydrate, scenario.html, scope)
+        const parse = measureParse(scenario.html)
+        const baseline = mod.VANILLA_BASELINES[scenario.name]
+        const vanillaHtml = baseline && baseline.render ? await baseline.render(scope()) : null
+        const vanillaParse = vanillaHtml === null ? null : measureParse(vanillaHtml)
         hydrates.push({
           name: scenario.name,
           nsPerOp,
           iters,
           rows: scenario.rows,
           nsPerRow: scenario.rows ? nsPerOp / scenario.rows : null,
+          parseNsPerOp: parse.nsPerOp,
+          vanillaParseNsPerOp: vanillaParse ? vanillaParse.nsPerOp : null,
         })
         hydrateRows = [...hydrates]
+
+        // Derived, measured nowhere new: the same scenario's `mount` figure from the pass above, next to
+        // the adopt path. Two ratios, because there are two questions. `hydrate ÷ mount` is abide against
+        // itself — is adopting cheaper than building? — and both numbers came out of this tab minutes
+        // apart, so it is the clean one. `adopt ÷ vanilla build` is the STRATEGY comparison, and the
+        // closest thing hydrate has to a hand-written baseline: ship SSR markup and walk it, versus ship
+        // none and build the DOM with `createElement`. It is honest only because `parse` is in the
+        // numerator — the adopt path pays for markup the build path never sends.
+        const mounted = mounts.find((m) => m.name === scenario.name)
+        if (mounted === undefined)
+          throw new Error("hydrated a scenario the mount pass never measured — the two corpora have drifted: " + scenario.name)
+        const adoptNsPerOp = parse.nsPerOp + nsPerOp
+        buildAdoptRows = [
+          ...buildAdoptRows,
+          {
+            name: scenario.name,
+            mountNsPerOp: mounted.nsPerOp,
+            hydrateNsPerOp: nsPerOp,
+            parseNsPerOp: parse.nsPerOp,
+            adoptNsPerOp,
+            hydrateOverMount: nsPerOp / mounted.nsPerOp,
+            adoptOverVanillaBuild: mounted.vanillaNsPerOp === null ? null : adoptNsPerOp / mounted.vanillaNsPerOp,
+          },
+        ]
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
 
@@ -334,6 +404,43 @@
         })
         updateRows = [...updates]
         await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+
+      // First-load pass — the one half of a first paint this tab cannot time itself: the server's
+      // `render`. Rather than a second copy of that loop, it drains the SAME streaming rpc the
+      // /platform/bench page drives (abide's render and the baseline's string concat, both timed on the
+      // server) and joins each row to the parse + hydrate figures measured above by scenario name. Runs
+      // LAST on purpose: an in-flight fetch resolving inside a timed batch is jitter, and every browser
+      // figure it needs is already collected by here.
+      //
+      // `invalidate` first because the browser memo is a tab-lifetime cache: without it a second click
+      // would replay the FIRST run's transcript and pair stale render numbers with fresh hydrate ones.
+      benchFrontend.invalidate()
+      const firstLoads = []
+      for await (const row of benchFrontend()) {
+        const hydrated = hydrates.find((h) => h.name === row.name)
+        // Both corpora are filtered by the same `server !== false` predicate, so a name in one and not the
+        // other is real drift, not a scenario that opted out.
+        if (hydrated === undefined)
+          throw new Error("the render corpus timed a scenario the hydrate pass never saw — the two have drifted: " + row.name)
+        const totalNsPerOp = row.nsPerOp + hydrated.parseNsPerOp + hydrated.nsPerOp
+        // The hand-written first load: its own string build, then the browser parsing ITS markup (no
+        // anchors), and then nothing — an inert page has no bindings to wire.
+        const vanillaTotalNsPerOp =
+          row.vanillaNsPerOp === null || hydrated.vanillaParseNsPerOp === null
+            ? null
+            : row.vanillaNsPerOp + hydrated.vanillaParseNsPerOp
+        firstLoads.push({
+          name: row.name,
+          renderNsPerOp: row.nsPerOp,
+          parseNsPerOp: hydrated.parseNsPerOp,
+          hydrateNsPerOp: hydrated.nsPerOp,
+          totalNsPerOp,
+          vanillaTotalNsPerOp,
+          ratio: vanillaTotalNsPerOp === null ? null : totalNsPerOp / vanillaTotalNsPerOp,
+          nearFloor: row.nearFloor,
+        })
+        firstLoadRows = [...firstLoads]
       }
     } catch {
       failed = true

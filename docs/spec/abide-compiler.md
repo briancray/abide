@@ -76,10 +76,37 @@ navigation**.
 1. **Reactive destructured props.** `const { name = fallback, ...rest } = props()` —
    reads compile to §7 state reads; parent `name={expr}` change updates the child; defaults
    apply on absent/`undefined`; `...rest` is a reactive collection.
-2. **One default slot — `<slot/>`** (renders the default children; `{children()}` is the equivalent
-   interpolation form); **no named slots.** Fallback = `{#if children}<slot/>{:else}…{/if}`. Named-slot /
-   render-prop needs are met by **inline components passed as props** (a nested `{#component}` inside
-   `<Foo>` becomes Foo's same-named prop).
+2. **One default slot — `<slot/>`**, and that is its ONLY spelling; **no named slots.** `children` is a
+   RESERVED template name — it is what the outlet resolves off the scope (`pushChildrenSlot`) — so a
+   FREE `children` in any expression position is a compile error naming `<slot/>`, in one gate both lanes
+   ask (`rewriteExpr`, the funnel every interpolation / attribute value / block head passes through).
+   Two things this retracts, for the same reason:
+   - **`{children()}`** was advertised as an equivalent interpolation form. It was a carve-out from the
+     law stated for components one clause down — an interpolation renders TEXT, and an outlet renders a
+     SUBTREE, so it is a tag for exactly the reason `{Name(…)}` is not one. `emitCheck` declared a
+     `children` intrinsic to make the carve-out type-check, which is the only reason it looked supported.
+   - **Fallback via `{#if children}<slot/>{:else}…{/if}`** cannot work and never did. A function is
+     always truthy, and a childless caller passes a FUNCTION: the outlet lowers to a component invocation
+     of whatever it is handed, so a childless `<Name/>` passes the shared empty children factory
+     (`emptyChildren`) rather than nothing. The `{:else}` branch was therefore unreachable on the server,
+     and the check lane agreed — it declared the intrinsic `() => unknown`, not optional. Fallback content
+     inside `<slot>…</slot>` is parsed and ignored, and is where this belongs if it is built.
+
+   That `emptyChildren` is a contract both lanes now spell, not a default each picked: `serverRuntime`'s
+   returns an empty `Raw`, `runtime`'s an empty `Mountable`, one shared instance each (nothing about
+   either is per-call). The client used to pass `null`, which reached `$rt.component` as a non-function
+   and threw `<children> is not a component in scope` on hydrate for EVERY childless `<slot/>` while the
+   server rendered correct HTML — and, because an inline component's adapter installs children as
+   `if (typeof $args[1] === "function")`, left `$s.children` unset on an `Object.create($scope)` scope, so
+   a childless inline component nested in a component that DID receive children rendered the OUTER ones.
+   An output-comparing test cannot see either: only one lane throws, and the other lane's HTML is right.
+
+   A block-bound `children` is reserved too, which is not over-reach: a `{#for children of …}` item is
+   published on the same `$scope` chain the outlet reads, so inside that body `<slot/>` would render the
+   ITEM. An author's own LEXICAL `children` (a `<script>` binding, an inline-component param) stays
+   lexical in the emit, never touches `$scope`, and is untouched. Named-slot / render-prop needs are met
+   by **inline components passed as props** (a nested `{#component}` inside `<Foo>` becomes Foo's
+   same-named prop).
 3. **Inline components** — `{#component Row(props, children)}…{/component}` (TitleCase; a lowercase name
    is a parse error — lowercase is reserved for element tags) invoked as a tag `<Row/>`; compile to
    fragment-builder (client) / string-builder

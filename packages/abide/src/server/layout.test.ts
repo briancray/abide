@@ -1,5 +1,5 @@
 // TODO #7 — layout.abide wiring. A `layout.abide` at a directory wraps the pages at/below it, nested
-// layouts compose outer→inner, and the page renders where a layout calls `{children()}`. Covers SSR
+// layouts compose outer→inner, and the page renders where a layout calls `<slot/>`. Covers SSR
 // composition (server), the hydration-seed record inside layouts, layout param/route() access, the
 // isomorphic client compose+hydrate path, and back-compat (a directory with no layout renders bare).
 
@@ -22,10 +22,10 @@ function tick(): Promise<void> {
 }
 
 describe('SSR — layout composition', () => {
-    test('a root layout with {children()} wraps a page', async () => {
+    test('a root layout with <slot/> wraps a page', async () => {
         const app = await createTestApp({
             pages: { '/': '<p>page body</p>' },
-            layouts: { '/': '<div class="chrome"><nav>NAV</nav>{children()}</div>' },
+            layouts: { '/': '<div class="chrome"><nav>NAV</nav><slot/></div>' },
         })
 
         const body = stripAnchors(await (await app.fetch('/')).text())
@@ -38,8 +38,8 @@ describe('SSR — layout composition', () => {
         const app = await createTestApp({
             pages: { '/admin/users': '<p>USERS</p>' },
             layouts: {
-                '/': '<root>{children()}</root>',
-                '/admin': '<admin>{children()}</admin>',
+                '/': '<root><slot/></root>',
+                '/admin': '<admin><slot/></admin>',
             },
         })
 
@@ -53,7 +53,7 @@ describe('SSR — layout composition', () => {
         const app = await createTestApp({
             // A layout scoped to /admin must NOT wrap a page outside that subtree.
             pages: { '/other': '<p>OTHER</p>' },
-            layouts: { '/admin': '<admin>{children()}</admin>' },
+            layouts: { '/admin': '<admin><slot/></admin>' },
         })
 
         const body = stripAnchors(await (await app.fetch('/other')).text())
@@ -68,7 +68,7 @@ describe('SSR — layout composition', () => {
             routes: { banner: GET(() => 'SALE') },
             pages: { '/': '<p>home</p>' },
             layouts: {
-                '/': "<script>import banner from '../../server/rpc/banner'</script><header>{await banner({})}</header>{children()}",
+                '/': "<script>import banner from '../../server/rpc/banner'</script><header>{await banner({})}</header><slot/>",
             },
         })
 
@@ -90,7 +90,7 @@ describe('SSR — layout composition', () => {
         const app = await createTestApp({
             pages: { '/users/[id]': '<p>page</p>' },
             layouts: {
-                '/': "<script>import { route } from 'abide/shared/route'</script><crumb>{route().params.id}</crumb>{children()}",
+                '/': "<script>import { route } from 'abide/shared/route'</script><crumb>{route().params.id}</crumb><slot/>",
             },
         })
 
@@ -103,11 +103,11 @@ describe('SSR — layout composition', () => {
 })
 
 describe('layout error boundaries + module parity (TODO #7 follow-ups)', () => {
-    test('a layout wrapping {children()} in {#try} contains a throwing inner page (200)', async () => {
+    test('a layout wrapping <slot/> in {#try} contains a throwing inner page (200)', async () => {
         const app = await createTestApp({
             pages: { '/': "<script>throw new Error('page boom')</script><p>never</p>" },
             layouts: {
-                '/': '<root>{#try}{children()}{:catch e}<err>{e.message}</err>{/try}</root>',
+                '/': '<root>{#try}<slot/>{:catch e}<err>{e.message}</err>{/try}</root>',
             },
         })
 
@@ -125,7 +125,7 @@ describe('layout error boundaries + module parity (TODO #7 follow-ups)', () => {
     test("a throwing page with NO {#try} boundary returns a controlled 500 (not Bun's default)", async () => {
         const app = await createTestApp({
             pages: { '/': "<script>throw new Error('unhandled')</script><p>never</p>" },
-            layouts: { '/': '<root>{children()}</root>' },
+            layouts: { '/': '<root><slot/></root>' },
         })
 
         const response = await app.fetch('/')
@@ -139,7 +139,7 @@ describe('layout error boundaries + module parity (TODO #7 follow-ups)', () => {
         // memoized once per emitted module, so both pages must render the SAME stamp — not 1 then 2.
         const key = '__abideT7moduleParity'
         ;(globalThis as Record<string, unknown>)[key] = 0
-        const layout = `<script module>let STAMP = ((globalThis["${key}"]) = (globalThis["${key}"]) + 1)</script><chrome>{STAMP}</chrome>{children()}`
+        const layout = `<script module>let STAMP = ((globalThis["${key}"]) = (globalThis["${key}"]) + 1)</script><chrome>{STAMP}</chrome><slot/>`
         const app = await createTestApp({
             pages: { '/a': '<p>A</p>', '/b': '<p>B</p>' },
             layouts: { '/': layout },
@@ -175,7 +175,7 @@ describe('applicableLayoutPrefixes — discovery + ordering', () => {
 
 describe('client — compose hydrate claims layout + page DOM', () => {
     test('hydrating a composed layout+page claims the same page node and stays reactive', async () => {
-        const layout = await loadEmitted('<div class="chrome"><nav>NAV</nav>{children()}</div>')
+        const layout = await loadEmitted('<div class="chrome"><nav>NAV</nav><slot/></div>')
         const page = await loadEmitted('<p>Page {msg}</p>')
 
         const msg = state('hi')

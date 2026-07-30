@@ -41,7 +41,7 @@
       <div class="row" data-testid="scenario-component">
         <span>Nested component</span>
         {#component Wrap(props)}
-          <span class="rounded border border-slate-200 px-2 py-1">{children()}</span>
+          <span class="rounded border border-slate-200 px-2 py-1"><slot/></span>
         {/component}
         <Wrap>
           <HydrationProbe label="in-component"/>
@@ -52,7 +52,7 @@
         <span>Inline <code>&#123;#component&#125;</code> DEFINED in an <code>&#123;#if&#125;</code> branch</span>
         {#if items.length > 0}
           {#component Boxed()}
-            <span class="rounded border border-slate-200 px-2 py-1">{children()}</span>
+            <span class="rounded border border-slate-200 px-2 py-1"><slot/></span>
           {/component}
           <Boxed><HydrationProbe label="def-in-if"/></Boxed>
         {:else}
@@ -63,7 +63,7 @@
       <div class="row" data-testid="scenario-inline-in-for">
         <span>Inline <code>&#123;#component&#125;</code> invoked inside a <code>&#123;#for&#125;</code></span>
         {#component Slotted()}
-          <span class="rounded border border-slate-200 px-2 py-1">{children()}</span>
+          <span class="rounded border border-slate-200 px-2 py-1"><slot/></span>
         {/component}
         {#for item of items by item}
           <Slotted><HydrationProbe label={"in-for-" + item}/></Slotted>

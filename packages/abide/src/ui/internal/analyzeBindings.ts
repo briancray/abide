@@ -865,15 +865,51 @@ export function rewriteFreeIdentifiers(
     declared: Set<string>,
     scopeVar: string,
 ): string {
+    const sites = freeIdentifierSites(code, declared)
+    if (sites.length === 0) return code
+    let out = ''
+    let cursor = 0
+    for (const site of sites) {
+        out += code.slice(cursor, site.start)
+        // shorthand `{ x }` → `{ x: $scope.x }`; everything else is a plain qualification
+        out += site.shorthand
+            ? `${site.name}: ${scopeVar}.${site.name}`
+            : `${scopeVar}.${site.name}`
+        cursor = site.end
+    }
+    out += code.slice(cursor)
+    return out
+}
+
+// One free identifier that WOULD be qualified onto the scope object, in source order.
+export interface FreeIdentifierSite {
+    name: string
+    start: number
+    end: number
+    // Object-literal shorthand (`{ x }`), which expands to `x: <scopeVar>.x` rather than replacing the
+    // token outright. The two output shapes are why this is a field rather than something the consumer
+    // can re-derive from `name`/`start` alone.
+    shorthand: boolean
+}
+
+// Which identifiers in a template expression are FREE — the twelve-branch decision `rewriteFreeIdentifiers`
+// used to inline. It is extracted because a second consumer needs the same ANSWER without the rewrite:
+// `templatePlan.rewriteExpr` reserves `children` (the outlet's internal scope name) and must reject a
+// template that reaches it, in EVERY expression position rather than only in an interpolation.
+//
+// Asking this rather than matching `/\bchildren\b/` is the whole point: the word appears in string
+// literals, in member accesses (`node.children`), in object keys and in type positions, none of which is
+// a scope reference — and a regex over an expression is precisely the shape of scan this compiler has
+// had to un-write three times (see `scanText.ts`).
+export function freeIdentifierSites(code: string, declared: Set<string>): FreeIdentifierSite[] {
+    const sites: FreeIdentifierSite[] = []
     const tokens = tokenize(code)
-    if (tokens.length === 0) return code
+    if (tokens.length === 0) return sites
     const braces = analyzeBraces(tokens)
     const { enclBraceOpen, isObjectBrace } = braces
     const { declNameIdx, shadows } = buildShadowedBindings(tokens, braces, () => true)
     const typeSkips = markTypeSkips(tokens, braces)
 
-    let out = ''
-    let cursor = 0
     for (let i = 0; i < tokens.length; i++) {
         const t = tokenAt(tokens, i)
         if (!isIdentifierLike(t.kind)) continue
@@ -890,23 +926,15 @@ export function rewriteFreeIdentifiers(
             encl !== -1 &&
             isObjectBrace.has(encl) &&
             (prev === K.OpenBraceToken || prev === K.CommaToken)
+        let shorthand = false
         if (inObjectPosition) {
             const next = tokens[i + 1]?.kind
             if (next === K.ColonToken || next === K.OpenParenToken) continue // property key / method name
-            if (next === K.CommaToken || next === K.CloseBraceToken) {
-                // shorthand `{ x }` → `{ x: $scope.x }`
-                out += code.slice(cursor, t.start)
-                out += `${name}: ${scopeVar}.${name}`
-                cursor = t.end
-                continue
-            }
+            if (next === K.CommaToken || next === K.CloseBraceToken) shorthand = true
         }
-        out += code.slice(cursor, t.start)
-        out += `${scopeVar}.${name}`
-        cursor = t.end
+        sites.push({ name, start: t.start, end: t.end, shorthand })
     }
-    out += code.slice(cursor)
-    return out
+    return sites
 }
 
 // ---------------------------------------------------------------------------

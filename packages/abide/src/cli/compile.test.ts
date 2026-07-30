@@ -56,7 +56,7 @@ async function fixtureProject(): Promise<string> {
         `import { GET } from 'abide/server/GET'\n` +
             `export default GET(({ name = 'world' }) => \`Hello, \${name}!\`)\n`,
     )
-    await Bun.write(join(dir, 'src/ui/pages/layout.abide'), `<main>{children()}</main>`)
+    await Bun.write(join(dir, 'src/ui/pages/layout.abide'), `<main><slot/></main>`)
     await Bun.write(join(dir, 'src/ui/components/Badge.abide'), `<b class="badge">compiled</b>`)
     await Bun.write(
         join(dir, 'src/ui/pages/page.abide'),

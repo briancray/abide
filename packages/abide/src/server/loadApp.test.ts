@@ -39,7 +39,7 @@ describe('loadApp — file-based app loader', () => {
         const layouts = loaded.layouts
         if (layouts === undefined) throw new Error('expected loaded layouts')
         expect(Object.keys(layouts)).toEqual(['/'])
-        expect(layouts['/']).toContain('children()')
+        expect(layouts['/']).toContain('<slot/>')
 
         // The fixture has no `app.ts` — middleware/lifecycle are optional, so the loader defaults
         // middleware to `[]` (app.ts absent → the early-return branch in loadAppModule).

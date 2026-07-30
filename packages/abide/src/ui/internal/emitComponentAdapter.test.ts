@@ -3,7 +3,7 @@
 // Every emitted `.abide` module now carries a trailing `export default` adapter reusing its own
 // `mount`/`render`. This test drives the CLIENT adapter DIRECTLY (not via a consumer page): emit a
 // component source, import its `default`, call it with `(props, childrenFn, parentScope)`, mount the
-// returned Mountable into a happy-dom host, and assert composed output, `{children()}` slot rendering,
+// returned Mountable into a happy-dom host, and assert composed output, `<slot/>` slot rendering,
 // and reference-site prop reactivity. Proves the adapter's calling convention + scope wiring in
 // isolation, independent of the cross-file resolver (PR2).
 
@@ -43,7 +43,7 @@ async function loadClientDefault(source: string): Promise<ComponentAdapter> {
 describe('component default adapter — client', () => {
     const SOURCE =
         `<script>import { props } from "abide/ui/props"; const p = props()</script>` +
-        `<section><span>{p.title}</span><div>{children()}</div></section>`
+        `<section><span>{p.title}</span><div><slot/></div></section>`
 
     test('mounts with props, renders the children slot, and reacts to a reference-site prop change', async () => {
         const adapter = await loadClientDefault(SOURCE)
@@ -53,7 +53,7 @@ describe('component default adapter — client', () => {
         Object.defineProperty(propsObj, 'title', { get: () => title(), enumerable: true })
 
         // The children factory yields a Mountable that inserts a marked text node (mirrors an inline
-        // snippet / component `{children()}` slot on the client).
+        // snippet / component `<slot/>` slot on the client).
         const childrenFn = (): Mountable => ({
             mount(target: Node, anchor: Node | null) {
                 const node = document.createTextNode('KID')
@@ -69,7 +69,7 @@ describe('component default adapter — client', () => {
         const span = host.querySelector('span')
         if (span === null) throw new Error('expected <span>')
         expect(span.textContent).toBe('Hi')
-        // `{children()}` slot rendered inside the component's own <div>.
+        // `<slot/>` slot rendered inside the component's own <div>.
         const slotDiv = host.querySelector('div')
         if (slotDiv === null) throw new Error('expected slot <div>')
         expect(slotDiv.textContent).toBe('KID')

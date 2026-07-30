@@ -58,7 +58,10 @@ export interface CheckModule {
 // `null`), which would false-positive on the very reassignments those slots exist for — widen them back to
 // a permissive type while every concrete init (`state(0)` → number) keeps real inference. `__ref` forces
 // an expression to be type-checked without an unused-expression lint; `__entries` types `{#for item, i}`
-// as `[index, item]`; `children` is the intrinsic slot callable.
+// as `[index, item]`. There is deliberately no `children` intrinsic: the default-children outlet is
+// `<slot/>`, a tag, and `children` is the internal scope name it resolves off — declaring it here typed
+// `{children()}` as legal (and as ALWAYS a function, so `{#if children}` was always true), which is the
+// only reason the interpolation form ever looked supported.
 const HEADER =
     // `untracked()`, not `peek()` (ADR 0027 D2) — this shim must match `shared/internal/reactive.ts`'s
     // real `State`, and `peek` now means the REACTIVE snapshot on `memo`/`channel`, which is cold-safe
@@ -102,7 +105,6 @@ const HEADER =
     `type __AbideNoPromise<__T> = __T extends PromiseLike<unknown> ? { __abide_error: 'this is a Promise — write {await expr} so it types as T' } : unknown;\n` +
     `declare function __text<__T>(value: __T & __AbideNoPromise<__T>): void;\n` +
     `declare function __entries<__T>(list: Iterable<__T> | ArrayLike<__T>): IterableIterator<[number, __T]>;\n` +
-    `declare function children(): unknown;\n` +
     // A component value — the type of a `{#component}`, an imported `.abide`, or a component-valued prop
     // (`{ Row: Component<{ entry: Item }> }`). Invoked as `<Row entry={x}/>` → checked as `Row({entry:x})`.
     `type Component<__P = Record<string, unknown>> = (props: __P, children?: () => unknown) => unknown;\n`

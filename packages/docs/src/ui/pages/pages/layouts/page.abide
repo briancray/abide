@@ -10,7 +10,7 @@
     <p>☝ The indigo frame wrapping this whole page is this layout, live. Its <code>&lt;slot/&gt;</code> is where the page renders.</p>
   </Demo>
   <aside class="aside">
-    <p>A layout renders the level below it — the next layout, or the page — at its <code>&lt;slot/&gt;</code> (the interpolation form is <code>{'{'}children(){'}'}</code>). A layout has no props; like a page it reads the current route with <code>route()</code>.</p>
+    <p>A layout renders the level below it — the next layout, or the page — at its <code>&lt;slot/&gt;</code>, which is the only spelling of the outlet. A layout has no props; like a page it reads the current route with <code>route()</code>.</p>
   </aside>
   <Panel id="layout-nav" title="Layouts stay alive across navigation">
     <div class="row">

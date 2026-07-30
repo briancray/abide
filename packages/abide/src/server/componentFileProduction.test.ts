@@ -34,7 +34,7 @@ const CARD =
     `const { title } = props();` +
     `let count = state(7);` +
     `</script>` +
-    `<section class="card"><h2>CARD_HEADING {title}</h2><Badge /><button onclick={() => count++}>{count}</button><div>{children()}</div></section>`
+    `<section class="card"><h2>CARD_HEADING {title}</h2><Badge /><button onclick={() => count++}>{count}</button><div><slot/></div></section>`
 
 const BADGE = `<span class="badge">BADGE_MARKER</span>`
 

@@ -15,16 +15,27 @@
 // embed source. This module uses the TS7 scanner (through analyzeBindings) and NEVER ships to the browser.
 
 import type { BindingAnalysis, NestedScript } from './analyzeBindings.ts'
-import { type CellBindings, rewriteCellRefs, rewriteFreeIdentifiers } from './analyzeBindings.ts'
+import {
+    type CellBindings,
+    freeIdentifierSites,
+    rewriteCellRefs,
+    rewriteFreeIdentifiers,
+} from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
 import { attributeParts } from './attributeParts.ts'
 import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
+import { BRACKETED_POSITIONS } from './SLOT_FOOTPRINT.ts'
 import { escapeHtml } from './serverRuntime.ts'
 
 // The clone skeleton's placeholder for one block/component: the paired anchors with an EMPTY body. The
 // server paints content between them; the claim walk reconciles the two by depth-counting the pair.
 const BLOCK_SKELETON = `<!--${BLOCK_ANCHOR.open}--><!--${BLOCK_ANCHOR.close}-->`
+
+// Every `childIndex += BRACKETED_POSITIONS` below is paired with a `BLOCK_SKELETON` append, and the two
+// have to agree: the skeleton emits two comment nodes, so the level's child index must advance by two.
+// The number is `SLOT_FOOTPRINT`'s — the same table the client emitter and the hydrate cursor read — so
+// a bracketed slot's cost is stated once rather than at each of these sites.
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -305,7 +316,34 @@ interface LevelResult {
 
 function rewriteExpr(ctx: WalkState, expr: string): string {
     const cellRewritten = rewriteCellRefs(expr, ctx.cellBindings)
+    rejectReservedScopeName(cellRewritten, ctx.declared)
     return rewriteFreeIdentifiers(cellRewritten, ctx.declared, '$scope')
+}
+
+// `children` is the scope name the default-children outlet resolves off (`pushChildrenSlot`), which
+// makes it the compiler's, not the template's. A FREE `children` in any expression position would be
+// qualified onto `$scope` by the rewrite below and hand the template the internal children factory —
+// so `{children()}` rendered a subtree from an interpolation, and `{#if children}` tested a function
+// that a childless site now always supplies. `<slot/>` is the outlet; there is no expression form.
+//
+// Gated on FREE, so an author's own LEXICAL `children` is untouched — a `<script>` binding or an
+// inline-component param is in `declared`, which is exactly the set the rewrite leaves alone. A
+// BLOCK-bound one is not exempt, and that is not over-reach: a `{#for children of …}` item is published
+// on the same `$scope` chain the outlet reads, so inside the loop body `<slot/>` would render the item
+// instead of the children. The name is reserved because the collision is real, and the message says so.
+//
+// This runs in `rewriteExpr`, the one funnel every expression position passes through (interpolation,
+// attribute value, block head), rather than in the interpolation case alone — which is where the sibling
+// `{Name(…)}` rejection still lives, and why `title={children()}` slipped past it.
+function rejectReservedScopeName(expr: string, declared: Set<string>): void {
+    for (const site of freeIdentifierSites(expr, declared)) {
+        if (site.name !== 'children') continue
+        throw new Error(
+            `children is a reserved template name — it is what the default-children outlet resolves ` +
+                `off the scope. Render a component's children with <slot/>; if this is a binding of ` +
+                `your own, rename it.`,
+        )
+    }
 }
 
 // The expression that REACHES a bare binding without reading it — lexical when a script declared it in
@@ -381,6 +419,10 @@ function collectComponentNames(nodes: TemplateNode[], into: Set<string>): void {
 // for it. That form is gone; reject it here, where the component name is known, so the author gets the
 // fix rather than a stray `[object Object]` (the runtime guards in `serverRuntime.renderLeaf` /
 // `runtime.interpolate` catch only the case this cannot see — a component arriving through props).
+// `{children()}` was the same rule with a carve-out: the outlet renders a SUBTREE, so it is a tag for
+// exactly the reason a component is, yet `templatePlan` used to special-case it into a children slot
+// before this check ran. It is now rejected by `rejectReservedScopeName`, which owns the whole `children`
+// name rather than just its call form.
 function rejectComponentCall(ctx: WalkState, expression: string): void {
     for (const name of ctx.componentNames) {
         if (!expression.includes(name)) continue
@@ -607,12 +649,14 @@ function walkLevelNodes(
     const pushHtmlSlot = (expr: string): void => {
         skeleton += `<!--${HTML_ANCHOR.open}--><!--${HTML_ANCHOR.close}-->`
         slots.push({ kind: 'html', path: [childIndex + 1], expr })
-        childIndex += 2
+        childIndex += BRACKETED_POSITIONS
     }
 
-    // The component's single default-children slot — emitted by both `{children()}` and `<slot>`. A
-    // zero-prop, no-body COMPONENT invocation of a `children` component (resolved off `$scope.children`),
-    // reusing the component emit + `$rt.component` runtime path (paired anchors + claimBlock hydration).
+    // The component's single default-children slot — `<slot/>`, the only spelling (the `{children()}`
+    // interpolation form is rejected: see `rejectComponentCall`). A zero-prop, no-body COMPONENT
+    // invocation of a `children` component (resolved off `$scope.children`), reusing the component emit
+    // + `$rt.component` runtime path (paired anchors + claimBlock hydration). `children` is that
+    // internal scope name, not a binding a template may read.
     const pushChildrenSlot = (): void => {
         skeleton += BLOCK_SKELETON
         const emptyBody = subLevel([])
@@ -640,7 +684,7 @@ function walkLevelNodes(
             // composed level records into the ROOT bucket (see compose.childComponent / pages.renderLevel).
             siteId: -1,
         })
-        childIndex += 2
+        childIndex += BRACKETED_POSITIONS
     }
 
     for (const node of nodes) {
@@ -669,15 +713,6 @@ function walkLevelNodes(
                 break
             }
             case 'Interpolation': {
-                // TODO #7: `{children()}` is the layout/component single slot. Emit it as a zero-prop, no-body
-                // COMPONENT invocation of a `children` component (resolved off `$scope.children`) rather than a
-                // text leaf — so it reuses the existing component emit + `$rt.component` runtime path (paired
-                // block anchors + claimBlock hydration). The composer injects `children` into scope as an
-                // isomorphic component wrapping the next level (server: renders it → Raw; client: mounts it).
-                if (node.expression.trim() === 'children()') {
-                    pushChildrenSlot()
-                    break
-                }
                 rejectComponentCall(ctx, node.expression)
                 const expr = rewriteExpr(ctx, node.expression)
                 pushLeaf('interpolation', expr)
@@ -697,7 +732,7 @@ function walkLevelNodes(
                 break
             }
             case 'Element': {
-                // `<slot/>` is the component's default-children outlet — same emission as `{children()}`.
+                // `<slot/>` is the component's default-children outlet, and the only spelling of it.
                 // (Fallback content inside `<slot>…</slot>` is not yet supported and is ignored.)
                 if (node.name === 'slot') {
                     pushChildrenSlot()
@@ -819,7 +854,7 @@ function walkLevelNodes(
                     hasChildren,
                     siteId,
                 })
-                childIndex += 2
+                childIndex += BRACKETED_POSITIONS
                 break
             }
             case 'IfBlock': {
@@ -840,7 +875,7 @@ function walkLevelNodes(
                     kind: 'if',
                     branches: branches.map((b) => ({ expr: b.expr, children: b.sub.server })),
                 })
-                childIndex += 2
+                childIndex += BRACKETED_POSITIONS
                 break
             }
             case 'ForBlock': {
@@ -880,7 +915,7 @@ function walkLevelNodes(
                     hasComponent: bodySub.hasComponent,
                     hasScript: bodySub.hasScript,
                 })
-                childIndex += 2
+                childIndex += BRACKETED_POSITIONS
                 break
             }
             case 'AwaitBlock': {
@@ -924,7 +959,7 @@ function walkLevelNodes(
                     finally: finallySub ? finallySub.server : null,
                     inline: node.inline,
                 })
-                childIndex += 2
+                childIndex += BRACKETED_POSITIONS
                 break
             }
             case 'SwitchBlock': {
@@ -947,7 +982,7 @@ function walkLevelNodes(
                     discriminant,
                     cases: cases.map((c) => ({ expr: c.expr, children: c.sub.server })),
                 })
-                childIndex += 2
+                childIndex += BRACKETED_POSITIONS
                 break
             }
             case 'TryBlock': {
@@ -975,7 +1010,7 @@ function walkLevelNodes(
                             : null,
                     finally: finallySub ? finallySub.server : null,
                 })
-                childIndex += 2
+                childIndex += BRACKETED_POSITIONS
                 break
             }
             case 'ComponentBlock': {

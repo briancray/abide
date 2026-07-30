@@ -88,6 +88,25 @@ export function isMountable(value: unknown): value is Mountable {
     )
 }
 
+// The children factory every CHILDLESS `<Name/>` site passes — the mirror of `serverRuntime.emptyChildren`,
+// and one contract stated on both sides rather than a default each lane picked for itself.
+//
+// It has to be a FUNCTION. `<slot/>` lowers to a component invocation whose componentFn IS
+// `$scope.children` (templatePlan.pushChildrenSlot), so whatever a childless caller passes down is what
+// the outlet is asked to invoke. This lane used to pass `null`, which reached `component()` as a
+// non-function and threw `<children> is not a component in scope` on hydrate for EVERY childless
+// `<slot/>` — while the server, passing its `emptyChildren`, rendered nothing and looked correct.
+//
+// Passing it unconditionally also closes a scope leak the `null` opened: an inline component's adapter
+// installs children as `if (typeof $args[1] === "function")`, so a `null` left `$s.children` unset on a
+// scope built with `Object.create($scope)` — and a childless inline component nested inside a component
+// that DID receive children inherited the outer ones and rendered them at its own `<slot/>`.
+//
+// Nothing here is per-call: the Mountable holds no state and mounts no nodes, so one instance serves
+// every childless site in the process (same reasoning as the server's shared `Raw`).
+const EMPTY_MOUNTABLE: Mountable = { mount: () => () => {} }
+export const emptyChildren = (): Mountable => EMPTY_MOUNTABLE
+
 // ---------------------------------------------------------------------------
 // Localized mismatch recovery (Stage 2, PR6) — decision 5
 // ---------------------------------------------------------------------------

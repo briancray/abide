@@ -235,7 +235,7 @@ test('an unknown path still 404s; RPC + openapi unaffected', async () => {
 test('warmPages pre-compiles every page + layout so first-hit SSR is cache-warm', async () => {
     // Unique sources so the module cache starts cold for this test (the caches are module-global).
     const page = '<p>warm-page-3f9a</p>'
-    const layout = '<section>warm-layout-3f9a {children()}</section>'
+    const layout = '<section>warm-layout-3f9a <slot/></section>'
 
     await warmPages({
         pages: { '/warm': page },

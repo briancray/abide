@@ -18,6 +18,7 @@ import { bindLazyPattern } from './bindLazyPattern.ts'
 import { bindPattern } from './bindPattern.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
+import { closeFinderFor, openIndexFor, SLOT_FOOTPRINT } from './SLOT_FOOTPRINT.ts'
 import { splitParams } from './scanText.ts'
 import type { ClientPlan, DynamicSlot, SlotKind, TemplatePlan } from './templatePlan.ts'
 
@@ -25,13 +26,10 @@ import type { ClientPlan, DynamicSlot, SlotKind, TemplatePlan } from './template
 // the compiler checks the planner supplied it.
 type SlotOf<K extends SlotKind> = Extract<DynamicSlot, { kind: K }>
 
-// Slot kinds that occupy a single `<!---->` leaf position in a level (a value node + its anchor).
-const LEAF_KINDS = new Set<string>(['interpolation', 'await'])
-// Slot kinds wrapped in paired `<!--[-->…<!--]-->` block anchors (2 child positions: open, close).
-const BLOCK_KINDS = new Set<string>(['if', 'for', 'switch', 'try', 'awaitBlock', 'component'])
-// `html` is bracketed like a block (2 positions) but by its OWN `<!--[h-->…<!--]h-->` anchors, so its
-// close is located by `findHtmlClose` (which reads the server's token off the open) rather than by the
-// depth-counting `findBlockClose`. See `serverRuntime.renderHtml`.
+// Which kinds are leaves, which are bracketed, and which finder locates a bracketed close is
+// `SLOT_FOOTPRINT` — one table, exhaustive over `SlotKind`. It used to be two `Set<string>`s plus a
+// hand-written `=== 'html'` here, which got no exhaustiveness check: an 18th bracketed kind fell through
+// to `'element'`, consumed one child position instead of two, and desynced the hydrate cursor silently.
 
 // ---------------------------------------------------------------------------
 // Emitter (collects sub-plans → clone ids → mount functions)
@@ -301,24 +299,24 @@ class ClientEmitter {
         const entries: Entry[] = []
         for (const [index, bucket] of groups) {
             const here = bucket.filter((s) => s.path.length === depth + 1)
-            const blockSlot = here.find((s) => BLOCK_KINDS.has(s.kind))
-            const htmlSlot = here.find((s) => s.kind === 'html')
-            const leafSlot = here.find((s) => LEAF_KINDS.has(s.kind))
-            if (blockSlot !== undefined)
+            // A bracketed slot wins over a leaf at the same index: it claims two positions and the leaf
+            // test would claim one. Asking the table in this order keeps that precedence where the old
+            // if/else-if chain had it.
+            const bracketed = here.find((s) => closeFinderFor(s.kind) !== undefined)
+            if (bracketed !== undefined) {
+                const closeFinder = closeFinderFor(bracketed.kind)
+                if (closeFinder === undefined)
+                    throw new Error(`unreachable: ${bracketed.kind} lost its close finder`)
                 entries.push({
-                    start: index - 1,
+                    start: openIndexFor(bracketed.kind, index),
                     index,
                     kind: 'block',
-                    closeFinder: 'findBlockClose',
+                    closeFinder,
                 })
-            else if (htmlSlot !== undefined)
-                entries.push({
-                    start: index - 1,
-                    index,
-                    kind: 'block',
-                    closeFinder: 'findHtmlClose',
-                })
-            else if (leafSlot !== undefined) entries.push({ start: index, index, kind: 'leaf' })
+                continue
+            }
+            const leafSlot = here.find((s) => SLOT_FOOTPRINT[s.kind].positions === 1)
+            if (leafSlot !== undefined) entries.push({ start: index, index, kind: 'leaf' })
             else entries.push({ start: index, index, kind: 'element' })
         }
         entries.sort((a, b) => a.start - b.start)
@@ -349,7 +347,9 @@ class ClientEmitter {
                 code += `$rt.hydrateSeek($rt.nextSibling(${varName}));\n`
                 expected = entry.index + 1
             } else {
-                const openVar = `$n${[...prefix, entry.index - 1].join('_')}`
+                // `entry.start` IS the open index — `openIndexFor` already derived it above, so this
+                // does not restate the `- 1`.
+                const openVar = `$n${[...prefix, entry.start].join('_')}`
                 const closeVar = `$n${[...prefix, entry.index].join('_')}`
                 code += `${openVar} = $rt.hydrateNode();\n`
                 code += `${closeVar} = $rt.${entry.closeFinder}(${openVar});\n`
@@ -641,7 +641,10 @@ class ClientEmitter {
                     break
             }
         }
-        let childrenFn = 'null'
+        // A childless site passes the SHARED empty factory, not `null` — see `runtime.emptyChildren` for
+        // why the distinction is load-bearing (`<slot/>` invokes whatever is passed here) and what the
+        // `null` broke. The server has always spelled it this way (`emitServer.genComponent`).
+        let childrenFn = '$rt.emptyChildren'
         if (slot.hasChildren) childrenFn = `() => (${this.mountable(slot.body, '$scope')})`
         // A cell- or memo-named tag (`<C/>` where `const C = memo(() => …)`) is a REACTIVE component:
         // read it in an effect and re-mount on identity change. Otherwise resolve the component once.

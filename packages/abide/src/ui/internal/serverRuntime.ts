@@ -67,6 +67,13 @@ export class Raw {
 // The children factory every CHILDLESS `<Name/>` site passes. Shared rather than emitted per site and
 // re-allocated per invocation: it closes over nothing, and `Raw` is immutable, so one instance is
 // indistinguishable from a fresh one — see `emitServer.genComponent`.
+//
+// It must be a FUNCTION rather than `null`, and that is a CONTRACT the client half now spells the same
+// way (`runtime.emptyChildren`): `<slot/>` lowers to a component invocation whose componentFn IS
+// `$scope.children`, so a childless site that passes a non-function makes the outlet fail the
+// is-this-a-component check. The client used to pass `null` and threw `<children> is not a component in
+// scope` on hydrate for every childless `<slot/>`, while the server rendered nothing — one field, and
+// only the CLIENT lane could see it, which is why an output-comparing test could not.
 const EMPTY_RAW = new Raw('')
 export const emptyChildren = async (): Promise<Raw> => EMPTY_RAW
 
