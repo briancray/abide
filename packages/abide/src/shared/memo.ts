@@ -1497,12 +1497,52 @@ export function memo<Args, T>(
         return readReactive(slot)
     }
 
-    // An auto-tracked fill is synchronous, so it is never pending and never revalidating over a stale value.
-    c.pending = (args: Args): boolean => {
-        const slot = ensureSlot(args)
+    // THE PER-SLOT VERBS — where the two fill modes are asked about ONCE.
+    //
+    // A slot fills one of two ways (ADR 0024 §1-3): pulled/coalesced, where the state machine is
+    // `slot.state`/`slot.inflight`, or an auto-tracked derivation, where it lives in the backing computed
+    // and those two fields go unused. Every probe and verb has to know which, and each one that spelled
+    // the branch itself was a place the next selector could forget it — `cancelClock`'s comment records
+    // one bug from this ("a slot has one refetch window conceptually and two possible carriers"), and
+    // `c.refreshing`'s records another (a derivation reported a constant `false`, so
+    // `memo(() => q(), { debounce: 300 })` never showed as refreshing).
+    //
+    // The four TAG aggregates at the bottom of this file were the third instance, and they had all three
+    // of the drift: they were written when a slot had one fill mode, and `refresh({tags})` therefore ran
+    // a derivation's body on the LOADING path — writing the result into `slot.state`, which the auto read
+    // never consults, so the derivation kept serving its previous value and `slot.loadedAt` was
+    // re-stamped, postponing the ttl re-run that would have fixed it. `pending({tags})` then reported
+    // that write on a slot whose own `pending()` is false by construction.
+    //
+    // So the three verbs a selector can apply to ONE slot live here, and both the callable's probes and
+    // the tag aggregates call them. `dropSlot` (invalidate) is the fourth and already worked, which is
+    // why the aggregate built on it is the one that had no bug.
+    function slotPending(slot: Slot<Args, T>): boolean {
+        // An auto-tracked fill is synchronous, so it is never pending.
         if (slot.auto !== undefined) return false
         return slot.state().status === 'pending'
     }
+
+    // A revalidation is outstanding on either of the two axes a slot has: a load that has STARTED
+    // (`slot.refreshing`, raised by `startLoad`'s keepStale branch), or one the refetch window is holding
+    // back. The second used to be reachable only on the pulled path, where the window's deferred bit was
+    // hand-copied into `slot.refreshing`. One window, asked the same way on both paths.
+    function slotRefreshing(slot: Slot<Args, T>): boolean {
+        const auto = slot.auto
+        if (auto !== undefined) return auto.gate?.deferred() ?? false
+        return slot.refreshing() || (slot.window?.deferred() ?? false)
+    }
+
+    // EAGER revalidation of one slot — `refresh`'s unit of work. On a derivation that is a version bump
+    // plus an immediate pull (`autoRefill(auto, true)`), never a load: the loading path's result lands in
+    // a field this slot does not read.
+    function slotRefresh(slot: Slot<Args, T>): void {
+        const auto = slot.auto
+        if (auto !== undefined) autoRefill(auto, true)
+        else scheduleRefresh(slot)
+    }
+
+    c.pending = (args: Args): boolean => slotPending(ensureSlot(args))
 
     c.error = (args: Args): unknown => {
         const slot = ensureSlot(args)
@@ -1558,28 +1598,12 @@ export function memo<Args, T>(
         return { cursor: undefined, fresh: true } // slot gone/evicted → caller runs fresh from 0
     }
 
-    // A revalidation is outstanding on either of the two axes a slot has: a load that has STARTED
-    // (`slot.refreshing`, raised by `startLoad`'s keepStale branch), or one the refetch window is
-    // holding back. The second used to be reachable only on the pulled path, where the window's
-    // deferred bit was hand-copied into `slot.refreshing` — so a derivation returned a constant
-    // `false` here, and `memo(() => q(), { debounce: 300 })` never reported refreshing at all, against
-    // what `MemoOptions.throttle` documents and `debounce` inherits. One window, asked the same way on
-    // both paths.
-    c.refreshing = (args: Args): boolean => {
-        const slot = ensureSlot(args)
-        const auto = slot.auto
-        if (auto !== undefined) return auto.gate?.deferred() ?? false
-        return slot.refreshing() || (slot.window?.deferred() ?? false)
-    }
+    c.refreshing = (args: Args): boolean => slotRefreshing(ensureSlot(args))
 
     c.refresh = (args?: Partial<Args> | Args): void => {
         const slots = selectSlots(args)
         log.channel('abide:memo').trace(`refresh ${id} (${slots.length} slots)`)
-        for (const slot of slots) {
-            const auto = slot.auto
-            if (auto !== undefined) autoRefill(auto, true)
-            else scheduleRefresh(slot)
-        }
+        for (const slot of slots) slotRefresh(slot)
         broadcast('refresh', args)
     }
 
@@ -1840,21 +1864,24 @@ export function memo<Args, T>(
     }
     function refreshForTags(): void {
         for (const slot of selectSlots(undefined)) {
-            scheduleRefresh(slot)
+            slotRefresh(slot)
             broadcast('refresh', slot.args)
         }
     }
+    // Both aggregates read EVERY slot before answering rather than returning early: they are reactive, so
+    // the loop is also the subscription, and a short-circuit would leave the reader unsubscribed from the
+    // slots it skipped.
     function anyPendingForTags(): boolean {
         let any = false
         for (const slot of selectSlots(undefined)) {
-            if (slot.state().status === 'pending') any = true
+            if (slotPending(slot)) any = true
         }
         return any
     }
     function anyRefreshingForTags(): boolean {
         let any = false
         for (const slot of selectSlots(undefined)) {
-            if (slot.refreshing()) any = true
+            if (slotRefreshing(slot)) any = true
         }
         return any
     }

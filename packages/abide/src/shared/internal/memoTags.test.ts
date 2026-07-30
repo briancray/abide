@@ -116,6 +116,80 @@ describe('refresh({ tags })', () => {
     })
 })
 
+// A TAGGED DERIVATION (ADR 0024 §1-3). Every one of these went through the four `*ForTags` aggregates,
+// which were written before `memo` absorbed derivation and never learned that a slot has two fill modes:
+// they read `slot.state` and called `scheduleRefresh`, the fields and the path the AUTO mode leaves
+// unused. So a tag verb ran the body on the classic loading path, wrote the result where nothing reads
+// it, and left the derivation serving its old value — while `CLAUDE.md` promises a tag refresh "re-runs
+// every live slot of every rpc carrying the tag" and lists `refreshing({tags})` as `fn.refreshing`'s
+// analogue. The assertion each of these makes is the pair: the global verb agrees with the per-callable
+// one, because they are documented as the same verb over a different selector.
+describe('a tagged DERIVATION agrees with its own callable', () => {
+    test('refresh({ tags }) re-runs it, so a body reading past the graph re-publishes', async () => {
+        // The case `ttl`/`refresh` exist for on a derivation: the body reads something the reactive
+        // graph cannot see, so nothing wakes it and an explicit revalidation is the only trigger.
+        let external = 1
+        const derived = memo(() => external, { tags: ['derived-ext'] })
+        expect(derived()).toBe(1)
+
+        external = 2
+        expect(derived()).toBe(1) // no dependency moved — the graph is right to serve this
+
+        refresh({ tags: ['derived-ext'] })
+        await settle()
+        expect(derived()).toBe(2)
+    })
+
+    test('pending({ tags }) answers what the callable answers', async () => {
+        const derived = memo(() => 1, { tags: ['derived-pending'] })
+        derived()
+        expect(pending({ tags: ['derived-pending'] })).toBe(derived.pending())
+        expect(pending({ tags: ['derived-pending'] })).toBe(false)
+
+        // AFTER a tag refresh is where the two used to part company: the aggregate saw the classic
+        // path's `pending` write on a slot whose own probe reports a synchronous fill.
+        refresh({ tags: ['derived-pending'] })
+        expect(pending({ tags: ['derived-pending'] })).toBe(derived.pending())
+        await settle()
+        expect(pending({ tags: ['derived-pending'] })).toBe(derived.pending())
+    })
+
+    test('refreshing({ tags }) reports a revalidation the refetch clock is holding back', async () => {
+        let external = 1
+        const derived = memo(() => external, { tags: ['derived-clock'], debounce: 40 })
+        expect(derived()).toBe(1) // the first publication is never deferred
+
+        external = 2
+        refresh({ tags: ['derived-clock'] })
+        expect(refreshing({ tags: ['derived-clock'] })).toBe(derived.refreshing())
+        expect(refreshing({ tags: ['derived-clock'] })).toBe(true)
+        expect(derived()).toBe(1) // the admitted value keeps being served during the window
+
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        expect(derived()).toBe(2)
+        expect(refreshing({ tags: ['derived-clock'] })).toBe(derived.refreshing())
+        expect(refreshing({ tags: ['derived-clock'] })).toBe(false)
+    })
+
+    test('invalidate({ tags }) re-runs it lazily, on the next read', async () => {
+        // This one already worked — `invalidateForTags` goes through `dropSlot`, which learned the
+        // dichotomy. It is here so the mode's four verbs are covered as a set rather than three of four.
+        let runs = 0
+        const derived = memo(
+            () => {
+                runs++
+                return runs
+            },
+            { tags: ['derived-invalidate'] },
+        )
+        expect(derived()).toBe(1)
+        expect(derived()).toBe(1)
+
+        invalidate({ tags: ['derived-invalidate'] })
+        expect(derived()).toBe(2)
+    })
+})
+
 describe('pending / refreshing ({ tags })', () => {
     test('pending is true while a first load is in flight, false once settled', async () => {
         let release: (value: number) => void = () => {}
