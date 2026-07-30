@@ -88,6 +88,39 @@ test('run measures every scenario across all four hot paths', async ({ page }) =
     await expect(page.getByTestId('hydrate-table')).not.toContainText('vanilla')
 })
 
+// The two DERIVED tables. Neither times a new hot path: `build vs adopt` joins the mount and hydrate
+// figures the passes above produced (plus the browser's parse of the served markup, which the hydrate
+// clock deliberately excludes), and `first load` joins those to the server's own `render` bench, drained
+// from the streaming rpc at the end of the run. They are where hydration gets a comparison at all — a
+// whole PATH against a whole path — so what has to be asserted is that both ratio columns actually
+// computed, on every scenario. A join that silently missed would leave an em-dash, not an error.
+test('the derived tables join the passes into whole-path comparisons', async ({ page }) => {
+    test.setTimeout(180_000)
+    await page.goto('/platform/bench/client')
+    await page.getByTestId('run').click()
+
+    const buildAdoptRows = page.getByTestId('build-adopt-row')
+    const firstLoadRows = page.getByTestId('first-load-row')
+    await expect(buildAdoptRows).toHaveCount(RENDER_SCENARIOS.length, { timeout: 90_000 })
+    // First load lands last: it waits on the whole in-tab run, then drains the server render bench.
+    await expect(firstLoadRows).toHaveCount(RENDER_SCENARIOS.length, { timeout: 120_000 })
+    await expect(page.getByTestId('bench-failed')).toHaveCount(0)
+
+    const timing = /\d+(\.\d+)?\s*(ns|µs|ms)/
+    const ratio = /\d+\.\d{2}×/
+    for (const name of RENDER_SCENARIOS) {
+        const cell = page.getByRole('cell', { name, exact: true })
+        const buildAdopt = buildAdoptRows.filter({ has: cell })
+        const firstLoad = firstLoadRows.filter({ has: cell })
+        await expect(buildAdopt).toContainText(timing)
+        await expect(firstLoad).toContainText(timing)
+        // Both of build-vs-adopt's ratios: hydrate ÷ mount (abide against itself) and parse + hydrate ÷
+        // the hand-written build. Two matches in one row is what proves the vanilla join landed too.
+        expect(await buildAdopt.locator('td').filter({ hasText: ratio }).count()).toBe(2)
+        await expect(firstLoad).toContainText(ratio)
+    }
+})
+
 test('the update scenarios genuinely patch the live DOM (reactivity propagates through the bundle)', async ({
     page,
 }) => {

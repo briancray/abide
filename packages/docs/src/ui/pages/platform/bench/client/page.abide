@@ -174,19 +174,27 @@
   // comparison without it, since building the DOM by hand parses no markup at all. Timed for BOTH sides'
   // markup — abide's carries hydration anchor comments the hand-written string does not, so parsing them
   // is not the same op. A fresh detached host per iteration: nothing is reused and no layout is triggered.
+  // Batched on one clock pair for the same reason `measureHydrate` is, and it is not a nicety here: every
+  // op needs a PRISTINE host, so a per-iteration clock pair is the only alternative — and at a sub-µs
+  // parse that reads the clock's own resolution rather than the parse. Timed per-op, `interpolation`'s
+  // 40 bytes of markup measured 2.84µs, more than `deep-tree-10`'s ten nested elements, and every ratio
+  // built on it was inflated by the floor. Calibrate on one parse, size a batch to ~20ms, allocate the
+  // hosts OUTSIDE the span so only the parse is on the clock.
   function measureParse(html) {
     for (let i = 0; i < WARMUP; i++) document.createElement("div").innerHTML = html
-    let iters = 0
-    let totalMs = 0
-    const budget = benchBudget(BUDGET)
-    do {
-      const host = document.createElement("div")
-      const t0 = performance.now()
-      host.innerHTML = html
-      totalMs += performance.now() - t0
-      iters++
-    } while (budget.more(totalMs * 1e6, iters))
-    return { nsPerOp: (totalMs * 1e6) / iters, iters }
+
+    const probe = document.createElement("div")
+    const p0 = performance.now()
+    probe.innerHTML = html
+    const oneNs = Math.max(1, (performance.now() - p0) * 1e6)
+    const batch = Math.max(5, Math.min(2000, Math.ceil(20e6 / oneNs)))
+
+    const hosts = []
+    for (let k = 0; k < batch; k++) hosts.push(document.createElement("div"))
+    const t0 = performance.now()
+    for (let k = 0; k < batch; k++) hosts[k].innerHTML = html
+    const elapsedMs = performance.now() - t0
+    return { nsPerOp: (elapsedMs * 1e6) / batch, iters: batch }
   }
 
   // Adaptive reactive-update timing (browser). A fresh host is mounted OUTSIDE the timed span each round
@@ -242,6 +250,8 @@
   // Fetch the AOT-bundled corpus, blob-import it as a real ES module, and time the browser hot paths:
   // `mount` (build the DOM) over the pure-render scenarios, then reactive `update` (patch the DOM) over
   // the interactive ones. Rows stream into their tables one scenario at a time (a paint yield between).
+  // The last two tables are DERIVED — adopt-vs-build joins figures the passes below already produced, and
+  // first-load joins them to the server's own `render` bench, drained over the wire at the very end.
   async function run() {
     if (running) return
     running = true
@@ -417,7 +427,10 @@
       // would replay the FIRST run's transcript and pair stale render numbers with fresh hydrate ones.
       benchFrontend.invalidate()
       const firstLoads = []
-      for await (const row of benchFrontend()) {
+      // A streaming rpc resolves to its cursor, so the call is awaited before the drain (in a template a
+      // `{#for await}` opener does this for you; a `<script>` is plain JS and does not).
+      const renderRows = await benchFrontend()
+      for await (const row of renderRows) {
         const hydrated = hydrates.find((h) => h.name === row.name)
         // Both corpora are filtered by the same `server !== false` predicate, so a name in one and not the
         // other is real drift, not a scenario that opted out.
@@ -460,6 +473,13 @@
     self-contained ES module, and server-renders each scenario's HTML; the page <code>blob:</code>-imports
     the module and times each path against a fresh detached host, right here in your browser — the same
     measurement the CLI <code>bun run bench</code> makes under happy-dom.
+  </p>
+  <p class="lead">
+    The last two tables are <strong>derived</strong>, and they exist because a single op is the wrong unit for
+    the question people actually ask about hydration. <strong>build vs adopt</strong> puts
+    <code>mount</code> next to <code>parse + hydrate</code> — the two ways this tab can reach the same live
+    DOM. <strong>first load</strong> adds the half your browser cannot time, the server's <code>render</code>,
+    drained from the <a href="/platform/bench">SSR bench</a> once the in-tab passes are done.
   </p>
   <Panel id="run-the-mount-bench" title="Run the mount bench">
     <button
@@ -598,7 +618,59 @@
       each row against its <strong>mount</strong> figure above: skipping node creation makes hydrate the
       cheaper path for most scenarios, though walking a very large tree (<code>for-list-10000</code>) can
       rival or exceed a fresh clone-based mount. No vanilla column here: adopting server-rendered markup is
-      a thing only a framework does, so there is nothing hand-written to compare it against.
+      a thing only a framework does, so there is nothing hand-written to compare it against — the two
+      tables below are where that comparison becomes possible, by comparing whole <em>paths</em> instead of
+      one op.
+    </p>
+  </aside>
+  <Panel id="build-vs-adopt-two-ways-to-a-live-" title="build vs adopt — two ways to a live DOM">
+    <table class="mb-8 w-full border-collapse text-sm" data-testid="build-adopt-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">scenario</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">mount (build)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">hydrate (adopt)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">hydrate ÷ mount</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">parse HTML</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">parse + hydrate</th>
+          <th class="py-1.5 text-right whitespace-nowrap">÷ vanilla build</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#if buildAdoptRows.length === 0 && !running}
+          <tr><td colspan="7" class="py-2 text-slate-400">—</td></tr>
+        {/if}
+        {#for row of buildAdoptRows by row.name}
+          <tr class="border-b border-slate-100" data-testid="build-adopt-row">
+            <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.mountNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.hydrateNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono font-semibold">{fmtX(row.hydrateOverMount)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{fmtNs(row.parseNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{fmtNs(row.adoptNsPerOp)}</td>
+            <td class="py-1.5 text-right whitespace-nowrap font-mono font-semibold">{fmtX(row.adoptOverVanillaBuild)}</td>
+          </tr>
+        {/for}
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p class="mb-3 text-sm text-slate-500">
+      The same two figures from the tables above, side by side, plus the cost the hydrate table leaves off
+      its clock on purpose: the browser <strong>parsing</strong> the served markup into nodes. Two ratios,
+      because there are two different questions. <strong>hydrate ÷ mount</strong> is abide against itself —
+      is adopting cheaper than building? — and it is the clean one: same tab, same substrate, same corpus,
+      minutes apart. Under 1.00× means the anchor walk beat node creation.
+    </p>
+    <p class="mb-3 text-sm text-slate-500">
+      <strong>÷ vanilla build</strong> is the closest thing <code>hydrate</code> has to a hand-written
+      baseline, and it compares <em>strategies</em> rather than ops: ship server-rendered markup and walk it
+      (<code>parse + hydrate</code>), versus ship none and build the DOM by hand with
+      <code>createElement</code> (the <strong>vanilla JS</strong> column in the mount table). That is a fair
+      question with two real answers, which one op against another never was — and it is only fair because
+      <code>parse</code> is inside the numerator: the adopt path pays for bytes the build path never sends.
+      What it still does not price is the network — the markup has to arrive, and it is bigger than the
+      hand-written string by every hydration anchor in it.
     </p>
   </aside>
   <Panel id="update-patch-the-dom-fine-grained-" title="update — patch the DOM (fine-grained reactivity)">
@@ -638,6 +710,62 @@
       same mutation by hand from a click handler (write the <code>textContent</code>, append the
       <code>&lt;li&gt;</code>, re-append the reversed node array) — so a <strong>×</strong> near or below
       1.00× means the reactive patch costs about what you'd have written yourself.
+    </p>
+  </aside>
+  <Panel id="first-load-render-parse-hydrate" title="first load — render + parse + hydrate">
+    <table class="w-full border-collapse text-sm" data-testid="first-load-table">
+      <thead>
+        <tr class="border-b border-slate-300 text-left">
+          <th class="py-1.5 pr-4">scenario</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">render (server)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">parse (browser)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">hydrate (browser)</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">first load</th>
+          <th class="py-1.5 pr-4 text-right whitespace-nowrap">vanilla first load</th>
+          <th class="py-1.5 text-right whitespace-nowrap">×</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#if firstLoadRows.length === 0 && !running}
+          <tr><td colspan="7" class="py-2 text-slate-400">—</td></tr>
+        {/if}
+        {#for row of firstLoadRows by row.name}
+          <tr class="border-b border-slate-100" data-testid="first-load-row">
+            <td class="py-1.5 pr-4 font-mono">{row.name}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{fmtNs(row.renderNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{fmtNs(row.parseNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{fmtNs(row.hydrateNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono">{fmtNs(row.totalNsPerOp)}</td>
+            <td class="py-1.5 pr-4 text-right whitespace-nowrap font-mono text-slate-500">{row.vanillaTotalNsPerOp === null ? "—" : fmtNs(row.vanillaTotalNsPerOp)}</td>
+            <td class="py-1.5 text-right whitespace-nowrap font-mono font-semibold">{fmtRatio(row)}</td>
+          </tr>
+        {/for}
+      </tbody>
+    </table>
+  </Panel>
+  <aside class="aside">
+    <p class="mb-3 text-sm text-slate-500">
+      The whole path from a request to an interactive page, in the three pieces that actually run: the server
+      builds the markup string (<code>render</code>), the browser parses it into nodes (<code>parse</code>),
+      and abide walks the anchors to wire it up (<code>hydrate</code>). The render half is not measured here —
+      it is the SAME streaming <a href="/platform/bench">SSR render bench</a> this page drains at the end of a
+      run, timed on the machine serving you, while the other two came out of your tab. So
+      <strong>first load</strong> is a real end-to-end framework cost that no single machine pays alone, and
+      unlike the ratios above it is a figure about two computers.
+    </p>
+    <p class="mb-3 text-sm text-slate-500">
+      <strong>vanilla first load</strong> is that same path with no framework: the hand-written string build
+      from the shared <code>@abide/bench/vanillaBaselines</code> corpus, plus the browser parsing
+      <em>its</em> markup (measured separately — abide's HTML carries hydration anchors the hand-written
+      string does not, so it is not the same parse), plus <strong>zero</strong> to become interactive. Read
+      the <strong>×</strong> knowing exactly that: it is not the price of the same work, it is the price of
+      <em>interactivity</em>. A hand-written page reaches the same pixels for less and then just sits there —
+      the moment it needs its bindings wired, the honest comparison is the <strong>÷ vanilla build</strong>
+      column two tables up, where both sides end up with a live DOM.
+    </p>
+    <p class="mt-3 text-sm text-slate-500">
+      † the render op is close enough to the timing loop's own per-iteration cost that the constant — added
+      to both sides — squashes the ratio toward 1.00×; the real multiple is higher.
     </p>
   </aside>
 </main>
