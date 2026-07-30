@@ -38,11 +38,17 @@ export function parseMuxFrame(raw: string): ParsedMuxFrame | null {
     return { kind: 'data', name, args: framed.args, msg: framed.msg }
 }
 
-// Compile-time proof that the three parsed kinds cover `MuxDownstream`'s three shapes: if a fourth
-// member is added there, this stops type-checking here rather than silently parsing as `data`.
-type _ExhaustiveOverDownstream = MuxDownstream extends
-    | { msg: unknown }
-    | { ok: true }
-    | { error: unknown }
-    ? true
-    : never
+// Compile-time proof that the three parsed kinds cover `MuxDownstream`'s three shapes: a fourth member
+// added there stops type-checking HERE rather than being parsed as `data` with `msg: undefined` and
+// routed by both the browser mux and `createTestApp` — the harness whose job is catching protocol drift.
+//
+// Through `Assert`, which is what makes it a proof. It was written as a bare conditional whose false
+// branch was `never`, and that is not a diagnostic: an unsatisfied conditional simply EVALUATES to
+// `never`, the alias was referenced nowhere, and the file compiled either way. A comment claiming an
+// invariant the code does not enforce is the exact class this repo has been finding — see CONTEXT.md's
+// "Owner" entry — and a totality proof that proves nothing is the most expensive kind, because it is
+// read as coverage.
+type Assert<T extends true> = T
+type _ExhaustiveOverDownstream = Assert<
+    MuxDownstream extends { msg: unknown } | { ok: true } | { error: unknown } ? true : false
+>

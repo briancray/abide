@@ -803,10 +803,23 @@ export function memo<Args, T>(
                     // here almost immediately — with the iterable, not the data — so its real clock is the
                     // per-chunk watchdog in `startStream`; bounding both from one timer would cut a healthy
                     // stream at T no matter how fast it was flowing.
-                    const produced = (await withDeadline(
-                        preProduced === undefined ? fn(slot.args) : preProduced.produced,
-                        timeoutMs,
-                    )) as T
+                    const raw = preProduced === undefined ? fn(slot.args) : preProduced.produced
+                    // CLASSIFY FROM THE RUN THAT IS HAPPENING ANYWAY. `readKeyedSync` sets `keyedSync`
+                    // when the BARE read runs the body, and it was the only thing that ever did — so a
+                    // keyed sync memo whose slot was first touched by `peek` (which loads through HERE,
+                    // not there) stayed unclassified, and every later bare read hit `readKeyedSync`'s
+                    // settled-but-unproven branch and returned a PROMISE. Permanently, for a memo whose
+                    // contract is `T`: a template rendered `[object Promise]`.
+                    //
+                    // Same evidence `readKeyedSync` reads, on a run this function was making regardless —
+                    // so it costs nothing and invents nothing. A `preProduced` value came FROM
+                    // `readKeyedSync` and is already classified, so it is left alone.
+                    if (keyedSyncEligible && keyedSync === undefined && preProduced === undefined) {
+                        const source = responseSourceOf(raw)
+                        keyedSync =
+                            source?.kind !== 'stream' && !isThenable(raw) && !isStreamSource(raw)
+                    }
+                    const produced = (await withDeadline(raw, timeoutMs)) as T
                     if (slot.generation !== generation) return produced as T // superseded — discard silently
                     // See through a json()/jsonl()/sse() wrapper to its pre-encoding payload, so a wrapped result
                     // caches/streams exactly like the raw form (replayable-streams.md §4).
@@ -1542,14 +1555,22 @@ export function memo<Args, T>(
 
     // Reactive stream probes (replayable-streams.md §4): full transcript snapshot, closed? (`peek()` above
     // gives the most-recent chunk — the "current value").
+    // `resolveMode` FIRST, as the bare read and `peek` do. Reading `slot.auto` on a slot whose mode was
+    // never resolved answers "pulled" by default, so as the FIRST touch of an argless derivation these
+    // fell into `readStreamReactive` → `startLoad` and ran the body on the LOADING path — after which the
+    // next bare read ran it a SECOND time inside the classifying probe and served that value. The existing
+    // coverage misses it by ordering: `memo.test.ts` peeks (which resolves the mode) before it asks for
+    // chunks.
     c.chunks = (args: Args): unknown[] | undefined => {
         const slot = ensureSlot(args)
+        resolveMode(slot)
         if (slot.auto !== undefined) return undefined // a synchronous derivation has no transcript
         touchOnRead(slot)
         return readStreamReactive(slot, (chunks) => chunks.slice())
     }
     c.done = (args: Args): boolean => {
         const slot = ensureSlot(args)
+        resolveMode(slot)
         if (slot.auto !== undefined) return false
         touchOnRead(slot)
         return readStreamReactive(slot, (_chunks, stream) => stream.done) ?? false
@@ -1560,6 +1581,7 @@ export function memo<Args, T>(
         from: number,
     ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean } => {
         const slot = ensureSlot(args)
+        resolveMode(slot)
         if (slot.auto !== undefined) return { cursor: undefined, fresh: true }
         const state = slot.state.untracked()
         // A retained, non-overflowed transcript is resumable — replay from `from` then continue live.

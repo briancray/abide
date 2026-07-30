@@ -1609,3 +1609,60 @@ describe('memo — the SWR refetch clock', () => {
         }
     })
 })
+
+// FIRST TOUCH — which entry point reaches a slot first must not change what the memo IS.
+//
+// A slot's fill mode (ADR 0024 §1-3) is decided by `resolveMode` for an argless body and by
+// `readKeyedSync` for a keyed one, and both were reachable from only some of the entry points. So the
+// SAME memo answered differently depending on which surface touched it first — a return type in one case,
+// a doubled body run in another. These pin the property the entry points share.
+describe('the first touch does not change what a memo is', () => {
+    // `peek` loads through `startLoad`, and `keyedSync` was set only by `readKeyedSync` (the bare read).
+    // A slot first touched by `peek` therefore stayed UNCLASSIFIED, and every later bare read took
+    // `readKeyedSync`'s settled-but-unproven branch and returned a PROMISE — permanently, for a memo whose
+    // documented contract is `T`. A template rendered `[object Promise]`.
+    test('a keyed sync memo peeked first still reads as T, not a promise', async () => {
+        const doubled = memo(({ n }: { n: number }) => n * 2)
+        doubled.peek({ n: 2 })
+        await tick()
+
+        const read = doubled({ n: 2 })
+        expect(read).not.toBeInstanceOf(Promise)
+        expect(read).toBe(4)
+        // And the classification is the MEMO's, so a key never touched by `peek` reads synchronously too.
+        expect(doubled({ n: 9 })).toBe(18)
+    })
+
+    // `chunks`/`done`/`resumeStream` read `slot.auto` without resolving the mode, so on an unclassified
+    // slot they answered "pulled" and ran the body on the LOADING path; the next bare read then ran it
+    // AGAIN inside the classifying probe. Asserted as WORK — the value is right either way, which is why
+    // this needs a run count.
+    test('asking a derivation for chunks first does not run its body twice', async () => {
+        let runs = 0
+        const derived = memo(() => {
+            runs++
+            return 'a value, not a transcript'
+        })
+
+        expect(derived.chunks()).toBeUndefined() // a synchronous derivation has no transcript
+        await tick()
+        expect(runs).toBe(1)
+
+        expect(derived()).toBe('a value, not a transcript')
+        expect(runs).toBe(1)
+    })
+
+    test('done() as a first touch does not run a derivation on the loading path', async () => {
+        let runs = 0
+        const derived = memo(() => {
+            runs++
+            return 42
+        })
+
+        expect(derived.done()).toBe(false)
+        await tick()
+        expect(runs).toBe(1)
+        expect(derived()).toBe(42)
+        expect(runs).toBe(1)
+    })
+})
