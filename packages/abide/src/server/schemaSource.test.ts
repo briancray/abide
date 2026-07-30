@@ -75,10 +75,18 @@ describe('the schema source is declared, not inferred from a file existing', () 
         }
     })
 
-    test('the default is baked-if-present, so a caller that says nothing keeps the boot-time behaviour', async () => {
+    // There is NO DEFAULT any more, which is the point: this case used to assert that a caller who says
+    // nothing gets the bake, and "says nothing" was how two production callers (`abide run`,
+    // `createTestApp`'s discovery mode) came to read a stale map without anyone choosing it. `schemas` is
+    // required, so the compiler asks. What remains worth pinning is the FALLBACK — a lane that asks for
+    // the bake and finds none still derives, rather than booting with no schemas at all.
+    test("'baked' with no bake on disk falls back to live derivation", async () => {
         const dir = await project()
         try {
-            expect(inputProperties(await loadApp(dir))).toEqual(['fromTheBake'])
+            await rm(join(dir, 'dist/schemas.json'))
+            expect(inputProperties(await loadApp(dir, { schemas: 'baked' }))).toEqual([
+                'fromTheSource',
+            ])
         } finally {
             await rm(dir, { recursive: true, force: true })
         }

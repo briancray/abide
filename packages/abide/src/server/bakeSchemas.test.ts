@@ -33,7 +33,9 @@ export default GET(({ id }: { id: number }) => ({ id, ok: true }))
 
 test("writeBakedSchemas records each route's derived input/output as JSON Schema", async () => {
     const dir = await materializeApp('write', THING_RPC)
-    const loaded = await loadApp(dir) // live derivation merges schemas onto the route
+    // 'source': this test is `abide build`'s lane — it is PRODUCING the bake, so the source is
+    // authoritative and no earlier bake may win.
+    const loaded = await loadApp(dir, { schemas: 'source' })
     if (loaded.routes === undefined) throw new Error('expected routes')
     await writeBakedSchemas(dir, loaded.routes)
 
@@ -67,7 +69,7 @@ test('loadApp prefers a baked dist/schemas.json over live derivation (no tsgo)',
     await mkdir(join(dir, 'dist'), { recursive: true })
     await writeFile(join(dir, 'dist/schemas.json'), JSON.stringify({ thing: { input: sentinel } }))
 
-    const loaded = await loadApp(dir)
+    const loaded = await loadApp(dir, { schemas: 'baked' })
     const thing = loaded.routes?.thing
     if (thing === undefined) throw new Error('expected thing route')
     expect(thing.__rpc.options.schemas?.input).toEqual(sentinel)

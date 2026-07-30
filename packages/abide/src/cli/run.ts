@@ -26,7 +26,11 @@ import { provideHealthSource } from '../shared/internal/healthSource.ts'
 // is the SCRIPT's, and propagates with its stack, which for a failed migration is the whole point.
 export async function run(dir: string, file: string, args: string[] = []): Promise<void> {
     const target = isAbsolute(file) ? file : resolve(dir, file)
-    const config = await loadApp(dir)
+    // 'baked': `abide run` is the PRODUCTION runtime with a script in front of it, not a build. A
+    // deployment that ran `abide build` has the derived map on disk and no tsgo, and a migration is not
+    // the lane that should pay a derivation pass to discover it — with no bake present this falls back to
+    // live derivation anyway, which is what a source checkout gets.
+    const config = await loadApp(dir, { schemas: 'baked' })
     // The one boot that binds no server, so `createApp` never runs and never registers what `health()`
     // composes from (CO2.4). A migration asking "is the app healthy" is asking about the app's own
     // `onHealth`, not about an HTTP listener it deliberately does not have — so `run` provides the same

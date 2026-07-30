@@ -322,7 +322,12 @@ export async function createTestApp(config: TestAppConfig = {}): Promise<TestApp
     // DISCOVERY mode — load the whole project at `dir` and boot it through THE lifecycle: `bootApp` is
     // the same module `serve()` drives, so a discovery test gets the wrapper order, the breakout, the
     // warm pages and the teardown backstop production gets, rather than a second copy of them.
-    const loaded = await loadApp(config.dir ?? process.cwd())
+    // 'source': discovery mode's whole claim is "the real app", and the real app is what the SOURCE
+    // says. A project that has run `abide build` (or `abide compile`) once has a `dist/schemas.json` on
+    // disk, and validating a test's calls against that bake means asserting behaviour the source no
+    // longer describes — the same staleness `abide dev` was fixed for, in the lane least able to notice
+    // it. With no bake present nothing changes: `'baked'` falls back to live derivation anyway.
+    const loaded = await loadApp(config.dir ?? process.cwd(), { schemas: 'source' })
     const booted = await bootApp(loaded, { lifecycle: config.lifecycle })
 
     return bind(booted.app, loaded.routes ?? {}, undefined, () => booted.stop())

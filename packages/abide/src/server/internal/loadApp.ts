@@ -231,18 +231,25 @@ export interface LoadAppOptions {
     // session and never re-derived — an edited handler signature kept validating against the old schema
     // in the one lane whose entire job is reflecting edits. A file's existence was standing in for a
     // question only the caller can answer.
-    schemas?: 'baked' | 'source'
+    //
+    // REQUIRED, for the reason `RouteClass.methods` is: there is then nowhere to not mention it. Making
+    // the lane a parameter and leaving it optional put the same silence one level up — it defaulted to
+    // `'baked'`, and two callers never said anything (`abide run`, and `createTestApp`'s discovery mode,
+    // the lane whose whole claim is "the real app"), so the staleness class the option exists to prevent
+    // was still reachable by saying nothing. The doc block above enumerated the lanes it had thought
+    // about and named neither of them.
+    schemas: 'baked' | 'source'
 }
 
 // Scan `dir` (a project root) and build the createApp config by importing its modules. Directories
 // that don't exist are simply skipped, so partial projects load fine.
-export async function loadApp(dir: string, options: LoadAppOptions = {}): Promise<LoadedApp> {
+export async function loadApp(dir: string, options: LoadAppOptions): Promise<LoadedApp> {
     await seedAppName(dir)
     const sources = await scanAppSources(dir)
     await loadConfig(sources.config)
 
     const { routes, derivationTargets } = await loadRoutes(sources.rpc)
-    await applyDerivedSchemas(dir, routes, derivationTargets, options.schemas ?? 'baked')
+    await applyDerivedSchemas(dir, routes, derivationTargets, options.schemas)
     const sockets = await loadSockets(sources.sockets)
     const pages = await loadPages(sources.pages)
     const layouts = await loadLayouts(sources.layouts)

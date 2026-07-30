@@ -126,7 +126,7 @@ for (const [surface, boot] of SURFACES) {
             const app = await boot(dir)
             running.push(app)
 
-            const loaded = await loadApp(dir)
+            const loaded = await loadApp(dir, { schemas: 'source' })
             const page = loaded.pages?.['/']
             const pageDir = loaded.pageDirs?.['/']
             expect(page).toBe(source)
@@ -165,7 +165,7 @@ describe('serve — onHealth/onError are loaded from src/app.ts', () => {
             export function onHealth() { return { app: 'demo' } }
             export function onError() { return new Response('shaped', { status: 503 }) }
         `)
-        const loaded = await loadApp(dir)
+        const loaded = await loadApp(dir, { schemas: 'source' })
         expect(typeof loaded.onHealth).toBe('function')
         expect(typeof loaded.onError).toBe('function')
     })

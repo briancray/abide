@@ -21,7 +21,7 @@ afterEach(async () => {
 
 describe('loadApp — file-based app loader', () => {
     test('discovers rpc route names, page paths, and defaults middleware when app.ts is absent', async () => {
-        const loaded = await loadApp(FIXTURE_DIR)
+        const loaded = await loadApp(FIXTURE_DIR, { schemas: 'source' })
 
         const routes = loaded.routes
         if (routes === undefined) throw new Error('expected loaded routes')
@@ -50,7 +50,7 @@ describe('loadApp — file-based app loader', () => {
     })
 
     test('the loaded config boots a working app: rpc + SSR pages', async () => {
-        const loaded = await loadApp(FIXTURE_DIR)
+        const loaded = await loadApp(FIXTURE_DIR, { schemas: 'source' })
         const app = await createTestApp(loaded)
         running = app
 
@@ -80,7 +80,7 @@ describe('loadApp — file-based app loader', () => {
 
     test('§11: a schemaless RPC gets its input schema derived from types at load', async () => {
         // `greet` is `export default GET(({ name }: { name: string }) => …)` — no hand-written schema.
-        const loaded = await loadApp(FIXTURE_DIR)
+        const loaded = await loadApp(FIXTURE_DIR, { schemas: 'source' })
         const greet = loaded.routes?.greet
         if (greet === undefined) throw new Error('expected greet route')
         // The derived input schema is merged onto the route's options (drives validation + OpenAPI).
