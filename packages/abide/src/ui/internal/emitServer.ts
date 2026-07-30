@@ -504,7 +504,7 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
             if (chunk.hasComponent || chunk.hasScript)
                 body += `    if ($scope.state && $scope.state.forItem) $c.state = $scope.state.forItem($i);\n`
             body += `    ${bindPattern('$c', chunk.item, '$value')}\n`
-            if (chunk.index !== null) body += `    $c[${JSON.stringify(chunk.index)}] = $i;\n`
+            if (chunk.index !== null) body += `    ${bindPattern('$c', chunk.index, '$i')}\n`
             // A stream-free item body renders straight into the loop's accumulator. This is the same
             // trade as `genElement`'s (see `inlinableChildren`), but it pays PER ROW rather than per
             // element, so it is the single biggest lever on list-render cost. The item body took `$c`
@@ -529,7 +529,7 @@ function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {
                         : ''
                 const itemBind =
                     `const $c = Object.create($scope);\n${itemState}      ${bindPattern('$c', chunk.item, '$value')}\n` +
-                    (chunk.index !== null ? `      $c[${JSON.stringify(chunk.index)}] = $i;\n` : '')
+                    (chunk.index !== null ? `      ${bindPattern('$c', chunk.index, '$i')}\n` : '')
                 const renderItem = `async ($value, $i) => {\n      ${itemBind}      return await ${bodyExpr(analysis, chunk.children)}($c);\n    }`
                 const caught = chunk.catch
                     ? `async ($e) => {\n      ${childScopeCode('$cc', chunk.catch.param, '$e').replace(/\n/g, '\n      ')}      return await ${bodyExpr(analysis, chunk.catch.children)}($cc);\n    }`

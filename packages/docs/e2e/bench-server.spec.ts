@@ -22,7 +22,11 @@ test('server bench table fills live from the streamed primitives', async ({ page
     // `<table>` — which is what stranded every append patch outside the table (half-formatted rows above it).
     const raw = await (await page.request.get('/platform/bench/server')).text()
     expect(raw).toContain('data-ab-append')
-    expect(raw).not.toContain('ab-patch')
+    // The patch MARKUP, not the substring `ab-patch`: `documentPatchPreamble` defines both DOM ops in one
+    // deduped script per streaming document, so its `$abideFill` body carries the literal
+    // `template[data-ab-patch="` on every page that streams anything at all — including an append-only one
+    // like this. The claim here is about a stray FILL PATCH, which is `<template data-ab-patch=…>`.
+    expect(raw).not.toContain('<template data-ab-patch')
     expect(raw).toMatch(/<tbody>[\s\S]*<template id="ab-l:0"[^>]*><\/template>[\s\S]*<\/tbody>/)
 
     await page.goto('/platform/bench/server')

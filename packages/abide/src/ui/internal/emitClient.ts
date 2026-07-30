@@ -517,7 +517,7 @@ class ClientEmitter {
             keyFor = '($value, $index) => $index'
         } else {
             let bindItem = `    ${bindPattern('$k', item, '$value')}\n`
-            if (index !== null) bindItem += `    $k[${JSON.stringify(index)}] = $index;\n`
+            if (index !== null) bindItem += `    ${bindPattern('$k', index, '$index')}\n`
             // Rebind `$scope` to the temp item scope so the rewritten key expression resolves item/index.
             keyFor = `($value, $index) => {\n    const $k = Object.create($scope);\n${bindItem}    return (($scope) => (${key}))($k);\n  }`
         }

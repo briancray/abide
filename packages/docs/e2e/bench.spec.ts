@@ -57,7 +57,11 @@ test('bench table fills live from the streamed corpus and stays bounded', async 
     const raw = await (await page.request.get('/platform/bench')).text()
     expect(raw).toContain('<template id="ab-l:0"')
     expect(raw).toContain('data-ab-append')
-    expect(raw).not.toContain('ab-patch')
+    // The patch MARKUP, not the substring `ab-patch`: `documentPatchPreamble` defines both DOM ops in one
+    // deduped script per streaming document, so its `$abideFill` body carries the literal
+    // `template[data-ab-patch="` on every page that streams anything at all — including an append-only one
+    // like this. The claim here is about a stray FILL PATCH, which is `<template data-ab-patch=…>`.
+    expect(raw).not.toContain('<template data-ab-patch')
 
     await page.goto('/platform/bench')
 
