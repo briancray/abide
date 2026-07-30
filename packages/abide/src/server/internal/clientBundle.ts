@@ -48,6 +48,7 @@ import { buildRegistry } from './registry.ts'
 import { onRegistryRebind } from './registryDerivation.ts'
 import type { AppConfig } from './router.ts'
 import { staticAssetType } from './staticAssetType.ts'
+import { reaches } from './surfaceProjection.ts'
 
 // Absolute path to the bootstrap entry the generated module imports. Resolved from this file's dir
 // so Bun.build (running from a temp entry elsewhere) resolves it.
@@ -129,7 +130,10 @@ function rpcSpecs(config: AppConfig, importedNames: Set<string>): Record<string,
     const specs: Record<string, RpcSpec> = {}
     for (const entry of buildRegistry(config).rpcs) {
         if (!importedNames.has(entry.name)) continue
-        if (entry.clients.browser === false) {
+        // The same reachability question every surface asks, with a different CONSEQUENCE: elsewhere an
+        // unreachable callable is skipped, here it is a build ERROR, because the page named it. Skipping
+        // would ship a page whose import silently resolves to nothing.
+        if (!reaches(entry, 'browser')) {
             throw new Error(
                 `abide: rpc "${entry.name}" is imported into a UI page but is not browser-reachable (clients.browser: false). Remove the import or expose the rpc to the browser.`,
             )
@@ -160,7 +164,8 @@ function socketSpecs(config: AppConfig, importedNames: Set<string>): Record<stri
     const specs: Record<string, SocketSpec> = {}
     for (const entry of buildRegistry(config).sockets) {
         if (!importedNames.has(entry.name)) continue
-        if (entry.clients.browser === false) {
+        // Build ERROR rather than a skip, for the reason `rpcSpecs` states above.
+        if (!reaches(entry, 'browser')) {
             throw new Error(
                 `abide: socket "${entry.name}" is imported into a UI page but is not browser-reachable (clients.browser: false). Remove the import or expose the socket to the browser.`,
             )

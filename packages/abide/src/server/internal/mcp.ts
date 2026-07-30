@@ -16,6 +16,7 @@ import { callOwnRpc } from './callOwnRpc.ts'
 import type { RpcEntry, SocketEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
+import { ANY_OBJECT_SCHEMA, ANY_VALUE_SCHEMA, rpcsFor, socketsFor } from './surfaceProjection.ts'
 
 const PROTOCOL_VERSION = '2025-06-18'
 const SERVER_NAME = 'abide'
@@ -73,21 +74,20 @@ function listTools(config: AppConfig): McpTool[] {
     const registry = buildRegistry(config)
     const tools: McpTool[] = []
 
-    for (const rpc of registry.rpcs) {
-        if (rpc.clients.mcp === false) continue
+    for (const rpc of rpcsFor(registry, 'mcp')) {
         const tool: McpTool = {
             name: rpc.name,
-            inputSchema: (rpc.inputSchema as Record<string, unknown> | undefined) ?? {
-                type: 'object',
-            },
+            // MCP requires an OBJECT schema — `{}` is not legal here. See `surfaceProjection.ts` for
+            // why the four surfaces' absent-schema answers differ and are not unified.
+            inputSchema:
+                (rpc.inputSchema as Record<string, unknown> | undefined) ?? ANY_OBJECT_SCHEMA,
             annotations: { readOnlyHint: rpc.read },
         }
         if (rpc.doc !== undefined) tool.description = rpc.doc
         tools.push(tool)
     }
 
-    for (const sock of registry.sockets) {
-        if (sock.clients.mcp === false) continue
+    for (const sock of socketsFor(registry, 'mcp')) {
         tools.push({
             name: `${sock.name}_tail`,
             description: `Snapshot of the "${sock.name}" socket's current tail buffer.`,
@@ -98,7 +98,8 @@ function listTools(config: AppConfig): McpTool[] {
             tools.push({
                 name: `${sock.name}_publish`,
                 description: `Publish a message to the "${sock.name}" socket.`,
-                inputSchema: (sock.messageSchema as Record<string, unknown> | undefined) ?? {},
+                inputSchema:
+                    (sock.messageSchema as Record<string, unknown> | undefined) ?? ANY_VALUE_SCHEMA,
                 annotations: { readOnlyHint: false },
             })
         }
@@ -133,8 +134,9 @@ async function callTool(
     const registry = buildRegistry(config)
 
     // RPC tools first — a registry name is exact and could collide with a socket-derived suffix.
-    for (const rpc of registry.rpcs) {
-        if (rpc.clients.mcp === false) continue
+    // The SAME list `mcpTools` advertises — one call, so the two cannot drift into advertising a tool
+    // that answers "unknown tool" or leaving one reachable that was never advertised.
+    for (const rpc of rpcsFor(registry, 'mcp')) {
         if (rpc.name === name) {
             try {
                 return { result: await callRpc(rpc, args, request) }
@@ -150,14 +152,17 @@ async function callTool(
     }
 
     const sockets = config.sockets ?? {}
-    const socketOutcome = await callSocketTool(name, args, registry.sockets, sockets)
+    // The SAME list `mcpTools` advertises, for the same reason the rpc dispatch above takes it.
+    const socketOutcome = await callSocketTool(name, args, socketsFor(registry, 'mcp'), sockets)
     if (socketOutcome !== undefined) return socketOutcome
 
     return { error: { code: INVALID_PARAMS, message: `Unknown tool: ${name}` } }
 }
 
-// Match a `<name>_tail` / `<name>_publish` tool against the exposed sockets. Returns undefined when
-// no socket tool matches (so the caller can fall through to "unknown tool").
+// Match a `<name>_tail` / `<name>_publish` tool against the sockets the MCP surface exposes. `entries`
+// is already gated by the caller — this function does not re-ask, so there is one answer to "which
+// sockets does MCP see" rather than one per loop. Returns undefined when no socket tool matches (so the
+// caller can fall through to "unknown tool").
 async function callSocketTool(
     name: string,
     args: unknown,
@@ -165,7 +170,6 @@ async function callSocketTool(
     sockets: Record<string, Socket<unknown>>,
 ): Promise<Outcome | undefined> {
     for (const entry of entries) {
-        if (entry.clients.mcp === false) continue
         const sock = sockets[entry.name]
         if (sock === undefined) continue
 

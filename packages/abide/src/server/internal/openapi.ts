@@ -15,14 +15,13 @@ import { singleType } from '../../shared/internal/jsonSchema.ts'
 import { RPC_QUERY_PARAMS } from '../../shared/internal/RPC_QUERY_PARAMS.ts'
 import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
 import type { Registry, RpcEntry } from './registry.ts'
+import { ANY_VALUE_SCHEMA, rpcsFor } from './surfaceProjection.ts'
 
-// A permissive schema — "any value" — used wherever the registry has no concrete JSON Schema.
-function anySchema(): Record<string, unknown> {
-    return {}
-}
-
+// A spec must describe every parameter, and the honest description of an underived one is
+// "unconstrained" — JSON Schema's `{}`. Which absent-schema answer each surface gives, and why the four
+// differ, is `surfaceProjection.ts`.
 function schemaOrAny(schema: JSONSchema | undefined): Record<string, unknown> {
-    return schema !== undefined ? (schema as Record<string, unknown>) : anySchema()
+    return schema !== undefined ? (schema as Record<string, unknown>) : ANY_VALUE_SCHEMA
 }
 
 // The 422 body the router emits. Declared once under components/schemas and referenced from every
@@ -122,9 +121,8 @@ function operationForRpc(entry: RpcEntry): Record<string, unknown> {
 export function buildOpenApi(registry: Registry): Record<string, unknown> {
     const paths: Record<string, Record<string, unknown>> = {}
 
-    for (const entry of registry.rpcs) {
-        // MS1.4: `browser: false` withholds the RPC from OpenAPI; absent/true exposes it.
-        if (entry.clients.browser === false) continue
+    // MS1.4: `browser: false` withholds the RPC from OpenAPI; absent/true exposes it.
+    for (const entry of rpcsFor(registry, 'browser')) {
         const path = `${RPC_ROUTE_PREFIX}${entry.name}`
         const verb = entry.method.toLowerCase()
         const item = paths[path] ?? {}

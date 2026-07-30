@@ -31,19 +31,22 @@ import type { RpcEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import { currentScope } from './requestScope.ts'
 import type { AppConfig } from './router.ts'
+import { rpcsFor } from './surfaceProjection.ts'
 
 export function rpcTools(config: AppConfig, origin: string): AgentSurface {
     const surface: AgentSurface = []
-    for (const entry of buildRegistry(config).rpcs) {
-        // Reachability, not authorization (CLAUDE.md): an rpc withheld from the MCP surface is withheld
-        // from the agent's tool set, which IS the MCP tool set by definition (MS2.6). Its middleware
-        // still runs on every call that does happen — which is now enforced rather than asserted.
-        if (entry.clients.mcp === false) continue
+    // Reachability, not authorization (CLAUDE.md): an rpc withheld from the MCP surface is withheld from
+    // the agent's tool set, which IS the MCP tool set by definition (MS2.6) — so this asks the MCP
+    // surface rather than restating the predicate. Its middleware still runs on every call that does
+    // happen, which is now enforced rather than asserted.
+    for (const entry of rpcsFor(buildRegistry(config), 'mcp')) {
         const tool: AgentTool = {
             name: entry.name,
             run: (args: unknown): Promise<unknown> => runRpcTool(entry, args, origin),
         }
         if (entry.doc !== undefined) tool.description = entry.doc
+        // OMITTED when absent, not `{}` — an engine reads absence as "no declared shape", where an
+        // empty object schema would declare "takes no arguments". `surfaceProjection.ts` has the four.
         if (entry.inputSchema !== undefined) tool.inputSchema = entry.inputSchema
         surface.push(tool)
     }

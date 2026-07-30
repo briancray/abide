@@ -34,6 +34,7 @@ import {
 } from './requestScope.ts'
 import type { AppConfig } from './router.ts'
 import { rpcChainFor } from './rpcChain.ts'
+import { rpcsFor } from './surfaceProjection.ts'
 
 // Identity + request resolved ONCE at the WS upgrade (cookie/bearer via the same ladder as HTTP)
 // and carried on the connection for the life of the socket. Every `@rpc:` join re-authorizes
@@ -81,9 +82,14 @@ export function authorizeTagJoin(channelName: string, config: AppConfig): boolea
     if (!channelName.startsWith(TAG_CHANNEL_PREFIX)) return false
     const tag = channelName.slice(TAG_CHANNEL_PREFIX.length)
     if (tag === '') return false
-    for (const entry of buildRegistry(config).rpcs) {
+    // Gated by DECLARATION rather than by the per-args middleware re-run an `@rpc:` join gets, because a
+    // tag frame carries a verb and NO payload: the client re-reads over HTTP under its own identity, so
+    // the join grants no data. It does reveal change-TIMING for any tag on a browser-reachable read —
+    // see CLAUDE.md's `tags` note. Asking `rpcsFor(..., 'browser')` is the same reachability question
+    // every other surface asks; what makes this one load-bearing is the argument above, not a different
+    // predicate.
+    for (const entry of rpcsFor(buildRegistry(config), 'browser')) {
         if (!entry.read) continue
-        if (entry.clients.browser === false) continue
         if (entry.tags?.includes(tag) === true) return true
     }
     return false

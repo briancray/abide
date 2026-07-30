@@ -16,6 +16,7 @@ import { singleType } from '../../shared/internal/jsonSchema.ts'
 import { log } from '../../shared/log.ts'
 import { buildRegistry } from '../internal/registry.ts'
 import type { AppConfig } from '../internal/router.ts'
+import { rpcsFor } from '../internal/surfaceProjection.ts'
 import { RESERVED_CLI_COMMANDS } from './RESERVED_CLI_COMMANDS.ts'
 
 export interface CliCommandField {
@@ -63,8 +64,7 @@ function fieldsOf(schema: JSONSchema | undefined): CliCommandField[] {
 
 export function cliCommands(config: AppConfig): CliCommand[] {
     const commands: CliCommand[] = []
-    for (const rpc of buildRegistry(config).rpcs) {
-        if (rpc.clients.cli === false) continue
+    for (const rpc of rpcsFor(buildRegistry(config), 'cli')) {
         const command: CliCommand = {
             name: rpc.name,
             method: rpc.method,
