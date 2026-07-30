@@ -143,9 +143,11 @@ describe('build — content-addressed split client', () => {
             write: (line) => lines.push(line),
             writeError: () => {},
         })
-        const reported = lines.find((line) => line.startsWith('abide build — '))
+        // The banner is one `write` of a multi-line block, so split rather than scan the calls.
+        const printed = lines.join('\n').split('\n')
+        expect(printed.join('\n')).not.toContain('[object Object]')
+        const reported = printed.find((line) => line.includes('output'))
         expect(reported).toBeDefined()
-        expect(reported).not.toContain('[object Object]')
         expect(reported).toContain(join('dist', '_app'))
     })
 

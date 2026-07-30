@@ -93,10 +93,13 @@ export interface ServeOptions {
 // In dev the requested port is only a starting point — if it's taken, hop to the next open one so
 // several dev servers can run side by side. Production (`abide start`) binds the requested port as-is,
 // so a clash surfaces as a hard EADDRINUSE rather than silently moving.
-async function resolvePort(opts: ServeOptions): Promise<number> {
+// Both numbers are returned, not just the one bound: the banner reports the hop, and the requested
+// port is only knowable here — reading the same ladder a second time in the CLI would be a copy that
+// nothing keeps in step.
+async function resolvePort(opts: ServeOptions): Promise<{ requested: number; bound: number }> {
     const requested = opts.port ?? readEnvPort() ?? DEFAULT_PORT
-    if (opts.dev === true) return await findOpenPort(requested)
-    return requested
+    if (opts.dev === true) return { requested, bound: await findOpenPort(requested) }
+    return { requested, bound: requested }
 }
 
 // Probe upward from `start` for a port nothing else is bound to, using a throwaway `Bun.serve` bind as
@@ -144,17 +147,19 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
 
     // Everything from here that is not dev-specific is `hostApp`, which a compiled binary enters
     // directly — see its header for why that floor is worth having.
+    const port = await resolvePort(opts)
     const hosted = await hostApp(config, {
-        port: await resolvePort(opts),
+        port: port.bound,
         dev: opts.dev === true,
         ...(opts.clientBuild !== undefined ? { clientBuild: opts.clientBuild } : {}),
     })
 
-    if (reloadSocket === undefined) return hosted
+    if (reloadSocket === undefined) return { ...hosted, requestedPort: port.requested }
 
     const watcher = startWatch(dir, config, reloadSocket, hosted.app)
     return {
         url: hosted.url,
+        requestedPort: port.requested,
         async stop(): Promise<void> {
             watcher.close()
             await hosted.stop()

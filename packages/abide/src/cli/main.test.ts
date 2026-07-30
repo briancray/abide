@@ -167,7 +167,10 @@ describe('main — dispatch', () => {
         const cwd = tempPath()
         const result = await run(['scaffold', 'demo', '--no-git', '--no-install', '--no-dev'], cwd)
         expect(result.code).toBe(0)
-        expect(result.out).toContain(`created ${join(cwd, 'demo')}`)
+        // The banner aligns rows into a column, so the label and the path are separated by padding
+        // whose width depends on the other labels in the block — assert both, not the spacing.
+        expect(result.out).toContain('created')
+        expect(result.out).toContain(join(cwd, 'demo'))
         expect(result.out).toContain('cd demo && bun run dev')
         expect(await Bun.file(join(cwd, 'demo', 'package.json')).exists()).toBe(true)
         expect((await Bun.file(join(cwd, 'demo', 'package.json')).json()).name).toBe('demo')

@@ -141,7 +141,7 @@ function entrySource(input: {
         const fields: string[] = [`name: ${literal(name)}`]
         lines.push(importLine(`$asset${index}`, join(input.buildDir, name), 'file'))
         fields.push(`identity: $asset${index}`)
-        const encodings = input.manifest.encodings?.[name] ?? []
+        const encodings = input.manifest.encodings[name] ?? []
         if (encodings.includes('gzip')) {
             lines.push(importLine(`$asset${index}gz`, join(input.buildDir, `${name}.gz`), 'file'))
             fields.push(`gzip: $asset${index}gz`)

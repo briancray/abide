@@ -23,7 +23,10 @@
 // dependency is never preloaded twice in one document.
 
 import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
-import type { ChunkAsset } from './clientBundle.ts'
+// From the artifact owner rather than through `clientBundle`'s re-export: this module is what
+// `clientArtifact` calls to DERIVE the graph, so importing the shape back through its caller would make
+// the two files a cycle on paper for no reason.
+import type { ChunkAsset } from './clientArtifact.ts'
 
 export interface PreloadGraph {
     // The entry plus its transitive static imports, breadth-first — needed by every page.

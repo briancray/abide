@@ -18,6 +18,7 @@
 
 import { colourEnabled } from '../../shared/internal/colourEnabled.ts'
 import { COERCE_FAILED, tryCoerceStringToType } from '../../shared/internal/jsonSchema.ts'
+import { type Paint, painter } from '../../shared/internal/painter.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { callCliCommand } from './callCliCommand.ts'
 import type { CliCommand } from './cliCommands.ts'
@@ -52,40 +53,8 @@ export interface InteractiveCliOptions {
 
 // Styling is opt-OUT by surface, not by flag: `colourEnabled` follows NO_COLOR / FORCE_COLOR / is-a-
 // terminal, so a piped session (`printf 'greet\n' | app`) emits exactly the bytes it always did and
-// nothing downstream has to strip escapes.
-const STYLE = {
-    reset: '\u001b[0m',
-    dim: '\u001b[2m',
-    bold: '\u001b[1m',
-    cyan: '\u001b[36m',
-    red: '\u001b[31m',
-} as const
-
-interface Paint {
-    dim(text: string): string
-    bold(text: string): string
-    prompt: string
-    error(text: string): string
-}
-
-function painter(coloured: boolean): Paint {
-    if (!coloured) {
-        return {
-            dim: (text) => text,
-            bold: (text) => text,
-            prompt: '> ',
-            error: (text) => text,
-        }
-    }
-    return {
-        dim: (text) => `${STYLE.dim}${text}${STYLE.reset}`,
-        bold: (text) => `${STYLE.bold}${text}${STYLE.reset}`,
-        // The prompt is the one thing on screen that is always in the same place, so colouring it is
-        // what lets you find where the last command's output ended when you scroll back.
-        prompt: `${STYLE.cyan}\u276f${STYLE.reset} `,
-        error: (text) => `${STYLE.red}${text}${STYLE.reset}`,
-    }
-}
+// nothing downstream has to strip escapes. The escapes themselves are `painter`, shared with the
+// `abide <command>` banners so the two surfaces cannot dim to different greys.
 
 // Prompt for one field, returning the typed value — or undefined when the caller pressed enter (an
 // optional field left out entirely, which is not the same as sending null).

@@ -16,6 +16,7 @@
 
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { ClientManifest } from '../server/internal/clientArtifact.ts'
 import type { ClientBuild } from '../server/internal/clientBundle.ts'
 import {
     buildClient,
@@ -25,15 +26,11 @@ import {
 import { loadApp, writeBakedSchemas } from '../server/internal/loadApp.ts'
 import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
-// The manifest as it is written to `index.json` / `manifest.json`. Declared HERE, where it is
-// produced, so the readers can import it instead of restating it.
-export interface ClientManifest {
-    entry: string
-    css: string | null
-    files: string[]
-    encodings: Record<string, string[]>
-    chunkByPattern: Record<string, string>
-}
+// The manifest's shape is `server/internal/clientArtifact.ts`'s, alongside the reader that decodes it and
+// the `ClientBuild` it becomes. It was declared HERE, "so the readers can import it instead of restating
+// it" — and the reader restated it anyway, with `encodings` optional against this required one. Declaring
+// a shape next to its producer is not what makes a reader use it; being the only declaration is.
+export type { ClientManifest } from '../server/internal/clientArtifact.ts'
 
 export interface BuildResult {
     // Absolute path of the content-addressed output directory (`dist/_app/<hash>/`).

@@ -42,6 +42,14 @@ export interface HostAppOptions {
 
 export interface ServeResult {
     url: string
+    // The port that was ASKED for, which in dev is not always the one `url` names — `findOpenPort`
+    // hops upward when it is taken. Carried so the banner can say WHY the URL is not the port you
+    // typed; deriving it in the CLI instead would restate the `--port` → `PORT` → DEFAULT_PORT ladder
+    // in a second place, and the copy that drifts is the one that only prints.
+    //
+    // Optional because only the `serve` lane resolves a port at all — `hostApp` is handed one already
+    // chosen, and a compiled binary's `serve` reaches it by a different door.
+    requestedPort?: number | undefined
     stop(): Promise<void>
 }
 

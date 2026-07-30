@@ -42,8 +42,14 @@ import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
+import {
+    type ChunkAsset,
+    type ClientBuild,
+    clientBuildFrom,
+    normalizeManifest,
+    type StoredClientManifest,
+} from './clientArtifact.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
-import { preloadGraphOf } from './preloadGraphOf.ts'
 import { buildRegistry, type Clients } from './registry.ts'
 import { onRegistryRebind } from './registryDerivation.ts'
 import type { AppConfig } from './router.ts'
@@ -63,38 +69,10 @@ const COMPOSE_PATH = join(import.meta.dir, '../../ui/internal/compose.ts')
 // the package) still resolve the runtime — without polluting the source tree or the dev watcher.
 const RUNTIME_PATH = join(import.meta.dir, '../../ui/internal/runtime.ts')
 
-// The built client: a content-addressed set of ES module files (the loader entry + code-split
-// per-route chunks + Bun's shared chunks) plus the concatenated CSS, all served under `/__abide/chunk/`
-// with immutable caching (each filename embeds a content hash). `entry` is the loader's hashed filename
-// the SSR document boots from; `cssFile` is the stylesheet's hashed filename (undefined when the app
-// bundles no CSS). Cached per config — an app's pages/routes are fixed for its lifetime.
-export interface ClientBuild {
-    entry: string
-    cssFile: string | undefined
-    files: Map<string, ChunkAsset>
-    // Route pattern → its code-split chunk filename, for `<link rel="modulepreload">` of the matched
-    // route's chunk (eliminates the first-load loader→dynamic-import waterfall).
-    chunkByPattern: Map<string, string>
-    // What the document head preloads, split into the always-needed boot graph and the per-route one.
-    // Derived from the emitted bytes — see `preloadGraphOf.ts` for why it exists and what it omits.
-    bootChunks: string[]
-    routeChunks: Map<string, string[]>
-}
-
-// One served asset, in every encoding the build produced for it. The identity bytes are `Uint8Array`
-// rather than `string` because this map is the SERVING representation, read once per request and never
-// mutated — handing the router a string made it re-encode the same UTF-8 on every chunk fetch forever.
-//
-// Monomorphic on purpose: all three fields are always present, `null` standing for "this encoding was
-// not worth keeping", so the negotiation reads the same hidden class for a compressed and an
-// incompressible asset alike.
-// The `<ArrayBuffer>` argument is not decoration: `BodyInit` (and `Bun.gzipSync`) reject the default
-// `ArrayBufferLike` form, since a SharedArrayBuffer-backed view cannot be handed to a response body.
-export interface ChunkAsset {
-    identity: Uint8Array<ArrayBuffer>
-    gzip: Uint8Array<ArrayBuffer> | null
-    brotli: Uint8Array<ArrayBuffer> | null
-}
+// The artifact's SHAPE and its assembly live in `clientArtifact.ts` — one owner for the in-memory form,
+// the on-disk manifest, and the mapping between them. Re-exported here because this is where the build
+// that produces them lives, and every existing reader imports them from this module.
+export type { ChunkAsset, ClientBuild } from './clientArtifact.ts'
 
 // Below one MTU there is nothing to win: the response already fits in a single segment, so compressing
 // it saves no round trip and only adds decode work at both ends.
@@ -530,13 +508,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
             const match = names.find((name) => re.test(name))
             if (match !== undefined) chunkByPattern.set(pattern, match)
         }
-        return {
-            entry,
-            cssFile,
-            files,
-            chunkByPattern,
-            ...preloadGraphOf(entry, chunkByPattern, files),
-        }
+        return clientBuildFrom({ entry, css: cssFile ?? null, chunkByPattern, files })
     } finally {
         await rm(buildDir, { recursive: true, force: true }).catch(() => {})
         for (const mod of modules) await unlink(mod.file).catch(() => {})
@@ -641,19 +613,12 @@ export function clientBuildFor(config: AppConfig): Promise<ClientBuild> {
 export async function loadClientBuild(dir: string): Promise<ClientBuild | undefined> {
     const manifestFile = Bun.file(join(dir, 'dist', 'manifest.json'))
     if (!(await manifestFile.exists())) return undefined
-    const manifest = (await manifestFile.json()) as {
-        hash: string
-        entry: string
-        css: string | null
-        files: string[]
-        // name → the encodings written as sidecars beside it. Recorded rather than probed so boot costs
-        // no speculative `exists()` per file per encoding, and so a half-written build is a loud missing
-        // file instead of a silently identity-only one.
-        encodings?: Record<string, string[]>
-        chunkByPattern: Record<string, string>
-    }
-    const buildDir = join(dir, 'dist', '_app', manifest.hash)
-    const encodings = manifest.encodings ?? {}
+    // The stored shape has ONE reader, here, and it is normalised at once — the manifest's own type is
+    // `clientArtifact.ts`'s, so this cannot be a fourth opinion about which fields are optional.
+    const stored = (await manifestFile.json()) as StoredClientManifest & { hash: string }
+    const manifest = normalizeManifest(stored)
+    const buildDir = join(dir, 'dist', '_app', stored.hash)
+    const encodings = manifest.encodings
     const files = new Map<string, ChunkAsset>()
     for (const name of manifest.files) {
         const available = encodings[name] ?? []
@@ -667,14 +632,10 @@ export async function loadClientBuild(dir: string): Promise<ClientBuild | undefi
                 : null,
         })
     }
-    return {
+    return clientBuildFrom({
         entry: manifest.entry,
-        cssFile: manifest.css ?? undefined,
+        css: manifest.css,
+        chunkByPattern: manifest.chunkByPattern,
         files,
-        chunkByPattern: new Map(Object.entries(manifest.chunkByPattern)),
-        // Derived here rather than baked into the manifest: the answer is a pure function of bytes this
-        // function has just read, so recomputing it costs one decode per preloaded chunk at startup and
-        // cannot go stale against a manifest written by an older `abide build`.
-        ...preloadGraphOf(manifest.entry, new Map(Object.entries(manifest.chunkByPattern)), files),
-    }
+    })
 }

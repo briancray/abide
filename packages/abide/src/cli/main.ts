@@ -19,6 +19,7 @@ import { isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { BundleWindow } from '../bundle/BundleWindow.ts'
 import { CLI_EXIT_CODES } from '../server/command/CLI_EXIT_CODES.ts'
+import { banner, formatDuration, hint, serveBanner } from './banner.ts'
 import { build, ensureClientBuild } from './build.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { check } from './check.ts'
@@ -224,9 +225,18 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         invocation: 'abide dev [--port <n>]',
         summary: 'start the dev server (watch + live-reload)',
         run: async ({ cwd, rest, write }) => {
+            const startedAt = performance.now()
             const running = await serve(cwd, { dev: true, port: parsePort(rest) })
             installShutdownHandlers(running)
-            write(`abide dev — ${running.url}`)
+            write(
+                serveBanner({
+                    command: 'abide dev',
+                    url: running.url,
+                    requestedPort: running.requestedPort,
+                    elapsedMilliseconds: performance.now() - startedAt,
+                    notes: ['watching src/'],
+                }),
+            )
             return running
         },
     },
@@ -235,10 +245,17 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         invocation: 'abide build',
         summary: 'build the content-addressed client bundle into dist/_app/<hash>/',
         run: async ({ cwd, write }) => {
+            const startedAt = performance.now()
             // `build` answers a `BuildResult`, not a path — the binding was named `outDir` and
             // interpolated whole, so this line printed `abide build — [object Object]`.
             const { outDir } = await build(cwd)
-            write(`abide build — ${outDir}`)
+            write(
+                banner(
+                    'abide build',
+                    [{ label: 'output', value: outDir }],
+                    [`built in ${formatDuration(performance.now() - startedAt)}`],
+                ),
+            )
             return undefined
         },
     },
@@ -247,12 +264,22 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         invocation: 'abide start [--port <n>]',
         summary: 'serve the app (no watch)',
         run: async ({ cwd, rest, write }) => {
+            const startedAt = performance.now()
             // Serve the client artifacts produced by `abide build` (building them if absent) — no
             // bundler runs at request time.
             const clientBuild = await ensureClientBuild(cwd)
             const running = await serve(cwd, { dev: false, port: parsePort(rest), clientBuild })
             installShutdownHandlers(running)
-            write(`abide start — ${running.url}`)
+            // No port note is possible here and none is wanted: `start` binds what it was asked for,
+            // so a clash is an EADDRINUSE rather than a quiet move to explain.
+            write(
+                serveBanner({
+                    command: 'abide start',
+                    url: running.url,
+                    requestedPort: running.requestedPort,
+                    elapsedMilliseconds: performance.now() - startedAt,
+                }),
+            )
             return running
         },
     },
@@ -269,8 +296,9 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
                 process.exitCode = CLI_EXIT_CODES.usage
                 return undefined
             }
+            const startedAt = performance.now()
             const root = await scaffold(cwd, name)
-            write(`abide scaffold — created ${root}`)
+            write(banner('abide scaffold', [{ label: 'created', value: root }], []))
 
             if (flagAbsent(rest, '--no-git')) await runStep(['git', 'init'], root, writeError)
             if (flagAbsent(rest, '--no-install')) {
@@ -283,7 +311,7 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
                         'abide scaffold: `bun install` failed — skipping the dev server. Fix the install, then run `bun run dev`.',
                     )
                     process.exitCode = CLI_EXIT_CODES.failed
-                    write(`  cd ${name} && bun install && bun run dev`)
+                    write(hint(`next: cd ${name} && bun install && bun run dev`))
                     return undefined
                 }
             }
@@ -291,11 +319,21 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             if (flagAbsent(rest, '--no-dev')) {
                 const running = await serve(root, { dev: true, port: parsePort(rest) })
                 installShutdownHandlers(running)
-                write(`abide dev — ${running.url}`)
+                write(
+                    serveBanner({
+                        command: 'abide dev',
+                        url: running.url,
+                        requestedPort: running.requestedPort,
+                        // The whole scaffold — write, git init, install, boot. That is what the person
+                        // waited for; timing only the serve would report a number nobody experienced.
+                        elapsedMilliseconds: performance.now() - startedAt,
+                        notes: ['watching src/'],
+                    }),
+                )
                 return running
             }
 
-            write(`  cd ${name} && bun run dev`)
+            write(hint(`next: cd ${name} && bun run dev`))
             return undefined
         },
     },
@@ -331,11 +369,25 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         invocation: 'abide check',
         summary: 'type-check .abide script bodies (best-effort, via TS7)',
         run: async ({ cwd, write, writeError }) => {
+            const startedAt = performance.now()
             const result = await check(cwd)
             if (result.ok) {
-                write('abide check — no type errors in .abide script bodies')
+                write(
+                    banner(
+                        'abide check',
+                        [],
+                        [
+                            'no type errors in .abide script bodies',
+                            `checked in ${formatDuration(performance.now() - startedAt)}`,
+                        ],
+                    ),
+                )
                 return undefined
             }
+            // The FAILURE half is deliberately left unbannered and unstyled below: those lines are
+            // `file:line:column — TSxxxx: message`, which an editor and a CI log parse. Decoration
+            // there would be prettier and unparseable, which is the wrong trade for the one output a
+            // machine reads.
             for (const diagnostic of result.diagnostics) {
                 writeError(
                     `${diagnostic.file}:${diagnostic.line}:${diagnostic.column} — TS${diagnostic.code}: ${diagnostic.message}`,
@@ -377,6 +429,7 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         invocation: 'abide compile',
         summary: 'build the standalone executable (app + assets embedded)',
         run: async ({ cwd, rest, write }) => {
+            const startedAt = performance.now()
             // `--platforms` with no value (or a trailing flag after it) means the default release set.
             const platforms = rest.includes('--platforms')
                 ? (flagValue(rest, '--platforms')?.split(',').filter(Boolean) ?? [])
@@ -386,7 +439,15 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
                 out: flagValue(rest, '--out'),
                 platforms,
             })
-            for (const outfile of built) write(`abide compile — ${outfile}`)
+            // One row per artifact — `--platforms` produces a release set, and each of those paths is
+            // a thing you upload, so each earns a row rather than a note.
+            write(
+                banner(
+                    'abide compile',
+                    built.map((outfile) => ({ label: 'output', value: outfile })),
+                    [`built in ${formatDuration(performance.now() - startedAt)}`],
+                ),
+            )
             return undefined
         },
     },
@@ -395,11 +456,20 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         invocation: 'abide bundle',
         summary: 'build the desktop launcher into dist/bundle/ (host platform)',
         run: async ({ cwd, write }) => {
+            const startedAt = performance.now()
             const outDir = await bundle(cwd)
-            write(`abide bundle — ${outDir}`)
-            write(`  run: bun ${join(outDir, 'launch.ts')}`)
             write(
-                `  note: native windowing is best-effort (system webview binary or default browser)`,
+                banner(
+                    'abide bundle',
+                    [
+                        { label: 'output', value: outDir },
+                        { label: 'run', value: `bun ${join(outDir, 'launch.ts')}` },
+                    ],
+                    [
+                        `built in ${formatDuration(performance.now() - startedAt)}`,
+                        'native windowing is best-effort (system webview binary or default browser)',
+                    ],
+                ),
             )
             return undefined
         },
