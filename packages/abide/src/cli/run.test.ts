@@ -37,6 +37,52 @@ async function script(body: string): Promise<string> {
     return file
 }
 
+// Run `abide run` in a CHILD `bun` process and hand back what it reported.
+//
+// Needed for exactly one class of script: one that cannot avoid TOP-LEVEL AWAIT. Under
+// `bun test --parallel` (Bun 1.3.14) a dynamically imported module's body stops at its first top-level
+// await and NEVER RESUMES — not "resolves early", never. Reproducible in six lines with no abide
+// involved:
+//
+//     // mod.ts
+//     process.env.A = '1'; await Bun.sleep(10); process.env.B = '1'
+//     // a test: await import('./mod.ts') → A is '1', B stays undefined however long you wait
+//
+// So a script that must `await` a read cannot be observed in-process at all, and no amount of waiting
+// helps. Running it through a child `bun` — which is how `abide run` is actually invoked — takes the
+// test runner's module loader out of the claim being tested. Everything about the surface stays real:
+// `loadApp`, the lifecycle hooks, `bindRpcChains` and the script all run, in one process, as they do
+// for a user's migration.
+async function runInChild(scriptFile: string): Promise<{ ran?: string; guard?: string }> {
+    const runModule = join(import.meta.dir, 'run.ts')
+    const driver = join(scratch ?? tmpdir(), 'driver.ts')
+    await writeFile(
+        driver,
+        `import { run } from ${JSON.stringify(runModule)}\n` +
+            // Seeded so the assertion reads as a COUNT (see the test) rather than as presence.
+            "process.env.__ABIDE_GUARD = '0'\n" +
+            `await run(${JSON.stringify(FIXTURE)}, ${JSON.stringify(scriptFile)})\n` +
+            'console.log(`__ABIDE_REPORT__${JSON.stringify({ ran: process.env.__ABIDE_RAN, guard: process.env.__ABIDE_GUARD })}`)\n',
+    )
+    const child = Bun.spawn(['bun', driver], { stdout: 'pipe', stderr: 'pipe' })
+    const [stdout, stderr, code] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+    ])
+    const marker = stdout.lastIndexOf('__ABIDE_REPORT__')
+    if (code !== 0 || marker === -1) {
+        throw new Error(`the child \`abide run\` failed (exit ${code})\n${stdout}\n${stderr}`)
+    }
+    const json = stdout.slice(marker + '__ABIDE_REPORT__'.length)
+    return JSON.parse(
+        json.slice(0, json.indexOf('\n') === -1 ? undefined : json.indexOf('\n')),
+    ) as {
+        ran?: string
+        guard?: string
+    }
+}
+
 describe('abide run', () => {
     test('runs the script with the app loaded and its lifecycle hooks wrapped around it', async () => {
         const file = await script(`
@@ -61,6 +107,11 @@ describe('abide run', () => {
     //
     // The script imports the rpc by ABSOLUTE path, which is the same specifier `loadApp` used, so ES module
     // caching hands it the very callable the chain was bound to. Importing a second copy would test nothing.
+    //
+    // A READ IS ASYNCHRONOUS, so this script cannot avoid top-level await the way the port-probe fixture
+    // below does — and a script with top-level await is unobservable in-process under the package's own
+    // `bun test --parallel`. So it runs in a child `bun`, which is how `abide run` is invoked anyway; see
+    // `runInChild` for the six-line repro of why.
     test("a script's read runs the rpc's own middleware", async () => {
         const guarded = join(FIXTURE, 'src/server/rpc/guarded.ts')
         const file = await script(
@@ -69,14 +120,11 @@ describe('abide run', () => {
                 "if (value?.ok !== true) throw new Error('the handler did not run')\n" +
                 "process.env.__ABIDE_RAN = '1'\n",
         )
-        // Seeded rather than deleted, so the counter has a known base and the assertion below reads as a
-        // count. (A `delete` also narrows the env property to `undefined` for the rest of the function,
-        // which makes the string comparison a type error.)
-        process.env.__ABIDE_GUARD = '0'
-        await run(FIXTURE, file)
-        expect(process.env.__ABIDE_RAN).toBe('1')
-        // Once — the read is chained, and chained exactly once.
-        expect(process.env.__ABIDE_GUARD).toBe('1')
+        const report = await runInChild(file)
+        expect(report.ran).toBe('1')
+        // Once — the read is chained, and chained exactly once. A COUNT, which is why the child seeds the
+        // counter to '0' rather than deleting it.
+        expect(report.guard).toBe('1')
     })
 
     test('serves no HTTP — the port a server would have taken stays free', async () => {

@@ -10,6 +10,28 @@ several modules are organised around.
 
 ---
 
+## Owner
+
+The one module a rule lives in. Most entries below are one — `rpcMemoPolicy` for a memo policy,
+`surfaceProjection` for a reachability gate, `templateChildren` for an AST child list.
+
+The recurring lesson is about what makes an owner HOLD, because three of them did not:
+
+- **`rpcSpec.ts`** owned the wire spec's TYPE and left the projection hand-written behind an `as` cast —
+  and an `as` admits a literal missing a required field, while a missing OPTIONAL field is not an error
+  anywhere. That is the same drift the module was created for (`throttle`/`debounce` set on the server,
+  typed on the client, absent in between), one layer out.
+- **`abideDiagnostic.ts`** said in prose that `indexByGeneratedPath` was "the only way" to build its
+  index. Two LSP handlers rebuilt it inline, and a comment described a sharing that did not exist.
+- **`cli/build.ts`** declared the client manifest "so the readers can import it instead of restating it".
+  The reader restated it, with a different answer about which fields are optional.
+
+In each case the fix was to make the claim a TYPE rather than a comment: a declared key list with a
+`never`-totality check (`UnprojectedRpcSpecKey`), a `Record` over a discriminated union
+(`childListsOf`), a branded map (`GeneratedIndex`). A rule stated once and enforced by a comment is a
+rule the next call site restates — and the failure is always silent, because the copy that drifts is the
+copy nobody was looking at.
+
 ## Adopted ambient
 
 A value the **server resolved** that the browser **adopts and never mints**.
@@ -47,6 +69,15 @@ lowers to type-only TS). They keep separate *lowerings* on purpose — a `{#for}
 `for…of` for the type checker and a keyed reconcile at runtime — but must agree on what is **legal**
 (`validateTemplate` asks the build lane's gate) and on what each construct **means**
 (`componentAttrLanes.test.ts` enumerates that).
+
+A *lowering* is a lane's own; a **structural fact about the AST is nobody's** (ADR 0029 says so
+explicitly, and names this as still in scope). Where a `TemplateNode`'s children are is such a fact, and
+three walks each carried it as nine `switch` arms with no `default` — `walkNestedScripts`,
+`collectComponentNames`, `scriptBodies` — so a new node type was silently skipped by each, three
+different ways (a branch-local `<script>` emitting nothing being the worst). `templateChildren.ts` is a
+`Record` over `TemplateNode['type']`, so a 16th member does not compile until it says where its children
+are; `site` carries the one thing the callers legitimately differ on (an element's children fold into the
+parent level and cannot host a `<script>`; a block body is its own level).
 
 ## Chain rung
 
@@ -176,6 +207,83 @@ not a class, because its match is an async lookup that can miss and a miss must 
 
 The three fat branches became modules (`chunkAsset.ts`, `navRoute.ts`, `rpcRoute.ts`), which took
 `router.ts` from 1296 lines to 855.
+
+## Fill mode
+
+Which of the three ways a `memo` slot fills: **pulled/coalesced** (the loading path — `slot.state` +
+`slot.inflight`), an **auto-tracked derivation** (ADR 0024 §1-3 — the state machine lives in a backing
+`computed` and those two fields go unused), or **keyed sync** (args are the whole dependency set, body
+runs untracked, one slot per key).
+
+Every probe and verb has to know which, so the dichotomy needs one statement per question rather than one
+per caller. Three bugs came from spelling it at the call site, and each is recorded where it happened:
+`cancelClock` ("a slot has one refetch window conceptually and two possible carriers"), `c.refreshing` (a
+derivation reported a constant `false`, so a debounced one never showed as refreshing), and the four
+`*ForTags` aggregates, which were written before a slot had two fill modes — `refresh({ tags })` ran a
+derivation's body on the LOADING path, wrote the result where the auto read never looks, and re-stamped
+`loadedAt`, postponing the `ttl` re-run that would eventually have corrected it.
+
+So the per-slot verbs are functions — `slotPending` / `slotRefreshing` / `slotRefresh`, alongside
+`dropSlot`, which already was one and is why the aggregate built on it had no bug — and the callable's
+probes and the tag aggregates both call them.
+
+The other axis a fill path has is TRACKING, and it is a **parameter, not a reason to restate a rule**:
+`runFillBody(call, untracked)` is the single statement of fail-closed checkpoint (a) (a `crossRequest`
+body runs scope-exited on every path, so it cannot bake one caller's identity into a shared value). It
+was written out three times, and two of the three had no test — every fail-closed test used an `async`
+body, and the two sync paths fail SYNCHRONOUSLY, so `rejects.toThrow` would have passed over them
+vacuously.
+
+## Substrate
+
+Which machine an emitted template runs on: `serverRuntime` builds an HTML **string**, `runtime` mutates a
+**live DOM node**. Most of what each does is genuinely its own. What is not is the CLASSIFICATION that
+comes first, and each time one was stated twice the two drifted:
+
+- **`attributeDisposition.ts`** — omit / bare / stringify, and whether a spread entry is an attribute at
+  all. Drifted on `onClick` in a spread: the server dropped it, the client wrote the function's SOURCE
+  TEXT into an `onclick` attribute, which a browser then executes.
+- **`bindTarget.ts`** — element / group / boolean / value. Drifted on `selected`: the server rendered a
+  boolean attribute, the client fell through to `bindValue` and assigned `option.value = "true"` on
+  hydrate. Both bind fixtures are `client: false` by construction (a bind writes a PROPERTY on one side
+  and an ATTRIBUTE on the other), so the parity harness structurally could not see it.
+
+The rule is the same both times: the two substrates share the classification and keep the ACTION. A
+boolean bind therefore takes the property it mirrors as a parameter — an `<input>` carries the state on
+`.checked`, an `<option>` on `.selected` — which is also why `selected` cannot be folded into `checked`.
+
+## Client artifact
+
+The built client, in its two shapes and the one mapping between them (`server/internal/clientArtifact.ts`):
+`ClientBuild` in memory, `ClientManifest` on disk, and `clientBuildFrom` — which applies the rules three
+producers were each restating (`null` is the manifest's absent and `undefined` the in-memory one; the
+preload graph is DERIVED from the bytes so it cannot go stale against an older build's manifest).
+
+The manifest is the cautionary half. It was declared beside `build()` "so the readers can import it
+instead of restating it", and the reader restated it anyway — `encodings` required in the declaration,
+optional in the reader, optional-chained in the compile stager: three answers about the field that decides
+whether a precompressed sidecar is served, embedded, or silently skipped. **Declaring a shape next to its
+producer is not what makes a reader use it; being the only declaration is.** What an OLDER build may omit
+is now its own named type (`StoredClientManifest`) weakened at the one place JSON is decoded.
+
+It lives under `server/internal/` rather than beside `build()` in `cli/` because the router reaches it, and
+importing `cli/build.ts` would drag `loadApp`/`writeBakedSchemas` onto the request path — the floor
+`compiledAppFloor.test.ts` holds.
+
+## Node bridge
+
+The re-exec that lets Bun-side code use the tsgo sync API, which cannot open its pipe under Bun: run THIS
+module under node, request in on stdin, marked JSON out on stdout (`server/internal/nodeTypeBridge.ts`).
+Two callers need it (`cli/check.ts`, `deriveSchema.ts`) and each had implemented all of it.
+
+The failure POLICY is the callers', and the difference is real: a type check that cannot run must not
+report green, so `check` propagates; schema derivation is documented loud-but-non-fatal, so it degrades to
+a warning per entry. One failure type, two visible `catch`es — rather than two scrapes that happened to
+disagree.
+
+Anything on this path must be **strip-only safe** (no enum, no parameter property, no `Bun` at module
+load): `check.ts` re-executes itself with types stripped, so a single TS construct with a runtime effect
+makes node reject the whole file.
 
 ## Probe
 
