@@ -119,7 +119,8 @@ proc.stdin.write(
 )
 await readUntil(
     () =>
-        received.filter((m) => m.method === 'textDocument/publishDiagnostics').length > beforeEdit &&
+        received.filter((m) => m.method === 'textDocument/publishDiagnostics').length >
+            beforeEdit &&
         (publishedFor(EDITED_PAGE)?.params as { diagnostics?: unknown[] })?.diagnostics?.length !==
             0,
     'the didChange diagnostics',

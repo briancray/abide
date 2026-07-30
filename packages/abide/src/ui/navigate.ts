@@ -10,7 +10,9 @@
 // PR3 unwraps the slots). The seed primes the reads so the claim suppresses re-fetch + the initial
 // write. Before hydrating it updates the reactive client route so `route()`-dependent bindings re-run.
 // A middleware short-circuit still arrives as a JSON `{redirect}` envelope (handled first). Link clicks
-// and back/forward drive the same path (see bootstrap.ts).
+// and back/forward drive the same path (see bootstrap.ts). WHAT a nav response is — frame stream,
+// redirect envelope, or unusable — is `internal/navResponse.ts`'s one answer for all three nav shapes;
+// what to DO about an unusable one differs per shape and stays at the call site.
 //
 // TRACING (CO2.3): a nav fetch deliberately carries NO `traceparent`, which is the opposite of what an
 // RPC call does. A navigation is a new logical operation, not a continuation of the page it left:
@@ -46,6 +48,7 @@ import { bootstrapPage, buildPageScope, replaySeedIntoProxies } from './internal
 import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
 import { HYDRATED_ATTRIBUTE } from './internal/HYDRATED_ATTRIBUTE.ts'
 import { HYDRATION_ELEMENT_ID } from './internal/HYDRATION_ELEMENT_ID.ts'
+import { classifyNavResponse } from './internal/navResponse.ts'
 import {
     loadPageEntry,
     pageBase,
@@ -272,19 +275,13 @@ async function partialCrossNav(
         return
     }
     if (gen !== navGen) return // superseded before we touch the DOM
-    const contentType = response.headers.get('content-type') ?? ''
-    const isStream = contentType.includes('application/jsonl')
-    // A middleware short-circuit arrives as a JSON `{redirect}` envelope (not the frame stream).
-    if (!isStream && contentType.includes('application/json')) {
-        const envelope = (await response.json().catch(() => null)) as { redirect?: string } | null
-        if (envelope?.redirect !== undefined && envelope.redirect.length > 0) {
-            await navigate(envelope.redirect, { replace: true })
-            return
-        }
-        location.href = path
+    const classified = await classifyNavResponse(response)
+    if (classified.kind === 'redirect') {
+        await navigate(classified.to, { replace: true })
         return
     }
-    if (!isStream || response.body === null) {
+    // Nothing graftable came back and this path was going to replace DOM: hard-load.
+    if (classified.kind === 'unusable') {
         location.href = path
         return
     }
@@ -293,7 +290,7 @@ async function partialCrossNav(
     let firstNode: Node | null = null
     let grafted = false
     try {
-        for await (const raw of decodeJsonlStream(response.body)) {
+        for await (const raw of decodeJsonlStream(classified.body)) {
             const frame = asSoftNavFrame(raw)
             if (frame === undefined) continue
             // Re-checked EVERY frame, not once after the fetch: a streamed destination holds this loop
@@ -411,17 +408,15 @@ async function softLoad(
             // whole render has streamed). Without it `trace()` would keep answering with the previous
             // page's id, which is worse than a stale route: it points at the wrong span.
             traceAmbient.adopt(confirm.headers.get('traceresponse'))
-            const type = confirm.headers.get('content-type') ?? ''
-            if (!type.includes('application/jsonl') && type.includes('application/json')) {
-                const envelope = (await confirm.json().catch(() => null)) as {
-                    redirect?: string
-                } | null
-                if (envelope?.redirect !== undefined && envelope.redirect.length > 0) {
-                    await navigate(envelope.redirect, { replace: true })
-                }
+            const classified = await classifyNavResponse(confirm)
+            if (classified.kind === 'redirect') {
+                await navigate(classified.to, { replace: true })
                 return
             }
-            if (!type.includes('application/jsonl') || confirm.body === null) return
+            // The one path whose `unusable` is NOT a hard load: this nav keeps its live mount, which is
+            // already showing the right DOM for the new params. The confirm was for the middleware
+            // verdict and the fresh reads, so an unreadable one costs those and nothing else.
+            if (classified.kind === 'unusable') return
             // The confirm is a FULL render of this route — the server ran every read on it. Drain the
             // frame stream for the trailing `seed` and replay its reads/streams into the live mount's
             // memos. This body used to be discarded on the premise that "the kept page's reads have
@@ -436,7 +431,7 @@ async function softLoad(
             // no matching slot sentinels, and re-rendering is the reactive graph's job once the memos hold
             // the new values.
             let seed: HydrationSeed | undefined
-            for await (const raw of decodeJsonlStream(confirm.body)) {
+            for await (const raw of decodeJsonlStream(classified.body)) {
                 const frame = asSoftNavFrame(raw)
                 if (frame?.kind === 'seed') seed = frame.seed
             }
@@ -507,32 +502,16 @@ async function softLoad(
     }
     if (gen !== navGen) return // superseded before we touch the DOM
 
-    const contentType = response.headers.get('content-type') ?? ''
     const container = document.getElementById(CONTAINER_ID)
-
-    // Check `jsonl` BEFORE `json` — "application/jsonl" contains "application/json" as a substring, so a
-    // naive `.includes("application/json")` would misclassify the frame stream as a redirect envelope.
-    const isStream = contentType.includes('application/jsonl')
-
-    // A middleware short-circuit arrives as a JSON `{redirect}` envelope (not the frame stream).
-    if (!isStream && contentType.includes('application/json')) {
-        let envelope: { redirect?: string }
-        try {
-            envelope = (await response.json()) as typeof envelope
-        } catch {
-            location.href = path
-            return
-        }
-        if (typeof envelope.redirect === 'string' && envelope.redirect.length > 0) {
-            await navigate(envelope.redirect, { replace: true })
-            return
-        }
-        location.href = path
+    const classified = await classifyNavResponse(response)
+    if (classified.kind === 'redirect') {
+        await navigate(classified.to, { replace: true })
         return
     }
 
-    // Not the streamed soft-nav body (a full HTML document / error page) → real load.
-    if (!isStream || response.body === null || container === null) {
+    // `unusable` is a full HTML document / error page / bodyless response → real load. So is a document
+    // with no container to swap into, which is this path's own condition rather than the response's.
+    if (classified.kind === 'unusable' || container === null) {
         location.href = path
         return
     }
@@ -545,7 +524,7 @@ async function softLoad(
     let seed: HydrationSeed | undefined
     let navUrl = target.pathname + target.search
     try {
-        for await (const raw of decodeJsonlStream(response.body)) {
+        for await (const raw of decodeJsonlStream(classified.body)) {
             const frame = asSoftNavFrame(raw)
             if (frame === undefined) continue
             if (gen !== navGen) return // superseded mid-stream — the newer nav owns the container
