@@ -51,6 +51,48 @@ export interface RpcSpec {
     timeout: number
 }
 
+// EVERY FIELD THAT CROSSES, NAMED ONCE — and the projection that writes them.
+//
+// The type having one owner fixed the two ENDS and left the crossing itself hand-written: the client
+// bundle enumerated six fields into a literal, then appended three more under `!== undefined` guards,
+// behind an `as` cast. The cast is what made that dangerous — an object literal missing a REQUIRED field
+// is an error, but an assertion admits it, so the compiler could not see a field that stopped crossing
+// even though `RpcEntry extends RpcSpec` had made the source of truth checkable.
+//
+// The optional half was worse, and is the drift this module was created for: `tags`/`throttle`/`debounce`
+// are written only when the author declared them (an empty array or two `undefined`s in every spec would
+// weigh the bundle down for the common case), and an optional field left out of the projection is not a
+// compile error ANYWHERE. That is exactly how `throttle`/`debounce` came to be set on the server, typed
+// on the client, and absent in between.
+export const RPC_SPEC_KEYS = [
+    'method',
+    'read',
+    'crossRequest',
+    'memo',
+    'ttl',
+    'timeout',
+    'tags',
+    'throttle',
+    'debounce',
+] as const satisfies readonly (keyof RpcSpec)[]
+
+// TOTALITY — the half `satisfies` cannot do. `satisfies` rejects a key that is not on `RpcSpec`; this
+// alias catches the direction that actually bites, a key on `RpcSpec` that nothing projects. It is
+// asserted in `rpcSpec.test.ts`, where the failure names the unprojected field.
+export type UnprojectedRpcSpecKey = Exclude<keyof RpcSpec, (typeof RPC_SPEC_KEYS)[number]>
+
+// The registry entry → the wire spec. `RpcEntry extends RpcSpec`, so this is a projection rather than a
+// translation: every declared field is written, and an absent optional one is omitted rather than sent as
+// `undefined` (which would survive `JSON.stringify` as nothing but does weigh the emitted literal).
+export function rpcSpecOf(entry: RpcSpec): RpcSpec {
+    const spec: Record<string, unknown> = {}
+    for (const key of RPC_SPEC_KEYS) {
+        const value = entry[key]
+        if (value !== undefined) spec[key] = value
+    }
+    return spec as unknown as RpcSpec
+}
+
 // THE SAME SHAPE AS A CONSUMER MUST ACCEPT IT. `rpcSpecs()` writes every policy field, but a
 // hand-built proxy (a test, a fixture) omits them and lands on the normalizer's defaults — which is
 // sound because `rpcMemoPolicy` is idempotent. Every field admits an explicit `undefined` so a full

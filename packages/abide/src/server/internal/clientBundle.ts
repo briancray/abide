@@ -35,7 +35,7 @@ import { promisify } from 'node:util'
 import { brotliCompress, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
 import { appName } from '../../shared/internal/appName.ts'
-import type { RpcSpec } from '../../shared/internal/rpcSpec.ts'
+import { type RpcSpec, rpcSpecOf } from '../../shared/internal/rpcSpec.ts'
 import { encodeMaxAge, type SocketSpec } from '../../shared/internal/socketSpec.ts'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
@@ -44,7 +44,7 @@ import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import { preloadGraphOf } from './preloadGraphOf.ts'
-import { buildRegistry } from './registry.ts'
+import { buildRegistry, type Clients } from './registry.ts'
 import { onRegistryRebind } from './registryDerivation.ts'
 import type { AppConfig } from './router.ts'
 import { staticAssetType } from './staticAssetType.ts'
@@ -130,30 +130,24 @@ function rpcSpecs(config: AppConfig, importedNames: Set<string>): Record<string,
     const specs: Record<string, RpcSpec> = {}
     for (const entry of buildRegistry(config).rpcs) {
         if (!importedNames.has(entry.name)) continue
-        // The same reachability question every surface asks, with a different CONSEQUENCE: elsewhere an
-        // unreachable callable is skipped, here it is a build ERROR, because the page named it. Skipping
-        // would ship a page whose import silently resolves to nothing.
-        if (!reaches(entry, 'browser')) {
-            throw new Error(
-                `abide: rpc "${entry.name}" is imported into a UI page but is not browser-reachable (clients.browser: false). Remove the import or expose the rpc to the browser.`,
-            )
-        }
-        const spec = {
-            method: entry.method,
-            read: entry.read,
-            crossRequest: entry.crossRequest,
-            memo: entry.memo,
-            ttl: entry.ttl,
-            timeout: entry.timeout,
-        } as (typeof specs)[string]
-        // Only when declared — an empty array in every spec would bloat the bundle for the common case.
-        if (entry.tags !== undefined) spec.tags = entry.tags
-        // Same rule for the refetch clock: absent on the overwhelming majority of routes.
-        if (entry.throttle !== undefined) spec.throttle = entry.throttle
-        if (entry.debounce !== undefined) spec.debounce = entry.debounce
-        specs[entry.name] = spec
+        requireBrowserReachable(entry, 'rpc')
+        // The fields that cross, and which of them are written, are `rpcSpec.ts`'s — see `rpcSpecOf`.
+        // This used to be a hand-enumerated literal behind an `as` cast, which is the one arrangement
+        // that could not catch a field that stopped crossing.
+        specs[entry.name] = rpcSpecOf(entry)
     }
     return specs
+}
+
+// The same reachability question every surface asks, with a different CONSEQUENCE: elsewhere an
+// unreachable callable is skipped, here it is a build ERROR, because the page NAMED it. Skipping would
+// ship a page whose import silently resolves to nothing. One statement for both callables — the rpc loop
+// and the socket loop had the identical throw with one word different.
+function requireBrowserReachable(entry: { name: string; clients: Clients }, kind: string): void {
+    if (reaches(entry, 'browser')) return
+    throw new Error(
+        `abide: ${kind} "${entry.name}" is imported into a UI page but is not browser-reachable (clients.browser: false). Remove the import or expose the ${kind} to the browser.`,
+    )
 }
 
 // The socket specs the client proxies need (client-sockets.md CS7). TREE-SHAKING: only sockets some
@@ -164,12 +158,7 @@ function socketSpecs(config: AppConfig, importedNames: Set<string>): Record<stri
     const specs: Record<string, SocketSpec> = {}
     for (const entry of buildRegistry(config).sockets) {
         if (!importedNames.has(entry.name)) continue
-        // Build ERROR rather than a skip, for the reason `rpcSpecs` states above.
-        if (!reaches(entry, 'browser')) {
-            throw new Error(
-                `abide: socket "${entry.name}" is imported into a UI page but is not browser-reachable (clients.browser: false). Remove the import or expose the socket to the browser.`,
-            )
-        }
+        requireBrowserReachable(entry, 'socket')
         specs[entry.name] = {
             clientPublish: entry.clientPublish,
             tail: entry.tail,
