@@ -77,16 +77,25 @@ function navKeepDeclared(request: Request): number | null {
     return value
 }
 
-// Does a page pattern claim this path? Sets the matched pattern as the route NAME and its extracted
-// params on the scope, so `route().params.id` works during SSR and `handleNavRoute` below reads the
-// pattern back off the scope instead of matching again.
-export function matchNavRoute(scope: RequestScope, config: AppConfig): boolean {
+// Does a page pattern claim this path? Returns the MATCH — the pattern and its extracted params — or
+// undefined.
+//
+// It used to answer `boolean` and write `scope.route.name`/`params` on the way past, which
+// `handleNavRoute` then read back. Two things were wrong with that. The ordering ("call the matcher
+// before the handler, on the same scope") was held by nothing but `resolveAppClass` happening to call
+// them adjacently, and the caller could not tell a claimed path from a claimed-and-recorded one. Handing
+// the match back makes the dependency an argument: the caller decides when the scope learns its route,
+// which is what `resolveAppClass` now does explicitly.
+export interface NavMatch {
+    pattern: string
+    params: Record<string, string>
+}
+
+export function matchNavRoute(scope: RequestScope, config: AppConfig): NavMatch | undefined {
     const pages = config.pages ?? {}
     const match = matchRoute(pagePatternsOf(config, pages), scope.route.url.pathname)
-    if (match === null) return false
-    scope.route.name = match.pattern
-    scope.route.params = match.params
-    return true
+    if (match === null) return undefined
+    return { pattern: match.pattern, params: match.params }
 }
 
 export async function handleNavRoute(scope: RequestScope, config: AppConfig): Promise<Response> {

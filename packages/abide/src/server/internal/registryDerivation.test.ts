@@ -29,9 +29,9 @@ describe('derived-from-the-registry re-derives on rebind', () => {
             // Prime the derivation — this is what made the bug latent rather than immediate: an app whose
             // pattern list was never asked for before the reload had nothing stale to serve.
             // biome-ignore lint/suspicious/noExplicitAny: RequestScope is request-shaped; the match reads only `route`.
-            expect(matchNavRoute(scopeFor('/') as any, config)).toBe(true)
+            expect(matchNavRoute(scopeFor('/') as any, config)?.pattern).toBe('/')
             // biome-ignore lint/suspicious/noExplicitAny: as above.
-            expect(matchNavRoute(scopeFor('/about') as any, config)).toBe(false)
+            expect(matchNavRoute(scopeFor('/about') as any, config)).toBeUndefined()
 
             // What `abide dev`'s rebuild does: reassign the property on the SAME config object, so a
             // WeakMap keyed on that object keeps answering with the boot's pages.
@@ -40,8 +40,7 @@ describe('derived-from-the-registry re-derives on rebind', () => {
 
             // biome-ignore lint/suspicious/noExplicitAny: as above.
             const scope = scopeFor('/about') as any
-            expect(matchNavRoute(scope, config)).toBe(true)
-            expect(scope.route.name).toBe('/about')
+            expect(matchNavRoute(scope, config)?.pattern).toBe('/about')
         } finally {
             void app.stop()
         }
@@ -54,11 +53,11 @@ describe('derived-from-the-registry re-derives on rebind', () => {
         const app = createApp(config)
         try {
             // biome-ignore lint/suspicious/noExplicitAny: as above.
-            expect(matchNavRoute(scopeFor('/gone') as any, config)).toBe(true)
+            expect(matchNavRoute(scopeFor('/gone') as any, config)?.pattern).toBe('/gone')
             config.pages = { '/': 'home.abide' }
             app.rebind()
             // biome-ignore lint/suspicious/noExplicitAny: as above.
-            expect(matchNavRoute(scopeFor('/gone') as any, config)).toBe(false)
+            expect(matchNavRoute(scopeFor('/gone') as any, config)).toBeUndefined()
         } finally {
             void app.stop()
         }

@@ -182,10 +182,15 @@ export function resolveFrameworkClass(scope: RequestScope): RouteClass | undefin
 // Rungs the APP owns. Resolved after the public-file probe. `undefined` means nothing claimed the path,
 // which is the router's 404.
 //
-// `matchNavRoute` sets `route().name`/`params` as a side effect, because the pattern match IS what produces
-// them and the handler must not repeat it.
+// Resolution is also where the scope LEARNS its route: the pattern match is what produces
+// `route().name`/`params`, and `handleNavRoute` reads them back rather than matching a second time. The
+// recording is written here, at the one place that knows the match happened, rather than hidden inside a
+// predicate — see `matchNavRoute` for what the side-writing version cost.
 export function resolveAppClass(scope: RequestScope, config: AppConfig): RouteClass | undefined {
     if (scope.route.kind === 'rpc') return RPC_CLASS
-    if (matchNavRoute(scope, config)) return NAV_CLASS
-    return undefined
+    const match = matchNavRoute(scope, config)
+    if (match === undefined) return undefined
+    scope.route.name = match.pattern
+    scope.route.params = match.params
+    return NAV_CLASS
 }

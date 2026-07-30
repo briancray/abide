@@ -197,15 +197,6 @@ export function findAbideFiles(dir: string): string[] {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Offset mapping
-// ---------------------------------------------------------------------------
-
-// Moved to `ui/internal/abideDiagnostic.ts` (it belongs with the map-back step it serves) and
-// re-exported here only because `lsp.ts` imported it FROM this file — a CLI command doubling as the
-// LSP's library. New callers should take it from `abideDiagnostic` directly.
-export { offsetToLineColumn } from '../ui/internal/abideDiagnostic.ts'
-
-// ---------------------------------------------------------------------------
 // TS7 diagnostics — the `TypeEngine` seam (Bun -> node bridge, mirrors deriveSchema)
 // ---------------------------------------------------------------------------
 
