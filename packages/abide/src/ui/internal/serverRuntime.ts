@@ -19,6 +19,7 @@ import {
     isSpreadHandler,
     styleDirectiveApplies,
 } from './attributeDisposition.ts'
+import { bindTargetKind } from './bindTarget.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // Re-exported so the emitted server `{#for await}` can flip the `done(source)` probe when it fully
@@ -264,28 +265,32 @@ function resolveBound(bound: unknown): unknown {
     return bound
 }
 
+// The ACTION half of the bind taxonomy for THIS substrate: an attribute written into an HTML string.
+// Which kind a target is belongs to `bindTarget.ts`, so the client cannot answer it differently.
 export function applyBind(builder: AttributeBuilder, name: string, value: unknown): void {
-    // `bind:element` is a CLIENT-ONLY node ref / attach fn — it renders no server attribute.
-    if (name === 'element') return
-    // `bind:group` is a radio/checkbox membership bind — resolve the group value and render `checked`
-    // iff it matches THIS input's own `value` (the static `value` attr already sits in the builder).
-    // It never emits a literal `group` attribute. Mirrors client `bindGroup`.
-    if (name === 'group') {
-        const current = resolveBound(value)
-        const own = builder.getValue('value')
-        const inputValue = typeof own === 'string' ? own : ''
-        const isCheckbox = builder.getValue('type') === 'checkbox'
-        const checked = isCheckbox
-            ? Array.isArray(current) && current.includes(inputValue)
-            : current === inputValue
-        if (checked) builder.setAttribute('checked', true)
-        return
-    }
-    const resolved = resolveBound(value)
-    if (name === 'checked' || name === 'selected') {
-        if (resolved) builder.setAttribute(name, true)
-    } else {
-        applyAttributeValue(builder, name, resolved)
+    switch (bindTargetKind(name)) {
+        case 'element':
+            // A node ref / attach fn — there is no node yet, so nothing is rendered.
+            return
+        case 'group': {
+            // Resolve the GROUP's value and render `checked` iff it matches THIS input's own `value`
+            // (the static `value` attr already sits in the builder). Never a literal `group` attribute.
+            const current = resolveBound(value)
+            const own = builder.getValue('value')
+            const inputValue = typeof own === 'string' ? own : ''
+            const isCheckbox = builder.getValue('type') === 'checkbox'
+            const checked = isCheckbox
+                ? Array.isArray(current) && current.includes(inputValue)
+                : current === inputValue
+            if (checked) builder.setAttribute('checked', true)
+            return
+        }
+        case 'boolean':
+            if (resolveBound(value)) builder.setAttribute(name, true)
+            return
+        default:
+            applyAttributeValue(builder, name, resolveBound(value))
+            return
     }
 }
 

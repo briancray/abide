@@ -16,6 +16,7 @@ import type { BindingAnalysis } from './analyzeBindings.ts'
 import { reconstructImport } from './analyzeBindings.ts'
 import { bindLazyPattern } from './bindLazyPattern.ts'
 import { bindPattern } from './bindPattern.ts'
+import { bindTargetKind } from './bindTarget.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
 import { closeFinderFor, openIndexFor, SLOT_FOOTPRINT } from './SLOT_FOOTPRINT.ts'
@@ -460,13 +461,18 @@ class ClientEmitter {
     private genBind(slot: SlotOf<'bind'>, nav: (p: number[]) => string): string {
         const el = nav(slot.path)
         const { name, expr } = slot
-        if (name === 'element') {
+        // Which kind this target is comes from `bindTarget.ts` — the same answer `serverRuntime.applyBind`
+        // renders against, so the two substrates cannot classify a target differently.
+        const kind = bindTargetKind(name)
+        if (kind === 'element') {
             return `  { const $d = $rt.bindElement(${el}, (${expr})); if ($d !== undefined) $sink.push($d); }\n`
         }
-        let helper = 'bindValue'
-        if (name === 'group') helper = 'bindGroup'
-        else if (name === 'checked') helper = 'bindChecked'
-        return `  { const $acc = $rt.boundAccessor((${expr})); if ($acc !== null) $sink.push($rt.${helper}(${el}, $acc)); }\n`
+        // A boolean target mirrors the property it NAMES (`checked`, `selected`), so the helper takes it.
+        const call =
+            kind === 'boolean'
+                ? `$rt.bindBoolean(${el}, $acc, ${JSON.stringify(name)})`
+                : `$rt.${kind === 'group' ? 'bindGroup' : 'bindValue'}(${el}, $acc)`
+        return `  { const $acc = $rt.boundAccessor((${expr})); if ($acc !== null) $sink.push(${call}); }\n`
     }
 
     private genIf(

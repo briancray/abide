@@ -540,19 +540,25 @@ export function boundAccessor(bound: unknown): Accessor | null {
     return null
 }
 
-export function bindChecked(element: Element, accessor: Accessor): Disposer {
-    const input = element as HTMLInputElement
+// A boolean-property bind (`bindTarget.ts`'s `'boolean'` kind): mirror the cell into the property the
+// target NAMES, and write back on `change`. Parameterized by property rather than hardcoded to
+// `checked`, because the state lives somewhere different per element — an `<input>` carries it on
+// `.checked`, an `<option>` on `.selected` — and the server renders the target's own name as the
+// attribute. `bind:selected` used to fall through to `bindValue` here, which assigned `.value = "true"`
+// and clobbered the option's value on hydrate over an SSR paint that was correct.
+export function bindBoolean(element: Element, accessor: Accessor, property: string): Disposer {
+    const node = element as unknown as Record<string, unknown>
     const dispose = hydratableEffect(
         () => Boolean(accessor.read()),
         (value) => {
-            input.checked = value as boolean
+            node[property] = value as boolean
         },
     )
-    const handler = (): void => accessor.write(input.checked)
-    input.addEventListener('change', handler)
+    const handler = (): void => accessor.write(Boolean(node[property]))
+    element.addEventListener('change', handler)
     return () => {
         dispose()
-        input.removeEventListener('change', handler)
+        element.removeEventListener('change', handler)
     }
 }
 
