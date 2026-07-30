@@ -364,68 +364,91 @@ function resolveRpcTimeout(options: RpcOptions, method: string): number {
 
 const DEFAULT_RPC_TIMEOUT_MS = 300_000
 
-export function makeRead<Args, T>(
-    method: string,
-    fn: (args: Args) => Promise<T> | T,
-    opts?: RpcOptions,
-): Rpc<Args, T> {
-    const options = opts ?? {}
+// THE MEMO ASSEMBLY, ONCE — what a read and a mutation both are before transport.
+//
+// `rpc = memo + transport`, and the memo half was written out twice: the same eight decisions in the same
+// order (policy → memo options → `crossRequest` → `loader` → deadline → `notify` → build → chain), with
+// the copy-pasted comments to prove it ("Server-only, as in `makeRead` above"; the loader note verbatim).
+// `attachSurface` then took ten positional arguments, two of which were single-use setter closures spelled
+// identically in both factories — a shallow seam where an eleventh capability means editing four sites.
+//
+// THE GENUINE DIFFERENCES ARE THREE, and they are the parameters: which verb the policy is normalised for,
+// the `read` flag on the meta, and the PRODUCER. That last one is why this is not a merge of the verbs:
+// ADR 0030 D2 records that `__bare` must be handed in by the factory rather than rebuilt from the memo,
+// because a mutation's producer is not "call the memo" (a `FormData` body and `memo: false` both bypass it,
+// and rebuilding that branch routed every multipart upload through the memo). So the producer is BUILT by
+// the caller, from what the assembly resolved — and gets exactly the three things it can need.
+interface RpcAssembly<Args, T> {
+    method: string
+    // The handler as the memo sees it: a mutation's `fn` returns the transport-wrapped `R` and the memo
+    // sees through to the payload, so the cast happens at the call site where both types are known.
+    handler: (args: Args) => Promise<T> | T
+    options: RpcOptions
+    read: boolean
+    produce: (resolved: {
+        backing: Memo<Args, T>
+        timeout: number
+        policy: ReturnType<typeof rpcMemoPolicy>
+    }) => (args: Args) => Promise<T>
+}
 
+function assembleRpc<Args, T>(assembly: RpcAssembly<Args, T>): Rpc<Args, T> {
+    const { method, handler, options, read } = assembly
     // ONE normalizer decides the policy (`shared/internal/rpcMemoPolicy`) and ONE builder turns it into
     // memo options — the same pair the wire spec and the browser proxy read, so a read's server memo and
     // its client memo cannot disagree. `memo: false` on a read = retain nothing → ttl:0 (coalesce-only,
     // always revalidate) while keeping the reactive surface; the full bare-call bypass is the mutation's
-    // opt-out. `crossRequest` opts into the process-global cache (rpc-core §2; server-only and
-    // fail-closed inside the memo — the handler runs scope-exited). Setting both refetch-clock edges is
-    // a TypeError from the memo constructor below, which surfaces at module load with the route's own
-    // stack, so there is no second validation here.
-    const readPolicy = rpcMemoPolicy(options.memo, true)
-    const memoOptions: MemoOptions = memoOptionsFor(readPolicy)
-    // The SERVER-only half of the policy: which store the slot lives in. `memoOptionsFor` withholds it
-    // by design, because a browser has no request to cross and a `crossRequest` memo fails closed
-    // outside a request scope.
-    if (readPolicy.crossRequest) memoOptions.crossRequest = true
-    // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets
-    // the actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
-    let broadcast: MemoNotify | undefined
-    // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
-    // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.
+    // opt-out. Setting both refetch-clock edges is a TypeError from the memo constructor below, which
+    // surfaces at module load with the route's own stack, so there is no second validation here.
+    const policy = rpcMemoPolicy(options.memo, read)
+    const memoOptions: MemoOptions = memoOptionsFor(policy)
+    // The SERVER-only half of the policy: which store the slot lives in. `memoOptionsFor` withholds it by
+    // design, because a browser has no request to cross and a `crossRequest` memo fails closed outside a
+    // request scope.
+    if (policy.crossRequest) memoOptions.crossRequest = true
+    // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress the
+    // auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.
     memoOptions.loader = true
     // The deadline is the MEMO's (ADR 0028 D2): the memo owns the run, so one coalesced slot has one
     // deadline and every joined caller observes the identical outcome.
     const timeout = resolveRpcTimeout(options, method)
     memoOptions.timeout = timeout
+    // Late-bound broadcast target: the memo gets a stable, transport-free sink now; `createApp` sets the
+    // actual publish target via `bindBroadcast` once the route name is known. Unbound → no-op.
+    let broadcast: MemoNotify | undefined
     memoOptions.notify = (verb, args, value): void => {
         if (broadcast !== undefined) broadcast(verb, args, value)
     }
-    const backing = memo<Args, T>(fn, memoOptions)
+    const backing = memo<Args, T>(handler, memoOptions)
 
-    // The middleware chain this read runs under, installed by `bindRpcChains` (the only place the route's
-    // own NAME is known — the chain needs it to say which read it is authorizing). Unbound — a hand-built
-    // rpc with no app around it — is a direct memo call, which is what keeps `makeRpc` transport-free and
-    // unit-testable on its own.
+    // The middleware chain this callable runs under, installed by `bindRpcChains` (the only place the
+    // route's own NAME is known — the chain needs it to say which read it is authorizing). Unbound — a
+    // hand-built rpc with no app around it — is a direct memo call, which is what keeps `makeRpc`
+    // transport-free and unit-testable on its own.
     let chain: RpcChainRunner<Args, T> | undefined
+    const produce = assembly.produce({ backing, timeout, policy })
 
-    // A caller's `signal` detaches THEIR wait and leaves the run alone (ADR 0028 D3) — the run belongs
-    // to the memo slot, which other callers are coalesced onto.
+    // A caller's `signal` detaches THEIR wait and leaves the run alone (ADR 0028 D3) — the run belongs to
+    // the memo slot, which other callers are coalesced onto.
     //
     // The chain wraps the CALL, not the memo body. `middleware` is `(next) => Response` — tracing, rate
     // limiting, context population, auth — so it is part of what a READ means and runs per read, from any
-    // door. It cannot wrap the body: a memo coalesces by ARGS, so two principals reading the same args share
-    // one run, and a chain inside would let the first caller's authorization stand in for the second's.
-    const produce = (args: Args): Promise<T> => settleRead(() => backing(args))
-    const rpc = ((args: Args, options?: RpcCallOptions): Promise<T> =>
+    // door. It cannot wrap the body: a memo coalesces by ARGS, so two principals reading the same args
+    // share one run, and a chain inside would let the first caller's authorization stand in for the
+    // second's.
+    const callable = ((args: Args, callOptions?: RpcCallOptions): Promise<T> =>
         withAbort(
             chain === undefined ? produce(args) : chain(args, () => produce(args)),
-            options?.signal,
+            callOptions?.signal,
         )) as unknown as Rpc<Args, T>
+
     attachSurface(
-        rpc,
+        callable,
         backing,
-        fn,
+        handler,
         method,
         options,
-        true,
+        read,
         timeout,
         (sink) => {
             broadcast = sink
@@ -435,7 +458,26 @@ export function makeRead<Args, T>(
         },
         produce,
     )
-    return rpc
+    return callable
+}
+
+export function makeRead<Args, T>(
+    method: string,
+    fn: (args: Args) => Promise<T> | T,
+    opts?: RpcOptions,
+): Rpc<Args, T> {
+    return assembleRpc<Args, T>({
+        method,
+        handler: fn,
+        options: opts ?? {},
+        read: true,
+        // A read's producer IS "call the memo" — the whole point of the read path. `settleRead` is what
+        // turns the memo's `T | Promise<T>` into the awaitable the surface promises.
+        produce:
+            ({ backing }) =>
+            (args) =>
+                settleRead(() => backing(args)),
+    })
 }
 
 export function makeMutation<Args, R>(
@@ -443,77 +485,43 @@ export function makeMutation<Args, R>(
     fn: (args: Args) => Promise<R> | R,
     opts?: RpcOptions,
 ): MutationSurface<Args, R> {
-    const options = opts ?? {}
     type T = Payload<R>
 
     // `fn` returns the (possibly transport-wrapped) `R`; the memo sees through it to the payload `T`.
     const handler = fn as unknown as (args: Args) => Promise<T> | T
 
-    // A mutation is a memo + transport exactly like a read — the memo backs BOTH the coalescing call
-    // and the whole probe surface. It differs only in the DEFAULT policy: ttl:0 (coalesce identical
-    // concurrent in-flight calls, retain nothing) where a read retains. `memo: { ttl }` opts a mutation
-    // into retention and the surface reflects it. `memo: false` still builds a memo so the surface
-    // exists (probes read an empty slot), but the bare CALL bypasses it for a direct at-least-once run —
-    // which is the one place the policy is verb-dependent, so `rpcMemoPolicy` is told which verb it is
-    // and returns `memoed` rather than each side re-reading `options.memo !== false`.
+    // A mutation is a memo + transport exactly like a read — the memo backs BOTH the coalescing call and
+    // the whole probe surface. It differs only in the DEFAULT policy: ttl:0 (coalesce identical concurrent
+    // in-flight calls, retain nothing) where a read retains. `memo: { ttl }` opts a mutation into retention
+    // and the surface reflects it. `memo: false` still builds a memo so the surface exists (probes read an
+    // empty slot), but the bare CALL bypasses it for a direct at-least-once run — which is the one place
+    // the policy is verb-dependent, so `rpcMemoPolicy` is told which verb it is and returns `memoed`
+    // rather than each side re-reading `options.memo !== false`.
     //
-    // The refetch clock is forwarded even at ttl:0, where it cannot bite (nothing retained to
-    // revalidate): the option pairing is the author's, and dropping it on the verb that happens to
-    // default to 0 is the surface asymmetry `ttl`/`tags` are already carried across to avoid.
-    const policy = rpcMemoPolicy(options.memo, false)
-    const memoed = policy.memoed
-    const memoOptions: MemoOptions = memoOptionsFor(policy)
-    // Server-only, as in `makeRead` above.
-    if (policy.crossRequest) memoOptions.crossRequest = true
-    let broadcast: MemoNotify | undefined
-    // An rpc handler is a LOADER, not a derivation — an async body is its expected shape, so suppress
-    // the auto-tracking diagnostic (ADR 0027 D8) that would otherwise fire on every zero-arg rpc.
-    memoOptions.loader = true
-    const timeout = resolveRpcTimeout(options, method)
-    memoOptions.timeout = timeout
-    memoOptions.notify = (verb, args, value): void => {
-        if (broadcast !== undefined) broadcast(verb, args, value)
-    }
-    const backing = memo<Args, T>(handler, memoOptions)
-
-    let chain: RpcChainRunner<Args, T> | undefined
-
-    // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw FormData
-    // throws in canonicalKey), and `memo: false` opts the call out entirely → run the handler directly
-    // (at-least-once). Otherwise route through the memo (coalesce/retain).
-    //
-    // Hoisted out of the callable so `bare` IS this function: the router's door and the chained door must
-    // differ in the chain and in NOTHING else, and a second copy of this branch is how the multipart bypass
-    // came to exist on only one of them.
-    const produce = (args: Args | FormData): Promise<T> =>
-        !memoed || (typeof FormData !== 'undefined' && args instanceof FormData)
-            ? // The memo-bypass path still gets its deadline (ADR 0028): with no slot there is nothing else
-              // left to bound it.
-              Promise.resolve(withDeadline(handler(args as Args), timeout))
-            : settleRead(() => backing(args as Args))
-
-    const mutation = ((args: Args | FormData, options?: RpcCallOptions): Promise<T> =>
-        withAbort(
-            // The chain wraps EITHER path. A `memo: false` mutation opts out of coalescing and retention —
-            // not out of being observed or authorized, the same reason it keeps its deadline.
-            chain === undefined ? produce(args) : chain(args as Args, () => produce(args)),
-            options?.signal,
-        )) as unknown as Rpc<Args, T>
-    attachSurface(
-        mutation,
-        backing,
-        handler,
+    // The refetch clock is forwarded even at ttl:0, where it cannot bite (nothing retained to revalidate):
+    // the option pairing is the author's, and dropping it on the verb that happens to default to 0 is the
+    // surface asymmetry `ttl`/`tags` are already carried across to avoid.
+    const mutation = assembleRpc<Args, T>({
         method,
-        options,
-        false,
-        timeout,
-        (sink) => {
-            broadcast = sink
-        },
-        (runner) => {
-            chain = runner
-        },
-        produce,
-    )
+        handler,
+        options: opts ?? {},
+        read: false,
+        // A FormData/multipart body can't be safely keyed (files have no cheap canonical value; a raw
+        // FormData throws in `canonicalKey`), and `memo: false` opts the call out entirely → run the
+        // handler directly (at-least-once). Otherwise route through the memo (coalesce/retain).
+        //
+        // Built ONCE here and used for both doors, so `__bare` IS this function: the router's door and the
+        // chained door must differ in the chain and in NOTHING else, and a second copy of this branch is
+        // how the multipart bypass came to exist on only one of them.
+        produce:
+            ({ backing, timeout, policy }) =>
+            (args) =>
+                !policy.memoed ||
+                (typeof FormData !== 'undefined' && (args as unknown) instanceof FormData)
+                    ? // The memo-bypass path still gets its deadline (ADR 0028): with no slot there is
+                      // nothing else left to bound it.
+                      Promise.resolve(withDeadline(handler(args), timeout))
+                    : settleRead(() => backing(args)),
+    })
     return mutation as unknown as MutationSurface<Args, R>
 }
