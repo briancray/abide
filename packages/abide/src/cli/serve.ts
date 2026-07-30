@@ -141,7 +141,11 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
     // Only `abide dev` writes into `src/`: it is the lane an editor is pointed at. `abide start` serves
     // the same code in production and has no business regenerating source-adjacent types at boot.
     if (opts.dev === true) await writeHealthCompanion(dir)
-    const config: LoadedApp = opts.app ?? (await loadApp(dir))
+    // `abide dev` derives schemas from SOURCE; `abide start` reads the bake `abide build` left. The lane
+    // says which, rather than `loadApp` guessing from whether `dist/schemas.json` is on disk — see
+    // `LoadAppOptions.schemas` for what that guess cost.
+    const config: LoadedApp =
+        opts.app ?? (await loadApp(dir, { schemas: opts.dev === true ? 'source' : 'baked' }))
     config.port = await resolvePort(opts)
     // Production (`abide start`) minifies the client bundle; `abide dev` does not (TODO #6).
     config.dev = opts.dev === true
@@ -203,7 +207,9 @@ function startWatch(
 
     async function rebuild(): Promise<void> {
         try {
-            const fresh = await loadApp(dir)
+            // From SOURCE: this is the rebuild, so a bake from an earlier `abide build` is by
+            // definition the thing being replaced.
+            const fresh = await loadApp(dir, { schemas: 'source' })
             // Regenerated before anything else: an edit to `onHealth` changes the app's health TYPE,
             // and an editor that reads the stale companion would report the old shape against the new
             // hook. The router reads `config.onHealth` live (a getter), so the two land together.

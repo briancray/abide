@@ -14,7 +14,7 @@
 // third copy, after this one and `clientBundle`'s). A caller that wants only the directory reads
 // `.outDir`; a caller that wants what is IN it no longer has to go back to disk to find out.
 
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ClientBuild } from '../server/internal/clientBundle.ts'
 import {
@@ -44,14 +44,14 @@ export interface BuildResult {
 }
 
 export async function build(dir: string): Promise<BuildResult> {
-    // Drop any prior baked schema map so this build derives FRESH from the current source (§11.5),
-    // rather than loadApp reusing a stale `dist/schemas.json`.
-    await rm(join(dir, 'dist', 'schemas.json'), { force: true })
     // The health companion (CO2.4) is generated, gitignored, and therefore absent on a fresh CI clone —
     // where a `tsc` run that never opened an editor would otherwise type `health()` as the bare
     // baseline and fail on the app's own fields.
     await writeHealthCompanion(dir)
-    const config = await loadApp(dir)
+    // From SOURCE: this build PRODUCES `dist/schemas.json`, so reading the previous one would bake the
+    // last build's types into this one. That used to be arranged by deleting the file first, which also
+    // meant a build that failed after the delete left the project with no bake at all.
+    const config = await loadApp(dir, { schemas: 'source' })
     config.dev = false // production build → minify the client bundle (TODO #6).
     const built = await buildClient(config)
     const names = [...built.files.keys()].sort()

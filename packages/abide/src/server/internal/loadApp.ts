@@ -120,10 +120,12 @@ async function applyDerivedSchemas(
     dir: string,
     routes: Record<string, Route>,
     targets: DeriveEntry[],
+    schemaSource: 'baked' | 'source',
 ): Promise<void> {
     if (targets.length === 0) return
     if (Bun.env.ABIDE_DERIVE_SCHEMAS === '0') return
-    const baked = await readBakedSchemas(dir)
+    // `'source'` ignores the bake outright rather than checking it first — see `LoadAppOptions.schemas`.
+    const baked = schemaSource === 'baked' ? await readBakedSchemas(dir) : undefined
     // Baked path: no tsgo, no warnings (they were emitted at build). Live path: derive + log warnings.
     const derived = baked ?? (await deriveSchemas(targets))
     if (baked === undefined) {
@@ -264,15 +266,35 @@ async function seedAppName(dir: string): Promise<void> {
     }
 }
 
+export interface LoadAppOptions {
+    // WHICH SCHEMA SOURCE OUT-RANKS THE OTHER, stated by the caller instead of inferred from whether a
+    // file happens to exist.
+    //
+    //   'baked'  — a `dist/schemas.json` written by `abide build` is used verbatim, no tsgo at boot.
+    //              The production answer: `abide start` and a compiled binary have no source to derive
+    //              from and deliberately carry no tsgo. Falls back to live derivation when absent.
+    //   'source' — the project's SOURCE is authoritative and any bake is ignored. The answer for every
+    //              lane that reads live source, which is `abide build` (it is producing the bake) and
+    //              `abide dev` (it exists to reflect edits).
+    //
+    // This was a single unconditional "prefer the bake if the file is there", with `abide build`
+    // deleting the file first as its way of opting out. Nothing else opted out, so in any project that
+    // had run `abide build` or `abide compile` once, `abide dev` merged the stale map for the whole
+    // session and never re-derived — an edited handler signature kept validating against the old schema
+    // in the one lane whose entire job is reflecting edits. A file's existence was standing in for a
+    // question only the caller can answer.
+    schemas?: 'baked' | 'source'
+}
+
 // Scan `dir` (a project root) and build the createApp config by importing its modules. Directories
 // that don't exist are simply skipped, so partial projects load fine.
-export async function loadApp(dir: string): Promise<LoadedApp> {
+export async function loadApp(dir: string, options: LoadAppOptions = {}): Promise<LoadedApp> {
     await seedAppName(dir)
     const sources = await scanAppSources(dir)
     await loadConfig(sources.config)
 
     const { routes, derivationTargets } = await loadRoutes(sources.rpc)
-    await applyDerivedSchemas(dir, routes, derivationTargets)
+    await applyDerivedSchemas(dir, routes, derivationTargets, options.schemas ?? 'baked')
     const sockets = await loadSockets(sources.sockets)
     const pages = await loadPages(sources.pages)
     const layouts = await loadLayouts(sources.layouts)
