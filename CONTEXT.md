@@ -91,9 +91,30 @@ router. Dispatch reads the registry live, so the premise "reassigning is picked 
 silently failed for all four derivations — an identity-keyed policy Map missed every fresh callable, so from
 the first file save onwards a per-rpc `middleware` and a declared `crossOrigin` stopped applying.
 
-So the derivations live in ONE function behind `App.rebind()`, which the rebuild calls, and the policy is
-keyed by NAME rather than by route object. The rule to keep: anything derived from the registry is named in
-that function, or it is stale in dev and nowhere else — which is the hardest place to notice it.
+So the router's own derivations live in ONE function behind `App.rebind()`, which the rebuild calls, and
+the policy is keyed by NAME rather than by route object.
+
+**That rule was PROSE, and it did not hold.** It said "anything derived from the registry is named in that
+function"; two derivations were not, and had no invalidation at all — `navRoute`'s `PAGE_PATTERNS` (a
+WeakMap keyed on the `AppConfig` OBJECT, while the rebuild reassigns `config.pages` on that same object, so
+a page added under `abide dev` was never matched and a deleted one still was) and `defaultAgentSurface`'s
+memo (so `agent()`'s tool list kept the first build's `doc`, schemas and `clients.mcp` gate). A third, the
+client bundle, was correct only by CONVENTION: a second exported hook the dev loop remembered to call.
+
+So invalidation is now **registered, not remembered** (`server/internal/registryDerivation.ts`). A
+derivation names itself at module load, next to the cache it owns; `rebind()` runs the set. Two properties
+are load-bearing and each cost a bug to learn:
+
+- **Boot is not a rebind.** The registrations run only on re-bind, never on the initial one. `abide start`
+  and `createTestApp` build the client BEFORE constructing the app, so evicting at boot discarded the build
+  they had just paid for and served 404 for its chunks. "Derived state is stale" is a claim about a SECOND
+  derivation.
+- **An invalidator must be a no-op for a config it holds nothing for.** Several apps share a process, so an
+  unscoped invalidation lets any app's rebind drop another's — invisible in production, where one app
+  rebinds once, and a cross-file flake in a parallel suite.
+
+The rule to keep is now smaller, because the structure carries the rest: a config-keyed cache registers, or
+`registryDerivation.test.ts`'s count tripwire fails.
 
 ## Surface
 
@@ -161,11 +182,31 @@ line reader, the REPL and the `0600` credential file on the HTTP request path. T
 and deliberately unasserted: `command/` reaches `internal/router.ts` because `serve` hosts the real app,
 and `internal/clientBundle.ts` type-only for the `ClientBuild` shape.
 
-What the directory does NOT yet buy is a clean dependency FLOOR for the binary. Three modules still point
-back at `cli/` (`serve.ts`, `parsePort.ts`, `installShutdownHandlers.ts`), and `cli/serve.ts` pulls
-`clientBundle.ts` — the module that calls `Bun.build` — into the compiled graph. So `cli/` is not purely
-the dev-time half; those three are shared and belong on this side. Recorded rather than fixed: it is a
-further move, and the 16 KB figure in `CLAUDE.md` says the cost is currently tolerable.
+**The binary also has a dependency FLOOR** (`compiledAppFloor.test.ts`), which is the other axis: the
+directory test above says nothing on the HTTP path may import `command/`; this one says nothing
+source-reading may be reachable FROM it. `serveCompiled` used to enter through `cli/serve.ts`, whose five
+dev branches `ServeOptions` already describes as an interface the module graph could not follow — so the
+compiled entry carried `scanAppSources`, `deriveSchemas`, `writeHealthCompanion`, `startWatch`,
+`findOpenPort` and the dev-reload browser snippet. Size was the lesser problem: those are reachable paths
+that CANNOT WORK on a deploy machine (read-only `/$bunfs/root`, no `src/`, no source). `hostApp.ts` is the
+half of serving with none of it, and `cli/serve.ts` keeps the dev shell.
+
+Two things that generalise beyond this instance:
+
+- **A floor that rests on tree-shaking is not a floor.** Extracting `hostApp` removed the six symbols, but
+  `compiledAppConfig` still imported four pure predicates that happened to live in `loadApp.ts`, so the
+  whole discovery graph was one keyword away and only Bun's optimiser kept it out — and a test cannot
+  assert a property only the optimiser holds. The predicates' own comments already called them a shared
+  rule; they now have a module (`appModuleShape.ts`). 934 KB → 730 KB.
+- **The guard is a static import walk, not a `Bun.build` of the entry.** The build probe is more faithful
+  and was the first draft, but it reads several hundred files and went red whenever anything else in the
+  tree was mid-write. A floor test that fails for unrelated reasons gets deleted, not obeyed.
+
+`Bun.build` IS still in the binary and is expected to be — it arrives through the ROUTER
+(`chunkAsset`/`navRoute` import `clientBuildFor`), since an app served without a prebuilt client must
+produce one. The test names it as the CONTROL, so an empty offender list means absence rather than a
+broken walk. Two small `cli/` edges remain (`parsePort`, `installShutdownHandlers`) and are harmless:
+argv and signal handling, no heavy deps, and the walk proves they pull nothing.
 
 It has two entry points over one table —
 `runCompiledApp` (one-shot, argv) and `interactiveCli` (the REPL prompt) — which differ genuinely in
