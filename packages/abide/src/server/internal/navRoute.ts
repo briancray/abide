@@ -23,13 +23,24 @@ import { applicableLayoutPrefixes, sharedLayoutDepth } from './layouts.ts'
 import { navKeepLevels } from './navKeepLevels.ts'
 import { outcomeResponse } from './outcomeResponse.ts'
 import { renderPage, streamPageDocument, streamSoftNav } from './pages.ts'
+import { onRegistryRebind } from './registryDerivation.ts'
 import type { RequestScope } from './requestScope.ts'
 
 // One config's page-pattern list, derived once. `matchRoute` needs the full pattern array on every nav —
 // twice on a soft nav, which also matches the `Abide-Nav` origin path — and an app's pages are fixed for
-// its lifetime, so rebuilding it with `Object.keys` per request is pure allocation. Weakly keyed on the
-// config so a dev-server config swap simply re-derives.
+// its lifetime, so rebuilding it with `Object.keys` per request is pure allocation.
+//
+// Keyed on the config OBJECT, which is why the invalidation below is not optional: `abide dev` reloads by
+// reassigning `config.pages` on the same object, so the key never changes and this list would otherwise
+// answer with the boot's pages forever — a page added under dev never matched (404 until restart), a
+// deleted one still matched and reached the "Unreachable" throw in `handleNavRoute`. It is registered as
+// a DERIVED-FROM-THE-REGISTRY value rather than exposing a second invalidation hook for the dev loop to
+// remember; `registryDerivation.ts` has the argument.
 const PAGE_PATTERNS = new WeakMap<AppConfig, string[]>()
+
+onRegistryRebind((config) => {
+    PAGE_PATTERNS.delete(config)
+})
 
 function pagePatternsOf(config: AppConfig, pages: Record<string, string>): string[] {
     let patterns = PAGE_PATTERNS.get(config)

@@ -65,6 +65,7 @@ import type { Rpc } from './makeRpc.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { isSoftNav } from './navRoute.ts'
 import { outcomeResponse } from './outcomeResponse.ts'
+import { rebindRegistryDerivations } from './registryDerivation.ts'
 import {
     anonymousPrincipal,
     makeRequestScope,
@@ -415,8 +416,6 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
 }
 
 export function createApp(config: AppConfig = {}): App {
-    const sockets = config.sockets ?? {}
-
     // Per-route static policy, derived once per BOOT rather than per request. `crossOrigin` and `middleware`
     // live on an immutable options object, so normalizing the CORS config and merging the global + per-rpc
     // middleware lists on every request re-derived a constant — and the merge also allocated a fresh spread
@@ -490,6 +489,21 @@ export function createApp(config: AppConfig = {}): App {
         }
     }
     bindRoutes()
+
+    // RE-bind, which is strictly more than the boot bind: the policy Maps above are re-derived eagerly
+    // (they are this closure's own state and nothing else can drop them), and then every LAZY derivation
+    // that lives next to the cache it belongs to is invalidated — the page-pattern list, the client
+    // bundle, the agent tool surface.
+    //
+    // The invalidations run HERE and not inside `bindRoutes`, because boot has nothing stale to drop and
+    // dropping at boot is not merely wasteful: `abide start` and `createTestApp` build the client BEFORE
+    // constructing the app, so a boot-time eviction discarded the build they had just paid for and served
+    // 404 for its chunks until something rebuilt it. "Derived state is stale" is a statement about a
+    // SECOND derivation, which is what `rebind` names.
+    const rebind = (): void => {
+        bindRoutes()
+        rebindRegistryDerivations(config)
+    }
 
     // AU8.3 / CX8.1: the Origin/Referer CSRF check and the CSWSH WebSocket-upgrade gate both key off
     // `APP_URL`. An unset `APP_URL` is legitimate in dev (and for hand-built/test apps), so those gates
@@ -805,13 +819,24 @@ export function createApp(config: AppConfig = {}): App {
                         frame.name,
                         frame.args,
                         frame.replay,
-                        sockets,
+                        // Read LIVE, not captured at boot. `abide dev`'s `syncSockets` happens to mutate
+                        // the registry in place, so a capture stayed correct — but that made a `cli/`
+                        // implementation detail load-bearing for a `server/internal/` closure, with
+                        // nothing stating it. Reading through costs one property load per frame.
+                        config.sockets ?? {},
                         config,
                     )
                 else if (frame.t === MUX_UPSTREAM.unsub)
                     wsUnsubscribe(connection, frame.name, frame.args)
                 else if (frame.t === MUX_UPSTREAM.pub)
-                    void wsPublish(ws, frame.name, frame.args, frame.msg, sockets, config)
+                    void wsPublish(
+                        ws,
+                        frame.name,
+                        frame.args,
+                        frame.msg,
+                        config.sockets ?? {},
+                        config,
+                    )
                 // An unrecognized frame type is dropped — but LOUDLY, not silently: a drifted discriminant
                 // would otherwise fail open (e.g. an ignored `unsub` keeps a stream pumping). Gated channel,
                 // so it never spams prod logs unless DEBUG names it.
@@ -835,7 +860,7 @@ export function createApp(config: AppConfig = {}): App {
     // This process is now serving THIS app, so this is what `agent()` means by "the app's tools"
     // (AG2.2). A thunk, so a process that never calls `agent()` never walks the routes; withdrawn on
     // `stop()`, so a stopped app is not still answering as the default for whatever boots next.
-    const withdrawAgentSurface = provideDefaultAgentSurface(() => rpcTools(config, origin))
+    const withdrawAgentSurface = provideDefaultAgentSurface(() => rpcTools(config, origin), config)
 
     // …and this is what `health()` means by "the app" (CO2.4): the bind clock plus the app's own hook.
     // Withdrawn on `stop()` by the same rule — a stopped app must not keep answering for its health.
@@ -853,9 +878,10 @@ export function createApp(config: AppConfig = {}): App {
         // Public App surface keeps `Bun.Server<undefined>`; the WS-data generic is internal (see above).
         server: server as unknown as Bun.Server<undefined>,
         origin,
-        // The same derivation the boot ran, over whatever `config` now holds. `onHealth` next door solves
-        // the same problem with a getter; a policy Map cannot be a getter, so it is re-derived on demand.
-        rebind: bindRoutes,
+        // The same derivation the boot ran, over whatever `config` now holds, plus the lazy caches the
+        // boot deliberately leaves alone. `onHealth` next door solves the same problem with a getter; a
+        // policy Map cannot be a getter, so it is re-derived on demand.
+        rebind,
         async stop(): Promise<void> {
             withdrawAgentSurface()
             withdrawHealthSource()

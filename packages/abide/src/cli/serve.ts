@@ -18,7 +18,7 @@
 import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
 import { bootApp } from '../server/internal/bootApp.ts'
-import { type ClientBuild, invalidateClientBundle } from '../server/internal/clientBundle.ts'
+import type { ClientBuild } from '../server/internal/clientBundle.ts'
 import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
 import type { App } from '../server/internal/router.ts'
@@ -178,15 +178,20 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
 // Watch the project `src/` dir; on a debounced change re-load the app config IN PLACE (the router
 // reads `config.routes`/`config.pages` live per request, so reassigning those properties is picked
 // up without restarting Bun.serve) and signal a reload. `config.sockets` is mutated in place rather
-// than reassigned: the router captured that exact object on the mux (router.ts:343), so newly added
-// or removed socket files are reconciled into it while the dev-reload channel's identity is kept.
+// than reassigned, so newly added or removed socket files are reconciled into it while the dev-reload
+// channel's identity is kept.
 //
-// READING LIVE IS ONLY HALF OF IT, and the missing half was silent. Some of what the router serves is
-// DERIVED from the registry at boot — the per-route CORS policy, the composed middleware chain, the
-// per-read chain on each callable, the `(rpc,args)` broadcast sink — and a reassigned `config.routes`
-// invalidates every one of them while looking like a live read. So a rebuild must also tell the app to
-// re-derive (`app.rebind()`). Without it, the first file save silently dropped per-rpc `middleware` and
-// `crossOrigin` for the rest of the session: authorization derived from a build that was no longer running.
+// READING LIVE IS ONLY HALF OF IT, and the missing half was silent. Much of what the router serves is
+// DERIVED from the registry at boot, and a reassigned `config.routes` invalidates every one of those
+// while looking like a live read. So a rebuild must also tell the app to re-derive (`app.rebind()`).
+// Without it, the first file save silently dropped per-rpc `middleware` and `crossOrigin` for the rest of
+// the session: authorization derived from a build that was no longer running.
+//
+// WHICH derivations those are is deliberately not enumerated here any more, and this loop no longer
+// invalidates any of them by hand. `registryDerivation.ts` owns the set; `rebind()` runs it. The previous
+// spelling — a list in this comment plus a hand-called `invalidateClientBundle` one line up — is exactly
+// how two further derivations (the page-pattern list, the agent tool surface) came to exist with no
+// invalidation at all: nothing required a new cache to appear in either place.
 function startWatch(
     dir: string,
     config: LoadedApp,
@@ -198,7 +203,6 @@ function startWatch(
 
     async function rebuild(): Promise<void> {
         try {
-            invalidateClientBundle(config)
             const fresh = await loadApp(dir)
             // Regenerated before anything else: an edit to `onHealth` changes the app's health TYPE,
             // and an editor that reads the stale companion would report the old shape against the new

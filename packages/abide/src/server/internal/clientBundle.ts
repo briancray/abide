@@ -45,6 +45,7 @@ import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import { applicableLayoutPrefixes } from './layouts.ts'
 import { preloadGraphOf } from './preloadGraphOf.ts'
 import { buildRegistry } from './registry.ts'
+import { onRegistryRebind } from './registryDerivation.ts'
 import type { AppConfig } from './router.ts'
 import { staticAssetType } from './staticAssetType.ts'
 
@@ -109,6 +110,16 @@ const brotliCompressAsync = promisify(brotliCompress)
 const MAXIMUM_COMPRESSED_RATIO = 0.9
 
 const BUNDLE_CACHE = new WeakMap<AppConfig, Promise<ClientBuild>>()
+
+// DERIVED-FROM-THE-REGISTRY (BP2.4): the built client is a projection of `config.routes`/`pages`, and the
+// dev loop mutates that config in place, so the WeakMap key never changes and a stale build must be
+// evicted explicitly. This used to be a SECOND exported hook (`invalidateClientBundle`) that the dev loop
+// called by hand from `cli/`, one line before the `loadApp` whose result made it necessary. Registering
+// it puts the eviction next to the cache and makes the dev lane's correctness structural rather than
+// conventional — and left that hook with no callers, so it is gone.
+onRegistryRebind((config) => {
+    BUNDLE_CACHE.delete(config)
+})
 
 // Build the RPC specs map (name → { method, read }) the client proxies need. TREE-SHAKING: only the
 // RPCs some page actually IMPORTS (by local name matching a route name) are emitted; un-imported RPCs
@@ -672,11 +683,4 @@ export async function loadClientBuild(dir: string): Promise<ClientBuild | undefi
         // cannot go stale against a manifest written by an older `abide build`.
         ...preloadGraphOf(manifest.entry, new Map(Object.entries(manifest.chunkByPattern)), files),
     }
-}
-
-// Drop the cached build for a config so the next `buildClient` rebuilds it. The dev watcher calls this
-// after a source change (the config object is mutated in place across reloads, so the WeakMap key stays
-// the same and the stale build must be evicted explicitly — BP2.4).
-export function invalidateClientBundle(config: AppConfig): void {
-    BUNDLE_CACHE.delete(config)
 }
