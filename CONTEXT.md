@@ -119,9 +119,35 @@ The rule to keep is now smaller, because the structure carries the rest: a confi
 ## Surface
 
 A projection of the app's registry for one kind of caller: HTTP, OpenAPI, MCP, CLI, the client bundle,
-an agent's tool list. `clients: { browser, mcp, cli }` gates surface **generation** at build time;
-`middleware` is authorization at request time. Different mechanism, different time — a surface flag is
-never auth.
+an agent's tool list, a tag channel's join gate. `clients: { browser, mcp, cli }` gates surface
+**generation** at build time; `middleware` is authorization at request time. Different mechanism,
+different time — a surface flag is never auth.
+
+**The gate and the loop have an owner** (`server/internal/surfaceProjection.ts`): `reaches`, `rpcsFor`,
+`socketsFor`. `registry.ts` owns the NORMALISATION of the authored option and used to stop there, leaving
+nine independent `clients.X === false` checks across six modules. Two of those had to AGREE — `mcp.ts`'s
+tool LIST and tool DISPATCH must admit the same set, or the surface either advertises a tool that answers
+"unknown tool" or, in the direction that matters, leaves a withheld rpc reachable that was never
+advertised. Nothing tied the two loops together.
+
+Two things stay per-surface on purpose, and the module says why rather than hiding it:
+
+- **The shape each surface renders.** A read's args become query parameters in OpenAPI, `--flags` on the
+  CLI, a JSON Schema for a model. Folding those together would be a worse module than the nine checks.
+- **The absent-input-schema fallback**, which has four answers. Three are PROTOCOL REQUIREMENTS (MCP
+  demands an object schema; an agent reads an omitted schema as "no declared shape", where `{}` declares
+  "takes no arguments"; a spec must describe every parameter) and only the fourth — the CLI's
+  `schemaKnown: false`, a parser mode — is a choice. They are NAMED rather than unified, because a single
+  answer would be wrong on at least two surfaces.
+
+The same predicate, different CONSEQUENCE, is fine and is now visible: `clientBundle` throws a build error
+where every other surface skips, because a page named the callable and skipping would ship an import that
+silently resolves to nothing.
+
+The lesson from the guard is worth more than the refactor: the first drift test compared the advertised
+list against `rpcsFor` and passed with a raw `registry.rpcs` dispatch loop reapplied — it only proved the
+LIST calls the helper. A test for "two projections agree" has to exercise BOTH, not one of them against
+the thing they are supposed to share.
 
 ## Route class
 
