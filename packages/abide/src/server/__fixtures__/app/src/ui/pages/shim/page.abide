@@ -1,0 +1,25 @@
+<script>
+// THE CHECK LANE'S TYPE SHIM, GUARDED FROM THE FRAMEWORK'S OWN `abide check`.
+//
+// `emitCheck`'s HEADER declares `__AbideState`/`__AbideMemo` as TEXT, and `__abideUnwrap`'s overloads
+// resolve by matching the REAL `State<T>`/`SyncMemo<T>` — imported here, from the real modules — against
+// those shapes. So the shim's members must stay a SUBSET of the real ones. Nothing type-checks that
+// correspondence: rename a member on `shared/internal/reactive.ts`'s `State` and the shim still compiles,
+// the overload silently stops matching, and every bare cell reads as the CELL OBJECT instead of its value.
+// `abide check` and the editor then lose their types on the primitive the language is built around, with
+// no runtime test able to see it — the check lane emits type-only TS.
+//
+// The docs app catches it (379 errors, each naming `State<…>`), but that is one package away and nothing
+// said so. This page is the same guard, next to the shim: every member access below is on the VALUE, so if
+// the unwrap stops matching, `bun run --filter abide abide-check` fails here.
+import { memo } from 'abide/shared/memo'
+import { state } from 'abide/shared/state'
+
+let count = state(1)
+const label = memo(() => 'shim')
+</script>
+
+<!-- `.toFixed` exists on number, not on State<number>; `.length` on string, not on SyncMemo<string>. -->
+<p>{count.toFixed(2)}</p>
+<p>{label.length}</p>
+<button onclick={() => { count = count + 1 }}>bump</button>

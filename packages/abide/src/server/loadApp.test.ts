@@ -32,7 +32,10 @@ describe('loadApp — file-based app loader', () => {
 
         const pages = loaded.pages
         if (pages === undefined) throw new Error('expected loaded pages')
-        expect(Object.keys(pages).sort()).toEqual(['/', '/about'])
+        // `/shim` is the check-lane shim guard (see that page's own header) — a fixture page like any
+        // other as far as discovery is concerned, which is why it belongs in this list rather than being
+        // filtered out of it.
+        expect(Object.keys(pages).sort()).toEqual(['/', '/about', '/shim'])
         expect(pages['/']).toContain('greet')
 
         // TODO #7: layout.abide files are discovered and keyed by their directory route prefix.

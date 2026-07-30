@@ -101,8 +101,15 @@ test('a page with no <script> is skipped (no diagnostics)', async () => {
 // NB: `untracked()`, not `peek()` (ADR 0027 D2). This stub must stay STRUCTURALLY identical to the real
 // `State` in `shared/internal/reactive.ts`, because `emitCheck`'s `__abideUnwrap` overload resolves on
 // that shape — a drifted member here silently stops the unwrap from matching and every bare cell read
-// reports as `Cell<T>` instead of `T`. This is the fourth place the cell shape is written down
-// (state.ts, the emit target, emitCheck's `__AbideState`, here); the type checker cannot connect them.
+// reports as `Cell<T>` instead of `T`.
+//
+// WHERE THE CORRESPONDENCE IS ENFORCED, since this comment used to end "the type checker cannot connect
+// them": `src/server/__fixtures__/app/src/ui/pages/shim/page.abide` binds a cell and a memo from the REAL
+// modules and then reads MEMBERS OF THEIR VALUES, so `bun run --filter abide abide-check` fails the moment
+// the shim stops matching the real shape (renaming `State.untracked` reds it with "Property 'toFixed' does
+// not exist on type 'State<number>'"). A stub drifting from the real type is caught there, one lane away
+// from this one — not by comparing copies, which cannot work: a TS copy of the shim in a test would be a
+// further statement of the same shape, and drift between it and `emitCheck`'s STRING would be invisible.
 const CELL_MODULE =
     'export interface Cell<T> { (): T; set(v: T): void; untracked(): T }\n' +
     'export function state<T>(initial: T): Cell<T> {\n' +
