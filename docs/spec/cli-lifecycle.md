@@ -135,14 +135,19 @@ a declared 403 is the gate working.
 **Under `abide run`:** `onStart`/`onStop` **run** (the script needs the booted runtime); the
 **middleware chain does not** (no requests). So `run` = boot lifecycle without the request path.
 
-That was written when the chain had only its per-REQUEST rung, and `auth.md` §AU7 has since split it:
-an rpc's OWN `middleware` runs per READ, from doors that are not requests. `run` does not reach that
-rung either, and for a mechanical reason rather than a decided one — the chain is installed by
-`createApp`, which `run` deliberately never calls (it binds no server). **A migration's reads
-therefore run unauthorized and untraced; authorize in the script.** Whether the per-read rung should
-follow the read into `run` is OPEN: it would make a gated read fail inside a migration that has no
-identity to present, which is either the correct fail-closed answer or a broken migration depending
-on what the rung is for. Recorded here so the next reader finds a question, not a silent gap.
+That sentence is about the per-REQUEST rung, and it is still true: `run` serves no HTTP, so there is no
+request for the global chain to authorize and it does not run. `auth.md` §AU7 has since split the chain in
+two, and the OTHER rung **does** run here: an rpc's own `middleware` is per READ, from every door, and a
+migration is a door (ADR 0030). So a script reading a guarded rpc runs that rpc's guard.
+
+That is a real behaviour change for a migration, and it is the fail-closed direction: a script reading past
+every guard its rpcs declare was the previous behaviour, and it was mechanical rather than decided — the
+chain happened to be installed by `createApp`, which `run` never calls. It is now installed by
+`bindRpcChains`, which `run` calls directly. What makes this safe is the rung split: the global chain is
+where an app reaches for `request()`, and it stays out of this door entirely.
+
+A migration that needs to read past a guard should call the handler's own logic rather than the rpc, or
+present an identity the guard accepts — not rely on the door being unauthenticated.
 
 ---
 

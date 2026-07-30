@@ -193,29 +193,34 @@ second-param idea from the interview was rejected in favor of imported ambient a
     limiting, context population, response post-processing, *and* auth — so it is part of what a read
     MEANS, and a read that skips it is not merely unauthorized, it is unobserved. It therefore runs from
     every door of a built app: HTTP, page SSR, a handler reading a sibling rpc, a cron tick.
-  - **The global `app.ts` chain is per REQUEST.** A read inside a request does not re-run it; otherwise a
-    page with eight reads counts nine hits in a rate limiter and logs nine lines for one request.
-    `owesGlobalChain()` (`currentScope() === undefined`) is the discriminator — the rule the `@rpc:`
-    channel join already followed, since a socket join is inside no request.
+  - **The global `app.ts` chain is per REQUEST** — it runs wherever a REQUEST exists to authorize, which is
+    the router at mount and the `@rpc:` channel join (which synthesizes a request-shaped scope precisely so
+    it can run it), and nowhere else. A page with eight reads runs it once, not nine times. A scope-free
+    read (a cron tick, an `abide run` migration) runs the OWN rung alone: this is the rung that may read
+    `request()`/`identity()`, so reaching it from a door with no request would throw inside the middleware
+    meant to observe the read — and a chain that does not reach its terminal fails closed.
   - **The chain wraps the CALL, never the memo body.** A memo coalesces by ARGS, not by identity, so a
     chain inside the body would let the first caller's authorization stand in for the next caller's. The
-    router composes the chain around the whole of dispatch and invokes the un-chained `route.bare(args)`,
+    router composes the chain around the whole of dispatch and invokes the un-chained `route.__bare(args)`,
     which is also what puts arg decoding and `schemas.input` validation INSIDE authorization: **a 422 never
     precedes a 403.**
   - A short-circuit reaches an in-process caller as a **thrown `HttpError`** (whether the middleware threw
     `error(403)` or returned a `Response`) — `throughChain` decodes it with the same `toHttpError` the
     browser proxy uses, so `fn.isError(e, name)` narrows identically on both sides. Inside a page render a
     deliberate outcome is rendered at its own status rather than collapsing into a 500.
-  - **Where it does NOT run**, enumerated from the call sites: the chain is installed by `createApp`, so
-    `abide run` (which never calls it) and an `onStart` warmer reading before `await start()` run NEITHER
-    rung — see CL2 in `cli-lifecycle.md`, and treat it as an open question rather than a settled exemption.
-    `fn.raw()` is the other gap, by construction: it calls the handler, not the chained producer.
-  - **The chain runs in the CALLER's scope** — nothing installs an rpc-shaped one. So from a non-HTTP door
-    `route()` answers the caller's route: at page SSR `kind` is `'nav'` and `name` is the page pattern, and
-    the guard spelled below as `route().name === 'deleteUser'` does not fire there. Scope-free,
-    `route()`/`identity()`/`request()` throw. The `@rpc:` join is the one door that synthesizes a scope
-    (`channelAuth`, via `runInScope` over a synthetic rpc request). **Gate on the middleware's arguments,
-    not on `route()`, for a guard that must hold from every door.**
+  - **`route()` inside the chain names the READ**, not the caller who made it: `{ kind: 'rpc', name,
+    params: args }`. This is what makes the `route().name === 'deleteUser'` guard below hold from EVERY
+    door. Run in the caller's scope it would not: at page SSR the active scope is the nav's, so the guard
+    would see `kind: 'nav'` and the page's pattern and **silently never fire** — which is worse than not
+    running the middleware at all, because it looks like coverage. `request()`/`cookies()`/`context()` and
+    `identity()` still answer the CALLER's request, which is the point of them; only the subject is
+    overridden. Scope-free those throw while `route()` still answers, so **gate on `params` (the args),
+    never on `url`** — an in-process read has no URL it can answer truthfully.
+  - **Where it does NOT run:** `fn.raw()`, by construction — it calls the handler, not the chained
+    producer, so it is the one read surface that is neither coalesced nor authorized. Everything else is
+    covered, because `bindRpcChains` is called by every boot (`createApp`, `abide dev`'s rebuild via
+    `App.rebind()`, and `abide run`) rather than by `createApp` alone. See ADR 0030 D5 for the two silent
+    holes that came from installing it in one place, and CL2 in `cli-lifecycle.md` for the migration door.
 - **Uniform across surfaces (§13.4):** RPC, nav, socket-connect, and HTTP-face socket ops all
   pass the same chain. `clients.*` is **reachability/curation, not access control** — an
   unauthorized call must **fail your authz middleware**, not merely be hidden. abide authorizes

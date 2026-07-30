@@ -1,7 +1,11 @@
 <script>
   import platformContext from "$server/rpc/platformContext"
 
-  // No input — a per-RPC middleware stamps context(), the handler reads it back. The button re-runs it.
+  // No input — a per-RPC middleware stamps context(), the handler reads it back.
+  //
+  // The stamp is ALREADY filled in on first paint: this read runs during the page's server render, and an
+  // rpc's middleware runs per READ from every door, so the in-process read runs it too. The button is a
+  // second read (over HTTP this time), which runs it again.
 </script>
 
 <button id="read-context-btn" onclick={() => platformContext.refresh()}>Read context()</button>

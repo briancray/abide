@@ -280,6 +280,75 @@ test('a short-circuiting middleware blocks the SSR page', async () => {
     await app.stop()
 })
 
+// A DELIBERATE OUTCOME RAISED *INSIDE* A RENDER IS NOT A RENDER FAILURE.
+//
+// The nav catch used to answer a controlled 500 for everything it caught, which is right for a page that
+// threw by accident and wrong for one that threw ON PURPOSE. Two things made that reachable rather than
+// theoretical: a page's own script can call `error(404)`, and — since an rpc's middleware runs per READ —
+// a gated read inside the render can now short-circuit mid-paint. Both used to become "Page render
+// failed." with a 500, so a login redirect rendered as a broken page.
+//
+// The test above covers a middleware blocking the page from OUTSIDE (the request onion, before any render).
+// These two are the inside-the-render cases, which nothing on any surface asserted.
+//
+// NOT covered here, and deliberately named rather than quietly skipped: the page's own `<script>` calling
+// `error(404)`. It is the same catch and the same branch, but an inline page source cannot reach it — a bare
+// `abide/server/error` specifier does not bind in one (the emitted module has no source dir to resolve
+// from), so the page fails with "error is not a function" and a 500 that says nothing about this rule. That
+// is a fixture limitation at worst and an import-resolution gap at best; either way it is a separate
+// question from the one these tests answer.
+test('a read that raises a deliberate 404 during SSR answers 404, not a 500', async () => {
+    const missing = GET(() => {
+        error(404, 'no such thing')
+    })
+    const app = await createTestApp({
+        routes: { missing },
+        pages: {
+            '/gone': `<script>
+                import missing from '$server/rpc/missing'
+            </script><h1>{await missing({})}</h1>`,
+        },
+    })
+
+    const response = await app.fetch('/gone')
+    expect(response.status).toBe(404)
+    const body = await response.text()
+    expect(body).not.toContain('never rendered')
+    expect(body).toContain('no such thing')
+
+    await app.stop()
+})
+
+test('a page whose read is short-circuited by the rpc middleware answers that status', async () => {
+    // The read is gated by its OWN middleware, which is the rung that now runs on the SSR door. Before
+    // the per-read chain this could not happen at all; after it, the throw had to be distinguished from a
+    // genuine render bug or it would have arrived as a 500.
+    const gated = GET(() => ({ secret: 'classified' }), {
+        middleware: [
+            () => {
+                error(403, 'not for you')
+            },
+        ],
+    })
+    const app = await createTestApp({
+        routes: { gated },
+        pages: {
+            '/guarded': `<script>
+                import gated from '$server/rpc/gated'
+            </script><h1>{await gated({})}</h1>`,
+        },
+    })
+
+    const response = await app.fetch('/guarded')
+    expect(response.status).toBe(403)
+    const body = await response.text()
+    expect(body).not.toContain('classified')
+    // The declared reason survives, rather than being flattened into "Page render failed."
+    expect(body).toContain('not for you')
+
+    await app.stop()
+})
+
 // ── ADR 0026 D1 gate — disposal accounting ─────────────────────────────────────────────────────────
 //
 // A request's reactive context is disposed exactly ONCE, and for a STREAMED reply that happens after

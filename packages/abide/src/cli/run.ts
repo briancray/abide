@@ -2,6 +2,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { appLifecycle } from '../server/internal/appLifecycle.ts'
 import { loadApp } from '../server/internal/loadApp.ts'
+import { bindRpcChains } from '../server/internal/rpcChain.ts'
 import { provideHealthSource } from '../shared/internal/healthSource.ts'
 
 // `abide run <file> [args…]` — run a script UNDER the abide server runtime, serving no HTTP (CL2).
@@ -34,6 +35,15 @@ export async function run(dir: string, file: string, args: string[] = []): Promi
         startedAt: Date.now(),
         onHealth: config.onHealth,
     })
+    // An rpc's OWN middleware runs PER READ, from every door, and a migration is a door. `createApp`
+    // installs the chain and `run` deliberately never calls it, so this is the same installer called
+    // directly — otherwise "which door built the app" would decide whether a read is authorized, and a
+    // script would be the one caller that reads past every guard its rpcs declare.
+    //
+    // Only the OWN rung: `config.middleware` is per REQUEST and there is no request here (`rpcChain.ts`).
+    // That is also what makes this safe to do at all — the global chain is where an app reaches for
+    // `request()`, which would throw from this door and fail every read closed.
+    bindRpcChains(config)
     const booted = await appLifecycle(config, {
         // Nothing binds. `abide run` is the surface that proves the lifecycle contract is not the
         // HTTP server's — the script IS the workload, and it has not started until it is imported.

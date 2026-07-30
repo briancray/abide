@@ -57,35 +57,43 @@ Which layer of middleware a unit of work owes. There are two, and conflating the
   context population, response post-processing, auth — so it is part of what a read MEANS, and a read that
   skips it is not merely unauthorized, it is unobserved. It therefore runs from every door of a BUILT app:
   HTTP, page SSR, a handler reading a sibling rpc, a cron tick.
-- **The app's global `config.middleware` is per REQUEST.** It runs once for the unit of work, and a read
-  inside a request does not re-run it. Otherwise a page with eight reads counts nine hits in a rate limiter
-  and logs nine lines for one request. `owesGlobalChain()` (`currentScope() === undefined`) is the
-  discriminator; it is the rule a WS subscribe already followed, since a socket join is inside no request.
+- **The app's global `config.middleware` is per REQUEST.** It runs wherever a REQUEST exists to authorize —
+  the router at mount, and the WS `@rpc:` join, which synthesizes a request-shaped scope precisely so it can
+  run it — and nowhere else. So a page with eight reads runs it once, not nine times, and a scope-free read
+  runs the own rung alone. Selecting it by `currentScope() === undefined` ("nothing has run it, so run it")
+  conflates that with a different question and was a landmine: the global chain is where an app reaches for
+  `request()`, so a cron tick's read threw inside the middleware meant to observe it, and a chain that does
+  not reach its terminal fails closed.
 
-Two invariants hold this together and each has a test that fails on it:
+Four invariants hold this together and each has a test that fails on it:
 
 - **The chain wraps the CALL, never the memo body.** A memo coalesces by ARGS, not by identity, so a chain
   inside the body would let the first caller's authorization stand in for the next caller's.
 - **Exactly once per read.** The router composes the chain around the whole of dispatch — so arg decoding
   and `schemas.input` validation happen INSIDE authorization, and a 422 never precedes a 403 — and then
-  invokes `route.bare(args)`, the same producer minus the chain. `bare` is handed in by each factory rather
-  than rebuilt from the memo, because a mutation's producer is not "call the memo": a `FormData` body and
-  `memo: false` both bypass it, and rebuilding that branch routed every multipart upload through the memo.
+  invokes `route.__bare(args)`, the same producer minus the chain. `__bare` is handed in by each factory
+  rather than rebuilt from the memo, because a mutation's producer is not "call the memo": a `FormData` body
+  and `memo: false` both bypass it, and rebuilding that branch routed every multipart upload through the memo.
+- **`route()` inside the chain names the READ, not the caller.** Otherwise the documented guard idiom
+  (`route().name === '<rpc>'`) silently never fires on the SSR door, where the active scope is the nav's —
+  which is worse than not running the middleware, because it looks like coverage. It is a scope copy sharing
+  the caller's `slots` Map, so `request()`/`cookies()`/`identity()` still answer the caller's request; and it
+  is a SCOPE rather than an assignment because concurrent reads on one request would clobber a field.
+- **One installer, every boot.** `bindRpcChains` is called by `createApp`, by `abide dev`'s rebuild and by
+  `abide run`, because which door built the app must not decide whether a read is authorized.
 
-Two limits of the current implementation, recorded because "from every door" reads as unconditional and is
-not, and both are one grep from being checked:
+## Derived-from-the-registry
 
-- **The chain is installed by `createApp`**, so a door that builds no app has none. `abide run` boots
-  through `appLifecycle` with `boot: () => undefined` and never calls `createApp` (`cli/run.ts`), and
-  `bootApp` calls it INSIDE the `start()` thunk — so a migration, and an `onStart` warmer reading before
-  `await start()`, run NEITHER rung. `cli-lifecycle.md` CL2 says the middleware chain does not run under
-  `run`, which was written when there was only the per-request rung; whether the per-READ rung should
-  reach a migration is open. Until it is answered, a migration authorizes itself.
-- **`throughChain` installs no scope**, so the middleware's ambients answer from the CALLER's scope: at
-  page SSR `route().kind` is `'nav'`, so a guard keyed on `route().name === '<rpc>'` does not fire, and
-  from a scope-free door `route()`/`identity()`/`request()` throw. `channelAuth` is the one door that
-  synthesizes an rpc-shaped scope (`runInScope` over a synthetic request) — the asymmetry is real and
-  unasserted.
+State the router computes from `config` at boot rather than per request: the per-route CORS policy, the
+composed middleware chain, the per-read chain on each callable, the `(rpc,args)` broadcast sink. Cheap and
+correct for a served app, and a trap for `abide dev`, which reloads by REASSIGNING `config.routes` on a live
+router. Dispatch reads the registry live, so the premise "reassigning is picked up" held for handlers and
+silently failed for all four derivations — an identity-keyed policy Map missed every fresh callable, so from
+the first file save onwards a per-rpc `middleware` and a declared `crossOrigin` stopped applying.
+
+So the derivations live in ONE function behind `App.rebind()`, which the rebuild calls, and the policy is
+keyed by NAME rather than by route object. The rule to keep: anything derived from the registry is named in
+that function, or it is stale in dev and nowhere else — which is the hardest place to notice it.
 
 ## Surface
 

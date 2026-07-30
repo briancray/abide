@@ -42,3 +42,19 @@ test('the greet RPC responds over HTTP', async ({ request }) => {
     expect(res.ok()).toBe(true)
     expect(await res.json()).toBe('Hello, abide!')
 })
+
+// THE PER-READ MIDDLEWARE RUNG, on the door that is easiest to lose.
+//
+// `greet` declares its own `middleware`, and the handler renders differently depending on whether it ran
+// ("(ungreeted)" if not). So the greeting in the SSR HTML is a direct assertion that the rung ran on an
+// IN-PROCESS read — the page's own render — and not merely on the browser's fetch.
+//
+// This is the assertion the scaffold could not make before: with no middleware anywhere in the starter,
+// nothing here would have failed if the rung stopped running. It also covers the doors most likely to
+// regress, because both are derived rather than requested: the chain is installed at boot, and `abide dev`
+// re-derives it on every rebuild.
+test('the per-RPC middleware runs on the SSR read, not just the HTTP one', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('h1')).not.toContainText('ungreeted')
+    await expect(page.locator('h1')).toHaveText('Hello, world!')
+})

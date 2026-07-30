@@ -152,23 +152,36 @@ export interface RpcMeta<Args, T> {
 // can name it without importing `server/`; `Rpc` is that surface PLUS the server-only construction meta.
 export type { MutationCallArgs, RpcCallArgs }
 
-// How a chained read runs: the runner receives the args (which rung of middleware applies can depend on
-// them being present) and the un-chained producer, and returns the produced value — or throws, when a
-// middleware short-circuited. Installed by `createApp`, which is the only place an rpc's route NAME and the
-// app's global middleware are both known.
+// How a chained read runs: the runner receives the args (which the chain needs to say WHICH read it is
+// authorizing) and the un-chained producer, and returns the produced value — or throws, when a middleware
+// short-circuited. Installed by `bindRpcChains`, which every boot calls.
 export type RpcChainRunner<Args, T> = (args: Args, produce: () => Promise<T>) => Promise<T>
 
-// The isomorphic call surface (probes, verbs, hydration seams) plus the members that are genuinely
-// server-side: the construction meta the router reads, the chain hook `createApp` installs, and the
-// un-chained entry the router invokes. The browser proxy implements everything in `RpcCallSurface` and has
-// none of these three, which is exactly where this line is drawn.
-export interface Rpc<Args, T> extends RpcCallSurface<Args, T> {
+// THE SERVER-ONLY MEMBERS OF A ROUTE, declared once for both route surfaces.
+//
+// All three are `__`-prefixed, and for `__bare` that is load-bearing rather than cosmetic: it is the call
+// that SKIPS the middleware chain — i.e. skips what `auth.md` calls auth. Spelled `bare`/`bindChain` they
+// appeared in the autocomplete of anyone importing `$server/rpc/getUsers`, sitting between `peek` and
+// `refresh` and reading exactly like a supported way to call an rpc. `__rpc` already established the
+// convention for "this is the router's seam, not your API".
+//
+// Declared on ONE interface because the previous split was silent and wrong: `Rpc` carried the chain
+// members and `StreamRead` did not, though `makeRead` builds both from the same `attachSurface` — so the
+// router reached a streaming route's un-chained entry through a cast that was sound only by luck. One
+// declaration, both surfaces, and `Route` (their union) has the members without a cast.
+export interface ServerRouteMembers<Args, T> {
     readonly __rpc: RpcMeta<Args, T>
-    // Install the middleware chain this rpc's reads run under. Called once per route at boot.
-    bindChain(runner: RpcChainRunner<Args, T>): void
+    // Install the middleware chain this rpc's reads run under. Called once per route per boot; binding
+    // again REPLACES the runner, so a dev-server rebuild cannot nest two chains on one route.
+    __bindChain(runner: RpcChainRunner<Args, T>): void
     // The memo call with NO chain — for the router, which composes the chain around all of dispatch.
-    bare(args: Args): Promise<T>
+    __bare(args: Args): Promise<T>
 }
+
+// The isomorphic call surface (probes, verbs, hydration seams) plus the members that are genuinely
+// server-side. The browser proxy implements everything in `RpcCallSurface` and none of `ServerRouteMembers`,
+// which is exactly where this line is drawn.
+export interface Rpc<Args, T> extends RpcCallSurface<Args, T>, ServerRouteMembers<Args, T> {}
 
 // A STREAMING read — a handler that yields an `AsyncIterable<C>` (replayable-streams.md §4). The read
 // resolves to a fresh replay-then-live `consume()` cursor, and the surface is stream-correct: reactive
@@ -181,7 +194,8 @@ export interface Rpc<Args, T> extends RpcCallSurface<Args, T> {
 // than `T`), which is exactly what parameterizing the surfaces by their value type buys.
 export interface StreamRead<Args, C>
     extends ReactiveValueProbes<C, RpcCallArgs<Args>>,
-        ReactiveStreamProbes<C, RpcCallArgs<Args>> {
+        ReactiveStreamProbes<C, RpcCallArgs<Args>>,
+        ServerRouteMembers<Args, AsyncIterable<C>> {
     // THE READ: awaitable; resolves to a fresh cursor that replays the transcript so far then goes live.
     (...args: RpcInvokeArgs<Args>): Promise<AsyncIterable<C>>
     // Re-run the source; `invalidate` aborts an open stream + drops it (replayable-streams.md §4).
@@ -190,7 +204,6 @@ export interface StreamRead<Args, C>
     // Raw `Response`, full bypass (single-consumption stream body; no replay).
     raw(args: Args, init?: RequestInit): Promise<Response>
     isError(e: unknown, name: string): boolean
-    readonly __rpc: RpcMeta<Args, AsyncIterable<C>>
 }
 
 // The surface a read helper (GET/HEAD) yields. A handler may return its result RAW or wrapped in a
@@ -259,7 +272,7 @@ function attachSurface<Args, T>(
     setChain: (runner: RpcChainRunner<Args, T>) => void,
     bare: (args: Args) => Promise<T>,
 ): void {
-    callable.bindChain = setChain
+    callable.__bindChain = setChain
     // The call WITHOUT the middleware chain — what the ROUTER invokes, because it composes the chain itself
     // around the whole of dispatch (so arg decoding and `schemas.input` validation happen INSIDE
     // authorization, where a 422 must not precede a 403). Every other caller goes through the chained call.
@@ -270,7 +283,7 @@ function attachSurface<Args, T>(
     // is not simply "call the memo". A `FormData` body bypasses the memo entirely (a raw FormData throws in
     // `canonicalKey`), as does `memo: false`, and rebuilding this as a bare memo call silently routed every
     // multipart upload through the memo instead.
-    callable.bare = bare
+    callable.__bare = bare
     callable.peek = (args: Args): T | undefined => backing.peek(args)
     callable.pending = (args: Args): boolean => backing.pending(args)
     callable.refreshing = (args: Args): boolean => backing.refreshing(args)
@@ -387,9 +400,10 @@ export function makeRead<Args, T>(
     }
     const backing = memo<Args, T>(fn, memoOptions)
 
-    // The middleware chain this read runs under, installed by `createApp` (the only place the route NAME and
-    // the app's global middleware are both known). Unbound — a hand-built rpc with no app around it — is a
-    // direct memo call, which is what keeps `makeRpc` transport-free and unit-testable on its own.
+    // The middleware chain this read runs under, installed by `bindRpcChains` (the only place the route's
+    // own NAME is known — the chain needs it to say which read it is authorizing). Unbound — a hand-built
+    // rpc with no app around it — is a direct memo call, which is what keeps `makeRpc` transport-free and
+    // unit-testable on its own.
     let chain: RpcChainRunner<Args, T> | undefined
 
     // A caller's `signal` detaches THEIR wait and leaves the run alone (ADR 0028 D3) — the run belongs

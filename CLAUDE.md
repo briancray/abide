@@ -111,23 +111,24 @@ the OpenAPI operation summary, the MCP tool description, and the CLI's `help`.
   The chain wraps the **CALL**, never the memo body: a memo coalesces by ARGS, so a chain inside the body
   would let the first caller's authorization stand in for the next caller's. **Two rungs, two scopes:**
   this rpc's own middleware runs per READ; the app's global `config.middleware` is per REQUEST and runs
-  only when the caller is not already inside a request that ran it — otherwise a page with eight reads
-  would count nine hits in a rate limiter. That is the rule a WS subscribe already followed. A
+  wherever a REQUEST exists to authorize — which is the router at mount and the WS `@rpc:` join (which
+  synthesizes a request-shaped scope precisely so it can run it), and nowhere else. A page with eight reads
+  therefore runs it once, not nine times, and a scope-free read (a cron tick, a migration) runs the own rung
+  ALONE: the global chain is where an app reaches for `request()`, and reaching for it from a door that has
+  none would fail the read closed inside the middleware meant to observe it (ADR 0030 D4). A
   short-circuit reaches an in-process caller as a thrown `HttpError` (whether the middleware threw
   `error(403)` or returned a `Response`), and inside a page render a deliberate `error()`/`redirect()` is
   rendered at its own status rather than collapsing into a 500.
-  **Two exceptions, both from the call sites rather than inferred.** (a) The chain is installed by
-  `createApp`, so a door that never builds an app has none: **`abide run`** boots through `appLifecycle`
-  with no `createApp` at all, and an `onStart` warmer reading *before* `await start()` is inside the same
-  window — a read from either runs NEITHER rung. A migration's reads are therefore unauthorized and
-  unobserved; do the authorizing in the script. (b) **`fn.raw()`** calls the handler directly, so it
-  bypasses the chain along with the memo.
-  **The chain runs in the CALLER's scope**, which is what the middleware's own ambients answer from: from
-  a non-HTTP door `route()` reports the caller's route, so during page SSR an rpc's middleware sees
-  `kind: 'nav'` and the page's pattern — a guard written as `route().name === '<rpc>'` does not fire
-  there. Outside a request entirely, `route()`/`identity()`/`request()` throw. The WS `@rpc:` join is the
-  one door that synthesizes an rpc-shaped scope (`channelAuth`); gate on the middleware's **arguments**
-  rather than on `route()` if it must hold from every door.
+  Installed by `bindRpcChains`, which **every** boot calls — `createApp`, `abide dev`'s rebuild
+  (`App.rebind()`), and `abide run` — so which door built the app cannot decide whether a read is
+  authorized. `fn.raw()` is the one exception, by construction: it calls the handler, not the chained
+  producer, so it is the one read surface that is neither coalesced nor authorized.
+  **Inside the chain, `route()` names the READ** — `{ kind: 'rpc', name, params: args }` — not the caller
+  who made it, so the `route().name === '<rpc>'` guard idiom holds from every door including page SSR
+  (ADR 0030 D3). `request()`/`cookies()`/`context()`/`identity()` still answer the CALLER's request,
+  which is the point of them; only the subject is overridden. From a scope-free door there is no request,
+  so those throw while `route()` still answers — gate on `params`/the middleware's arguments, never on
+  `url`, which an in-process read cannot answer truthfully.
 - **`memo`** (unified across verbs; `docs/spec/replayable-streams.md`): `ttl` (ms; **reads** default ∞,
   **mutations** default `0` = coalesce identical concurrent in-flight calls, retain nothing — a mutation
   that sets `memo: { ttl }` retains like a read on **both** the server and client memo, so its
@@ -477,13 +478,14 @@ Mutations differ only in transport (args in body + CSRF gate) and the default TT
 ## App module — `src/app.ts`
 `export const middleware = [(next) => Response, …]` (onion; `next()` needs no args; return a
 `Response` — or call `error(403)`/`redirect(...)`, which THROW — to short-circuit; **auth is
-middleware**). This is the **per-REQUEST** rung — an rpc's own `opts.middleware` is the per-READ one, and
-the global chain deliberately does not re-run for a read inside a request that already ran it. It DOES run
-for a read from outside any request (a cron tick), where there is no request scope to read from, so a
-global middleware reaching for `request()`/`identity()` throws on that path. A thrown outcome is rendered
-by the chain exactly as a returned `Response` is, on every surface middleware runs on: the HTTP path, a
-scope-free in-process read, and the per-subscribe channel/room re-authorization, where it counts as a DENY
-and fails closed. Plus lifecycle hooks (async-capable, awaited):
+middleware**). This is the **per-REQUEST** rung — an rpc's own `opts.middleware` is the per-READ one
+(ADR 0030). It runs wherever a request exists to authorize and nowhere else: once per HTTP request however
+many reads that request makes, and at the WS `@rpc:` join. It does **not** run for an in-process read, so
+this is the rung that may safely read `request()`/`identity()` — a cron tick or an `abide run` migration
+reaching an rpc runs that rpc's own middleware and not this. A thrown outcome is rendered by the chain
+exactly as a returned `Response` is, on both surfaces it runs on: the HTTP path, and the per-subscribe
+channel/room re-authorization, where it counts as a DENY and fails closed. Plus lifecycle hooks
+(async-capable, awaited):
 `onStart(start)` / `onStop(stop)` **wrap** the real boot/teardown — do setup, then `await start()`
 (the socket binds only inside it, so nothing serves until setup finishes); returning without calling
 `start()` is a breakout (app never boots). `onStop(stop)` mirrors it (drain, then `await stop()`;

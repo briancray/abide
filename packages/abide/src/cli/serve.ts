@@ -21,6 +21,7 @@ import { bootApp } from '../server/internal/bootApp.ts'
 import { type ClientBuild, invalidateClientBundle } from '../server/internal/clientBundle.ts'
 import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
+import type { App } from '../server/internal/router.ts'
 import { socket } from '../server/socket.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
 import { SOCKETS_ROUTE } from '../shared/internal/SOCKETS_ROUTE.ts'
@@ -162,7 +163,7 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
 
     let watcher: FSWatcher | undefined
     if (reloadSocket !== undefined) {
-        watcher = startWatch(dir, config, reloadSocket)
+        watcher = startWatch(dir, config, reloadSocket, booted.app)
     }
 
     return {
@@ -179,10 +180,18 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
 // up without restarting Bun.serve) and signal a reload. `config.sockets` is mutated in place rather
 // than reassigned: the router captured that exact object on the mux (router.ts:343), so newly added
 // or removed socket files are reconciled into it while the dev-reload channel's identity is kept.
+//
+// READING LIVE IS ONLY HALF OF IT, and the missing half was silent. Some of what the router serves is
+// DERIVED from the registry at boot — the per-route CORS policy, the composed middleware chain, the
+// per-read chain on each callable, the `(rpc,args)` broadcast sink — and a reassigned `config.routes`
+// invalidates every one of them while looking like a live read. So a rebuild must also tell the app to
+// re-derive (`app.rebind()`). Without it, the first file save silently dropped per-rpc `middleware` and
+// `crossOrigin` for the rest of the session: authorization derived from a build that was no longer running.
 function startWatch(
     dir: string,
     config: LoadedApp,
     reloadSocket: ReturnType<typeof socket<number>>,
+    app: App,
 ): FSWatcher {
     const srcDir = join(dir, 'src')
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -203,6 +212,10 @@ function startWatch(
             config.layoutDirs = fresh.layoutDirs ?? {}
             config.middleware = fresh.middleware ?? []
             syncSockets(config, fresh, reloadSocket)
+            // AFTER every property is in place and BEFORE the reload signal: re-derive everything the
+            // router computed from the old registry, so the next request is served by this build's
+            // authorization rather than the boot's.
+            app.rebind()
             await warmPages(config)
             reloadSocket.publish(Date.now())
             log.channel('abide:cli').info('reloaded')

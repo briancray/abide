@@ -52,6 +52,33 @@ describe('abide run', () => {
         expect(process.env.__ABIDE_LC_STOP).toBe('1')
     })
 
+    // A MIGRATION'S READS RUN THE RPC'S OWN MIDDLEWARE — the door with no `createApp` behind it.
+    //
+    // This needs a `run`-shaped harness and cannot be asserted through `createTestApp`, which is exactly
+    // how the gap survived: the chain is installed by `createApp`, `createTestApp` calls it, and `run`
+    // never does. So the scope-free test next door in `rpcChain.test.ts` passed while the door it named
+    // ran no middleware at all.
+    //
+    // The script imports the rpc by ABSOLUTE path, which is the same specifier `loadApp` used, so ES module
+    // caching hands it the very callable the chain was bound to. Importing a second copy would test nothing.
+    test("a script's read runs the rpc's own middleware", async () => {
+        const guarded = join(FIXTURE, 'src/server/rpc/guarded.ts')
+        const file = await script(
+            `const { default: guarded } = await import(${JSON.stringify(guarded)})\n` +
+                'const value = await guarded({})\n' +
+                "if (value?.ok !== true) throw new Error('the handler did not run')\n" +
+                "process.env.__ABIDE_RAN = '1'\n",
+        )
+        // Seeded rather than deleted, so the counter has a known base and the assertion below reads as a
+        // count. (A `delete` also narrows the env property to `undefined` for the rest of the function,
+        // which makes the string comparison a type error.)
+        process.env.__ABIDE_GUARD = '0'
+        await run(FIXTURE, file)
+        expect(process.env.__ABIDE_RAN).toBe('1')
+        // Once — the read is chained, and chained exactly once.
+        expect(process.env.__ABIDE_GUARD).toBe('1')
+    })
+
     test('serves no HTTP — the port a server would have taken stays free', async () => {
         // Ask the OS for a port, release it, and hand it to `abide run` as PORT. Probing a FIXED port
         // (3000) instead made this depend on nothing else on the machine listening there, which is not

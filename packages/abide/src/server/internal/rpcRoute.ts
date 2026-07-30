@@ -20,7 +20,7 @@
 // self-host, `createTestApp.rpc`, and the REPL.
 //
 // Its own `middleware` used to be on that list and no longer is: the chain runs per READ from any door
-// (`rpcChain.ts`), which is why `invokeRpc` calls `route.bare(args)` — the router composes the chain around
+// (`rpcChain.ts`), which is why `invokeRpc` calls `route.__bare(args)` — the router composes the chain around
 // the whole of dispatch, so validation happens INSIDE authorization and a 422 never precedes a 403.
 //
 // This module does not close the remaining gap; it makes the gap have a shape. `validateRpcArgs` +
@@ -189,7 +189,7 @@ export function invokeRpc(
     args: unknown,
 ): Promise<unknown> {
     // biome-ignore lint/suspicious/noExplicitAny: existential rpc — concrete Args/T erased at dispatch; `unknown` breaks assignability through RpcMeta's invariant Args.
-    return (route as Rpc<any, any>).bare(args)
+    return (route as Rpc<any, any>).__bare(args)
 }
 
 // ── TRANSPORT (out) ─────────────────────────────────────────────────────────────────────────────────

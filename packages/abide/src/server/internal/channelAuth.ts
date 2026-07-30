@@ -131,7 +131,7 @@ export async function authorizeChannelJoin(
         `${RPC_ROUTE_PREFIX}${rpcName}`,
         presentedArgs,
         connData,
-        rpcChainFor(route, config, true),
+        rpcChainFor(route, config),
     )
 }
 

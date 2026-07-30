@@ -30,6 +30,97 @@ async function withApp(run: (origin: string) => Promise<void>): Promise<void> {
     }
 }
 
+// WHAT THE ROUTER DERIVES FROM THE REGISTRY MUST SURVIVE A REGISTRY SWAP.
+//
+// `abide dev` reloads by reassigning `config.routes` on a LIVE router, on the premise — stated in
+// `serve.ts` — that the router reads the config live per request. Dispatch does. But four things are
+// DERIVED at boot: the per-route CORS policy, the composed middleware chain, the per-read chain on each
+// callable, and the broadcast sink. Those were keyed to the previous build's objects, so from the first
+// file save onwards an author's per-rpc `middleware` and `crossOrigin` silently stopped applying — the
+// worst possible surface for a silent authorization drop, and with no symptom where the failure was.
+//
+// Asserted at the `createApp` level rather than through the file watcher: the claim is about re-derivation,
+// not about `fs.watch`, and a test that edits files on disk would pin the wrong thing.
+describe('a reloaded registry re-derives the policy that was built from it', () => {
+    test('rebind() picks up a fresh callable with fresh middleware and CORS', async () => {
+        let firstHits = 0
+        let secondHits = 0
+        const first = GET(() => ({ generation: 1 }), {
+            middleware: [
+                (next) => {
+                    firstHits += 1
+                    return next()
+                },
+            ],
+        })
+        const config = { routes: { swapped: first }, pages: {} }
+        const app = createApp(config)
+        try {
+            const before = await fetch(`${app.origin}/__abide/rpc/swapped`)
+            expect(await before.json()).toEqual({ generation: 1 })
+            expect(firstHits).toBe(1)
+
+            // Exactly what `serve.ts`'s rebuild does: a fresh callable under the same name, declaring
+            // different middleware and now a `crossOrigin` policy, reassigned onto the live config.
+            const second = GET(() => ({ generation: 2 }), {
+                crossOrigin: { origin: 'https://friend.example' },
+                middleware: [
+                    (next) => {
+                        secondHits += 1
+                        return next()
+                    },
+                ],
+            })
+            config.routes = { swapped: second }
+            app.rebind()
+
+            const after = await fetch(`${app.origin}/__abide/rpc/swapped`)
+            // The handler was already live off the live registry read…
+            expect(await after.json()).toEqual({ generation: 2 })
+            // …but these three are the derived state, and each was stale before `rebind`.
+            expect(secondHits).toBe(1)
+            expect(firstHits).toBe(1)
+            const preflight = await fetch(`${app.origin}/__abide/rpc/swapped`, {
+                method: 'OPTIONS',
+                headers: {
+                    origin: 'https://friend.example',
+                    'access-control-request-method': 'GET',
+                },
+            })
+            expect(preflight.headers.get('access-control-allow-origin')).toBe(
+                'https://friend.example',
+            )
+        } finally {
+            await app.stop()
+        }
+    })
+
+    test('the fresh callable is chained for an IN-PROCESS read too', async () => {
+        let hits = 0
+        const config = { routes: { swapped: GET(() => ({ generation: 1 })) }, pages: {} }
+        const app = createApp(config)
+        try {
+            const fresh = GET(() => ({ generation: 2 }), {
+                middleware: [
+                    (next) => {
+                        hits += 1
+                        return next()
+                    },
+                ],
+            })
+            config.routes = { swapped: fresh }
+            app.rebind()
+            // Not over HTTP: the door the router does not compose a chain for. `rebind` has to reach the
+            // callable itself, which is why the per-read binding is part of the same re-derivation and
+            // not a separate step the rebuild could forget.
+            expect(await fresh({})).toEqual({ generation: 2 })
+            expect(hits).toBe(1)
+        } finally {
+            await app.stop()
+        }
+    })
+})
+
 describe('the declared verb is enforced, not just advertised', () => {
     test('a mutation is NOT reachable over GET', async () => {
         await withApp(async (origin) => {

@@ -36,7 +36,7 @@ import { SOCKET_FACE_PREFIX, SOCKETS_ROUTE } from '../../shared/internal/SOCKETS
 import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
 import { json } from '../json.ts'
-import type { AppConfig, Route } from './appConfig.ts'
+import type { AppConfig } from './appConfig.ts'
 import { applyResponseCompression } from './applyResponseCompression.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
 import {
@@ -80,7 +80,7 @@ import {
     resolveAppClass,
     resolveFrameworkClass,
 } from './routeClass.ts'
-import { owesGlobalChain, rpcChainFor, throughChain } from './rpcChain.ts'
+import { bindRpcChains, rpcChainFor } from './rpcChain.ts'
 import { allowedMethodsFor } from './rpcRoute.ts'
 import { rpcTools } from './rpcTools.ts'
 import { servePublicFile } from './servePublicFile.ts'
@@ -273,6 +273,11 @@ export interface App {
     server: Bun.Server<undefined>
     origin: string
     stop(): Promise<void>
+    // RE-DERIVE every per-surface binding from the CURRENT `config` — for `abide dev`, which mutates the
+    // config in place on each rebuild (fresh route callables, a fresh global middleware array, a re-synced
+    // socket registry) and cannot otherwise tell the app that its authorization is now derived from a
+    // previous build. Not a lifecycle hook: a served app never calls it.
+    rebind(): void
 }
 
 // A soft-nav that a middleware short-circuited with a redirect Response is surfaced to the client as
@@ -410,68 +415,81 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
 }
 
 export function createApp(config: AppConfig = {}): App {
-    const routes = config.routes ?? {}
-    const globalMiddleware = config.middleware ?? []
     const sockets = config.sockets ?? {}
 
-    // Per-route static policy, derived ONCE at boot rather than per request. `crossOrigin` and
-    // `middleware` live on an immutable options object, so normalizing the CORS config and merging the
-    // global + per-rpc middleware lists on every request re-derived a constant — and the merge also
-    // allocated a fresh spread array each time. Only the final `compose` stays per-request: its inner
-    // `next` closes over that request's scope.
+    // Per-route static policy, derived once per BOOT rather than per request. `crossOrigin` and `middleware`
+    // live on an immutable options object, so normalizing the CORS config and merging the global + per-rpc
+    // middleware lists on every request re-derived a constant — and the merge also allocated a fresh spread
+    // array each time. Only the final `compose` stays per-request: its inner `next` closes over that
+    // request's scope.
+    //
+    // KEYED BY NAME, not by the Route object. `abide dev`'s rebuild reassigns `config.routes` to freshly
+    // imported callables, and an identity-keyed Map silently missed every one of them: the request then fell
+    // back to the bare global chain, so a per-rpc `middleware` and a declared `crossOrigin` stopped applying
+    // after the first file save — in the surface an author does all their work in, and with no symptom at the
+    // point of failure. A name is what dispatch looks the route up by anyway.
     const routePolicy = new Map<
-        Route,
+        string,
         { cors: NormalizedCors | undefined; middleware: Middleware[] }
     >()
-    for (const routeDef of Object.values(routes)) {
-        routePolicy.set(routeDef, {
-            cors: normalizeCrossOrigin(routeDef.__rpc.options.crossOrigin),
-            middleware: rpcChainFor(routeDef, config, true),
-        })
-    }
-
-    // AND THE SAME CHAIN FOR AN IN-PROCESS READ. `middleware` is `(next) => Response` — tracing, rate
-    // limiting, context population, auth — so it is part of what a READ means, not of what HTTP means, and
-    // it runs per read from whichever door the read came through. Installed here because this is the only
-    // place an rpc's route NAME and the app's global middleware are both known (the same reason
-    // `bindBroadcast` is installed here), and `makeRpc` stays transport-free.
-    //
-    // TWO RUNGS, decided PER CALL rather than at boot (`owesGlobalChain`): the rpc's own middleware always
-    // runs; the global chain runs only when the caller is not already inside a request that ran it. During
-    // page SSR it has run, so a page with eight reads does not count nine hits in a rate limiter; from a
-    // cron tick nothing has run, so both rungs do. This is the rule `channelAuth` already applies to a WS
-    // subscribe.
-    //
-    // BEING HERE IS ALSO THE LIMIT: this is the only install site, so a door that never builds an app is
-    // unchained. `abide run` never calls `createApp`, and `bootApp` calls it inside the `start()` thunk, so
-    // a migration and a pre-`start()` `onStart` warmer run neither rung — see `rpcChain.ts`'s header, which
-    // enumerates that gap rather than leaving "every door" to be read as unconditional.
-    //
-    // The ROUTER does not go through this: it invokes `route.bare(args)` inside the chain it composes above,
-    // so arg decoding and `schemas.input` validation stay INSIDE authorization (a 422 must not precede a
-    // 403) and the chain still runs exactly once.
-    for (const routeDef of Object.values(routes)) {
-        const own = routeDef.__rpc.options.middleware ?? []
-        // Nothing to run and nothing to decide → leave the callable unwrapped rather than paying a closure
-        // and a `currentScope()` read per call for an empty list.
-        if (own.length === 0 && globalMiddleware.length === 0) continue
-        // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
-        ;(routeDef as Rpc<any, any>).bindChain((_args, produce) =>
-            throughChain(rpcChainFor(routeDef, config, owesGlobalChain()), produce),
-        )
-    }
-
-    // The socket analog of `routePolicy`. A socket's own `middleware` authorizes its subscribes and
-    // publishes (CLAUDE.md: "the socket analog of an rpc's middleware"); the WS join path already runs
-    // it via `authorizeSocketJoin`, so without this the HTTP face was the one way in that skipped it.
-    // Same boot-time derivation, same reason: the merged list is a constant per socket.
     const socketPolicy = new Map<string, Middleware[]>()
-    for (const [socketName, sock] of Object.entries(sockets)) {
-        socketPolicy.set(socketName, [
-            ...globalMiddleware,
-            ...(sock.__socket.options.middleware ?? []),
-        ])
+
+    // EVERY PER-SURFACE DERIVATION, in one place that can be run AGAIN. There were four, each its own loop
+    // over a `routes`/`sockets`/`globalMiddleware` local captured at boot: the route policy above, the
+    // per-read middleware chain, the `(rpc,args)` broadcast sink, and the socket policy. A dev rebuild
+    // invalidates all four at once — it reassigns `config.routes`, `config.middleware` and re-syncs the
+    // sockets — and re-derived none of them, so the app kept serving the first build's authorization.
+    const bindRoutes = (): void => {
+        const routes = config.routes ?? {}
+        routePolicy.clear()
+        for (const [name, routeDef] of Object.entries(routes)) {
+            routePolicy.set(name, {
+                cors: normalizeCrossOrigin(routeDef.__rpc.options.crossOrigin),
+                // BOTH RUNGS for the HTTP door: a request is exactly what the global rung authorizes, and
+                // the router is the one composer that has one. `dispatch` then invokes `route.__bare(args)`
+                // inside this chain, so arg decoding and `schemas.input` validation stay INSIDE
+                // authorization (a 422 must not precede a 403) and the chain runs exactly once per read.
+                middleware: rpcChainFor(routeDef, config),
+            })
+        }
+
+        // The OWN rung, for every other door — page SSR, a handler reading a sibling rpc, a cron tick, an
+        // `abide run` migration. Shared with those other boots (`rpcChain.ts`) rather than spelled here,
+        // because which door built the app must not decide whether a read is authorized.
+        bindRpcChains(config)
+
+        // §8 broadcast seam (PR2): bind each SHARED read route's transport-free memo `notify` sink to a
+        // publish onto its `(rpc,args)` channel. The route NAME is the `config.routes` key — known only
+        // here — so the router is the sole owner of both name and registry; memo/makeRpc stay
+        // transport-free. Value-form `publish` carries a `value`; invalidate/refresh do not.
+        for (const [name, route] of Object.entries(routes)) {
+            const meta = route.__rpc
+            if (
+                meta.read &&
+                meta.options.memo !== false &&
+                meta.options.memo?.crossRequest === true
+            ) {
+                // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
+                ;(route as Rpc<any, any>).bindBroadcast((verb, args, value): void => {
+                    const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
+                    publishMemoFrame(memoChannelName(name, args), frame)
+                })
+            }
+        }
+        // The socket analog of `routePolicy`. A socket's own `middleware` authorizes its subscribes and
+        // publishes (CLAUDE.md: "the socket analog of an rpc's middleware"); the WS join path already runs
+        // it via `authorizeSocketJoin`, so without this the HTTP face was the one way in that skipped it.
+        // Same derivation, same reason: the merged list is a constant per socket — and re-derived here for
+        // the same reason the routes are, since a rebuild re-syncs the socket registry too.
+        socketPolicy.clear()
+        for (const [socketName, sock] of Object.entries(config.sockets ?? {})) {
+            socketPolicy.set(socketName, [
+                ...(config.middleware ?? []),
+                ...(sock.__socket.options.middleware ?? []),
+            ])
+        }
     }
+    bindRoutes()
 
     // AU8.3 / CX8.1: the Origin/Referer CSRF check and the CSWSH WebSocket-upgrade gate both key off
     // `APP_URL`. An unset `APP_URL` is legitimate in dev (and for hand-built/test apps), so those gates
@@ -502,21 +520,6 @@ export function createApp(config: AppConfig = {}): App {
     // neither. `abide run` binds no server and so never enables it: there would be no route to read it.
     const logFeedConfig = logFeedSettings()
     if (logFeedConfig.enabled) logFeed.enable(logFeedConfig.capacity)
-
-    // §8 broadcast seam (PR2): bind each SHARED read route's transport-free memo `notify` sink to a
-    // publish onto its `(rpc,args)` channel. The route NAME is the `config.routes` key — known only
-    // here — so createApp is the sole owner of both name and registry; memo/makeRpc stay
-    // transport-free. Value-form `publish` carries a `value`; invalidate/refresh do not.
-    for (const [name, route] of Object.entries(routes)) {
-        const meta = route.__rpc
-        if (meta.read && meta.options.memo !== false && meta.options.memo?.crossRequest === true) {
-            // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
-            ;(route as Rpc<any, any>).bindBroadcast((verb, args, value): void => {
-                const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
-                publishMemoFrame(memoChannelName(name, args), frame)
-            })
-        }
-    }
 
     // Per-connection subscription state, keyed by the live WS. The connection's identity + request
     // ride on `ws.data` (SocketConnectionData, resolved at upgrade); this map holds only the live
@@ -626,7 +629,7 @@ export function createApp(config: AppConfig = {}): App {
                 try {
                     admitted = await runInScope(
                         connectScope,
-                        compose(globalMiddleware, () => UPGRADE_ADMITTED),
+                        compose(config.middleware ?? [], () => UPGRADE_ADMITTED),
                     )
                 } catch (caught) {
                     // A middleware short-circuits by THROWING (`error(401)`/`redirect(...)`). Render it
@@ -703,8 +706,10 @@ export function createApp(config: AppConfig = {}): App {
                 traceparent: propagatedTrace,
             })
 
-            const matched = info.kind === 'rpc' ? routes[info.name] : undefined
-            const policy = matched !== undefined ? routePolicy.get(matched) : undefined
+            // Read the registry LIVE, not off a boot-time local: `abide dev` reassigns `config.routes` on
+            // every rebuild, and a captured copy answers with the previous build's callables.
+            const matched = info.kind === 'rpc' ? config.routes?.[info.name] : undefined
+            const policy = matched !== undefined ? routePolicy.get(info.name) : undefined
             const cors = policy?.cors
             // CORS preflight: answer an OPTIONS to an RPC before the middleware onion. A crossOrigin-less
             // RPC has no CORS policy, so preflight is simply an unsupported method (405 + Allow).
@@ -725,8 +730,9 @@ export function createApp(config: AppConfig = {}): App {
                 info.kind === 'socket-subscribe' || info.kind === 'socket-publish'
                     ? socketPolicy.get(info.name)
                     : undefined
-            const chain = compose(policy?.middleware ?? socketChain ?? globalMiddleware, () =>
-                dispatch(scope, config),
+            const chain = compose(
+                policy?.middleware ?? socketChain ?? config.middleware ?? [],
+                () => dispatch(scope, config),
             )
 
             // A pre-stage rather than part of `exit`: it REPLACES the response (a raw 3xx is opaque to
@@ -847,6 +853,9 @@ export function createApp(config: AppConfig = {}): App {
         // Public App surface keeps `Bun.Server<undefined>`; the WS-data generic is internal (see above).
         server: server as unknown as Bun.Server<undefined>,
         origin,
+        // The same derivation the boot ran, over whatever `config` now holds. `onHealth` next door solves
+        // the same problem with a getter; a policy Map cannot be a getter, so it is re-derived on demand.
+        rebind: bindRoutes,
         async stop(): Promise<void> {
             withdrawAgentSurface()
             withdrawHealthSource()

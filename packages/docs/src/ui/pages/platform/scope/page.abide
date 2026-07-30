@@ -19,11 +19,13 @@
   </Demo>
   <aside class="aside">
     <p>Cookies come from the client; <code>context()</code> is the same idea for values <em>you</em> put on the request. It is the per-request carrier bag. A per-RPC middleware writes into it; the handler beneath it in the onion reads it back — the hand-off from a middleware layer to the handler.</p>
+    <p>Note <em>when</em> it ran. The stamp is already filled in before you touch the button, because this page read the RPC during its own server render — and an RPC's <code>middleware</code> runs <strong>per read, from every door</strong>, not only over HTTP. The button is a second read through the browser, so the middleware runs a second time. That is the whole rule: <code>middleware</code> is <code>(next) =&gt; Response</code>, so it is tracing and rate limiting and context-filling as much as it is auth, and a read that skipped it would not merely be unauthorized — it would be unobserved.</p>
   </aside>
   <Demo id="guard" title="RPC <code>middleware</code> — onion + short-circuit" server="src/server/rpc/platformGuard.ts" client="src/ui/demos/platform/scope/GuardDemo.abide" tab="server">
     <GuardDemo />
   </Demo>
   <aside class="aside">
     <p>Middleware is the layer around a handler — and the reason <code>context()</code> exists, since it is how a layer hands something down. A per-RPC <code>middleware</code> array composes an onion: the first layer authorizes, either calling <code>error(403)</code> to short-circuit (it <strong>throws</strong>, so the handler never runs and the chain renders the 403) or calling <code>next()</code>. Both buttons hit the real router pipeline in the browser.</p>
+    <p>There are <strong>two rungs</strong>, and they differ in how often they run. An RPC's own <code>middleware</code> is per <em>read</em> — every read, every door. Your <code>src/app.ts</code> <code>middleware</code> array is per <em>request</em>: a page with eight reads runs it once, not nine times, which is what keeps a rate limiter honest. From a door with no request at all — a cron tick, an <code>abide run</code> migration — the read still runs its own rung, and the global one stays out of it, because there is no request there for it to authorize.</p>
   </aside>
 </main>
