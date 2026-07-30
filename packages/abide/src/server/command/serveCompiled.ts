@@ -8,7 +8,7 @@
 
 import { installShutdownHandlers } from '../../cli/installShutdownHandlers.ts'
 import { parsePort } from '../../cli/parsePort.ts'
-import { type ServeResult, serve } from '../../cli/serve.ts'
+import { DEFAULT_PORT, hostApp, readEnvPort, type ServeResult } from '../internal/hostApp.ts'
 import type { LoadedApp } from '../internal/loadApp.ts'
 import type { CompiledApp } from './compiledAppConfig.ts'
 import { embeddedClientBuild } from './embeddedClientBuild.ts'
@@ -34,10 +34,9 @@ export async function serveCompiled(
     // The executable's own command line: `./server --port 8080`, else `PORT`, else 3000 — the same
     // resolution `abide start` performs, including binding the port directly (a clash is a loud
     // EADDRINUSE; production should fail rather than silently move).
-    const running = await serve(app.dir, {
+    const running = await hostApp(config, {
         dev: false,
-        port: parsePort(argv),
-        app: config,
+        port: parsePort(argv) ?? readEnvPort() ?? DEFAULT_PORT,
         clientBuild: await embeddedClientBuild(app),
     })
     installShutdownHandlers(running)

@@ -17,8 +17,8 @@
 
 import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
-import { bootApp } from '../server/internal/bootApp.ts'
 import type { ClientBuild } from '../server/internal/clientBundle.ts'
+import { DEFAULT_PORT, hostApp, readEnvPort, type ServeResult } from '../server/internal/hostApp.ts'
 import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
 import type { App } from '../server/internal/router.ts'
@@ -34,10 +34,6 @@ const DEV_RELOAD_CHANNEL = '__abide_dev_reload'
 
 // Coalesce a burst of filesystem events into one rebuild.
 const WATCH_DEBOUNCE_MS = 60
-
-// Default listen port when none is given (via `--port` or `PORT`). `abide dev` hops upward from here to
-// the next free port so parallel dev servers coexist; `abide start` binds it directly.
-const DEFAULT_PORT = 3000
 
 // How many ports to probe upward from the requested one (dev only) before giving up and letting the OS
 // pick an ephemeral port.
@@ -75,6 +71,10 @@ const DEV_RELOAD_SNIPPET =
     `ws.addEventListener("message",function(e){try{var f=JSON.parse(e.data);if(f&&f.name===${JSON.stringify(DEV_RELOAD_CHANNEL)}&&f.msg!==undefined){cap();location.reload();}}catch(_){}});` +
     `}catch(_){}})();`
 
+// Re-exported so the CLI keeps naming its result from the module it calls; the shape belongs to
+// `hostApp`, which is what actually produces it.
+export type { ServeResult }
+
 export interface ServeOptions {
     dev?: boolean | undefined
     port?: number | undefined
@@ -89,11 +89,6 @@ export interface ServeOptions {
     app?: LoadedApp | undefined
 }
 
-export interface ServeResult {
-    url: string
-    stop(): Promise<void>
-}
-
 // Resolve the listen port from (in order) an explicit `--port`, the `PORT` env var, then DEFAULT_PORT.
 // In dev the requested port is only a starting point — if it's taken, hop to the next open one so
 // several dev servers can run side by side. Production (`abide start`) binds the requested port as-is,
@@ -102,14 +97,6 @@ async function resolvePort(opts: ServeOptions): Promise<number> {
     const requested = opts.port ?? readEnvPort() ?? DEFAULT_PORT
     if (opts.dev === true) return await findOpenPort(requested)
     return requested
-}
-
-// Read `PORT` from the environment, ignoring an unset/blank/out-of-range value.
-function readEnvPort(): number | undefined {
-    const raw = Bun.env.PORT
-    if (raw === undefined || raw === '') return undefined
-    const port = Number(raw)
-    return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : undefined
 }
 
 // Probe upward from `start` for a port nothing else is bound to, using a throwaway `Bun.serve` bind as
@@ -146,12 +133,6 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
     // `LoadAppOptions.schemas` for what that guess cost.
     const config: LoadedApp =
         opts.app ?? (await loadApp(dir, { schemas: opts.dev === true ? 'source' : 'baked' }))
-    config.port = await resolvePort(opts)
-    // Production (`abide start`) minifies the client bundle; `abide dev` does not (TODO #6).
-    config.dev = opts.dev === true
-    // Production `abide start` passes the pre-built client loaded from `dist` — the router serves it
-    // directly (no Bun.build at request time).
-    if (opts.clientBuild !== undefined) config.clientBuild = opts.clientBuild
 
     // The dev-reload socket must exist in `config.sockets` BEFORE createApp so the router captures it
     // on the mux. Its object identity stays fixed across rebuilds so `publish` keeps reaching clients.
@@ -161,20 +142,22 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
         config.devReloadScript = DEV_RELOAD_SNIPPET
     }
 
-    // The onStart/onStop wrapper lifecycle — including the page warm and the teardown backstop — is
-    // `bootApp`, shared with `createTestApp` so a test boots the app the same way production does.
-    const booted = await bootApp(config)
+    // Everything from here that is not dev-specific is `hostApp`, which a compiled binary enters
+    // directly — see its header for why that floor is worth having.
+    const hosted = await hostApp(config, {
+        port: await resolvePort(opts),
+        dev: opts.dev === true,
+        ...(opts.clientBuild !== undefined ? { clientBuild: opts.clientBuild } : {}),
+    })
 
-    let watcher: FSWatcher | undefined
-    if (reloadSocket !== undefined) {
-        watcher = startWatch(dir, config, reloadSocket, booted.app)
-    }
+    if (reloadSocket === undefined) return hosted
 
+    const watcher = startWatch(dir, config, reloadSocket, hosted.app)
     return {
-        url: booted.app.origin,
+        url: hosted.url,
         async stop(): Promise<void> {
-            watcher?.close()
-            await booted.stop()
+            watcher.close()
+            await hosted.stop()
         },
     }
 }

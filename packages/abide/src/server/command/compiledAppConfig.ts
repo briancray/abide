@@ -16,13 +16,8 @@
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { registerEmittedServer } from '../../ui/internal/emit.ts'
-import {
-    appModuleExports,
-    isRoute,
-    isSocket,
-    type LoadedApp,
-    singleExport,
-} from '../internal/loadApp.ts'
+import { appModuleExports, isRoute, isSocket, singleExport } from '../internal/appModuleShape.ts'
+import type { LoadedApp } from '../internal/loadApp.ts'
 import { mergeSchemas } from '../internal/mergeSchemas.ts'
 import type { Route } from '../internal/router.ts'
 import type { Socket } from '../socket.ts'

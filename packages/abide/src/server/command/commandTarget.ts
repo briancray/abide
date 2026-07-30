@@ -15,8 +15,8 @@
 // 3000) instead of the ephemeral one a one-shot call uses. The `serve` SUBCOMMAND does not come here
 // at all — it goes straight to `serveCompiled`, since it has nothing to do afterwards.
 
-import { type ServeResult, serve } from '../../cli/serve.ts'
 import type { ClientBuild } from '../internal/clientBundle.ts'
+import { DEFAULT_PORT, hostApp, readEnvPort, type ServeResult } from '../internal/hostApp.ts'
 import type { LoadedApp } from '../internal/loadApp.ts'
 import type { CompiledApp } from './compiledAppConfig.ts'
 import { embeddedClientBuild } from './embeddedClientBuild.ts'
@@ -53,12 +53,12 @@ export function commandTarget(input: {
 
     const boot = async (port?: number): Promise<string> => {
         if (client === undefined) client = await embeddedClientBuild(input.app)
-        // `port: undefined` lets serve() resolve `--port` → `PORT` → 3000, exactly as `abide start`
-        // does; `0` asks the OS for an ephemeral one, which is what a one-shot command wants.
-        running = await serve(input.app.dir, {
+        // `port: undefined` resolves `PORT` → 3000, exactly as `abide start` does; `0` asks the OS for
+        // an ephemeral one, which is what a one-shot command wants (and must NOT be replaced by the
+        // ladder, hence the explicit undefined check rather than `??`).
+        running = await hostApp(input.config, {
             dev: false,
-            port,
-            app: input.config,
+            port: port ?? readEnvPort() ?? DEFAULT_PORT,
             clientBuild: client,
         })
         return running.url

@@ -18,6 +18,13 @@ import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import type { Socket } from '../socket.ts'
+import {
+    type AppModuleExports,
+    appModuleExports,
+    isRoute,
+    isSocket,
+    singleExport,
+} from './appModuleShape.ts'
 import { type DeriveEntry, deriveSchemas } from './deriveSchema.ts'
 import { mergeSchemas } from './mergeSchemas.ts'
 import type { Middleware } from './middleware.ts'
@@ -49,39 +56,6 @@ export interface AppLifecycle {
 // process-lifecycle hooks. The caller feeds the AppConfig fields to `createApp` and drives
 // onStart/onStop itself (CL2/CO2.4); the router drives `onHealth`.
 export interface LoadedApp extends AppConfig, AppLifecycle {}
-
-// Pull the single meaningful export from an imported module, WITH the name it was found under (needed
-// to derive its schema from source). Prefer `default`, else the sole named export. Returns undefined
-// when the module has no usable export (the caller decides to skip it).
-//
-// Exported because a `abide compile` binary imports the same modules STATICALLY and must read them the
-// same way: what counts as "the RPC in this file" is one rule, and a second copy of it in the code
-// generator would be a rule two surfaces could disagree about.
-export function singleExport(
-    module: Record<string, unknown>,
-): { value: unknown; exportName: string } | undefined {
-    if (module.default !== undefined) return { value: module.default, exportName: 'default' }
-    const names = Object.keys(module).filter((name) => name !== 'default')
-    const only = names[0]
-    if (names.length === 1 && only !== undefined) return { value: module[only], exportName: only }
-    return undefined
-}
-
-// An RPC module's export is an `Rpc`/`Mutation` — both carry non-enumerable `__rpc` metadata.
-export function isRoute(value: unknown): value is Route {
-    return typeof value === 'function' && '__rpc' in (value as object)
-}
-
-// A socket module's export is a `Socket` — it carries the `__socket` internals handle. A `Socket` is a
-// CALLABLE (`socket({room})` picks a room; ADR 0023), so it is a `function`, not an `object` — accept
-// either callable or object as long as it carries `__socket`.
-export function isSocket(value: unknown): value is Socket<unknown> {
-    return (
-        (typeof value === 'object' || typeof value === 'function') &&
-        value !== null &&
-        '__socket' in value
-    )
-}
 
 async function loadRoutes(
     sources: AppSources['rpc'],
@@ -214,32 +188,6 @@ async function loadLayouts(
 async function loadAppModule(appPath: string | undefined): Promise<AppModuleExports> {
     if (appPath === undefined) return { middleware: [], lifecycle: {} }
     return appModuleExports((await import(appPath)) as Record<string, unknown>)
-}
-
-export interface AppModuleExports {
-    middleware: Middleware[]
-    lifecycle: AppLifecycle
-    onHealth?: AppConfig['onHealth']
-    onError?: AppConfig['onError']
-}
-
-// Read a project's `src/app.ts` module object (CL3). A middleware export that isn't an array is ignored
-// (defensive); each hook is carried only when it is a function. Split from the import above so a
-// compiled binary, which has the module as a static import, applies the identical rule.
-export function appModuleExports(module: Record<string, unknown>): AppModuleExports {
-    const middleware = Array.isArray(module.middleware) ? (module.middleware as Middleware[]) : []
-    const lifecycle: AppLifecycle = {}
-    if (typeof module.onStart === 'function')
-        lifecycle.onStart = module.onStart as (start: () => Promise<void>) => void | Promise<void>
-    if (typeof module.onStop === 'function')
-        lifecycle.onStop = module.onStop as (stop: () => Promise<void>) => void | Promise<void>
-    // onHealth/onError ride on AppConfig (router-consumed per request), not AppLifecycle.
-    const result: AppModuleExports = { middleware, lifecycle }
-    if (typeof module.onHealth === 'function')
-        result.onHealth = module.onHealth as AppConfig['onHealth']
-    if (typeof module.onError === 'function')
-        result.onError = module.onError as AppConfig['onError']
-    return result
 }
 
 // Import `src/server/config.ts` (if present) for its boot-time `env(...)` side effect (CO1). The

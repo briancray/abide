@@ -10,8 +10,8 @@
 // the test suite boots repeatedly, and per-boot exit handlers there would be wrong. The callers are
 // the ones that OWN the process: `abide dev`/`start`/`scaffold`, and a compiled binary's boot.
 
+import type { ServeResult } from '../server/internal/hostApp.ts'
 import { log } from '../shared/log.ts'
-import type { ServeResult } from './serve.ts'
 
 // Grace window for onStop teardown during shutdown before the process is force-exited — a buggy hook
 // that never resolves must not turn a crash or a Ctrl-C into a hang.
