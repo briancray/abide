@@ -41,16 +41,13 @@ import type {
 } from 'typescript/unstable/sync'
 import { API, SignatureKind, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
+import { answerAsNode, askNode, underBun } from './nodeTypeBridge.ts'
 
 export type DeriveSchemaResult = { input?: JSONSchema; output?: JSONSchema; warnings: string[] }
 
 // How deep to descend into nested object/array types before giving up. Recursive types are also
 // guarded by an on-stack `seen` set of type ids; this bounds merely-deep (non-recursive) types.
 const MAX_DEPTH = 24
-
-// Marker the subprocess prints so the Bun-side parent can find the JSON result line even if tsgo or
-// something else writes to stdout.
-const RESULT_MARKER = '__ABIDE_DERIVE_RESULT__:'
 
 // One export-name in an already-open project → its {input, output} JSON Schema.
 function deriveExportFromProject(
@@ -194,10 +191,7 @@ export async function deriveSchemas(
     entries: DeriveEntry[],
 ): Promise<Record<string, DeriveSchemaResult>> {
     if (entries.length === 0) return {}
-    const bun = (globalThis as { Bun?: unknown }).Bun
-    return bun !== undefined
-        ? await deriveBatchViaNodeSubprocess(entries)
-        : deriveBatchInProcess(entries)
+    return underBun() ? await deriveBatchViaNodeSubprocess(entries) : deriveBatchInProcess(entries)
 }
 
 // One export, over the batch path — the convenience the deleted `deriveSchema` used to be, minus the
@@ -242,45 +236,23 @@ function deriveBatchInProcess(entries: DeriveEntry[]): Record<string, DeriveSche
 async function deriveBatchViaNodeSubprocess(
     entries: DeriveEntry[],
 ): Promise<Record<string, DeriveSchemaResult>> {
-    const self = fileURLToPath(import.meta.url)
-    const spawn = (
-        globalThis as {
-            Bun: {
-                spawn: (
-                    cmd: string[],
-                    opts?: unknown,
-                ) => {
-                    stdout: ReadableStream<Uint8Array>
-                    stderr: ReadableStream<Uint8Array>
-                    exited: Promise<number>
-                }
-            }
-        }
-    ).Bun.spawn
-    const proc = spawn(['node', self, '--batch'], {
-        stdin: Buffer.from(JSON.stringify(entries)),
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    // Drain both pipes concurrently with the exit. Reading them in sequence can deadlock: a subprocess
-    // that fills the stderr pipe buffer blocks until it is read, and it never exits.
-    const [stdout, stderrRaw] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-    ])
-    const markerAt = stdout.lastIndexOf(RESULT_MARKER)
-    if (markerAt === -1) {
-        const stderr = stderrRaw.trim()
-        const warning = `deriveSchema: batch Node subprocess produced no result${stderr ? ` (stderr: ${stderr})` : ''}`
+    // The bridge (marker protocol, concurrent pipe drain, one failure) is `nodeTypeBridge.ts`'s.
+    // THE FAILURE POLICY IS THIS CALLER'S, and it differs from `abide check`'s on purpose: a schema that
+    // cannot be derived is documented as loud-but-non-fatal — the app still boots, validating nothing it
+    // could not derive — so a bridge failure becomes a warning on every entry rather than a throw.
+    try {
+        return await askNode<DeriveEntry[], Record<string, DeriveSchemaResult>>({
+            self: fileURLToPath(import.meta.url),
+            argv: ['--batch'],
+            payload: entries,
+            what: 'deriveSchema: batch',
+        })
+    } catch (caught) {
+        const warning = caught instanceof Error ? caught.message : String(caught)
         const out: Record<string, DeriveSchemaResult> = {}
         for (const entry of entries) out[entry.key] = { warnings: [warning] }
         return out
     }
-    const jsonStart = markerAt + RESULT_MARKER.length
-    const jsonEnd = stdout.indexOf('\n', jsonStart)
-    const json = stdout.slice(jsonStart, jsonEnd === -1 ? undefined : jsonEnd)
-    return JSON.parse(json) as Record<string, DeriveSchemaResult>
 }
 
 // The exported binding may be the function itself (`export const fn = (a) => ...`), a wrapped handler
@@ -633,9 +605,7 @@ function findProjectRoot(filePath: string): string {
 // bridges could drift where it mattered least visibly. The single-entry convenience is now expressed
 // over the batch path (`deriveOne`), which is what it always described itself as.
 if (import.meta.main) {
-    const chunks: Buffer[] = []
-    for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
-    const entries = JSON.parse(Buffer.concat(chunks).toString('utf8')) as DeriveEntry[]
-    const derived = deriveBatchInProcess(entries)
-    process.stdout.write(`${RESULT_MARKER}${JSON.stringify(derived)}\n`)
+    await answerAsNode<DeriveEntry[], Record<string, DeriveSchemaResult>>((entries) =>
+        deriveBatchInProcess(entries),
+    )
 }

@@ -230,7 +230,6 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             installShutdownHandlers(running)
             write(
                 serveBanner({
-                    command: 'abide dev',
                     url: running.url,
                     requestedPort: running.requestedPort,
                     elapsedMilliseconds: performance.now() - startedAt,
@@ -251,7 +250,6 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             const { outDir } = await build(cwd)
             write(
                 banner(
-                    'abide build',
                     [{ label: 'output', value: outDir }],
                     [`built in ${formatDuration(performance.now() - startedAt)}`],
                 ),
@@ -274,7 +272,6 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             // so a clash is an EADDRINUSE rather than a quiet move to explain.
             write(
                 serveBanner({
-                    command: 'abide start',
                     url: running.url,
                     requestedPort: running.requestedPort,
                     elapsedMilliseconds: performance.now() - startedAt,
@@ -298,7 +295,7 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             }
             const startedAt = performance.now()
             const root = await scaffold(cwd, name)
-            write(banner('abide scaffold', [{ label: 'created', value: root }], []))
+            write(banner([{ label: 'created', value: root }], []))
 
             if (flagAbsent(rest, '--no-git')) await runStep(['git', 'init'], root, writeError)
             if (flagAbsent(rest, '--no-install')) {
@@ -321,7 +318,9 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
                 installShutdownHandlers(running)
                 write(
                     serveBanner({
-                        command: 'abide dev',
+                        // The one heading in the CLI: you typed `scaffold`, and what boots is a
+                        // dev server.
+                        heading: 'abide dev',
                         url: running.url,
                         requestedPort: running.requestedPort,
                         // The whole scaffold — write, git init, install, boot. That is what the person
@@ -374,7 +373,6 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             if (result.ok) {
                 write(
                     banner(
-                        'abide check',
                         [],
                         [
                             'no type errors in .abide script bodies',
@@ -443,7 +441,6 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             // a thing you upload, so each earns a row rather than a note.
             write(
                 banner(
-                    'abide compile',
                     built.map((outfile) => ({ label: 'output', value: outfile })),
                     [`built in ${formatDuration(performance.now() - startedAt)}`],
                 ),
@@ -460,7 +457,6 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             const outDir = await bundle(cwd)
             write(
                 banner(
-                    'abide bundle',
                     [
                         { label: 'output', value: outDir },
                         { label: 'run', value: `bun ${join(outDir, 'launch.ts')}` },

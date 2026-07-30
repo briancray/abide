@@ -26,6 +26,7 @@ import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FileSystem } from 'typescript/unstable/fs'
 import { API, DiagnosticCategory } from 'typescript/unstable/sync'
+import { answerAsNode, askNode, underBun } from '../server/internal/nodeTypeBridge.ts'
 import {
     indexByGeneratedPath,
     type RawDiagnostic,
@@ -47,9 +48,6 @@ export interface CheckResult {
     ok: boolean
     diagnostics: CheckDiagnostic[]
 }
-
-// Marker the node subprocess prints so the Bun-side parent finds the JSON result line.
-const RESULT_MARKER = '__ABIDE_CHECK_RESULT__:'
 
 // Diagnostic codes suppressed as noise for the extracted-script model: an inline callback in a
 // `.abide` script is contextually typed by the template/runtime binding it feeds, and that context is
@@ -110,7 +108,10 @@ export async function check(dir: string): Promise<CheckResult> {
 
     const rawDiagnostics =
         toCheck.length > 0
-            ? diagnose(dir, { files: virtualFiles, open: toCheck.map((entry) => entry.tsPath) })
+            ? await diagnose(dir, {
+                  files: virtualFiles,
+                  open: toCheck.map((entry) => entry.tsPath),
+              })
             : []
 
     // Indexing + map-back is `abideDiagnostic`, shared with the LSP. Both traps it handles (tsgo
@@ -249,46 +250,18 @@ export function overlayFs(getFiles: () => Record<string, string>): FileSystem {
     }
 }
 
-function diagnose(cwd: string, request: DiagnoseRequest): RawDiagnostic[] {
-    const bun = (globalThis as { Bun?: unknown }).Bun
-    if (bun !== undefined) return diagnoseViaNodeSubprocess(cwd, request)
-    return diagnoseInProcess(cwd, request)
-}
-
-function diagnoseViaNodeSubprocess(cwd: string, request: DiagnoseRequest): RawDiagnostic[] {
-    const self = fileURLToPath(import.meta.url)
-    const spawnSync = (
-        globalThis as {
-            Bun: {
-                spawnSync: (
-                    cmd: string[],
-                    opts?: unknown,
-                ) => {
-                    stdout: { toString(): string }
-                    stderr: { toString(): string }
-                    success: boolean
-                }
-            }
-        }
-    ).Bun.spawnSync
-    // The virtual-file manifest rides in on STDIN (no temp files); the diagnostics ride out on STDOUT.
-    const proc = spawnSync(['node', self, '--abide-diagnose', cwd], {
-        stdin: new TextEncoder().encode(JSON.stringify(request)),
-        stdout: 'pipe',
-        stderr: 'pipe',
+// Under Bun the checker cannot run in-process, so the request goes over the shared node bridge
+// (`nodeTypeBridge.ts`, which owns the marker protocol, the concurrent pipe drain and the one failure).
+// Under node it runs here. THE FAILURE POLICY IS THIS CALLER'S: a type check that cannot run has nothing
+// to report and must not report GREEN, so a bridge failure propagates.
+async function diagnose(cwd: string, request: DiagnoseRequest): Promise<RawDiagnostic[]> {
+    if (!underBun()) return diagnoseInProcess(cwd, request)
+    return askNode<DiagnoseRequest, RawDiagnostic[]>({
+        self: fileURLToPath(import.meta.url),
+        argv: ['--abide-diagnose', cwd],
+        payload: request,
+        what: 'abide check',
     })
-    const stdout = proc.stdout.toString()
-    const markerAt = stdout.lastIndexOf(RESULT_MARKER)
-    if (markerAt === -1) {
-        const stderr = proc.stderr.toString().trim()
-        throw new Error(
-            `abide check: type-check subprocess produced no result${stderr ? ` (stderr: ${stderr})` : ''}`,
-        )
-    }
-    const jsonStart = markerAt + RESULT_MARKER.length
-    const jsonEnd = stdout.indexOf('\n', jsonStart)
-    const json = stdout.slice(jsonStart, jsonEnd === -1 ? undefined : jsonEnd)
-    return JSON.parse(json) as RawDiagnostic[]
 }
 
 // Runs under node (types stripped by Node >= 23). Uses the sync TS7 API — which cannot open its pipe
@@ -323,15 +296,15 @@ export function diagnoseInProcess(cwd: string, request: DiagnoseRequest): RawDia
     }
 }
 
-// node subprocess entry (mirrors deriveSchema's `import.meta.main` bridge). Reads the virtual-file
-// manifest from stdin.
+// The NODE half of the bridge above: same module, re-executed, so the request/response shapes need no
+// second declaration. The protocol (stdin JSON in, marker + JSON out) is `nodeTypeBridge`'s.
 if (import.meta.main && process.argv[2] === '--abide-diagnose') {
     const cwd = process.argv[3]
     if (cwd === undefined) {
         process.stderr.write('usage: node check.ts --abide-diagnose <cwd>  (manifest on stdin)\n')
         process.exit(2)
     }
-    const request = JSON.parse(readFileSync(0, 'utf8')) as DiagnoseRequest
-    const result = diagnoseInProcess(cwd, request)
-    process.stdout.write(`${RESULT_MARKER}${JSON.stringify(result)}\n`)
+    await answerAsNode<DiagnoseRequest, RawDiagnostic[]>((request) =>
+        diagnoseInProcess(cwd, request),
+    )
 }

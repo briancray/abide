@@ -3,8 +3,8 @@
 // Everything asserted here is invisible to a type check and to every other test in the suite, because
 // the banner's whole output is a string nothing parses: the escapes go to a stream the test harness
 // is not, the layout is only wrong to an eye, and a note that lies (the port hop) reads exactly like
-// one that does not. So the two things that actually break are pinned — styling a pipe, and the hop
-// note appearing when nothing hopped.
+// one that does not. So the things that actually break are pinned — styling a pipe, the hop note
+// appearing when nothing hopped, and the block opening by restating the command line above it.
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { banner, formatDuration, serveBanner } from './banner.ts'
@@ -30,15 +30,10 @@ describe('banner', () => {
         delete Bun.env.NO_COLOR
         delete Bun.env.FORCE_COLOR
         // `bun test` writes to a pipe, so this is the ambient case rather than a simulated one.
-        const text = banner(
-            'abide dev',
-            [{ label: 'local', value: 'http://localhost:3000' }],
-            ['ready in 40ms'],
-        )
+        const text = banner([{ label: 'local', value: 'http://localhost:3000' }], ['ready in 40ms'])
         expect(text).not.toMatch(ESCAPE)
         expect(text).not.toContain('➜')
         // …and the content is all still there. An uncoloured banner is what a bug report pastes.
-        expect(text).toContain('abide dev')
         expect(text).toContain('local')
         expect(text).toContain('http://localhost:3000')
         expect(text).toContain('ready in 40ms')
@@ -46,18 +41,17 @@ describe('banner', () => {
 
     test('FORCE_COLOR styles it, and NO_COLOR wins over FORCE_COLOR', () => {
         Bun.env.FORCE_COLOR = '1'
-        expect(banner('abide dev', [{ label: 'local', value: 'x' }], [])).toMatch(ESCAPE)
+        expect(banner([{ label: 'local', value: 'x' }], [])).toMatch(ESCAPE)
 
         Bun.env.NO_COLOR = '1'
         // The conventional precedence: a refusal beats an insistence.
-        expect(banner('abide dev', [{ label: 'local', value: 'x' }], [])).not.toMatch(ESCAPE)
+        expect(banner([{ label: 'local', value: 'x' }], [])).not.toMatch(ESCAPE)
     })
 
     test('rows align on the longest label', () => {
         delete Bun.env.NO_COLOR
         delete Bun.env.FORCE_COLOR
         const rows = banner(
-            'abide dev',
             [
                 { label: 'local', value: 'A' },
                 { label: 'network', value: 'B' },
@@ -70,15 +64,27 @@ describe('banner', () => {
         expect(rows[0]?.indexOf('A')).toBe(rows[1]?.indexOf('B'))
     })
 
+    test('no heading unless one is asked for — the shell already printed the command', () => {
+        delete Bun.env.NO_COLOR
+        delete Bun.env.FORCE_COLOR
+        // The default block opens on the addresses. A header here would spend the most prominent
+        // line restating the `$ abide dev` echo directly above it.
+        const bare = banner([{ label: 'local', value: 'http://localhost:3000' }], [])
+        expect(bare).not.toContain('abide dev')
+        expect(bare.split('\n').filter((line) => line.length > 0)).toHaveLength(1)
+
+        // …and the one case that earns it: `abide scaffold` boots a dev server, so that block is not
+        // for the command the caller typed.
+        expect(banner([{ label: 'local', value: 'x' }], [], 'abide dev')).toContain('abide dev')
+    })
+
     test('an empty section contributes no blank line', () => {
         delete Bun.env.NO_COLOR
         delete Bun.env.FORCE_COLOR
         // `abide check` has notes and no rows; a naive layout prints the gap for the rows anyway and
         // the banner grows a hole where the addresses would have been.
-        expect(banner('abide check', [], ['no type errors'])).not.toContain('\n\n\n')
-        expect(banner('abide compile', [{ label: 'output', value: 'x' }], [])).not.toContain(
-            '\n\n\n',
-        )
+        expect(banner([], ['no type errors'])).not.toContain('\n\n')
+        expect(banner([{ label: 'output', value: 'x' }], [])).not.toContain('\n\n')
     })
 })
 
@@ -87,7 +93,6 @@ describe('serveBanner', () => {
         delete Bun.env.NO_COLOR
         delete Bun.env.FORCE_COLOR
         const hopped = serveBanner({
-            command: 'abide dev',
             url: 'http://localhost:3001',
             requestedPort: 3000,
             elapsedMilliseconds: 412,
@@ -97,7 +102,6 @@ describe('serveBanner', () => {
         // The same number bound is the ordinary case, and a note that fires on it would be a lie
         // printed at every single boot — which is how a banner stops being read at all.
         const bound = serveBanner({
-            command: 'abide dev',
             url: 'http://localhost:3000',
             requestedPort: 3000,
             elapsedMilliseconds: 412,
@@ -109,7 +113,6 @@ describe('serveBanner', () => {
         delete Bun.env.NO_COLOR
         delete Bun.env.FORCE_COLOR
         const text = serveBanner({
-            command: 'abide dev',
             url: 'http://localhost:3001',
             elapsedMilliseconds: 8,
             notes: ['watching src/'],
