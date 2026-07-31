@@ -27,7 +27,7 @@ import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 import { BRACKETED_POSITIONS } from './SLOT_FOOTPRINT.ts'
 import { escapeHtml } from './serverRuntime.ts'
-import { childListsOf } from './templateChildren.ts'
+import { bindingSitesOf, childListsOf } from './templateChildren.ts'
 
 // The clone skeleton's placeholder for one block/component: the paired anchors with an EMPTY body. The
 // server paints content between them; the claim walk reconciles the two by depth-counting the pair.
@@ -327,23 +327,50 @@ function rewriteExpr(ctx: WalkState, expr: string): string {
 // so `{children()}` rendered a subtree from an interpolation, and `{#if children}` tested a function
 // that a childless site now always supplies. `<slot/>` is the outlet; there is no expression form.
 //
-// Gated on FREE, so an author's own LEXICAL `children` is untouched — a `<script>` binding or an
-// inline-component param is in `declared`, which is exactly the set the rewrite leaves alone. A
-// BLOCK-bound one is not exempt, and that is not over-reach: a `{#for children of …}` item is published
-// on the same `$scope` chain the outlet reads, so inside the loop body `<slot/>` would render the item
-// instead of the children. The name is reserved because the collision is real, and the message says so.
+// Gated on FREE, so an author's own LEXICAL `children` is untouched — a `<script>` binding is in
+// `declared`, which is exactly the set the rewrite leaves alone. A TEMPLATE-declared one is not lexical
+// and so is not exempt: a `{#for}` item, a `{:then}`/`{:catch}` param and an inline component's params
+// are all published on the `$scope` chain the outlet reads, so inside that body `<slot/>` resolves to the
+// BINDING instead of the children. (An earlier version of this comment claimed an inline-component param
+// was in `declared`. It is not — `genComponentDef` binds the params over `$s`, the same object it writes
+// `$s.children` on, which is precisely why that param collides rather than shadows.)
 //
 // This runs in `rewriteExpr`, the one funnel every expression position passes through (interpolation,
 // attribute value, block head), rather than in the interpolation case alone — which is where the sibling
-// `{Name(…)}` rejection still lives, and why `title={children()}` slipped past it.
+// `{Name(…)}` rejection still lives, and why `title={children()}` slipped past it. `rewriteExpr` sees
+// EXPRESSIONS, though, so it catches a reference and never a binding — `rejectReservedBindings` below is
+// the other half, and without it the one form the compiler spec cites as the REASON for the reservation
+// was the one form that compiled.
 function rejectReservedScopeName(expr: string, declared: Set<string>): void {
     for (const site of freeIdentifierSites(expr, declared)) {
         if (site.name !== 'children') continue
-        throw new Error(
-            `children is a reserved template name — it is what the default-children outlet resolves ` +
-                `off the scope. Render a component's children with <slot/>; if this is a binding of ` +
-                `your own, rename it.`,
-        )
+        throw new Error(reservedNameMessage('binding'))
+    }
+}
+
+// The reserved name, stated once: both halves of the gate report the same fix.
+function reservedNameMessage(kind: 'binding' | string): string {
+    const tail =
+        kind === 'binding' ? `if this is a binding of your own, rename it.` : `rename this ${kind}.`
+    return (
+        `children is a reserved template name — it is what the default-children outlet resolves ` +
+        `off the scope. Render a component's children with <slot/>; ${tail}`
+    )
+}
+
+// A `children` in a template BINDING position. The pattern may be a destructuring one, so this reads
+// identifiers rather than comparing the whole text: `{ id, children }` binds `children` (shorthand, so
+// the name IS the binding) while `{ children: kids }` does not (there `children` is the KEY and `kids` is
+// the binding — the same key-vs-binding distinction `freeIdentifierSites` already draws for expressions).
+// A binding pattern carries no strings or comments, so a token scan over the raw text is sound here.
+const RESERVED_IN_PATTERN = /(^|[^.\w$])children\s*(?![\w$]|\s*:)/
+function rejectReservedBindings(nodes: TemplateNode[]): void {
+    for (const node of nodes) {
+        for (const site of bindingSitesOf(node)) {
+            if (RESERVED_IN_PATTERN.test(site.pattern))
+                throw new Error(reservedNameMessage(site.where))
+        }
+        for (const list of childListsOf(node)) rejectReservedBindings(list.nodes)
     }
 }
 
@@ -1041,6 +1068,10 @@ export function buildPlan(root: Root, analysis: BindingAnalysis): TemplatePlan {
     const componentNames = new Set<string>()
     for (const entry of analysis.componentImports) componentNames.add(entry.local)
     collectComponentNames(root.children, componentNames)
+    // Before the walk, so a reserved BINDING is reported at the binding rather than at whichever
+    // expression inside the body happens to reference it first (or, when the body only ever spells the
+    // outlet as `<slot/>`, not at all until the render throws).
+    rejectReservedBindings(root.children)
     // The root `<style>` needs no special case: it is simply the outermost level's own scope, which
     // `walkLevel` establishes like any other. (Before, only a ROOT style produced a scope attribute at
     // all, so a component whose only `<style>` was nested shipped that CSS unscoped and global.)

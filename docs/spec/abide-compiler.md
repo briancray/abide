@@ -101,13 +101,24 @@ navigation**.
    a childless inline component nested in a component that DID receive children rendered the OUTER ones.
    An output-comparing test cannot see either: only one lane throws, and the other lane's HTML is right.
 
-   A block-bound `children` is reserved too, which is not over-reach: a `{#for children of …}` item is
-   published on the same `$scope` chain the outlet reads, so inside that body `<slot/>` would render the
-   ITEM. An author's own LEXICAL `children` (a `<script>` binding, an inline-component param) stays
-   lexical in the emit, never touches `$scope`, and is untouched. Named-slot / render-prop needs are met
-   by **inline components passed as props** (a nested `{#component}` inside `<Foo>` becomes Foo's
-   same-named prop).
-3. **Inline components** — `{#component Row(props, children)}…{/component}` (TitleCase; a lowercase name
+   The name is reserved in **two** positions, and the second is the one the first exists for. A
+   REFERENCE is caught by `rewriteExpr`; a BINDING is caught by `rejectReservedBindings`, a pre-pass over
+   the AST driven by `templateChildren.ts`'s `BINDING_SITES` table — the `{#for}` item and index, a
+   `{:then}`/`{:catch}` param, and an inline component's params. All of them PUBLISH onto the scope chain
+   the outlet reads, so inside that body `<slot/>` resolves to the BINDING: `{#for children of list}<slot/>{/for}`
+   asks the outlet to invoke the loop item. `rewriteExpr` sees expressions only, so it reached that form
+   solely when the body happened to REFERENCE the name — and a body spelling the outlet as `<slot/>`, the
+   spelling this clause mandates, never does. So the one form cited here as the REASON for the reservation
+   was the one form that compiled, and it failed at RENDER with `<children> is not a component in scope`,
+   pointing at the outlet rather than at the binding that shadowed it.
+
+   Only a LEXICAL `children` is exempt — a `<script>` binding, which stays lexical in the emit and never
+   touches `$scope`. An inline component's param is **not** lexical and is therefore not exempt:
+   `genComponentDef` writes `$s.children = $args[1]` and then binds the declared params over that same
+   `$s`, so a param of that name collides with the children rather than shadowing them. Named-slot /
+   render-prop needs are met by **inline components passed as props** (a nested `{#component}` inside
+   `<Foo>` becomes Foo's same-named prop).
+3. **Inline components** — `{#component Row(props)}…{/component}` (TitleCase; a lowercase name
    is a parse error — lowercase is reserved for element tags) invoked as a tag `<Row/>`; compile to
    fragment-builder (client) / string-builder
    (server); **first-class values passable as props**. `<slot/>` renders the default children; a

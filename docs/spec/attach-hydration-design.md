@@ -41,8 +41,9 @@ soft-nav envelope, replayed into client memos before mount). See `rpc-core.md` �
    >
    > **That made one leaf position two shapes, decided outside the plan.** The call form is now REMOVED: a
    > component is invoked as a TAG (`<Name/>`), which is a component slot with statically-emitted paired
-   > anchors on both emitters. (`{children()}` was never really this case — `templatePlan` lowers it, and
-   > `<slot/>`, to a component slot.) So an interpolation leaf is ALWAYS one scalar position, `renderLeaf`
+   > anchors on both emitters. (`{children()}` was never really this case either — `templatePlan` lowered
+   > it, like `<slot/>`, to a component slot — and it has since been removed outright, leaving `<slot/>`
+   > as the outlet's only spelling.) So an interpolation leaf is ALWAYS one scalar position, `renderLeaf`
    > emits one shape, `hydrateInterpLeaf` is gone, and `hydrateValueLeaf` claims every non-`html` leaf.
    > `templatePlan.rejectComponentCall` rejects the statically visible form at compile time; `renderLeaf`
    > and `runtime.interpolate` throw on the one it cannot see (a component arriving through props).

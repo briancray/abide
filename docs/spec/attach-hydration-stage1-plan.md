@@ -54,8 +54,11 @@ emitted module strings reach the client.
   where `path` is firstChild/nextSibling steps and `expr` is already cell-ref-rewritten. Blocks get
   paired `<!--[-->…<!--]-->`; interp/await/html get one trailing `<!---->` (matches
   `renderClient.ts:322`). (This is the client *skeleton*, still single-anchor per leaf. Later refinement:
-  a *mountable* interpolation value — a `{#component}` call (inline component) / `{children()}` — is bracketed like a block in
-  the SERVER output; see `attach-hydration-design.md` decision 4.)
+  a *mountable* interpolation value is bracketed like a block in the SERVER output; see
+  `attach-hydration-design.md` decision 4.) **Both spellings that produced one are since gone:** the
+  `{Name(…)}` call form was removed (`attach-hydration-design.md` decision 4 is marked SUPERSEDED) and
+  `{children()}` was retired in favour of `<slot/>` — which lowers to a component INVOCATION, i.e. a tag,
+  and is bracketed as one. Nothing reaches this refinement through an interpolation any more.
 - **`ui/internal/emitClient.ts` / `emitServer.ts`** (NEW) — `emitClientModule(plan, analysis):
   string` / `emitServerModule(...)`. Emit ES-module strings with real
   `import * as $rt from "abide/ui/internal/runtime"` and lexical identifiers.

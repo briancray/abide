@@ -122,6 +122,49 @@ describe('{children()} is retired — <slot/> is the only spelling', () => {
         expect(verdict.legal === false && verdict.rejected).toContain('<slot/>')
     })
 
+    // THE BINDING, not a reference to it. `rewriteExpr` sees expressions, so every case above reaches the
+    // gate only because the body happens to REFERENCE the name — and a body that spells the outlet as
+    // `<slot/>` (the spelling this whole change mandates) never does. `{#for children of list}<slot/>{/for}`
+    // therefore compiled, and threw `<children> is not a component in scope` at RENDER, pointing at the
+    // outlet rather than at the binding. That is the exact hazard the compiler spec cites as the REASON
+    // the name is reserved, so it was the one form the reservation did not cover.
+    //
+    // Every template binding position, since they all publish onto the scope chain the outlet reads —
+    // which for an inline component's params is the same `$s` that `genComponentDef` writes
+    // `$s.children` on, one line above where it binds them.
+    test.each([
+        ['a {#for} item', '<i>{#for children of list}<slot/>{/for}</i>'],
+        ['a {#for} index', '<i>{#for x, children of list}<slot/>{/for}</i>'],
+        ['a destructured {#for} item', '<i>{#for {id, children} of list}<slot/>{/for}</i>'],
+        ['a {:then} param', '<i>{#await p}{:then children}<slot/>{/await}</i>'],
+        ['a {:catch} param', '<i>{#try}a{:catch children}<slot/>{/try}</i>'],
+        [
+            'an inline-component param',
+            '{#component Card(props, children)}<i><slot/></i>{/component}<Card>hi</Card>',
+        ],
+    ])('%s named children is a compile error naming <slot/>', (_where, source) => {
+        const verdict = validateTemplate(parse(source))
+        expect(verdict.legal).toBe(false)
+        expect(verdict.legal === false && verdict.rejected).toContain('<slot/>')
+    })
+
+    // The binding check reads IDENTIFIERS, not the word: a renaming pattern binds `kids` and merely
+    // mentions `children` as the key, and a longer name that starts with it is a different name.
+    test.each([
+        ['a renaming destructure', '<i>{#for {children: kids} of list}{kids}{/for}</i>'],
+        [
+            'a name with the reserved one as a prefix',
+            '<i>{#for childrenOf of l}{childrenOf}{/for}</i>',
+        ],
+        [
+            'an inline component with no children param',
+            '{#component Card(props)}<i><slot/></i>{/component}<Card>hi</Card>',
+        ],
+    ])('%s is still legal', (_shape, source) => {
+        const verdict = validateTemplate(parse(source))
+        expect(verdict.legal === false ? verdict.rejected : 'legal').toBe('legal')
+    })
+
     // The rejection is about a FREE identifier, not about the word — so it must not fire on a member
     // access, a string, an object key, or a name the author declared LEXICALLY (those stay lexical in the
     // emit and never touch `$scope`, so there is nothing to collide with).

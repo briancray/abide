@@ -64,6 +64,14 @@ already has exactly one owner:
 | which templates are LEGAL | `validateTemplate`, which asks `buildPlan` — the seam exists, and `laneAgreement.test.ts` guards it as a harness rather than a case list |
 | what a `<script>` BINDS | `analyzeBindings`'s `BindingAnalysis`, consumed by both lanes |
 | character-level scanning | `scanText.ts` |
+| how much room a bracketed slot takes | `ui/internal/SLOT_FOOTPRINT.ts` — a `Record<SlotKind, …>`, so a new slot kind does not compile until it declares its footprint |
+| where a node's CHILDREN are, and what it BINDS | `ui/internal/templateChildren.ts` — `CHILD_LISTS`/`BINDING_SITES`, two `Record`s over `TemplateNode['type']` |
+
+The last two rows were added by a later session, which is the table working as intended: both are
+STRUCTURAL facts about the AST rather than lowerings, so the "in scope" clause below applied and each
+got an owner. Both had been stated in three or four modules apiece, and all of the copies FAILED OPEN —
+no `default` arm, so a new node type was silently skipped rather than loudly unhandled. The `Record`
+shape is what converts that into a compile error.
 
 That is the pattern to keep: the drift surface has been given owners one fact at a time, and what remains
 separate is the part that must be.
@@ -77,8 +85,8 @@ and `componentAttrLanes.test.ts:82-83` asserts both lanes reject it.
 
 - A future review that finds `buildPlan`'s two callers and proposes a third should read this first. The
   finding is well-evidenced and the conclusion is still no.
-- If a *legality* or *binding* fact is ever found stated twice, that is in scope and this ADR does not
-  cover it — give it an owner, as the three above were given one.
+- If a *legality*, *binding* or *structural* fact is ever found stated twice, that is in scope and this
+  ADR does not cover it — give it an owner, as the rows above were given one, and add a row.
 - The residual cost is accepted: the two lanes must agree on what each construct MEANS, and that agreement
   is enforced by enumeration (`componentAttrLanes.test.ts`). An enumeration is a weaker guard than a shared
   structure, and here it is the strongest one available.

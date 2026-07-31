@@ -1,7 +1,9 @@
 # Implementation plan — components as `.abide` files (import + `<Card>`)
 
 Lets a page/layout/component `import Card from "./Card.abide"` and use `<Card prop={x}>…</Card>`,
-exactly like an inline `{#component Card(props, children)}` but in a SHARED reusable file. Gates per PR:
+exactly like an inline `{#component Card(props)}` but in a SHARED reusable file. (This read
+`(props, children)` when written; an inline component takes ONE param and reaches its children through
+`<slot/>` — `abide-compiler.md` §C4.2.) Gates per PR:
 `cd packages/abide && bun test` (805) + `bunx tsc --noEmit` clean, docs e2e 72/72.
 
 ## Core design

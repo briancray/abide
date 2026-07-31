@@ -28,8 +28,8 @@ function stripComments(html: string): string {
     return html.replace(/<!--[\s\S]*?-->/g, '')
 }
 
-// The shared reusable component (exactly the plan's `Component.abide`): a `title` prop + a `{children()}`
-// slot, wrapped in a <section>.
+// The shared reusable component (exactly the plan's `Component.abide`): a `title` prop + a `<slot/>`
+// outlet, wrapped in a <section>.
 const COMPONENT =
     `<script>import { props } from "abide/ui/props"; const { title } = props()</script>` +
     `<section>{title}<div><slot/></div></section>`
@@ -108,10 +108,12 @@ describe('file-component — interactive state', () => {
 })
 
 describe('PARITY — file-component === inline {#component}', () => {
-    // The SAME UI expressed inline: a `{#component Card(props, children)}` taking props + the children
-    // factory (rendered via `<slot/>`), in one page — vs the file-component in another.
+    // The SAME UI expressed inline: a `{#component Card(props)}` taking props, with its children reached
+    // through `<slot/>`, in one page — vs the file-component in another. ONE param: the invocation
+    // convention fills the outlet off the scope, so there is nothing to declare, and a `children` param
+    // would be bound onto that same scope object and collide with the children rather than shadow them.
     const INLINE_PAGE =
-        `{#component Card(props, children)}<section>{props.title}<div><slot/></div></section>{/component}` +
+        `{#component Card(props)}<section>{props.title}<div><slot/></div></section>{/component}` +
         `<Card title="Hi"><p>slot</p></Card>`
 
     test('identical SSR HTML (stripped of anchors)', async () => {

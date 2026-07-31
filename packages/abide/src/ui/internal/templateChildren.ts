@@ -99,3 +99,81 @@ export function childListsOf(node: TemplateNode): readonly TemplateChildList[] {
     const lists = CHILD_LISTS[node.type] as (n: TemplateNode) => readonly TemplateChildList[]
     return lists(node)
 }
+
+// WHERE A `TemplateNode` BINDS A NAME — the other half of the same structural fact, and the reason this
+// table earns its place next to the one above rather than in `templatePlan`.
+//
+// A template-declared binding is PUBLISHED ON `$scope`, not lowered to a lexical `const`: a `{#for}` item,
+// a `{:then}`/`{:catch}` param and an inline component's params all land on the level's scope object
+// (`genComponentDef` writes `$s.children = $args[1]` and then binds the declared params over the same
+// `$s`). That is what makes `children` a COLLISION rather than a shadow — the outlet resolves
+// `$scope.children`, so `{#for children of list}<slot/>{/for}` asks the outlet to invoke the loop ITEM.
+//
+// It was reserved in `rewriteExpr` only, which sees expressions and therefore only ever caught a
+// REFERENCE. The binding itself was taken verbatim (`item: node.item`), so the form the compiler spec
+// names as the reason for the reservation was the one form that compiled — and then threw
+// `<children> is not a component in scope` at RENDER, where nothing points at the binding that caused it.
+//
+// Same `Record`-over-the-union shape as `CHILD_LISTS`, for the same reason: a node type that starts
+// binding a name does not compile until it says so here.
+export interface TemplateBindingSite {
+    // The raw binding text — possibly a destructuring pattern, so the reserved-name check tokenizes it
+    // rather than comparing it.
+    pattern: string
+    // What to call it in a diagnostic, e.g. `{#for} item`.
+    where: string
+}
+
+const NO_BINDINGS: readonly TemplateBindingSite[] = []
+
+type BindingSitesByType = {
+    [K in TemplateNode['type']]: (
+        node: Extract<TemplateNode, { type: K }>,
+    ) => readonly TemplateBindingSite[]
+}
+
+const BINDING_SITES: BindingSitesByType = {
+    Text: () => NO_BINDINGS,
+    Comment: () => NO_BINDINGS,
+    Interpolation: () => NO_BINDINGS,
+    Html: () => NO_BINDINGS,
+    AwaitInterpolation: () => NO_BINDINGS,
+    Script: () => NO_BINDINGS,
+    Style: () => NO_BINDINGS,
+    Element: () => NO_BINDINGS,
+    Component: () => NO_BINDINGS,
+    IfBlock: () => NO_BINDINGS,
+    SwitchBlock: () => NO_BINDINGS,
+
+    ForBlock: (node) => {
+        const sites: TemplateBindingSite[] = [{ pattern: node.item, where: '{#for} item' }]
+        if (node.index !== null) sites.push({ pattern: node.index, where: '{#for} index' })
+        if (node.catch?.param != null)
+            sites.push({ pattern: node.catch.param, where: '{:catch} param' })
+        return sites
+    },
+    AwaitBlock: (node) => {
+        const sites: TemplateBindingSite[] = []
+        if (node.then?.param != null)
+            sites.push({ pattern: node.then.param, where: '{:then} param' })
+        if (node.catch?.param != null)
+            sites.push({ pattern: node.catch.param, where: '{:catch} param' })
+        return sites
+    },
+    TryBlock: (node) => {
+        if (node.catch?.param == null) return NO_BINDINGS
+        return [{ pattern: node.catch.param, where: '{:catch} param' }]
+    },
+    // The raw parameter list, unsplit: the check reads the whole text, so a reserved name is found
+    // wherever in the list it sits without this table needing to know the list's grammar.
+    ComponentBlock: (node) =>
+        node.params.trim() === ''
+            ? NO_BINDINGS
+            : [{ pattern: node.params, where: `{#component ${node.name}} param` }],
+}
+
+// Every name this node binds onto the scope chain. Same cast, same reason, as `childListsOf`.
+export function bindingSitesOf(node: TemplateNode): readonly TemplateBindingSite[] {
+    const sites = BINDING_SITES[node.type] as (n: TemplateNode) => readonly TemplateBindingSite[]
+    return sites(node)
+}

@@ -270,7 +270,9 @@ describe('{#try} block — claim the successful body (PR4)', () => {
     })
 })
 
-describe('component {children()} — claim the children region (PR4)', () => {
+// The RUNTIME convention, which is unchanged: a component function's 2nd argument is its children
+// factory. Only the TEMPLATE spelling was retired — `<slot/>` is what lowers to this now.
+describe('component children — claim the children region (PR4)', () => {
     // A pass-through component, isomorphic: on the server `children()` yields a Promise<Raw> (has
     // `.then`); on the client it yields a Mountable (has `.mount`). Both just render the children.
     function passThrough() {

@@ -81,9 +81,16 @@ the resolved fork at each branch is stated with its rationale.
    literal → primitive; `[]`/`{}`/`null`/no-default → `unknown`); extra keys allowed. Near-zero false
    positives on real (bare-props) components; still value-checks what flows in.
 6. **Children/inline-components — ride the Q5 gradient.** No new machinery: a slot is "just a prop". Explicit
-   `props<{ header: (a: string) => unknown }>()` → precise. Bare props → `{children()}` synthesizes
-   `children?: () => unknown`; inline-component slots are opaque `(...args: any[]) => unknown`. No bidirectional
-   inline-component-param inference in v1.
+   `props<{ header: (a: string) => unknown }>()` → precise. Inline-component slots are opaque
+   `(...args: any[]) => unknown`. No bidirectional inline-component-param inference in v1.
+   **There is no `children` intrinsic.** This clause used to say bare props made `{children()}` synthesize
+   `children?: () => unknown`, and `emitCheck` declared exactly that — which is the only reason the
+   interpolation form ever type-checked. It is retired with the form (`abide-compiler.md` §C4.2): the
+   outlet is `<slot/>`, `children` is a RESERVED template name in every expression AND binding position,
+   and an occurrence of it in a template expression is now an ordinary undeclared-name diagnostic, which is
+   what it should always have been. Note the intrinsic was declared `() => unknown` and NOT optional, so
+   the `{#if children}` fallback idiom the compiler spec used to advertise could never take its `{:else}`
+   branch — the check lane agreed with the runtime that the test was always true.
 7. **Position map — bidirectional `Segment[]`, verbatim-copy invariant.** Segments monotonic in both
    `genStart` and `origStart` → one array answers gen→orig AND orig→gen by binary search. `emitCheck`
    may only WRAP user expressions in synthetic scaffolding, never rewrite INSIDE them (same rule

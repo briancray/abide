@@ -35,9 +35,14 @@ byte length of the immediately-preceding static text (0 if prev sibling is comme
 claim splits deterministically:
 
 > This `prefixLen`/`claimText` mechanism is the SCALAR-value leaf path. A *mountable* interpolation
-> value (a `{#component}` call (inline component) / `{children()}`) is a later refinement: the server brackets its subtree
-> with `<!--[-->…<!--]-->` (decision 4 refinement) and it is claimed by `hydrateInterpLeaf` (peek
-> `<!--[-->` → `findBlockClose` → adopt the region), NOT by `prefixLen`.
+> value is a later refinement: the server brackets its subtree with `<!--[-->…<!--]-->` (decision 4
+> refinement) and it is claimed by `hydrateInterpLeaf` (peek `<!--[-->` → `findBlockClose` → adopt the
+> region), NOT by `prefixLen`.
+>
+> **SUPERSEDED as to its examples.** Both forms this named — a `{#component}` CALL and `{children()}` —
+> have since been removed from the grammar: a component is invoked as a TAG, and the outlet is `<slot/>`,
+> which lowers to a component invocation and is bracketed as one. The mechanism below stands; no
+> INTERPOLATION reaches it any more.
 ```
 claimText(anchor, prefixLen): Text|null
   p = anchor.previousSibling
