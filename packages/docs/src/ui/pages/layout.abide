@@ -60,7 +60,7 @@
       { href: "/platform/testing", label: "Testing" },
       { href: "/platform/deploy", label: "Build & deploy" },
       { href: "/platform/bench", label: "Render bench" },
-      { href: "/platform/bench/client", label: "Mount bench (browser)" },
+      { href: "/platform/bench/client", label: "Frontend bench (browser)" },
       { href: "/platform/bench/server", label: "Server dispatch bench" },
     ] },
   ]

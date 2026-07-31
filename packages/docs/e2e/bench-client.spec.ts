@@ -37,7 +37,11 @@ test('run measures every scenario across all four hot paths', async ({ page }) =
     await expect(unmountRows).toHaveCount(RENDER_SCENARIOS.length, { timeout: 60_000 })
     await expect(hydrateRows).toHaveCount(RENDER_SCENARIOS.length, { timeout: 60_000 })
     await expect(updateRows).toHaveCount(UPDATE_SCENARIOS.length, { timeout: 60_000 })
-    await expect(page.getByTestId('run')).toBeEnabled({ timeout: 60_000 })
+    // The button re-enables only after the WHOLE run, whose tail is now the first-load pass — it drains
+    // the streaming `benchFrontend` rpc, so this one waits on a server render bench as well as the four
+    // browser passes. The per-table budgets above bound one pass each; this bounds all of them plus that
+    // drain, so it is the sibling test's 120s rather than their 60s.
+    await expect(page.getByTestId('run')).toBeEnabled({ timeout: 120_000 })
     await expect(page.getByTestId('run')).toHaveText('Run browser bench')
 
     // No scenario threw (the failure banner never rendered).

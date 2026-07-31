@@ -27,7 +27,7 @@
       <li><a href="/platform/testing">Testing</a> — <code>createTestApp()</code>, the in-process app harness: <code>rpc</code>, <code>fetch</code>, <code>as(identity)</code>, sockets.</li>
       <li><a href="/platform/deploy">Build &amp; deploy</a> — the content-hashed client build and how <code>start</code> serves it.</li>
       <li><a href="/platform/bench">Render bench</a> — the live SSR render benchmark.</li>
-      <li><a href="/platform/bench/client">Mount bench (browser)</a> — the same corpus, timing the real browser <code>mount</code> path in your tab.</li>
+      <li><a href="/platform/bench/client">Frontend bench (browser)</a> — the same corpus through mount, unmount, hydrate and update in your tab, plus the whole-path tables that give hydration a baseline.</li>
     </ul>
   </aside>
 </main>
