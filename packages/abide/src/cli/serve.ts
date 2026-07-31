@@ -98,8 +98,44 @@ export interface ServeOptions {
 // nothing keeps in step.
 async function resolvePort(opts: ServeOptions): Promise<{ requested: number; bound: number }> {
     const requested = opts.port ?? readEnvPort() ?? DEFAULT_PORT
-    if (opts.dev === true) return { requested, bound: await findOpenPort(requested) }
-    return { requested, bound: requested }
+    if (opts.dev !== true) return { requested, bound: requested }
+    const bound = await findOpenPort(requested)
+    if (bound !== requested) realignAppUrlToBoundPort(requested, bound)
+    return { requested, bound }
+}
+
+// A dev port hop moves the app; `APP_URL` still names where it WAS. Carry it to where the app actually
+// listens, because APP_URL is not merely the mount base — it is the expected origin BOTH origin gates
+// compare against (`socketOriginAllowed`, AU8's `csrfReject`), and those are the only two readers that
+// matter here. Left stale, the server rejects its OWN browser: every WS upgrade is a 403 (CSWSH) and the
+// client mux reconnect-loops on it, and — silently, which is the worse half — every MUTATION is a 403
+// (CSRF) while reads sail through, because reads are exempt from that gate. So the page loads, looks
+// healthy, and is read-only. The banner's dim `port 3000 was taken` note is the only trace, and nothing
+// connects it to either symptom.
+//
+// This is a REALIGNMENT, not a relaxation: the gates still compare a full origin and still reject a
+// genuinely foreign one. Only dev hops (`abide start` binds directly and fails hard on EADDRINUSE, so
+// its APP_URL cannot drift out from under it).
+//
+// Rewritten ONLY when APP_URL's port is the one we asked for — that is what identifies it as describing
+// THIS server rather than something in front of it. An APP_URL naming a different port or none at all
+// (a tunnel, a reverse proxy, `https://app.example`) is a deliberate statement about a front door the
+// hop did not move, and overwriting it would break the gate it exists to feed.
+function realignAppUrlToBoundPort(requested: number, bound: number): void {
+    const appUrl = Bun.env.APP_URL
+    if (appUrl === undefined || appUrl.length === 0) return
+    let parsed: URL
+    try {
+        parsed = new URL(appUrl)
+    } catch {
+        return
+    }
+    if (parsed.port !== String(requested)) return
+    parsed.port = String(bound)
+    Bun.env.APP_URL = parsed.origin
+    log.channel('abide:cli').warn(
+        `port ${requested} was taken; APP_URL realigned to ${parsed.origin} so the origin gates match where the app bound`,
+    )
 }
 
 // Probe upward from `start` for a port nothing else is bound to, using a throwaway `Bun.serve` bind as

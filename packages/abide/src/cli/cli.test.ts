@@ -69,6 +69,70 @@ describe('serve — boots a file-based project on a real port', () => {
             blocker.stop(true)
         }
     })
+
+    // A hop moves the app; APP_URL still names where it was. Since APP_URL is the expected origin BOTH
+    // origin gates compare against, a stale one makes the server reject its OWN browser — every WS
+    // upgrade a 403 (CSWSH, which the client mux then reconnect-loops on) and, silently, every MUTATION
+    // a 403 (CSRF), while reads sail through because reads are exempt. The page looks healthy and is
+    // read-only. Asserting the URL alone cannot see any of that: `app.url` was always right. Assert the
+    // GATES — an upgrade from where the app actually bound.
+    test('a dev port hop carries APP_URL to the bound origin, so the origin gates admit the app', async () => {
+        const held = 34579
+        const previousAppUrl = Bun.env.APP_URL
+        const blocker = Bun.serve({ port: held, fetch: () => new Response('busy') })
+        Bun.env.APP_URL = `http://localhost:${held}`
+        try {
+            const app = await serve(FIXTURE_DIR, { dev: true, port: held })
+            running.push(app)
+            const bound = new URL(app.url).origin
+            expect(Bun.env.APP_URL).toBe(bound)
+
+            // The browser's own origin is admitted (101), where a stale APP_URL made this a 403.
+            const upgrade = await fetch(`${app.url}/__abide/sockets`, {
+                headers: {
+                    Connection: 'Upgrade',
+                    Upgrade: 'websocket',
+                    'Sec-WebSocket-Version': '13',
+                    'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==',
+                    Origin: bound,
+                },
+            })
+            expect(upgrade.status).toBe(101)
+
+            // REALIGNED, not relaxed — a genuinely foreign origin is still rejected.
+            const foreign = await fetch(`${app.url}/__abide/sockets`, {
+                headers: {
+                    Connection: 'Upgrade',
+                    Upgrade: 'websocket',
+                    'Sec-WebSocket-Version': '13',
+                    'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==',
+                    Origin: 'http://evil.example',
+                },
+            })
+            expect(foreign.status).toBe(403)
+        } finally {
+            blocker.stop(true)
+            Bun.env.APP_URL = previousAppUrl
+        }
+    })
+
+    test('a hop leaves an APP_URL that names a different port alone', async () => {
+        // An APP_URL naming some other port is a statement about a front door the hop did not move — a
+        // tunnel, a reverse proxy. Rewriting it would break the very gate it feeds. The rewrite is keyed
+        // to APP_URL's port matching the port we ASKED for, which is what identifies it as this server.
+        const held = 34581
+        const previousAppUrl = Bun.env.APP_URL
+        const blocker = Bun.serve({ port: held, fetch: () => new Response('busy') })
+        Bun.env.APP_URL = 'https://app.example'
+        try {
+            const app = await serve(FIXTURE_DIR, { dev: true, port: held })
+            running.push(app)
+            expect(Bun.env.APP_URL).toBe('https://app.example')
+        } finally {
+            blocker.stop(true)
+            Bun.env.APP_URL = previousAppUrl
+        }
+    })
 })
 
 describe('serve dev — live-reload wiring', () => {
