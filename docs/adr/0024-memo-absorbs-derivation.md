@@ -151,8 +151,13 @@ args.
 
 `<script>` bodies are inlined verbatim and sequentially into `async function render($scope)`
 (`ui/internal/emitSetup.ts:133`), with all markup generation emitted after. So a script-level `await`
-blocks **everything below it** — the rest of the script, the component's entire markup, the SSR response
-for that subtree, and the client mount. It is plain JS sequencing, not a dependency graph.
+blocks **everything below it** — the rest of the script, the component's entire markup, and the SSR response
+for that subtree. It is plain JS sequencing, not a dependency graph.
+
+> **CORRECTED by ADR 0031 D6.** This paragraph also claimed a script-level `await` blocks *the client
+> mount*. It does not: `render` is `async`, `mount` is not, so the emitted client module fails to parse —
+> green in `abide check`, correct on the server, broken in the browser. Top-level `await` in a `<script>`
+> becomes a compile error in both lanes.
 
 Markup-level `{#await}` is the parallel form: `awaitStream` kicks the read immediately
 (`ui/internal/streamScope.ts:101`) and races it against a **single per-render** deadline

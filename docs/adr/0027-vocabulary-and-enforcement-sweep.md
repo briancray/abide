@@ -62,6 +62,12 @@ framework. Nesting is cheaper than maintaining that invariant.
 
 ### D2 — `peek` is the reactive non-blocking read, framework-wide
 
+> **SUPERSEDED by ADR 0031 D3.** Landed as described below, then reversed: `peek` reverts to the
+> *untracked* read on all three primitives and `state.untracked()` retires into it. The reason recorded
+> here — that `memo.peek` is the load-bearing public verb while `state.peek` is invisible because the
+> compiler rewrites bare reads — stopped being true once the compiler rewrites the bare read on a memo
+> too (ADR 0031 D1–D2).
+
 `state.peek()` → `state.untracked()`. `Computed.peek()` likewise.
 
 **Why.** `peek` is the only verb on all three primitives, and it is inverted on the tracking axis —
@@ -127,6 +133,12 @@ differently. And `SocketsChatDemo`/`PeekDemo` needed no change at all, because a
 always the reactive one.
 
 ### D3 — Bare `{fn(args)}` stays a check error, restated as a boundary
+
+> **SUPERSEDED by ADR 0031 D2.** The bare read becomes the snapshot and `await` becomes the blocking
+> axis. The decisive argument below — that a `.abide`-only meaning makes one expression mean two things
+> by file extension — is a cost `state` already pays language-wide (`count` is `count()` in a `.abide`,
+> the cell object in a `.ts`); the emitter argument dissolves once the compiler emits a non-thenable for
+> the snapshot read, leaving the auto-await as the backstop this decision already describes.
 
 `await` = blocking · `peek` = non-blocking · auto-await = passthrough backstop for `T | Promise<T>`.
 
