@@ -114,13 +114,21 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // though their timing does not. Same shape as the entry above: it minifies to almost nothing, and
     // the duplication it removes is the kind that goes wrong silently.
     //
+    // 136→137 KB is the hydration seed's crossRequest narrowing: `ReactiveScope.sharedReads` plus the
+    // two blocks in `memo` that write and read it (420 bytes measured, 135,881 → 136,301, of which the
+    // code is about ten lines). Both are structurally DEAD in a browser bundle — `crossRequest` is
+    // `opts.crossRequest === true && !isBrowser`, so the client value is always `false` — but the
+    // bundler cannot prove it, and the WHY is worth more here than the bytes: without the narrowing
+    // `snapshot()` reported every crossRequest slot in the PROCESS, so a document shipped whatever a
+    // background job had warmed and the seed grew with the shared cache instead of with the page.
+    //
     // The ceiling is raised rather than the comments trimmed, deliberately: this bound is a
     // heavy-item tripwire (does a TypeScript compiler / a server-only subsystem reach the client?),
     // not a shipping budget — the assertions above are the real guard, and production is minified.
     // Squeezing under it by deleting the reasoning would trade the thing that has repeatedly caught
     // real bugs in this codebase for a number that measures nothing anyone ships.
     const bytes = Buffer.byteLength(body, 'utf8')
-    expect(bytes).toBeLessThan(136_000)
+    expect(bytes).toBeLessThan(137_000)
 
     // Still a real bundle that boots the app and carries the AOT client mount runtime path.
     expect(body).toContain('bootstrapPage')

@@ -73,6 +73,56 @@ test('the soft-nav envelope carries the recorded read', async () => {
     await app.stop()
 })
 
+test('a crossRequest read seeds only the slots THIS render touched', async () => {
+    // A `crossRequest` memo's slots live in the PROCESS-GLOBAL store, not in the request's own. The seed
+    // walk therefore reported every slot in the process — whatever an earlier request, a cron tick or a
+    // background scan had warmed — so a page shipped records it never read, and the leak grew with the
+    // shared cache rather than with the page. Asserting the VALUES cannot see this: every extra record is
+    // a correct (name, args, value), just for a read this document did not make. Assert the WORK — how
+    // many records the seed carries — and warm a second key from a different request first, which is the
+    // only shape that distinguishes "this render's slots" from "the store's slots".
+    const app = await createTestApp({
+        routes: {
+            tmdb: GET(({ path }: { path: string }) => ({ path }), {
+                memo: { crossRequest: true },
+            }),
+        },
+        pages: {
+            '/': "<script>import tmdb from '../../server/rpc/tmdb'</script><p>{await tmdb({path:'/one'})}</p>",
+        },
+    })
+
+    // A separate request warms `/two` into the shared store. It is a real, live, correctly-cached slot —
+    // it simply belongs to no later render.
+    await app.fetch(`/__abide/rpc/tmdb?__abide_args=${encodeURIComponent('{"path":"/two"}')}`)
+
+    const seed = readSeedFromDocument(await (await app.fetch('/')).text())
+    expect(seed.reads).toEqual([{ name: 'tmdb', args: { path: '/one' }, value: { path: '/one' } }])
+
+    await app.stop()
+})
+
+test('a page that reads no crossRequest RPC seeds none of its warm slots', async () => {
+    // The same leak seen from the other end, and the shape the bug was actually found in: a route that
+    // touches the rpc not at all still carried every record the store held.
+    const app = await createTestApp({
+        routes: {
+            tmdb: GET(({ path }: { path: string }) => ({ path }), {
+                memo: { crossRequest: true },
+            }),
+        },
+        pages: { '/': '<h1>static</h1>' },
+    })
+
+    await app.fetch(`/__abide/rpc/tmdb?__abide_args=${encodeURIComponent('{"path":"/one"}')}`)
+    await app.fetch(`/__abide/rpc/tmdb?__abide_args=${encodeURIComponent('{"path":"/two"}')}`)
+
+    const seed = readSeedFromDocument(await (await app.fetch('/')).text())
+    expect(seed.reads).toBeUndefined()
+
+    await app.stop()
+})
+
 test('output-shaping trims the seed value to the declared output schema', async () => {
     const app = await createTestApp({
         routes: {

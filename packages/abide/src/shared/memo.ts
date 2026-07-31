@@ -52,6 +52,7 @@ import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import {
     exitScope,
     onScopeDispose,
+    peekReactiveScope,
     reactiveScope,
     serverDefaultScope,
 } from './internal/reactiveScope.ts'
@@ -701,6 +702,16 @@ export function memo<Args, T>(
     function ensureSlot(args: Args): Slot<Args, T> {
         const cache = slots()
         const slotKey = prefix + canonicalKey(args)
+        // A crossRequest slot lives in the process-global store, so the caller's scope holds no record
+        // that this unit of work touched it. Note it here — the one choke point every read and verb goes
+        // through — so `snapshot()` can report THIS request's slots rather than the whole process's.
+        if (crossRequest) {
+            const scope = peekReactiveScope()
+            if (scope !== undefined) {
+                if (scope.sharedReads === undefined) scope.sharedReads = new Set([slotKey])
+                else scope.sharedReads.add(slotKey)
+            }
+        }
         let slot = cache.get(slotKey) as Slot<Args, T> | undefined
         if (slot === undefined) {
             slot = {
@@ -1694,10 +1705,18 @@ export function memo<Args, T>(
         broadcast('publish', args, value)
     }) as Memo<Args, T>['publish']
 
+    // The slots THIS unit of work resolved. For an ordinary memo that is every slot in `slots()`, which is
+    // already the per-request store. A `crossRequest` memo's store is the PROCESS's, so the same walk
+    // reported slots the render never read — whatever a scan, a cron tick or an earlier request had left
+    // warm — and the hydration seed shipped all of them in every document. Narrow to what `ensureSlot`
+    // recorded on this scope; no record (a request-less caller) means nothing was touched here, which for
+    // the seed's purposes is the same answer.
     c.snapshot = (): Array<{ args: Args; value: T }> =>
         untrack(() => {
             const result: Array<{ args: Args; value: T }> = []
+            const touched = crossRequest ? peekReactiveScope()?.sharedReads : undefined
             for (const slot of selectSlots(undefined)) {
+                if (crossRequest && touched?.has(slot.key) !== true) continue
                 const auto = slot.auto
                 if (auto !== undefined) {
                     // Report an auto slot only once something has actually pulled it — reading it here would

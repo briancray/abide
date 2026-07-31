@@ -78,6 +78,15 @@ export interface ReactiveScope {
     // Outstanding holds on this scope’s lifetime (ADR 0026). Absent means the implicit single hold
     // taken by whoever entered it. See `retainScope`/`releaseScope`.
     retains?: number | undefined
+    // Slot keys THIS unit of work touched in the PROCESS-GLOBAL store (`memo: { crossRequest: true }`).
+    // A crossRequest memo's slots deliberately do not live in `slots` above, so this scope has no other
+    // record of which of them the request actually read — and `snapshot()` (the hydration seed's only
+    // caller) has to answer exactly that. Without it the seed reported every crossRequest slot in the
+    // PROCESS, so a page shipped whatever a background scan had warmed: a route reading no TMDB at all
+    // still carried 107 `getTmdb` records, and the leak grows with the shared cache rather than with the
+    // page. Written by `ensureSlot`, read by `snapshot`; a request-less caller (cron, migration) records
+    // nothing, which is correct — it seeds nothing either.
+    sharedReads?: Set<string> | undefined
 }
 
 export function createReactiveScope(): ReactiveScope {

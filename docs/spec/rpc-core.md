@@ -166,6 +166,19 @@ Rich codec support (hydration path only):
 
 Makes the *value* travel with zero SSR/client coordination:
 
+**Scope: the seed carries the reads THIS RENDER made, and nothing else.** For an ordinary memo that
+falls out of §2 for free — its slots live in the request's own store, so walking the store *is*
+walking this render's reads. A **`crossRequest`** memo's slots deliberately live in the
+process-global store instead, and there the same walk answers a different question: every slot in the
+PROCESS, whatever a background scan, a cron tick or an earlier request left warm. That is not a
+smaller version of the right answer, it is an unbounded one — the seed grows with the shared cache
+rather than with the page, and a route that reads the rpc not at all still ships all of it. So
+`ensureSlot` records each process-global key it hands out on the calling scope (`sharedReads`) and
+`snapshot()` reports only those. A caller with no scope (a cron tick, a migration) records nothing,
+which is the same answer: it seeds nothing either. Note what a VALUE test cannot see here — every
+leaked record is a correct `(name, args, value)`, just for a read the document never made, so the
+guard has to assert the COUNT.
+
 1. **Key identity across sides** is guaranteed by §3 (`callSiteId` + canonical args). RPC
    route ids are trivially isomorphic. **Record-and-replay of SSR-computed inputs:** the
    server serializes the **actual args it used** next to each hydrated value; the client
