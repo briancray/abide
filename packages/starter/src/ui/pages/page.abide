@@ -1,4 +1,24 @@
 <script module>
   import greet from '$server/rpc/greet'
+  import Card from '$ui/components/Card.abide'
 </script>
-<h1>{await greet({ name: 'world' })}</h1>
+
+<script>
+  import { state } from 'abide/shared/state'
+
+  // A cell is the owned half of the reactive model. `bind:value` below is sugar for reading it into the
+  // input and writing back on input — the compiler synthesizes the accessor.
+  let name = state('world')
+</script>
+
+<Card title="Your first RPC">
+  <!-- `{await …}` blocks the SSR render, so the value is in the initial HTML and in the hydration seed —
+       the client does not re-fetch it. The read is keyed on its args, so editing the field re-runs it. -->
+  <h1>{await greet({ name })}</h1>
+</Card>
+
+<Card title="Two-way binding">
+  <label for="name">Name</label>
+  <input id="name" bind:value={name} />
+  <p>The heading re-reads <code>greet</code> as you type — same callable, same name, both sides.</p>
+</Card>

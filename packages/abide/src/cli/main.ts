@@ -156,7 +156,9 @@ const STARTER_DIR = join(import.meta.dir, '../../../starter')
 // `src/.abide/health.d.ts` — which the whole health-companion design (CO2.4) assumes is regenerated,
 // never tracked. That invariant held in this monorepo only via the ROOT `.gitignore`, which no
 // scaffolded app ever sees.
-const STARTER_ROOT_FILES = ['tsconfig.json', '.gitignore'] as const
+// `README.md` rides along for the same reason: it is the only thing in a fresh app that says what the
+// scripts are and where files go, and a scaffolded project has no monorepo around it to infer that from.
+const STARTER_ROOT_FILES = ['tsconfig.json', '.gitignore', 'README.md'] as const
 
 // Copy the starter package into a fresh `name/` project. Returns the project root.
 export async function scaffold(dir: string, name: string): Promise<string> {

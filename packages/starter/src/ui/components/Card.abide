@@ -1,0 +1,20 @@
+<script>
+  import { props } from 'abide/ui/props'
+
+  // Props are read by destructuring the reader — that is the whole API, and the read is reactive, so a
+  // parent changing `title` updates this without anything being wired up.
+  const { title } = props()
+</script>
+
+<section class="card">
+  <h2>{title}</h2>
+  <!-- `<slot/>` renders whatever the caller put between the tags. It is the ONLY spelling of the
+       outlet, and `children` is a reserved name — there is no expression form. -->
+  <slot/>
+</section>
+
+<style>
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.25rem; margin-block: 1rem; }
+  /* Component-scoped: this `h2` rule cannot reach an `h2` outside this component. */
+  .card h2 { margin: 0 0 0.5rem; font-size: 1rem; color: #555; }
+</style>

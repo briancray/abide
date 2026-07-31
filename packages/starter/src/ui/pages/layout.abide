@@ -1,0 +1,14 @@
+<!-- A layout wraps every page below it in the route tree. It renders its child page through `<slot/>` —
+     the same outlet a component uses, filled by the router instead of by a caller's `<Tag>…</Tag>`, so
+     there is nothing layout-specific to learn.
+
+     A layout SURVIVES a soft navigation: a cross-route nav that shares a layout prefix keeps the shared
+     outer layouts mounted and swaps only the diverging suffix. So state you put in a `<script>` here
+     outlives navigation, and an effect here does not re-run per page. -->
+<main class="app">
+  <slot/>
+</main>
+
+<style>
+  .app { max-width: 42rem; margin: 3rem auto; padding: 0 1.5rem; font-family: system-ui, sans-serif; }
+</style>

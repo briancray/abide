@@ -35,6 +35,33 @@ test('the client bundle hydrates with no console errors', async ({ page }) => {
     expect(errors).toEqual([])
 })
 
+// THE COMPONENT + OUTLET PATH, which the console-error assertion above cannot reach on its own.
+//
+// The scaffold used to be a single `<h1>` with no layout and no component, so the "no console errors"
+// test had no component adapter, no `<slot/>` and no child scope to exercise — and stayed green through
+// the entire lifetime of a bug where a childless `<slot/>` threw on hydrate while the server's HTML was
+// correct. A page that invokes a component through a layout makes that assertion load-bearing.
+test('the layout and its component render through <slot/> on both lanes', async ({ page }) => {
+    await page.goto('/')
+    // The layout wraps the page: both cards are inside its `<main>`.
+    await expect(page.locator('main.app .card')).toHaveCount(2)
+    // The outlet rendered the caller's children, not nothing.
+    await expect(page.locator('main.app .card').first().locator('h1')).toHaveText('Hello, world!')
+    // Component-scoped styles reached the component's own markup.
+    await expect(page.locator('.card h2').first()).toHaveText('Your first RPC')
+})
+
+// Hydration proved by BEHAVIOUR rather than by markup: a bind writes the cell, the cell is the RPC's
+// arg, and the read is keyed on its args — so the heading changing is the whole chain (client bundle
+// loaded, component adopted, bind wired, memo re-read over the wire) in one assertion.
+test('a bind drives a re-read of the RPC after hydration', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('h1')).toHaveText('Hello, world!')
+
+    await page.locator('#name').fill('abide')
+    await expect(page.locator('h1')).toHaveText('Hello, abide!')
+})
+
 test('the greet RPC responds over HTTP', async ({ request }) => {
     const res = await request.get('/__abide/rpc/greet', {
         params: { name: 'abide' },
