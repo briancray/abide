@@ -246,4 +246,16 @@ test('machine surfaces: OpenAPI + MCP tools/list fetched from the browser', asyn
     await expect(tools.first()).toBeVisible()
     // The capabilities RPC is projected as an MCP tool.
     await expect(page.locator('#mcp-tools')).toContainText('capabilities')
+    // …and one that declares `clients: { mcp: false }` is not.
+    await expect(page.locator('#mcp-tools')).not.toContainText('lifecycleThrow')
+
+    // The half a LIST assertion cannot make. Listing and dispatch have to admit the same set: drift
+    // that hides a tool from the list while leaving it callable is reachable by any caller who guesses
+    // the name, and asserting the list alone passes straight over it. Refused is the PASS — reaching
+    // the handler would surface its own `boom`, which is how this reads if the gate regresses.
+    await page.locator('#mcp-withheld-btn').click()
+    const withheld = page.locator('#mcp-withheld-out')
+    await expect(withheld).not.toHaveText('not called yet')
+    await expect(withheld).not.toContainText('boom')
+    await expect(withheld).toContainText('lifecycleThrow')
 })

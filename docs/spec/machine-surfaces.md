@@ -77,6 +77,20 @@ manifests; every surface derives from the same RPC + socket metadata.
    convenience path). Whatever authz your middleware enforces applies uniformly across
    browser/MCP/CLI — an unauthorized call fails in middleware, not by being hidden. `clients`
    controls reachability, NOT authorization (DX8).
+
+   **Reachability is nevertheless ENFORCED at DISPATCH, not only at generation.** "Reachability, not
+   authorization" says which gate answers an unauthorized caller; it does not license the tool CALL path
+   to admit a wider set than the tool LIST advertises. It did: `mcpTools` and `callMcpTool` each spelled
+   `clients.mcp === false` for themselves, with nothing tying the two loops together, so drift in one
+   direction advertises a tool that answers "unknown tool" and in the other — the one that matters —
+   leaves a **withheld rpc reachable that was never advertised**. Both now project through one owner
+   (`server/internal/surfaceProjection.ts`: `reaches` / `rpcsFor` / `socketsFor`), which is also what the
+   agent surface (MS2.6) and the client bundle read, so a single declaration moves every surface at once.
+   The drift test has to CALL a withheld tool: comparing the advertised list against the projection only
+   proves the list calls the helper, and passes with a raw-registry dispatch loop reapplied.
+   What deliberately does NOT move is the SHAPE each surface renders a read's args in — query parameters
+   for OpenAPI, `--flags` for the CLI, a JSON Schema for a model. Folding those together would be a worse
+   module than the checks it removed.
 6. **Agent tools (DX9).** An agent's `AgentSurface` tool set defaults to **all `clients.mcp`
    RPCs**; `tools: []` = none, `tools: [...]` = a selective subset (see `agent.md` AG2.5). Engine
    built-in tools (bash/file/web) stay **off by default**; app-RPC tools are auto-run and subject

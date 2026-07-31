@@ -4,15 +4,31 @@
   // Call the MCP endpoint (JSON-RPC 2.0 over HTTP POST) with tools/list and render the tool names.
   // Every RPC reachable by machines is projected as an MCP tool.
   let tools = state(null)
+  // The other half of `clients.mcp`, and the one a tool LIST cannot show you: a withheld rpc must also
+  // be refused by tools/CALL. Listing and dispatch used to decide that independently, so drift could
+  // leave a withheld rpc reachable by a caller who simply guessed its name — which is exactly what an
+  // agent that has seen the app's source does. `lifecycleThrow` declares `clients: { mcp: false }`.
+  let withheld = state(null)
 
-  async function loadTools() {
+  async function mcp(method: string, params?: unknown) {
     const response = await fetch("/__abide/mcp", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     })
-    const reply = await response.json()
+    return await response.json()
+  }
+
+  async function loadTools() {
+    const reply = await mcp("tools/list")
     tools = (reply.result?.tools ?? []).map((tool) => ({ name: tool.name, readOnly: tool.annotations?.readOnlyHint === true }))
+  }
+
+  async function callWithheld() {
+    const reply = await mcp("tools/call", { name: "lifecycleThrow", arguments: {} })
+    // Refused is the PASS. It is reported as an error rather than as a result, because the app declined
+    // the call — it never reached the handler, which would have thrown its own `boom`.
+    withheld = reply.error?.message ?? reply.result?.content?.[0]?.text ?? "reached the handler"
   }
 </script>
 
@@ -26,3 +42,6 @@
 {:else}
   <p id="mcp-empty">not fetched yet</p>
 {/if}
+
+<button id="mcp-withheld-btn" onclick={callWithheld}>Call a withheld tool</button>
+<p id="mcp-withheld-out">{withheld ?? "not called yet"}</p>
