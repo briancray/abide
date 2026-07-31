@@ -546,6 +546,17 @@ export function boundAccessor(bound: unknown): Accessor | null {
 // `.checked`, an `<option>` on `.selected` — and the server renders the target's own name as the
 // attribute. `bind:selected` used to fall through to `bindValue` here, which assigned `.value = "true"`
 // and clobbered the option's value on hydrate over an SSR paint that was correct.
+// WHERE `change` IS OBSERVABLE for a bound element, which is not always the element itself. An
+// `<option>`'s selectedness changes because the user acted on its `<select>`, and that is where the
+// event fires — events bubble UP, so a listener on the option never sees it and the write-back half of
+// `bind:selected` silently never ran. `closest` rather than `parentElement`: an `<option>` may sit
+// inside an `<optgroup>`. It walks the ancestor chain without requiring the node to be in the document,
+// so this does not depend on binds running after `finalize` (they do, but nothing here needs that).
+function changeTarget(element: Element): Element {
+    if (element.tagName !== 'OPTION') return element
+    return element.closest('select') ?? element
+}
+
 export function bindBoolean(element: Element, accessor: Accessor, property: string): Disposer {
     const node = element as unknown as Record<string, unknown>
     const dispose = hydratableEffect(
@@ -554,11 +565,14 @@ export function bindBoolean(element: Element, accessor: Accessor, property: stri
             node[property] = value as boolean
         },
     )
+    // Read the property off the BOUND element, listen on whichever element emits the event. For an
+    // option those differ, and conflating them is what made this bind one-way.
     const handler = (): void => accessor.write(Boolean(node[property]))
-    element.addEventListener('change', handler)
+    const target = changeTarget(element)
+    target.addEventListener('change', handler)
     return () => {
         dispose()
-        element.removeEventListener('change', handler)
+        target.removeEventListener('change', handler)
     }
 }
 

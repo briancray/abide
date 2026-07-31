@@ -381,6 +381,24 @@ Mechanism:
    after hydrate, so the two paints disagreed about the props the component received.
 2. **`bind:group={cell}`** — radios write the selected value; checkbox groups maintain an
    **array** in the cell.
+2b. **The target NAME selects one of four KINDS, and both lanes read one taxonomy** (`bindTarget.ts`):
+   `element` (a node ref or per-instance attachment fn — client-only, since there is no live node during
+   SSR, so nothing is rendered for it at all) · `group` (2 above; the bound value is the GROUP's, so both
+   sides compare it against the input's own `value` and neither ever emits a literal `group` attribute) ·
+   **`boolean`** — `bind:checked`, `bind:selected` — a boolean DOM PROPERTY mirrored as a boolean
+   attribute, present iff truthy and never stringified · `value` (1 and 3; everything else).
+   The boolean kind is a NAMED SET rather than a `checked`-only test, because that test is exactly how
+   `selected` came to mean two different things: the server tested `checked || selected` and wrote a
+   boolean attribute, while the client's ladder tested only `group` and `checked` and let `selected` fall
+   through to the value bind. `<option bind:selected={x}>` therefore rendered `<option selected>` and then,
+   on hydrate, assigned `option.value = "true"` — the bind clobbering the option's own value over an SSR
+   paint that was correct. `selected` cannot simply be folded into `checked`: the boolean state lives on a
+   different property per element (`<input>.checked`, `<option>.selected`), which is why the client helper
+   is `bindBoolean(element, accessor, property)` and takes the target's own name.
+   What stays PER-SUBSTRATE is the ACTION, which genuinely differs — one writes an attribute string, the
+   other attaches a listener and mirrors a property. Only the classification is shared. Neither lane could
+   catch the divergence: both bind fixtures in the parity corpus are `client: false` by construction (a
+   bind writes a PROPERTY on the client and an ATTRIBUTE on the server), so the harness cannot compare them.
 3. **Derived `bind:value={{ get, set }}`** = the general primitive `bind:value={cell}` is
    sugar over (`cell` → `{ get: () => cell, set: v => cell = v }`). For transformed/
    validated/nested targets. **Works on component props too** (bindable props — child writes

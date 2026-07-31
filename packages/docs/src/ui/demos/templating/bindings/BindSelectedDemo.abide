@@ -1,0 +1,19 @@
+<script>
+  import { state } from "abide/shared/state"
+
+  // bind:selected — the OTHER boolean target. The state lives on `<option>.selected`, not on
+  // `.checked`, which is why the two cannot share one property name: the bind mirrors the property
+  // the TARGET names. The option's own `value` must survive that untouched — a value bind here would
+  // stringify the boolean over it, which is exactly what used to happen on hydrate.
+  let starred = state(true)
+</script>
+
+<label for="selected-list">Plan</label>
+<select id="selected-list">
+  <!-- `free` sits first deliberately: a single `<select>` always keeps exactly one option selected,
+       so deselecting the FIRST one snaps straight back to it and the bind looks stuck. -->
+  <option value="free">free</option>
+  <option id="selected-option" value="pro" bind:selected={starred}>pro</option>
+</select>
+<button id="selected-toggle" type="button" onclick={() => starred = !starred}>toggle</button>
+<p>Cell: <span id="selected-out">{starred ? "yes" : "no"}</span></p>

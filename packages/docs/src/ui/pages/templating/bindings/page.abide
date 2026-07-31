@@ -6,6 +6,7 @@
   import NativeEventsDemo from "$ui/demos/templating/bindings/NativeEventsDemo.abide"
   import BindValueDemo from "$ui/demos/templating/bindings/BindValueDemo.abide"
   import BindCheckedDemo from "$ui/demos/templating/bindings/BindCheckedDemo.abide"
+  import BindSelectedDemo from "$ui/demos/templating/bindings/BindSelectedDemo.abide"
   import BindGroupDemo from "$ui/demos/templating/bindings/BindGroupDemo.abide"
   import BindGroupCheckboxDemo from "$ui/demos/templating/bindings/BindGroupCheckboxDemo.abide"
   import DerivedAccessorDemo from "$ui/demos/templating/bindings/DerivedAccessorDemo.abide"
@@ -72,6 +73,14 @@
   </Demo>
   <aside class="aside">
     <p>The same directive over the other input shapes. A checkbox binds a boolean; a radio group binds the one chosen value; a checkbox group binds an array of the checked ones — same name, shape follows the element.</p>
+  </aside>
+  <Demo id="selected" title="<code>bind:selected</code> — the other boolean" client="src/ui/demos/templating/bindings/BindSelectedDemo.abide">
+    <BindSelectedDemo />
+  </Demo>
+  <aside class="aside">
+    <p>A bind target resolves to one of four kinds, and both lanes read the one taxonomy: a node <em>ref</em>, a <em>group</em>, a <em>boolean</em>, or a <em>value</em>. <code>checked</code> and <code>selected</code> are the boolean pair — mirrored as a boolean attribute, present iff truthy, never stringified. They cannot be one target: an <code>&lt;input&gt;</code> keeps that state on <code>.checked</code> and an <code>&lt;option&gt;</code> on <code>.selected</code>, so the bind mirrors the property the target names.</p>
+    <p>The set is named rather than tested for, because a <code>checked</code>-only test is how <code>selected</code> came to mean two things at once: the server wrote a boolean attribute while the client fell through to the value bind, so the option rendered correctly and then had <code>value="true"</code> written over it on hydrate. A correct paint, clobbered by its own bind.</p>
+    <p>It is two-way in both directions, which took one more distinction: a bind reads the property off the element it is <em>attached</em> to, but listens on whichever element <em>emits</em> the event. For an <code>&lt;option&gt;</code> those are not the same node — selectedness changes because the user acted on the <code>&lt;select&gt;</code>, and events bubble up, so a listener on the option never sees it. Conflating the two makes the bind silently one-way: the mirror works, nothing throws, and the cell just never moves.</p>
   </aside>
   <Demo id="group" title="<code>bind:group</code> — radios (one value)" client="src/ui/demos/templating/bindings/BindGroupDemo.abide">
     <BindGroupDemo />

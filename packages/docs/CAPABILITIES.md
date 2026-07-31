@@ -36,15 +36,15 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, soft-nav, machines, a
   ```
   The three totals must reconcile three ways — kinds, statuses, and the bucket table's own column
   sums all equal the total — which is the check that catches a dropped row.
-- **Playwright suite: 26 spec files, 187 tests — ALL PASSING** (`bunx playwright test --list | tail -1`).
+- **Playwright suite: 26 spec files, 192 tests — ALL PASSING** (`bunx playwright test --list | tail -1`).
   They drive the real docs app
   (a real abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way
   binds, soft-nav (incl. layout keep-alive + streamed-patch adoption), sockets, raw SSR-emitter bytes,
   and machine surfaces fetched from the browser.
-  - `rpc` (24), `routing` (22), `platform` (17), `memo` (14), `bindings` (14), `control` (11),
+  - `rpc` (24), `routing` (24), `platform` (17), `bindings` (16), `memo` (14), `control` (11),
     `ssr-emit` (10), `sockets` (8), `memo-verbs` (7), `state` (5), `memo-global` (5), `channel` (5),
-    `build-deploy` (5), `branch-scope` (5), `watch` (4), `streaming` (4), `smoke` (4),
-    `rpc-probes` (4), `bench` (4), `bench-client` (4), `hydration` (3), `uploads` (2),
+    `build-deploy` (5), `branch-scope` (5), `bench-client` (5), `watch` (4), `streaming` (4),
+    `smoke` (4), `rpc-probes` (4), `bench` (4), `hydration` (3), `uploads` (2),
     `sidebar` (2), `bench-server` (2), `styling` (1), `nav-perf` (1).
   - Note: `bench.spec.ts`'s two re-run tests were flaky under CPU contention (they failed in a
     full-suite run while passing 3/3 in isolation). Both asserted that two *live* microbenchmark
@@ -258,6 +258,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `class:name={cond}` / `style:prop={value}` on a COMPONENT is a compile error in BOTH lanes (the directive targets one element; a component renders a subtree). It used to be typed as a real prop by `abide check` and silently DROPPED by both emitters | unit | [x] (abide `ui/internal/componentAttrLanes.test.ts` "…compile error in the check lane AND the build lane" + "the message names the fix"; one gate — `validateTemplate` runs `buildPlan` — so check and build reject the same thing by construction. Not hostable in the docs app: it does not compile) |
 | `bind:value` | PW | [x] (/templating/bindings) |
 | `bind:checked` | PW | [x] (/templating/bindings) |
+| `bind:selected` — the other BOOLEAN target. A bind target resolves to one of four kinds (`element`/`group`/`boolean`/`value`) through one taxonomy both lanes read; `checked` and `selected` are a named SET rather than a `checked`-only test, because that test let `selected` fall through to the VALUE bind on the client while the server wrote a boolean attribute — so `<option bind:selected>` painted correctly and then had `option.value = "true"` written over it on hydrate. Two-way in both directions, which needs one further distinction: a bind READS the property off the element it is attached to but LISTENS on whichever element emits `change`, and for an `<option>` those are different nodes (selectedness changes because the user acted on the `<select>`, and events bubble up) | PW+unit | [x] (/templating/bindings + e2e/bindings.spec — TWO tests, because the two directions have different failure modes: the mirror half asserts the option's own `value` survives hydration (the only observable — the visible output was right either way), and the write-back half asserts the CELL moves when the user picks through the select (attaching the listener to the option is silently one-way: the mirror works, nothing throws, the cell never moves). Each reds only for its own regression. abide `ui/internal/bindTarget.test.ts` pins the shared classification. The parity harness provably cannot catch this family: both bind fixtures are `client: false` by construction, since a bind writes a PROPERTY on the client and an ATTRIBUTE on the server) |
 | `bind:group` | PW | [x] (/templating/bindings — radios + checkbox array) |
 | `bind:value={{get,set}}` | PW | [x] (/templating/bindings) |
 | `bind:element={cell \| fn}` — node ref / attach-teardown | PW | [x] (/templating/bindings) |

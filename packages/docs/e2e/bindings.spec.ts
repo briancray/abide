@@ -62,6 +62,44 @@ test('bind:checked round-trips a checkbox', async ({ page }) => {
     await expect(out).toHaveText('no')
 })
 
+// The regression this demo exists for is an SSR/hydrate DISAGREEMENT. `selected` used to be classified
+// as a boolean by the server and fall through to the VALUE bind on the client, so the option rendered
+// `<option value="pro" selected>` and then had `option.value = "true"` written over it on hydrate. The
+// paint was correct; the bind broke it. Asserting the option's own `value` after hydration is what sees
+// that — the visible output was right in both cases.
+test('bind:selected mirrors the property without clobbering the option value', async ({ page }) => {
+    const option = page.locator('#selected-option')
+    await expect(page.locator('#selected-out')).toHaveText('yes')
+    await expect(option).toHaveJSProperty('selected', true)
+    // The option's own value survives the bind — `"true"` here is the regression. Reintroducing it
+    // (dropping `selected` from the boolean set) reds this test: the bind stops mirroring `.selected`
+    // at all and writes the stringified boolean over `.value` on the first change instead.
+    await expect(option).toHaveJSProperty('value', 'pro')
+
+    // Cell → property.
+    await page.locator('#selected-toggle').click()
+    await expect(page.locator('#selected-out')).toHaveText('no')
+    await expect(option).toHaveJSProperty('selected', false)
+    await expect(option).toHaveJSProperty('value', 'pro')
+})
+
+// The OTHER direction, which is its own test because it has its own failure mode. A bind's write-back
+// listens for `change`, and an `<option>`'s selectedness changes because the user acted on its
+// `<select>` — events bubble UP, so a listener on the option never sees it. Attaching to the option was
+// silently one-way: the mirror worked, nothing errored, and the cell simply never moved. Asserting only
+// the DOM would miss it, so this asserts the CELL through the rendered text.
+test('bind:selected writes back when the user picks through the select', async ({ page }) => {
+    const out = page.locator('#selected-out')
+    await expect(out).toHaveText('yes')
+
+    await page.locator('#selected-list').selectOption('free')
+    await expect(out).toHaveText('no')
+
+    await page.locator('#selected-list').selectOption('pro')
+    await expect(out).toHaveText('yes')
+    await expect(page.locator('#selected-option')).toHaveJSProperty('value', 'pro')
+})
+
 test('bind:group tracks the selected radio', async ({ page }) => {
     const out = page.locator('#group-out')
     await expect(out).toHaveText('green')
