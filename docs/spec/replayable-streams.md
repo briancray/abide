@@ -193,8 +193,12 @@ ref-counted by attached consumers, and **not** LRU-evictable (§4).
   `n` ms of close replays the full transcript with no re-run**; after `n`, re-run.
 - **`ttl: ∞`** (reads default) → retain until LRU eviction (of *closed* transcripts only).
 
-`isExpired` gains a stream branch: **while `status === "stream"` and not `done`, never expired** (open
-streams outlive any ttl). Disposal must **remove the slot from the backing map**, not merely reset it to
+The staleness predicate gains a stream branch: **while `status === "stream"` and not `done`, never
+expired** (open streams outlive any ttl). That predicate is now `isRetentionStale`
+(`shared/internal/slotRetention.ts`); when this was written it was `isExpired`, local to `memo.ts`, and
+the auto-tracked fill path carried a SECOND one (`autoExpire`) that compared `loadedAt` itself and did
+not know this rule. What differs between the two callers is not the question but WHAT THE SLOT HOLDS,
+which each already knows — so that is the argument, and the rule is stated once. Disposal must **remove the slot from the backing map**, not merely reset it to
 idle — today `dropSlot` only resets state (`memo.ts:362-367`), which for `ttl:0` leaks an idle slot and
 leaves the "coalesce vs re-execute" boundary undefined. The observable guarantee: *a call whose
 inflight-start is after the previous identical call's ref-count hit 0 re-executes; otherwise it
@@ -642,7 +646,8 @@ unit tests, no memo:
 - `abort()` → live consumers terminate at chunks-so-far; a racing late joiner replays-then-ends.
 
 **1b. Memo integration** ✅ **built** — `SlotState` gains `status:"stream"` + `stream` field; `close()`/`fail()`
-stamp `slot.loadedAt`; per-`consume()` ref-count; `isExpired`/`measureBytes`/`snapshot`/`seed`/the sync
+stamp `slot.loadedAt`; per-`consume()` ref-count; the staleness predicate (now `isRetentionStale`,
+`shared/internal/slotRetention.ts`)/`measureBytes`/`snapshot`/`seed`/the sync
 cache-hit gain stream branches; disposal removes the slot from the map. Tests:
 - two concurrent reads through the memo = one source run + full replay for a late joiner.
 - value slot's clock still starts at resolve (regression guard).

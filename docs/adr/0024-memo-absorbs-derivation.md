@@ -91,9 +91,11 @@ This is not an ergonomic preference — hydration depends on it. `interpolate` s
 *before* awaiting a thenable (`ui/internal/runtime.ts:509-513`), so a promise-returning read would **blank
 the server-rendered text and refill it a microtask later** — a visible flash on every derived value.
 
-This does not leak into RPC: `makeRpc` builds its own callable, `const rpc = ((args) => backing(args)) as
-Rpc<Args, T>` (`server/internal/makeRpc.ts:327`), explicitly typed `Promise<T>`. The RPC contract holds
-regardless of what the backing memo returns.
+This does not leak into RPC: `makeRpc` builds its own callable, explicitly typed `Promise<T>`, rather
+than exposing the backing memo's return. The RPC contract holds regardless of what that memo returns.
+(Written when both verbs spelled this inline; the memo half of an rpc is now assembled once by
+`assembleRpc`, and the PRODUCER is still handed in per verb — ADR 0030 D2 — because a mutation's is not
+"call the memo": a `FormData` body and `memo: false` both bypass it.)
 
 Mechanically this is what "`memo` gains a sync mode" means: **a second fill path for the same slot**, not a
 second surface. A sync argless `fn` makes the slot computed-backed, so `refresh`/`invalidate`/`watch` all

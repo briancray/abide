@@ -93,6 +93,21 @@ precisely so the client does not re-invoke the source), and a settled slot whose
 classified (returning its value there would hand a raw `T` back from an async memo). Both were caught
 by the existing suite.
 
+**The second of those is a BREACH of the contract stated above, not merely a guard.** The
+classification is evidence produced by RUNNING the body, so a memo whose slot was settled by `publish`
+or a hydration `seed` before any body has ever run has no evidence, and its bare read returns a
+`Promise` until some key runs cold — a keyed sync memo answering `Promise<3>` where this ADR promises
+`3`. It is reachable from a documented surface: `memo.state()` on a sync memo needs no `initial` and
+its `set` IS `publish`, so a write-before-first-read hands a template a promise.
+
+The classification is the MEMO's, not the slot's, so one settled key answers for every other — which is
+why `startLoad` now classifies from the run it was making anyway, closing the case where a `peek()` was
+the first touch (that slot stayed UNCLASSIFIED permanently, and every later bare read returned a
+promise, rendering `[object Promise]`). The remaining hole is left OPEN deliberately, because both fixes
+are worse than it: running the body to classify is unacceptable when the body is an rpc handler reached
+from a hydration seed, and choosing a default the first real run may contradict trades a visible wrong
+type for a silent one.
+
 Types follow via a `NotDeferred<T>` exclusion on a new overload, so a promise- or async-iterable-
 returning body still resolves to `Memo<Args, T>` and its `Promise<T>` read.
 

@@ -441,12 +441,21 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
    typed `never`, so they are not union members at all and there is no supertype to reduce to.
    Both `json(T) | error()` and `T | error()` resolve to the success payload.
    Opt out with `ABIDE_DERIVE_SCHEMAS=0`. Live derivation needs `node` on
-   PATH (the tsgo bridge can't run under Bun); `abide dev`/`run` and the test app derive live.
+   PATH (the tsgo bridge can't run under Bun); `abide dev` and the test app derive live from SOURCE.
+   **`abide run` does NOT** — it takes the BAKE (falling back to live derivation when there is none),
+   because it is the production runtime with a script in front of it rather than a build.
+   The lane is a REQUIRED `loadApp` argument, for the reason `RouteClass.methods` is: there is nowhere
+   to not mention it. It was optional-with-a-`'baked'`-default, which put the original staleness bug
+   (a file's existence standing in for a question only the caller can answer) one level up — two
+   production callers reached it by saying nothing, and one of them was `createTestApp`'s DISCOVERY
+   mode, whose whole claim is "the real app". Discovery therefore takes `'source'`.
    **Baked (§11.5):** `abide build` writes the derived schema map to `dist/schemas.json`, and
    `loadApp` prefers it over a live tsgo pass when present — so `abide start` (and a future
    source-less `compile`/`cli`) merges schemas at boot with no derivation, and prod carries no
-   tsgo/node dependency. `abide build` first clears any stale `dist/schemas.json` so it always
-   re-derives from current source.
+   tsgo/node dependency. `abide build` asks for the `'source'` lane, so it always re-derives from
+   current source and cannot bake the previous build's types into this one. It used to arrange that by
+   DELETING `dist/schemas.json` first, which meant a build failing after the delete left the project with
+   no bake at all; naming the lane gets the same guarantee without a window where neither is on disk.
 
 ## 12. Streaming reads/writes
 
@@ -545,6 +554,20 @@ pages — nothing is reserved outside `/__abide/*`.
    client to re-normalize a spec the server already normalized; `crossRequest` is deliberately NOT in
    `memoOptionsFor`'s output, because it selects a STORE rather than a retention and a browser has no
    request to cross.
+
+   **WHICH FIELDS CROSS is `RPC_SPEC_KEYS`** (`shared/internal/rpcSpec.ts`): `method`, `read`,
+   `crossRequest`, `memo`, `ttl`, `timeout`, `tags`, `throttle`, `debounce`. `RpcSpec` owns the TYPE and
+   `rpcSpecOf` owns the PROJECTION, which had been hand-written between two ends that were each already
+   checked — and neither half of that hand-written middle was checkable. An `as` cast admitted an object
+   literal missing a REQUIRED field, so what `RpcEntry extends RpcSpec` had made catchable was
+   uncatchable again one layer out; and an OPTIONAL field simply left out of the `if (x !== undefined)`
+   guards was an error nowhere. Which is exactly how `throttle`/`debounce` came to be set on the server,
+   typed on the client, and **absent in between** — the refetch clock of §3 was server-only for as long
+   as it existed, with no symptom a type or a value test could show. `satisfies` now rejects a key that
+   is not on `RpcSpec`, and `UnprojectedRpcSpecKey` closes the direction that bites: a field ON `RpcSpec`
+   that nothing projects is a compile error naming the field. Falsy-but-declared values must cross —
+   `memo: false`, `ttl: null`, `timeout: 0` are all meaningful, and a `!value` guard would flip three
+   policies at once.
 2. **No request batching.** Coalescing (dedup identical in-flight) yes; batching (combine
    distinct calls in one tick into one round-trip) **no** — it couples requests (HOL),
    defeats per-URL HTTP/CDN caching, hurts visibility; HTTP/2 multiplexing makes N small

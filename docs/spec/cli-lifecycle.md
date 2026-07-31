@@ -1,7 +1,8 @@
 # abide — CLI Conveniences & App Lifecycle (Spec, Slice 9)
 
 Status: draft, derived from design interview 2026-07-17.
-Scope: `abide scaffold` / `run`, and the `src/app.ts` process-lifecycle hooks.
+Scope: `abide scaffold` / `run`, what every `abide` command PRINTS when it finishes starting, and the
+`src/app.ts` process-lifecycle hooks.
 Thin/mechanical. The request/nav middleware chain is specced in C6-nav/S5; this covers only what's
 left. Builds on §2 (ambient context), CO1/CO2, machine-surfaces.md.
 
@@ -62,6 +63,42 @@ shared one branch and both exited `0`, which is how `abide biuld` in a CI script
 text and reported the build succeeded. Also `usage`: `scaffold` with no `<name>`, and `run` with a
 missing or nonexistent file. A `check` that finds type errors is `failed` (1) — a real failure, not a
 wrong command line — as is a `scaffold` whose `bun install` fails.
+
+## CL2b. The completion banner — what a command prints when it has finished starting
+
+One formatter (`cli/banner.ts`) for **every** command — `dev`, `start`, `build`, `scaffold`, `check`,
+`compile`, `bundle` — so seven commands cannot drift into seven layouts. They each used to interpolate
+their own `abide <cmd> — <thing>` line, which is how `abide build` once printed `— [object Object]`:
+nothing tied the shape to a place that could be got right once.
+
+```
+   ➜  local     http://localhost:3001
+   ➜  network   http://192.168.1.24:3001
+
+   ready in 412ms · port 3000 was taken · watching src/ · ctrl-c stops
+```
+
+1. **Two parts, and the split is the rule.** **ROWS** are addresses and paths — the things you click,
+   copy or `cd` into — so they are the only unstyled text and they are aligned into a column. **NOTES**
+   are dim, one line, joined by `·`: facts you read once and then stop seeing. *Anything a caller would
+   grep for belongs in a row, never in a note.*
+2. **There is NO command header**, because the terminal already printed one: the line above the block is
+   the prompt you typed `abide dev` on, or `bun run`'s own `$ abide dev` echo. A banner that opens by
+   restating it spends its most prominent line on the one fact the reader supplied. `heading` is the
+   exception that proves the rule and there is exactly one — `abide scaffold` ends by BOOTING a dev
+   server, so that block is `abide dev` output under a command line that says `scaffold`. Pass a heading
+   when the block is for a command the caller did not type, and only then.
+3. **The `network` row** is this machine's LAN IPv4 (`cli/networkAddress.ts`), omitted when there is no
+   external interface. `node:os` rather than a Bun API because Bun exposes no interface enumeration —
+   one of the "unless necessary" cases — and it is truthful only because the router calls `Bun.serve`
+   with no `hostname`, i.e. binds every interface. Narrow that to loopback and this row starts
+   advertising an address nothing answers on.
+4. **Colour follows `colourEnabled`** — `NO_COLOR` / `FORCE_COLOR` / is-stdout-a-terminal, the same
+   ladder the REPL banner and the log lines use (CO2), so there is no third abide-specific name to
+   learn. A pipe gets the identical text with no escapes to strip, and no `➜`: the marker is decoration,
+   and a surface that cannot show the colour that makes it read as a marker is better off without the
+   glyph. The LAYOUT does not change with colour — an uncoloured banner is the same lines in the same
+   order, because it is also what a bug report pastes.
 
 ## CL3. `src/app.ts` — process-lifecycle hooks
 

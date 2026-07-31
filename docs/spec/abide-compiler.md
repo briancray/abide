@@ -403,8 +403,10 @@ Mechanism:
    sugar over (`cell` → `{ get: () => cell, set: v => cell = v }`). For transformed/
    validated/nested targets. **Works on component props too** (bindable props — child writes
    back into a parent cell).
-4. **SSR:** binds render the current value into the HTML attribute; the writeback listener
-   wires on hydrate (binds are inert server-side).
+4. **SSR:** a `value` bind renders the current value into the HTML attribute; a `boolean` one renders
+   presence-iff-truthy and never stringifies (that stringification WAS the `selected` bug above); an
+   `element` bind renders nothing, having no node to reference. The writeback listener wires on hydrate
+   (binds are otherwise inert server-side).
 5. **Binds are transport-only (value ↔ cell).** Validation/field-errors
    (`clients.browser.validate` / `ValidationErrorData.fields`, §10/§12) read the cell and
    surface errors separately — not carried inside `bind:`.

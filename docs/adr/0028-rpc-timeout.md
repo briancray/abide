@@ -187,9 +187,10 @@ same ttl clock as a value slot, and a read's default ttl is ∞ — so `memo.ts:
 every subsequent call with the cached `TimeoutError` and never retry. The failure most likely to
 succeed on retry would be the one cached hardest.
 
-The fix is **expire, not dispose**. `c.error` reads `slot.state()` with no expiry check
-(`memo.ts:1188-1200`) while `readClassic` gates the cached rejection behind `if (!isExpired(slot))`
-(`memo.ts:1127`). Stamping a `TimeoutError` slot as immediately expired therefore keeps
+The fix is **expire, not dispose**. `c.error` reads `slot.state()` with no expiry check, while the read
+path gates the cached rejection behind one (`isRetentionStale`, `shared/internal/slotRetention.ts` — this
+ADR was written when that predicate was `isExpired`, local to `memo.ts`, and had a second copy for the
+auto-tracked path). Stamping a `TimeoutError` slot as immediately expired therefore keeps
 `fn.error()` reporting it *and* makes the next read run cold. `disposeSlot` was the first instinct and
 is wrong: deleting the slot blanks `fn.error()` at once, so an error banner would flash and vanish.
 
@@ -314,6 +315,15 @@ runtime-specific API without probing for it.
 
 Fixed by probing the capability ONCE at arm time and keeping each branch monomorphic (`refresh()` on
 the server, `clearTimeout` + re-arm in the browser), rather than re-arming blindly on both.
+
+**Since moved to `shared/internal/streamDeadline.ts`**, with the timer pair as a PARAMETER (defaulting
+to a module constant, so a stream still pays one property load rather than a closure). The fix above is
+unchanged — that module does exactly what this paragraph describes — but its LOCATION was the reason the
+branch stayed untestable: `test/happydom.ts` deletes global `window`, so `bun test` always presents a
+Node timer and the browser branch could not be selected by any unit test however it was written. With
+the substrate injectable, eleven tests choose it and assert the WORK the design is about — a hot stream
+on the node substrate allocates exactly ONE timer for 100 chunks, while the browser substrate clears and
+re-sets per chunk. Re-arming blindly reds three of them, including the throw itself.
 
 ### 3. The call tuple could not be built by spreading
 
