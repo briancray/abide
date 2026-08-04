@@ -61,6 +61,41 @@ export function isRetentionStale(
 
 // Stamp "settled now". One statement of what the stamp MEANS, so a settle point cannot record a
 // different clock than the predicate reads — which is the whole reason the clock is injectable.
+//
+// THAT ARGUMENT ONLY HOLDS IF EVERY SETTLE POINT USES IT. For a long time one did: `memo.ts` called this
+// once and wrote `loadedAt = Date.now()` by hand at eight other settle points, so the module's stated
+// contract ("there is one clock") was true of the predicate and false of the stamp, and the
+// injectability nothing could reach was bought and never spent. The two verbs below close the rest of
+// it — `expired` had no verb at all and was written raw at three of those sites.
 export function stampRetained(fields: RetentionFields, clock: () => number = Date.now): void {
     fields.loadedAt = clock()
+}
+
+// Stamp "settled now, and this outcome EXPIRES the slot" — a tripped run deadline (ADR 0028 D7), which
+// must re-run cold on the next read rather than serve a truncated transcript for the rest of its `ttl`.
+// One verb rather than two writes, because the two fields always move together at a settle: stamping the
+// clock and forgetting the flag retains a dead value, and the reverse expires a live one.
+export function stampExpired(
+    fields: RetentionFields,
+    expired: boolean,
+    clock: () => number = Date.now,
+): void {
+    fields.loadedAt = clock()
+    fields.expired = expired
+}
+
+// A NEW RUN supersedes a deadline expiry (ADR 0028 D7): the flag exists to force exactly this run, so
+// clearing it as the run starts is what keeps ONE cold retry from becoming a permanent one. Distinct
+// from `clearRetention` because it deliberately leaves `loadedAt` alone — the previous value is still
+// what is being served while the re-run is in flight, and zeroing its clock here would report a slot
+// that has never settled.
+export function clearExpiry(fields: RetentionFields): void {
+    fields.expired = false
+}
+
+// Forget everything retained — the slot holds nothing again. `loadedAt = 0` is not "the epoch", it is
+// the idle sentinel, which is why this is a verb and not an assignment.
+export function clearRetention(fields: RetentionFields): void {
+    fields.loadedAt = 0
+    fields.expired = false
 }

@@ -2,9 +2,13 @@
 //
 // A standalone binary is the same server with a different way of finding itself: `compiledAppConfig`
 // assembles the `LoadedApp` from the modules the generated entry statically imported, and from there
-// `serve()` resolves the port, runs the `onStart`/`onStop` wrappers, warms the pages and returns the
+// `hostApp()` resolves the port, runs the `onStart`/`onStop` wrappers, warms the pages and returns the
 // same `ServeResult`. A compiled binary enters through `runCompiledApp` and lands here for its `serve`
 // subcommand; `commandTarget` is the other door, for the ephemeral server behind a self-hosted call.
+//
+// It enters `hostApp` DIRECTLY, not `cli/serve.ts` — that is the compiled-app dependency FLOOR
+// (`compiledAppFloor.test.ts`): the dev shell's watch, health companion and live-reload snippet cannot
+// work on a deploy machine, where the filesystem is a read-only `/$bunfs/root` with no `src/`.
 
 import { installShutdownHandlers } from '../../cli/installShutdownHandlers.ts'
 import { parsePort } from '../../cli/parsePort.ts'

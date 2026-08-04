@@ -79,7 +79,14 @@ import {
     sharedStore,
 } from './internal/sharedCache.ts'
 import { createSlotIndex } from './internal/slotIndex.ts'
-import { isRetentionStale, type RetainedKind, stampRetained } from './internal/slotRetention.ts'
+import {
+    clearExpiry,
+    clearRetention,
+    isRetentionStale,
+    type RetainedKind,
+    stampExpired,
+    stampRetained,
+} from './internal/slotRetention.ts'
 import { idleState, type SlotState, sameSlotState } from './internal/slotState.ts'
 import { armStreamDeadline } from './internal/streamDeadline.ts'
 import { tagStreamTranscript } from './internal/streamTranscript.ts'
@@ -711,9 +718,7 @@ export function memo<Args, T>(
         preProduced?: { produced: unknown },
     ): Promise<T> {
         if (slot.inflight !== null) return slot.inflight
-        // A new run supersedes a deadline expiry (ADR 0028 D7) — the flag exists to force exactly this
-        // run, so clearing it here is what keeps ONE cold retry from becoming a permanent one.
-        slot.expired = false
+        clearExpiry(slot)
 
         const current = slot.state.peek()
         if (keepStale && current.status === 'value') {
@@ -785,14 +790,13 @@ export function memo<Args, T>(
                         return startStream(slot, produced) as unknown as T
                     }
                     const value = tagged?.kind === 'value' ? (tagged.value as T) : produced
-                    slot.loadedAt = Date.now()
+                    stampRetained(slot)
                     setState(slot, { status: 'value', value, error: undefined })
                     recordAndEvict(slot, value)
                     return value
                 } catch (caught) {
                     if (slot.generation === generation) {
-                        slot.loadedAt = Date.now()
-                        slot.expired = isTimeoutError(caught)
+                        stampExpired(slot, isTimeoutError(caught))
                         setState(slot, {
                             status: 'error',
                             value: undefined,
@@ -935,7 +939,7 @@ export function memo<Args, T>(
         }
         // Starts the `ttl` clock (`autoExpire`). Stamped here rather than inside the backing so the auto
         // and pulled paths keep ONE retention stamp per slot.
-        slot.loadedAt = Date.now()
+        stampRetained(slot)
         slot.auto = backing
     }
 
@@ -1087,7 +1091,7 @@ export function memo<Args, T>(
         // A fully-known transcript settles NOW — there is no tail to await.
         if (tail === undefined) {
             stream.close()
-            slot.loadedAt = Date.now()
+            stampRetained(slot)
             sharedCacheSettleStream(store, slot.key, stream.bytes)
             bumpStreamTick(slot)
             return stream
@@ -1123,8 +1127,7 @@ export function memo<Args, T>(
                 // TTL-from-close (§2): the retention clock starts when the transcript settles, not at
                 // fn-resolve. A transcript the DEADLINE cut is settled-but-expired instead (ADR 0028 D7),
                 // so the next read re-runs rather than replaying a truncated one for the rest of its ttl.
-                slot.loadedAt = Date.now()
-                slot.expired = isTimeoutError(stream.error)
+                stampExpired(slot, isTimeoutError(stream.error))
                 // The transcript is now a CLOSED value: unpin (LRU-evictable) and record its final size.
                 sharedCacheSettleStream(store, slot.key, stream.bytes)
             }
@@ -1240,7 +1243,7 @@ export function memo<Args, T>(
             produced = runFillBody(() => fn(slot.args), true)
         } catch (caught) {
             keyedSync = true
-            slot.loadedAt = Date.now()
+            stampRetained(slot)
             setState(slot, { status: 'error', value: undefined, error: caught })
             throw caught
         }
@@ -1254,7 +1257,7 @@ export function memo<Args, T>(
         }
         keyedSync = true
         const value = (tagged?.kind === 'value' ? tagged.value : produced) as T
-        slot.loadedAt = Date.now()
+        stampRetained(slot)
         setState(slot, { status: 'value', value, error: undefined })
         return value
     }
@@ -1589,7 +1592,7 @@ export function memo<Args, T>(
         }
         slot.generation++
         slot.inflight = null
-        slot.loadedAt = 0
+        clearRetention(slot)
         setState(slot, idleState<T>())
     }
 
@@ -1691,7 +1694,7 @@ export function memo<Args, T>(
             c.publish(args, value)
             return
         }
-        slot.loadedAt = Date.now()
+        stampRetained(slot)
         setState(slot, { status: 'value', value, error: undefined })
     }
 

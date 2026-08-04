@@ -81,12 +81,6 @@ export interface ServeOptions {
     // A pre-built client loaded from `dist` (production `abide start`). When set, the router serves it
     // as-is and never runs Bun.build at request time. Absent → the client is built in-memory on first use.
     clientBuild?: ClientBuild | undefined
-    // An app config assembled WITHOUT scanning the filesystem — what a `abide compile` binary boots
-    // from, where the project's modules are static imports baked into the executable and `dir` names a
-    // source tree that isn't on the machine. Everything after loading (port resolution, the onStart /
-    // onStop wrappers, warm pages, stop) is identical, which is the point: one boot path, two ways of
-    // getting the config.
-    app?: LoadedApp | undefined
 }
 
 // Resolve the listen port from (in order) an explicit `--port`, the `PORT` env var, then DEFAULT_PORT.
@@ -170,8 +164,9 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
     // `abide dev` derives schemas from SOURCE; `abide start` reads the bake `abide build` left. The lane
     // says which, rather than `loadApp` guessing from whether `dist/schemas.json` is on disk — see
     // `LoadAppOptions.schemas` for what that guess cost.
-    const config: LoadedApp =
-        opts.app ?? (await loadApp(dir, { schemas: opts.dev === true ? 'source' : 'baked' }))
+    const config: LoadedApp = await loadApp(dir, {
+        schemas: opts.dev === true ? 'source' : 'baked',
+    })
 
     // The dev-reload socket must exist in `config.sockets` BEFORE createApp so the router captures it
     // on the mux. Its object identity stays fixed across rebuilds so `publish` keeps reaching clients.

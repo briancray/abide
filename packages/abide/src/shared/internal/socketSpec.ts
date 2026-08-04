@@ -19,6 +19,26 @@ export interface SocketSpec {
     maxAge: number | null
 }
 
+// THE PROJECTED KEYS, declared — and the totality check the RPC half already has.
+//
+// This projection is hand-written in `clientBundle.socketSpecs`, and it is safe TODAY only because all
+// three fields are required: a missing required field is a compile error at the object literal. That is
+// an accident of the current shape, not a guarantee. `rpcSpec.ts` names precisely what happens when it
+// stops being true — "an optional field left out of the projection is not a compile error ANYWHERE.
+// That is exactly how `throttle`/`debounce` came to be set on the server, typed on the client, and
+// absent in between." The rpc side learned that; the socket side was one optional field away from
+// repeating it.
+export const SOCKET_SPEC_KEYS = [
+    'clientPublish',
+    'tail',
+    'maxAge',
+] as const satisfies readonly (keyof SocketSpec)[]
+
+// TOTALITY — the half `satisfies` cannot do. `satisfies` rejects a key that is not on `SocketSpec`;
+// this alias catches the direction that bites, a key on `SocketSpec` that nothing projects. Asserted in
+// `socketSpec.test.ts`, where the failure names the unprojected field.
+export type UnprojectedSocketSpecKey = Exclude<keyof SocketSpec, (typeof SOCKET_SPEC_KEYS)[number]>
+
 export function encodeMaxAge(maxAge: number): number | null {
     return Number.isFinite(maxAge) ? maxAge : null
 }
