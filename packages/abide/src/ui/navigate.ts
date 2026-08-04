@@ -45,7 +45,7 @@ import type { RouteInfo } from '../shared/internal/routeInfo.ts'
 import { asSoftNavFrame, type SoftNavPatchFrame } from '../shared/internal/softNavFrame.ts'
 import { traceAmbient } from '../shared/internal/traceAmbient.ts'
 import { bootstrapPage, buildPageScope, replaySeedIntoProxies } from './internal/bootstrap.ts'
-import type { ChainHandle, Level, LevelRecord } from './internal/compose.ts'
+import type { ChainHandle, Level, LevelRecord, MountHandle } from './internal/compose.ts'
 import { HYDRATED_ATTRIBUTE } from './internal/HYDRATED_ATTRIBUTE.ts'
 import { HYDRATION_ELEMENT_ID } from './internal/HYDRATION_ELEMENT_ID.ts'
 import { classifyNavResponse } from './internal/navResponse.ts'
@@ -70,7 +70,7 @@ export interface NavigateOptions {
 
 // The currently mounted page's chain handle (a callable disposer that also carries per-level `records`,
 // for the same-chain graft). mountPathname disposes it before mounting the next page.
-let activeChain: ChainHandle | null = null
+let activeChain: MountHandle | null = null
 // The route pattern + applicable layout prefixes of the currently mounted page (set by mountPathname). A
 // nav to the SAME pattern is a param/query-only nav (whole chain stays alive, C6.3); a nav sharing a
 // leading layout prefix keeps those layouts alive and grafts only the diverging suffix (C6.2).
@@ -107,6 +107,20 @@ let navGen = 0
 // existed; the one caller facing the coldest chunk was the one that could not pass a generation.
 export function currentNavGen(): number {
     return navGen
+}
+
+// HAS A NEWER NAV TAKEN OVER? The newest-wins rule, as one named operation.
+//
+// It was written out by hand after every await — twelve bare `gen !== navGen` comparisons, each with its
+// own comment about what a stale continuation would do (claim over the newer nav's DOM, fire a
+// superseded redirect, swap a container it no longer owns). A missed one is SILENT: the older attempt
+// simply proceeds and the page ends up describing a route the URL disagrees with, which
+// `currentNavGen`'s note above records as the one race that does not self-heal.
+//
+// A function rather than twelve comparisons because the rule is one rule; the reason each site checks it
+// stays at that site, since those genuinely differ.
+function superseded(gen: number): boolean {
+    return gen !== navGen
 }
 
 // Scroll to the top the moment the destination's SHELL lands — not after the frame stream drains. A
@@ -194,7 +208,7 @@ export async function mountPathname(
     if (entry === undefined) return false
     // A cold chunk is a network fetch, which is ample time for a newer nav to start. It owns the DOM now,
     // so hydrating over it here would claim nodes it is in the middle of replacing.
-    if (gen !== undefined && gen !== navGen) return false
+    if (gen !== undefined && superseded(gen)) return false
 
     const info = routeInfoFor(match.pattern, targetUrl, match.params)
 
@@ -213,13 +227,7 @@ export async function mountPathname(
 
     // One hydrate path for first load and soft-nav (decision 6): claim the SSR (initial) or the
     // innerHTML-swapped (soft-nav) server DOM in place rather than fresh-mounting over it.
-    activeChain = bootstrapPage(
-        entry.hydrate,
-        pageSpecs(),
-        pageBase(),
-        seed,
-        pageSocketSpecs(),
-    ) as unknown as ChainHandle
+    activeChain = bootstrapPage(entry.hydrate, pageSpecs(), pageBase(), seed, pageSocketSpecs())
     currentPattern = match.pattern
     currentPrefixes = entry.prefixes ?? null
     currentPath = targetUrl.pathname
@@ -285,7 +293,7 @@ async function partialCrossNav(
         location.href = path
         return
     }
-    if (gen !== navGen) return // superseded before we touch the DOM
+    if (superseded(gen)) return // superseded before we touch the DOM
     const classified = await classifyNavResponse(response)
     if (classified.kind === 'redirect') {
         await navigate(classified.to, { replace: true })
@@ -308,7 +316,7 @@ async function partialCrossNav(
             // open for the whole render, and a nav that started meanwhile owns the DOM. Applying a graft
             // or a patch on top of it would corrupt the newer page. Bailing after the graft leaves
             // `mountClaimed` false, which is exactly the state that routes the newer nav to the full path.
-            if (gen !== navGen) return
+            if (superseded(gen)) return
             if (frame.kind === 'shell') {
                 // No `sharedLevels !== keep` bail any more: `keep` is what we ASKED for, so the shell is
                 // the suffix we are set up to graft by construction. That check existed because the two
@@ -345,7 +353,7 @@ async function partialCrossNav(
         location.href = path // no shell frame — not the body we expected
         return
     }
-    if (gen !== navGen) return // superseded while the render streamed — do not claim over the newer nav
+    if (superseded(gen)) return // superseded while the render streamed — do not claim over the newer nav
 
     // Claim the assembled suffix DOM with its own (partial) seed: `state` ordinals from 0, reads seeded.
     const scope = buildPageScope(seed ?? {}, pageSpecs(), pageBase(), pageSocketSpecs())
@@ -412,7 +420,7 @@ async function softLoad(
             const confirm = await fetch(path, {
                 headers: navRequestHeaders(from, sameEntry ? 0 : keptLevels),
             })
-            if (gen !== navGen) return // superseded by a newer nav
+            if (superseded(gen)) return // superseded by a newer nav
             // CO2.3: a param/query nav keeps the live mount, so it never hydrates — the confirm
             // response's `traceresponse` header is the earliest carrier for the trace of the request
             // this navigation actually made (the seed below carries the same id, but only once the
@@ -446,7 +454,7 @@ async function softLoad(
                 const frame = asSoftNavFrame(raw)
                 if (frame?.kind === 'seed') seed = frame.seed
             }
-            if (gen !== navGen || seed === undefined) return // superseded while the render streamed
+            if (superseded(gen) || seed === undefined) return // superseded while the render streamed
             replaySeedIntoProxies(seed, pageBase() ?? '')
             // AU3: a nav is a fresh request whose middleware may have resolved someone else. A full nav
             // re-adopts through `buildPageScope`; this path never gets there, so it was the one nav shape
@@ -464,12 +472,12 @@ async function softLoad(
     // destination's chunk (for its `levels`/`prefixes`), which the full path below would load anyway.
     if (destMatch !== null && activeChain !== null && mountClaimed && currentPrefixes !== null) {
         const entry = await loadPageEntry(destMatch.pattern)
-        if (gen !== navGen) return
+        if (superseded(gen)) return
         const levels = entry?.levels
         const prefixes = entry?.prefixes
         if (levels !== undefined && prefixes !== undefined) {
             const keep = commonPrefixLength(currentPrefixes, prefixes)
-            const boundary = activeChain.records[keep]
+            const boundary = activeChain.records?.[keep]
             if (
                 keep >= 1 &&
                 boundary?.graftSuffix !== undefined &&
@@ -511,7 +519,7 @@ async function softLoad(
         location.href = path
         return
     }
-    if (gen !== navGen) return // superseded before we touch the DOM
+    if (superseded(gen)) return // superseded before we touch the DOM
 
     const container = document.getElementById(CONTAINER_ID)
     const classified = await classifyNavResponse(response)
@@ -534,7 +542,7 @@ async function softLoad(
     // live mount. This nav would then dispose that mount and null `activeChain`, bail at the next guard
     // without swapping anything, and leave the page on screen with every effect dead: no reactivity, no
     // `{#await}` fills, no `bind:` write-backs, until something forces a full nav.
-    if (gen !== navGen) return
+    if (superseded(gen)) return
 
     // Dispose the previous page mount BEFORE swapping so its still-live effects don't react to the shell
     // swap / streamed patch fills (the dispose-first invariant — see mountPathname's note). `mountPathname`
@@ -547,7 +555,7 @@ async function softLoad(
         for await (const raw of decodeJsonlStream(classified.body)) {
             const frame = asSoftNavFrame(raw)
             if (frame === undefined) continue
-            if (gen !== navGen) return // superseded mid-stream — the newer nav owns the container
+            if (superseded(gen)) return // superseded mid-stream — the newer nav owns the container
             if (frame.kind === 'shell') {
                 // The request asked for `keep: 0`, so a TRIMMED shell means the server did not honour it
                 // — a deployment older than this bundle, during a rolling deploy. Swapping a diverging
@@ -578,12 +586,12 @@ async function softLoad(
     // Hydrate the fully-assembled DOM: replay this stream's recorded reads then claim in place (PR3
     // unwraps any streamed `<abide-slot>`). Awaits the destination chunk (primed above, usually already
     // resolved); a chunk-load failure returns false → fall back to a full load rather than dead-end.
-    if (gen !== navGen) return
+    if (superseded(gen)) return
     if (!(await mountPathname(navUrl, seed, gen))) {
         // `false` also covers "a newer nav started while the chunk downloaded", which must NOT hard-load
         // — that would drag the tab to THIS nav's destination on top of the one the reader actually asked
         // for. Only a genuine failure (no match, dead chunk) falls back.
-        if (gen !== navGen) return
+        if (superseded(gen)) return
         location.href = path
         return
     }

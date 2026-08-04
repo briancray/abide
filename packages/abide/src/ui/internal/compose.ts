@@ -61,6 +61,20 @@ export interface ChainHandle {
     records: LevelRecord[]
 }
 
+// WHAT A PAGE MOUNT HANDS BACK, as one type rather than as a cast at the far end.
+//
+// A `ChainHandle` is what `compose` builds; a HAND-BUILT `PageEntry` (a test, a fixture) may return a
+// bare disposer, which is why `PageEntry.levels`/`prefixes` are already optional. So the honest return
+// type is "a disposer that MAY carry the records" — and saying that here is what removes
+// `navigate.ts`'s `as unknown as ChainHandle`, a double cast that was the only thing connecting
+// `compose`'s output to its one consumer across two modules that had both erased it to `() => void`.
+//
+// The erasure was not harmless: `bootstrap.ts` declares in prose that the hydrated handle is "stamped
+// AROUND … never by wrapping it", because a fresh closure returns a disposer that has lost `records` and
+// the same-chain graft then silently stops swapping content on a soft-nav. A `() => void` return type
+// permits exactly the wrapping that comment forbids; this one does not.
+export type MountHandle = (() => void) & { records?: LevelRecord[] }
+
 // compose's result: mount/hydrate return a ChainHandle (assignable to the bare `() => void` a Level
 // expects, since ChainHandle is callable — so this stays usable everywhere a Level is).
 export interface ComposedChain {

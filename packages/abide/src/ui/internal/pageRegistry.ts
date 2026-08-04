@@ -9,14 +9,17 @@
 // chunk early doesn't double-fetch it.
 
 import type { RpcSpecInput } from '../../shared/internal/rpcSpec.ts'
-import type { Level } from './compose.ts'
+import type { Level, MountHandle } from './compose.ts'
 import type { SocketSpec } from './socketProxy.ts'
 
 // The emitted client mount for a page: clones its template, wires reactive bindings against the
 // injected `$scope` (RPC proxies + framework bindings, built by bootstrapPage), returns a disposer.
 // `hydrate` has the same shape but CLAIMS the server DOM instead of cloning (Stage 2, PR7); it
 // whole-page-falls-back to a fresh `mount` internally on an unrecoverable mismatch.
-export type PageMount = (target: Element, scope: Record<string, unknown>) => () => void
+//
+// The disposer it returns MAY carry the per-level graft records (`MountHandle`) — `compose` always does,
+// a hand-built entry need not, which is the same optionality `levels`/`prefixes` below already declare.
+export type PageMount = (target: Element, scope: Record<string, unknown>) => MountHandle
 
 export interface PageEntry {
     mount: PageMount

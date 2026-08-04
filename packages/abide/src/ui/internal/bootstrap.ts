@@ -42,6 +42,7 @@ import {
     navigate,
 } from '../navigate.ts'
 import { makeClientImports } from './clientProxy.ts'
+import type { MountHandle } from './compose.ts'
 import { HYDRATED_ATTRIBUTE } from './HYDRATED_ATTRIBUTE.ts'
 import { HYDRATION_ELEMENT_ID } from './HYDRATION_ELEMENT_ID.ts'
 import {
@@ -252,7 +253,7 @@ export function bootstrapPage(
     base?: string,
     seedOverride?: HydrationSeed,
     socketSpecs?: SocketSpecs,
-): () => void {
+): MountHandle {
     if (typeof document === 'undefined') return () => {}
 
     const container = document.getElementById(CONTAINER_ID)
