@@ -35,6 +35,7 @@ import {
 } from './requestScope.ts'
 import type { AppConfig } from './router.ts'
 import { rpcChainFor } from './rpcChain.ts'
+import { CONNECT_AUTHED, socketChainFor } from './socketChain.ts'
 import { rpcsFor } from './surfaceProjection.ts'
 
 // Identity + request resolved ONCE at the WS upgrade (cookie/bearer via the same ladder as HTTP)
@@ -159,25 +160,18 @@ export async function authorizeSocketJoin(
     connData: SocketConnectionData,
     config: AppConfig,
 ): Promise<boolean> {
-    const socketMiddleware = sock.__socket.options.middleware ?? []
-    // No per-room gate configured → connect-authed. The global chain already ran at the WS upgrade
-    // (`router.ts`, the `SOCKET_MUX_ROUTE` branch), so this caller has already passed the app's own
-    // authorization; without socket `middleware` there is no per-room refinement left to enforce.
-    //
-    // That premise was written here before it was TRUE. The upgrade used to return before the chain was
-    // composed, so no middleware ran for a WebSocket at all — and this line then admitted every
-    // connect-authed socket to a caller the app's `requireLogin` had never seen. Whatever this returns
-    // rests entirely on the connect gate existing; if that branch ever stops running the chain, this
-    // `true` becomes an open door again.
-    if (socketMiddleware.length === 0) return true
-    const globalMiddleware = config.middleware ?? []
+    // The rung this door owes, and whether it owes one at all — both `socketChain.ts`'s answer rather
+    // than a spread and a length check written out here. `CONNECT_AUTHED` means the connect gate already
+    // IS the authorization; the reasoning (and the hole it once was) lives with the other two doors.
+    const chain = socketChainFor(sock, config, 'ws-join')
+    if (chain === CONNECT_AUTHED) return true
     return reauthorize(
         'socket-subscribe',
         socketName,
         `${SOCKET_FACE_PREFIX}${socketName}`,
         roomArgs,
         connData,
-        [...globalMiddleware, ...socketMiddleware],
+        chain,
     )
 }
 

@@ -65,6 +65,7 @@ import {
 import { rpcChainFor } from './rpcChain.ts'
 import { allowedMethodsFor } from './rpcRoute.ts'
 import { servePublicFile } from './servePublicFile.ts'
+import { socketChainFor } from './socketChain.ts'
 import { socketOriginAllowed } from './socketMux.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -455,10 +456,7 @@ export function deriveRouterPolicy(config: AppConfig): RouterPolicy {
     // `authorizeSocketJoin`, so without this the HTTP face was the one way in that skipped it.
     const socketPolicy = new Map<string, Middleware[]>()
     for (const [socketName, sock] of Object.entries(config.sockets ?? {})) {
-        socketPolicy.set(socketName, [
-            ...(config.middleware ?? []),
-            ...(sock.__socket.options.middleware ?? []),
-        ])
+        socketPolicy.set(socketName, socketChainFor(sock, config, 'http-face'))
     }
     return { routePolicy, socketPolicy }
 }

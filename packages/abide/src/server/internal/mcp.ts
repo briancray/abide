@@ -19,6 +19,7 @@ import type { RpcEntry, SocketEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
 import { throughChain } from './rpcChain.ts'
+import { socketChainFor } from './socketChain.ts'
 import {
     ANY_OBJECT_SCHEMA,
     ANY_VALUE_SCHEMA,
@@ -163,7 +164,13 @@ async function callTool(
 
     const sockets = config.sockets ?? {}
     // The SAME list `mcpTools` advertises, for the same reason the rpc dispatch above takes it.
-    const socketOutcome = await callSocketTool(name, args, socketsFor(registry, 'mcp'), sockets)
+    const socketOutcome = await callSocketTool(
+        name,
+        args,
+        socketsFor(registry, 'mcp'),
+        sockets,
+        config,
+    )
     if (socketOutcome !== undefined) return socketOutcome
 
     return { error: { code: INVALID_PARAMS, message: `Unknown tool: ${name}` } }
@@ -178,6 +185,9 @@ async function callSocketTool(
     args: unknown,
     entries: SocketEntry[],
     sockets: Record<string, Socket<unknown>>,
+    // Carried so the rung comes from `socketChainFor` — this door's answer is the OWN rung, and which
+    // rung a door owes is not a fact this function should be restating.
+    config: AppConfig,
 ): Promise<Outcome | undefined> {
     for (const entry of entries) {
         const sock = sockets[entry.name]
@@ -191,10 +201,11 @@ async function callSocketTool(
         // and accepted `<name>_publish` into every subscriber. Default-on, since an absent `clients.mcp`
         // is reachable.
         //
-        // The OWN rung only: MCP arrives over HTTP, so the router already ran the global chain for this
-        // request — re-running it here would double-count a page's reads in a rate limiter for the same
-        // reason `rpcChainFor` gives. Same asymmetry, same rationale, as `bindRpcChains`.
-        const own = sock.__socket.options.middleware ?? []
+        // The OWN rung only, which is the `'mcp'` door's answer in `socketChain.ts` — where it sits next
+        // to the other two doors' answers rather than being justified here in isolation. MCP arrives over
+        // HTTP, so the router already ran the global chain for this request; re-running it would
+        // double-count a page's reads in a rate limiter, for the reason `rpcChainFor` gives.
+        const own = socketChainFor(sock, config, 'mcp')
         const toolNames = socketToolNames(entry.name)
         if (name === toolNames.tail) {
             // MCP addresses a socket as a single topic — the void room.
