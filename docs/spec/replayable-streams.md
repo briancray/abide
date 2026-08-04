@@ -260,7 +260,9 @@ and `GET(() => jsonl(gen()))` / `GET(() => sse(gen()))` infer `StreamRead<Args, 
 forms, at author time and at runtime (verified by type-probe + HTTP tests). Two requirements this exposed:
 (a) `jsonl` **and `sse`** are now **lazy** (pull-based, `highWaterMark: 0`) so a Response the memo sees
 through and discards unread never drains its source (eager consumption would double-consume the one
-generator); (b) `fn.raw` still returns the real encoded `Response` (tag/init intact). **`sse` is now
+generator); (b) `fn.raw` returns an encoded `Response` — it is the bare call, so it drains the SLOT's
+replay-then-live cursor and re-encodes it (the tagged encoding first, then its `init`'s `Accept`), rather
+than handing back the handler's single-consumption body. **`sse` is now
 see-through too (built).** The lazy `sse` tags its source like `jsonl` and **defers its `:ok` prelude +
 idle heartbeat to the FIRST real read**, so a discarded see-through body never opens (no timer leak) while
 the long-lived socket HTTP faces — `router.ts` `sse(sock)`, consumed WS-less by CLI/MCP — keep their

@@ -276,8 +276,16 @@ export function clientProxy<Args = unknown, T = unknown>(
     streamRpc.streaming = (args: Args): boolean => backing.streaming(args)
     rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
         backing.watch(args, handler)
-    // Raw fetch, full bypass of the memo — the untouched `Response` (no parse, no `!ok` throw). A read
-    // GETs `?__abide_args=`; a mutation POSTs the body + CSRF header. `init` overrides wholesale.
+    // The same request the bare call makes, handed back UNDECODED — the untouched `Response` (no parse,
+    // no `!ok` throw). A read GETs `?__abide_args=`; a mutation POSTs the body + CSRF header. `init`
+    // overrides wholesale.
+    //
+    // It does NOT route through the memo, where the SERVER's `.raw` does, and the asymmetry is the point
+    // rather than an oversight: the server's `.raw` has to ENCODE a Response (the slot holds a decoded
+    // value), while here one already exists on the wire. Draining the slot instead would hand back a
+    // synthesized Response — the real status, headers and redirect gone — and drag the jsonl/sse
+    // encoders into the browser bundle to rebuild bytes the network just delivered. So on both sides
+    // `.raw` is "this read, undecoded"; only in the browser does that also mean uncoalesced.
     rpc.raw = (args: Args | FormData, init?: RequestInit): Promise<Response> => {
         // `.raw` bypasses the MEMO, not the deadline (ADR 0028 D6). `init` still overrides wholesale, but
         // its `signal` is COMPOSED with the run deadline rather than replacing it — a caller reaching for

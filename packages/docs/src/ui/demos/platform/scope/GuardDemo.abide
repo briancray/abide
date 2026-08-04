@@ -14,8 +14,8 @@
   // Blocked call: layer 1 calls error(403) WITHOUT next() — it THROWS, the chain renders the 403, and
   // the handler never runs.
   // The bare call `fn(args)` rejects with the HttpError carrying the short-circuited status, which we read off the
-  // catch. NOTE: `fn.raw(args, init?)` (the untouched Response) is not implemented on the RPC callable
-  // today (framework gap); catching `.load` is the honest way to observe the status from the callable.
+  // catch. `fn.raw(args, init?)` is the other way to see it — the same read returning the Response, so
+  // the 403 arrives as a status rather than a throw — and this demo catches, to show the throw.
   async function runBlocked() {
     try {
       await platformGuard({ allow: "no" })

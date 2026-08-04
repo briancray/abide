@@ -6,9 +6,11 @@
 // and `jsonl(gen())`/`sse(gen())` should be REPLAYABLE exactly like returning `gen()`.
 //
 // So each helper tags its Response with the pre-encoding source (and, for streams, the wire encoding it
-// chose). The memo reads the tag and taps the source; `fn.raw` and non-memo paths still get the real
-// Response. `STREAM_ENCODING` rides on the per-consumer cursor so the router re-serves the handler's
-// original encoding (jsonl vs sse) after replay.
+// chose). The memo reads the tag and taps the source; only a path that BYPASSES the memo (a `memo: false`
+// mutation, a FormData body) still sees the helper's real Response. `fn.raw` is not such a path — it is
+// the memo-backed call with a `Response` return, so it re-encodes the payload the way the router does.
+// `STREAM_ENCODING` rides on the per-consumer cursor so both of them re-serve the handler's original
+// encoding (jsonl vs sse) after replay, which is the tag that survives.
 
 // The pre-encoding payload a transport helper carries on its Response.
 export type ResponseSource =

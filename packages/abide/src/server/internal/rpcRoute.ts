@@ -9,8 +9,9 @@
 //                              enforced before the handler runs; a failure is a 422 the caller narrows
 //                              to `ValidationErrorData`
 //   invokeRpc       CONTRACT  — the memo-backed call: coalesce, retain, run under the deadline
-//   encodeRpcResult TRANSPORT — Response passthrough, stream encoding (jsonl/sse), or output validation +
-//                              output shaping + `json()`
+//   encodeRpcResult CONTRACT  — `schemas.output` validation + output SHAPING, then `encodeRpcValue` —
+//                              the transport-out ladder itself (Response passthrough / jsonl-sse / json),
+//                              which `fn.raw` leaves through too so the two doors cannot encode differently
 //
 // WHY IT MATTERS THAT THE MIDDLE TWO ARE NAMED: an rpc's declaration promises one thing a bare call to the
 // callable does NOT deliver, because `makeRpc` builds only the handler + memo + deadline. Its
@@ -33,9 +34,9 @@ import { STREAM_RESUME, STREAM_RESUME_HEADER } from '../../shared/internal/STREA
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { validateStandard } from '../../shared/StandardSchema.ts'
-import { json } from '../json.ts'
 import type { AppConfig, Route } from './appConfig.ts'
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
+import { encodeRpcValue, encodesAsStream } from './encodeRpcValue.ts'
 import { errorResponse } from './errorResponse.ts'
 import { isProd } from './isProd.ts'
 import type { Rpc, RpcMeta } from './makeRpc.ts'
@@ -59,16 +60,6 @@ const ANY_RPC_METHOD = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 export function allowedMethodsFor(route: Route | undefined): readonly string[] {
     const meta = route?.__rpc
     return meta === undefined ? ANY_RPC_METHOD : [meta.method]
-}
-
-// A streaming read result is an AsyncIterable of decoded chunks (a ReplayableStream `consume()` cursor);
-// the router transport-encodes it (jsonl/sse). A plain value/object is not async-iterable.
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-    return (
-        value !== null &&
-        typeof value === 'object' &&
-        typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
-    )
 }
 
 // What the wire carried, and in which of the two forms. `multipart` is not merely a content type here: it
@@ -199,37 +190,35 @@ async function encodeRpcResult(
     result: unknown,
     resumeFresh: boolean,
 ): Promise<Response> {
-    // Streams and other raw Responses pass through untouched — nothing to validate or shape.
-    if (result instanceof Response) return result
-
-    // A streaming read whose slot holds a ReplayableStream resolves to an AsyncIterable of DECODED chunks
-    // (replayable-streams.md §4): the ROUTER applies the transport encoding downstream, once per HTTP
-    // consumer. The handler's chosen encoding (jsonl(...)/sse(...)) wins; else `Accept: text/event-stream`
-    // selects SSE; else application/jsonl.
-    if (isAsyncIterable(result)) {
-        const response = streamResponseFor(result, scope.request)
-        // A `?__abide_from=` resume whose transcript was gone → a fresh run from 0; the client must REPLACE.
-        if (resumeFresh) response.headers.set(STREAM_RESUME_HEADER, STREAM_RESUME.fresh)
-        return response
-    }
-
-    // M8a output validation — DEV ONLY contract-drift catch. A mismatch logs loudly but never becomes a
-    // client error.
-    const outputSchema = meta.options.schemas?.output
-    if (outputSchema !== undefined && !isProd()) {
-        const checked = await validateStandard(asStandardSchema(outputSchema), result)
-        if (!checked.ok) {
-            log.channel('abide:rpc').warn(
-                `output schema mismatch for rpc "${scope.route.name}":`,
-                checked.issues,
-            )
+    // THE CONTRACT HALF, which is all this function still is: everything below hands off to
+    // `encodeRpcValue`, the transport-out ladder `fn.raw` leaves through too. A Response or a stream has
+    // nothing to validate or shape, so both stages are asked of a VALUE only.
+    if (!(result instanceof Response) && !encodesAsStream(result)) {
+        // M8a output validation — DEV ONLY contract-drift catch. A mismatch logs loudly but never becomes
+        // a client error.
+        const outputSchema = meta.options.schemas?.output
+        if (outputSchema !== undefined && !isProd()) {
+            const checked = await validateStandard(asStandardSchema(outputSchema), result)
+            if (!checked.ok) {
+                log.channel('abide:rpc').warn(
+                    `output schema mismatch for rpc "${scope.route.name}":`,
+                    checked.issues,
+                )
+            }
         }
+        // Output-shaping (§5.2) — trim the wire result to the declared output schema so undeclared fields
+        // (e.g. a `passwordHash` the handler over-returned) never leak. Applied in ALL environments. A
+        // Standard Schema or absent schema is not shapeable → the value passes through unchanged. This is
+        // the one thing the wire does that `.raw` does not: it is about what LEAVES the process.
+        return encodeRpcValue(shapeToSchema(result, jsonSchemaOf(outputSchema)), null)
     }
 
-    // Output-shaping (§5.2) — trim the wire result to the declared output schema so undeclared fields
-    // (e.g. a `passwordHash` the handler over-returned) never leak. Applied in ALL environments. A
-    // Standard Schema or absent schema is not shapeable → the value passes through unchanged.
-    return json(shapeToSchema(result, jsonSchemaOf(outputSchema)))
+    const response = encodeRpcValue(result, scope.request.headers.get('accept'))
+    // A `?__abide_from=` resume whose transcript was gone → a fresh run from 0; the client must REPLACE.
+    if (resumeFresh && encodesAsStream(result)) {
+        response.headers.set(STREAM_RESUME_HEADER, STREAM_RESUME.fresh)
+    }
+    return response
 }
 
 // Resumable stream replay (replayable-streams.md §5): `?__abide_from=<count>` asks to resume a RETAINED
@@ -255,7 +244,7 @@ function resumeRetainedStream(
         // Re-served through the SAME encoding decision the fresh run makes — including the `Accept` rung,
         // which this half used to skip, so an untagged source resumed as jsonl after having been served
         // as sse.
-        const response = streamResponseFor(resumed.cursor, scope.request)
+        const response = streamResponseFor(resumed.cursor, scope.request.headers.get('accept'))
         response.headers.set(STREAM_RESUME_HEADER, STREAM_RESUME.live)
         return { response }
     }

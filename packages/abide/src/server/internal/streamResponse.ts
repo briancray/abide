@@ -16,10 +16,15 @@ import { streamEncodingOf } from '../../shared/internal/responseSource.ts'
 import { jsonl } from '../jsonl.ts'
 import { sse } from '../sse.ts'
 
-export function streamResponseFor(cursor: AsyncIterable<unknown>, request: Request): Response {
+// `accept` is the header VALUE rather than the `Request` it came off: the second caller is `fn.raw`,
+// which has no request — only the `init` a caller handed it — and fabricating a `Request` to ask it one
+// question can throw (a body + a read method) for a header lookup either caller can do itself.
+export function streamResponseFor(
+    cursor: AsyncIterable<unknown>,
+    accept: string | null | undefined,
+): Response {
     const encoding = streamEncodingOf(cursor)
     if (encoding === 'sse') return sse(cursor)
     if (encoding !== undefined) return jsonl(cursor)
-    const accept = (request.headers.get('accept') ?? '').toLowerCase()
-    return accept.includes('text/event-stream') ? sse(cursor) : jsonl(cursor)
+    return (accept ?? '').toLowerCase().includes('text/event-stream') ? sse(cursor) : jsonl(cursor)
 }

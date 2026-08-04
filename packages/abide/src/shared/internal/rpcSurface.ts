@@ -66,8 +66,11 @@ export interface RpcCallSurface<Args, T>
     (...args: RpcInvokeArgs<Args>): Promise<T>
     // Run `handler` whenever this slot's value changes; returns a dispose function. Reactive probe.
     watch(args: Args, handler: (value: T | undefined) => void): () => void
-    // Raw `Response`, full bypass of the memo (rpc-core call surface): on the client a bare fetch to
-    // `/__abide/rpc/<name>`; on the server the handler run wrapped in a JSON `Response` (or its own Response).
+    // THE BARE CALL, ENCODED — a `Response` instead of the decoded value, and nothing else different
+    // (rpc-core call surface). On the SERVER that is the same chained, coalesced, deadline-bounded read
+    // `fn(args)` makes, encoded the way the wire would encode it. In the BROWSER it is the same request
+    // the bare call makes, handed back undecoded — the wire's own status and headers, which is what a
+    // caller reaching for `.raw` there is reaching for. `init` describes that request on both sides.
     raw(args: Args, init?: RequestInit): Promise<Response>
     // Narrow a caught value to this RPC's typed error by name (`fn.isError(e, "RateLimited")`).
     isError(e: unknown, name: string): boolean

@@ -629,9 +629,18 @@ pages — nothing is reserved outside `/__abide/*`.
    set no `Cache-Control` of its own — responses are identity-scoped by default, so a shared
    cache must never hold one. A handler/helper that sets its own `Cache-Control` (e.g. the
    immutable `/__abide/chunk/` assets) keeps it and is left alone.
-6. **`.raw(args, init?)` → raw `Response`**, full bypass of codec-decode, cache,
-   coalescing, and reactivity — escape hatch for custom headers, binary/file downloads,
-   hand-driven streams.
+6. **`.raw(args, init?)` → `Response` instead of the decoded value, and NOTHING else different.**
+   It is the bare call: the middleware chain, the memo (coalesce + retain + the slot the probes
+   report on), the run deadline. **Server:** the result is encoded the way the wire would encode it
+   — `json(value)`; a stream as jsonl/sse by the handler's own `jsonl()`/`sse()` choice, else `init`'s
+   `Accept`; an UNTAGGED `Response` the handler returned passed through whole (status and headers
+   intact), which is the escape hatch for custom headers and binary/file downloads. A `json(data,
+   init)` helper's init does NOT survive — the memo sees through it to `data` (§ replayable-streams
+   §4) — so a handler shaping bytes returns a plain `Response`. `init` describes the request this
+   in-process read stands in for: `signal` detaches THIS waiter, `headers.accept` picks the stream
+   encoding. **Client:** the same request the bare call makes, handed back undecoded — the wire's own
+   status/headers, no client-side memo. A deliberate `error()`/`redirect()` and a tripped deadline are
+   RENDERED as that Response on both sides rather than thrown.
 
 ---
 
@@ -641,7 +650,7 @@ pages — nothing is reserved outside `/__abide/*`.
 | --- | --- |
 | `fn(args)` | smart read — cached, coalesced, reactive, SSR in-proc → browser fetch |
 | `fn(args, { signal })` | same read, with a caller-owned abort that detaches THIS waiter (ADR 0028 D3) |
-| `fn.raw(args, init?)` | raw `Response`, full bypass |
+| `fn.raw(args, init?)` | the same read, returning the `Response` instead of the decoded value |
 | `fn.refresh()` / `fn.refresh(args)` | eager refetch, keep stale visible (partial-args match) |
 | `fn.invalidate()` / `fn.invalidate(args)` | drop cached slot(s), lazy reload (partial-args match; no arg = whole callable) |
 | `fn.publish(args, value \| updater)` | swap retained value — value-form broadcasts server-side; server per-request updater-form errors |

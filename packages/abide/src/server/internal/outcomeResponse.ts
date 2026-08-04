@@ -7,10 +7,12 @@
 // what a thrown failure did before, arriving on the wire as a bare 500 with its status lost.
 //
 // Two callers that must agree: the router's `handleUncaught` (the HTTP path) and an rpc's `.raw()` (the
-// in-process bypass, which hands back the untouched `Response` exactly as the browser proxy's `.raw()`
-// does — no parse, no `!ok` throw).
+// same read encoded in-process, which hands back the outcome as a `Response` exactly as the browser
+// proxy's `.raw()` does — no parse, no `!ok` throw).
 
 import { HttpError } from '../../shared/HttpError.ts'
+import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
+import { log } from '../../shared/log.ts'
 import { Redirect } from '../../shared/Redirect.ts'
 import { errorResponse } from './errorResponse.ts'
 
@@ -30,4 +32,21 @@ export function outcomeResponse(caught: unknown): Response | undefined {
         })
     }
     return undefined
+}
+
+// A TRIPPED RUN DEADLINE — the outcome that is not deliberate and is not a bug either, so both response
+// surfaces answer it before the generic 500 (ADR 0028 D7). Returns `undefined` for anything else, exactly
+// as `outcomeResponse` does, so a caller's ladder reads as one sequence of "is it this? is it that?".
+//
+// It lives here, with the telemetry inside it, because there are now two doors: the router's
+// `handleUncaught` and `fn.raw` — which is the SAME read, encoded in-process rather than over HTTP, and
+// must therefore answer a trip with the same 504 a browser `.raw` receives for it. Spelled out at each
+// door, the second copy would be one status literal and one missing `kind` away from the two disagreeing,
+// and `fn.isError(e, 'TimeoutError')` narrows on that `kind`.
+//
+// 504, not 408 — 408 says the CLIENT was slow sending its request; here the server was slow producing.
+export function timeoutResponse(caught: unknown): Response | undefined {
+    if (!isTimeoutError(caught)) return undefined
+    log.channel('abide:rpc').warn('run exceeded its timeout:', caught)
+    return errorResponse(504, undefined, { kind: 'TimeoutError' })
 }

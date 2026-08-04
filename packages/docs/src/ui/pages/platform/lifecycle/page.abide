@@ -20,6 +20,6 @@
     <LifecycleErrorDemo />
   </Demo>
   <aside class="aside">
-    <p>An RPC that throws. <code>.raw()</code> bypasses the memo and returns the untouched <code>Response</code>, so what you see is exactly the status and body <code>onError</code> shaped — a typed <code>error()</code> would never reach the hook. Not because it isn't a throw (it is one), but because it throws an <code>HttpError</code>, which the router renders at the status the handler asked for <em>before</em> the hook is consulted: a declared 404 is not a bug in the app.</p>
+    <p>An RPC that throws. <code>.raw()</code> hands back the wire's own <code>Response</code> instead of the decoded value, so what you see is exactly the status and body <code>onError</code> shaped — a typed <code>error()</code> would never reach the hook. Not because it isn't a throw (it is one), but because it throws an <code>HttpError</code>, which the router renders at the status the handler asked for <em>before</em> the hook is consulted: a declared 404 is not a bug in the app.</p>
   </aside>
 </main>

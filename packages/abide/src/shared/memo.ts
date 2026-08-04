@@ -444,7 +444,8 @@ function measureBytes(value: unknown): number {
 // A streaming handler yields a raw AsyncIterable<chunk> (replayable-streams.md §4) — that is what the
 // memo wraps in a ReplayableStream. A `Response` / `ReadableStream` is an opaque byte body (jsonl/sse or
 // a raw fetch), NOT a decoded-chunk source, so it stays a scalar value and the existing pass-through
-// behavior is untouched.
+// behavior is untouched. A different question from `encodeRpcValue`'s stream test, which asks what can be
+// SERVED as a stream and asks it only after the `Response` case — hence the two, deliberately.
 function isStreamSource(value: unknown): value is AsyncIterable<unknown> {
     if (value === null || typeof value !== 'object') return false
     if (value instanceof Response || value instanceof ReadableStream) return false

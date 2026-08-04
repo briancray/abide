@@ -137,8 +137,16 @@ through `createTestApp`, which *does* call `createApp`, so it passed while the d
 - **`callOwnRpc`'s rationale narrows.** MCP and `agent()` still dispatch over the loopback, but only for
   **input validation** of args a MODEL wrote: validation is applied by the router, so an in-process call
   would advertise a schema and never enforce it. Middleware is no longer part of that argument.
-- **`fn.raw()` is outside the chain**, by construction — it calls the handler, not the producer. It is the
-  one read surface that is neither coalesced nor authorized, and that is now stated wherever `.raw` is.
+- ~~**`fn.raw()` is outside the chain**, by construction — it calls the handler, not the producer. It is the
+  one read surface that is neither coalesced nor authorized, and that is now stated wherever `.raw` is.~~
+  **SUPERSEDED.** `.raw` now calls the chained producer like every other door: it is the bare call with a
+  `Response` return, so it is coalesced, authorized and deadline-bounded, and the encoding is the only
+  difference from `fn(args)`. The carve-out did not survive being written down — "the one read surface
+  that is neither coalesced nor authorized" is a description of a hole, and `middleware` is tracing and
+  rate limiting as well as auth, so the surface an author reaches for to inspect the wire was the one
+  surface nothing observed. What it costs is that a `json(data, init)` helper's status/headers no longer
+  reach `.raw` (the memo sees through to `data`); a handler shaping bytes returns a plain `Response`,
+  which is still the memo's value and still passes through whole.
 - **`__bare` and `__bindChain` are `__`-prefixed** for the reason `__rpc` is. Un-prefixed, `.bare()` sat in
   the autocomplete of anyone importing an rpc, next to `peek` and `refresh`, reading like a supported call —
   and it skips what `auth.md` calls auth. Declared once on `ServerRouteMembers` for both route surfaces,

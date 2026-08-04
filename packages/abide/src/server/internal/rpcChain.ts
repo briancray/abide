@@ -25,7 +25,8 @@
 // tick, and an `abide run` migration. `bindRpcChains` is what installs it, and it is called from all three
 // boots (`createApp`, the dev server's rebuild, `abide run`) rather than only from `createApp` — which is
 // what made a migration's reads unauthorized and a dev server's reads unauthorized after the first file
-// save. `fn.raw()` remains outside the chain, by construction: it calls the handler, not `produce`.
+// save. `fn.raw()` is inside it too: `.raw` is the bare call with a `Response` return, not a second way
+// to reach the handler, so the chain has no read surface left outside it.
 //
 // AND IT RUNS WITH `route()` DESCRIBING THE READ, not the caller who made it — see `chainScope`, which is
 // where the SUBJECT of the authorization decision is established, and why that has to be a scope rather

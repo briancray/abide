@@ -50,7 +50,7 @@
     <RawResponseDemo />
   </Demo>
   <aside class="aside">
-    <p>Every card above shows the decoded result. <code>fn.raw(args, init?)</code> is the view underneath: the untouched <code>Response</code>, memo bypassed and nothing thrown, so you read the status line, headers and body yourself. Switch between the helpers and watch the status change — <code>200</code>, <code>422</code>, <code>429</code>, <code>302</code> — each chosen by the helper, none by the framework.</p>
+    <p>Every card above shows the decoded result. <code>fn.raw(args, init?)</code> is the view underneath — the same read, returning the <code>Response</code>: in the browser, the untouched wire response with nothing thrown, so you read the status line, headers and body yourself. Switch between the helpers and watch the status change — <code>200</code>, <code>422</code>, <code>429</code>, <code>302</code> — each chosen by the helper, none by the framework.</p>
     <p>The redirect button passes <code>{'{'} redirect: "manual" {'}'}</code> as <code>init</code>, the second argument of <code>raw</code>. The browser still won't show you the 302: the Fetch spec resolves a manual redirect to an opaque response with the status, <code>Location</code> and body withheld from JS. The wire carries all three — <code>curl -i</code> proves it — a reminder that <code>raw</code> hands you the browser's <code>Response</code>, not the server's.</p>
   </aside>
 </main>

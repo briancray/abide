@@ -22,7 +22,6 @@
 import { CSRF_HEADER } from '../../shared/internal/CSRF_HEADER.ts'
 import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
 import { provideHealthSource } from '../../shared/internal/healthSource.ts'
-import { isTimeoutError } from '../../shared/internal/isTimeoutError.ts'
 import { logFeed } from '../../shared/internal/logFeed.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
 import {
@@ -65,7 +64,7 @@ import { logFeedSettings } from './logFeedSettings.ts'
 import type { Rpc } from './makeRpc.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { isSoftNav } from './navRoute.ts'
-import { outcomeResponse } from './outcomeResponse.ts'
+import { outcomeResponse, timeoutResponse } from './outcomeResponse.ts'
 import { rebindRegistryDerivations } from './registryDerivation.ts'
 import {
     anonymousPrincipal,
@@ -95,12 +94,6 @@ import {
 } from './socketMux.ts'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-
-// The wire form of a tripped run deadline (ADR 0028 D7). Built through the same `kind` the authoring-side
-// `error.typed` carries, so the body holds the name the client narrows on rather than a hand-rolled shape
-// that would drift from every other typed error. It is BUILT, not thrown — the deadline has already
-// escaped as a throw by the time transport answers it, and re-throwing here would re-enter `handleUncaught`.
-const TIMEOUT_RESPONSE = (): Response => errorResponse(504, undefined, { kind: 'TimeoutError' })
 
 // Does the LAST path segment carry an extension? The cheap synchronous gate in front of the
 // `src/ui/public/**` lookup — a page route (`/memo`, `/users/7`) has none and never reaches the
@@ -249,14 +242,10 @@ async function handleUncaught(caught: unknown, config: AppConfig): Promise<Respo
     // A tripped run deadline is not a bug in the app, so it is answered before `onError` and never
     // reaches the generic 500 (ADR 0028 D7). It leaves as a TYPED error so the two sides of an
     // isomorphic call agree: the browser proxy's `fn.isError(e, 'TimeoutError')` narrows on the body's
-    // `name`, which is the same value `AbortSignal.timeout` gives a caller that aborted locally.
-    //
-    // 504, not 408 — 408 says the CLIENT was slow sending its request; here the server was slow
-    // producing, which is what a gateway timeout means.
-    if (isTimeoutError(caught)) {
-        log.channel('abide:rpc').warn('run exceeded its timeout:', caught)
-        return TIMEOUT_RESPONSE()
-    }
+    // `name`, which is the same value `AbortSignal.timeout` gives a caller that aborted locally. Shared
+    // with `fn.raw`, the other door that answers a read with a Response.
+    const timedOut = timeoutResponse(caught)
+    if (timedOut !== undefined) return timedOut
     log.channel('abide:router').error('uncaught error in dispatch:', caught)
     const onError = config.onError
     if (onError !== undefined) {

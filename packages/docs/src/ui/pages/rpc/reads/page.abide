@@ -54,7 +54,7 @@
     <RawDemo />
   </Demo>
   <aside class="aside">
-    <p>Every form above goes through the memo — cached, coalesced, throwing on failure. <code>fn.raw(args, init?)</code> is the door out: the untouched <code>Response</code>, no caching and nothing thrown, so you read the status, headers and body yourself. See what the helpers put on the wire on <a href="/rpc/responses">Responses</a>.</p>
+    <p>Every form above goes through the memo — cached, coalesced, throwing on failure. <code>fn.raw(args, init?)</code> is that same read with the <code>Response</code> in place of the decoded value, and nothing thrown: in the browser it is the door out to the wire, so you read the status, headers and body yourself. See what the helpers put on the wire on <a href="/rpc/responses">Responses</a>.</p>
     <p>Beyond <code>live</code>, a read carries the full reactive probe surface — <code>pending</code>, <code>refreshing</code>, <code>error</code>, <code>watch</code> — because it is a memo. They have their own page: <a href="/rpc/probes">RPC probes</a>.</p>
   </aside>
 </main>

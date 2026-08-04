@@ -53,8 +53,9 @@ export type { Payload } from '../../shared/internal/responseSource.ts'
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
 import type { StandardSchemaV1 } from '../../shared/StandardSchema.ts'
 import type { CrossOriginOption } from './cors.ts'
+import { encodeRpcValue } from './encodeRpcValue.ts'
 import type { Middleware } from './middleware.ts'
-import { outcomeResponse } from './outcomeResponse.ts'
+import { outcomeResponse, timeoutResponse } from './outcomeResponse.ts'
 import type { ClientsOption } from './registry.ts'
 
 // A minimal, JSON-Schema-ish description of the file fields a multipart mutation accepts (TODO #8).
@@ -205,7 +206,8 @@ export interface StreamRead<Args, C>
     // Re-run the source; `invalidate` aborts an open stream + drops it (replayable-streams.md §4).
     refresh(args?: Partial<Args> | Args): void
     invalidate(args?: Partial<Args> | Args): void
-    // Raw `Response`, full bypass (single-consumption stream body; no replay).
+    // The bare call, encoded: this caller's own replay-then-live cursor served as jsonl/sse (the
+    // handler's tagged choice first, then `init`'s `Accept`) over the ONE run the slot holds.
     raw(args: Args, init?: RequestInit): Promise<Response>
     isError(e: unknown, name: string): boolean
 }
@@ -262,12 +264,13 @@ function attachMeta<Args, T>(target: object, meta: RpcMeta<Args, T>): void {
 // Attach the FULL isomorphic surface (reactive probes + cache verbs + `raw` + stream chunk probes +
 // `__rpc` meta) to a memo-backed callable. Shared by reads and mutations — the only caller-specific
 // pieces are the bare CALL (built by the caller, so a mutation can bypass on FormData/`memo:false`)
-// and the meta `read` flag. `rawSource` is the handler `.raw` runs in-process AND the meta handler
-// (the same function reference the router/OpenAPI/MCP invoke).
+// and the meta `read` flag. `handler` is the meta handler (the same function reference the
+// router/OpenAPI/MCP invoke); `chained` is the CALL — chain + memo + deadline — which is what `.raw`
+// runs, since `.raw` differs from `fn(args)` in nothing but its return type.
 function attachSurface<Args, T>(
     callable: Rpc<Args, T>,
     backing: Memo<Args, T>,
-    rawSource: (args: Args) => Promise<T> | T,
+    handler: (args: Args) => Promise<T> | T,
     method: string,
     options: RpcOptions,
     read: boolean,
@@ -275,6 +278,7 @@ function attachSurface<Args, T>(
     setBroadcast: (sink: MemoNotify) => void,
     setChain: (runner: RpcChainRunner<Args, T>) => void,
     bare: (args: Args) => Promise<T>,
+    chained: (args: Args, callOptions?: RpcCallOptions) => Promise<T>,
 ): void {
     callable.__bindChain = setChain
     // The call WITHOUT the middleware chain — what the ROUTER invokes, because it composes the chain itself
@@ -296,25 +300,43 @@ function attachSurface<Args, T>(
     callable.error = (args: Args): unknown => backing.error(args)
     callable.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
         backing.watch(args, handler)
+    // `.raw` IS THE BARE CALL, ENCODED. One difference from `fn(args)` and it is the return type: a
+    // `Response` instead of the decoded value. Everything else about the read is the same read — the
+    // middleware chain, the memo (coalesce + retain), the run deadline, the reactive slot it fills.
+    //
+    // It used to call `rawSource` — the handler — which made it the one read surface that was neither
+    // coalesced nor AUTHORIZED, and `auth.md` had to carve out an exception for it. That exception was
+    // load-bearing in the wrong direction: `middleware` is tracing, rate limiting and context population
+    // as well as auth, so `.raw` was a door that ran none of it, and the deadline ADR 0028 D6 claims for
+    // `.raw` was never armed on this side either (the handler was awaited bare). Nothing about wanting
+    // the RESPONSE says anything about wanting to skip the read's own contract.
+    //
+    // What that costs, stated rather than discovered: a handler's `json(data, { status, headers })` is
+    // seen through by the memo to `data` (`responseSource.ts`), so its init no longer survives to here.
+    // `.raw` answers what the WIRE would answer for this read, through the ROUTER'S OWN encoder
+    // (`encodeRpcValue`) rather than a second copy of it — which is what makes that sentence checkable
+    // instead of aspirational. An UNTAGGED `Response` a handler returns is still the memo's value, so it
+    // passes through whole.
     callable.raw = async (args: Args, init?: RequestInit): Promise<Response> => {
-        let value: T | Response
+        let value: T
         try {
-            value = await Promise.resolve(rawSource(args))
+            // `init.signal` is the CALLER's wait, forwarded exactly as the bare call takes it (ADR 0028
+            // D3): it detaches this waiter and leaves the run to the other callers coalesced on the slot.
+            value = await chained(args, init?.signal == null ? undefined : { signal: init.signal })
         } catch (caught) {
             // `.raw` is the RESPONSE surface, so a deliberate `error()`/`redirect()` is rendered rather
             // than rethrown — matching the browser proxy's `.raw`, which hands back a non-2xx untouched
             // (no parse, no `!ok` throw). An unexpected error still propagates; only transport turns a
             // genuine bug into a 500, and doing it here would disguise one as a normal response.
-            const outcome = outcomeResponse(caught)
+            //
+            // The same two rungs, in the same order, as the router's `handleUncaught` — a tripped run
+            // deadline is neither deliberate nor a bug, and it is now REACHABLE here: `.raw` had no
+            // deadline at all while it called the handler directly (ADR 0028 D6 said otherwise).
+            const outcome = outcomeResponse(caught) ?? timeoutResponse(caught)
             if (outcome === undefined) throw caught
             return outcome
         }
-        if (value instanceof Response) return value
-        return new Response(JSON.stringify(value), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-            ...(init ?? {}),
-        })
+        return encodeRpcValue(value, acceptOf(init))
     }
     callable.isError = isTypedError
     callable.refresh = (args?: Partial<Args> | Args): void => backing.refresh(args)
@@ -346,7 +368,16 @@ function attachSurface<Args, T>(
     streamable.done = (args: Args): boolean => backing.done(args)
     streamable.streaming = (args: Args): boolean => backing.streaming(args)
     streamable.resumeStream = (args: Args, from: number) => backing.resumeStream(args, from)
-    attachMeta(callable, { method, handler: rawSource, options, read, timeout })
+    attachMeta(callable, { method, handler, options, read, timeout })
+}
+
+// `.raw`'s `init` describes the REQUEST this in-process read stands in for, so its `Accept` selects the
+// stream encoding exactly as an HTTP caller's does. (It used to be spread onto the RESPONSE init — a
+// `RequestInit` where a `ResponseInit` was wanted, so the only fields that could land were the ones the
+// two happen to share by name.) `HeadersInit` is three shapes; `Headers` normalizes all of them.
+function acceptOf(init: RequestInit | undefined): string | null {
+    if (init?.headers === undefined) return null
+    return new Headers(init.headers).get('accept')
 }
 
 // The run deadline for this rpc in ms (ADR 0028 D9). `ABIDE_RPC_TIMEOUT` is a FALLBACK CEILING, not a
@@ -446,11 +477,12 @@ function assembleRpc<Args, T>(assembly: RpcAssembly<Args, T>): Rpc<Args, T> {
     // door. It cannot wrap the body: a memo coalesces by ARGS, so two principals reading the same args
     // share one run, and a chain inside would let the first caller's authorization stand in for the
     // second's.
-    const callable = ((args: Args, callOptions?: RpcCallOptions): Promise<T> =>
+    const call = (args: Args, callOptions?: RpcCallOptions): Promise<T> =>
         withAbort(
             chain === undefined ? produce(args) : chain(args, () => produce(args)),
             callOptions?.signal,
-        )) as unknown as Rpc<Args, T>
+        )
+    const callable = call as unknown as Rpc<Args, T>
 
     attachSurface(
         callable,
@@ -467,6 +499,7 @@ function assembleRpc<Args, T>(assembly: RpcAssembly<Args, T>): Rpc<Args, T> {
             chain = runner
         },
         produce,
+        call,
     )
     return callable
 }

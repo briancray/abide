@@ -216,8 +216,11 @@ second-param idea from the interview was rejected in favor of imported ambient a
     `identity()` still answer the CALLER's request, which is the point of them; only the subject is
     overridden. Scope-free those throw while `route()` still answers, so **gate on `params` (the args),
     never on `url`** — an in-process read has no URL it can answer truthfully.
-  - **Where it does NOT run:** `fn.raw()`, by construction — it calls the handler, not the chained
-    producer, so it is the one read surface that is neither coalesced nor authorized. Everything else is
+  - **`fn.raw()` runs it too.** `.raw` is the bare call with a `Response` return — the same chained,
+    coalesced, deadline-bounded read — so a short-circuiting middleware reaches it as the rendered
+    Response (403) and the handler never runs. It used to call the handler directly and was therefore the
+    one read surface that was neither authorized nor observed; wanting the RESPONSE says nothing about
+    wanting to skip the read's contract. There is now no read surface outside the chain. Everything is
     covered, because `bindRpcChains` is called by every boot (`createApp`, `abide dev`'s rebuild via
     `App.rebind()`, and `abide run`) rather than by `createApp` alone. See ADR 0030 D5 for the two silent
     holes that came from installing it in one place, and CL2 in `cli-lifecycle.md` for the migration door.

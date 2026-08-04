@@ -170,8 +170,16 @@ never answers — the single most common real timeout.
 The diagnostic cost (a client-side abort is invisible server-side) is already paid for: a browser RPC
 call carries a child `traceparent`, so the abandoned server span exists in the trace.
 
-**`.raw()` is included.** It bypasses the memo, not the deadline: `.raw` arms the same
-`AbortSignal.timeout(T)`, composed with a caller-supplied `init.signal` rather than replaced by it.
+**`.raw()` is included.** On the client it arms the same `AbortSignal.timeout(T)`, composed with a
+caller-supplied `init.signal` rather than replaced by it.
+
+> **AMENDED.** The server half of this was a claim, not a mechanism: `.raw` called the handler and
+> awaited it bare, so it was the one read with no deadline at all. `.raw` is now the bare call with a
+> `Response` return, so the MEMO's deadline bounds it — the same one, on the same slot, for every caller
+> coalesced onto it — and `init.signal` is forwarded as the call's own `{ signal }`, which detaches this
+> waiter without ending the run. A trip is answered as the 504 (`timeoutResponse`, shared with the
+> router) rather than escaping as a `DOMException`, because `.raw` is a Response surface and that is the
+> status a browser `.raw` receives for the same trip.
 
 ### D7 — `TimeoutError` / **504**, and the slot is EXPIRED, not disposed
 
