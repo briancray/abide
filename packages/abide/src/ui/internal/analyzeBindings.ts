@@ -1004,16 +1004,23 @@ export function isSimpleIdentifier(pattern: string): boolean {
 
 function parseImport(rawText: string): ImportBinding | null {
     const specifierMatch = rawText.match(/from\s*['"]([^'"]+)['"]/)
-    // NB: a clause-less side-effect import (`import "./polyfill.ts"`) has no `from`, so it stops here —
-    // and since the classifier strips every import record's range unconditionally, a non-CSS one is
-    // DELETED from both emitted substrates with no diagnostic, next to imports that survive. That is a
-    // real defect and it is NOT fixed here: recognising it in this function is inert, because the
-    // statement SCANNER upstream never produces a record for the clause-less form in the first place, so
-    // the gate is a layer further out than this. `reconstructImport` below already re-emits the form and
-    // has never been reachable, which is the other half of the same evidence. A `.css` side-effect
-    // import is unaffected — `cssSideEffectSpecifier` owns that one and the classifier reads it exactly
-    // when there is no binding, which is why a fix here has to leave the CSS path alone.
-    if (!specifierMatch) return null
+    if (!specifierMatch) {
+        // A SIDE-EFFECT import (`import "./polyfill.ts"`) has no `from`, so the match above misses it.
+        // The scanner still records the statement and the classifier strips its range unconditionally,
+        // so a non-CSS one used to be DELETED from both emitted substrates with no diagnostic, sitting
+        // next to imports that survived. That it was meant to work was already written down two
+        // functions below: `reconstructImport` re-emits the clause-less form, and nothing could reach
+        // that branch.
+        const bareSpecifier = rawText.match(/^\s*import\s*['"]([^'"]+)['"]/)?.[1]
+        if (bareSpecifier === undefined) return null
+        // A side-effect `.css` import is ALREADY owned, by `cssSideEffectSpecifier` — and the classifier
+        // reads `record.cssSpecifier` only when `record.binding` is null, so claiming one here takes
+        // every stylesheet out of `cssImports` and the page renders with no `<link>`. The two
+        // clause-less forms are different facts about the module; this branch owns the one that had no
+        // owner.
+        if (bareSpecifier.endsWith('.css')) return null
+        return { specifier: bareSpecifier, defaultLocal: null, namespaceLocal: null, named: [] }
+    }
     const specifier = specifierMatch[1]
     if (specifier === undefined) return null
     const clause = rawText

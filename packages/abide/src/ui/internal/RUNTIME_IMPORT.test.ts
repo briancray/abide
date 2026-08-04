@@ -4,6 +4,10 @@
 // finds, on both substrates, through the real emitters.
 
 import { describe, expect, test } from 'bun:test'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { rewriteImportSpecifier } from './analyzeBindings.ts'
 import { emitModuleSource } from './emit.ts'
 import {
     RUNTIME_NAMESPACE,
@@ -50,5 +54,77 @@ describe('the emitted runtime import', () => {
         expect(() => rewriteRuntimeImport('export const x = 1\n', 'client', './x.ts')).toThrow(
             /out of step/,
         )
+    })
+})
+
+describe('a side-effect import survives the emit', () => {
+    // `import "./polyfill.ts"` used to be DELETED from both substrates with no diagnostic: `parseImport`
+    // required a `from`, so it produced no binding, while the scanner still recorded the statement and
+    // the classifier stripped its range unconditionally. It sat next to imports that survived.
+    //
+    // These pass a real `dir`, because that is how production calls `emitModuleSource` and it is the
+    // only way the assertion means anything: WITHOUT one, `passesThrough` admits only `abide/shared/*`
+    // and `abide/ui/*` — so a dir-less fixture reports an empty `moduleImports` for every ordinary
+    // specifier whether this works or not. A first version of this test was written that way and read
+    // as a failure of the fix rather than of the fixture.
+    function project(files: Record<string, string>): string {
+        const dir = mkdtempSync(join(tmpdir(), 'abide-bare-import-'))
+        for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body)
+        return dir
+    }
+
+    test('a bare relative import is re-emitted on BOTH substrates', () => {
+        const dir = project({ 'polyfill.ts': 'globalThis.x = 1\n' })
+        const emitted = emitModuleSource(
+            '<script>\nimport "./polyfill.ts"\n</script>\n<p>hi</p>\n',
+            dir,
+        )
+        expect(emitted.analysis.moduleImports.map((m) => m.specifier)).toEqual(['./polyfill.ts'])
+        expect(emitted.client).toContain('import "./polyfill.ts"')
+        expect(emitted.server).toContain('import "./polyfill.ts"')
+    })
+
+    test('it sits alongside a clause-carrying import from the same script', () => {
+        const dir = project({
+            'polyfill.ts': 'globalThis.x = 1\n',
+            'util.ts': 'export const helper = 1\n',
+        })
+        const emitted = emitModuleSource(
+            '<script>\nimport "./polyfill.ts"\nimport { helper } from "./util.ts"\n</script>\n<p>{helper}</p>\n',
+            dir,
+        )
+        expect(emitted.analysis.moduleImports.map((m) => m.specifier)).toEqual([
+            './polyfill.ts',
+            './util.ts',
+        ])
+    })
+
+    test('a bare CSS import still belongs to the CSS owner, not to module imports', () => {
+        // The two clause-less forms are different facts. `cssSideEffectSpecifier` already owned this
+        // one, and the classifier reads `cssSpecifier` only when there is NO binding — so claiming it
+        // in `parseImport` takes every stylesheet out of `cssImports` and the page renders with no
+        // `<link>`. That is what happened on the first attempt, and it is why the guard is there.
+        const dir = project({ 'styles.css': 'p { color: red }\n' })
+        const emitted = emitModuleSource(
+            '<script>\nimport "./styles.css"\n</script>\n<p>hi</p>\n',
+            dir,
+        )
+        expect(emitted.analysis.cssImports).toEqual(['./styles.css'])
+        expect(emitted.analysis.moduleImports).toEqual([])
+    })
+
+    test('rewriting a clause-less import finds it — `from "spec"` never could', () => {
+        const dir = project({ 'polyfill.ts': 'globalThis.x = 1\n' })
+        const emitted = emitModuleSource(
+            '<script>\nimport "./polyfill.ts"\n</script>\n<p>hi</p>\n',
+            dir,
+        )
+        const rewritten = rewriteImportSpecifier(
+            emitted.client,
+            './polyfill.ts',
+            '/abs/polyfill.js',
+        )
+        expect(rewritten).toContain('import "/abs/polyfill.js"')
+        expect(rewritten).not.toContain('"./polyfill.ts"')
     })
 })
