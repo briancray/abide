@@ -98,6 +98,62 @@ let mountClaimed = true
 // checks it before acting on a stale response (a redirect or claim from a superseded nav must not fire).
 let navGen = 0
 
+// ── THE LIVE PAGE, AS TRANSITIONS ───────────────────────────────────────────────────────────────
+// The five mutables above are ONE fact — what is mounted and what it is showing — and they are only
+// ever correct together. Written field-by-field, the failure mode is a PARTIAL update: some of them
+// describe the page on screen and the rest describe the one that left, and every nav classifier
+// downstream (`currentPattern` for a param nav, `currentPrefixes` for a graft, `currentPath` for
+// `Abide-Nav`) then answers from a mixture. The graft site records exactly that bug — the bookkeeping
+// used to be committed at end-of-stream, so on a streaming page `currentPattern` named a route that had
+// already left the screen, and a Back into that window was taken for a param nav and kept a mount
+// showing the other page.
+//
+// So the transitions are named and there are four. Nothing outside them assigns these fields.
+
+// A page is MOUNTED and claimed: its chain owns the DOM, and all four descriptors are its own.
+function mountedPage(
+    chain: MountHandle,
+    pattern: string,
+    prefixes: string[] | null,
+    path: string,
+): void {
+    activeChain = chain
+    currentPattern = pattern
+    currentPrefixes = prefixes
+    currentPath = path
+    mountClaimed = true
+}
+
+// A cross-route graft has landed the destination's SHELL but not yet claimed it. The DOM and `route()`
+// are the destination's from here, so the descriptors must be too — while `activeChain` deliberately
+// stays the OUTGOING route's, because that is what still has to be disposed. `mountClaimed: false` is
+// the whole point: it is what makes the two optimized nav shapes unavailable across this window, since
+// `graftSuffix` is not re-entrant and a second graft would leave both suffixes in the document.
+function graftingPage(pattern: string, prefixes: string[] | null, path: string): void {
+    currentPattern = pattern
+    currentPrefixes = prefixes
+    currentPath = path
+    mountClaimed = false
+}
+
+// The kept prefix + the freshly-claimed suffix are a live, claimed chain again.
+function claimedGraft(): void {
+    mountClaimed = true
+}
+
+// A param/query-only nav: the whole chain stays alive and only the PATH moved.
+function movedTo(path: string): void {
+    currentPath = path
+}
+
+// The mount is gone. `currentPath` is deliberately NOT cleared — the full soft-nav path releases before
+// swapping the container, so clearing would blank the outgoing route for the whole drain that follows,
+// which is exactly when a traversal can arrive and need it for `Abide-Nav`. It stays truthful until the
+// next transition re-points it.
+function releaseMount(): void {
+    activeChain = null
+}
+
 // The token a caller OUTSIDE this module can hold, so the first-load mount is supersedable like every
 // other one. `bootstrapApp` starts `mountPathname` for the current location and then installs the click
 // interceptor synchronously — so a click landing before that route's chunk resolves runs a full soft-nav,
@@ -221,17 +277,18 @@ export async function mountPathname(
     // The chunk is already resolved above, so this dispose→hydrate window is synchronous (no blank gap).
     if (activeChain !== null) {
         activeChain()
-        activeChain = null
+        releaseMount()
     }
     routeAmbient.adopt(info)
 
     // One hydrate path for first load and soft-nav (decision 6): claim the SSR (initial) or the
     // innerHTML-swapped (soft-nav) server DOM in place rather than fresh-mounting over it.
-    activeChain = bootstrapPage(entry.hydrate, pageSpecs(), pageBase(), seed, pageSocketSpecs())
-    currentPattern = match.pattern
-    currentPrefixes = entry.prefixes ?? null
-    currentPath = targetUrl.pathname
-    mountClaimed = true
+    mountedPage(
+        bootstrapPage(entry.hydrate, pageSpecs(), pageBase(), seed, pageSocketSpecs()),
+        match.pattern,
+        entry.prefixes ?? null,
+        targetUrl.pathname,
+    )
     return true
 }
 
@@ -248,7 +305,7 @@ export async function mountPathname(
 export function disposeActive(): void {
     if (activeChain !== null) {
         activeChain()
-        activeChain = null
+        releaseMount()
         document.getElementById(CONTAINER_ID)?.removeAttribute(HYDRATED_ATTRIBUTE)
     }
 }
@@ -333,10 +390,7 @@ async function partialCrossNav(
                 // left `currentPattern` naming a route that had already left the screen. A nav starting in
                 // that window classified against it: a Back to the route just departed matched the stale
                 // pattern and was taken for a param nav, so it kept a mount showing the other page.
-                currentPattern = dest.pattern
-                currentPrefixes = prefixes
-                currentPath = target.pathname
-                mountClaimed = false
+                graftingPage(dest.pattern, prefixes, target.pathname)
                 grafted = true
                 settleScroll(opts)
             } else if (frame.kind === 'seed') {
@@ -363,8 +417,7 @@ async function partialCrossNav(
         location.href = path
         return
     }
-    // The kept prefix + the freshly-claimed suffix are now a live, claimed chain again.
-    mountClaimed = true
+    claimedGraft()
     // Second pass: the grafted suffix streamed in AFTER the shell, so the page is only now at its final
     // height. A forward nav is already at the top and must not re-scroll (that was the bug).
     if (opts?.keepScroll === true) restoreStampedScroll()
@@ -400,7 +453,7 @@ async function softLoad(
         destMatch.pattern === currentPattern
     ) {
         routeAmbient.adopt(routeInfoFor(destMatch.pattern, target, destMatch.params))
-        currentPath = target.pathname
+        movedTo(target.pathname)
         try {
             // A nav to the URL you are ALREADY on is a refresh gesture, and the layouts are part of
             // what is on screen. Left alone the server skips every layout level here (from == to, so
@@ -570,7 +623,7 @@ async function softLoad(
                 if (frame.url !== '') navUrl = frame.url
                 // The container IS the destination's now — keep the outgoing-route header truthful for a
                 // nav that starts before this one hydrates (`handlePopState` reads it).
-                currentPath = target.pathname
+                movedTo(target.pathname)
                 settleScroll(opts)
             } else if (frame.kind === 'seed') {
                 seed = frame.seed as HydrationSeed
