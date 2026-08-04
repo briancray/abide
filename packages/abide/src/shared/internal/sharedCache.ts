@@ -11,6 +11,7 @@
 // Recency = touch-on-read. The same ceiling also bounds the persistent server default-context
 // cache (the `abide run`/cron/worker path); `memo.ts` passes that store to these same helpers.
 
+import { isThenable } from './isThenable.ts'
 import { positiveEnvBytes } from './positiveEnvBytes.ts'
 
 // The one process-global shared store. Holds memo slots keyed by `prefix + canonicalKey(args)`.
@@ -56,10 +57,54 @@ export function sharedCacheUnpin(store: Map<string, unknown>, key: string): void
     pinnedFor(store).delete(key)
 }
 
+// A ceiling declared by a TEST, overriding the env var. `null` = no override.
+//
+// The env read stays the default and stays FRESH (an operator retuning a running process takes effect),
+// but it was also the only seam: exercising eviction meant assigning `Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE`
+// and deleting it in an `afterEach`. That is the module-level-global-a-test-mutates pattern
+// `slotRetention.ts` argues against next door, with the failure mode it names — a global outlives the
+// file that set it and leaves the next file in the process asserting nothing, which in a PARALLEL suite
+// is a cross-file flake rather than a visible failure.
+//
+// `withSharedCacheLimit` is the whole seam: it restores the previous value, so a throwing body cannot
+// leak the override into the next test the way a bare assignment could.
+let declaredLimit: number | null = null
+
+export function withSharedCacheLimit<T>(bytes: number, body: () => T): T {
+    const previous = declaredLimit
+    declaredLimit = bytes
+    const restore = (): void => {
+        declaredLimit = previous
+    }
+    let result: T
+    try {
+        result = body()
+    } catch (caught) {
+        restore()
+        throw caught
+    }
+    // GUARDED, not an unconditional await — and load-bearing rather than stylistic: a `try/finally`
+    // around a plain `return body()` restores when the body RETURNS its promise, not when that promise
+    // settles, so every async caller would run with the override already gone.
+    if (isThenable(result))
+        return result.then(
+            (value) => {
+                restore()
+                return value
+            },
+            (error: unknown) => {
+                restore()
+                throw error
+            },
+        ) as T
+    restore()
+    return result
+}
+
 // The active byte ceiling, or Infinity when unset/invalid (the unbounded default). Read fresh each
-// call so operators (and tests) can change it at runtime.
+// call so operators can change it at runtime.
 function readLimit(): number {
-    return positiveEnvBytes('ABIDE_MAX_SHARED_CACHE_SIZE')
+    return declaredLimit ?? positiveEnvBytes('ABIDE_MAX_SHARED_CACHE_SIZE')
 }
 
 // Is the byte ceiling active? Both `sharedCacheRecordSize` and `sharedCacheEvictIfNeeded` are no-ops

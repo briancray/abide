@@ -12,7 +12,7 @@ import {
     runInScope,
 } from '../server/internal/requestScope.ts'
 import { until } from '../test/internal/until.ts'
-import { sharedStore } from './internal/sharedCache.ts'
+import { sharedStore, withSharedCacheLimit } from './internal/sharedCache.ts'
 import { memo } from './memo.ts'
 
 function makeScope(): RequestScope {
@@ -35,10 +35,13 @@ async function drain<T>(iter: AsyncIterable<T>): Promise<T[]> {
     return values
 }
 
+// Only the store. The two byte ceilings used to be deleted here too, because the only way to SET one
+// was `Bun.env.…` — a process-wide mutation whose reset this hook had to remember, and which in a
+// parallel suite leaks into whatever file runs next as a flake rather than a failure. They are declared
+// per test now: `withSharedCacheLimit` scopes and restores its own, and the per-stream cap is a memo
+// option (`maxStreamBuffer`).
 afterEach(() => {
     sharedStore().clear()
-    delete Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE
-    delete Bun.env.ABIDE_MAX_STREAM_BUFFER_SIZE
 })
 
 describe('shared streaming — one run across requests', () => {
@@ -70,37 +73,35 @@ describe('shared streaming — one run across requests', () => {
 
 describe('shared streaming — byte accounting & eviction', () => {
     test("a closed stream's bytes count toward the ceiling and evict an older slot", async () => {
-        Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE = '100'
+        await withSharedCacheLimit(100, async () => {
+            let olderRuns = 0
+            const older = memo<{ k: string }, string>(
+                () => {
+                    olderRuns++
+                    return 'x'.repeat(40) // JSON ~42 bytes
+                },
+                { crossRequest: true },
+            )
+            await runInScope(makeScope(), () => older({ k: 'a' }))
+            expect(olderRuns).toBe(1)
 
-        let olderRuns = 0
-        const older = memo<{ k: string }, string>(
-            () => {
-                olderRuns++
-                return 'x'.repeat(40) // JSON ~42 bytes
-            },
-            { crossRequest: true },
-        )
-        await runInScope(makeScope(), () => older({ k: 'a' }))
-        expect(olderRuns).toBe(1)
+            const streamer = memo<{ k: string }, AsyncIterable<string>>(
+                async function* () {
+                    yield 'y'.repeat(80) // JSON ~82 bytes → 42 + 82 = 124 > 100
+                },
+                { crossRequest: true, ttl: 10_000 },
+            )
+            await runInScope(makeScope(), async () => drain(await streamer({ k: 'b' })))
 
-        const streamer = memo<{ k: string }, AsyncIterable<string>>(
-            async function* () {
-                yield 'y'.repeat(80) // JSON ~82 bytes → 42 + 82 = 124 > 100
-            },
-            { crossRequest: true, ttl: 10_000 },
-        )
-        await runInScope(makeScope(), async () => drain(await streamer({ k: 'b' })))
-
-        // The older (LRU) slot was evicted to fit the stream → reading it re-runs.
-        await runInScope(makeScope(), () => older({ k: 'a' }))
-        expect(olderRuns).toBe(2)
+            // The older (LRU) slot was evicted to fit the stream → reading it re-runs.
+            await runInScope(makeScope(), () => older({ k: 'a' }))
+            expect(olderRuns).toBe(2)
+        })
     })
 })
 
 describe('shared streaming — per-stream cap (overflow)', () => {
     test('a stream past the cap is bounded, drops replay, and a late joiner re-runs', async () => {
-        Bun.env.ABIDE_MAX_STREAM_BUFFER_SIZE = '60' // tiny cap
-
         let runs = 0
         const c = memo<Record<string, never>, AsyncIterable<string>>(
             async function* () {
@@ -110,7 +111,9 @@ describe('shared streaming — per-stream cap (overflow)', () => {
                     yield 'z'.repeat(20) // ~22 bytes each → overflow after ~3 chunks
                 }
             },
-            { crossRequest: true, ttl: 10_000 },
+            // The per-stream cap, DECLARED rather than assigned into the environment. ~22 bytes a
+            // chunk, so this overflows after ~3 of the 100.
+            { crossRequest: true, ttl: 10_000, maxStreamBuffer: 60 },
         )
 
         const first = await runInScope(makeScope(), async () => drain(await c({})))
@@ -125,42 +128,47 @@ describe('shared streaming — per-stream cap (overflow)', () => {
 
 describe('shared streaming — open stream is pinned', () => {
     test('an open stream is never LRU-evicted; a concurrent read still coalesces under a tiny ceiling', async () => {
-        Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE = '10' // absurdly tiny — would evict a closed slot immediately
+        // Absurdly tiny — it would evict a CLOSED slot immediately, which is what makes the pin
+        // observable. Scoped, so it cannot outlive this test.
+        await withSharedCacheLimit(10, async () => {
+            let runs = 0
+            let release!: () => void
+            const gate = new Promise<void>((resolve) => {
+                release = resolve
+            })
+            const c = memo<Record<string, never>, AsyncIterable<string>>(
+                async function* () {
+                    runs++
+                    yield 'a'.repeat(20) // ~22 bytes > 10 → eviction pressure while open
+                    yield 'b'.repeat(20)
+                    await gate // park the source OPEN
+                    yield 'c'.repeat(20)
+                },
+                { crossRequest: true, ttl: 10_000 },
+            )
 
-        let runs = 0
-        let release!: () => void
-        const gate = new Promise<void>((resolve) => {
-            release = resolve
+            const collectedA: string[] = []
+            const readerA = runInScope(makeScope(), async () => {
+                for await (const v of await c({})) collectedA.push(v)
+            })
+            await sleep(10) // 2 chunks flushed; the OPEN stream is pinned despite exceeding the ceiling
+
+            const collectedB: string[] = []
+            const readerB = runInScope(makeScope(), async () => {
+                for await (const v of await c({})) collectedB.push(v)
+            })
+            // B must have JOINED A's open run before the source is released — that is the coalescing this
+            // asserts. `runs` is the observable for it; a sleep was a guess at how long a join takes.
+            await until(
+                'both readers joined the one run',
+                () => runs === 1 && collectedA.length > 0,
+            )
+            release()
+            await Promise.all([readerA, readerB])
+
+            expect(runs).toBe(1) // B coalesced onto A's run → the open stream slot was NOT evicted
+            expect(collectedA.length).toBe(3)
+            expect(collectedB.length).toBe(3)
         })
-        const c = memo<Record<string, never>, AsyncIterable<string>>(
-            async function* () {
-                runs++
-                yield 'a'.repeat(20) // ~22 bytes > 10 → eviction pressure while open
-                yield 'b'.repeat(20)
-                await gate // park the source OPEN
-                yield 'c'.repeat(20)
-            },
-            { crossRequest: true, ttl: 10_000 },
-        )
-
-        const collectedA: string[] = []
-        const readerA = runInScope(makeScope(), async () => {
-            for await (const v of await c({})) collectedA.push(v)
-        })
-        await sleep(10) // 2 chunks flushed; the OPEN stream is pinned despite exceeding the ceiling
-
-        const collectedB: string[] = []
-        const readerB = runInScope(makeScope(), async () => {
-            for await (const v of await c({})) collectedB.push(v)
-        })
-        // B must have JOINED A's open run before the source is released — that is the coalescing this
-        // asserts. `runs` is the observable for it; a sleep was a guess at how long a join takes.
-        await until('both readers joined the one run', () => runs === 1 && collectedA.length > 0)
-        release()
-        await Promise.all([readerA, readerB])
-
-        expect(runs).toBe(1) // B coalesced onto A's run → the open stream slot was NOT evicted
-        expect(collectedA.length).toBe(3)
-        expect(collectedB.length).toBe(3)
     })
 })

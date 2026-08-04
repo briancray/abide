@@ -215,6 +215,20 @@ export interface MemoOptions {
     // fields incrementally) — the throw is the enforcement, matching this file's other construction
     // guards.
     debounce?: number
+    // INTERNAL (set by a test, never by an author): the per-stream transcript cap in bytes, overriding
+    // `ABIDE_MAX_STREAM_BUFFER_SIZE`.
+    //
+    // The env var is read FRESH at each use so an operator can retune a running process, which is
+    // correct and stays the default. What it is not is a seam: the only way to exercise the overflow
+    // path was to MUTATE `Bun.env` and delete it in an `afterEach` — the module-level-global-a-test-
+    // mutates pattern `slotRetention.ts` argues against next door, with the same failure mode it names
+    // (a global outlives the file that set it and leaves the next file in the process asserting
+    // nothing). An explicit parameter costs one `??` on a path that already reads a function.
+    //
+    // Internal rather than public for the same reason `loader` below is: it is a test seam, not an
+    // authoring decision — a per-memo buffer ceiling is not something an app should be tuning per call
+    // site when the operator knob is process-wide.
+    maxStreamBuffer?: number
     // INTERNAL (set by `makeRpc`, never by an author): this memo wraps a LOADER — an rpc handler —
     // rather than a derivation. An async body is the expected shape for a loader, so the auto-tracking
     // diagnostic (ADR 0027 D8) does not apply and would fire on every zero-arg rpc as pure noise.
@@ -452,6 +466,9 @@ export function memo<Args, T>(
     // (`clockMs === 0`) is a single compare on every memo that configured no clock at all.
     const clockMs = throttleMs > 0 ? throttleMs : debounceMs
     const clockIsDebounce = debounceMs > 0
+    // The per-stream cap: the declared override, else the env var read FRESH at each use (so an
+    // operator retuning a running process still takes effect on a memo that declared nothing).
+    const streamCap = (): number => opts?.maxStreamBuffer ?? streamBufferCap()
     const id = opts?.key ?? `memo#${++memoCounter}`
     // `crossRequest` is server-only; on the client it is inert (falls through to the client cache).
     const crossRequest = opts?.crossRequest === true && !isBrowser
@@ -1011,7 +1028,7 @@ export function memo<Args, T>(
         if (slot.state.peek().stream !== stream) return // stale (slot re-ran)
         const store = boundedStore(slots())
         if (store === undefined) return
-        if (stream.bytes > streamBufferCap()) {
+        if (stream.bytes > streamCap()) {
             stream.markOverflowed() // abort + drop replay eligibility; buffer stops growing
             return
         }
@@ -1046,8 +1063,7 @@ export function memo<Args, T>(
         // re-measures on its next cold fill, so the window is bounded — and the alternative is reading
         // two env vars on every chunk to answer a question whose answer is a deployment constant.
         const store = boundedStore(slots())
-        const accounted =
-            store !== undefined && (sharedCacheBounded() || streamBufferCap() !== Infinity)
+        const accounted = store !== undefined && (sharedCacheBounded() || streamCap() !== Infinity)
         const stream = new ReplayableStream<unknown>({
             onAbort: () => controller.abort(),
             onRefCountZero: () => onStreamRefCountZero(slot, stream),
