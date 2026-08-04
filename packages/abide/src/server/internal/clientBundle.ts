@@ -40,7 +40,9 @@ import { type RpcSpec, rpcSpecOf } from '../../shared/internal/rpcSpec.ts'
 import { encodeMaxAge, type SocketSpec } from '../../shared/internal/socketSpec.ts'
 import { log } from '../../shared/log.ts'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
+import { rewriteImportSpecifier } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
+import { rewriteRuntimeImport } from '../../ui/internal/RUNTIME_IMPORT.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
 import { resolveTemplateAlias } from '../../ui/internal/resolveTemplateAlias.ts'
 import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
@@ -220,10 +222,7 @@ function resolveModuleImports(
         if (seen.has(specifier)) continue
         seen.add(specifier)
         const absolute = resolvePassThroughImport(specifier, sourceDir)
-        out = out.replaceAll(
-            `from ${JSON.stringify(specifier)}`,
-            `from ${JSON.stringify(absolute)}`,
-        )
+        out = rewriteImportSpecifier(out, specifier, absolute)
     }
     return out
 }
@@ -263,7 +262,7 @@ async function emitOne(
     modules.push({ file, locals: importedLocals(analysis) })
     visited.set(key, index) // register before recursion (cycle guard)
 
-    let client = emitted.client.replace('"abide/ui/internal/runtime"', JSON.stringify(RUNTIME_PATH))
+    let client = rewriteRuntimeImport(emitted.client, 'client', RUNTIME_PATH)
     client = resolveCssImports(client, analysis.cssImports, sourceDir)
     client = resolveModuleImports(client, analysis.moduleImports, sourceDir)
 

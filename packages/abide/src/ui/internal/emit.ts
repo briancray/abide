@@ -10,10 +10,11 @@
 import { unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { analyzeBindings, type BindingAnalysis } from './analyzeBindings.ts'
+import { analyzeBindings, type BindingAnalysis, rewriteImportSpecifier } from './analyzeBindings.ts'
 import { emitClientModule } from './emitClient.ts'
 import { emitServerModule } from './emitServer.ts'
 import { parse } from './parse.ts'
+import { rewriteRuntimeImport } from './RUNTIME_IMPORT.ts'
 import { resolvePassThroughImport } from './resolvePassThroughImport.ts'
 import { resolveTemplateAlias } from './resolveTemplateAlias.ts'
 import { buildPlan } from './templatePlan.ts'
@@ -227,10 +228,11 @@ async function emitTree(
     const emitted = emitModuleSource(source, dir)
     let src = side === 'client' ? emitted.client : emitted.server
     if (target.siblingRuntime) {
-        const runtimeFrom =
-            side === 'client' ? '"abide/ui/internal/runtime"' : '"abide/ui/internal/serverRuntime"'
-        const runtimeTo = side === 'client' ? '"./runtime.ts"' : '"./serverRuntime.ts"'
-        src = src.replace(runtimeFrom, runtimeTo)
+        src = rewriteRuntimeImport(
+            src,
+            side,
+            side === 'client' ? './runtime.ts' : './serverRuntime.ts',
+        )
     }
 
     // The compiled module is written elsewhere than next to the `.abide`, so an ordinary import
@@ -238,10 +240,7 @@ async function emitTree(
     // absolute path resolved from the SOURCE's dir before it is written.
     for (const binding of emitted.analysis.moduleImports) {
         const absolute = resolvePassThroughImport(binding.specifier, dir)
-        src = src.replaceAll(
-            `from ${JSON.stringify(binding.specifier)}`,
-            `from ${JSON.stringify(absolute)}`,
-        )
+        src = rewriteImportSpecifier(src, binding.specifier, absolute)
     }
 
     const basename = target.name(key, side)
@@ -263,10 +262,7 @@ async function emitTree(
             files,
             target,
         )
-        src = src.replaceAll(
-            `from ${JSON.stringify(componentImport.specifier)}`,
-            `from ${JSON.stringify(`./${childBasename}`)}`,
-        )
+        src = rewriteImportSpecifier(src, componentImport.specifier, `./${childBasename}`)
     }
 
     const file = `${target.outDir}/${basename}`

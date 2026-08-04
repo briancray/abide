@@ -17,6 +17,7 @@ import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
 import { bindPattern } from './bindPattern.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
+import { runtimeImportStatement } from './RUNTIME_IMPORT.ts'
 import { splitParams } from './scanText.ts'
 import { applyStatic, attrBuilder } from './serverRuntime.ts'
 import type { AttrPlan, ServerChunk, TemplatePlan } from './templatePlan.ts'
@@ -775,7 +776,7 @@ export function emitServerModule(plan: TemplatePlan, analysis: BindingAnalysis):
         moduleImports += `${reconstructImport(binding)}\n`
     }
     return (
-        `import * as $rt from "abide/ui/internal/serverRuntime";\n` +
+        runtimeImportStatement('server') +
         componentImports +
         moduleImports +
         `\n` +

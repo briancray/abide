@@ -12,6 +12,7 @@ import { unlink } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { state } from '../../shared/internal/reactive.ts'
 import { emitModuleSource } from './emit.ts'
+import { rewriteRuntimeImport } from './RUNTIME_IMPORT.ts'
 import type { Mountable } from './runtime.ts'
 
 function tick(): Promise<void> {
@@ -29,7 +30,7 @@ type ComponentAdapter = (
 // so the temp file is safe to unlink immediately.
 async function loadClientDefault(source: string): Promise<ComponentAdapter> {
     const { client } = emitModuleSource(source)
-    const src = client.replace('"abide/ui/internal/runtime"', '"./runtime.ts"')
+    const src = rewriteRuntimeImport(client, 'client', './runtime.ts')
     const file = `${import.meta.dir}/.emit-adapter-${crypto.randomUUID()}.client.ts`
     await Bun.write(file, src)
     try {

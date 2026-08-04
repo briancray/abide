@@ -19,6 +19,7 @@ import { bindPattern } from './bindPattern.ts'
 import { bindTargetKind } from './bindTarget.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
 import { indent } from './indent.ts'
+import { runtimeImportStatement } from './RUNTIME_IMPORT.ts'
 import { closeFinderFor, openIndexFor, SLOT_FOOTPRINT } from './SLOT_FOOTPRINT.ts'
 import { splitParams } from './scanText.ts'
 import type { ClientPlan, DynamicSlot, SlotKind, TemplatePlan } from './templatePlan.ts'
@@ -93,7 +94,8 @@ class ClientEmitter {
             cssImports +
             componentImports +
             moduleImports +
-            `import * as $rt from "abide/ui/internal/runtime";\n\n` +
+            runtimeImportStatement('client') +
+            '\n' +
             templates +
             '\n' +
             emitModuleEnsure(this.analysis) +
