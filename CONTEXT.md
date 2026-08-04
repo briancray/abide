@@ -43,6 +43,23 @@ between it and the string is invisible. The guard is a FIXTURE that goes through
 `abide check` fails the moment the shapes part company. It was being caught only by the docs app, one
 package away, with nothing pointing at it.
 
+**The seam the pattern had not reached is the EMITTED TEXT.** The compiler writes
+`import * as $rt from "abide/ui/internal/runtime"` as a string literal and three modules found it again by
+pattern match, each spelling the search term itself including its double quotes — so producer and
+consumers agreed by coincidence, and `String.replace` answers "no match" by returning the input unchanged.
+A quoting change left a temp module holding the bare package specifier: an unresolved import later, or
+where the rewrite was what pointed at a real file, the WRONG runtime loaded and no error at all.
+`RUNTIME_IMPORT.ts` owns the specifier, the `$rt` namespace, the statement and the rewrite — and
+`rewriteRuntimeImport` THROWS when the substitution finds nothing, because a rewrite that cannot find what
+it was written to replace has had its premise invalidated.
+
+A related defect is recorded and NOT fixed, at `parseImport`: a non-CSS side-effect import
+(`import "./polyfill.ts"`) in a `<script>` is silently deleted from both substrates, next to imports that
+survive. `reconstructImport` already re-emits the clause-less form and has never been reachable, which is
+the evidence it was meant to work. Fixing it in `parseImport` is inert — the statement SCANNER upstream
+never produces a record for that form — and the attempt broke every stylesheet, because a `.css`
+side-effect import IS owned, by `cssSideEffectSpecifier`, exactly when there is no binding.
+
 ## Adopted ambient
 
 A value the **server resolved** that the browser **adopts and never mints**.
@@ -90,6 +107,33 @@ different ways (a branch-local `<script>` emitting nothing being the worst). `te
 are; `site` carries the one thing the callers legitimately differ on (an element's children fold into the
 parent level and cannot host a `<script>`; a block body is its own level).
 
+## Request pipeline
+
+What happens to a request between arriving and leaving, as a named module
+(`server/internal/handleRequest.ts`): trace mint, WS-upgrade gate, route classification, identity, scope,
+CORS preflight, CSRF, the middleware onion, dispatch, and the one `exit()` every response goes through.
+
+It was an anonymous closure inside `Bun.serve({ fetch })`, which cost two things. Its thirteen-stage
+ORDER was held by textual position plus a comment saying the order is load-bearing — `exit()` had
+mechanized two stages, and the other eleven were whatever the code happened to do next. And the only way
+to ask what an app answers for a request was to bind an OS port: 41 test files did, one of them booting a
+server over loopback to assert three header strings.
+
+`routeClass.ts` gave each dispatch BRANCH a name; this is the pipeline that runs them. `Bun.serve`'s
+`fetch` is now the adapter — it supplies the request, the server and the boot-derived policy, nothing
+else. This does NOT replace `createTestApp`: testing.md TE1.1's real-`Bun.serve`-on-a-real-port
+integration door is unchanged, and the point is that a test needing CSRF + middleware + dispatch but
+nothing from TCP now has a way to say so.
+
+**The route class's four cross-cutting treatments are declared in two places, and the split has a
+reason.** `RouteClass` carries `methods` + `handle`. The chain rung and CORS cannot join it — the chain
+WRAPS dispatch, and dispatch is what resolves the class — so they are declared against the KIND
+(`ROUTE_KIND_POLICY`, a total `Record<RouteKind, …>`), which `routeInfo` knows early enough. Same
+property either way: a new kind does not compile until it says which chain authorizes it and whether it
+answers CORS. Before, a new kind picked up the `?? config.middleware` fallback by falling off the end of
+one `info.kind` ladder and the not-an-rpc answer by falling off another — silently, and toward the
+WEAKER chain.
+
 ## Chain rung
 
 Which layer of middleware a unit of work owes. There are two, and conflating them is the design error the
@@ -123,6 +167,14 @@ Four invariants hold this together and each has a test that fails on it:
   is a SCOPE rather than an assignment because concurrent reads on one request would clobber a field.
 - **One installer, every boot.** `bindRpcChains` is called by `createApp`, by `abide dev`'s rebuild and by
   `abide run`, because which door built the app must not decide whether a read is authorized.
+
+**The socket side has its own rung selector** (`socketChainFor`), and it took four spellings and three
+answers to get one: the HTTP face owes both rungs, a WS room join owes both but is CONNECT-AUTHED when
+the socket declares no per-room gate, and an MCP tool call owes the own rung alone (the router already
+ran the global one for that request). All three are correct and none is the same, which is exactly why
+they belong where they can be read against each other. `CONNECT_AUTHED` is a `ws-join`-only answer and
+the function is overloaded on the door so the other two never carry a `| undefined` for a case they
+cannot receive.
 
 ## Derived-from-the-registry
 
@@ -254,6 +306,27 @@ was written out three times, and two of the three had no test — every fail-clo
 body, and the two sync paths fail SYNCHRONOUSLY, so `rejects.toThrow` would have passed over them
 vacuously.
 
+**The derivation backing is now a module** (`shared/internal/autoBacking.ts`). It had everything a module
+has except a file — a declared interface (`AutoBacking`), a constructor, and coupling narrow enough to
+name (the eight fields of `AutoBackingContext`). It is also a seam the TESTS need and no CALLER crosses:
+nothing outside `memo.ts` ever touched `AutoBacking`, yet half of `memo.test.ts` drove it through the
+whole memo surface, so every case there also exercised slot allocation, the store and the read classifier
+to assert something about a `computed`. Two prerequisites came out with it — `slotState.ts` (both fill
+paths hold that type, and its being private was what kept the backing in) and `isStreamSource.ts`.
+
+Still inside `memo.ts` and assessed rather than moved: the STREAM-slot lifecycle. Its `settleSlot` / pin /
+`isExpired` interlock needs a designed interface rather than a mechanical lift, and its two byte ceilings
+are read fresh at the leaf from env — which is why `streamShared.test.ts` mutates `Bun.env` in an
+`afterEach`, the module-level-global-a-test-mutates pattern `slotRetention.ts` argues against next door.
+
+**`slotRetention.ts` is the cautionary half.** It bought an injectable clock so "a settle point cannot
+record a different clock than the predicate reads" — and `memo.ts` called `stampRetained` ONCE while
+writing `loadedAt = Date.now()` by hand at eight other settle points, so the contract was true of the
+predicate and false of the stamp. Declaring an owner is not what makes callers use it; being the only way
+to spell the operation is. It now has a verb per operation (`stampRetained` / `stampExpired` /
+`clearExpiry` / `clearRetention`), because `expired` and `loadedAt` always move together at a settle and
+writing one without the other retains a dead value or expires a live one.
+
 ## Substrate
 
 Which machine an emitted template runs on: `serverRuntime` builds an HTML **string**, `runtime` mutates a
@@ -319,6 +392,28 @@ A reactive read of a slot's *status* rather than its value — `peek` / `pending
 `error` / `chunks` / `done`. The vocabulary is one declaration (`ReactiveValueProbes` +
 `ReactiveStreamProbes`) that `memo`, `channel`, `socket`, `Rpc` and `StreamRead` all derive from,
 parameterized by value type and by arg-tuple. A probe wakes for its **own** axis.
+
+## Dispatcher
+
+`cli/main.ts` — argv in, a command out, and nothing else. `build.ts` states the rule for itself ("a
+MODULE rather than a function body inside `main.ts`, because `main.ts` is the CLI DISPATCHER"), and the
+extraction stopped there: `bundle`, `scaffold` and `forwardLsp` stayed, so `bundle/bundle.test.ts`
+imported a launcher writer from the dispatcher and pulled in `serve`, `compile`, `run` and the starter
+constants. `dispatcherFloor.test.ts` asserts the rule instead of restating it.
+
+**The EXIT CODE is part of the interface.** `CommandContext` injected `cwd`/`write`/`writeError`/`usage`
+"so the dispatcher is callable from a test rather than only from a shell" — everything except the one
+thing a CLI invocation's result IS. Six sites assigned `process.exitCode`, while the COMPILED surface,
+over the same `CLI_EXIT_CODES` table, already returned its code. `main` returns `CliOutcome`, commands
+signal with `fail(code)`, `bin.ts` is the only place it reaches the process, and the test lost its
+save/zero/restore dance.
+
+**A floor test that invents edges out of prose is worse than none.** The shared static walker
+(`test/internal/moduleGraph.ts`, extracted rather than copied) matched the `import` inside `build.ts`'s
+own COMMENT — the one quoting the edge that module exists to have deleted — and reported
+`build.ts → main.ts → serve/compile/run`. Comment lines are stripped now. The walker's other two standing
+caveats are unchanged: a floor resting on tree-shaking is not a floor, and every floor asserts a CONTROL
+so an empty offender list means absence rather than a broken walk.
 
 ## Command surface
 
