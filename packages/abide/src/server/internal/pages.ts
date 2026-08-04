@@ -28,22 +28,24 @@ import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema
 import type { SoftNavFrame } from '../../shared/internal/softNavFrame.ts'
 import { log } from '../../shared/log.ts'
 import { route } from '../../shared/route.ts'
-import type { State, StateFactory } from '../../shared/state.ts'
+import type { State } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
 import { trace } from '../../shared/trace.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
 import { loadEmittedServer } from '../../ui/internal/emit.ts'
 import { HYDRATION_ELEMENT_ID } from '../../ui/internal/HYDRATION_ELEMENT_ID.ts'
+import type { RenderStream } from '../../ui/internal/renderState.ts'
 import { closeRenderState, openRenderState, renderState } from '../../ui/internal/renderState.ts'
 import type { ServerScopeBindings } from '../../ui/internal/SCOPE_PROVIDED.ts'
-import { SITE_PATH } from '../../ui/internal/SITE_PATH.ts'
 import { escapeHtml, Raw } from '../../ui/internal/serverRuntime.ts'
+import { type SiteStateFactory, siteStateFactory } from '../../ui/internal/siteStateFactory.ts'
 import {
     createRenderStream,
     documentPatch,
     documentPatchPreamble,
     drainPatches,
+    type Patch,
 } from '../../ui/internal/streamScheduler.ts'
 import { context } from '../context.ts'
 import { cookies } from '../cookies.ts'
@@ -134,32 +136,23 @@ function renderStateOrThrow(): { states: Record<string, unknown[]> } {
     return state
 }
 
-function makeRecordingState(): StateFactory {
+// The descent is `siteStateFactory`'s — the same walk the client REPLAYER runs, so the two ends of the
+// record/replay pair share the traversal as well as the `SITE_PATH` grammar. All that is left here is
+// what one `state()` call does: append its initial to this bucket.
+function makeRecordingState(): SiteStateFactory {
     const buckets = renderStateOrThrow().states
-    function at(sitePath: string, bucketPath: string): StateFactory {
-        let bucket = buckets[bucketPath]
+    return siteStateFactory((path) => {
+        let bucket = buckets[path]
         if (bucket === undefined) {
             bucket = []
-            buckets[bucketPath] = bucket
+            buckets[path] = bucket
         }
         const owned = bucket
-        const rec = function recordState<T>(initial: T, transform?: (value: T) => T): State<T> {
+        return <T>(initial: T, transform?: (value: T) => T): State<T> => {
             owned.push(initial)
             return state(initial, transform)
-        } as StateFactory
-        return Object.assign(rec, {
-            shared: state.shared,
-            forSite(siteId: number): StateFactory {
-                const next = SITE_PATH.forSite(sitePath, siteId)
-                return at(next, next)
-            },
-            forItem(index: number): StateFactory {
-                const next = SITE_PATH.forItem(sitePath, index)
-                return at(next, next)
-            },
-        }) as StateFactory
-    }
-    return at(SITE_PATH.root, SITE_PATH.root) // the page/root bucket
+        }
+    })
 }
 
 // Render one composed level (a layout or the page) to its inner SSR HTML. When a deeper level exists,
@@ -531,6 +524,31 @@ function streamRetainedRender(
 // flushes last. The drain + `collectSeed` run inside the captured request scope so they read the
 // same request cache. The render-error → 500 guarantee holds: `renderPage` (which awaits blocking
 // reads) has already returned before this stream is constructed.
+// Does this render have anything to stream? Asked by both transports below, and by the document one
+// BEFORE it drains — the move-script preamble is written eagerly, in the same flush as the shell, so a
+// reader's first chunk is unchanged by the fact that it is now written through a shared helper.
+function hasPatches(stream: RenderStream | undefined): boolean {
+    return stream !== undefined && (stream.deferred.length > 0 || stream.streamers.length > 0)
+}
+
+// Drain every deferred subtree / streamer into `emit`, in the captured request scope. Both streaming
+// transports below do exactly this and differ only in how they FRAME a patch, so the guard, the scope
+// and the disconnect check have one statement rather than two that have to agree.
+async function drainInto(
+    ctx: ReactiveScope,
+    stream: RenderStream | undefined,
+    out: { disconnected: boolean },
+    emit: (patch: Patch) => void,
+): Promise<void> {
+    if (!hasPatches(stream) || stream === undefined) return
+    await enterScope(ctx, async () => {
+        for await (const patch of drainPatches(stream)) {
+            if (out.disconnected) break // client gone — stop draining
+            emit(patch)
+        }
+    })
+}
+
 export function streamPageDocument(
     shell: string,
     ctx: ReactiveScope,
@@ -542,17 +560,10 @@ export function streamPageDocument(
     return streamRetainedRender(ctx, 'streaming SSR drain', async (out) => {
         out.write(head)
         out.write(shell)
-        if (stream !== undefined && (stream.deferred.length > 0 || stream.streamers.length > 0)) {
-            // The move-scripts, once per document rather than once per patch — written only on a page
-            // that actually defers something.
-            out.write(documentPatchPreamble())
-            await enterScope(ctx, async () => {
-                for await (const patch of drainPatches(stream)) {
-                    if (out.disconnected) break // client gone — stop draining
-                    out.write(documentPatch(patch))
-                }
-            })
-        }
+        // The move-scripts, once per document rather than once per patch — written only on a page that
+        // actually defers something, and in this same first flush.
+        if (hasPatches(stream)) out.write(documentPatchPreamble())
+        await drainInto(ctx, stream, out, (patch) => out.write(documentPatch(patch)))
         // A drain error skips the tail: a document missing its seed is worse than a truncated one.
         const seed = enterScope(ctx, () => collectSeed(config))
         out.write(documentTail(seed, opts))
@@ -587,17 +598,9 @@ export function streamSoftNav(
         // layout instances alive and grafts this into the innermost kept layout's outlet (C6.2).
         frame({ kind: 'shell', html: shell, url: urlPath, sharedLevels })
         try {
-            if (
-                stream !== undefined &&
-                (stream.deferred.length > 0 || stream.streamers.length > 0)
-            ) {
-                await enterScope(ctx, async () => {
-                    for await (const patch of drainPatches(stream)) {
-                        if (out.disconnected) break // client gone — stop draining
-                        frame({ kind: patch.op, id: patch.id, html: patch.html }) // "fill" | "append"
-                    }
-                })
-            }
+            await drainInto(ctx, stream, out, (patch) => {
+                frame({ kind: patch.op, id: patch.id, html: patch.html }) // "fill" | "append"
+            })
         } catch (caught) {
             // A drain error still emits the seed — unlike first load, the client has already swapped the
             // shell in and needs the seed to hydrate what DID render.

@@ -18,6 +18,7 @@
 // app's own RPCs as tools to the spawned Claude Code via abide's MCP face (`--mcp-config` at the app
 // URL + auth token) and reconciling Claude Code's permission model with abide's `ApprovalPolicy`.
 
+import { readLines } from '../shared/internal/readLines.ts'
 import { collectText, stringify } from './internal/agentText.ts'
 import type {
     AgentEngine,
@@ -343,31 +344,14 @@ interface StreamJsonBlock {
 
 // Newline-delimited JSON reader over the child's stdout. Yields each parsed line object; malformed
 // lines are skipped rather than aborting the turn (matches the SSE parser in claudeEngine).
+//
+// Framing is `readLines`', which already yields an unterminated final line — the copy that used to
+// live here re-derived that same tail rule by hand, one file away from the SSE copy that got it wrong.
 async function* ndjsonLines(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamJsonLine> {
-    const reader = body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        let newlineIndex = buffer.indexOf('\n')
-        while (newlineIndex !== -1) {
-            const rawLine = buffer.slice(0, newlineIndex)
-            buffer = buffer.slice(newlineIndex + 1)
-            const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
-            if (line.trim() === '') continue
-            const parsed = tryParse(line)
-            if (parsed !== undefined) yield parsed
-            newlineIndex = buffer.indexOf('\n')
-        }
-    }
-
-    const tail = buffer.trim()
-    if (tail !== '') {
-        const parsed = tryParse(tail)
+    for await (const raw of readLines(body)) {
+        const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+        if (line.trim() === '') continue
+        const parsed = tryParse(line)
         if (parsed !== undefined) yield parsed
     }
 }

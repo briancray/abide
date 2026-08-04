@@ -11,6 +11,8 @@
 //     UNCHANGED. Truncating a value we cannot fully describe would be worse than over-returning, so
 //     shaping only ever removes fields it is certain are undeclared.
 
+import { isStandardSchema } from '../StandardSchema.ts'
+import { isPlainObject } from './isPlainObject.ts'
 import type { JSONSchema } from './jsonSchema.ts'
 
 // The JSON Schema keywords abide emits. A value carrying any of these (and NOT a `~standard` marker)
@@ -31,15 +33,11 @@ const JSON_SCHEMA_KEYWORDS = [
 // schema at all (both cases: pass the value through unshaped).
 export function jsonSchemaOf(schema: unknown): JSONSchema | undefined {
     if (typeof schema !== 'object' || schema === null) return undefined
-    if ('~standard' in schema) return undefined
+    if (isStandardSchema(schema)) return undefined
     for (const keyword of JSON_SCHEMA_KEYWORDS) {
         if (keyword in schema) return schema as JSONSchema
     }
     return undefined
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 // Trim `value` to the fields `schema` declares. `schema === undefined` (or any non-shapeable schema)

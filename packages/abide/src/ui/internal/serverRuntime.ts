@@ -20,6 +20,7 @@ import {
     styleDirectiveApplies,
 } from './attributeDisposition.ts'
 import { bindTargetKind } from './bindTarget.ts'
+import { isAccessorBound, isStateLikeBound } from './boundShape.ts'
 import { HTML_ANCHOR } from './HTML_ANCHOR.ts'
 
 // Re-exported so the emitted server `{#for await}` can flip the `done(source)` probe when it fully
@@ -250,18 +251,13 @@ export function applyStyleDir(builder: AttributeBuilder, name: string, value: un
     if (styleDirectiveApplies(value)) builder.addStyle(`${name}: ${String(value)}`)
 }
 
-// Resolve a bound value through its accessor exactly as the client `boundAccessor` does: a writable
-// state (callable with `.set`) is invoked, an explicit `{ get, set }` reads via `.get()`, otherwise
-// the raw value passes through (bare state vars already evaluate to their value server-side).
+// Resolve a bound value through its accessor exactly as the client `boundAccessor` does — literally,
+// now: both ask `boundShape.ts`, which is what makes the word "exactly" true (the two used to disagree
+// about what counts as an accessor). Otherwise the raw value passes through: a bare state var already
+// evaluates to its value server-side.
 function resolveBound(bound: unknown): unknown {
-    if (typeof bound === 'function' && typeof (bound as { set?: unknown }).set === 'function') {
-        return (bound as () => unknown)()
-    }
-    if (bound !== null && typeof bound === 'object') {
-        const object = bound as { get?: () => unknown; set?: unknown }
-        if (typeof object.get === 'function' && typeof object.set !== 'undefined')
-            return object.get()
-    }
+    if (isStateLikeBound(bound)) return bound()
+    if (isAccessorBound(bound)) return bound.get()
     return bound
 }
 

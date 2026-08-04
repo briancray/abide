@@ -243,6 +243,22 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): ErasedSo
     return proxy as unknown as ErasedSocketSurface
 }
 
+// ONE proxy per `(base, socket name)` for the life of the tab — the same cache `makeClientImports`
+// grew for RPC, for the same reason and with the same key. This is called from `buildPageScope`, i.e.
+// once per MOUNT, so every navigation used to mint a fresh proxy: a fresh `rooms` map, a fresh
+// `ChannelHub` and two state cells per room. The old graph is not merely garbage either — `muxSubscribe`
+// dedups on `(name, room)` and early-returns, so the stale `onMessage` closure stays registered in the
+// mux and the NEW proxy's hub receives nothing.
+//
+// Keyed on base too, for the RPC cache's reason: a cross-origin `base` is a different endpoint.
+const socketProxyCache = new Map<string, ErasedSocketSurface>()
+
+// Drop every cached proxy — TESTS ONLY, and required by them: the cache is module state. The sibling of
+// `clearClientProxyCache`.
+export function clearSocketProxyCache(): void {
+    socketProxyCache.clear()
+}
+
 // Build the imports map injected into a page's client `$scope`: socket name → its client proxy
 // (parallel to `makeClientImports` for RPC). The emitted mount reads these off `$scope` by the local
 // name the page imported from `server/sockets/<name>.ts`.
@@ -252,7 +268,13 @@ export function makeClientSocketImports(
 ): Record<string, ErasedSocketSurface> {
     const imports: Record<string, ErasedSocketSurface> = {}
     for (const [name, spec] of Object.entries(specs)) {
-        imports[name] = makeSocketProxy(name, spec, base ?? '')
+        const key = `${base ?? ''}\u0000${name}`
+        let proxy = socketProxyCache.get(key)
+        if (proxy === undefined) {
+            proxy = makeSocketProxy(name, spec, base ?? '')
+            socketProxyCache.set(key, proxy)
+        }
+        imports[name] = proxy
     }
     return imports
 }

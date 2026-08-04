@@ -53,7 +53,7 @@ import { compose, type Middleware } from './middleware.ts'
 
 // THE OWN RUNG — per READ, from every door. One definition, so the bind site and `rpcChainFor` below
 // cannot come to disagree about what "the rpc's own middleware" is.
-export function ownMiddlewareFor(route: Route): Middleware[] {
+function ownMiddlewareFor(route: Route): Middleware[] {
     return route.__rpc.options.middleware ?? []
 }
 
@@ -162,7 +162,7 @@ function chainUrl(outer: ReactiveScope | undefined, name: string, args: unknown)
 // channel is a throw, and `toHttpError` is the same decoder the browser proxy uses on a non-2xx — so a
 // middleware `error(403)` reaches an in-process caller as the identical `HttpError` a browser caller
 // catches, and `fn.isError(e, name)` narrows the same on both.
-export async function throughChain<T>(
+async function throughChain<T>(
     middleware: Middleware[],
     produce: () => Promise<T>,
     read: { name: string; args: unknown },

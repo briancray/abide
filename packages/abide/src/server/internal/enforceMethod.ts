@@ -33,7 +33,7 @@ function admitted(allowed: readonly string[]): string[] {
     return methods
 }
 
-export function allowHeader(allowed: readonly string[]): string {
+function allowHeader(allowed: readonly string[]): string {
     return admitted(allowed).join(', ')
 }
 

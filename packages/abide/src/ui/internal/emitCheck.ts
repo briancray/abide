@@ -23,16 +23,12 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
+import { escapeRegExp } from '../../shared/internal/escapeRegExp.ts'
 import type { BindingAnalysis } from './analyzeBindings.ts'
 import type { AttributeNode, Root, Script, TemplateNode } from './ast.ts'
 import { attributeParts } from './attributeParts.ts'
 import { skipQuoted, splitTopLevel, topLevelAssignmentIndex } from './scanText.ts'
 import { isClose, isOpen, statementExtent, tokenAt, tokenize } from './tokens.ts'
-
-// A local name is an identifier, so this only ever has to neutralise `$`.
-function escapeForRegExp(name: string): string {
-    return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 // A verbatim span of the generated file: [genStart, genEnd) maps to original offset `origStart`.
 export interface Segment {
@@ -217,7 +213,7 @@ function deriveProps(source: string, root: Root, propsLocal: string): string {
     if (root.instanceScript !== null) scripts.push(root.instanceScript)
     for (const script of scripts) {
         const content = source.slice(script.contentStart, script.contentEnd)
-        const match = new RegExp(`\\b${escapeForRegExp(propsLocal)}\\s*<`).exec(content)
+        const match = new RegExp(`\\b${escapeRegExp(propsLocal)}\\s*<`).exec(content)
         if (match !== null) {
             const lt = match.index + match[0].length - 1
             const gt = scanBalancedAngle(content, lt)

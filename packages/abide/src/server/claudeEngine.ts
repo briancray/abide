@@ -4,9 +4,10 @@
 // `/v1/messages` with `stream: true`, parses the SSE event stream, and emits text/thinking deltas,
 // tool-call frames, a usage frame, then `message-stop`. The loop — not the engine — decides `done`.
 //
-// Raw `fetch` + a hand-rolled SSE line parser keep this dependency-free and on web standards. Live
+// Raw `fetch` + `readLines` over the body keep this dependency-free and on web standards. Live
 // use needs `ANTHROPIC_API_KEY` (or an explicit `apiKey`); the tests stub `fetch` entirely.
 
+import { readLines } from '../shared/internal/readLines.ts'
 import { collectText, stringify } from './internal/agentText.ts'
 import type {
     AgentEngine,
@@ -300,30 +301,20 @@ function toolResultBlock(part: {
 
 // SSE line parser over the response body. Yields the JSON payload of each `data:` line; the parsed
 // object's own `type` field carries the event name, so callers switch on that.
+//
+// Framing is `readLines`', not a local copy of it. The copy that used to live here dropped an
+// unterminated final line, so a body whose last `data:` frame arrived without a trailing newline lost
+// that event — invisible to a fixture that ends in `\n`, which is every test in this file.
 async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
-    const reader = body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        let newlineIndex = buffer.indexOf('\n')
-        while (newlineIndex !== -1) {
-            const rawLine = buffer.slice(0, newlineIndex)
-            buffer = buffer.slice(newlineIndex + 1)
-            newlineIndex = buffer.indexOf('\n')
-            const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
-            if (!line.startsWith('data:')) continue
-            const data = line.slice(5).trim()
-            if (data === '' || data === '[DONE]') continue
-            try {
-                yield JSON.parse(data) as StreamEvent
-            } catch {
-                // Ignore malformed SSE payloads rather than aborting the whole turn.
-            }
+    for await (const raw of readLines(body)) {
+        const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+        if (!line.startsWith('data:')) continue
+        const data = line.slice(5).trim()
+        if (data === '' || data === '[DONE]') continue
+        try {
+            yield JSON.parse(data) as StreamEvent
+        } catch {
+            // Ignore malformed SSE payloads rather than aborting the whole turn.
         }
     }
 }

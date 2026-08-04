@@ -175,3 +175,46 @@ describe('claudeEngine', () => {
         expect(frames[frames.length - 1]).toEqual({ type: 'done' })
     })
 })
+
+// The SSE framing is `readLines`', which yields an unterminated final line. The hand-rolled loop that
+// used to live in `claudeEngine` did not, so a body whose last frame lacked a trailing newline
+// silently lost that event — invisible to every fixture above, which ends in `\n`.
+//
+// The missing decoder flush that copy also had is NOT tested here, deliberately: a stream ending
+// mid-sequence cannot form a valid `data:` payload either way, so no test distinguishes the two
+// implementations on it. `readLines` fixes it for the callers where it IS observable.
+describe('claudeEngine SSE framing', () => {
+    const originalFetch = globalThis.fetch
+    // Raw byte chunks, so a test can end mid-line and split a character mid-sequence.
+    function rawResponse(chunks: Uint8Array[]): Response {
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                for (const chunk of chunks) controller.enqueue(chunk)
+                controller.close()
+            },
+        })
+        return new Response(body, {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream' },
+        })
+    }
+
+    afterEach(() => {
+        globalThis.fetch = originalFetch
+    })
+
+    test('delivers a final data: frame with no trailing newline', async () => {
+        const encoder = new TextEncoder()
+        const text =
+            `data: ${JSON.stringify({ type: 'message_start', message: { usage: {} } })}\n\n` +
+            `data: ${JSON.stringify({
+                type: 'content_block_delta',
+                index: 0,
+                delta: { type: 'text_delta', text: 'tail' },
+            })}` // deliberately unterminated
+        globalThis.fetch = stubFetch([rawResponse([encoder.encode(text)])])
+
+        const frames = await collect(agent(claudeEngine(), [user('hi')]))
+        expect(frames.some((f) => f.type === 'text-delta' && f.text === 'tail')).toBe(true)
+    })
+})

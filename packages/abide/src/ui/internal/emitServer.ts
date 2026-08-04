@@ -439,19 +439,35 @@ function genComponent(
 // skeleton (templatePlan: `<!--[--><!--]-->` per block/component). Leaves carry a trailing `<!---->`
 // inside their own case. Anchors match the client by construction — both sides read the SAME plan, and
 // both spell the markers from `BLOCK_ANCHOR` (asserted end-to-end by `planParity.test.ts`).
+// WHICH SERVER CHUNK KINDS ARE BRACKETED — a total `Record`, not a `switch` with a `default`, for the
+// reason `SLOT_FOOTPRINT` gives for the client's slot kinds: a new kind that brackets its region and is
+// not listed here silently takes the `default` arm, and unbracketed output paints correctly while the
+// hydrate walk falls back to a fresh mount — right-looking HTML, no error. A missing key is now a
+// compile error at the one place the kinds are enumerated. (`ServerChunk['kind']` is its OWN taxonomy,
+// not `SlotKind` — `interp` vs `interpolation`, and a server `style` chunk is a `<style>` element where
+// a `style` SLOT is a directive — so this is the sibling table, not a second reader of that one.)
+const BRACKETED_CHUNK: Record<ServerChunk['kind'], boolean> = {
+    component: true,
+    if: true,
+    for: true,
+    awaitBlock: true,
+    switch: true,
+    try: true,
+
+    static: false,
+    interp: false,
+    html: false,
+    await: false,
+    element: false,
+    componentDef: false,
+    style: false,
+    script: false,
+}
+
 function genChunk(analysis: BindingAnalysis, chunk: ServerChunk): string {
     const code = genChunkRaw(analysis, chunk)
-    switch (chunk.kind) {
-        case 'component':
-        case 'if':
-        case 'for':
-        case 'awaitBlock':
-        case 'switch':
-        case 'try':
-            return `  $out += "<!--${BLOCK_ANCHOR.open}-->";\n${code}  $out += "<!--${BLOCK_ANCHOR.close}-->";\n`
-        default:
-            return code
-    }
+    if (!BRACKETED_CHUNK[chunk.kind]) return code
+    return `  $out += "<!--${BLOCK_ANCHOR.open}-->";\n${code}  $out += "<!--${BLOCK_ANCHOR.close}-->";\n`
 }
 
 function genChunkRaw(analysis: BindingAnalysis, chunk: ServerChunk): string {

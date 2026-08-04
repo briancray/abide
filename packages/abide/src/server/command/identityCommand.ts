@@ -11,6 +11,7 @@
 import { IDENTITY_ROUTE } from '../../shared/internal/IDENTITY_ROUTE.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { cliExitCodeForStatus } from './cliExitCodeForStatus.ts'
+import { reportUnreachable } from './cliFailure.ts'
 
 export async function identityCommand(options: {
     origin: string
@@ -25,14 +26,7 @@ export async function identityCommand(options: {
     try {
         response = await fetch(`${options.origin}${IDENTITY_ROUTE}`, { headers })
     } catch (caught) {
-        options.writeError(
-            `${JSON.stringify({
-                error: 'unreachable',
-                target: options.origin,
-                message: caught instanceof Error ? caught.message : String(caught),
-            })}\n`,
-        )
-        return CLI_EXIT_CODES.failed
+        return reportUnreachable(options.origin, caught, options.writeError)
     }
     const body = await response.text()
     if (!response.ok) {

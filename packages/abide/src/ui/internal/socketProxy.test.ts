@@ -5,7 +5,7 @@
 // (a terminal 1008 close clears the mux) after each test.
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { makeClientSocketImports, type SocketSpec } from './socketProxy.ts'
+import { clearSocketProxyCache, makeClientSocketImports, type SocketSpec } from './socketProxy.ts'
 
 // A structurally FAITHFUL shim for the erased proxy. The probes take an optional key because
 // `ErasedSocketSurface` is `SocketSurface<unknown, unknown>` — `Args` is `unknown`, not `void`, so the
@@ -59,6 +59,10 @@ class FakeWebSocket {
 const saved: Record<string, unknown> = {}
 
 beforeEach(() => {
+    // The proxy cache is module state (one proxy per `(base, name)` for the tab's life), so every test
+    // that expects to build a FRESH proxy — and to see it open a fresh mux subscription — has to drop it.
+    // The sibling of `clearClientProxyCache` in the RPC proxy's tests.
+    clearSocketProxyCache()
     const g = globalThis as Record<string, unknown>
     saved.window = g.window
     saved.WebSocket = g.WebSocket
@@ -172,6 +176,10 @@ test('publish gating: clientPublish:false throws; true sends a pub frame', () =>
     const closed = makeProxy({ clientPublish: false })
     expect(() => closed.publish('x')).toThrow(/client publish is disabled/)
 
+    // Two DIFFERENT specs under one socket name is a test-only situation: the proxy cache keys on
+    // `(base, name)`, so a second `makeClientSocketImports` for `chat` hands back the first proxy —
+    // which is the point of it, since in a real tab the spec for a name is fixed by the build.
+    clearSocketProxyCache()
     const open = makeProxy({ clientPublish: true })
     open.publish('hi')
     const frames = lastWs().sent.map((raw) => JSON.parse(raw))

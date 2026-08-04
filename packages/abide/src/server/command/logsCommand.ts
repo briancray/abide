@@ -21,6 +21,7 @@ import { logFormat } from '../../shared/internal/logFormat.ts'
 import { readLines } from '../../shared/internal/readLines.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { cliExitCodeForStatus } from './cliExitCodeForStatus.ts'
+import { reportStreamInterrupted, reportUnreachable } from './cliFailure.ts'
 
 export interface LogsCommandOptions {
     origin: string
@@ -93,17 +94,6 @@ function feedUrl(origin: string, flags: LogsFlags): string {
     return url.toString()
 }
 
-function unreachable(origin: string, caught: unknown, options: LogsCommandOptions): number {
-    options.writeError(
-        `${JSON.stringify({
-            error: 'unreachable',
-            target: origin,
-            message: caught instanceof Error ? caught.message : String(caught),
-        })}\n`,
-    )
-    return CLI_EXIT_CODES.failed
-}
-
 // Confirm there is an abide server at the other end BEFORE opening a stream that is supposed to be
 // silent. A non-abide host answers this with something that is not the health doc, which is a far more
 // useful thing to print than a tail that never emits.
@@ -117,7 +107,7 @@ async function preflight(options: LogsCommandOptions): Promise<number | undefine
             ...(options.signal === undefined ? {} : { signal: options.signal }),
         })
     } catch (caught) {
-        return unreachable(options.origin, caught, options)
+        return reportUnreachable(options.origin, caught, options.writeError)
     }
     // A 503 is an app reporting itself unhealthy — exactly when you want its logs, so it is not fatal
     // here. Only an answer that is not an abide health doc at all stops us.
@@ -176,7 +166,7 @@ export async function logsCommand(options: LogsCommandOptions): Promise<number> 
             ...(options.signal === undefined ? {} : { signal: options.signal }),
         })
     } catch (caught) {
-        return unreachable(options.origin, caught, options)
+        return reportUnreachable(options.origin, caught, options.writeError)
     }
 
     if (!response.ok) {
@@ -211,13 +201,7 @@ export async function logsCommand(options: LogsCommandOptions): Promise<number> 
         // A detach (REPL Ctrl-C) aborts the fetch, which lands here. That is a clean end to a tail, not
         // a failure — the reader asked to stop.
         if (options.signal?.aborted === true) return CLI_EXIT_CODES.ok
-        options.writeError(
-            `${JSON.stringify({
-                error: 'stream-interrupted',
-                message: caught instanceof Error ? caught.message : String(caught),
-            })}\n`,
-        )
-        return CLI_EXIT_CODES.failed
+        return reportStreamInterrupted(caught, options.writeError)
     }
     return CLI_EXIT_CODES.ok
 }

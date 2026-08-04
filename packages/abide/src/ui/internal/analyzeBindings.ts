@@ -41,9 +41,15 @@
 //   statement/RHS boundaries follow the same line-break (ASI) heuristic as `transformScript.ts`.
 
 import type { SyntaxKind } from 'typescript/unstable/ast'
+import { escapeRegExp } from '../../shared/internal/escapeRegExp.ts'
 import type { Root, Script, TemplateNode } from './ast.ts'
 import { SCOPE_PROVIDED_SPECIFIERS } from './SCOPE_PROVIDED.ts'
-import { matchingBracket, splitParams, topLevelIndexOf } from './scanText.ts'
+import {
+    matchingBracket,
+    splitParams,
+    topLevelAssignmentIndex,
+    topLevelIndexOf,
+} from './scanText.ts'
 import { childListsOf } from './templateChildren.ts'
 import {
     analyzeBraces,
@@ -145,10 +151,11 @@ export interface BindingAnalysis {
     // Branch-local `<script>`s, keyed by their AST node so `templatePlan` can pick each up at the level
     // that owns it. Empty for the overwhelmingly common single-root-script component.
     nested: Map<Script, NestedScript>
-    cellNames: Set<string>
     // Everything a template-expression rewrite needs: cells, auto-called memos, dependency-position
-    // callees. `cellNames` above is `cellBindings.cells` — kept as its own field because WRITABILITY (not
-    // auto-call) is what `bind:` and the seeded-state plumbing key on.
+    // callees. `cells` is the WRITABLE half — what `bind:` and the seeded-state plumbing key on. It was
+    // also published as a top-level `cellNames` field "kept as its own field because WRITABILITY is not
+    // auto-call", but the two were the SAME `Set` object, so the distinction was in the comment only and
+    // no production caller read the alias.
     cellBindings: CellBindings
     declared: Set<string>
     // All side-effect CSS import specifiers across module + instance scripts, in source order.
@@ -475,25 +482,6 @@ function collectVarBindings(
     return names
 }
 
-// Extent of an arrow-function EXPRESSION body starting at token `start`; returns the last body token
-// index. Stops at a depth-0 comma/semicolon or when an enclosing bracket closes.
-function arrowExprEnd(tokens: Tok[], start: number): number {
-    let depth = 0
-    let last = start
-    for (let j = start; j < tokens.length; j++) {
-        const kind = tokenAt(tokens, j).kind
-        if (depth === 0 && (kind === K.CommaToken || kind === K.SemicolonToken))
-            return j > start ? j - 1 : start
-        if (isOpen(kind)) depth++
-        else if (isClose(kind)) {
-            if (depth === 0) return j > start ? j - 1 : start
-            depth--
-        }
-        last = j
-    }
-    return last
-}
-
 function buildShadowedBindings(
     tokens: Tok[],
     braces: BraceInfo,
@@ -594,7 +582,7 @@ function buildShadowedBindings(
             if (tokens[bodyStart] && tokenAt(tokens, bodyStart).kind === K.OpenBraceToken) {
                 bodyEnd = matchClose.get(bodyStart) ?? n - 1
             } else {
-                bodyEnd = arrowExprEnd(tokens, bodyStart)
+                bodyEnd = rhsExtent(tokens, bodyStart)
             }
             for (const pidx of params) {
                 declNameIdx.add(pidx)
@@ -1037,10 +1025,6 @@ function parseImport(rawText: string): ImportBinding | null {
     return binding
 }
 
-function escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 // After a callee name, does an (optional) generic argument list lead into a call `(`? See
 // `callOpenIndex` — this is its boolean face.
 function callFollows(rest: string): boolean {
@@ -1400,7 +1384,11 @@ function analyzeScript(content: string): RawScript {
 
         // var / let / const
         for (const declarator of splitParams(record.rawDeclarators)) {
-            const equalsIndex = topLevelIndexOf(declarator, '=')
+            // `topLevelAssignmentIndex`, not the first top-level `=`: a function-type ANNOTATION
+            // (`let f: () => void = fn`) puts an `=` inside its `=>` ahead of the real assignment.
+            // emitCheck's declarator scan has always asked it this way; this one asked the naive
+            // question, which is the same lane split `statementExtent`'s header records.
+            const equalsIndex = topLevelAssignmentIndex(declarator)
             const pattern = (
                 equalsIndex === -1 ? declarator : declarator.slice(0, equalsIndex)
             ).trim()
@@ -1408,19 +1396,26 @@ function analyzeScript(content: string): RawScript {
             if (pattern === '') continue
             const names = extractBindingNames(pattern)
             let kind: BindingKind = 'const'
-            if (isSimpleIdentifier(pattern)) {
+            // A cell/memo declarator may carry a type annotation — emitCheck accepts `bar: T` and
+            // type-checks the unwrapped init against it, so the build lane has to see the same
+            // declaration. Testing the annotated text made `let n: number = state(0)` a plain const:
+            // `{n}` emitted the callable instead of `n()` and `n = 1` was never rewritten to `.set()`,
+            // with `abide check` green over it because only THIS lane misread it.
+            const annotation = pattern.startsWith('{') ? -1 : topLevelIndexOf(pattern, ':')
+            const bare = annotation === -1 ? pattern : pattern.slice(0, annotation).trim()
+            if (isSimpleIdentifier(bare)) {
                 const cell = cellKind(init, stateLocal)
                 const derived = cell === null ? memoKind(init, memoLocal) : null
                 if (cell) {
                     kind = cell
-                    cells.add(pattern)
+                    cells.add(bare)
                 } else if (derived === 'cell') {
                     // `memo(…).state()` — the writable projection reads and writes exactly like a cell.
                     kind = 'state'
-                    cells.add(pattern)
+                    cells.add(bare)
                 } else if (derived === 'memo') {
                     kind = 'memo'
-                    memos.add(pattern)
+                    memos.add(bare)
                 } else if (isPropsInit(init, propsLocal)) {
                     kind = 'prop'
                 }
@@ -1672,7 +1667,6 @@ export function analyzeBindings(root: Root): BindingAnalysis {
         module,
         instance,
         nested,
-        cellNames,
         cellBindings,
         declared,
         cssImports,

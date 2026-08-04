@@ -35,6 +35,7 @@ import { promisify } from 'node:util'
 import { brotliCompress, constants as zlibConstants } from 'node:zlib'
 import type { BunPlugin } from 'bun'
 import { appName } from '../../shared/internal/appName.ts'
+import { escapeRegExp } from '../../shared/internal/escapeRegExp.ts'
 import { type RpcSpec, rpcSpecOf } from '../../shared/internal/rpcSpec.ts'
 import { encodeMaxAge, type SocketSpec } from '../../shared/internal/socketSpec.ts'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
@@ -503,7 +504,7 @@ async function build(config: AppConfig): Promise<ClientBuild> {
         const chunkByPattern = new Map<string, string>()
         const names = [...files.keys()]
         for (const { pattern, slug } of chainSlugs) {
-            const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const escaped = escapeRegExp(slug)
             const re = new RegExp(`^${escaped}-[0-9a-z]+\\.js$`)
             const match = names.find((name) => re.test(name))
             if (match !== undefined) chunkByPattern.set(pattern, match)
@@ -619,19 +620,25 @@ export async function loadClientBuild(dir: string): Promise<ClientBuild | undefi
     const manifest = normalizeManifest(stored)
     const buildDir = join(dir, 'dist', '_app', stored.hash)
     const encodings = manifest.encodings
-    const files = new Map<string, ChunkAsset>()
-    for (const name of manifest.files) {
-        const available = encodings[name] ?? []
-        files.set(name, {
-            identity: await Bun.file(join(buildDir, name)).bytes(),
-            gzip: available.includes('gzip')
-                ? await Bun.file(join(buildDir, name + ENCODING_EXTENSION.gzip)).bytes()
-                : null,
-            brotli: available.includes('brotli')
-                ? await Bun.file(join(buildDir, name + ENCODING_EXTENSION.brotli)).bytes()
-                : null,
-        })
-    }
+    // CONCURRENTLY: this is on the critical path of `abide start`, before the port binds, and the reads
+    // are independent. Serially it was up to three awaits per file (identity, `.gz`, `.br`) chained
+    // end-to-end — ~185 round trips for a 61-chunk build, each waiting on the last for no reason.
+    const loaded = await Promise.all(
+        manifest.files.map(async (name): Promise<[string, ChunkAsset]> => {
+            const available = encodings[name] ?? []
+            const [identity, gzip, brotli] = await Promise.all([
+                Bun.file(join(buildDir, name)).bytes(),
+                available.includes('gzip')
+                    ? Bun.file(join(buildDir, name + ENCODING_EXTENSION.gzip)).bytes()
+                    : null,
+                available.includes('brotli')
+                    ? Bun.file(join(buildDir, name + ENCODING_EXTENSION.brotli)).bytes()
+                    : null,
+            ])
+            return [name, { identity, gzip, brotli }]
+        }),
+    )
+    const files = new Map<string, ChunkAsset>(loaded)
     return clientBuildFrom({
         entry: manifest.entry,
         css: manifest.css,

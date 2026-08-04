@@ -24,8 +24,14 @@ import {
 import { peekSettled } from '../../shared/internal/settledRead.ts'
 import { streamTranscriptOf } from '../../shared/internal/streamTranscript.ts'
 import { log } from '../../shared/log.ts'
-import { attributeDisposition, isSpreadHandler } from './attributeDisposition.ts'
+import {
+    attributeDisposition,
+    directiveIsOn,
+    isSpreadHandler,
+    styleDirectiveApplies,
+} from './attributeDisposition.ts'
 import { BLOCK_ANCHOR } from './BLOCK_ANCHOR.ts'
+import { isAccessorBound, isStateLikeBound } from './boundShape.ts'
 import { insert, nextSibling, remove } from './domOps.ts'
 import {
     beginForItem,
@@ -449,15 +455,20 @@ export function setAttr(element: Element, name: string, read: () => unknown): Di
     return hydratableEffect(read, (value) => applyAttribute(element, name, value))
 }
 
+// The two directive predicates come from `attributeDisposition`, which exists "so the two runtimes stop
+// spelling the same falsy test twice" — the server runtime imported them and this one re-spelled both
+// inline. They agree today; a directive whose ON-ness changed would have moved one substrate only.
 export function toggleClass(element: Element, className: string, read: () => unknown): Disposer {
-    return hydratableEffect(read, (value) => element.classList.toggle(className, Boolean(value)))
+    return hydratableEffect(read, (value) =>
+        element.classList.toggle(className, directiveIsOn(value)),
+    )
 }
 
 export function setStyleProp(element: Element, property: string, read: () => unknown): Disposer {
     return hydratableEffect(read, (value) => {
         const style = (element as HTMLElement).style
-        if (value === false || value === null || value === undefined) style.removeProperty(property)
-        else style.setProperty(property, String(value))
+        if (styleDirectiveApplies(value)) style.setProperty(property, String(value))
+        else style.removeProperty(property)
     })
 }
 
@@ -479,7 +490,13 @@ export function spread(element: Element, read: () => unknown): Disposer {
         const nextKeys: string[] = []
         const nextHandlerKeys: string[] = []
         if (value !== null && typeof value === 'object') {
-            for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+            // Indexed over `Object.keys`, not `Object.entries`: this runs inside a reactive effect, and
+            // the entries iterator allocated a `[key, entry]` tuple per property on every re-evaluation.
+            const record = value as Record<string, unknown>
+            const keys = Object.keys(record)
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i] as string
+                const entry = record[key]
                 if (isSpreadHandler(entry)) {
                     // A function is never an attribute — the server drops it for want of a live node,
                     // and here it is assigned as a PROPERTY, which is how `onclick` and friends wire up
@@ -522,20 +539,15 @@ export interface Accessor {
     write: (value: unknown) => void
 }
 
-// Resolve a bound value to a read/write accessor. Accepts a writable state (callable with `.set`)
-// or an explicit `{ get, set }` object.
+// Resolve a bound value to a read/write accessor. WHICH shape it is comes from `boundShape.ts` (shared
+// with the server runtime, which reads the same two kinds); building the read/write pair is this
+// substrate's own half.
 export function boundAccessor(bound: unknown): Accessor | null {
-    if (typeof bound === 'function' && typeof (bound as { set?: unknown }).set === 'function') {
-        const stateLike = bound as (() => unknown) & { set: (value: unknown) => void }
-        return { read: () => stateLike(), write: (value) => stateLike.set(value) }
+    if (isStateLikeBound(bound)) {
+        return { read: () => bound(), write: (value) => bound.set(value) }
     }
-    if (bound !== null && typeof bound === 'object') {
-        const object = bound as { get?: () => unknown; set?: (value: unknown) => void }
-        const get = object.get
-        const set = object.set
-        if (typeof get === 'function' && typeof set === 'function') {
-            return { read: () => get(), write: (value) => set(value) }
-        }
+    if (isAccessorBound(bound)) {
+        return { read: () => bound.get(), write: (value) => bound.set(value) }
     }
     return null
 }

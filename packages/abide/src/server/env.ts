@@ -35,7 +35,8 @@ import {
     singleType,
     tryCoerceStringToType,
 } from '../shared/internal/jsonSchema.ts'
-import type { StandardSchemaV1 } from '../shared/StandardSchema.ts'
+import { readEnv } from '../shared/internal/readEnv.ts'
+import { isStandardSchema, type StandardSchemaV1 } from '../shared/StandardSchema.ts'
 
 export interface EnvFieldSpec {
     type?: JSONSchemaType
@@ -104,7 +105,7 @@ export function env<T = Record<string, unknown>>(schema?: EnvSchema): T {
         return Object.freeze({ ...readAllEnv() }) as T
     }
 
-    const isStandard = typeof schema === 'object' && schema !== null && '~standard' in schema
+    const isStandard = isStandardSchema(schema)
     const fields = normalizeFields(schema, isStandard)
 
     const result: Record<string, unknown> = {}
@@ -250,13 +251,6 @@ function formatFailure(missing: string[], invalid: string[]): string {
         parts.push(`missing required environment variable(s): ${missing.join(', ')}`)
     if (invalid.length > 0) parts.push(`invalid environment variable(s): ${invalid.join('; ')}`)
     return `env(): ${parts.join('; ')} — refusing to start.`
-}
-
-function readEnv(name: string): string | undefined {
-    const bunEnv = (globalThis as { Bun?: { env?: Record<string, string | undefined> } }).Bun?.env
-    if (bunEnv !== undefined && bunEnv[name] !== undefined) return bunEnv[name]
-    return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-        ?.env?.[name]
 }
 
 function readAllEnv(): Record<string, string | undefined> {

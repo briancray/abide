@@ -9,6 +9,7 @@ import { invalidate } from '../../shared/invalidate.ts'
 import { refresh } from '../../shared/refresh.ts'
 import type { ValidationErrorData } from '../../shared/ValidationErrorData.ts'
 import { createTestApp, type TestApp } from '../../test/createTestApp.ts'
+import { until } from '../../test/internal/until.ts'
 import { clearClientProxyCache, clientProxy, makeClientImports } from './clientProxy.ts'
 
 let running: TestApp | undefined
@@ -244,25 +245,23 @@ test('makeClientImports threads tags from the spec into the proxy memo', async (
 
     expect((await tagged(undefined)).calls).toBe(1)
     refresh({ tags: ['fromSpec'] })
-    // Polled, not slept: `refresh` is eager but the re-run is a real HTTP round trip, and a fixed
-    // sleep sized on an idle machine is what makes a parallel suite flaky.
-    await until(() => calls === 2)
+    // Polled, not slept — but polled on the SLOT, never on `calls`. The handler increments at the top
+    // of the request, so a `calls >= 2` wait returns while the response is still in flight: the test
+    // then ends, `afterEach` stops the app out from under the open fetch, and the rejection surfaces
+    // inside whichever test is running by then. `peek` is the untracked read (no subscribe, no load),
+    // so waiting on it observes the settled value without perturbing what is being measured.
+    await until('the tag refresh landed a fresh value', () => tagged.peek(undefined)?.calls === 2)
     expect(calls).toBe(2)
     clearTagRegistry()
 })
 
-// Wait for a condition instead of sleeping a guessed interval — the suite runs in parallel, so a
-// fixed sleep sized on an idle machine turns into an intermittent failure under load.
-// Poll a condition to a deadline. When the condition reads a MONOTONE counter, write it as `>=` rather
-// than `===`: an overshoot can never become true again, so exact equality converts "more work happened
-// than expected" into a deadline timeout that names no cause. Assert the exact count separately, after.
-async function until(condition: () => boolean, timeoutMs = 2000): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (!condition()) {
-        if (Date.now() > deadline) throw new Error('until: condition not met before the deadline')
-        await new Promise((resolve) => setTimeout(resolve, 5))
-    }
-}
+// NB on the shared `until` (test/internal/until.ts): DO NOT poll a handler-side counter here. `calls++`
+// runs at the top of the request, so the counter reaches its target while the response is still on the
+// wire — the wait returns early, the test ends, and `afterEach` stops the app under the open fetch. The
+// rejection then lands in a LATER test, which is what made this file's slowest test look flaky when the
+// fault was two tests above it. Poll the slot (`peek()`), which only reads what has settled. If you do
+// poll a monotone counter somewhere it is safe, write `>=` rather than `===`: an overshoot can never
+// become true again, so equality turns "more work than expected" into a timeout that names no cause.
 
 // The client half of the SWR refetch clock (rpc-core §3). The browser is where a refresh storm actually
 // happens — a socket broadcast calling `fn.refresh()` per frame — so the clock has to survive the spec
@@ -272,6 +271,15 @@ async function until(condition: () => boolean, timeoutMs = 2000): Promise<void> 
 // onto one in-flight load even with NO clock at all, so a burst cannot tell the two implementations
 // apart. Spaced past a loopback round trip, each one would fire its own refetch — which is what makes
 // the `calls` count below evidence rather than coincidence.
+// THE ONE WALL-CLOCK ASSERTION IN THIS FILE, and why the window is a second rather than the 300ms it
+// used to be. "Nothing fired YET" is the only claim here that a condition-wait cannot express — every
+// other wait below is a `until`. It is therefore a race by construction, and the only defence is
+// MARGIN: the spreading must finish so far inside the window that no plausible scheduler stall closes
+// it first. At 300ms with 40ms gaps the test did 120ms of work in a 300ms window — a 2.5x margin,
+// which the parallel suite lost roughly one run in twelve. 45ms of work in a 1000ms window is 20x.
+const THROTTLE_MS = 1000
+const SPREAD_GAP_MS = 15
+
 test('a throttled read proxy collapses spread-out refreshes into one refetch', async () => {
     let calls = 0
     const app = await boot({
@@ -281,7 +289,7 @@ test('a throttled read proxy collapses spread-out refreshes into one refetch', a
         }),
     })
     const imports = makeClientImports(
-        { counted: { method: 'GET', read: true, throttle: 300 } },
+        { counted: { method: 'GET', read: true, throttle: THROTTLE_MS } },
         app.origin,
     )
     const counted = imports.counted as Rpc<undefined, { calls: number }>
@@ -289,17 +297,31 @@ test('a throttled read proxy collapses spread-out refreshes into one refetch', a
     expect((await counted(undefined)).calls).toBe(1)
 
     counted.refresh() // leading edge — fires at once
-    await until(() => calls === 2)
+    // On the SLOT, not on `calls`: the handler counts at the top of the request, so waiting on the
+    // counter returns mid-flight and leaves an open fetch for `afterEach` to kill.
+    await until('the leading-edge refetch landed', () => counted.peek(undefined)?.calls === 2)
+    expect(calls).toBe(2)
+    // The window opens at the leading edge, so that is what the margin below is measured from.
+    const windowOpened = Date.now()
 
     for (let index = 0; index < 3; index++) {
         counted.refresh()
-        await new Promise((resolve) => setTimeout(resolve, 40))
+        await new Promise((resolve) => setTimeout(resolve, SPREAD_GAP_MS))
     }
+    // Asserted BEFORE the count, so a box that stalled through the whole window fails saying so rather
+    // than reporting a throttle that did not hold.
+    const elapsed = Date.now() - windowOpened
+    expect({ elapsed, insideWindow: elapsed < THROTTLE_MS }).toEqual({
+        elapsed,
+        insideWindow: true,
+    })
     // Un-throttled these would be three separate refetches (calls === 5). Throttled, they are ONE
     // trailing load that has not fired yet.
     expect(calls).toBe(2)
 
-    await until(() => calls === 3)
+    await until('the single trailing refetch landed', () => counted.peek(undefined)?.calls === 3)
+    // Nothing else is pending, so any further load would be a real extra refetch — this one CAN be a
+    // sleep, because a stall only makes it a longer quiet period, never a false pass.
     await new Promise((resolve) => setTimeout(resolve, 120))
     expect(calls).toBe(3) // exactly one trailing refetch, not three
 })

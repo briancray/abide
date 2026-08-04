@@ -262,13 +262,17 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
     const values: unknown[] = []
     let index = 0
     let pending = next()
+    // Derived ONCE: `deadlinePassed` is one long-lived promise per render, so a `.then()` per row both
+    // allocated a derived promise + closure per item and appended a reaction record to it that only the
+    // deadline itself releases. It resolves once and the loop breaks on it, so one derivation suffices.
+    const deadlineRaced = scope.deadlinePassed.then(() => ({ kind: 'deadline' as const }))
     for (;;) {
         const raced = await Promise.race([
             pending.then(
                 (step) => ({ kind: 'item' as const, step }),
                 (error) => ({ kind: 'error' as const, error }),
             ),
-            scope.deadlinePassed.then(() => ({ kind: 'deadline' as const })),
+            deadlineRaced,
         ])
         if (raced.kind === 'deadline') break // still yielding past the deadline → stream the remainder.
         if (raced.kind === 'error') {
@@ -323,17 +327,24 @@ export async function forAwaitStream(config: ForAwaitStreamConfig): Promise<stri
         run: async function* (): AsyncGenerator<StreamFrame> {
             let i = startIndex
             let step = inFlight
+            // Same reason as the inline drain's `deadlineRaced`: `budget()` memoises ONE promise for the
+            // whole render (a 5-minute timer), so a `.then()` per row left an un-released reaction record
+            // on it per streamed row — unbounded growth on a long non-abide stream.
+            const budgetRaced = attachable
+                ? null
+                : scope.budget().then(() => ({ kind: 'budget' as const }))
             try {
                 for (;;) {
                     // Source-derived budget (§6): an abide RPC source carries its own PROGRESS deadline (ADR
                     // 0028), which self-terminates the stream as an error, so await it directly with no global
                     // cap; a non-abide source races the last-resort total-wall-clock `ABIDE_SSR_STREAM_BUDGET`.
-                    const raced = attachable
-                        ? { kind: 'item' as const, result: await step }
-                        : await Promise.race([
-                              step.then((result) => ({ kind: 'item' as const, result })),
-                              scope.budget().then(() => ({ kind: 'budget' as const })),
-                          ])
+                    const raced =
+                        budgetRaced === null
+                            ? { kind: 'item' as const, result: await step }
+                            : await Promise.race([
+                                  step.then((result) => ({ kind: 'item' as const, result })),
+                                  budgetRaced,
+                              ])
                     if (raced.kind === 'budget') return // budget hit — cut off; handle stays open (mode B resume).
                     if (raced.result.done === true) break
                     if (handle !== null) handle.values.push(raced.result.value)
@@ -414,11 +425,9 @@ export async function* drainPatches(scope: RenderStream): AsyncGenerator<Patch> 
         advance: (() => void) | null // re-arm a streamer for its next frame; null for a one-shot subtree.
     }
     const inFlight = new Map<string, Promise<Ready>>()
-    const started = new Set<string>()
 
     const kickSubtree = (subtree: DeferredSubtree): void => {
         const key = `s${subtree.id}`
-        started.add(key)
         inFlight.set(
             key,
             subtree.render().then((result) => ({
@@ -431,7 +440,6 @@ export async function* drainPatches(scope: RenderStream): AsyncGenerator<Patch> 
 
     const kickStreamer = (streamer: DeferredStreamer): void => {
         const key = `l${streamer.id}`
-        started.add(key)
         const generator = streamer.run()
         const pull = (): void => {
             inFlight.set(
@@ -447,16 +455,29 @@ export async function* drainPatches(scope: RenderStream): AsyncGenerator<Patch> 
         pull()
     }
 
-    for (const subtree of scope.deferred) kickSubtree(subtree)
-    for (const streamer of scope.streamers) kickStreamer(streamer)
+    // Both arrays are APPEND-ONLY (a rendering patch can register more), so two cursors say what a
+    // started-key Set said: everything below the cursor has been kicked. The Set cost a rebuilt
+    // `s${id}`/`l${id}` template key per entry on every pass, and rescanned both arrays in full after
+    // every patch — O((deferred + streamers) × patches) string allocations for a monotone frontier.
+    let deferredCursor = 0
+    let streamerCursor = 0
+    const kickPending = (): void => {
+        for (; deferredCursor < scope.deferred.length; deferredCursor++) {
+            const subtree = scope.deferred[deferredCursor]
+            if (subtree !== undefined) kickSubtree(subtree)
+        }
+        for (; streamerCursor < scope.streamers.length; streamerCursor++) {
+            const streamer = scope.streamers[streamerCursor]
+            if (streamer !== undefined) kickStreamer(streamer)
+        }
+    }
+
+    kickPending()
     while (inFlight.size > 0) {
         const ready = await Promise.race(inFlight.values())
         inFlight.delete(ready.key)
         if (ready.patch !== null) yield ready.patch
         if (ready.advance !== null) ready.advance()
-        for (const subtree of scope.deferred)
-            if (!started.has(`s${subtree.id}`)) kickSubtree(subtree)
-        for (const streamer of scope.streamers)
-            if (!started.has(`l${streamer.id}`)) kickStreamer(streamer)
+        kickPending()
     }
 }

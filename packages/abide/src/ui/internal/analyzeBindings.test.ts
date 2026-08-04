@@ -124,7 +124,7 @@ describe('rewriteCellRefs assignment', () => {
     describe('a multi-line declarator list keeps every binding', () => {
         const bindings = (script: string): { declared: string[]; cells: string[] } => {
             const analysis = analyzeBindings(parse(`<script>${script}</script><p>x</p>`))
-            return { declared: [...analysis.declared], cells: [...analysis.cellNames] }
+            return { declared: [...analysis.declared], cells: [...analysis.cellBindings.cells] }
         }
 
         test('plain declarators', () => {
@@ -557,8 +557,8 @@ describe('analyzeBindings cell recognition', () => {
             "<script>import { state } from 'abide/shared/state'; import { memo } from 'abide/shared/memo'; let n = state(0); const d = memo(()=>n*2); let e = memo(()=>n).state()</script>{n}",
         )
         const analysis = analyzeBindings(root)
-        // `cellNames` is WRITABILITY: the owned cell and the memo's writable projection, not the memo.
-        expect([...analysis.cellNames].sort()).toEqual(['e', 'n'])
+        // `cellBindings.cells` is WRITABILITY: the owned cell and the memo's writable projection, not the memo.
+        expect([...analysis.cellBindings.cells].sort()).toEqual(['e', 'n'])
         expect([...analysis.cellBindings.memos].sort()).toEqual(['d'])
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
@@ -573,7 +573,7 @@ describe('analyzeBindings cell recognition', () => {
             "<script>import { state as s } from 'abide/shared/state'; let n = s(0); let d = s.shared('k', 0)</script>{n}",
         )
         const analysis = analyzeBindings(root)
-        expect([...analysis.cellNames].sort()).toEqual(['d', 'n'])
+        expect([...analysis.cellBindings.cells].sort()).toEqual(['d', 'n'])
         const instance = analysis.instance
         if (instance === null) throw new Error('expected an instance script')
         expect(instance.setupCode).toBe(" let n = s(0); let d = s.shared('k', 0)")
@@ -589,7 +589,7 @@ describe('analyzeBindings cell recognition', () => {
         const kinds = Object.fromEntries(instance.bindings.map((b) => [b.name, b.kind]))
         expect(kinds.who).toBe('prop')
         expect(kinds.age).toBe('prop')
-        expect(analysis.cellNames.size).toBe(0)
+        expect(analysis.cellBindings.cells.size).toBe(0)
     })
 
     // A declarator list is split by the SHARED scanner (`scanText`), so text inside a string literal
@@ -616,7 +616,7 @@ describe('analyzeBindings cell recognition', () => {
         )
         const analysis = analyzeBindings(root)
 
-        expect([...analysis.cellNames].sort()).toEqual(['g', 'n'])
+        expect([...analysis.cellBindings.cells].sort()).toEqual(['g', 'n'])
         expect(analysis.declared.has('state')).toBe(true)
         expect(analysis.declared.has('greet')).toBe(true)
         expect(analysis.declared.has('inc')).toBe(true)
@@ -644,7 +644,7 @@ describe('analyzeBindings cell recognition', () => {
         const analysis = analyzeBindings(root)
         expect(analysis.module).toBeNull()
         expect(analysis.instance).toBeNull()
-        expect(analysis.cellNames.size).toBe(0)
+        expect(analysis.cellBindings.cells.size).toBe(0)
     })
 
     test('module cells do not rewrite instance-only names and vice versa', () => {
@@ -654,7 +654,7 @@ describe('analyzeBindings cell recognition', () => {
         )
         const analysis = analyzeBindings(root)
         // instance can reference module cell g:
-        expect([...analysis.cellNames].sort()).toEqual(['g', 'n'])
+        expect([...analysis.cellBindings.cells].sort()).toEqual(['g', 'n'])
     })
 })
 

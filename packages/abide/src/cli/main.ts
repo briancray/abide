@@ -22,13 +22,11 @@ import { CLI_EXIT_CODES } from '../server/command/CLI_EXIT_CODES.ts'
 import { banner, formatDuration, hint, serveBanner } from './banner.ts'
 import { build, ensureClientBuild } from './build.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
-import { check } from './check.ts'
 import { compile } from './compile.ts'
 import { firstPositional } from './firstPositional.ts'
 import { flagAbsent } from './flagAbsent.ts'
 import { flagValue } from './flagValue.ts'
 import { installShutdownHandlers } from './installShutdownHandlers.ts'
-import { lspServer } from './lsp.ts'
 import { parsePort } from './parsePort.ts'
 import { run } from './run.ts'
 import { type ServeResult, serve } from './serve.ts'
@@ -371,6 +369,10 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         summary: 'type-check .abide script bodies (best-effort, via TS7)',
         run: async ({ cwd, write, writeError }) => {
             const startedAt = performance.now()
+            // Loaded on DEMAND: `check.ts` and `lsp.ts` both top-level-import
+            // `typescript/unstable/sync`, and evaluating that costs ~17ms — which every `abide`
+            // invocation paid, `abide --help` included, for two commands most of them are not.
+            const { check } = await import('./check.ts')
             const result = await check(cwd)
             if (result.ok) {
                 write(
@@ -411,6 +413,7 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
             // can host it — revert = drop the forwarder branch. `ABIDE_LSP_INPROCESS=1` forces
             // in-process (for that future / testing).
             if (bunCanHostTsgo()) {
+                const { lspServer } = await import('./lsp.ts')
                 await lspServer({
                     projectRoot: cwd,
                     read: Bun.stdin.stream(),

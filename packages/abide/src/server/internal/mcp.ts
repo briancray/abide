@@ -16,7 +16,13 @@ import { callOwnRpc } from './callOwnRpc.ts'
 import type { RpcEntry, SocketEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
-import { ANY_OBJECT_SCHEMA, ANY_VALUE_SCHEMA, rpcsFor, socketsFor } from './surfaceProjection.ts'
+import {
+    ANY_OBJECT_SCHEMA,
+    ANY_VALUE_SCHEMA,
+    rpcsFor,
+    socketsFor,
+    socketToolNames,
+} from './surfaceProjection.ts'
 
 const PROTOCOL_VERSION = '2025-06-18'
 const SERVER_NAME = 'abide'
@@ -88,15 +94,16 @@ function listTools(config: AppConfig): McpTool[] {
     }
 
     for (const sock of socketsFor(registry, 'mcp')) {
+        const toolNames = socketToolNames(sock.name)
         tools.push({
-            name: `${sock.name}_tail`,
+            name: toolNames.tail,
             description: `Snapshot of the "${sock.name}" socket's current tail buffer.`,
             inputSchema: { type: 'object' },
             annotations: { readOnlyHint: true },
         })
         if (sock.clientPublish) {
             tools.push({
-                name: `${sock.name}_publish`,
+                name: toolNames.publish,
                 description: `Publish a message to the "${sock.name}" socket.`,
                 inputSchema:
                     (sock.messageSchema as Record<string, unknown> | undefined) ?? ANY_VALUE_SCHEMA,
@@ -173,11 +180,12 @@ async function callSocketTool(
         const sock = sockets[entry.name]
         if (sock === undefined) continue
 
-        if (name === `${entry.name}_tail`) {
+        const toolNames = socketToolNames(entry.name)
+        if (name === toolNames.tail) {
             // MCP addresses a socket as a single topic — the void room.
             return { result: textResult(sock.__socket.tailSnapshot(undefined)) }
         }
-        if (entry.clientPublish && name === `${entry.name}_publish`) {
+        if (entry.clientPublish && name === toolNames.publish) {
             try {
                 await sock.__socket.ingressPublish(undefined, args)
                 return { result: textResult({ ok: true }) }

@@ -1447,6 +1447,30 @@ export function memo<Args, T>(
         return startLoad(slot, state.status === 'value').then(mapRead)
     }
 
+    // ENTERING A READ — everything the two ACQUIRING reads (the bare call and `live`) do before they
+    // diverge, which is only in what they return: `c()` rethrows an errored derivation where `live`
+    // hands back `undefined`. Classify the slot, move its LRU/retention position, and on an
+    // auto-tracked slot expire it, pull it and byte-account the result. Returns the derivation's state,
+    // or `undefined` when this slot fills the pulled way and the caller must take that path.
+    //
+    // Written once because the two must expire on the SAME terms: `live` serving a value the ttl has
+    // retired while the bare read re-runs would make the two reads disagree about one slot. `peek` is
+    // deliberately NOT a caller — it acquires nothing, which is the whole of what it promises.
+    function enterRead(slot: Slot<Args, T>): SlotState<T> | undefined {
+        // A backing that THIS read created is already fresh. Expiring it would run the body twice for
+        // one read, because `resolveMode`'s classifying probe is itself a fill and `ttl: 0` stales every
+        // stamp the instant it is written.
+        const hadAuto = slot.auto !== undefined
+        resolveMode(slot)
+        touchOnRead(slot)
+        const auto = slot.auto
+        if (auto === undefined) return undefined
+        if (hadAuto) autoExpire(slot, auto)
+        const state = autoState(auto)
+        recordAuto(slot, state)
+        return state
+    }
+
     // THE READ (Promise-read model): the bare call is the awaitable coalesced load AND subscribes the
     // calling reactive context to the slot (the tracked `slot.state()` read). So a reactive `{await
     // memo()}` / `{#await memo()}` re-runs and re-awaits when the slot invalidates — the crux the model
@@ -1455,19 +1479,10 @@ export function memo<Args, T>(
     // where the classic path rejects — the synchronous analog.
     const c = ((args: Args) => {
         const slot = ensureSlot(args)
-        // A backing that THIS read created is already fresh. Expiring it would run the body twice for one
-        // read, because `resolveMode`'s classifying probe is itself a fill and `ttl: 0` stales every stamp
-        // the instant it is written.
-        const hadAuto = slot.auto !== undefined
-        resolveMode(slot)
-        touchOnRead(slot)
-        const auto = slot.auto
-        if (auto !== undefined) {
-            if (hadAuto) autoExpire(slot, auto)
-            const state = autoState(auto)
-            recordAuto(slot, state)
-            if (state.status === 'error') throw state.error
-            return state.value as T
+        const derived = enterRead(slot)
+        if (derived !== undefined) {
+            if (derived.status === 'error') throw derived.error
+            return derived.value as T
         }
         if (keyedSyncEligible && keyedSync !== false) {
             const settled = readKeyedSync(slot)
@@ -1507,18 +1522,8 @@ export function memo<Args, T>(
     // whole transcript.
     c.live = (args: Args): T | undefined => {
         const slot = ensureSlot(args)
-        // Expire on the same terms as the bare read. `peek` already kicks a load on a cold pulled slot,
-        // so serving a value the ttl has retired would make the two reads disagree about the same slot.
-        const hadAuto = slot.auto !== undefined
-        resolveMode(slot)
-        touchOnRead(slot)
-        const auto = slot.auto
-        if (auto !== undefined) {
-            if (hadAuto) autoExpire(slot, auto)
-            const state = autoState(auto)
-            recordAuto(slot, state)
-            return state.value
-        }
+        const derived = enterRead(slot)
+        if (derived !== undefined) return derived.value
         if (slot.state.peek().status === 'stream') {
             return readStreamReactive(slot, (chunks) =>
                 chunks.length > 0 ? chunks[chunks.length - 1] : undefined,
@@ -1598,6 +1603,24 @@ export function memo<Args, T>(
         return slot.state()
     }
 
+    // THE TRANSCRIPT A STATUS PROBE OBSERVES — or undefined when this slot holds no stream. Subscribing
+    // to `streamTick` is what wakes the probe as the transcript grows and on its terminal, and taking an
+    // ALREADY-READ `state` rather than fetching its own is what keeps one probe to one `statusState`
+    // read.
+    //
+    // Four probes below need exactly this and each used to spell it itself, which is three chances to
+    // forget the tick (a probe that never wakes) or to reach for `readStreamReactive` instead (a probe
+    // that OPENS the transcript it was asked about — the bug `done` shipped with). The rule is that a
+    // probe observes and never causes; it is easier to keep when there is one place it lives.
+    function observedStream(
+        slot: Slot<Args, T>,
+        state: SlotState<T>,
+    ): ReplayableStream<unknown> | undefined {
+        if (state.status !== 'stream' || state.stream === undefined) return undefined
+        if (slot.streamTick !== undefined) slot.streamTick()
+        return state.stream
+    }
+
     // Has this slot's acquisition reached a TERMINAL outcome? A value, an error, or a transcript that
     // stopped — where "stopped" is `ReplayableStream.settled` (done || errored || aborted) and NOT
     // `stream.done`, which only `close()` sets. A stream cut short by a `TimeoutError`, an `invalidate`
@@ -1610,11 +1633,8 @@ export function memo<Args, T>(
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return true
         const state = statusState(slot)
-        if (state.status === 'stream') {
-            if (state.stream === undefined) return false
-            if (slot.streamTick !== undefined) slot.streamTick() // wake on the terminal
-            return state.stream.settled
-        }
+        const stream = observedStream(slot, state)
+        if (stream !== undefined) return stream.settled
         return state.status === 'value' || state.status === 'error'
     }
 
@@ -1627,21 +1647,16 @@ export function memo<Args, T>(
     c.streaming = (args: Args): boolean => {
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return false // a synchronous derivation has no transcript
-        const state = statusState(slot)
-        if (state.status !== 'stream' || state.stream === undefined) return false
-        if (slot.streamTick !== undefined) slot.streamTick() // wake as the transcript grows / ends
-        return !state.stream.settled
+        const stream = observedStream(slot, statusState(slot))
+        return stream !== undefined && !stream.settled
     }
 
     c.error = (args: Args): unknown => {
         const slot = ensureSlot(args)
         const state = statusState(slot)
         // A stream's error lives on the ReplayableStream, not the slot state; surface it reactively.
-        if (state.status === 'stream' && state.stream !== undefined) {
-            if (slot.streamTick !== undefined) slot.streamTick()
-            return state.stream.error
-        }
-        return state.error
+        const stream = observedStream(slot, state)
+        return stream !== undefined ? stream.error : state.error
     }
 
     // THE TRANSCRIPT READ (replayable-streams.md §4) — a READ, not a status probe, and the one member of
@@ -1669,10 +1684,9 @@ export function memo<Args, T>(
     c.done = (args: Args): boolean => {
         const slot = ensureSlot(args)
         if (slot.auto !== undefined) return false
-        const state = statusState(slot)
-        if (state.status !== 'stream' || state.stream === undefined) return false
-        if (slot.streamTick !== undefined) slot.streamTick() // wake on the terminal
-        return state.stream.done
+        const stream = observedStream(slot, statusState(slot))
+        if (stream === undefined) return false
+        return stream.done
     }
 
     c.resumeStream = (

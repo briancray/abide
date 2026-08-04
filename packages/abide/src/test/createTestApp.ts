@@ -18,13 +18,12 @@
 // request, exercising the real per-user-token rung of the identity ladder (AU9). The rpc proxy
 // sends Content-Type: application/json on mutations so they satisfy the CSRF gate (AU8).
 
+import type { AppConfig } from '../server/internal/appConfig.ts'
 import { bootApp } from '../server/internal/bootApp.ts'
 import { loadApp } from '../server/internal/loadApp.ts'
-import type { Middleware } from '../server/internal/middleware.ts'
 import type { Principal } from '../server/internal/requestScope.ts'
 import { type App, createApp, type Route } from '../server/internal/router.ts'
 import { seal } from '../server/internal/seal.ts'
-import type { ErasedSocket } from '../server/socket.ts'
 import { CSRF_HEADER } from '../shared/internal/CSRF_HEADER.ts'
 import { HEALTH_ROUTE } from '../shared/internal/HEALTH_ROUTE.ts'
 import { MUX_UPSTREAM } from '../shared/internal/MUX_UPSTREAM.ts'
@@ -58,23 +57,27 @@ export interface TestApp {
     as(identity: Partial<Principal>): TestApp
 }
 
-// NOTE (contract deviation): the fixed sketch typed `routes` as `Record<string, Rpc<any, any>>`,
-// but the mutation verbs (POST/PUT/PATCH/DELETE) produce `Mutation`, which is not assignable to
-// `Rpc`. Widened to `Route` (the `Rpc | Mutation` union) so both reads and mutations register.
-export interface TestAppConfig {
-    routes?: Record<string, Route>
-    middleware?: Middleware[]
-    // A heterogeneous socket record: `Socket` is contravariant in its message type, so `unknown` REJECTS
-    // concrete `Socket<T>` values and the erasure has to live in `ErasedSocket`. (This carried a
-    // `noExplicitAny` suppression until the `any` moved into that alias, leaving the directive covering
-    // nothing — the reason is worth keeping, the suppression was not.)
-    sockets?: Record<string, ErasedSocket>
-    pages?: Record<string, string>
-    layouts?: Record<string, string>
-    // TODO #20: absolute source dirs (keyed like `pages`/`layouts`) so the client bundle can resolve a
-    // page/layout's relative CSS imports. Normally populated by the file loader; exposed here for tests.
-    pageDirs?: Record<string, string>
-    layoutDirs?: Record<string, string>
+// THE REQUEST-FACING SURFACES A TEST MAY REGISTER — named once, as a value, because THREE things have
+// to agree about this list: the config type below, the discovery predicate below that, and `AppConfig`
+// itself. A surface added to `AppConfig` and to the type but missed by the predicate does not fail to
+// compile: it silently falls through to DISCOVERY mode and boots the whole project, which is the
+// opposite of the hermetic app the test asked for.
+const SURFACE_KEYS = [
+    'routes',
+    'middleware',
+    'sockets',
+    'pages',
+    'layouts',
+    'pageDirs',
+    'layoutDirs',
+] as const
+
+// Picked from `AppConfig` rather than re-declared, so each field keeps the exact type the router will
+// receive. Two of them were worth a comment when they were written out here, and the reasons live at
+// the declaration now: `routes` is `Route` (the `Rpc | StreamRead` union) because the mutation verbs
+// produce `Mutation`, which is not assignable to `Rpc`; `sockets` is `ErasedSocket` because `Socket` is
+// contravariant in its message type, so a `Record<string, Socket<unknown>>` REJECTS concrete sockets.
+export interface TestAppConfig extends Pick<AppConfig, (typeof SURFACE_KEYS)[number]> {
     // DISCOVERY-mode control knobs (ignored in explicit mode — they are not surfaces, so setting one
     // alone still triggers discovery). `dir`: project root to scan (default `process.cwd()`).
     // `lifecycle`: run the discovered app's `onStart`/`onStop` hooks (default `true`; set `false` to
@@ -83,19 +86,14 @@ export interface TestAppConfig {
     lifecycle?: boolean
 }
 
-// A config names an explicit SURFACE (so: no discovery) when it registers any request-facing
-// registry — routes, sockets, pages/layouts (or their dirs), or middleware. `dir`/`lifecycle` are
-// control knobs, not surfaces, so they don't count. An empty `{}` (or no arg) names none → discovery.
+// A config names an explicit SURFACE (so: no discovery) when it registers any request-facing registry.
+// `dir`/`lifecycle` are control knobs, not surfaces, so they don't count. An empty `{}` (or no arg)
+// names none → discovery.
 function hasExplicitSurface(config: TestAppConfig): boolean {
-    return (
-        config.routes !== undefined ||
-        config.sockets !== undefined ||
-        config.pages !== undefined ||
-        config.layouts !== undefined ||
-        config.pageDirs !== undefined ||
-        config.layoutDirs !== undefined ||
-        config.middleware !== undefined
-    )
+    for (const key of SURFACE_KEYS) {
+        if (config[key] !== undefined) return true
+    }
+    return false
 }
 
 // A minimal pushable async queue: producers `push`/`close`, one consumer iterates. Backs each

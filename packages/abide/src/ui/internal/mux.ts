@@ -50,7 +50,6 @@ const subscriptions = new Map<string, Subscription>()
 const pendingPublishes: string[] = []
 
 let socket: WebSocket | undefined
-let isOpen = false
 let base = ''
 let reconnectDelay = RECONNECT_MIN_MS
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
@@ -70,6 +69,14 @@ function isBrowser(): boolean {
 function socketUrl(): string {
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${scheme}//${location.host}${base}${SOCKETS_ROUTE}`
+}
+
+// Is the socket usable right now? The `WebSocket` owns this fact, so nothing here mirrors it: a module
+// `isOpen` flag was maintained at three sites (open/close/error) and then asked ALONGSIDE the real
+// answer anyway (`isOpen && socket !== undefined && socket.readyState === 1`), which is one condition
+// spelled three ways and three chances for the mirror to disagree with the thing it mirrors.
+function socketIsOpen(): boolean {
+    return socket !== undefined && socket.readyState === 1
 }
 
 function sendSubscribe(sub: Subscription): void {
@@ -115,7 +122,6 @@ function ensureSocket(): void {
     const ws = new WebSocket(socketUrl())
     socket = ws
     ws.addEventListener('open', () => {
-        isOpen = true
         reconnectDelay = RECONNECT_MIN_MS
         // (Re)send every active subscription — this is both the first-join path and the reconnect
         // replay (CS2.4). Then flush buffered publishes.
@@ -125,7 +131,6 @@ function ensureSocket(): void {
     })
     ws.addEventListener('message', onMessage)
     ws.addEventListener('close', (event) => {
-        isOpen = false
         socket = undefined
         if (isTerminalClose(event.code)) {
             // Non-retryable: surface a terminal error to socket subscribers and stop (CS10b). The mux
@@ -144,9 +149,6 @@ function ensureSocket(): void {
         for (const sub of subscriptions.values()) sub.onReconnecting?.()
         scheduleReconnect()
     })
-    ws.addEventListener('error', () => {
-        isOpen = false
-    })
 }
 
 // Join the mux channel `name` (room `sub.args`). Idempotent per `(name, room)` (dedup) — the caller
@@ -161,23 +163,16 @@ export function muxSubscribe(name: string, sub: Subscription, mountBase?: string
     // Capture openness BEFORE ensureSocket: if the socket was ALREADY open, the open handler won't
     // re-fire for this new sub, so send it now. If it wasn't, `ensureSocket`'s open handler sends every
     // registered subscription (including this one) — sending here too would double-subscribe.
-    const wasOpen = isOpen
+    const wasOpen = socketIsOpen()
     ensureSocket()
     if (wasOpen) sendSubscribe(sub)
 }
 
-// Leave the mux channel `name` (room `args`). Sends `{t:"unsub"}` when open; always drops the local sub.
-export function muxUnsubscribe(name: string, args?: unknown): void {
-    if (!isBrowser()) return
-    subscriptions.delete(subscriptionKey(name, args))
-    if (isOpen && socket !== undefined && socket.readyState === 1) {
-        const frame =
-            args === undefined
-                ? { t: MUX_UPSTREAM.unsub, name }
-                : { t: MUX_UPSTREAM.unsub, name, args }
-        socket.send(JSON.stringify(frame))
-    }
-}
+// NB: there is no `muxUnsubscribe`, and that is the design rather than an omission. Every subscriber
+// here is a module singleton with a tab-long life — one mux subscription per socket name, per rpc
+// cache channel, per tag — so nothing ever leaves a channel it joined. A client-side unsubscribe
+// existed for a while, called from nowhere; the `unsub` frame is still spoken by the SERVER, so the
+// protocol is unchanged and a future room-scoped subscriber can reinstate the sender it needs.
 
 // Publish one message upstream on socket `name` into room `args` (fire-and-forget, CS3.4). Buffered and
 // flushed on (re)open if the socket is mid-connect. No-op under SSR.
@@ -189,7 +184,7 @@ export function muxPublish(name: string, msg: unknown, mountBase?: string, args?
             ? { t: MUX_UPSTREAM.pub, name, msg }
             : { t: MUX_UPSTREAM.pub, name, args, msg },
     )
-    if (isOpen && socket !== undefined && socket.readyState === 1) socket.send(frame)
+    if (socket !== undefined && socket.readyState === 1) socket.send(frame)
     else {
         pendingPublishes.push(frame)
         ensureSocket()
@@ -221,25 +216,15 @@ export function subscribeMemoChannel(
     )
 }
 
-// Join the `@tag:<tag>` cache-tag channel, applying each inbound `MemoFrame` via `apply`. Same
-// silent-deny adapter as the cache channel above; argless, so `muxSubscribe`'s dedup key is the
-// channel name itself and several proxies sharing a tag join it exactly once.
+// Join the `@tag:<tag>` cache-tag channel, applying each inbound `MemoFrame` via `apply`. It IS the
+// cache-channel join with no room — argless, so `muxSubscribe`'s dedup key is the channel name itself
+// and several proxies sharing a tag join it exactly once. Spelled as a delegation rather than a second
+// copy of the same frame literal, so the silent-deny adapter (no ack/error handlers, replay on) is
+// stated once: a tag channel and an `(rpc,args)` channel differ in their NAME, not in how they join.
 export function subscribeTagChannel(
     tag: string,
     apply: (frame: MemoFrame) => void,
     mountBase?: string,
 ): void {
-    muxSubscribe(
-        tagChannelName(tag),
-        {
-            name: tagChannelName(tag),
-            args: undefined,
-            replay: true,
-            onMessage: (payload) => apply(payload as MemoFrame),
-            onAck: undefined,
-            onError: undefined,
-            onReconnecting: undefined,
-        },
-        mountBase,
-    )
+    subscribeMemoChannel(tagChannelName(tag), undefined, apply, mountBase)
 }

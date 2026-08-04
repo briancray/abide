@@ -73,3 +73,12 @@ export function socketsFor(registry: Registry, surface: SurfaceKind): SocketEntr
 // forced. Deliberately NOT unified — a single answer would be wrong on at least two surfaces.
 export const ANY_VALUE_SCHEMA: Record<string, unknown> = {}
 export const ANY_OBJECT_SCHEMA: Record<string, unknown> = { type: 'object' }
+
+// A SOCKET'S MCP TOOL NAMES. The `<name>_tail` / `<name>_publish` convention is a wire contract between
+// the tool LIST and the tool DISPATCH, and `mcp.ts` spelled it at four literal sites across the two
+// loops. That module's own header names the failure this invites — "advertises a tool that answers
+// 'unknown tool', or leaves one reachable that was never advertised" — and it was fixed for the SET the
+// two loops iterate (both take `socketsFor(registry, 'mcp')`) but not for the NAMES they derive from it.
+export function socketToolNames(name: string): { tail: string; publish: string } {
+    return { tail: `${name}_tail`, publish: `${name}_publish` }
+}

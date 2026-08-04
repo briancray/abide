@@ -16,7 +16,12 @@
 // x-ndjson while this one did not, so the same response line-streamed at the command line and decoded
 // as a single JSON value in the browser. One predicate, and it recognises the union of what the two
 // used to.
-function streamEncodingFor(contentType: string): 'jsonl' | 'sse' | undefined {
+//
+// EXPORTED because the encoding, not just the boolean, has a consumer: the CLI frames its line-stream
+// differently per encoding (jsonl verbatim, sse unwrapped to its `data:` payload) and was asking with a
+// private `.includes('text/event-stream')`. So the boolean half had one owner and the encoding half had
+// two — and a third framing added to the map below would have been silently line-streamed as jsonl.
+export function streamEncodingFor(contentType: string): 'jsonl' | 'sse' | undefined {
     if (contentType.includes('application/jsonl')) return 'jsonl'
     if (contentType.includes('application/x-ndjson')) return 'jsonl'
     if (contentType.includes('text/event-stream')) return 'sse'

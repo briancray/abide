@@ -7,7 +7,8 @@
 // Issues are shaped like Standard Schema issues (`message` + `path` array) so they flow straight
 // into ValidationErrorData via the Standard Schema path (see toStandard below).
 
-import type { StandardSchemaV1 } from '../StandardSchema.ts'
+import { isStandardSchema, type StandardSchemaV1 } from '../StandardSchema.ts'
+import { isPlainObject } from './isPlainObject.ts'
 
 // The supported draft-2020-12 subset. Every field is optional because abide composes these freely;
 // a schema may be nothing but `{ type: "string" }` or a bare `{ anyOf: [...] }`.
@@ -152,9 +153,7 @@ export function toStandard(jsonSchema: JSONSchema): StandardSchemaV1 {
 // `~standard` and passes through untouched; anything else is treated as a raw/derived JSON Schema and
 // wrapped with `toStandard`, so `schemas.input`/`schemas.output` accept either kind uniformly.
 export function asStandardSchema(schema: StandardSchemaV1 | JSONSchema): StandardSchemaV1 {
-    if (typeof schema === 'object' && schema !== null && '~standard' in schema) {
-        return schema as StandardSchemaV1
-    }
+    if (isStandardSchema(schema)) return schema
     return toStandard(schema as JSONSchema)
 }
 
@@ -356,10 +355,6 @@ function matchesType(type: JSONSchemaType, value: unknown): boolean {
         case 'null':
             return value === null
     }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 // Accept the common ISO 8601 date-time shapes JSON Schema `date-time` describes: a date, a `T` (or

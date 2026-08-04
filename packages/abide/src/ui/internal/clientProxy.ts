@@ -160,7 +160,7 @@ export function clientProxy<Args = unknown, T = unknown>(
                   headers: traceHeaders(sameOrigin),
                   ...(armed !== undefined ? { signal: armed } : {}),
               })
-            : await fetch(`${base}/__abide/rpc/${name}`, {
+            : await fetch(rpcUrl(base, name), {
                   ...mutationInit(method, args, sameOrigin),
                   ...(armed !== undefined ? { signal: armed } : {}),
               })
@@ -290,7 +290,7 @@ export function clientProxy<Args = unknown, T = unknown>(
                   ...(init ?? {}),
                   ...(armed !== undefined ? { signal: armed } : {}),
               })
-            : fetch(`${base}/__abide/rpc/${name}`, {
+            : fetch(rpcUrl(base, name), {
                   ...mutationInit(method, args, sameOrigin),
                   ...(init ?? {}),
                   ...(armed !== undefined ? { signal: armed } : {}),
@@ -344,22 +344,18 @@ export function makeClientImports(
 ): Record<string, unknown> {
     const imports: Record<string, unknown> = {}
     for (const [name, spec] of Object.entries(specs)) {
-        const key = `${base ?? ''} ${name}`
+        const key = `${base ?? ''}\u0000${name}`
         let proxy = clientProxyCache.get(key)
         if (proxy === undefined) {
-            // Forwarded VERBATIM: the spec is the server's normalized policy, and `clientProxy` runs it
-            // back through the same normalizer. Filling in defaults here (`spec.ttl ?? null`, `spec.memo
-            // !== false`) is what made the browser's policy a second derivation of the server's.
-            proxy = clientProxy(name, spec.method, {
-                base: base ?? '',
-                crossRequest: spec.crossRequest,
-                memo: spec.memo,
-                ttl: spec.ttl,
-                tags: spec.tags,
-                throttle: spec.throttle,
-                debounce: spec.debounce,
-                timeout: spec.timeout,
-            })
+            // Forwarded VERBATIM — by SPREAD, which is the only spelling that makes the word true.
+            // The spec is the server's normalized policy and `clientProxy` runs it back through the
+            // same normalizer, so filling in defaults here (`spec.ttl ?? null`, `spec.memo !== false`)
+            // is what made the browser's policy a second derivation of the server's. Hand-listing the
+            // fields was the same failure one step earlier: `RPC_SPEC_KEYS` owns which fields cross,
+            // and this was the last hop that re-enumerated them — an eighth bilateral field would have
+            // reached the browser on the wire and been dropped here, with no compile error (every
+            // policy field is optional) and no value symptom.
+            proxy = clientProxy(name, spec.method, { ...spec, base: base ?? '' })
             clientProxyCache.set(key, proxy)
         }
         imports[name] = proxy

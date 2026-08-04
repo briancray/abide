@@ -1,85 +1,59 @@
 // Server-Sent Events streaming response (rpc-core §4). Emits a `data: <json>\n\n` frame per item from
 // a sync or async iterable, streamed through a ReadableStream.
 //
-// LAZY (pull-based, HWM 0), exactly like `jsonl.ts`: the source is consumed only as the body is READ,
-// and it is tagged see-through with the pre-encoding source. So `GET(() => sse(gen()))` is replayable —
-// a memo-backed read taps the raw source to build a ReplayableStream and the discarded, unread Response
-// body never drains it (no double-consumption). The `?__abide_from=` resume re-encodes as sse (its tagged
-// encoding). This makes sse fully isomorphic (SSR-block/seed/resume), on par with jsonl.
+// LAZY (pull-based, HWM 0), exactly like `jsonl.ts` — and now literally so: the pull machine is the
+// shared `framedStream`, so the see-through contract is one implementation rather than two that agree
+// today. The source is consumed only as the body is READ, and it is tagged see-through with the
+// pre-encoding source. So `GET(() => sse(gen()))` is replayable — a memo-backed read taps the raw
+// source to build a ReplayableStream and the discarded, unread Response body never drains it (no
+// double-consumption). The `?__abide_from=` resume re-encodes as sse (its tagged encoding). This makes
+// sse fully isomorphic (SSR-block/seed/resume), on par with jsonl.
 //
-// The prelude + heartbeat are deferred to the FIRST real read (a discarded body never opens):
+// What sse adds over jsonl is the pair of lifecycle hooks, deferred to the FIRST real read (a
+// discarded body never opens, so it never arms a timer nobody will clear):
 //   - `:ok` prelude so `EventSource.onopen` fires on connect rather than waiting for the first message;
 //   - a periodic `:\n\n` comment (ignored by every EventSource) after HEARTBEAT_MS of silence, so a
 //     long-lived byte-idle subscription (a `socket(...)` HTTP face consumed by CLI/MCP) isn't idle-
 //     timed-out. A finite iterable that drains promptly never emits one.
-// `cancel` (consumer disconnect) tears the interval down AND returns the source iterator, so a
-// subscribing iterable (the socket hub) drops the subscriber instead of leaking it.
+// `close` runs on every terminal — drain, error, and consumer disconnect — so the interval is torn
+// down and `framedStream`'s own `cancel` still returns the source iterator, which is what makes a
+// subscribing iterable (the socket hub) drop the subscriber instead of leaking it.
 
+import { framedStream } from '../shared/internal/framedStream.ts'
 import { type StreamResponse, tagResponseSource } from '../shared/internal/responseSource.ts'
 
 const HEARTBEAT_MS = 15_000
-const HEARTBEAT = new TextEncoder().encode(':\n\n')
-const PRELUDE = new TextEncoder().encode(':ok\n\n')
+const encoder = new TextEncoder()
+const HEARTBEAT = encoder.encode(':\n\n')
+const PRELUDE = encoder.encode(':ok\n\n')
 
 export function sse<C>(
     iterable: AsyncIterable<C> | Iterable<C>,
     init?: ResponseInit,
 ): StreamResponse<C> {
-    const encoder = new TextEncoder()
-    let iterator: AsyncIterator<unknown> | Iterator<unknown> | undefined
     let heartbeat: ReturnType<typeof setInterval> | undefined
-    let opened = false
     const stopHeartbeat = (): void => {
         if (heartbeat !== undefined) {
             clearInterval(heartbeat)
             heartbeat = undefined
         }
     }
-    const stream = new ReadableStream<Uint8Array>(
+    const stream = framedStream(
+        iterable,
+        (value) => encoder.encode(`data: ${JSON.stringify(value)}\n\n`),
         {
-            start() {
-                // Obtain the iterator WITHOUT consuming — an async generator's body runs on the first
-                // `.next()`, which `pull` (not `start`) makes; a discarded, unread body never pulls, so
-                // see-through's raw-source drain is the only consumer.
-                const asAsync = iterable as AsyncIterable<unknown>
-                iterator =
-                    asAsync[Symbol.asyncIterator]?.() ??
-                    (iterable as Iterable<unknown>)[Symbol.iterator]()
-            },
-            async pull(controller) {
-                // Open on the FIRST real read: flush the prelude and arm the heartbeat (see file header).
-                if (!opened) {
-                    opened = true
-                    controller.enqueue(PRELUDE)
-                    heartbeat = setInterval(() => {
-                        try {
-                            controller.enqueue(HEARTBEAT)
-                        } catch {
-                            stopHeartbeat()
-                        }
-                    }, HEARTBEAT_MS)
-                }
-                try {
-                    const result = await (iterator as AsyncIterator<unknown>).next()
-                    if (result.done === true) {
+            open: (controller) => {
+                controller.enqueue(PRELUDE)
+                heartbeat = setInterval(() => {
+                    try {
+                        controller.enqueue(HEARTBEAT)
+                    } catch {
                         stopHeartbeat()
-                        controller.close()
-                    } else {
-                        controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify(result.value)}\n\n`),
-                        )
                     }
-                } catch (caught) {
-                    stopHeartbeat()
-                    controller.error(caught)
-                }
+                }, HEARTBEAT_MS)
             },
-            async cancel() {
-                stopHeartbeat()
-                await (iterator as AsyncIterator<unknown>)?.return?.(undefined)
-            },
+            close: stopHeartbeat,
         },
-        { highWaterMark: 0 },
     )
     const headers = new Headers(init?.headers)
     if (!headers.has('content-type')) headers.set('content-type', 'text/event-stream')

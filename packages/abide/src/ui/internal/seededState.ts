@@ -27,9 +27,9 @@
 
 import { decode } from '../../shared/internal/codec.ts'
 import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
-import type { State, StateFactory } from '../../shared/state.ts'
+import type { State } from '../../shared/state.ts'
 import { state } from '../../shared/state.ts'
-import { SITE_PATH } from './SITE_PATH.ts'
+import { type SiteStateFactory, siteStateFactory } from './siteStateFactory.ts'
 
 // `seed.states` is the rich-codec `encode(...)` string of the whole site-keyed bucket map (a non-RPC
 // hydrated value — see pages.ts). Decode it back to the buckets the ordinal replay reads. A malformed/
@@ -53,40 +53,25 @@ function decodeStates(encoded: HydrationSeed['states']): Record<string, unknown[
 export function makeSeededState(
     seed: HydrationSeed,
     isHydrating: () => boolean = () => true,
-): StateFactory {
+): SiteStateFactory {
     const buckets = decodeStates(seed.states)
     // Next unconsumed ordinal per BUCKET path (not per factory) — see the header note on `{#for}` items.
     const cursors = new Map<string, number>()
 
-    function at(sitePath: string, bucketPath: string): StateFactory {
-        const local = function seededState<T>(initial: T, transform?: (value: T) => T): State<T> {
-            // Only REPLAY (and advance the bucket's cursor) while CLAIMING server nodes. In CREATE mode —
-            // a fresh mount, or a create-fallback re-mount — there are no server nodes to match, so use
-            // the LITERAL initial and DON'T touch the cursor.
-            if (!isHydrating()) return state(initial, transform)
-            const bucket = buckets === undefined ? undefined : buckets[bucketPath]
-            const index = cursors.get(bucketPath) ?? 0
-            cursors.set(bucketPath, index + 1)
-            const value =
-                bucket !== undefined && Array.isArray(bucket) && index < bucket.length
-                    ? (bucket[index] as T)
-                    : initial
-            return state(value, transform)
-        } as StateFactory
-        // `.shared` never consumed a seed slot. `.forSite` opens the bucket of a `<Component/>`
-        // invocation; `.forItem` opens one per loop iteration.
-        return Object.assign(local, {
-            shared: state.shared,
-            forSite(siteId: number): StateFactory {
-                const next = SITE_PATH.forSite(sitePath, siteId)
-                return at(next, next)
-            },
-            forItem(index: number): StateFactory {
-                const next = SITE_PATH.forItem(sitePath, index)
-                return at(next, next)
-            },
-        }) as StateFactory
-    }
-
-    return at(SITE_PATH.root, SITE_PATH.root) // the page/root bucket
+    // The descent is `siteStateFactory`'s (shared with the recorder); this is only what one `state()`
+    // call does in the bucket at `path`.
+    return siteStateFactory((path) => <T>(initial: T, transform?: (value: T) => T): State<T> => {
+        // Only REPLAY (and advance the bucket's cursor) while CLAIMING server nodes. In CREATE
+        // mode — a fresh mount, or a create-fallback re-mount — there are no server nodes to
+        // match, so use the LITERAL initial and DON'T touch the cursor.
+        if (!isHydrating()) return state(initial, transform)
+        const bucket = buckets === undefined ? undefined : buckets[path]
+        const index = cursors.get(path) ?? 0
+        cursors.set(path, index + 1)
+        const value =
+            bucket !== undefined && Array.isArray(bucket) && index < bucket.length
+                ? (bucket[index] as T)
+                : initial
+        return state(value, transform)
+    })
 }

@@ -11,6 +11,7 @@
 // Engine (non-app) tools are OUT here (AG2.5, off by default) — this loop only executes tools in
 // the provided `AgentSurface`, which are the app's own RPCs gated by the app's middleware (AG1.7).
 
+import { raceAbort } from '../shared/internal/withAbort.ts'
 import type {
     AgentEngine,
     AgentFrame,
@@ -207,32 +208,19 @@ const ABORTED: unique symbol = Symbol('abide.agent.approval.aborted')
 
 // Await the transport's decision, but resolve to ABORTED the moment the signal fires — so a pending
 // approval (a decision that may never arrive) can't wedge the loop past an abort (AG2.3).
+//
+// The RACE is `raceAbort`'s, shared with `withAbort`; only the terminal is this file's. An abandoned
+// approval is a decision the loop can act on, not an error, so it resolves the sentinel where an
+// abandoned rpc read rejects — and the swallow-the-underlying-rejection rule that was discovered here
+// now lives with the race rather than beside one of its two callers.
 function awaitDecision(
     policy: ApprovalPolicy,
     request: { id: string; name: string; args: unknown },
     signal: AbortSignal | undefined,
 ): Promise<ApprovalDecision | typeof ABORTED> {
-    const decision = policy.decide(request)
-    if (signal === undefined) return decision
-    if (signal.aborted) {
-        // Already aborted: we return ABORTED without awaiting `decision`, so attach a swallow handler —
-        // an approval transport that later rejects would otherwise be an unhandled rejection (process
-        // crash under strict unhandled-rejection modes).
-        void decision.catch(() => {})
-        return Promise.resolve(ABORTED)
-    }
-    return new Promise<ApprovalDecision | typeof ABORTED>((resolve, reject) => {
-        const onAbort = (): void => resolve(ABORTED)
-        signal.addEventListener('abort', onAbort, { once: true })
-        decision.then(
-            (value) => {
-                signal.removeEventListener('abort', onAbort)
-                resolve(value)
-            },
-            (caught) => {
-                signal.removeEventListener('abort', onAbort)
-                reject(caught)
-            },
-        )
-    })
+    return raceAbort<ApprovalDecision | typeof ABORTED>(
+        policy.decide(request),
+        signal,
+        () => ABORTED,
+    )
 }

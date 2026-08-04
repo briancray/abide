@@ -22,6 +22,7 @@ import { json } from '../json.ts'
 import { clientPublishAllowed, type ErasedSocket } from '../socket.ts'
 import { sse } from '../sse.ts'
 import type { AppConfig } from './appConfig.ts'
+import { appOrigin } from './appOrigin.ts'
 import {
     authorizeChannelJoin,
     authorizeSocketJoin,
@@ -61,10 +62,10 @@ export interface SocketConnection {
 export function socketOriginAllowed(request: Request): boolean {
     const origin = request.headers.get('origin')
     if (origin === null) return true
-    const appUrl = Bun.env.APP_URL
-    if (appUrl === undefined || appUrl.length === 0) return true
+    const app = appOrigin()
+    if (!app.configured) return true
     try {
-        return new URL(origin).origin === new URL(appUrl).origin
+        return new URL(origin).origin === app.origin
     } catch {
         return false
     }

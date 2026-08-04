@@ -17,7 +17,9 @@
 import { canonicalKey } from './codec.ts'
 
 // A selector and a slot's args are matched structurally, so only a plain object counts as a partial
-// selector — a class instance or an array is compared whole, by canonical key.
+// selector — a class instance or an array is compared whole, by canonical key. Deliberately STRICTER
+// than the shared `isPlainObject`, which admits a class instance because a schema walker must descend
+// into one; here descending into one would match a selector against fields it does not own.
 function isPlainObject(value: unknown): value is Record<string, unknown> {
     if (value === null || typeof value !== 'object') return false
     const prototype = Object.getPrototypeOf(value)

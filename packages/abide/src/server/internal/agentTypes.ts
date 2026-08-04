@@ -77,7 +77,6 @@ export type AgentSurface = AgentTool[]
 export interface AgentOptions {
     model?: string
     system?: string
-    temperature?: number
     maxTokens?: number
     tools?: AgentSurface
     approval?: ApprovalPolicy

@@ -39,6 +39,7 @@ import { json } from '../json.ts'
 import type { AppConfig } from './appConfig.ts'
 import { applyResponseCompression } from './applyResponseCompression.ts'
 import { applyResponseHeaders } from './applyResponseHeaders.ts'
+import { appOrigin } from './appOrigin.ts'
 import {
     clearIdentityCookieHeader,
     identityCookieHeader,
@@ -145,8 +146,8 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
         )
     }
 
-    const appUrl = Bun.env.APP_URL
-    if (appUrl !== undefined && appUrl.length > 0) {
+    const app = appOrigin()
+    if (app.configured) {
         // AU8.3 Origin/Referer check. Prefer the unforgeable `Origin`; fall back to `Referer` when a
         // browser omitted `Origin` on the mutation (older browsers / some same-origin navs). When NEITHER
         // is present we ALLOW — the non-simple-shape gate above is the primary CSRF defense, and a
@@ -155,11 +156,16 @@ function csrfReject(request: Request, cors: NormalizedCors | undefined): Respons
         const claimed = request.headers.get('origin') ?? request.headers.get('referer')
         if (claimed !== null) {
             let claimedOrigin: string
-            let appHost: string
             try {
                 claimedOrigin = new URL(claimed).origin
-                appHost = new URL(appUrl).origin
             } catch {
+                return errorResponse(
+                    403,
+                    'CSRF: could not verify request Origin/Referer against APP_URL.',
+                )
+            }
+            const appHost = app.origin
+            if (appHost === undefined) {
                 return errorResponse(
                     403,
                     'CSRF: could not verify request Origin/Referer against APP_URL.',
@@ -319,9 +325,12 @@ const SOCKET_MUX_ROUTE = SOCKETS_ROUTE
 // response — of ANY status — reads as the short-circuit it is.
 const UPGRADE_ADMITTED = new Response(null, { status: 101 })
 
-// The request scope a `socket-connect` middleware runs in. Deliberately NOT the full HTTP scope: an
-// upgrade has no response to write a rolling identity cookie onto (a successful upgrade returns
-// `undefined`), so the cookie-lifecycle fields are absent rather than present-and-ignored.
+// The request scope a `socket-connect` middleware runs in. Built through `makeRequestScope` like the
+// other two, because an upgrade's scope differs from an HTTP request's only in what it PUTS in the
+// fields, not in which fields exist — there is no response to write a rolling identity cookie onto, so
+// `identityExpiresAt` is `undefined`, and that is data rather than an omission. It used to be a third
+// hand-written 13-field literal here, carrying a header that said the cookie-lifecycle fields were
+// "absent rather than present-and-ignored" while three of them were set ten lines below it.
 //
 // Identity resolution FAILS CLOSED to anonymous. A tampered token that will not unseal must reach the
 // chain as "nobody", so an app's `requireLogin` denies it — degrading to anonymous is what makes the
@@ -339,15 +348,12 @@ async function socketConnectScope(
     } catch {
         identity = anonymousPrincipal()
     }
-    return {
+    return makeRequestScope({
         request,
         cookies,
         identity,
         identityStateless: isMachineBearer(request),
-        identityCleared: false,
-        identityDirty: false,
         identityExpiresAt: undefined,
-        bag: {},
         route: {
             kind: 'socket-connect',
             name: SOCKET_MUX_ROUTE,
@@ -358,9 +364,8 @@ async function socketConnectScope(
         // The WS-data generic is a socket-transport concern only; the public `server()` surface stays
         // `Bun.Server<undefined>`.
         server: srv as unknown as Bun.Server<undefined>,
-        slots: new Map<string, unknown>(),
         traceparent: propagatedTrace,
-    }
+    })
 }
 
 // Gate the method a route class declares, then let it answer. `GATE_IN_HANDLER` is the two classes whose

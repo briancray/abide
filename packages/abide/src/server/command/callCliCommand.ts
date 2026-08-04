@@ -12,12 +12,16 @@
 // names the failure class.
 
 import { CSRF_HEADER } from '../../shared/internal/CSRF_HEADER.ts'
-import { isStreamContentType } from '../../shared/internal/decodeStreamResponse.ts'
+import {
+    isStreamContentType,
+    streamEncodingFor,
+} from '../../shared/internal/decodeStreamResponse.ts'
 import { readLines } from '../../shared/internal/readLines.ts'
 import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import type { CliCommand } from './cliCommands.ts'
 import { cliExitCodeForStatus } from './cliExitCodeForStatus.ts'
+import { reportStreamInterrupted, reportUnreachable } from './cliFailure.ts'
 
 export interface CliCallOptions {
     origin: string
@@ -76,7 +80,7 @@ async function reportFailure(response: Response, options: CliCallOptions): Promi
 async function streamBody(response: Response, options: CliCallOptions): Promise<number> {
     const body = response.body
     if (body === null) return CLI_EXIT_CODES.ok
-    const sse = (response.headers.get('content-type') ?? '').includes('text/event-stream')
+    const sse = streamEncodingFor(response.headers.get('content-type') ?? '') === 'sse'
     const emit = (line: string): void => {
         if (line === '') return
         if (!sse) {
@@ -96,14 +100,7 @@ export async function callCliCommand(options: CliCallOptions): Promise<number> {
     try {
         response = await fetch(requestUrl(options), requestInit(options))
     } catch (caught) {
-        options.writeError(
-            `${JSON.stringify({
-                error: 'unreachable',
-                target: options.origin,
-                message: caught instanceof Error ? caught.message : String(caught),
-            })}\n`,
-        )
-        return CLI_EXIT_CODES.failed
+        return reportUnreachable(options.origin, caught, options.writeError)
     }
 
     if (!response.ok) return await reportFailure(response, options)
@@ -112,13 +109,7 @@ export async function callCliCommand(options: CliCallOptions): Promise<number> {
         try {
             return await streamBody(response, options)
         } catch (caught) {
-            options.writeError(
-                `${JSON.stringify({
-                    error: 'stream-interrupted',
-                    message: caught instanceof Error ? caught.message : String(caught),
-                })}\n`,
-            )
-            return CLI_EXIT_CODES.failed
+            return reportStreamInterrupted(caught, options.writeError)
         }
     }
 

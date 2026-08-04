@@ -82,11 +82,7 @@ export function sharedCacheTouch(store: Map<string, unknown>, key: string): void
 
 // Record a slot's settled JSON byte size for ceiling accounting. No-op when unbounded, so the
 // sidecar never grows in the default (unlimited) configuration.
-export function sharedCacheRecordSize(
-    store: Map<string, unknown>,
-    key: string,
-    bytes: number,
-): void {
+function sharedCacheRecordSize(store: Map<string, unknown>, key: string, bytes: number): void {
     if (readLimit() === Infinity) return
     sizesFor(store).set(key, bytes)
 }
@@ -94,7 +90,7 @@ export function sharedCacheRecordSize(
 // Evict least-recently-touched entries until the total settled bytes are within the ceiling.
 // Totals are computed only over keys still present in the store, so stale sidecar entries never
 // distort the count. No-op when unbounded.
-export function sharedCacheEvictIfNeeded(store: Map<string, unknown>): void {
+function sharedCacheEvictIfNeeded(store: Map<string, unknown>): void {
     const limit = readLimit()
     if (limit === Infinity) return
     const sizes = sizesFor(store)

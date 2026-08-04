@@ -53,6 +53,14 @@ export namespace StandardSchemaV1 {
     >['output']
 }
 
+// "Is this a conforming schema?" — the `~standard` probe, stated once. It was written out inline at
+// three sites (`jsonSchema.asStandardSchema`, `shapeToSchema.jsonSchemaOf`, `env`), each guarding a
+// cast to this interface, so the predicate form is also what makes those casts checked rather than
+// asserted.
+export function isStandardSchema(value: unknown): value is StandardSchemaV1 {
+    return typeof value === 'object' && value !== null && '~standard' in value
+}
+
 // Normalised outcome the RPC path consumes — collapses sync/async and success/failure into a
 // single monomorphic shape so callers branch on `ok` alone.
 export type ValidateStandardResult<Output> =

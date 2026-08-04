@@ -28,6 +28,7 @@ import type { CommandTarget } from './commandTarget.ts'
 import { completeCliLine } from './completeCliLine.ts'
 import { type LineReader, lineReader } from './lineReader.ts'
 import { parseCliArgs } from './parseCliArgs.ts'
+import { RESERVED_CLI_COMMANDS } from './RESERVED_CLI_COMMANDS.ts'
 import { reservedCliCommand } from './reservedCliCommand.ts'
 import { reservedCliDispatch } from './reservedCliDispatch.ts'
 import { type ResolvedCliTarget, resolveCliTarget } from './resolveCliTarget.ts'
@@ -166,7 +167,17 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
             options.tty ? 'TAB completes' : undefined,
             options.tty && coloured ? '\u2192 accepts the hint' : undefined,
         ].filter((hint) => hint !== undefined)
-        const reserved = '`help`, `serve`, `connect <url>`, `identity`, `logs`, `exit`'
+        // Derived from the one table, the way `cliUsage` derives help from it. Spelled as prose here,
+        // this was the FIFTH place that had to agree about the reserved names and the only one that did
+        // not read them: the table declares eleven and the line named six, so `disconnect`, `login`,
+        // `logout`, `completion` and `quit` were intercepted at this prompt and advertised nowhere.
+        const reserved = Object.entries(RESERVED_CLI_COMMANDS)
+            .map(([name, entry]) =>
+                'args' in entry && entry.args !== undefined
+                    ? `\`${name} ${entry.args}\``
+                    : `\`${name}\``,
+            )
+            .join(', ')
         options.write(
             paint.dim(
                 `\n${options.commands.length} commands${keys.length === 0 ? '' : ` · ${keys.join(', ')}`} · ${reserved}\n`,
