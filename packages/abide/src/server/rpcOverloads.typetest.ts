@@ -34,7 +34,7 @@ type _2 = AssertTrue<Expect<Parameters<typeof defaulted>[0]['message'], string |
 
 // 3. Zero-arg read still works (arg optional).
 const zero = GET(() => ({ ok: true }))
-zero.peek()
+zero.live()
 
 // 4. Explicit annotation still works.
 const annotated = GET((args: { id: string }) => ({ id: args.id }))

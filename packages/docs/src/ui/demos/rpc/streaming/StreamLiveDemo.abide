@@ -1,0 +1,19 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+  import rpcTicker from "$server/rpc/rpcTicker"
+
+  // On a STREAMING read, `live(args)` is the LATEST chunk — the stream's current value, reactive, with
+  // no list to maintain. It ACQUIRES: reading it kicks the shared run, and it advances as each tick
+  // lands. `peek(args)` is the same latest chunk read untracked — it starts nothing and never advances
+  // on its own.
+  let started = state(false)
+  const latest = memo(() => (started ? (rpcTicker.live({ count: 4 })?.label ?? "…") : "idle"))
+  function start() { started = true; rpcTicker.live({ count: 4 }) }
+</script>
+
+<p><code>live()</code> — latest chunk: <strong data-testid="stream-latest">{latest}</strong></p>
+
+<div class="row">
+  <button data-testid="stream-live-start" onclick={start}>Start stream</button>
+</div>

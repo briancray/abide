@@ -89,7 +89,7 @@ export interface Binding {
 //
 // `cells` are writable state cells: a read becomes `n()`, a write becomes `n.set(x)`.
 // `memos` are auto-called memos: only the BARE reference becomes `m()`. A memo is read-only and carries a
-// surface, so `m.peek()` / `m.refresh()` / `m.state()` and an explicit `m()` are left alone — reach into
+// surface, so `m.live()` / `m.refresh()` / `m.state()` and an explicit `m()` are left alone — reach into
 // the VALUE with `{m}` or `{m().field}`.
 // There is no dependency-position exception (ADR 0025): a `memo`/`watch` source is ALWAYS a thunk, so
 // every identifier inside it is an ordinary read and needs no special casing here.

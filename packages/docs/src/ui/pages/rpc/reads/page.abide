@@ -3,7 +3,7 @@
   import GetReadDemo from "$ui/demos/rpc/reads/GetReadDemo.abide"
   import HeadPingDemo from "$ui/demos/rpc/reads/HeadPingDemo.abide"
   import AwaitReadDemo from "$ui/demos/rpc/reads/AwaitReadDemo.abide"
-  import PeekReadDemo from "$ui/demos/rpc/reads/PeekReadDemo.abide"
+  import LiveReadDemo from "$ui/demos/rpc/reads/LiveReadDemo.abide"
   import AwaitBlockDemo from "$ui/demos/rpc/reads/AwaitBlockDemo.abide"
   import AwaitInlineDemo from "$ui/demos/rpc/reads/AwaitInlineDemo.abide"
   import RawDemo from "$ui/demos/rpc/reads/RawDemo.abide"
@@ -31,11 +31,12 @@
     <p>Waiting is the default and the one to write: <code>{'{'}await fn(args){'}'}</code> blocks the render, so the value lands in the server HTML — the string here is in this document before any JavaScript runs. Nothing suspends on the client; the text node fills when the read settles.</p>
     <p>The <code>await</code> is not optional. Every expression slot is auto-awaited at runtime, so a bare <code>{'{'}fn(args){'}'}</code> renders the value too — but it types as <code>Promise&lt;T&gt;</code>, which dead-ends the moment you want a field. <code>abide check</code> rejects it, so there is one form, not two.</p>
   </aside>
-  <Demo id="peek-read" title="<code>{'{'}fn.peek(args){'}'}</code> — non-blocking snapshot" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/PeekReadDemo.abide" tab="client">
-    <PeekReadDemo />
+  <Demo id="live-read" title="<code>{'{'}fn.live(args){'}'}</code> — non-blocking snapshot" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/reads/LiveReadDemo.abide" tab="client">
+    <LiveReadDemo />
   </Demo>
   <aside class="aside">
-    <p>Not waiting is <code>peek</code>: a reactive <code>T | undefined</code> snapshot that never blocks. It returns whatever the slot holds and kicks a coalesced load — the value when the slot is warm (on the server too, if an earlier read of the same call settled during that render), <code>undefined</code> when it is cold. It is an ordinary value, so the placeholder is ordinary too: <code>{'{'}fn.peek(args) ?? 'Loading…'{'}'}</code>.</p>
+    <p>Not waiting is <code>live</code>: a reactive <code>T | undefined</code> snapshot that never blocks. It returns whatever the slot holds and kicks a coalesced load — the value when the slot is warm (on the server too, if an earlier read of the same call settled during that render), <code>undefined</code> when it is cold. It is an ordinary value, so the placeholder is ordinary too: <code>{'{'}fn.live(args) ?? 'Loading…'{'}'}</code>.</p>
+    <p>Its untracked sibling <code>{'{'}fn.peek(args){'}'}</code> reads the same slot and <em>acquires nothing</em> — no subscription, no load — so it never fills in on its own. That is the escape hatch, not the display read; see the <a href="/memo/probes#memo-peek">memo probes</a> page for a card that makes the difference visible.</p>
   </aside>
   <Demo id="await-block" title="<code>{'{'}#await{'}'}</code> / <code>{'{'}:then{'}'}</code> / <code>{'{'}:catch{'}'}</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/reads/AwaitBlockDemo.abide" tab="client">
     <AwaitBlockDemo />
@@ -54,6 +55,6 @@
   </Demo>
   <aside class="aside">
     <p>Every form above goes through the memo — cached, coalesced, throwing on failure. <code>fn.raw(args, init?)</code> is the door out: the untouched <code>Response</code>, no caching and nothing thrown, so you read the status, headers and body yourself. See what the helpers put on the wire on <a href="/rpc/responses">Responses</a>.</p>
-    <p>Beyond <code>peek</code>, a read carries the full reactive probe surface — <code>pending</code>, <code>refreshing</code>, <code>error</code>, <code>watch</code> — because it is a memo. They have their own page: <a href="/rpc/probes">RPC probes</a>.</p>
+    <p>Beyond <code>live</code>, a read carries the full reactive probe surface — <code>pending</code>, <code>refreshing</code>, <code>error</code>, <code>watch</code> — because it is a memo. They have their own page: <a href="/rpc/probes">RPC probes</a>.</p>
   </aside>
 </main>

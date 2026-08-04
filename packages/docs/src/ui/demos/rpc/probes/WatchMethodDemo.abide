@@ -6,7 +6,7 @@
   // `fn.watch(args, cb)` runs cb whenever THIS slot's value changes (method form, not `watch(thunk)`).
   let watchMethodStarted = state(false)
   let watchMethodHits = state(0)
-  const watchMethodValue = memo(() => (watchMethodStarted ? (cacheCounter.peek({ key: "watch-method" })?.runs ?? "loading") : "idle"))
+  const watchMethodValue = memo(() => (watchMethodStarted ? (cacheCounter.live({ key: "watch-method" })?.runs ?? "loading") : "idle"))
   cacheCounter.watch({ key: "watch-method" }, () => { watchMethodHits++ })
   function startWatchMethod() { watchMethodStarted = true }
   function refreshWatched() { cacheCounter.refresh({ key: "watch-method" }) }

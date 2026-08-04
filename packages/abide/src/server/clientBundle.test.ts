@@ -264,7 +264,7 @@ test('a socket ships the channel retention the server hub runs on, Infinity as n
                 "import windowed from '../../server/sockets/windowed'",
                 "import plain from '../../server/sockets/plain'",
                 '</script>',
-                '<p>{sticky.peek()}{windowed.peek()}{plain.peek()}</p>',
+                '<p>{sticky.live()}{windowed.live()}{plain.live()}</p>',
             ].join('\n'),
         },
     })

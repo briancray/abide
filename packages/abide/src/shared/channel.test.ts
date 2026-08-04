@@ -27,7 +27,7 @@ test('void channel: direct iteration subscribes, publish fans out, peek/chunks r
     ch.publish(1)
     ch.publish(2)
     expect(await got).toEqual([1, 2])
-    expect(ch.peek()).toBe(2)
+    expect(ch.live()).toBe(2)
     expect(ch.chunks()).toEqual([1, 2])
 })
 
@@ -36,7 +36,7 @@ test('void channel: the explicit (undefined, message) form unpacks to the same r
     ch.publish(undefined, 1) // the generic-safe two-argument form (what forwarding code emits)
     ch.publish(2)
     expect(ch.chunks()).toEqual([1, 2])
-    expect(ch.peek()).toBe(2)
+    expect(ch.live()).toBe(2)
 })
 
 test('rooms: a subscriber to room A does NOT receive room B (server-side isolation)', async () => {
@@ -48,8 +48,8 @@ test('rooms: a subscriber to room A does NOT receive room B (server-side isolati
     expect(await a).toEqual(['to-a']) // a resolves; b is still pending (never saw 'to-a')
     ch.publish({ room: 'b' }, 'to-b')
     expect(await b).toEqual(['to-b'])
-    expect(ch.peek({ room: 'a' })).toBe('to-a')
-    expect(ch.peek({ room: 'b' })).toBe('to-b')
+    expect(ch.live({ room: 'a' })).toBe('to-a')
+    expect(ch.live({ room: 'b' })).toBe('to-b')
 })
 
 test('a late joiner to a room replays only that room’s tail', async () => {
@@ -113,12 +113,14 @@ test('channel exposes the same reactive read surface as memo', () => {
     const ch = channel<number>()
     const mo = memo(async () => 1)
     const SURFACE = [
-        'peek',
+        'live',
         'chunks',
         'pending',
         'refreshing',
+        'settled',
         'error',
         'done',
+        'streaming',
         'refresh',
         'invalidate',
         'watch',
@@ -140,5 +142,5 @@ test('channel runs in a browser-shaped environment (isomorphic, no server scope)
     await delay(5)
     ch.publish('browser')
     expect(await seen).toEqual(['browser'])
-    expect(ch.peek()).toBe('browser')
+    expect(ch.live()).toBe('browser')
 })

@@ -16,7 +16,7 @@ unless it explicitly says "transport" or "HTTP."
 
 - The primitive is **`memo`**: `memo(asyncFn)` wraps *any* async function to give it the
   smart-read surface: caching, in-flight coalescing, and reactive reads (`.pending`,
-  `.error`, `.refreshing`, `.peek`, `.watch`, `.refresh`, `.invalidate`, `.publish`). Its type
+  `.error`, `.refreshing`, `.settled`, `.live`, `.peek`, `.watch`, `.refresh`, `.invalidate`, `.publish`). Its type
   is **`Memo`** (the `AsyncMemo` referenced by selector signatures elsewhere = `Memo`).
 - abide's own `GET`/`POST`/`socket` **bake the behavior in** — users never call `memo` to
   get RPC behavior. Users reach for `memo()` only to wrap **their own third-party async
@@ -190,7 +190,7 @@ guard has to assert the COUNT.
    round-trips with its type intact instead of JSON-flattening to `null`.
 2. **Third-party `memo`s are server-only** and don't hydrate as themselves (a Stripe call
    can't run in the browser). A server-computed value opts into hydration via an explicit
-   `key`; the client can then **read** it (`.peek`) but **never recompute/refresh** it (no
+   `key`; the client can then **read** it (`.live`/`.peek`) but **never recompute/refresh** it (no
    client transport for it). Keys auto-set otherwise. **Output-shaping:** before any value
    goes on the wire OR into the hydration `<script>`, it is **shaped to the
    declared/derived output-schema fields** (key-pick allowlist) — undeclared fields
@@ -243,13 +243,14 @@ One imported callable means two things:
 2. **Each cache slot `(callSiteId, args)` *is* a `state`.** Reading it in a tracking context
    subscribes; changes (resolve, `invalidate`, `publish`, socket broadcast) re-run
    subscribers. The slot is a state machine: `idle → pending → value | error`. `.pending`/`.error`/
-   `.peek` are **derived views of the one slot**, not separate channels.
+   `.live` are **derived views of the one slot**, not separate channels (and `.peek` is the same view read
+   without subscribing).
 3. **`refreshing` is its own signal, NOT a field of the slot state.** Value and status are two
    AXES, and a slot carries one signal per axis. A `refresh` over a retained value flips
    `refreshing` on and back while the value never moves; folding it into the state envelope meant
    every such flip rebuilt the envelope and woke every VALUE reader — twice per refresh — to report
    that a spinner had come and gone. Separate signals mean a probe wakes for its own axis and no
-   other: `.refreshing` readers see the flip, `{await fn()}` / `.peek` readers do not.
+   other: `.refreshing` readers see the flip, `{await fn()}` / `.live` readers do not.
 4. **An observably-identical write wakes nobody.** A slot state is immutable, so a transition that
    produces the same `status`/`value`/`error`/`stream` re-writes the SAME object and the reactive
    graph's `oldValue !== value` cutoff stops propagation there. This covers a `refresh` that
@@ -289,6 +290,28 @@ One imported callable means two things:
    parked. Without this ownership every render leaves its `watch`es subscribed to whatever they read
    that outlives the request (a module-level `state`), so one later write re-runs one dead effect per
    request ever served.
+
+8. **A PROBE OBSERVES; IT NEVER CAUSES.** The vocabulary splits three ways and only the first group
+   acquires: the ACTIVE **reads** `live` and `chunks` (subscribe, and kick a coalesced load when the
+   slot is cold — `chunks` because `{#for c of fn.chunks()}` renders the data, so a transcript read
+   that started nothing would paint an empty list forever); the untracked read `peek` (neither); and
+   the **probes** `pending`/`refreshing`/`settled`/`error`/`done`/`streaming`, which start no load, open
+   no subscription, and move no LRU/retention position. No exceptions — including on an **argless**
+   memo, where classifying the body means RUNNING it.
+   This is stated as a rule because it did not hold, in two ways no value test can see. `done` reached
+   `startLoad` through the same helper `chunks` uses, so asking "has this finished?" is what started it.
+   And on an argless memo every probe that classified (`error`/`settled`/`streaming`/`done`) ran the body
+   to do so — on a deferred body that fires the LOAD, so `{#if job.settled()}` was what launched the job
+   it asked about. The PRICE, which is deliberate: a probe on an argless memo whose body has never run
+   reports the COLD answer (`settled()` false, `error()` undefined) until a READ classifies it. That is
+   honest — nothing has produced a value, so there is no outcome — and it is exactly what `pending()`
+   has always done.
+   The same rule fixes the one thing `pending` could never answer: `pending()` is false for a COLD slot
+   and for a settled one alike, and neither read separates them either (a settled `undefined` reads
+   exactly like nothing-yet), so **`!settled() && !pending()` is "never asked"**.
+   On an AUTO-TRACKED memo the two stream probes are constants — `settled()` is `true` (a synchronous
+   derivation is never pending and always has a value or a throw) and `streaming()` is `false` (it has
+   no transcript).
 
 ## 8. Mutation → read consistency
 
@@ -462,9 +485,10 @@ When no schema is given, synthesize input/output JSON Schema from the handler's 
 1. **Return type named `AsyncIterable<T>`** (true async iterable) or **`Stream<T>`** (when
    not quite). `Subscribable` is retired (ambiguous).
 2. **A stream is a subscription, not a scalar value slot** — no `.peek` scalar, not in the
-   hydration payload as a value. **SUPERSEDED (designed, not yet built —
-   `replayable-streams.md`):** a stream whose slot is cached stores a **`ReplayableStream`**
-   (buffered decoded chunks) rather than bypassing the cache.
+   hydration payload as a value. **SUPERSEDED (designed, not yet built — `replayable-streams.md`):** a
+   stream whose slot is cached stores a **`ReplayableStream`** (buffered decoded chunks) rather than
+   bypassing the cache. Superseded a SECOND way by the read split: a stream slot has BOTH reads,
+   `live` and `peek`, each meaning the most-recent CHUNK over `C` rather than a scalar value.
 3. **Coalescing at the subscription level:** identical-arg consumers **share one upstream
    connection, fan out to N** (ref-counted; torn down when the last leaves). **SUPERSEDED
    (designed, not yet built — `replayable-streams.md`): replay becomes available for an HTTP
@@ -542,7 +566,7 @@ pages — nothing is reserved outside `/__abide/*`.
    **mutation** it is a full bypass: the bare call skips the memo, every call runs, at-least-once,
    nothing coalesced. On a **read** the memo STAYS at `ttl: 0` — a read needs its reactive surface,
    so nothing is retained and every call runs cold, but identical concurrent calls still coalesce and
-   `peek`/`pending`/`refresh`/`error` stay live.
+   `live`/`pending`/`refresh`/`error` stay live.
 
    One **normalizer** (`shared/internal/rpcMemoPolicy`) answers this once and one **builder**
    (`memoOptionsFor`) turns its answer into memo options; the server memo, the wire registry spec and
@@ -621,11 +645,13 @@ pages — nothing is reserved outside `/__abide/*`.
 | `fn.refresh()` / `fn.refresh(args)` | eager refetch, keep stale visible (partial-args match) |
 | `fn.invalidate()` / `fn.invalidate(args)` | drop cached slot(s), lazy reload (partial-args match; no arg = whole callable) |
 | `fn.publish(args, value \| updater)` | swap retained value — value-form broadcasts server-side; server per-request updater-form errors |
-| `fn.peek` | synchronous retained value |
-| `fn.pending` / `fn.refreshing` / `fn.error` | reactive slot-state probes |
+| `fn.live` | synchronous retained value, reactive — subscribes + kicks a cold load |
+| `fn.peek` | the same value read UNTRACKED — no subscription, no load |
+| `fn.pending` / `fn.refreshing` / `fn.settled` / `fn.error` | reactive slot-state probes — they OBSERVE, so none of them starts a load |
+| `fn.chunks` / `fn.done` / `fn.streaming` | the transcript READ (acquires, like `live`) and the two transcript probes (observe only); surfaced by the STREAM rpc types |
 | `fn.watch` | trigger on change |
 | `fn.isError(e, name)` | narrow a typed error |
-| bare call on a streaming handler | returns `AsyncIterable<T>` / `Stream<T>` |
+| bare call on a streaming handler | returns `Promise<AsyncIterable<C>>` — a fresh replay-then-live cursor |
 
 ## RPC options (consolidated)
 

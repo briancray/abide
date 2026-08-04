@@ -1,7 +1,9 @@
 # Concurrent child renders — plan
 
-**Status:** proposed, not started. Follow-up to ADR 0031 (D10), which names this and deliberately does not
-attempt it.
+**Status:** proposed, not started. It was written as a follow-up to ADR 0031 (D10), which named this and
+deliberately did not attempt it; **that ADR was rejected as a whole and its file is not in the tree**. This
+plan does not depend on it — the waterfall it removes is its own, at its own granularity — so the premise
+is restated below rather than pointed at.
 
 ## The problem
 
@@ -16,11 +18,12 @@ $out += …
 
 `Bar`'s render function is not merely awaited after `Foo` — it is not *called* until `Foo` has fully
 resolved. So a page of independent components with reads in them costs the **sum** of their latencies, not
-the max. This is the same waterfall ADR 0031 removed inside a memo body (D4) and inside a single template's
-slots (D10), one level up, and it is the last structural one.
+the max. This is the same *kind* of waterfall ADR 0031 proposed to remove inside a memo body (D4) and
+inside a single template's slots (D10), one level up. Those were never built — so this is not the last
+structural one, it is the only one anybody has a plan for.
 
-**Why ADR 0031's mechanism cannot reach it.** D4/D10 work by having the compiler declare a unit's reads in
-advance. A child's reads are keyed by props — `getUser({ id: props.id })` — so declaring them requires the
+**Why that ADR's mechanism could not have reached it anyway.** D4/D10 worked by having the compiler
+declare a unit's reads in advance. A child's reads are keyed by props — `getUser({ id: props.id })` — so declaring them requires the
 parent to interpret the child's read shape. That is cross-module knowledge, and acquiring it at emit time
 would make a `.abide`'s emit depend on another file's contents, breaking the source-keyed `SOURCE_CACHE`
 (`emit.ts:114`) and silently staling `abide dev` rebuilds when the child changes.
@@ -86,7 +89,7 @@ the bytes are identical, hydration is untouched, which is why byte-identity is t
 
 ## What must be asserted
 
-Work, not output — the same rule ADR 0031 verifies under:
+Work, not output — the project's standing rule for a performance contract (`docs/PERFORMANCE.md`):
 
 - **both children are in flight before the first resolves** (the entire claim; a latency measurement can
   hide behind a fast fixture, a call-order assertion cannot)
@@ -95,9 +98,9 @@ Work, not output — the same rule ADR 0031 verifies under:
 - **a throwing child** produces the same response as today, including a deliberate `error()`/`redirect()`
 - **hydration adopts the concurrent output** with no cursor changes
 
-## Relationship to ADR 0031
+## Relationship to the rejected ADR 0031
 
-Independent. ADR 0031 needs none of this and this needs none of ADR 0031 — they remove different waterfalls
-at different granularities (memo body, template slot, component subtree). Doing 0031 first is only
-sequencing, not dependency. The one shared idea worth keeping consistent: *start every independent piece of
-work as early as you can, and emit in document order.*
+Independent, which is why this plan survives that ADR's rejection intact. The two removed different
+waterfalls at different granularities (memo body, template slot, component subtree); ADR 0031 needed none
+of this and this needs none of it. The one idea worth carrying forward from it: *start every independent
+piece of work as early as you can, and emit in document order.*

@@ -1,0 +1,39 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+  import rpcTicker from "$server/rpc/rpcTicker"
+
+  // The stream axis, read as THREE states rather than one boolean.
+  //
+  //   pending()   — asked, nothing arrived yet
+  //   streaming() — the transcript is OPEN and delivering
+  //   settled()   — it ENDED, however it ended
+  //
+  // `done()` is next to them deliberately: it is `close()` ALONE. A stream killed by a timeout, an
+  // invalidate or the per-stream buffer cap answers `done() === false` forever while its consumers have
+  // already thrown or returned — so a spinner rendered off `!done()` never stops. `settled()` reads the
+  // union, which is why it and not `done` is the honest end-of-stream test.
+  //
+  // All four are PROBES: they observe and never cause. Nothing here starts until you press the button —
+  // `live()` is the read that opens the run. Own key ({ count: 6 }) so this card owns its stream.
+  let started = state(false)
+  const phase = memo(() => {
+    if (rpcTicker.settled({ count: 6 })) return "settled"
+    if (rpcTicker.streaming({ count: 6 })) return "streaming"
+    if (rpcTicker.pending({ count: 6 })) return "pending"
+    return "never asked"
+  })
+  const latest = memo(() => (started ? (rpcTicker.live({ count: 6 })?.label ?? "…") : "—"))
+  function start() { started = true; rpcTicker.live({ count: 6 }) }
+</script>
+
+<ul class="grid">
+  <li>Phase: <strong data-testid="stream-phase">{phase}</strong></li>
+  <li><code>streaming()</code>: <strong data-testid="stream-streaming">{rpcTicker.streaming({ count: 6 }) ? "yes" : "no"}</strong></li>
+  <li><code>settled()</code>: <strong data-testid="stream-settled">{rpcTicker.settled({ count: 6 }) ? "yes" : "no"}</strong></li>
+  <li><code>done()</code>: <strong data-testid="stream-streaming-done">{rpcTicker.done({ count: 6 }) ? "yes" : "no"}</strong></li>
+  <li>Latest chunk: <strong data-testid="stream-streaming-latest">{latest}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="stream-streaming-start" onclick={start}>Start stream</button>
+</div>

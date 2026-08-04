@@ -4,7 +4,7 @@
 
   // error(args): the retained error, or undefined. A rejected load lands on the slot; a subsequent
   // invalidate + successful read clears it. The `started` gate keeps SSR from kicking the failing load
-  // (an ungated peek during render would reject before any click).
+  // (an ungated live read during render would reject before any click).
   let started = state(false)
   let failing = state(true)
   const flaky = memo(async ({ id }: { id: string }) => {
@@ -16,7 +16,7 @@
     const e = flaky.error({ id: "a" })
     return e instanceof Error ? e.message : "none"
   })
-  const value = memo(() => (started ? (flaky.peek({ id: "a" }) ?? "—") : "idle"))
+  const value = memo(() => (started ? (flaky.live({ id: "a" }) ?? "—") : "idle"))
   function trigger() { started = true; flaky({ id: "a" }).catch(() => {}) }
   function fixAndRetry() { failing = false; flaky.invalidate({ id: "a" }); flaky({ id: "a" }).catch(() => {}) }
 </script>

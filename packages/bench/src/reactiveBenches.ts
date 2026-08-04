@@ -211,7 +211,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'set-flush-1',
             note: 'set + flush, 1 observer',
             run: async () => {
-                setState1.set(setState1.untracked() + 1)
+                setState1.set(setState1.peek() + 1)
                 await afterFlush()
             },
             baseline: {
@@ -228,7 +228,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'set-flush-10',
             note: 'set + flush, 10 observers',
             run: async () => {
-                setState10.set(setState10.untracked() + 1)
+                setState10.set(setState10.peek() + 1)
                 await afterFlush()
             },
             baseline: {
@@ -245,7 +245,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'set-flush-100',
             note: 'set + flush, 100 observers',
             run: async () => {
-                setState100.set(setState100.untracked() + 1)
+                setState100.set(setState100.peek() + 1)
                 await afterFlush()
             },
             baseline: {
@@ -279,7 +279,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'peek-scalar',
             note: 'warm value slot (ADR step 4 wraps this)',
             run: () => {
-                scalar.peek({ id: 1 })
+                scalar.live({ id: 1 })
             },
             baseline: {
                 note: 'plain object field read',
@@ -321,7 +321,7 @@ export async function createReactiveBenches(): Promise<ServerBench[]> {
             name: 'peek-stream',
             note: 'latest chunk of a 100-chunk transcript',
             run: () => {
-                streamMemo.peek({ id: 1 })
+                streamMemo.live({ id: 1 })
             },
             baseline: {
                 note: 'last element of an array',

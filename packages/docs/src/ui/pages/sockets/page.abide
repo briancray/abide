@@ -19,6 +19,6 @@
   <aside class="aside">
     <p>The template block <code>{'{'}#for await message of socketsChat{'}'}</code> <em>is</em> the subscription — it rides the multiplexed WebSocket at <code>/__abide/sockets</code> transparently (one connection carries every named socket), appending each message as it arrives. No raw connection, no frames.</p>
     <p>The socket keeps a <code>tail</code> of recent messages, so reloading this page replays them immediately — no re-publish needed.</p>
-    <p>Beyond iterating, a socket carries the reactive probe surface — <code>peek()</code> (latest message), <code>chunks()</code> (tail transcript), plus <code>pending</code>/<code>refreshing</code>/<code>error</code>. They have their own page: <a href="/sockets/probes">Socket probes</a>.</p>
+    <p>Beyond iterating, a socket carries the reactive probe surface — <code>live()</code> (latest message), <code>chunks()</code> (tail transcript), plus <code>pending</code>/<code>refreshing</code>/<code>error</code>. They have their own page: <a href="/sockets/probes">Socket probes</a>.</p>
   </aside>
 </main>

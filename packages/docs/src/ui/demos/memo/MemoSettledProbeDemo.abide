@@ -1,0 +1,36 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // settled(args): has this slot's acquisition reached a TERMINAL outcome — a value or an error?
+  //
+  // It is the only way to tell a COLD slot from a settled one. `pending()` is false for both, and
+  // neither read separates them either: a settled `undefined` reads exactly like nothing-yet. So
+  // `!settled() && !pending()` is "never asked", which is the third state this line renders.
+  //
+  // Note what asking does NOT do: `settled()` is a PROBE, so reading it starts no load. The slot below
+  // stays cold until you press Load, however long you look at it.
+  let started = state(false)
+  const answer = memo(async ({ id }: { id: string }) => {
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    return `answer ${id}`
+  })
+  const phase = memo(() => {
+    if (answer.settled({ id: "a" })) return "settled"
+    if (answer.pending({ id: "a" })) return "pending"
+    return "never asked"
+  })
+  const value = memo(() => (started ? (answer.live({ id: "a" }) ?? "—") : "—"))
+  function load() { started = true }
+  function reset() { started = false; answer.invalidate({ id: "a" }) }
+</script>
+
+<ul class="grid">
+  <li>Phase: <strong data-testid="settled-phase">{phase}</strong></li>
+  <li><code>settled()</code>: <strong data-testid="settled-flag">{answer.settled({ id: "a" }) ? "yes" : "no"}</strong></li>
+  <li>Value: <strong data-testid="settled-value">{value}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="settled-load" onclick={load}>Load</button>
+  <button data-testid="settled-reset" onclick={reset}>Invalidate</button>
+</div>

@@ -3,9 +3,10 @@
   import JsonlStreamDemo from "$ui/demos/rpc/streaming/JsonlStreamDemo.abide"
   import SseStreamDemo from "$ui/demos/rpc/streaming/SseStreamDemo.abide"
   import SseEventSourceDemo from "$ui/demos/rpc/streaming/SseEventSourceDemo.abide"
-  import StreamPeekDemo from "$ui/demos/rpc/streaming/StreamPeekDemo.abide"
+  import StreamLiveDemo from "$ui/demos/rpc/streaming/StreamLiveDemo.abide"
   import StreamChunksDemo from "$ui/demos/rpc/streaming/StreamChunksDemo.abide"
   import StreamDoneDemo from "$ui/demos/rpc/streaming/StreamDoneDemo.abide"
+  import StreamStreamingDemo from "$ui/demos/rpc/streaming/StreamStreamingDemo.abide"
   import StreamingMutationDemo from "$ui/demos/rpc/streaming/StreamingMutationDemo.abide"
 </script>
 
@@ -30,12 +31,18 @@
   <aside class="aside">
     <p>The same <code>sse</code> endpoint is also consumable with the native <code>EventSource</code> DOM API — same frames on the wire, raw-DOM style.</p>
   </aside>
-  <Demo id="stream-peek" title="<code>rpcTicker.peek(args)</code> — latest chunk" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamPeekDemo.abide" tab="client">
-    <StreamPeekDemo />
+  <Demo id="stream-live" title="<code>rpcTicker.live(args)</code> — latest chunk" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamLiveDemo.abide" tab="client">
+    <StreamLiveDemo />
   </Demo>
   <aside class="aside">
-    <p>A <strong>streaming</strong> read swaps the value probes for <em>chunk</em> probes — one per card: <code>fn.peek(args)</code> is the latest chunk, <code>fn.chunks(args)</code> is the transcript so far, and <code>fn.done(args)</code> reports whether the stream has closed.</p>
-    <p>The stream's current value: the most recent chunk, reactive, with no list to maintain. Reading it kicks the run; it advances as each tick lands.</p>
+    <p>A <strong>streaming</strong> read re-types the whole surface over the <em>chunk</em>: <code>fn.live(args)</code> is the latest chunk (and <code>fn.peek(args)</code> the same one, untracked), <code>fn.chunks(args)</code> is the transcript so far, and <code>fn.pending()</code> / <code>fn.streaming()</code> / <code>fn.settled()</code> / <code>fn.done()</code> / <code>fn.error()</code> report where the transcript is in its life — one card each below.</p>
+    <p>The stream's current value: the most recent chunk, reactive, with no list to maintain. It <em>acquires</em> — reading it kicks the run, and it advances as each tick lands.</p>
+  </aside>
+  <Demo id="stream-streaming" title="<code>rpcTicker.streaming(args)</code> / <code>settled(args)</code> vs <code>done(args)</code>" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamStreamingDemo.abide" tab="client">
+    <StreamStreamingDemo />
+  </Demo>
+  <aside class="aside">
+    <p>The stream axis, read as three states rather than one boolean: <code>pending()</code> (asked, nothing yet) → <code>streaming()</code> (open and delivering) → <code>settled()</code> (ended). <code>done()</code> sits next to them because it is <em>not</em> the same question — it is <code>close()</code> alone. A stream killed by a timeout, an <code>invalidate</code> or the per-stream buffer cap answers <code>done() === false</code> forever while its consumers have already thrown or returned, so a spinner rendered off <code>!done()</code> is a permanent spinner. <code>settled()</code> reads the union: <em>ended, however it ended</em>.</p>
   </aside>
   <Demo id="stream-chunks" title="<code>rpcTicker.chunks(args)</code> — transcript" server="src/server/rpc/rpcTicker.ts" client="src/ui/demos/rpc/streaming/StreamChunksDemo.abide" tab="client">
     <StreamChunksDemo />

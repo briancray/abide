@@ -4,10 +4,11 @@
 // module-swap, rpc-core §6): same `Socket<T>` surface — `for await` + `publish` + the reactive
 // memo-probe vocabulary — reached over the shared WS mux instead of an in-proc hub. Fan-out is local:
 // ONE mux subscription per socket name, many local `Subscriber` iterators (CS3). The probes are
-// backed by reactive `state`s so `{chat.peek()}` / `{#if chat.pending()}` re-render on change.
+// backed by reactive `state`s so `{chat.live()}` / `{#if chat.pending()}` re-render on change.
 //
-// ACTIVE probes (iterate / `peek` / `chunks`) open the subscription; STATUS probes (`pending` /
-// `refreshing` / `done` / `error`) only observe it (CS11). `publish` is fire-and-forget (CS3.4).
+// ACTIVE READS (iterate / `live` / `chunks`) open the subscription; the untracked read `peek` and the
+// STATUS probes (`pending` / `refreshing` / `settled` / `streaming` / `done` / `error`) only observe one
+// that already exists (CS4.1). `publish` is fire-and-forget (CS3.4).
 
 import { ChannelHub } from '../../shared/internal/channelHub.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
@@ -29,10 +30,13 @@ type Status = 'idle' | 'pending' | 'live' | 'refreshing' | 'error'
 // distinct room key. Same shape the server socket exposes per hub.
 interface RoomProxy {
     publish(message: unknown): void
+    live(): unknown
     peek(): unknown
     chunks(): unknown[]
     pending(): boolean
     refreshing(): boolean
+    settled(): boolean
+    streaming(): boolean
     done(): boolean
     error(): unknown
     iterate(): AsyncIterator<unknown>
@@ -64,11 +68,11 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
     // Deliver one inbound message: retain + fan out through the hub, then wake the reactive probes.
     function deliver(message: unknown): void {
         hub.publish(message)
-        revision.set(revision.untracked() + 1)
-        if (status.untracked() !== 'error') status.set('live')
+        revision.set(revision.peek() + 1)
+        if (status.peek() !== 'error') status.set('live')
     }
 
-    // Open the ONE mux subscription (idempotent). Reading an ACTIVE probe drives this (CS11). We always
+    // Open the ONE mux subscription (idempotent). Reading an ACTIVE READ drives this (CS4.1). We always
     // request the tail replay: a client-only subscription (a `bind:element` iterator, a soft-nav mount)
     // paints nothing during SSR, so it MUST catch up on the tail — and a reconnect must too (CS2.4). The
     // CS5/CS8 `replay: false` hydration join (for a socket whose `{#for await}` the SERVER already
@@ -85,7 +89,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
                 replay: true,
                 onMessage: deliver,
                 onAck: (): void => {
-                    if (status.untracked() !== 'error') status.set('live')
+                    if (status.peek() !== 'error') status.set('live')
                 },
                 onError: (error: unknown): void => {
                     errorValue = error
@@ -96,7 +100,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
                     cursors.clear()
                 },
                 onReconnecting: (): void => {
-                    if (status.untracked() === 'live') status.set('refreshing')
+                    if (status.peek() === 'live') status.set('refreshing')
                 },
             },
             base,
@@ -111,13 +115,20 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
             }
             muxPublish(name, message, base, args)
         },
-        // ACTIVE probes — drive the subscription. Each reads `revision` FIRST so the caller subscribes
+        // ACTIVE READS — drive the subscription. Each reads `revision` FIRST so the caller subscribes
         // to the room even when the hub currently has nothing to hand back; the hub then applies the
         // same maxAge window (`peekLatest`) and tail bound (`tailSnapshot`) the server applies, lazily on
         // read (CS4.2) — no timer, so a static view may hold a stale value until the next reactive tick.
-        peek(): unknown {
+        live(): unknown {
             ensureSubscribed()
             revision()
+            return hub.peekLatest()
+        },
+        // THE UNTRACKED READ — neither ACTIVE nor a probe. No `ensureSubscribed` (so it never opens the
+        // mux subscription) and no `revision()` (so the caller never subscribes to this room). This is the
+        // side of the split that actually differs between the two: on the server both reads are plain hub
+        // reads, and only here does declining to subscribe mean declining to CONNECT.
+        peek(): unknown {
             return hub.peekLatest()
         },
         chunks(): unknown[] {
@@ -125,7 +136,7 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
             revision()
             return hub.tailSnapshot()
         },
-        // STATUS probes — observe only (CS11), never open a subscription.
+        // STATUS probes — observe only (CS4.1), never open a subscription.
         pending(): boolean {
             return status() === 'pending'
         },
@@ -134,6 +145,24 @@ function makeRoomProxy(name: string, args: unknown, spec: SocketSpec, base: stri
         },
         done(): boolean {
             return status() === 'idle'
+        },
+        // The subscription reached a TERMINAL. On this side that is exactly `error`: `onError` closes
+        // every live cursor and clears the set, so nothing will arrive again — where the SERVER channel
+        // answers a constant `false` because an in-proc topic has no transport to fail. Same surface,
+        // honest per side, as with the four probes above.
+        //
+        // NOT `idle`: idle is "never subscribed", which is the opposite of ended, and it is already what
+        // `done()` reports under the true-when-idle convention.
+        settled(): boolean {
+            return status() === 'error'
+        },
+        // Subscribed and alive. `refreshing` counts: a transient reconnect (CS4.1) has not ended the
+        // subscription, and messages resume on the re-ack — so the three states stay total and disjoint
+        // over a subscription's life (`pending` → `streaming` → `settled`), with `idle` the never-asked
+        // fourth that none of them claims.
+        streaming(): boolean {
+            const current = status()
+            return current === 'live' || current === 'refreshing'
         },
         error(): unknown {
             return status() === 'error' ? errorValue : undefined
@@ -165,7 +194,7 @@ type ErasedSocketSurface = SocketSurface<any, any>
 
 // The isomorphic `Socket<T, Args>` browser proxy: a CALLABLE that mirrors the server socket. A void
 // socket uses the single (undefined) room — direct iteration + argless probes/`publish`. A roomed socket
-// picks a room: `sock({room})` iterates it, `sock.peek({room})` / `sock.publish({room}, msg)` address it.
+// picks a room: `sock({room})` iterates it, `sock.live({room})` / `sock.publish({room}, msg)` address it.
 // One `RoomProxy` (⇒ one mux subscription) per distinct room, created lazily.
 //
 // Typed against `SocketSurface`, not `unknown`. While this returned `unknown` nothing checked the client
@@ -200,10 +229,13 @@ function makeSocketProxy(name: string, spec: SocketSpec, base: string): ErasedSo
     // which is the only reason the surface type is worth having.
     const members: SocketSurfaceMembers<unknown, unknown> = {
         publish: proxy.publish as ErasedSocketSurface['publish'],
+        live: (...r: unknown[]): unknown => roomFor(room(r)).live(),
         peek: (...r: unknown[]): unknown => roomFor(room(r)).peek(),
         chunks: (...r: unknown[]): unknown[] => roomFor(room(r)).chunks(),
         pending: (...r: unknown[]): boolean => roomFor(room(r)).pending(),
         refreshing: (...r: unknown[]): boolean => roomFor(room(r)).refreshing(),
+        settled: (...r: unknown[]): boolean => roomFor(room(r)).settled(),
+        streaming: (...r: unknown[]): boolean => roomFor(room(r)).streaming(),
         done: (...r: unknown[]): boolean => roomFor(room(r)).done(),
         error: (...r: unknown[]): unknown => roomFor(room(r)).error(),
     }

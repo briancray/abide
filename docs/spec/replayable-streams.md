@@ -151,38 +151,40 @@ hand-built `Response` returned by a handler is likewise `memo: false` (opaque, s
 replayable — see §4).
 
 **Mutation public surface mirrors a read (full symmetry).** A memo-backed mutation exposes the SAME
-surface as a read — `peek`/`pending`/`refreshing`/`refresh`/`invalidate`/`publish`/`watch`/`snapshot`/
-`seed`/`raw`/`isError` plus the streaming chunk probes (`makeRpc.ts` `attachSurface`). POST/PUT/PATCH/
+surface as a read — `live`/`peek`/`pending`/`refreshing`/`settled`/`error`/`refresh`/`invalidate`/
+`publish`/`watch`/`snapshot`/`seed`/`raw`/`isError` plus the streaming chunk reads and probes (`makeRpc.ts` `attachSurface`). POST/PUT/PATCH/
 DELETE return `MutationSurface<Args, R>` (`Mutation extends Rpc` for a value handler, `StreamMutation
 extends StreamRead` for a streaming one). The only differences are transport (method + args-in-body +
 the CSRF gate, keyed off `__rpc.read`) and the default TTL: a mutation defaults to `ttl: 0`, so the slot
 is transient and the probes just report "nothing retained" — until the author opts into `memo: { ttl }`,
-at which point retention + `peek`/`refresh`/`refreshing` behave exactly like a read (on both the server
+at which point retention + `live`/`refresh`/`refreshing` behave exactly like a read (on both the server
 and the client memo; `memo: false` bypasses the client memo too). Cross-callable invalidation is
 unchanged — a mutation handler still invalidates *other* reads by calling their verbs (`todos.invalidate()`).
 
-**The probe vocabulary is ONE declaration, not a symmetry maintained by hand.**
-`shared/internal/reactiveReadSurface.ts` declares it once — `ReactiveValueProbes<T, A>` (`peek`,
-`pending`, `refreshing`, `error`) and `ReactiveStreamProbes<C, A>` (`chunks`, `done`), composed at the
-primitive arity as `ReactiveProbeSurface<Args, T>` — and `SocketSurface`, `RpcCallSurface` and
-`StreamRead` all EXTEND them. It had been hand-copied into five interfaces that extended nothing, which
+**The read/probe vocabulary is ONE declaration, not a symmetry maintained by hand.**
+`shared/internal/reactiveReadSurface.ts` declares it once, in THREE interfaces — `UntrackedRead<T, A>`
+(`peek`), `ReactiveValueProbes<T, A>` (the display read `live`, plus `pending`, `refreshing`, `settled`,
+`error`) and `ReactiveStreamProbes<C, A>` (the transcript read `chunks`, plus `done`, `streaming`) —
+composed at the primitive arity as `ReactiveProbeSurface<Args, T>`, and `SocketSurface`, `RpcCallSurface`
+and `StreamRead` all EXTEND them. `UntrackedRead` is split out rather than left among the probes because
+every member there is annotated "Reactive" and `peek` is the negation of it — it was a lie sitting inside
+the one declaration whose whole purpose is that four surfaces cannot drift from it. It had been hand-copied into five interfaces that extended nothing, which
 is the same rot ADR 0027 names (a rule stated at the root and enforced one layer short of the leaves)
 surviving at the type level after D4 fixed the runtime half, and it had already drifted (see the
 streaming surface below). Two axes had to become parameters first, and each spelling is load-bearing
 rather than something to normalize: **ARITY** — a memo/channel/socket takes `[args: Args]`, the key
-last-or-only, so TypeScript's omittable-`void`-parameter rule collapses `peek(args: void)` to `peek()`
+last-or-only, so TypeScript's omittable-`void`-parameter rule collapses `live(args: void)` to `live()`
 for free, while an RPC takes `RpcCallArgs<Args>` with the slot OPTIONAL, because a zero-arg rpc infers
 `Args = unknown` rather than `void` and gets no such collapse; and **CARDINALITY** — a value read has
 no transcript, so the two halves stay separate interfaces and `RpcCallSurface` takes only the value
-one, since folding them would put `chunks`/`done` on every scalar rpc. `refresh`/`invalidate`/`watch`
+one, since folding them would put `chunks`/`done`/`streaming` on every scalar rpc. `refresh`/`invalidate`/`watch`
 are deliberately NOT in this seam but one level up on `ReactiveReadSurface`: a socket implements none
 of them, and folding the verbs down would widen its public surface with three members nothing
 implements.
 
 ### 2. TTL semantics: the clock starts at "settled" — resolve for a value, CLOSE for a stream; slots are ref-counted while open
 `ttl` = how long a **settled** slot is retained. For a value, settled = resolved (`loadedAt` at fn
-resolve, unchanged, `memo.ts:255`). For a stream, settled = **closed** (last chunk buffered +
-done/errored) — the ReplayableStream's `close()`/`fail()` stamps `slot.loadedAt`, **not** fn-resolve.
+resolve, unchanged, `memo.ts:255`). For a stream, settled = **ended, however it ended** (last chunk buffered + closed, failed OR aborted) — the ReplayableStream's `close()`/`fail()` stamps `slot.loadedAt`, **not** fn-resolve.
 While a slot is **in-flight** (pending value, or an open stream) it is retained **regardless of `ttl`**,
 ref-counted by attached consumers, and **not** LRU-evictable (§4).
 
@@ -193,8 +195,11 @@ ref-counted by attached consumers, and **not** LRU-evictable (§4).
   `n` ms of close replays the full transcript with no re-run**; after `n`, re-run.
 - **`ttl: ∞`** (reads default) → retain until LRU eviction (of *closed* transcripts only).
 
-The staleness predicate gains a stream branch: **while `status === "stream"` and not `done`, never
-expired** (open streams outlive any ttl). That predicate is now `isRetentionStale`
+The staleness predicate gains a stream branch: **while `status === "stream"` and not SETTLED, never
+expired** (open streams outlive any ttl). Settled, not `done`: `retainedByState` branches on
+`ReplayableStream.settled` (the union — closed, failed OR aborted), because `done` is `close()` alone, and
+pinning on it would keep a transcript that a `TimeoutError`, an `invalidate` or the per-stream buffer cap
+killed retained forever — the same blind spot the public `settled()` probe exists to remove. That predicate is now `isRetentionStale`
 (`shared/internal/slotRetention.ts`); when this was written it was `isExpired`, local to `memo.ts`, and
 the auto-tracked fill path carried a SECOND one (`autoExpire`) that compared `loadedAt` itself and did
 not know this rule. What differs between the two callers is not the question but WHAT THE SLOT HOLDS,
@@ -297,34 +302,53 @@ content-type (`shared/internal/decodeStreamResponse.ts` — the inverse of the `
 async generator that cancels its reader on early exit) into an `AsyncIterable` of chunks, which the SAME
 `memo` routes to a `ReplayableStream` slot. So a browser `{#for await x of rpc()}` — including a client
 re-run of a known-RPC source with no SSR seed (the `{#if}`-gated / interaction-triggered case) — consumes
-a stream identically to SSR, with `peek`/`chunks`/`done`/`resumeStream` all live client-side, and
+a stream identically to SSR, with `live`/`chunks`/`done`/`resumeStream` all live client-side, and
 `.refresh()` restarts it. The client `{#for await}` **awaits the read first** (a streaming read is
 `Promise<AsyncIterable>`; a plain async-generator source is unaffected — awaiting a non-thenable is
 identity). `sse` is additionally consumable via the native **`EventSource`** DOM API, same frames on the
 wire.
 
-**Streaming read surface + reactive peek (typed, built).** `GET`/`HEAD` return a **conditional** type:
+**Streaming read surface + reactive live read (typed, built).** `GET`/`HEAD` return a **conditional** type:
 a handler yielding `AsyncIterable<C>` produces a `StreamRead<Args, C>`, a value handler the usual
-`Rpc<Args, T>`. `StreamRead` keeps `peek` as the canonical "current value" read (so it means the same
+`Rpc<Args, T>`. `StreamRead` keeps `live` as the canonical "current value" read (so it means the same
 thing on both surfaces) and drops the meaningless value verbs (`publish`/`snapshot`). It does not
 *replace* the value probes, it **re-types** them over the CHUNK: `StreamRead` extends
-`ReactiveValueProbes<C, …>` + `ReactiveStreamProbes<C, …>` (the one declaration of §1), so the surface
-is all **six**:
-- `fn.peek(args): C | undefined` — the non-blocking **most-recent chunk** (a stream's "current value"),
+`UntrackedRead<C, …>` + `ReactiveValueProbes<C, …>` + `ReactiveStreamProbes<C, …>` (the one declaration
+of §1), so the surface is all **nine**:
+- `fn.live(args): C | undefined` — the non-blocking **most-recent chunk** (a stream's "current value"),
   reactive (re-renders as chunks arrive; reading it also kicks the source). This is the "just the latest
-  value" read — `peek()` *is* the latest, no `.at(-1)`.
+  value" read — `live()` *is* the latest, no `.at(-1)`.
+- `fn.peek(args): C | undefined` — the same most-recent chunk, UNTRACKED: no subscription, no source
+  kick, no LRU move. A lone `peek` reader therefore never sees the next chunk arrive; it is the escape
+  hatch (an event handler asking "what is on screen right now", a test asserting a slot was NOT filled),
+  not the display read.
 - `fn.chunks(args): C[] | undefined` — a reactive snapshot (copy) of the **whole transcript** so far, for
-  rendering history or joining deltas — the genuinely different need a scalar `peek` can't serve.
-- `fn.done(args): boolean` / `fn.error(args)` — reactive closed/failed probes.
+  rendering history or joining deltas — the genuinely different need a scalar `live` can't serve. Like
+  `live`, and unlike every probe below, it ACQUIRES: `{#for c of fn.chunks()}` renders the data, so a
+  transcript read that started nothing would paint an empty list forever.
+- `fn.done(args): boolean` — the transcript closed **CLEANLY** (`close()` alone).
+- `fn.settled(args): boolean` — the transcript ENDED, **however it ended** (closed, failed OR aborted).
+  The two differ on exactly the stream that stopped without finishing: a run killed by a `TimeoutError`,
+  by an `invalidate` or by the per-stream buffer cap answers `done() === false` for the rest of its life
+  while its consumers have already thrown or returned, so a spinner rendered off `!done()` is a permanent
+  spinner on all three failure routes. `settled` is also the only way to tell a COLD slot from a settled
+  one — `pending()` is false for both, and a settled `undefined` reads exactly like nothing-yet, so
+  `!settled() && !pending()` is "never asked".
+- `fn.streaming(args): boolean` — the transcript is OPEN and delivering. This is what makes the stream
+  axis three-state and readable: `pending` (nothing yet) → `streaming` (arriving) → `settled` (ended).
+  Before it, `done() === false` was the answer for a scalar slot, an idle slot, an open stream AND a
+  stream that died mid-flight, so "is this still coming?" had no honest spelling.
+- `fn.error(args)` — the retained failure, read off the transcript's buffer.
 - `fn.pending(args): boolean` / `fn.refreshing(args): boolean` — no chunk yet / re-acquiring over a
   retained transcript. `refreshing` was the drift the shared declaration exposed: `StreamRead` declared
   no `refreshing` while `Rpc` next door did, for no stated reason, though `makeRpc`'s `attachSurface`
-  had been assigning it all along. Enumerating four of six here is what let the fifth go missing.
+  had been assigning it all along. Enumerating four of six here is what let the fifth go missing — which
+  is why the list above is exhaustive rather than representative.
 
 Reactivity rides a **separate per-slot `streamTick` state** bumped on each chunk push and on the
 terminal — kept distinct from the state-machine `state` the bare read subscribes to, so per-chunk
-`peek()` updates never restart a `{#for await}`. The editor distinguishes the two surfaces at author
-time (stream reads reject `.publish`/`.snapshot`; value reads reject `.chunks`/`.done`), closing the
+`live()` updates never restart a `{#for await}`. The editor distinguishes the two surfaces at author
+time (stream reads reject `.publish`/`.snapshot`; value reads reject `.chunks`/`.done`/`.streaming`), closing the
 auxiliary-surface typing gap the earlier resolution left open.
 
 **Byte accounting & the buffer bound (built).** A stream's transcript is measured **incrementally** — the
@@ -343,7 +367,7 @@ new stream under the same key is never corrupted by the old stream's callbacks.
 status, ttl-from-close, per-`consume()` ref-count → dispose-on-drain / empty-refcount abort, `invalidate`
 teardown), 2 (mutations route through a memo at `memo: { ttl: 0 }`; `memo: false` opt-out; FormData
 bypass), the **typed streaming read surface** (`StreamRead<Args, C>` via a conditional `GET`/`HEAD`
-return, with reactive `peek`/`chunks`/`done`), and 3 (shared streaming + incremental byte accounting +
+return, with reactive `live`/`chunks`/`done`), and 3 (shared streaming + incremental byte accounting +
 open-stream pinning + per-stream cap/overflow) are **built and tested** (`replayableStream.ts`,
 `memo.ts`, `makeRpc.ts`, `GET.ts`/`HEAD.ts`, `sharedCache.ts` + their `*.test.ts`; verified against the
 docs app). The transport half of step **4** is built — the router transport-encodes streaming reads
@@ -403,7 +427,7 @@ page never schedules it (`streamScope.ts`, `context.ts`, `streamBudget.test.ts`)
 - **Slot polymorphism, contained.** Add `status: "stream"` and a typed `stream?: ReplayableStream<T>`
   field to `SlotState` — keep `value` for scalar slots so both stay monomorphic in *their own* field
   (honoring the CLAUDE.md monomorphic-slot guidance). Every value-slot reader gains an explicit stream
-  branch: `peek` → snapshot of `chunks` (or `undefined` while empty); the bare read →
+  branch: `live` → snapshot of `chunks` (or `undefined` while empty); the bare read →
   `stream.consume()`; the sync cache hit returns `stream.consume()` (a fresh cursor), **never** the
   shared object; `snapshot`/`seed` → the handle form (§5), not the value form; `measureBytes` →
   `stream.bytes`; `pending` = source started, 0 chunks; `error` = `stream.error`.
@@ -475,7 +499,7 @@ NOT the per-chunk `streamTick`, so arriving chunks never restart it). A `fn.refr
 — or a change to any reactive dep in the source expression (`{#for await x of fn(count)}`) — tears the
 list down and **re-streams it from the fresh run** (clear-and-restream). This holds for **both** modes:
 since both are warm-seeded into the memo, the block adopts with no re-invoke on hydrate AND
-`fn.peek`/`fn.chunks`/`fn.done`/`fn.error`/`fn.refresh` all reflect the on-screen transcript. (Before this,
+`fn.live`/`fn.chunks`/`fn.done`/`fn.error`/`fn.refresh` all reflect the on-screen transcript. (Before this,
 a `{#for await}` was a one-shot mount that re-ran the source server-side on `refresh()` but never
 repainted, and an adopted stream's memo probes were dead.)
 
@@ -636,7 +660,9 @@ implementation unmodified. A socket remains the right tool for an **unbounded, a
 ## Build order (independently shippable, each with its test matrix)
 
 **1a. Standalone `ReplayableStream<T>` primitive** ✅ **built** — memo-independent: `push`/`close`/`fail`/`abort`,
-`consume(): AsyncIterable<T>`, `chunks`/`done`/`error`/`aborted`/`bytes`/`refCount`/`generation`. Its own
+`consume(): AsyncIterable<T>`, `chunks`/`done`/`settled`/`error`/`aborted`/`bytes`/`refCount`/`generation`
+(`settled` is the done||errored||aborted UNION, and it is where the public `settled()` probe gets both its
+name and its answer). Its own
 unit tests, no memo:
 - 100 concurrent `consume()` → one buffer, all receive the identical full transcript.
 - late joiner after chunk k, source at k+1 → sees k+1..end, no gap/dup.
@@ -669,9 +695,9 @@ FormData/hand-built-Response always `memo: false`. Tests:
   coercion (`count="3"` matches `count: 3`), so they coalesce / cache-hit.
 - two distinct concurrent **file** uploads → never collide, both execute (file-bearing FormData is
   `memo: false`).
-- Mutation public surface mirrors a read (full symmetry): `peek`/`pending`/`refreshing`/`refresh`/
-  `invalidate`/`publish`/`watch`/`snapshot`/`seed`/`raw` all present, plus the streaming chunk probes for
-  a streaming mutation. The default `ttl: 0` slot is transient, so the probes reflect a retained value
+- Mutation public surface mirrors a read (full symmetry): `live`/`peek`/`pending`/`refreshing`/`settled`/
+  `error`/`refresh`/`invalidate`/`publish`/`watch`/`snapshot`/`seed`/`raw` all present, plus the streaming
+  chunk reads and probes (`chunks`/`done`/`streaming`) for a streaming mutation. The default `ttl: 0` slot is transient, so the probes reflect a retained value
   only when the author opts into `memo: { ttl }`; `__rpc.read` stays `false` (transport still keys off
   it — args in body + CSRF gate).
 

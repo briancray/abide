@@ -4,7 +4,7 @@
 
   // A mutation opted into caching (`memo: { ttl }`) gets the SAME reactive surface as a read. Calling
   // it retains the value: a second call HITS the cache (the run number stays), while `.refresh()` re-runs
-  // the handler (the run number bumps). `.peek()` snapshots the retained value; `.refreshing()` reports
+  // the handler (the run number bumps). `.live()` snapshots the retained value; `.refreshing()` reports
   // the revalidation. This is the read/mutation symmetry — the exact same probes a GET exposes.
   const args = { id: "demo" }
   let called = state(false)
@@ -15,7 +15,7 @@
 <button data-testid="cached-call-btn" onclick={call}>Call (cached)</button>
 <button data-testid="cached-refresh-btn" onclick={refresh}>Refresh (re-run)</button>
 {#if called}
-  <pre class="out" data-testid="cached-out">runs: {rpcBumpCounter.peek(args)?.runs ?? "…"}
+  <pre class="out" data-testid="cached-out">runs: {rpcBumpCounter.live(args)?.runs ?? "…"}
 refreshing: {String(rpcBumpCounter.refreshing(args))}</pre>
 {:else}
   <p data-testid="cached-out">not called yet</p>

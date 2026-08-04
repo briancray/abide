@@ -1,11 +1,11 @@
 <script>
   import hello from "$server/rpc/hello"
 
-  // The non-blocking snapshot `fn.peek(args)`. It never waits — it returns whatever the slot holds
+  // The non-blocking snapshot `fn.live(args)`. It never waits — it returns whatever the slot holds
   // AT THAT INSTANT and kicks a coalesced load. So it renders the value whenever the slot is already
   // warm (including on the server, if an earlier read of the same fn+args settled in that render),
-  // and `undefined` when it is cold — as here, where this peek is the only reader of its slot.
+  // and `undefined` when it is cold — as here, where this read is the only reader of its slot.
   // Since the `undefined` is an ordinary value, the placeholder is an ordinary expression.
 </script>
 
-<p class="say" data-testid="peek-read">{hello.peek({ who: "peek" }) ?? "Loading…"}</p>
+<p class="say" data-testid="live-read">{hello.live({ who: "live" }) ?? "Loading…"}</p>

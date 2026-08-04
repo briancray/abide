@@ -9,7 +9,7 @@
     await new Promise((resolve) => setTimeout(resolve, 400))
     return `ready ${id}`
   })
-  const value = memo(() => (started ? (slow.peek({ id: "a" }) ?? "loading") : "idle"))
+  const value = memo(() => (started ? (slow.live({ id: "a" }) ?? "loading") : "idle"))
   const pendingFlag = memo(() => (started ? (slow.pending({ id: "a" }) ? "yes" : "no") : "—"))
   function read() { started = true }
 </script>

@@ -111,7 +111,7 @@ test('a page with no <script> is skipped (no diagnostics)', async () => {
 // from this one — not by comparing copies, which cannot work: a TS copy of the shim in a test would be a
 // further statement of the same shape, and drift between it and `emitCheck`'s STRING would be invisible.
 const CELL_MODULE =
-    'export interface Cell<T> { (): T; set(v: T): void; untracked(): T }\n' +
+    'export interface Cell<T> { (): T; set(v: T): void; peek(): T }\n' +
     'export function state<T>(initial: T): Cell<T> {\n' +
     '  return Object.assign(() => initial, { set: () => {}, untracked: () => initial })\n' +
     '}\n'

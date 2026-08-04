@@ -49,7 +49,7 @@
     <MemoAsyncDemo />
   </Demo>
   <aside class="aside">
-    <p>The other axis — an async body. No args again, so it is one slot, but a <em>loaded</em> one: the read is coalesced (concurrent callers share one run), the settled value is retained, and the slot carries the full read surface (<code>peek</code>/<code>pending</code>/<code>refreshing</code>/<code>error</code>/<code>watch</code> + <code>refresh</code>/<code>invalidate</code>/<code>publish</code>).</p>
+    <p>The other axis — an async body. No args again, so it is one slot, but a <em>loaded</em> one: the read is coalesced (concurrent callers share one run), the settled value is retained, and the slot carries the full read surface (<code>live</code>/<code>pending</code>/<code>refreshing</code>/<code>error</code>/<code>watch</code> + <code>refresh</code>/<code>invalidate</code>/<code>publish</code>).</p>
     <p>What that costs: an argless async body is NOT auto-tracked. Half-tracked is worse than untracked, so a load re-fills on <code>refresh</code>/<code>invalidate</code> only. Read again and the run count holds, rename and nothing re-runs, <code>refresh</code> re-runs and picks up the current label.</p>
   </aside>
   <Demo id="memo-args" title="<code>memo(async (args) =&gt; …)</code> — keyed AND loaded" client="src/ui/demos/memo/MemoArgsDemo.abide" tab="client">

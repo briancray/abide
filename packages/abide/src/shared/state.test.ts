@@ -34,7 +34,7 @@ describe('state(initial)', () => {
         expect(count()).toBe(1)
         count.set(2)
         expect(count()).toBe(2)
-        expect(count.untracked()).toBe(2)
+        expect(count.peek()).toBe(2)
     })
 
     test('a tracked read re-runs an effect; untracked() does NOT subscribe', async () => {
@@ -43,7 +43,7 @@ describe('state(initial)', () => {
         let runs = 0
         const stop = watch(() => {
             tracked()
-            quiet.untracked()
+            quiet.peek()
             runs++
         })
         await flush()

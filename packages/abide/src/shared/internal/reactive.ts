@@ -257,25 +257,29 @@ function disposeNode(node: Reactive): void {
 }
 
 // The ATOM. `state` is the one reactive source node (ADR 0023): calling it in a tracking context
-// subscribes, `set` publishes, `untracked` reads WITHOUT subscribing. The public `shared/state.ts` is
+// subscribes, `set` publishes, `peek` reads WITHOUT subscribing. The public `shared/state.ts` is
 // this same shape plus the `.abide` compiler brand and the `.shared` factory — not a second kind of cell.
 //
-// NAMED `untracked`, not `peek` (ADR 0027 D2). `peek` means the opposite thing on the other two
-// primitives: `memo.peek(args)` / `channel.peek(args)` SUBSCRIBE (and a memo's additionally kicks a
-// load) — they are the reactive non-blocking snapshot, the thing `ReactiveReadSurface` unifies around
-// and the template grammar spells `{fn.peek(args)}`. This one is the escape hatch that deliberately
-// does NOT subscribe, i.e. exactly `untrack(() => cell())`. One word cannot mean both on the axis the
-// whole reactive model is built on, so the rare one moved: the compiler rewrites bare reads, so a
-// `.abide` author almost never types this, while `memo.peek` is load-bearing in four surfaces.
+// NAMED `peek`, on all three primitives, meaning one thing: read what is there, subscribe to nothing,
+// acquire nothing. This member spent a while called `untracked` (ADR 0027 D2) for a reason that no longer
+// exists — `peek` then meant the OPPOSITE on `memo`/`channel` (it subscribed and kicked a load), and one
+// word could not mean both on the axis the whole reactive model is built on. D2 resolved that collision by
+// moving the rare member; splitting the memo's two reads into `live` (subscribes + acquires) and `peek`
+// (neither) resolved it at the source instead, which left `untracked` as a second name for an operation
+// that already had one. `state.peek()` is exactly `untrack(() => cell())`, and now also exactly what
+// `memo.peek()` / `channel.peek()` / `socket.peek()` do.
+//
+// `untrack(fn)` — the REGION wrapper, further down this file — keeps its name. It is a different thing:
+// this reads one cell, that runs arbitrary work with tracking suspended.
 export interface State<T> {
     (): T
     set(value: T): void
-    untracked(): T
+    peek(): T
 }
 
 export interface Computed<T> {
     (): T
-    untracked(): T
+    peek(): T
     // Detach the node from its sources. `memo`'s auto-tracked fill (ADR 0024 §2) can only tell a
     // synchronous derivation from a promise/stream source by RUNNING the body once inside a computed;
     // when the run turns out to be deferred it drops the node, and without this the discarded node would
@@ -287,14 +291,14 @@ export function state<T>(initial: T): State<T> {
     const node = new Reactive(initial, false, false)
     const read = (() => node.get() as T) as State<T>
     read.set = (value: T) => node.set(value)
-    read.untracked = () => node.value as T
+    read.peek = () => node.value as T
     return read
 }
 
 export function computed<T>(fn: () => T): Computed<T> {
     const node = new Reactive(fn, true, false)
     const read = (() => node.get() as T) as Computed<T>
-    read.untracked = () => node.peekValue() as T
+    read.peek = () => node.peekValue() as T
     read.dispose = () => disposeNode(node)
     return read
 }

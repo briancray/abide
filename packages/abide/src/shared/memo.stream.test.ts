@@ -102,13 +102,13 @@ describe('memo streaming — reactive peek (latest) / chunks / done', () => {
         // An effect reading `peek` (the latest chunk) re-runs as chunks arrive — reading it kicks the source.
         const seen: Array<number | undefined> = []
         const dispose = effect(() => {
-            seen.push(c.peek({}) as number | undefined)
+            seen.push(c.live({}) as number | undefined)
         })
 
         await sleep(60)
         dispose()
 
-        expect(c.peek({}) as number | undefined).toBe(2) // most-recent chunk = the "current value"
+        expect(c.live({}) as number | undefined).toBe(2) // most-recent chunk = the "current value"
         expect(c.chunks({})).toEqual([0, 1, 2]) // full transcript snapshot
         expect(c.done({})).toBe(true) // closed
         // the effect observed the progression, not just a single value
@@ -120,7 +120,7 @@ describe('memo streaming — reactive peek (latest) / chunks / done', () => {
     test('chunks/done are inert on a value memo; peek still returns the value', async () => {
         const c = memo<Record<string, never>, number>(() => 42)
         await c({})
-        expect(c.peek({})).toBe(42) // value read: peek is the value, unchanged
+        expect(c.live({})).toBe(42) // value read: peek is the value, unchanged
         expect(c.chunks({})).toBeUndefined()
         expect(c.done({})).toBe(false)
     })
@@ -203,5 +203,158 @@ describe('memo streaming — error & invalidate', () => {
         c.invalidate({})
         await drain(await c({}))
         expect(runs).toBe(2)
+    })
+})
+
+// The distinction these two probes exist for. `done` is `close()` ALONE, so it cannot see a stream that
+// stopped without finishing — and "stopped without finishing" is every interesting failure: a timeout, an
+// invalidate, a buffer-cap overflow. A view rendering a spinner off `!done()` spins forever on all three.
+describe('memo streaming — settled/streaming vs done', () => {
+    test('a stream that FAILS is settled but never done', async () => {
+        const boom = new Error('mid-stream')
+        const c = memo<Record<string, never>, AsyncIterable<number>>(async function* () {
+            yield 0
+            throw boom
+        })
+
+        await drain(await c({}))
+
+        // The whole point: `done` says "still going" about a transcript that threw and will never
+        // deliver another chunk. `settled` reads the terminal union, so it says "ended".
+        expect(c.done({})).toBe(false)
+        expect(c.settled({})).toBe(true)
+        expect(c.streaming({})).toBe(false)
+        expect(c.error({})).toBe(boom)
+    })
+
+    test('a stream ABORTED by invalidate is settled but never done', async () => {
+        const c = memo<Record<string, never>, AsyncIterable<number>>(async function* () {
+            for (let i = 0; i < 100; i++) {
+                await sleep(5)
+                yield i
+            }
+        })
+
+        void c.live({}) // kick the source
+        await sleep(20)
+        expect(c.streaming({})).toBe(true) // open and delivering
+
+        c.invalidate({})
+        // `invalidate` drops the slot, so the probes answer about a fresh COLD slot rather than the
+        // aborted transcript — cold is neither streaming nor settled, which is the "never asked" reading.
+        expect(c.streaming({})).toBe(false)
+        expect(c.settled({})).toBe(false)
+    })
+
+    test('the three states are disjoint across one stream lifetime', async () => {
+        const c = memo<Record<string, never>, AsyncIterable<number>>(async function* () {
+            await sleep(10)
+            yield 0
+            await sleep(10)
+            yield 1
+        })
+
+        // COLD: none of the three claims it. This is the reading `pending`/`peek` alone cannot give —
+        // both answer identically for a slot never asked for and a slot holding a settled `undefined`.
+        expect(c.pending({})).toBe(false)
+        expect(c.streaming({})).toBe(false)
+        expect(c.settled({})).toBe(false)
+
+        void c.live({}) // kick
+        await sleep(15)
+        expect(c.streaming({})).toBe(true)
+        expect(c.settled({})).toBe(false)
+
+        await sleep(30)
+        expect(c.streaming({})).toBe(false)
+        expect(c.settled({})).toBe(true)
+        expect(c.done({})).toBe(true) // closed CLEANLY, so here done and settled agree
+    })
+
+    test('streaming()/settled() OBSERVE: asking does not start the source', async () => {
+        let calls = 0
+        // The counter sits OUTSIDE the generator on purpose. An async generator's body does not run
+        // until the first `next()`, so a `calls++` inside one stays 0 through a `startLoad` that has
+        // already created the iterator — this test passed against a deliberately-kicking implementation
+        // until the counter moved out here.
+        //
+        // The memo takes a DECLARED ARG for the second half of the same reason: an argless memo is
+        // `autoEligible`, so any probe calling `resolveMode` runs the body once to classify it (see the
+        // sibling test below). The observe-only claim is about the probe's own path, not about
+        // classification, and only a keyed memo isolates the two.
+        const c = memo<{ id: number }, AsyncIterable<number>>((_args) => {
+            calls++
+            return (async function* () {
+                yield 0
+            })()
+        })
+
+        // The ACTIVE/STATUS split (client-sockets.md CS4.1). `chunks` kicks a cold slot; these two
+        // must not, or a `{#if feed.streaming()}` guard would be what causes the streaming it guards.
+        expect(c.streaming({ id: 1 })).toBe(false)
+        expect(c.settled({ id: 1 })).toBe(false)
+        expect(calls).toBe(0)
+        expect(c.pending({ id: 1 })).toBe(false) // and the slot is still COLD, not merely un-run
+
+        await drain(await c({ id: 1 }))
+        expect(calls).toBe(1)
+    })
+
+    test('chunks() still KICKS — the contrast the ACTIVE/STATUS split rests on', async () => {
+        let calls = 0
+        const c = memo<{ id: number }, AsyncIterable<number>>((_args) => {
+            calls++
+            return (async function* () {
+                await sleep(5)
+                yield 0
+            })()
+        })
+
+        c.chunks({ id: 1 })
+        expect(calls).toBe(1) // ACTIVE: reading the transcript is what opens it
+    })
+
+    // The ARGLESS shape, which is where a probe's kick used to hide. An argless memo is `autoEligible`, so
+    // anything calling `resolveMode` classifies it by RUNNING the body — and on a deferred body that starts
+    // the source. No status probe classifies any more, so asking costs nothing on this shape either.
+    test('on an ARGLESS memo, no status probe runs the body', async () => {
+        let calls = 0
+        const c = memo<void, AsyncIterable<number>>(() => {
+            calls++
+            return (async function* () {
+                yield 0
+            })()
+        })
+
+        expect(c.settled()).toBe(false)
+        expect(c.streaming()).toBe(false)
+        expect(c.done()).toBe(false)
+        expect(c.error()).toBeUndefined()
+        expect(calls).toBe(0)
+
+        // `chunks` is the transcript READ and still acquires — the contrast that keeps the line visible.
+        c.chunks()
+        expect(calls).toBe(1)
+    })
+
+    test('a value memo is settled once loaded, and never streaming', async () => {
+        const c = memo<Record<string, never>, number>(async () => 42)
+
+        expect(c.settled({})).toBe(false) // cold
+        await c({})
+        expect(c.settled({})).toBe(true)
+        expect(c.streaming({})).toBe(false)
+        expect(c.done({})).toBe(false) // a scalar slot has no transcript to close
+    })
+
+    test('a rejected value memo is settled — the error channel is an outcome', async () => {
+        const boom = new Error('nope')
+        const c = memo<Record<string, never>, number>(async () => {
+            throw boom
+        })
+
+        await c({}).catch(() => {})
+        expect(c.settled({})).toBe(true)
+        expect(c.error({})).toBe(boom)
     })
 })

@@ -150,7 +150,7 @@ describe('mode A — completed RPC {#for await} adopts the seeded transcript (no
         expect(complete.done({ n: 3 })).toBe(true)
         // `peek` on a raw memo is typed as the source value (`AsyncIterable`); on a stream slot it returns
         // the latest CHUNK at runtime (the RPC surface types this as `C` — here it is a bare memo).
-        expect(complete.peek({ n: 3 }) as unknown).toBe('t2')
+        expect(complete.live({ n: 3 }) as unknown).toBe('t2')
 
         // refresh() re-runs the source and the list re-streams from the fresh transcript (clear-and-restream).
         complete.refresh({ n: 3 })

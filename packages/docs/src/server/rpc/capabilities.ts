@@ -38,7 +38,7 @@ export default GET((): Capability[] => [
     {
         name: 'Surface verbs & probes',
         path: '/memo/verbs',
-        blurb: 'invalidate / refresh / publish, peek / pending / error / watch.',
+        blurb: 'invalidate / refresh / publish — and the reads and probes at /memo/probes.',
     },
     {
         name: 'Bindings & directives',

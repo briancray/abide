@@ -62,13 +62,27 @@ framework. Nesting is cheaper than maintaining that invariant.
 
 ### D2 — `peek` is the reactive non-blocking read, framework-wide
 
-> **SUPERSEDED by ADR 0031 D3.** Landed as described below, then reversed: `peek` reverts to the
-> *untracked* read on all three primitives and `state.untracked()` retires into it. The reason recorded
-> here — that `memo.peek` is the load-bearing public verb while `state.peek` is invisible because the
-> compiler rewrites bare reads — stopped being true once the compiler rewrites the bare read on a memo
-> too (ADR 0031 D1–D2).
+> **SUPERSEDED — landed as described below, then reversed IN FULL.** `peek` is now the *untracked* read
+> on all three primitives, and the reactive load-kicking read it used to name is spelled **`live`**. The
+> rename this decision made — `state.peek()` → `state.untracked()` — has been undone: `State.peek()` and
+> `Computed.peek()` are back, meaning what they meant before, and `untracked` is gone as a member name.
+> `untrack(fn)`, the REGION wrapper, is a different thing and keeps its name.
+>
+> So the collision this ADR identified was real and its diagnosis below still reads true; only the FIX
+> was wrong. D2 moved the rare member to protect a word whose other meaning was itself the problem. The
+> reads are now two members — `live` acquires, `peek` does not — which resolves it at the source and
+> leaves one word with one meaning on every primitive.
+>
+> The reversal was first written up as ADR 0031 D3, which was rejected as a whole (on cost) and whose
+> file is not in the tree — so this note deliberately states the decision rather than pointing at it.
+> D3's argument was that the premise recorded below stops being true once the compiler rewrites the bare
+> read on a memo; that compiler work did NOT land, and the reversal was taken anyway on the simpler
+> ground that one word cannot mean "subscribe and load" here and "subscribe to nothing" one primitive
+> over. Splitting the two behaviours into two names settles it without needing the desugar: `live` is
+> the display read, `peek` is the escape hatch, and `peek` now agrees with TC39 Signals and the wider
+> ecosystem instead of contradicting them.
 
-`state.peek()` → `state.untracked()`. `Computed.peek()` likewise.
+`state.peek()` → `state.untracked()`. `Computed.peek()` likewise. *(Both since reverted — see above.)*
 
 **Why.** `peek` is the only verb on all three primitives, and it is inverted on the tracking axis —
 the axis the whole reactive model is built on:
@@ -134,8 +148,11 @@ always the reactive one.
 
 ### D3 — Bare `{fn(args)}` stays a check error, restated as a boundary
 
-> **SUPERSEDED by ADR 0031 D2.** The bare read becomes the snapshot and `await` becomes the blocking
-> axis. The decisive argument below — that a `.abide`-only meaning makes one expression mean two things
+> **NOT superseded — this note used to claim it was.** It pointed at ADR 0031 D2, which was rejected
+> along with the rest of that ADR and whose file is not in the tree; the bare read is still a check
+> error and `await` is still the blocking axis. Only D2 above actually reversed, and the non-blocking
+> read it names is now spelled `live` rather than `peek`. The original forward-looking note read:
+> the bare read becomes the snapshot and `await` becomes the blocking axis. The decisive argument below — that a `.abide`-only meaning makes one expression mean two things
 > by file extension — is a cost `state` already pays language-wide (`count` is `count()` in a `.abide`,
 > the cell object in a `.ts`); the emitter argument dissolves once the compiler emits a non-thenable for
 > the snapshot read, leaving the auto-await as the backstop this decision already describes.

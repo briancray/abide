@@ -57,16 +57,16 @@
     <ChannelKeyLadderDemo />
   </Demo>
   <aside class="aside">
-    <p>The other verbs got this free — a <code>void</code> parameter is omittable, so <code>peek()</code> / <code>chunks()</code> / <code>invalidate()</code> collapsed on their own. <code>publish</code> and <code>watch</code> carry a trailing payload, which is the only place the key had to be made to vanish deliberately.</p>
+    <p>The other verbs got this free — a <code>void</code> parameter is omittable, so <code>live()</code> / <code>chunks()</code> / <code>invalidate()</code> collapsed on their own. <code>publish</code> and <code>watch</code> carry a trailing payload, which is the only place the key had to be made to vanish deliberately.</p>
     <p class="note">One <code>.abide</code> caveat, unrelated to the rule: an argless <code>memo</code> bound in a template auto-calls, so <code>d</code> <em>is</em> its value and the memo's own surface is not reachable through that binding — which is why the middle rung uses a keyed memo. In plain <code>.ts</code>, <code>publish(value)</code> on an argless memo is exactly what you write.</p>
   </aside>
-  <Demo id="probes" title="<code>peek()</code> / <code>chunks()</code> / <code>invalidate()</code> on a channel" client="src/ui/demos/channel/ChannelProbesDemo.abide" tab="client">
+  <Demo id="probes" title="<code>live()</code> / <code>chunks()</code> / <code>invalidate()</code> on a channel" client="src/ui/demos/channel/ChannelProbesDemo.abide" tab="client">
     <ChannelProbesDemo />
   </Demo>
   <aside class="aside">
     <p><code>tail</code> is the one retention knob — how many recent messages a late joiner replays before going live. The card above keeps nothing; this one sets <code>tail: 3</code>, which is also what makes its <code>chunks()</code> probe non-empty.</p>
-    <p>A channel implements the identical vocabulary a memo does — <code>peek</code> / <code>chunks</code> / <code>pending</code> / <code>refreshing</code> / <code>error</code> / <code>done</code>, plus <code>refresh</code> / <code>invalidate</code> / <code>publish</code> / <code>watch</code>. That is the argument of ADR 0023: two honest storage strategies behind one surface, so a caller never branches on which it holds. Here <code>peek()</code> is the latest message and <code>chunks()</code> the tail transcript.</p>
-    <p>On this in-process core the status probes are <strong>degenerate</strong> — a local topic is immediately live, never reconnecting and never errored — and <code>peek</code>/<code>chunks</code> read the hub directly, so this card snapshots them on a button. Putting the channel on the wire is what makes them reactive: see <a href="/sockets/probes">socket probes</a>.</p>
+    <p>A channel implements the identical vocabulary a memo does — <code>live</code> / <code>chunks</code> / <code>pending</code> / <code>refreshing</code> / <code>error</code> / <code>done</code>, plus <code>refresh</code> / <code>invalidate</code> / <code>publish</code> / <code>watch</code>. That is the argument of ADR 0023: two honest storage strategies behind one surface, so a caller never branches on which it holds. Here <code>live()</code> is the latest message and <code>chunks()</code> the tail transcript.</p>
+    <p>On this in-process core the status probes are <strong>degenerate</strong> — a local topic is immediately live, never reconnecting and never errored — and <code>live</code>/<code>chunks</code> read the hub directly, so this card snapshots them on a button. Putting the channel on the wire is what makes them reactive: see <a href="/sockets/probes">socket probes</a>.</p>
     <p>Everything here is local. <code>socket</code> = <code>channel</code> + transport + per-room authorization; the pub/sub core, the rooms and the read surface are all this primitive, unchanged. Continue at <a href="/sockets">sockets</a>.</p>
   </aside>
 </main>

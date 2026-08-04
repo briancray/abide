@@ -13,7 +13,7 @@
   </Demo>
   <aside class="aside">
     <p>Declare it, write it, read it. Everything reading the cell updates — here, one text node.</p>
-    <p>Under the sugar a cell is <strong>callable</strong>: <code>count()</code> reads (and subscribes the enclosing <code>memo</code>/<code>watch</code>), <code>count.set(next)</code> writes, <code>count.untracked()</code> reads without subscribing. In a <code>.abide</code> <code>&lt;script&gt;</code> the compiler writes those calls, which is why these demos type the bare <code>count</code>; in a plain <code>.ts</code> you call the surface yourself — the <a href="/memo#server-state">server graph</a> shows that form.</p>
+    <p>Under the sugar a cell is <strong>callable</strong>: <code>count()</code> reads (and subscribes the enclosing <code>memo</code>/<code>watch</code>), <code>count.set(next)</code> writes, <code>count.peek()</code> reads without subscribing. In a <code>.abide</code> <code>&lt;script&gt;</code> the compiler writes those calls, which is why these demos type the bare <code>count</code>; in a plain <code>.ts</code> you call the surface yourself — the <a href="/memo#server-state">server graph</a> shows that form.</p>
   </aside>
   <Demo id="transform" title="<code>state(v, transform)</code> — an invariant on the cell" client="src/ui/demos/state/StateTransformDemo.abide">
     <StateTransformDemo />

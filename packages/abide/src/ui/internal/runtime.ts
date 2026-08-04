@@ -264,7 +264,7 @@ export function interpolate(
                     // (ADR 0027 D3). `emitServer` auto-awaits every expression slot — the await is GUARDED
                     // by `isThenable`, but it is type-blind, so a thenable still suspends the slot either
                     // way — so `{fn()}` blocks the render exactly like `{await fn()}`, and the
-                    // non-blocking read is spelled `{fn.peek()}`. The auto-await here stays a passthrough
+                    // non-blocking read is spelled `{fn.live()}`. The auto-await here stays a passthrough
                     // backstop for a `T | Promise<T>` value, not a second way to spell the read.
                     if (generation === thenGeneration && textNode !== null)
                         textNode.data = text(resolved)

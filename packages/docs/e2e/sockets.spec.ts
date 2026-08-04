@@ -12,7 +12,7 @@ import { expect, test } from './fixtures.ts'
 // `Bun.serve`'s `idleTimeout` + a heartbeat/`cancel()` in `server/sse.ts` (docs/TODO.md #22).
 
 // The one file in the suite that must NOT run its tests in parallel with each other. Every demo on
-// these pages publishes to the ONE server-wide `socketsChat` topic, so `peek()` — "the latest message"
+// these pages publishes to the ONE server-wide `socketsChat` topic, so `live()` — "the latest message"
 // — is last-writer-wins across the whole process. A `unique()` label keeps the other assertions honest
 // but cannot save that one: a concurrent test's publish legitimately becomes the latest. `default` mode
 // (not `serial`) keeps them sequential without making one failure skip the rest.
@@ -90,14 +90,32 @@ test('{#for await} subscription — a publish appears live in the streamed log',
     await expect(item).toHaveAttribute('data-via', 'client')
 })
 
-test('peek() — the latest-message probe tracks the newest publish', async ({ page }) => {
+test('live() — the latest-message read tracks the newest publish', async ({ page }) => {
     await page.goto('/sockets/probes')
 
-    const text = unique('peek')
-    await page.getByTestId('peek-input').fill(text)
-    await page.getByTestId('peek-publish').click()
+    const text = unique('live')
+    await page.getByTestId('live-input').fill(text)
+    await page.getByTestId('live-publish').click()
 
-    await expect(page.getByTestId('peek-latest')).toHaveText(text, { timeout: 15_000 })
+    await expect(page.getByTestId('live-latest')).toHaveText(text, { timeout: 15_000 })
+})
+
+// The socket is where the read split has teeth: `live` opens a mux subscription, `peek` declines to
+// CONNECT. `done()` is the observable — it stays true only if nothing ever subscribed.
+test('peek() — reading it opens no subscription, so the topic stays idle', async ({ page }) => {
+    await page.goto('/sockets/probes')
+
+    // Its own topic, untouched by every other demo, so idle is genuinely idle.
+    await expect(page.getByTestId('socket-peek-idle')).toHaveText('yes', { timeout: 15_000 })
+
+    await page.getByTestId('socket-peek-peek').click()
+    await page.getByTestId('socket-peek-peek').click()
+    await expect(page.getByTestId('socket-peek-latest')).toHaveText('—')
+    await expect(page.getByTestId('socket-peek-idle')).toHaveText('yes')
+
+    // `live` is the active read — this is what subscribes, and only now can a message arrive.
+    await page.getByTestId('socket-peek-open').click()
+    await expect(page.getByTestId('socket-peek-idle')).toHaveText('no', { timeout: 15_000 })
 })
 
 test('chunks() — the tail-transcript probe grows with a publish', async ({ page }) => {
@@ -118,7 +136,7 @@ test('done() — the lifecycle probe flips from idle once a subscription opens',
     // The pulse topic is untouched by the other demos, so it starts idle → done() reads yes.
     await expect(page.getByTestId('socket-done-idle')).toHaveText('yes', { timeout: 15_000 })
 
-    // Opening an active read (peek) subscribes the topic → done() flips to no.
+    // Opening an active read (live) subscribes the topic → done() flips to no.
     await page.getByTestId('socket-done-open').click()
     await expect(page.getByTestId('socket-done-idle')).toHaveText('no', { timeout: 15_000 })
 })

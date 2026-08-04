@@ -44,11 +44,11 @@ test('applyMemoFrame drives the matching local memo verb with the subscribed arg
     // publish value-form → the local value reflects the broadcast value for THOSE args.
     c.seed({ id: 'A' }, 'seed-A')
     applyMemoFrame(c, { id: 'A' }, { verb: 'publish', value: 'broadcast-A' })
-    expect(c.peek({ id: 'A' })).toBe('broadcast-A')
+    expect(c.live({ id: 'A' })).toBe('broadcast-A')
 
     // invalidate → the slot drops to idle (lazy reload on next read), value cleared.
     applyMemoFrame(c, { id: 'A' }, { verb: 'invalidate' })
-    expect(c.peek({ id: 'A' })).toBeUndefined()
+    expect(c.live({ id: 'A' })).toBeUndefined()
 
     // refresh → eager revalidation on the retained slot (re-runs the loader).
     c.seed({ id: 'B' }, 'seed-B')
@@ -179,7 +179,7 @@ test('server crossRequest-publish broadcast reaches an authorized subscriber and
     }))
     clientMemo.seed(args, { id: 'A', secret: 'stale' })
     applyMemoFrame(clientMemo, args, frame as MemoFrame)
-    expect(clientMemo.peek(args)).toEqual(value)
+    expect(clientMemo.live(args)).toEqual(value)
 
     socket.close()
 })

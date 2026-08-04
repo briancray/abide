@@ -6,7 +6,7 @@
   // Distinct from first-load `pending`: `refreshing` is true only while a re-fetch runs over a value
   // that stays on screen. So during a refresh: value = the stale one, refreshing = yes, pending = no.
   let refreshingStarted = state(false)
-  const refreshingValue = memo(() => (refreshingStarted ? (cacheSlow.peek({ key: "refresh-demo" })?.runs ?? "loading") : "idle"))
+  const refreshingValue = memo(() => (refreshingStarted ? (cacheSlow.live({ key: "refresh-demo" })?.runs ?? "loading") : "idle"))
   const refreshingFlag = memo(() => (cacheSlow.refreshing({ key: "refresh-demo" }) ? "yes" : "no"))
   const refreshingPending = memo(() => (cacheSlow.pending({ key: "refresh-demo" }) ? "yes" : "no"))
   function startRefreshing() { refreshingStarted = true }

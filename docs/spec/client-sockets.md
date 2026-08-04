@@ -25,22 +25,25 @@ adds no durability the server never had.
    ```ts
    interface Socket<T> extends AsyncIterable<T> {
      publish(message: T): void          // fire-and-forget, void, both sides (S1.3, CS3)
-     peek(): T | undefined              // ACTIVE · reactive latest, maxAge-windowed (CS4.2)
+     live(): T | undefined              // ACTIVE · reactive latest, maxAge-windowed (CS4.2)
      chunks(): T[] | undefined          // ACTIVE · messages seen this session, capped (CS4.3)
      pending(): boolean                 // STATUS · connecting, never yet subscribed (CS4.1)
      refreshing(): boolean              // STATUS · dropped, reconnecting (CS4.1, CS2.4)
      done(): boolean                    // STATUS · not subscribed / torn down (CS4.1)
      error(): unknown | undefined       // STATUS · terminal, non-retryable refusal (CS4.1)
+     settled(): boolean                 // STATUS · the subscription ENDED (client: the error terminal)
+     streaming(): boolean               // STATUS · live and delivering, incl. through a reconnect
+     peek(): T | undefined              // neither · the untracked latest — opens nothing, wakes nobody
      readonly __socket: SocketInternals<T>
    }
    ```
 
    Probes are **zero-arg for a void (single-topic) socket**; a roomed socket (`Args`, ADR 0023)
-   keys them by the room, exactly like an args-keyed memo — `peek(room)`/`chunks(room)`/… (on par
-   with the RPC read's `fn.peek(args)`). The six probes get that for free by taking `args: Args`
+   keys them by the room, exactly like an args-keyed memo — `live(room)`/`chunks(room)`/… (on par
+   with the RPC read's `fn.live(args)`). The two reads and the six probes get that for free by taking `args: Args`
    **last-or-only**, inherited from the shared `ReactiveProbeSurface` (`shared/internal/
-   reactiveReadSurface.ts`): TypeScript's omittable-`void`-parameter rule collapses `peek(args: void)`
-   to `peek()` with no `Room` machinery at all. The `Room<Args>` spread is for the verbs whose key is
+   reactiveReadSurface.ts`): TypeScript's omittable-`void`-parameter rule collapses `live(args: void)`
+   to `live()` with no `Room` machinery at all. The `Room<Args>` spread is for the verbs whose key is
    NOT last — `publish`, `fn.watch`, `memo.state` — where a trailing payload would otherwise need an
    `undefined` placeholder ahead of it. That is the rule (ADR 0023 §2 amendment), stated once on the
    shared surface: a void socket/channel and an argless memo all write `publish(value)`, a keyed one
@@ -115,20 +118,41 @@ Per-socket-name reactive lifecycle over the shared subscription:
 pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ──reopen──▶ live
    │                  │                                                 │
    └──sub-error/policy-close──▶ error(terminal)      last-active-reader-leaves──▶ done
+
+probes over those states:  pending()   = pending
+                           streaming() = live | refreshing   ← a reconnect has ended nothing
+                           settled()   = error               ← the only terminal on this side
+                           done()      = idle                ← never subscribed / torn down
 ```
 
-1. **Active vs status probes.**
-   - **Active — drive/refcount the subscription:** `[Symbol.asyncIterator]`, `peek()`, `chunks()`.
+1. **Active reads vs status probes vs the untracked read.** A PROBE OBSERVES; IT NEVER CAUSES — the rule
+   holds framework-wide with no exceptions, and is restated on `ReactiveValueProbes`/`ReactiveStreamProbes`
+   because it did not always hold on the memo side (a `done()` that reached `startLoad`, and probes that
+   classified an argless body by RUNNING it).
+   - **Active reads — drive/refcount the subscription:** `[Symbol.asyncIterator]`, `live()`, `chunks()`.
      Reading any registers the caller as a consumer (CS3.1) and, if first, subscribes. Mirrors
-     rpc-core: `fn.peek` subscribes + kicks the load.
-   - **Status — observe only, never subscribe:** `pending()`, `refreshing()`, `done()`, `error()`.
-     A component rendering only `{#if chat.pending()}…{/if}` (no iterate/`peek`/`chunks`) sees
+     rpc-core: `fn.live` subscribes + kicks the load; `fn.peek` does neither. `chunks` is ACTIVE because
+     it is the transcript READ — `{#for m of chat.chunks()}` renders the data, and a `chunks` that
+     subscribed to nothing would paint an empty list forever.
+   - **Status — observe only, never subscribe:** `pending()`, `refreshing()`, `settled()`, `streaming()`,
+     `done()`, `error()`.
+     A component rendering only `{#if chat.pending()}…{/if}` (no iterate/`live`/`chunks`) sees
      `done()===true` — correct, nobody is subscribed.
    - `error()` is **terminal-only** (CS2.4): transient drops are `refreshing()`, not `error()`.
      Clean three-way split — `refreshing` = recoverable, `error` = gave up, `done` = intentional.
-2. **`peek(): T | undefined` — reactive latest, `maxAge`-windowed.** Server: the hub's `last`
+   - `settled()` is the subscription having ENDED, which on this side is exactly the `error` terminal;
+     `streaming()` is it being live, INCLUDING through a transient reconnect, which has not ended
+     anything. So over a CLIENT subscription's life `pending` → `streaming` → `settled` is total and
+     disjoint, with `idle` the never-asked fourth.
+     **That totality is the client half's**, and the scoping is load-bearing rather than pedantic. The
+     in-proc SERVER channel is eternal — it has no source to finish, fail or abort, so no acquisition of
+     it ever reaches a terminal — and `settled()` there is a hardcoded `false` (`shared/channel.ts`),
+     which is the honest constant: an idle hub is not-yet-started, the opposite of ended. On that side
+     the axis never completes and `streaming()`/`done()` are exact complements (`!idle` / `idle`).
+     Same surface, honest per side, exactly as with the four probes above.
+2. **`live(): T | undefined` — reactive latest, `maxAge`-windowed.** Server: the hub's `last`
    `{message,time}` slot (updated on every publish, **independent of `tail`** so a `tail:0` socket
-   still has a `peek`), returning `undefined` once `now - time > maxAge`. Client: the last received
+   still has a `live`), returning `undefined` once `now - time > maxAge`. Client: the last received
    message, windowed **lazily** on read against the shipped `maxAge` (CS7) — no timer; a static view
    may show a stale value until the next reactive tick. `maxAge:∞` (default) → sticky.
 3. **`chunks(): T[] | undefined` — this session's messages, capped.** Everything received while
@@ -142,8 +166,10 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
    chat}` would block on live messages and hang the flush. Inside an SSR render the socket's
    server-side iterator is **context-sensitive**: it yields `hub.tailSnapshot()` (the in-window
    tail, S2.2) and then **completes** instead of registering a live `Subscriber`. So under SSR
-   `chunks()` = the rendered snapshot, `peek()` = its last entry, `done()===true` post-render,
-   `pending()/refreshing()===false`. `tail:0` → renders nothing, goes live on the client. Outside
+   `chunks()` = the rendered snapshot, `live()` = its last entry (and `peek()` the same entry, having
+   subscribed to nothing), `done()===true` post-render, `pending()/refreshing()===false`, and both new
+   probes `false` — `settled()` because the server channel never reaches a terminal, `streaming()`
+   because the render's iterator completed rather than staying open. `tail:0` → renders nothing, goes live on the client. Outside
    an SSR render (RPC handler, background task, socket `handler`) iteration is the real live
    subscription — the same ambient-scope discrimination as the other request-scoped accessors.
 2. **Hydrate: re-subscribe `replay:false`** *(design; deferred in v1 — see Deferred/parked)*. The
@@ -185,14 +211,14 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
    - `validate` — when `true`, the bundle **also** ships the schema's validator (same plumbing as
      RPC `clients.browser.validate`); when `false`, nothing schema-related ships.
    - `tail` — sizes the `chunks()` cap (CS4.3).
-   - `maxAge` — the `peek()` lazy window (CS4.2).
+   - `maxAge` — the `live()` lazy window (CS4.2).
 2. **Emit swap.** `server/sockets/*` import locals are rewritten to read the proxy off `$scope`,
    parallel to the RPC local rewrite; a non-reachable socket import is the CS6.1 build error.
 
 ## Edges
 
 - **Multi-tab: per-tab, independent.** Each tab opens its own mux WS (S3.1), its own subscription,
-  its own tail replay / `peek` / `chunks`. **No** cross-tab leader election (contrast
+  its own tail replay / `live` / `chunks`. **No** cross-tab leader election (contrast
   `state.shared`'s `BroadcastChannel`) — N tabs = N connect-authed subscriptions, the honest and
   simple model.
 - **Cross-origin.** The proxy only ever dials its **own** app origin (the mount base, like the RPC
@@ -224,14 +250,14 @@ pending ──sub-ack──▶ live ──drop(abnormal)──▶ refreshing ─
 - **Local tail replay for late in-tab consumers** (CS3.2) — deliberately not done; late = live-only.
 - **`canSubscribe` / topic-level subscribe authz** (CS6.2) — parked with S4.
 - **Cross-tab subscription sharing** (leader tab holds one WS) — parked; per-tab is the model.
-- **Reactive `maxAge`-timer for `peek()`** (push `undefined` exactly at expiry) — parked in favor of
+- **Reactive `maxAge`-timer for `live()`** (push `undefined` exactly at expiry) — parked in favor of
   the lazy on-read window (CS4.2); revisit only if a UI needs precise idle-expiry.
 
 ## Implementation surface (files)
 
 - `lib/shared/internal/subscriber.ts` — new; the lifted FIFO `Subscriber`, imported both sides.
 - `lib/server/socket.ts` — `Socket<T>` gains the probe members; server impls (trivial/degenerate).
-- `lib/server/internal/socketHub.ts` — `last` slot for `peek`; the context-sensitive SSR iterator
+- `lib/server/internal/socketHub.ts` — `last` slot for `live`; the context-sensitive SSR iterator
   (snapshot-then-done).
 - `lib/server/internal/router.ts` — sub-ack / sub-error frames; `replay` flag on `wsSubscribe`;
   close-code → transient/terminal mapping.

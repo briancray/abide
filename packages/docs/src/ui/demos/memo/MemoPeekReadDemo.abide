@@ -1,0 +1,34 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+
+  // peek(args): THE UNTRACKED READ — what the slot holds right now, and nothing else. It subscribes to
+  // nothing and kicks no load, so a lone `peek` reader never sees a value arrive. That is the whole
+  // difference from `live()` next door, and this demo is built to make it visible: "Peek" alone stays
+  // `undefined` forever, however many times you press it. Press "Load (live)" and the slot fills — and
+  // the peek line, which re-renders because the BUTTON bumped a cell it reads, now sees the value.
+  let started = state(false)
+  let peekTicks = state(0)
+  const greeting = memo(async ({ id }: { id: string }) => {
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    return `hello ${id}`
+  })
+  // `peekTicks` is what makes this line re-render — NOT the memo. The read itself carries no
+  // subscription, which is exactly the property on display.
+  const snapshot = memo(() => {
+    peekTicks
+    return greeting.peek({ id: "a" }) ?? "undefined (nothing there)"
+  })
+  const live = memo(() => (started ? (greeting.live({ id: "a" }) ?? "undefined (pending)") : "idle"))
+  function peek() { peekTicks = peekTicks + 1 }
+  function load() { started = true }
+</script>
+
+<ul class="grid">
+  <li><code>peek()</code>: <strong data-testid="memopeek-value">{snapshot}</strong></li>
+  <li><code>live()</code>: <strong data-testid="memopeek-live">{live}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="memopeek-peek" onclick={peek}>Peek (starts nothing)</button>
+  <button data-testid="memopeek-load" onclick={load}>Load (live)</button>
+</div>

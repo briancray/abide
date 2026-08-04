@@ -1,0 +1,22 @@
+<script>
+  import { state } from "abide/shared/state"
+  import { memo } from "abide/shared/memo"
+  import socketsChat from "$server/sockets/socketsChat"
+
+  // `live()` is the DISPLAY READ: the latest message on the topic, no list to maintain. It is an ACTIVE
+  // read — reading it opens the subscription — so it updates as messages arrive, including publishes
+  // from the other demos on this page, since they all share the one `socketsChat` topic.
+  // Its untracked sibling `peek()` reads the same latest message and opens nothing; see the demo below.
+  let draft = state("latest wins")
+  const latest = memo(() => socketsChat.live()?.text ?? "—")
+  function publish() {
+    socketsChat.publish({ id: crypto.randomUUID(), text: draft, via: "client" })
+  }
+</script>
+
+<p><code>live()</code> — latest message: <strong data-testid="live-latest">{latest}</strong></p>
+
+<div class="controls">
+  <input data-testid="live-input" bind:value={draft} />
+  <button data-testid="live-publish" onclick={publish}>Publish</button>
+</div>

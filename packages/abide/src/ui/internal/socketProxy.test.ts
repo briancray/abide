@@ -15,7 +15,7 @@ import { makeClientSocketImports, type SocketSpec } from './socketProxy.ts'
 // missing a member, which is the whole reason `SocketSurfaceMembers` is `Omit`-derived.
 interface SocketLike {
     publish(message: unknown): void
-    peek(args?: unknown): unknown
+    live(args?: unknown): unknown
     chunks(args?: unknown): unknown[]
     pending(args?: unknown): boolean
     refreshing(args?: unknown): boolean
@@ -112,7 +112,7 @@ test('sub-ack clears pending() → live; a data frame drives peek/chunks and the
     expect(chat.pending()).toBe(false)
 
     ws.inbound({ name: 'chat', msg: 'hello' })
-    expect(chat.peek()).toBe('hello')
+    expect(chat.live()).toBe('hello')
     expect(chat.chunks()).toEqual(['hello'])
 
     const first = await iterator.next()
@@ -128,7 +128,7 @@ test('chunks() is capped at tail size (drop-oldest)', () => {
     ws.inbound({ name: 'chat', msg: 2 })
     ws.inbound({ name: 'chat', msg: 3 })
     expect(chat.chunks()).toEqual([2, 3])
-    expect(chat.peek()).toBe(3)
+    expect(chat.live()).toBe(3)
 })
 
 // ADR 0023 measured and rejected fusing the replay `tail` with the per-cursor delivery FIFO, and the
@@ -165,7 +165,7 @@ test('tail: 0 retains no transcript, but peek() stays sticky', () => {
     ws.inbound({ name: 'chat', msg: 'a' })
     ws.inbound({ name: 'chat', msg: 'b' })
     expect(chat.chunks()).toEqual([])
-    expect(chat.peek()).toBe('b')
+    expect(chat.live()).toBe('b')
 })
 
 test('publish gating: clientPublish:false throws; true sends a pub frame', () => {
@@ -189,10 +189,10 @@ test('a sub-error frame sets terminal error() and ends the iterators', async () 
 })
 
 // A roomed socket is the SAME proxy, called with a room key. `sock({room})` iterates that room;
-// `sock.peek({room})` / `sock.publish({room}, msg)` address it.
+// `sock.live({room})` / `sock.publish({room}, msg)` address it.
 interface RoomedSocketLike {
     (room: unknown): AsyncIterable<unknown>
-    peek(room?: unknown): unknown
+    live(room?: unknown): unknown
     publish(room: unknown, message: unknown): void
 }
 
@@ -216,8 +216,8 @@ test('rooms: subscribing a room sends args; a frame routes ONLY to its room', as
 
     // A room-a data frame reaches a, never b.
     ws.inbound({ name: 'feed', args: { room: 'a' }, msg: 'to-a' })
-    expect(feed.peek({ room: 'a' })).toBe('to-a')
-    expect(feed.peek({ room: 'b' })).toBeUndefined()
+    expect(feed.live({ room: 'a' })).toBe('to-a')
+    expect(feed.live({ room: 'b' })).toBeUndefined()
     expect(await a.next()).toEqual({ value: 'to-a', done: false })
 
     void a.return?.()

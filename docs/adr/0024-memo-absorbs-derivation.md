@@ -156,10 +156,15 @@ args.
 blocks **everything below it** — the rest of the script, the component's entire markup, and the SSR response
 for that subtree. It is plain JS sequencing, not a dependency graph.
 
-> **CORRECTED by ADR 0031 D6.** This paragraph also claimed a script-level `await` blocks *the client
-> mount*. It does not: `render` is `async`, `mount` is not, so the emitted client module fails to parse —
-> green in `abide check`, correct on the server, broken in the browser. Top-level `await` in a `<script>`
-> becomes a compile error in both lanes.
+> **CORRECTED — factually, on the ground stated here; the prescription did NOT land.** This paragraph
+> also claimed a script-level `await` blocks *the client mount*. It does not: `render` is `async`, `mount`
+> is not, so the emitted client module fails to parse — green in `abide check`, correct on the server,
+> broken in the browser. That much stands and is the correction.
+>
+> The fix it prescribed — top-level `await` in a `<script>` becoming a compile error in both lanes — was
+> written up as ADR 0031 D6, which was rejected as a whole (on cost) and whose file is not in the tree. So
+> the error does not exist: neither lane rejects a top-level `await` today, and the symptom above is still
+> reachable. Stated here rather than pointed at, so a deleted file cannot take the diagnosis with it.
 
 Markup-level `{#await}` is the parallel form: `awaitStream` kicks the read immediately
 (`ui/internal/streamScope.ts:101`) and races it against a **single per-render** deadline

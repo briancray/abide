@@ -43,7 +43,7 @@ function makeState<T>(initial: T, transform?: (value: T) => T): State<T> {
     const backing = reactiveState<T>(transform ? transform(initial) : initial)
     const cell = (() => backing()) as State<T>
     cell.set = (value: T) => backing.set(transform ? transform(value) : value)
-    cell.untracked = () => backing.untracked()
+    cell.peek = () => backing.peek()
     cell[STATE_CELL] = 'state'
     return cell
 }
@@ -88,7 +88,7 @@ function makeShared<T>(key: string, initial: T): State<T> {
         const backing = reactiveState<T>(initial)
         const cell = (() => backing()) as State<T>
         cell.set = (value: T) => backing.set(value)
-        cell.untracked = () => backing.untracked()
+        cell.peek = () => backing.peek()
         cell[STATE_CELL] = 'shared'
         return cell
     }
@@ -111,7 +111,7 @@ function makeShared<T>(key: string, initial: T): State<T> {
             }
         }
     }
-    cell.untracked = () => backing.untracked() as T
+    cell.peek = () => backing.peek() as T
     cell[STATE_CELL] = 'shared'
     return cell
 }

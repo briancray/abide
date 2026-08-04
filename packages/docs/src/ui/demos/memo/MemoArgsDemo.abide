@@ -14,8 +14,8 @@
     await new Promise((resolve) => setTimeout(resolve, 150))
     return `${key} #${at}`
   })
-  const alpha = memo(() => (alphaReads ? (item.peek({ key: "alpha" }) ?? "loading") : "idle"))
-  const beta = memo(() => (betaReads ? (item.peek({ key: "beta" }) ?? "loading") : "idle"))
+  const alpha = memo(() => (alphaReads ? (item.live({ key: "alpha" }) ?? "loading") : "idle"))
+  const beta = memo(() => (betaReads ? (item.live({ key: "beta" }) ?? "loading") : "idle"))
 
   function readAlpha() { alphaReads++; item({ key: "alpha" }) }
   function readBeta() { betaReads++; item({ key: "beta" }) }

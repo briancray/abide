@@ -93,9 +93,9 @@ test('a memo:false read has the same peek policy on the server and in the browse
     //
     // `await fn(args)` joins the in-flight run rather than starting one, so awaiting it adds no work — and
     // if that ever stopped being true, the exact-count assertion at the end of the test is what catches it.
-    routes.tick.peek({ id: 1 })
+    routes.tick.live({ id: 1 })
     await routes.tick({ id: 1 })
-    routes.tick.peek({ id: 1 })
+    routes.tick.live({ id: 1 })
     await routes.tick({ id: 1 })
     const serverRuns = calls
     expect(serverRuns).toBe(2)
@@ -114,9 +114,9 @@ test('a memo:false read has the same peek policy on the server and in the browse
         { id: number },
         { id: number; run: number }
     >
-    proxy.peek({ id: 1 })
+    proxy.live({ id: 1 })
     await proxy({ id: 1 })
-    proxy.peek({ id: 1 })
+    proxy.live({ id: 1 })
     await proxy({ id: 1 })
 
     expect(calls).toBe(serverRuns)
@@ -201,7 +201,7 @@ test('makeClientImports builds a name -> proxy map', () => {
     expect(typeof imports.bump).toBe('function')
     // Both proxies carry the identical reactive surface — full read/mutation symmetry.
     expect(typeof (imports.bump as Rpc<unknown, unknown>).refresh).toBe('function')
-    expect(typeof (imports.bump as Rpc<unknown, unknown>).peek).toBe('function')
+    expect(typeof (imports.bump as Rpc<unknown, unknown>).live).toBe('function')
 })
 
 // The client half of isomorphic cache tags. A browser memo is never `crossRequest`, so until tags were

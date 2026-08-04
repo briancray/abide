@@ -1,8 +1,18 @@
 # Design — the Promise-read model (RPC/memo read semantics)
 
 > **STATUS: IMPLEMENTED.** The bare memo/RPC call now returns `Promise<T>` (subscribing coalesced
-> load); `fn.peek(args): T | undefined` is the reactive snapshot; `.load` is retained as a `@deprecated`
-> non-subscribing alias (migration only). **The open crux below is SOLVED:** the bare call does a
+> load); `fn.live(args): T | undefined` is the reactive snapshot. `.load` is GONE (it was a `@deprecated`
+> migration alias and no longer exists).
+>
+> **VOCABULARY (this doc was written before the read split).** Everything below that this doc calls
+> `peek` is now spelled **`live`** — the reactive, subscribing, load-kicking snapshot. `peek` has been
+> reclaimed for the UNTRACKED read: it returns what the slot holds right now, subscribes to nothing,
+> starts no load and (on a socket) opens no subscription, so a lone `peek` reader never sees a value
+> arrive. The two reads are separate members on every primitive — see `shared/internal/reactiveReadSurface.ts`
+> (`UntrackedRead` vs `ReactiveValueProbes`) and ADR 0027 D2's reversal note. The prose has been renamed
+> in place; where the distinction is load-bearing it is called out.
+>
+> **The open crux below is SOLVED:** the bare call does a
 > tracked `slot.signal()` read before returning the load promise, so the interpolation/await effect
 > re-runs and re-awaits on invalidate. Seed-primed synchronous hydration claim is preserved via a
 > runtime-only settled-value hint on the promise (`shared/internal/settledRead.ts`) — the public type
@@ -22,21 +32,22 @@
 > `ui/internal/parse.ts` (`parseAwaitBlock`).
 
 Decision record from the design grill that grew out of TODO #11's docs-clean gate. The gate surfaced
-that abide's RPC read-surface TYPE (`(args): T | undefined`, a sync peek) does not cleanly model the
+that abide's RPC read-surface TYPE (`(args): T | undefined`, a sync snapshot) does not cleanly model the
 documented template usage (`{#await rpc()}{:then v}{v.foo}` expects `v: T`). This doc captures the
 chosen end-state read model and its one open crux. It is a **public-API + core-primitive** change,
 sequenced AFTER #11's checker lands; #11 lands on the honest `T | undefined` with interim guards.
 
 ## The model
 
-The bare read call becomes the (coalesced) load promise; the non-blocking peek becomes explicit.
+The bare read call becomes the (coalesced) load promise; the non-blocking read becomes explicit.
 
 ```ts
 rpc(args): Promise<T>          // the read — awaitable; coalesced + cached
-rpc.peek(args): T | undefined  // reactive sync snapshot (was today's bare call)
-rpc.pending/error/refreshing(args): …   // probes (unchanged)
-rpc.refresh/invalidate/publish(…): …      // cache verbs (unchanged)
-// rpc.load — REMOVED (=== the bare call now); deprecated alias during migration only
+rpc.live(args): T | undefined  // reactive sync snapshot (was today's bare call) — subscribes + loads
+rpc.peek(args): T | undefined  // the UNTRACKED read — subscribes to nothing, starts no load
+rpc.pending/refreshing/settled/error(args): …  // probes — they observe, they never cause
+rpc.refresh/invalidate/publish(…): …      // surface verbs (unchanged)
+// rpc.load — REMOVED (=== the bare call now)
 ```
 
 **The interpolation runtime auto-awaits.** A bare `{rpc()}` renders the AWAITED value, not
@@ -44,17 +55,18 @@ rpc.refresh/invalidate/publish(…): …      // cache verbs (unchanged)
 client's `interpolate` detects a thenable, clears the text node and fills it when the promise settles
 (`ui/internal/runtime.ts`). What is still loud is the TYPE: `{rpc().field}` is a **TS error** caught by
 the #11 checker (`Property 'field' does not exist on Promise<T>`) — bind through `{#await}` or use
-`.peek()`.
+`.live()`.
 
 > The clear-then-fill is exactly why an ARGLESS SYNCHRONOUS `memo`'s bare call returns `T` rather than
 > `Promise<T>` (ADR 0024 §3): a promise-returning derived read would blank the server-rendered text and
 > refill it a microtask later — a visible flash on every derived value.
 
-### The four template contexts
+### The template contexts
 
 | Template | Type | Semantics |
 | --- | --- | --- |
-| `{rpc.peek()}` / `{rpc.peek()?.foo}` | `T \| undefined` | non-blocking, reactive |
+| `{rpc.live()}` / `{rpc.live()?.foo}` | `T \| undefined` | non-blocking, reactive (subscribes + kicks the load) |
+| `{rpc.peek()}` | `T \| undefined` | the UNTRACKED read — never subscribes, never loads, so it never fills in on its own |
 | `{rpc()}` (bare) | `Promise<T>` → the awaited value | **REJECTED by the checker** (see below); would render blocking, value-in-HTML |
 | `{await rpc()}` | `T` | blocking (SSR value-in-HTML) |
 | `{#await rpc()}{:then v}` | `v: T` | reactive await block |
@@ -87,29 +99,30 @@ sometimes a promise is the passthrough case the auto-await exists for. `any` pas
 the conditional to `unknown`), so this never false-positives on an untyped import.
 
 The checker (`emitCheck`) needs **no** operand detection and **no** special types — every row falls
-out of `Promise<T>` + `.peek(): T | undefined` with the existing lowering. This is the most
+out of `Promise<T>` + `.live(): T | undefined` with the existing lowering. This is the most
 checker-friendly of the models considered (vs the `Read<T> = PromiseLike<T> & Partial<T>` hybrid and a
 `Promise<T>`+auto-await-suspense variant — see "Rejected alternatives").
 
 ### Narrowing: bind-then-use (a hard TS fact)
 
-TS does **not** narrow across separate calls: `{#if rpc.peek()}{rpc.peek().foo}{/if}` fails — a
+TS does **not** narrow across separate calls: `{#if rpc.live()}{rpc.live().foo}{/if}` fails — a
 call-expression result is not a narrowable reference. Field access after a guard must bind:
 
 - blocking: `{#await rpc()}{:then v}{v.foo}` — `v` binds `T` (the canonical, type-safe path), or
-- non-blocking: `<script>const v = rpc.peek(args)</script> {#if v}{v.foo}{/if}`, or `{rpc.peek()?.foo}`.
+- non-blocking: `<script>const v = rpc.live(args)</script> {#if v}{v.foo}{/if}`, or `{rpc.live()?.foo}`.
 
 The blessed blocking form (`{#await}{:then v}`) *is* the bind-and-narrow shape, so the ergonomic path
-and the type-safe path coincide. Optional future sugar: `{#if rpc.peek() as v}` binding-in-condition.
+and the type-safe path coincide. Optional future sugar: `{#if rpc.live() as v}` binding-in-condition.
 
 ## The one crux — await-interpolation reactivity (SOLVED, kept for the reasoning)
 
-Today `{fn()}` (peek) re-renders on `invalidate`/`publish` because the peek subscribes. Under this model
-the reactive form `{rpc.peek()}` still subscribes ✓, but the blocking form `{await rpc()}` must ALSO
+Today `{fn()}` (the display read) re-renders on `invalidate`/`publish` because that read subscribes. Under
+this model the reactive form `{rpc.live()}` still subscribes ✓ (and `{rpc.peek()}`, the untracked read,
+deliberately does not), but the blocking form `{await rpc()}` must ALSO
 re-await when the underlying memo invalidates — otherwise a blocking read goes stale after a mutation.
 So the await-interpolation has to subscribe-and-re-await. This was the hardest design point; it SHIPPED
 (the await leaf subscribes to the slot and re-awaits on a change), and the section is retained for the
-reasoning rather than as open work. (`{rpc.peek()}` reactivity is free; `{await rpc()}` reactivity was
+reasoning rather than as open work. (`{rpc.live()}` reactivity is free; `{await rpc()}` reactivity was
 new behavior.)
 
 One consequence worth carrying here, because it is what the reactivity actually means: the re-await
@@ -119,12 +132,12 @@ demo of this form needs a handler whose output genuinely moves.
 
 ## Migration
 
-- Every bare `{fn()}` used as a display *peek* → `{fn.peek()}`. Mechanical and **checker-guided** (the
+- Every bare `{fn()}` used as a display read → `{fn.live()}`. Mechanical and **checker-guided** (the
   #11 checker flags each `{fn().field}` / `{#await fn()}{:then v}{v.field}` mismatch).
 - `{#await fn(args)}` → `{#await fn(args)}` unchanged once the bare call is `Promise<T>` (interim it is
   `{#await fn.load(args)}` — see below).
-- CLAUDE.md contract flips: "`{fn(args)}` = non-blocking peek" → "`{fn.peek(args)}` = non-blocking
-  peek; `{fn(args)}` / `{await fn(args)}` = the read (promise)."
+- CLAUDE.md contract flips: "`{fn(args)}` = the non-blocking read" → "`{fn.live(args)}` = the
+  non-blocking read; `{fn(args)}` / `{await fn(args)}` = the read (promise)."
 - Seed/SSR/hydration: smaller than other B-variants (memo internals barely move — only which method the
   bare call forwards to). Re-prove `snapshot`/`seed` under `{await rpc()}`-driven SSR resolution.
 
@@ -133,7 +146,7 @@ demo of this form needs a handler whose output genuinely moves.
 #11's checker lands on the honest CURRENT type `(args): T | undefined`. To make `abide check
 packages/docs` clean under that type, the docs get honest guards that are LARGELY forward-compatible
 with this model:
-- bare `{fn().foo}` → `{fn()?.foo}` (the `?.` stays; later `fn()` → `fn.peek()`).
+- bare `{fn().foo}` → `{fn()?.foo}` (the `?.` stays; later `fn()` → `fn.live()`).
 - `{#await fn(args)}{:then v}{v.foo}` → `{#await fn.load(args)}{:then v}` (`v: T`); later `.load()`
   drops back to the bare call.
 - `.error()` is `unknown` → guard/`?.`.
@@ -142,14 +155,14 @@ When this model lands, the guards are simplified/renamed and the checker proves 
 ## Rejected alternatives
 
 - **`Read<T> = PromiseLike<T> & Partial<T>`** (thenable hybrid): zero doc churn, but an ugly
-  intersection type, a runtime unwrap-to-peek on render, and `{#if rpc()}` is always-truthy (footgun).
+  intersection type, a runtime unwrap-to-snapshot on render, and `{#if rpc()}` is always-truthy (footgun).
 - **`Promise<T>` + client SUSPENSE on bare `{rpc()}`**: rejected — a bare render that suspends the
   surrounding region is magic the author never asked for; `{#await}` is the explicit form for that.
   NB: the auto-AWAIT half was NOT rejected and did ship (see the header) — the runtime unwraps a
   thenable interpolation, so a bare `{rpc()}` renders the awaited value rather than the
   `[object Promise]` this entry originally projected. Only suspension was turned down.
-- **Type-only `PromiseLike` fudge** (type says awaitable, runtime stays sync peek): unsound —
-  `await fn()` would resolve to the peek, crashing typed-safe code.
+- **Type-only `PromiseLike` fudge** (type says awaitable, runtime stays the sync snapshot): unsound —
+  `await fn()` would resolve to the snapshot, crashing typed-safe code.
 
 ## Deferred / parked
 

@@ -87,7 +87,7 @@ export function adoptedAmbient<T, Absent = undefined>(options: {
         adopted: () => cell(),
         adopt: (value: unknown): void => {
             if (!isValid(value)) return
-            const current = cell.untracked()
+            const current = cell.peek()
             if (current !== undefined && changed !== undefined && !changed(current, value)) return
             cell.set(value)
         },

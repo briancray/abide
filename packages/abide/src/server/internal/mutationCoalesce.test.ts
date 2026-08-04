@@ -148,7 +148,7 @@ describe('mutation public surface mirrors a read (full symmetry)', () => {
     test('the reactive probes + cache verbs are exposed; __rpc.read is false', () => {
         const m = POST((_args: { x: number }) => 1) as unknown as Record<string, unknown>
         expect(typeof m).toBe('function')
-        expect(typeof m.peek).toBe('function')
+        expect(typeof m.live).toBe('function')
         expect(typeof m.publish).toBe('function')
         expect(typeof m.pending).toBe('function')
         expect(typeof m.refresh).toBe('function')

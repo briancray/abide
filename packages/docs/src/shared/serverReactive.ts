@@ -11,11 +11,12 @@ import { watch } from 'abide/shared/watch'
 // There is no compiler here — plain `.ts` — so you call the `State` surface yourself:
 //   total()           // tracked read (subscribes the surrounding memo/watch)
 //   total.set(next)   // publish a new value
-//   total.untracked() // untracked read (no subscription)
+//   total.peek()      // untracked read (no subscription)
 //
-// It is `untracked()`, not `peek()`, because `peek` means the OPPOSITE on the other two primitives:
-// `memo.peek(args)` / `channel.peek(args)` SUBSCRIBE and return `T | undefined` (ADR 0027 D2). Both
-// spellings appear side by side one file over, in `serverReactiveRead.ts`.
+// `peek()` means the SAME thing here as on a memo, a channel and a socket: read what is there, subscribe
+// to nothing. It was spelled `untracked()` until recently, because `peek` then meant the reactive,
+// load-kicking read on the other two primitives — that read is `live()` today, which freed the word.
+// Both spellings appear side by side one file over, in `serverReactiveRead.ts`.
 //
 // Module-level state is PROCESS-GLOBAL (one value across all requests) — fine for this global counter;
 // for mutable per-request/per-user state, use `memo({ crossRequest })` instead.

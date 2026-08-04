@@ -39,8 +39,7 @@ function makeScope(overrides?: Partial<RequestScope>): RequestScope {
 // fail-closed handler's value was NEVER cached — an error slot has no value).
 function hasCachedValue(): boolean {
     for (const entry of sharedStore().values()) {
-        const status = (entry as { state: { untracked(): { status: string } } }).state.untracked()
-            .status
+        const status = (entry as { state: { peek(): { status: string } } }).state.peek().status
         if (status === 'value') return true
     }
     return false
@@ -292,7 +291,7 @@ describe('a crossRequest memo is callable from ANY caller, request or not', () =
     test('a shared read with no active request scope works', async () => {
         const c = memo(async (n: number) => n + 1, { crossRequest: true })
         expect(await c(1)).toBe(2)
-        expect(c.peek(1)).toBe(2)
+        expect(c.live(1)).toBe(2)
     })
 
     test('a scriptless caller and a request share ONE slot in both directions', async () => {
@@ -354,7 +353,7 @@ describe('a crossRequest memo is callable from ANY caller, request or not', () =
         expect(await read({ n: 4 })).toEqual({ n: 8 })
         expect(await runInScope(makeScope(), () => read({ n: 4 }))).toEqual({ n: 8 })
         expect(calls).toBe(1)
-        expect(read.peek({ n: 4 })).toEqual({ n: 8 })
+        expect(read.live({ n: 4 })).toEqual({ n: 8 })
 
         // And the write verbs reach the same slot they always could.
         read.invalidate({ n: 4 })

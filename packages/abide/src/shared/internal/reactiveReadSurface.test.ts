@@ -11,6 +11,13 @@
 // Kept as a NAME LIST rather than one `expect(surface).toMatchObject(...)`, because the point is the
 // vocabulary: adding a probe to the shared declaration should make this file the place you notice the
 // four implementations have not caught up.
+//
+// What that claim CANNOT do, stated so the next reader does not over-trust it: the list is hand-kept, so
+// adding a probe to the declaration does not fail this file on its own — `settled`/`streaming` were added
+// to `ReactiveValueProbes`/`ReactiveStreamProbes` and every test here still passed until the names were
+// typed in below. The two enumerations are the TYPE (which catches a surface that declares a member it
+// never assigns) and this LIST (which catches an implementation that skipped one); neither finds the
+// other's misses, and a new probe has to be added to both by hand.
 
 import { describe, expect, test } from 'bun:test'
 import { GET } from '../../server/GET.ts'
@@ -18,8 +25,8 @@ import { POST } from '../../server/POST.ts'
 import { channel } from '../channel.ts'
 import { memo } from '../memo.ts'
 
-const VALUE_PROBES = ['peek', 'pending', 'refreshing', 'error'] as const
-const STREAM_PROBES = ['chunks', 'done'] as const
+const VALUE_PROBES = ['live', 'pending', 'refreshing', 'settled', 'error'] as const
+const STREAM_PROBES = ['chunks', 'done', 'streaming'] as const
 
 function members(surface: unknown): Record<string, unknown> {
     return surface as Record<string, unknown>

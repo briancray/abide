@@ -26,9 +26,9 @@ describe('memo — read + load', () => {
         await withScope(async () => {
             const c = memo(async (n: number) => n + 1)
             // peek does not trigger a load
-            expect(c.peek(1)).toBeUndefined()
+            expect(c.live(1)).toBeUndefined()
             expect(await c(1)).toBe(2)
-            expect(c.peek(1)).toBe(2)
+            expect(c.live(1)).toBe(2)
         })
     })
 
@@ -39,10 +39,10 @@ describe('memo — read + load', () => {
                 return n * 3
             })
             const loading = c(5)
-            expect(c.peek(5)).toBeUndefined()
+            expect(c.live(5)).toBeUndefined()
             expect(c.pending(5)).toBe(true)
             expect(await loading).toBe(15)
-            expect(c.peek(5)).toBe(15)
+            expect(c.live(5)).toBe(15)
             expect(c.pending(5)).toBe(false)
         })
     })
@@ -72,8 +72,8 @@ describe('memo — read + load', () => {
             expect(await c(1)).toBe(10)
             expect(await c(2)).toBe(20)
             expect(calls).toBe(2)
-            expect(c.peek(1)).toBe(10)
-            expect(c.peek(2)).toBe(20)
+            expect(c.live(1)).toBe(10)
+            expect(c.live(2)).toBe(20)
         })
     })
 
@@ -91,23 +91,23 @@ describe('memo — read + load', () => {
         })
     })
 
-    test('reactive c.peek() in an effect eventually shows the resolved value', async () => {
+    test('reactive c.live() in an effect eventually shows the resolved value', async () => {
         await withScope(async () => {
             const c = memo(async (n: number) => {
                 await delay(10)
                 return n * 2
             })
             const seen: (number | undefined)[] = []
-            // `.peek()` is the reactive value snapshot (subscribes + kicks a coalesced load when cold).
+            // `.live()` is the reactive value snapshot (subscribes + kicks a coalesced load when cold).
             const dispose = effect(() => {
-                seen.push(c.peek(5))
+                seen.push(c.live(5))
             })
             expect(seen[0]).toBeUndefined() // undefined while pending
             await delay(30)
             await tick()
             dispose()
             expect(seen).toContain(10)
-            expect(c.peek(5)).toBe(10)
+            expect(c.live(5)).toBe(10)
         })
     })
 })
@@ -122,7 +122,7 @@ describe('memo — refresh / invalidate', () => {
             const load = memo(async ({ id }: { id: number }) => `user-${id}`)
             await load({ id: 1 })
 
-            const value = wakeups(() => load.peek({ id: 1 }))
+            const value = wakeups(() => load.live({ id: 1 }))
             const spinner = wakeups(() => load.refreshing({ id: 1 }))
             await settled(value, spinner)
 
@@ -164,7 +164,7 @@ describe('memo — refresh / invalidate', () => {
             await tick()
             // The load has NOT settled — the flag must survive the out-of-band value.
             expect(load.refreshing({ id: 1 })).toBe(true)
-            expect(load.peek({ id: 1 })).toBe('published-while-loading')
+            expect(load.live({ id: 1 })).toBe('published-while-loading')
 
             release('user-1-reloaded')
             await tick()
@@ -179,7 +179,7 @@ describe('memo — refresh / invalidate', () => {
             const load = memo(async () => `v${++calls}`)
             await load()
             const seen: (string | undefined)[] = []
-            const value = wakeups(() => seen.push(load.peek()))
+            const value = wakeups(() => seen.push(load.live()))
             await settled(value)
 
             load.refresh()
@@ -202,12 +202,12 @@ describe('memo — refresh / invalidate', () => {
 
             c.refresh(1)
             // stale value stays visible, refreshing flag is set
-            expect(c.peek(1)).toBe('1:1')
+            expect(c.live(1)).toBe('1:1')
             expect(c.refreshing(1)).toBe(true)
             expect(calls).toBe(2)
 
             await delay(50)
-            expect(c.peek(1)).toBe('1:2')
+            expect(c.live(1)).toBe('1:2')
             expect(c.refreshing(1)).toBe(false)
         })
     })
@@ -223,7 +223,7 @@ describe('memo — refresh / invalidate', () => {
             expect(calls).toBe(1)
 
             c.invalidate(1)
-            expect(c.peek(1)).toBeUndefined() // dropped back to idle
+            expect(c.live(1)).toBeUndefined() // dropped back to idle
 
             expect(await c(1)).toBe(2)
             expect(calls).toBe(2)
@@ -239,9 +239,9 @@ describe('memo — refresh / invalidate', () => {
 
             c.invalidate({ id: 1 })
 
-            expect(c.peek({ id: 1, page: 1 })).toBeUndefined()
-            expect(c.peek({ id: 1, page: 2 })).toBeUndefined()
-            expect(c.peek({ id: 2, page: 1 })).toBe('2-1') // untouched
+            expect(c.live({ id: 1, page: 1 })).toBeUndefined()
+            expect(c.live({ id: 1, page: 2 })).toBeUndefined()
+            expect(c.live({ id: 2, page: 1 })).toBe('2-1') // untouched
         })
     })
 
@@ -251,8 +251,8 @@ describe('memo — refresh / invalidate', () => {
             await c(1)
             await c(2)
             c.invalidate()
-            expect(c.peek(1)).toBeUndefined()
-            expect(c.peek(2)).toBeUndefined()
+            expect(c.live(1)).toBeUndefined()
+            expect(c.live(2)).toBeUndefined()
         })
     })
 })
@@ -262,13 +262,13 @@ describe('memo — publish', () => {
         await withScope(async () => {
             const c = memo(async (n: number) => `v${n}`)
             await c(1)
-            expect(c.peek(1)).toBe('v1')
+            expect(c.live(1)).toBe('v1')
 
             c.publish(1, 'X')
-            expect(c.peek(1)).toBe('X')
+            expect(c.live(1)).toBe('X')
 
             c.publish(1, (current) => `${current}!`)
-            expect(c.peek(1)).toBe('X!')
+            expect(c.live(1)).toBe('X!')
         })
     })
 
@@ -280,7 +280,7 @@ describe('memo — publish', () => {
             const c = memo(async ({ id }: { id: number }) => `user-${id}`)
             await c({ id: 1 })
             const seen: (string | undefined)[] = []
-            const value = wakeups(() => seen.push(c.peek({ id: 1 })))
+            const value = wakeups(() => seen.push(c.live({ id: 1 })))
             await settled(value)
 
             for (let i = 0; i < 3; i++) c.publish({ id: 1 }, 'user-1')
@@ -300,13 +300,13 @@ describe('memo — publish', () => {
         await withScope(async () => {
             const c = memo(async () => 'loaded')
             await c()
-            expect(c.peek()).toBe('loaded')
+            expect(c.live()).toBe('loaded')
 
             c.publish('X') // `Room<void>` = `[]`, so the value is the only argument
-            expect(c.peek()).toBe('X')
+            expect(c.live()).toBe('X')
 
             c.publish((current) => `${current}!`)
-            expect(c.peek()).toBe('X!')
+            expect(c.live()).toBe('X!')
         })
     })
 
@@ -398,7 +398,7 @@ describe('memo — reactive probes', () => {
             dispose()
             expect(pendings).toContain(true)
             expect(c.pending(5)).toBe(false)
-            expect(c.peek(5)).toBe(10)
+            expect(c.live(5)).toBe(10)
         })
     })
 
@@ -420,7 +420,7 @@ describe('memo — reactive probes', () => {
 
             expect(c.error(-1)).toBeInstanceOf(Error)
             expect(errors.some((e) => e instanceof Error)).toBe(true)
-            expect(c.peek(-1)).toBeUndefined()
+            expect(c.live(-1)).toBeUndefined()
             expect(c.pending(-1)).toBe(false)
         })
     })
@@ -459,7 +459,7 @@ describe('memo — context isolation', () => {
             expect(await c(1)).toBe(2)
         })
         await enterScope(createReactiveScope(), async () => {
-            expect(c.peek(1)).toBeUndefined() // different cache
+            expect(c.live(1)).toBeUndefined() // different cache
             expect(await c(1)).toBe(2)
         })
         expect(calls).toBe(2)
@@ -472,7 +472,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
             const c = memo(async (args: { name: string }) => `hi ${args.name}`)
             await c({ name: 'ada' })
             await c({ name: 'bo' })
-            c.peek({ name: 'pending-never-loaded' }) // stays idle → excluded
+            c.live({ name: 'pending-never-loaded' }) // stays idle → excluded
 
             const snapshot = c.snapshot().sort((a, b) => (a.value < b.value ? -1 : 1))
             expect(snapshot).toEqual([
@@ -491,7 +491,7 @@ describe('memo — snapshot + seed (§5 hydration)', () => {
             })
 
             c.seed({ name: 'ada' }, 'seeded ada')
-            expect(c.peek({ name: 'ada' })).toBe('seeded ada')
+            expect(c.live({ name: 'ada' })).toBe('seeded ada')
             expect(await c({ name: 'ada' })).toBe('seeded ada')
             expect(calls).toBe(0) // seeded slot short-circuits the fetch
 
@@ -741,7 +741,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     test('probes: never pending, never refreshing, no transcript', () => {
         withScope(() => {
             const derived = memo(() => 7)
-            expect(derived.peek()).toBe(7)
+            expect(derived.live()).toBe(7)
             expect(derived.pending()).toBe(false)
             expect(derived.refreshing()).toBe(false)
             expect(derived.chunks()).toBeUndefined()
@@ -756,7 +756,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
             })
             expect(() => derived()).toThrow('nope')
             expect((derived.error() as Error).message).toBe('nope')
-            expect(derived.peek()).toBeUndefined()
+            expect(derived.live()).toBeUndefined()
         })
     })
 
@@ -782,7 +782,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
                 () => a(),
                 (value) => {
                     runs++
-                    return value + other.untracked()
+                    return value + other.peek()
                 },
             )
             expect(derived()).toBe(101)
@@ -938,7 +938,7 @@ describe('memo — auto-tracked (argless, synchronous)', () => {
     test('the KEYED form is untouched — an args-taking body still pairs with options', () => {
         withScope(() => {
             const keyed = memo(({ id }: { id: number }) => id * 2, { ttl: 50 })
-            expect(keyed.peek({ id: 2 })).toBeUndefined() // a slot per key, not a source thunk
+            expect(keyed.live({ id: 2 })).toBeUndefined() // a slot per key, not a source thunk
         })
     })
 
@@ -990,12 +990,36 @@ describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
             let runs = 0
             const stop = effect(() => {
                 runs++
-                draft.untracked()
+                draft.peek()
             })
             expect(runs).toBe(1)
             draft.set(6)
             expect(runs).toBe(1) // no subscription through peek
             stop()
+        })
+    })
+
+    // The subscription assertion above passes whether or not `peek` ACQUIRES, which is how the
+    // projection kept kicking loads through a member contracted to cause nothing: it was spelled
+    // `untrack(read)`, and `untrack` suspends tracking without stopping `live`'s `startLoad`. So assert
+    // the WORK — the body must not run — not the value, which is the `initial` either way.
+    test('peek() on an ASYNC projection does not kick a cold load', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const loaded = memo(async () => {
+                runs++
+                return 7
+            })
+            const draft = loaded.state(0)
+            expect(draft.peek()).toBe(0) // the initial — the slot holds nothing
+            expect(runs).toBe(0) // and asking did not start it
+            await Promise.resolve()
+            expect(runs).toBe(0)
+            expect(loaded.pending()).toBe(false) // still cold, not in flight
+            expect(draft()).toBe(0) // the DISPLAY read is the one that acquires
+            await loaded()
+            expect(runs).toBe(1)
+            expect(draft.peek()).toBe(7)
         })
     })
 
@@ -1007,7 +1031,7 @@ describe('memo — .state() is the writable projection (ADR 0024 §4)', () => {
             const cell = byId.state({ id: 2 }, 0)
             expect(cell()).toBe(20)
             cell.set(99)
-            expect(byId.peek({ id: 2 })).toBe(99)
+            expect(byId.live({ id: 2 })).toBe(99)
         })
     })
 })
@@ -1024,7 +1048,7 @@ describe('memo — loud on fn.length false zeros (ADR 0024 §Consequences)', () 
     test('the destructuring-default form type derivation relies on is unaffected', () => {
         withScope(() => {
             const c = memo(({ n = 0 }: { n?: number }) => n + 1)
-            expect(c.peek({ n: 1 })).toBeUndefined() // args-keyed: a cold peek kicks a load
+            expect(c.live({ n: 1 })).toBeUndefined() // args-keyed: a cold peek kicks a load
         })
     })
 })
@@ -1153,7 +1177,7 @@ describe('auto-tracking diagnostic (ADR 0027 D8)', () => {
 
 // ADR 0027 D7 — the writable projection is a real `State<T>`.
 //
-// `c.state` used to cast `c.peek(args) as T` twice while `peek` returns `T | undefined`, so a projection
+// `c.state` used to cast `c.live(args) as T` twice while `peek` returns `T | undefined`, so a projection
 // of a COLD slot handed back `undefined` typed as `T`. `State<T | undefined>` is not the fix: `State` is
 // invariant across read and write, so widening the read widens `set` — and `publish` takes `next: T`
 // precisely because `undefined` is the sentinel for "not loaded", which a local write must not be able
@@ -1176,7 +1200,7 @@ describe('memo.state — the writable projection (ADR 0027 D7)', () => {
             expect(await loaded({ id: 3 })).toBe(30)
             cell.set(99)
             expect(cell()).toBe(99)
-            expect(loaded.peek({ id: 3 })).toBe(99)
+            expect(loaded.live({ id: 3 })).toBe(99)
         })
     })
 
@@ -1209,9 +1233,9 @@ describe('memo.state — the writable projection (ADR 0027 D7)', () => {
         await withScope(async () => {
             const loaded = memo(async () => 7)
             const cell = loaded.state(-5)
-            expect(cell.untracked()).toBe(-5)
+            expect(cell.peek()).toBe(-5)
             expect(await loaded()).toBe(7)
-            expect(cell.untracked()).toBe(7)
+            expect(cell.peek()).toBe(7)
         })
     })
 })
@@ -1307,11 +1331,11 @@ describe('memo — the SWR refetch clock', () => {
 
             load.refresh({ id: 1 }) // deferred into the window
             expect(load.refreshing({ id: 1 })).toBe(true)
-            expect(load.peek({ id: 1 })).toBe(20) // stale value still served...
+            expect(load.live({ id: 1 })).toBe(20) // stale value still served...
             expect(await load({ id: 1 })).toBe(20) // ...and the awaited read does not block on it
 
             await delay(140)
-            expect(load.peek({ id: 1 })).toBe(30)
+            expect(load.live({ id: 1 })).toBe(30)
             expect(load.refreshing({ id: 1 })).toBe(false)
         })
     })
@@ -1623,7 +1647,7 @@ describe('the first touch does not change what a memo is', () => {
     // documented contract is `T`. A template rendered `[object Promise]`.
     test('a keyed sync memo peeked first still reads as T, not a promise', async () => {
         const doubled = memo(({ n }: { n: number }) => n * 2)
-        doubled.peek({ n: 2 })
+        doubled.live({ n: 2 })
         await tick()
 
         const read = doubled({ n: 2 })
@@ -1652,7 +1676,10 @@ describe('the first touch does not change what a memo is', () => {
         expect(runs).toBe(1)
     })
 
-    test('done() as a first touch does not run a derivation on the loading path', async () => {
+    // Was "done() does not run a derivation on the LOADING path" (it classified first, so the body ran
+    // once, correctly). `done` is a STATUS probe and no longer classifies at all, so the guard tightens:
+    // the body does not run. A probe cannot misclassify a memo it never runs.
+    test('done() as a first touch does not run a derivation AT ALL', async () => {
         let runs = 0
         const derived = memo(() => {
             runs++
@@ -1661,8 +1688,155 @@ describe('the first touch does not change what a memo is', () => {
 
         expect(derived.done()).toBe(false)
         await tick()
+        expect(runs).toBe(0)
+        expect(derived()).toBe(42) // the READ is what classifies it
         expect(runs).toBe(1)
+    })
+
+    // The same rule for the rest of the status vocabulary, on the shape where it used to fail: an ARGLESS
+    // memo, where classification means RUNNING the body. `chunks` is deliberately absent — it is the
+    // transcript READ, it acquires by design, and the test above pins that it still does.
+    test('no status probe runs an argless body — settled/streaming/error/pending/done', async () => {
+        let runs = 0
+        const derived = memo(() => {
+            runs++
+            return 42
+        })
+
+        expect(derived.settled()).toBe(false)
+        expect(derived.streaming()).toBe(false)
+        expect(derived.error()).toBeUndefined()
+        expect(derived.pending()).toBe(false)
+        expect(derived.done()).toBe(false)
+        await tick()
+        expect(runs).toBe(0) // five probes, no work
+
+        // And once a READ has classified it, the probes report the truth rather than staying cold.
         expect(derived()).toBe(42)
         expect(runs).toBe(1)
+        expect(derived.settled()).toBe(true)
+        expect(derived.pending()).toBe(false)
+    })
+
+    // The deferred shape is the one that made this urgent: on an argless ASYNC memo, classification does
+    // not merely run the body, it starts the LOAD. `{#if job.settled()}` used to be what fired the job.
+    test('a status probe on an argless ASYNC memo starts no load', async () => {
+        let runs = 0
+        const job = memo(async () => {
+            runs++
+            return 'done'
+        })
+
+        expect(job.settled()).toBe(false)
+        expect(job.error()).toBeUndefined()
+        expect(job.done()).toBe(false)
+        await tick()
+        await tick()
+        expect(runs).toBe(0)
+
+        expect(await job()).toBe('done')
+        expect(runs).toBe(1)
+        expect(job.settled()).toBe(true)
+    })
+})
+
+// `peek` is the UNTRACKED read and `live` is the display read. Same shape, same return type, opposite
+// behaviour on both axes — which is exactly why every case here is a CONTRAST between the two.
+//
+// Asserting "peek does not wake" on its own would pass against any implementation, including one that
+// subscribes: a reader that woke is indistinguishable from a reader that never had anything to wake for
+// unless something else proves the wake-up was available to be missed. So each test pins `live` doing the
+// thing in the same conditions.
+describe('memo — peek (untracked) vs live (display read)', () => {
+    test('live() kicks a cold slot; peek() leaves it cold', async () => {
+        let calls = 0
+        const loadPeek = memo(async ({ id }: { id: number }) => {
+            calls++
+            return id * 2
+        })
+
+        expect(loadPeek.peek({ id: 1 })).toBeUndefined()
+        expect(calls).toBe(0) // asking did not acquire
+        expect(loadPeek.pending({ id: 1 })).toBe(false) // ...and the slot is still idle, not in flight
+
+        const loadLive = memo(async ({ id }: { id: number }) => {
+            calls++
+            return id * 2
+        })
+        loadLive.live({ id: 1 })
+        expect(calls).toBe(1) // the display read acquires
+        await tick()
+    })
+
+    test('peek() sees a value someone else loaded — it declines to acquire, not to read', async () => {
+        const load = memo(async ({ id }: { id: number }) => id * 2)
+
+        expect(load.peek({ id: 1 })).toBeUndefined()
+        await load({ id: 1 })
+        expect(load.peek({ id: 1 })).toBe(2)
+    })
+
+    test('a live() reader wakes on refresh; a peek() reader does not', async () => {
+        let runs = 0
+        const load = memo(async (_args: { id: number }) => {
+            runs++
+            return runs
+        })
+        await load({ id: 1 })
+
+        const liveReader = wakeups(() => load.live({ id: 1 }))
+        const peekReader = wakeups(() => load.peek({ id: 1 }))
+        await settled(liveReader, peekReader)
+
+        load.refresh({ id: 1 })
+        await tick()
+        await tick()
+
+        // The contrast IS the test: if `live` had not woken, `peek`'s zero would prove nothing.
+        expect(liveReader.count).toBeGreaterThan(0)
+        expect(peekReader.count).toBe(0)
+        stopAll()
+    })
+
+    test('peek() reads the latest chunk of a stream without subscribing to chunk arrival', async () => {
+        const ticker = memo<{ n: number }, AsyncIterable<number>>(async function* ({ n }) {
+            for (let i = 0; i < n; i++) {
+                await new Promise((resolve) => setTimeout(resolve, 5))
+                yield i
+            }
+        })
+
+        ticker.live({ n: 3 }) // kick, so there is a transcript to read
+        const liveReader = wakeups(() => ticker.live({ n: 3 }))
+        const peekReader = wakeups(() => ticker.peek({ n: 3 }))
+        await settled(liveReader, peekReader)
+
+        await new Promise((resolve) => setTimeout(resolve, 40))
+
+        // The cast is the raw-`memo` stream quirk, not this change: `Memo<Args, AsyncIterable<C>>` types
+        // both reads as the ITERABLE while they return the latest CHUNK. Only the `StreamRead` rpc surface
+        // re-types them over `C`; `memo.stream.test.ts` casts for the same reason.
+        expect(ticker.peek({ n: 3 }) as number | undefined).toBe(2) // the value is right...
+        expect(liveReader.count).toBeGreaterThan(0) // ...and only one of the two readers heard about it
+        expect(peekReader.count).toBe(0)
+        stopAll()
+    })
+
+    test('peek() does not classify an argless memo — the one thing live()/settled() do', () => {
+        let calls = 0
+        const derived = memo(() => {
+            calls++
+            return 7
+        })
+
+        // `settled`/`error`/`live` all call `resolveMode`, which runs the body once to find out what kind
+        // of memo this is. `peek` deliberately does not: a read that promises to change nothing cannot be
+        // the one that runs the body.
+        expect(derived.peek()).toBeUndefined()
+        expect(calls).toBe(0)
+
+        expect(derived()).toBe(7) // the bare read classifies it
+        expect(calls).toBe(1)
+        expect(derived.peek()).toBe(7) // and now the untracked read sees it
     })
 })

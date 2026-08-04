@@ -94,8 +94,9 @@ function mutationInit(method: string, args: unknown, sameOrigin: boolean): Reque
 // A single client proxy for BOTH reads and mutations — full symmetry with the server. The only
 // differences are transport (a read GETs with `?__abide_args=`; a mutation POSTs the body + CSRF header) and
 // the default cache policy (carried by the spec's `ttl`: reads retain, mutations coalesce-only). Every
-// probe/verb (peek/pending/refreshing/refresh/invalidate/publish/watch/chunks/done/raw) is attached for
-// both, so an author who caches a mutation (`memo: { ttl }`) gets the identical reactive surface.
+// read/probe/verb (live/peek/pending/refreshing/settled/error/refresh/invalidate/publish/watch/chunks/
+// done/streaming/raw) is attached for both, so an author who caches a mutation (`memo: { ttl }`) gets the
+// identical reactive surface.
 export function clientProxy<Args = unknown, T = unknown>(
     name: string,
     method: string,
@@ -250,23 +251,29 @@ export function clientProxy<Args = unknown, T = unknown>(
         ensureTagsSubscribed()
         return withAbort(backing(args as Args), options?.signal)
     }) as unknown as RpcCallSurface<Args, T>
-    rpc.peek = (args: Args): T | undefined => {
+    rpc.live = (args: Args): T | undefined => {
         ensureSubscribed(args)
         ensureTagsSubscribed()
-        return backing.peek(args)
+        return backing.live(args)
     }
+    // THE UNTRACKED READ: no channel join, no tag join, no load — the point of it is that asking costs
+    // nothing and changes nothing. `live` above is the display read that wires all three up.
+    rpc.peek = (args: Args): T | undefined => backing.peek(args)
     rpc.pending = (args: Args): boolean => backing.pending(args)
     rpc.refreshing = (args: Args): boolean => backing.refreshing(args)
+    rpc.settled = (args: Args): boolean => backing.settled(args)
     rpc.error = (args: Args): unknown => backing.error(args)
     // Streaming chunk probes (the `StreamRead`/`StreamMutation` surface): `peek` above is already
-    // stream-aware (latest chunk); forward `chunks` (transcript) + `done` (closed?) too. A scalar route
-    // never calls these; only the streaming type surfaces them.
+    // stream-aware (latest chunk); forward `chunks` (transcript) + `done` (closed?) + `streaming` (open?)
+    // too. A scalar route never calls these; only the streaming type surfaces them.
     const streamRpc = rpc as unknown as {
         chunks: (args: Args) => unknown[] | undefined
         done: (args: Args) => boolean
+        streaming: (args: Args) => boolean
     }
     streamRpc.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
     streamRpc.done = (args: Args): boolean => backing.done(args)
+    streamRpc.streaming = (args: Args): boolean => backing.streaming(args)
     rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
         backing.watch(args, handler)
     // Raw fetch, full bypass of the memo — the untouched `Response` (no parse, no `!ok` throw). A read

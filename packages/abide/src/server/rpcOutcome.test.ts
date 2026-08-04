@@ -52,7 +52,7 @@ describe('an rpc failure leaves through the memo error channel', () => {
         })
         await expect(read({ id: 1 })).rejects.toThrow('upstream down')
         // `peek` is the non-blocking display read — it must not hand a caller a `Response` dressed as data.
-        expect(read.peek({ id: 1 })).toBeUndefined()
+        expect(read.live({ id: 1 })).toBeUndefined()
         // The failure is visible on the axis that means failure.
         expect(read.error({ id: 1 })).toBeInstanceOf(HttpError)
     })
@@ -81,6 +81,6 @@ describe('an rpc failure leaves through the memo error channel', () => {
     test('a redirect leaves the value channel too', async () => {
         const read = GET(() => redirect('/login', 303))
         await expect(read()).rejects.toThrow('/login')
-        expect(read.peek(undefined as never)).toBeUndefined()
+        expect(read.live(undefined as never)).toBeUndefined()
     })
 })

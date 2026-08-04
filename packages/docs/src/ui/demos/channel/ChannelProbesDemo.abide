@@ -8,9 +8,9 @@
 <script>
   import { state } from "abide/shared/state"
 
-  // A channel implements the SAME read surface a memo does — peek / chunks / pending / refreshing /
+  // A channel implements the SAME read surface a memo does — live / chunks / pending / refreshing /
   // error / done + refresh / invalidate / publish / watch. On this in-process core the STATUS probes are
-  // degenerate (a local topic is immediately live, never reconnecting, never errored) and peek/chunks
+  // degenerate (a local topic is immediately live, never reconnecting, never errored) and live/chunks
   // read the hub directly rather than through a reactive node — so this card snapshots them on demand.
   // Putting the same channel on the wire (a `socket`) is what makes those probes reactive.
   let latest = state<string | undefined>(undefined)
@@ -23,7 +23,7 @@
   }
 
   function probe() {
-    latest = feed.peek()
+    latest = feed.live()
     // `chunks()` is declared on the SHARED read surface, where a scalar memo slot has no element type
     // to promise — so it widens to `unknown[]` even though a channel's transcript is `T[]`.
     tail = (feed.chunks() as string[] | undefined) ?? []
@@ -44,7 +44,7 @@
 </div>
 
 <ul class="grid">
-  <li><code>peek()</code> — latest: <strong data-testid="probe-peek">{latest ?? "—"}</strong></li>
+  <li><code>live()</code> — latest: <strong data-testid="probe-peek">{latest ?? "—"}</strong></li>
   <li><code>chunks()</code> — tail ({tail.length}/3): <strong data-testid="probe-chunks">{tail.join(", ") || "—"}</strong></li>
   <li><code>pending()</code> / <code>done()</code>: <strong data-testid="probe-status">{feed.pending()} / {feed.done()}</strong> <span class="muted">(<code>pending()</code> is degenerate on a local channel — it is always live; <code>done()</code> is the lifecycle axis and reports whether anyone is subscribed)</span></li>
   <li class="muted">probes read {read} times</li>

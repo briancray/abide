@@ -3,7 +3,7 @@
   import { memo } from "abide/shared/memo"
 
   // Argless and ASYNC — still no key, so still ONE slot. The body loads, which changes two things
-  // versus the synchronous derivation above: the slot gains the full read surface (peek/pending/
+  // versus the synchronous derivation above: the slot gains the full read surface (live/pending/
   // refreshing/error), and it is NOT auto-tracked. Half-tracked is worse than untracked (ADR 0024 §2),
   // so an async body re-fills on refresh/invalidate only — it reads `label` here, and renaming does
   // nothing until the next refresh picks up the current value.
@@ -16,8 +16,8 @@
     await new Promise((resolve) => setTimeout(resolve, 150))
     return `${label} #${at}`
   })
-  // Gated so the card starts idle: a `.peek()` in the markup subscribes AND kicks the load.
-  const value = memo(() => (reads ? (loaded.peek() ?? "loading") : "idle"))
+  // Gated so the card starts idle: a `.live()` in the markup subscribes AND kicks the load.
+  const value = memo(() => (reads ? (loaded.live() ?? "loading") : "idle"))
 
   function read() { reads++; loaded() }
   function rename() { label = label === "alpha" ? "beta" : "alpha" }

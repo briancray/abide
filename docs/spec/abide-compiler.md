@@ -52,24 +52,33 @@ navigation**.
 
 ## C3. Async reads in templates (the RPC seam)
 
-1. **`{fn(args)}` = reactive peek** — an effect reading the §7 slot state; renders
-   `undefined` while pending, the value when resolved, re-renders on change/invalidate.
+1. **`{fn.live(args)}` = the reactive non-blocking read** — an effect reading the §7 slot state;
+   renders `undefined` while pending, the value when resolved, re-renders on change/invalidate.
    Composes with `?.`, `??`, `{#if}`, `{#switch}`, `{#for}`, attributes (pending = treated
-   as `undefined`).
-2. **On SSR, peek auto-streams (out-of-order, §5.4/§6).** Rendering triggers the in-proc
+   as `undefined`). Its untracked sibling `{fn.peek(args)}` reads the same slot but subscribes to
+   nothing and kicks no load, so it never fills in on its own — the escape hatch, not the display read.
+   The BARE `{fn(args)}` is **none of these**: it is the awaitable, and it is a `abide check` ERROR
+   (ADR 0027 D3, `emitCheck.ts`). It is not the non-blocking form either — `emitServer` auto-awaits
+   every expression slot, so a bare read BLOCKS exactly like `{await fn(args)}` while typing as
+   `Promise<T>`. This item described the bare call as the reactive read for as long as that was true,
+   which was before the promise-read model (`promise-read-model.md`).
+2. **On SSR, the live read auto-streams (out-of-order, §5.4/§6).** Rendering triggers the in-proc
    handler (§6.6); SSR emits a placeholder, registers the §7.4 one-shot "resolve → flush
    HTML patch + §5 cache entry," continues siblings. Client seeds cache, never refetches.
 3. **`{await fn()}` = block/suspend.** SSR **waits** for the value before emitting that
    subtree (value is in the initial HTML — SEO, no layout shift). On the client it
    **suspends the subtree** to the nearest `{#await}`/`{#try}` boundary. The opt-in for
    "must be in initial HTML."
-4. **Three forms:** peek = silent-stream, await = block/suspend, `{#await p}{:then}{:catch}
+4. **Three forms:** `live` = silent-stream, `await` = block/suspend, `{#await p}{:then}{:catch}
    {:finally}` = explicit pending branch + `{:then}` narrowing + `{:catch}` over the §9.2
-   error slot.
-5. **Reads are render-triggered (lazy)** — a `{fn(args)}` inside `{#if false}` never fires;
+   error slot. Three forms, three behaviours — which is exactly why the bare call is a check error
+   rather than a fourth spelling of one of them.
+5. **Reads are render-triggered (lazy)** — a `{fn.live(args)}` inside `{#if false}` never fires;
    matches §7 subscribe-on-read.
-6. **`.pending()` / `.error()` probes** are readable in template expressions as reactive
-   reads of the slot's derived state (§7.2).
+6. **The probes** — `.pending()` / `.refreshing()` / `.settled()` / `.error()`, plus `.done()` /
+   `.streaming()` on a stream — are readable in template expressions as reactive reads of the slot's
+   derived state (§7.2). They OBSERVE and never cause (rpc-core §7.8): a `{#if job.settled()}` guard
+   must not be what starts the job it guards.
 
 ## C4. Components
 
@@ -494,7 +503,7 @@ Mechanism:
    - **A member access reads the VALUE, for both** — `{d.length}` is `d().length`, not the memo object's
      `length`. The consequence is that a memo's own surface is NOT reachable through the binding; probes
      belong to RPC/socket callables, which are imports, and imports are never rewritten. `abide check`
-     unwraps the binding to its value, so `d.peek()` fails on both sides rather than silently returning
+     unwraps the binding to its value, so `d.live()` fails on both sides rather than silently returning
      the wrong thing.
    - **No dependency-position exception (ADR 0025).** A `watch`/`memo` source is always an argless
      THUNK, so every identifier inside it is an ordinary read and the rewriter has ONE rule, not two:

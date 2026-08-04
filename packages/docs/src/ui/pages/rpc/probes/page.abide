@@ -8,12 +8,12 @@
 
 <main class="page">
   <h1>Reactive probes</h1>
-  <p class="lead">An RPC read is a <a href="/memo">memo</a> with a transport, so it carries the same reactive read surface — the <strong>probes</strong> — as any memo. <code>peek(args)</code> is the non-blocking snapshot, <code>pending(args)</code>/<code>refreshing(args)</code> track first-load vs revalidation, <code>error(args)</code> holds a rejected read, and <code>watch(args, cb)</code> fires on every change. Same vocabulary as the <a href="/memo/probes">generic-memo</a> and <a href="/sockets/probes">socket</a> probes — here over live <code>GET</code> fetches.</p>
-  <Demo id="probes" title="In-template <code>fn.peek()</code> / <code>fn.pending()</code> / <code>fn.error()</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/probes/ProbesDemo.abide" tab="client">
+  <p class="lead">An RPC read is a <a href="/memo">memo</a> with a transport, so it carries the same reactive read surface as any memo. Two <strong>reads</strong>: <code>live(args)</code> is the non-blocking snapshot (it subscribes and kicks a load) and <code>peek(args)</code> is the same snapshot untracked (it does neither). Then the <strong>probes</strong>, which observe and never cause: <code>pending(args)</code>/<code>refreshing(args)</code> track first-load vs revalidation, <code>settled(args)</code> reports a terminal outcome, <code>error(args)</code> holds a rejected read, and <code>watch(args, cb)</code> fires on every change. Same vocabulary as the <a href="/memo/probes">generic-memo</a> and <a href="/sockets/probes">socket</a> probes — here over live <code>GET</code> fetches.</p>
+  <Demo id="probes" title="In-template <code>fn.live()</code> / <code>fn.pending()</code> / <code>fn.error()</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/probes/ProbesDemo.abide" tab="client">
     <ProbesDemo />
   </Demo>
   <aside class="aside">
-    <p><code>fn.peek(args)</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves — all reactive, straight in the markup.</p>
+    <p><code>fn.live(args)</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves — all reactive, straight in the markup.</p>
   </aside>
   <Demo id="refreshing" title="<code>pending</code> vs <code>refreshing</code> — first-load vs revalidation" server="src/server/rpc/cacheSlow.ts" client="src/ui/demos/rpc/probes/RefreshingDemo.abide" tab="server">
     <RefreshingDemo />

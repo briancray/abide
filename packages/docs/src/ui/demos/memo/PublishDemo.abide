@@ -5,8 +5,8 @@
 
   // publish(args, value | updater) mutates the retained slot value in place — the handler never re-runs.
   let publishStarted = state(false)
-  const publishValue = memo(() => (publishStarted ? String(cacheCounter.peek({ key: "publish-demo" })?.runs ?? "loading") : "idle"))
-  const publishPeek = memo(() => String(cacheCounter.peek({ key: "publish-demo" })?.runs ?? "(none)"))
+  const publishValue = memo(() => (publishStarted ? String(cacheCounter.live({ key: "publish-demo" })?.runs ?? "loading") : "idle"))
+  const publishPeek = memo(() => String(cacheCounter.live({ key: "publish-demo" })?.runs ?? "(none)"))
   function startPublish() { publishStarted = true }
   // value-form: replace the retained value in place — the server handler never runs.
   function publishValueForm() { cacheCounter.publish({ key: "publish-demo" }, { key: "publish-demo", runs: 999 }) }
@@ -16,7 +16,7 @@
 
 <ul class="grid">
   <li>Value (runs): <strong data-testid="publish-value">{publishValue}</strong></li>
-  <li>peek(): <strong data-testid="publish-peek">{publishPeek}</strong></li>
+  <li>live(): <strong data-testid="publish-peek">{publishPeek}</strong></li>
 </ul>
 <div class="row">
   <button data-testid="publish-start" onclick={startPublish}>Load</button>

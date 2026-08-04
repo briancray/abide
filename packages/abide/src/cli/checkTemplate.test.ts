@@ -359,10 +359,10 @@ test('a sometimes-thenable value stays legal — the passthrough case the auto-a
 // because the real `SyncMemo<T> extends Memo<void, T>` also carries the INHERITED `(args: void):
 // Promise<T>` call signature, and that is what the overload is matched against.
 const MEMO_SHIM =
-    'export interface State<T> { (): T; set(value: T): void; untracked(): T }\n' +
+    'export interface State<T> { (): T; set(value: T): void; peek(): T }\n' +
     'export interface Memo<Args, T> {\n' +
     '  (args: Args): Promise<T>\n' +
-    '  peek(args: Args): T | undefined\n' +
+    '  live(args: Args): T | undefined\n' +
     '  invalidate(args?: Args): void\n' +
     '  state(args: Args, initial: T): State<T>\n' +
     '}\n' +

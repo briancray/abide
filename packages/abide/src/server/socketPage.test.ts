@@ -18,7 +18,7 @@ test('SSR reads a socket probe off $scope (peek renders the latest published mes
     const app = await createTestApp({
         sockets: { chat },
         pages: {
-            '/': "<script>import { chat } from '../server/sockets/chat.ts'</script><p>{chat.peek()}</p>",
+            '/': "<script>import { chat } from '../server/sockets/chat.ts'</script><p>{chat.live()}</p>",
         },
     })
     const body = await (await app.fetch('/')).text()
@@ -49,7 +49,7 @@ test('the client bundle ships SOCKET_SPECS for an imported browser-reachable soc
     const config: AppConfig = {
         sockets: { chat: socket<string>({ channel: { tail: 4 }, clientPublish: true }) },
         pages: {
-            '/': "<script>import { chat } from '../server/sockets/chat.ts'</script><p>{chat.peek()}</p>",
+            '/': "<script>import { chat } from '../server/sockets/chat.ts'</script><p>{chat.live()}</p>",
         },
     }
     const build = await buildClient(config)
@@ -66,7 +66,7 @@ test('importing a non-browser-reachable socket into a UI page is a build error (
     const config: AppConfig = {
         sockets: { secret: socket<string>({ clients: { browser: false } }) },
         pages: {
-            '/': "<script>import { secret } from '../server/sockets/secret.ts'</script><p>{secret.peek()}</p>",
+            '/': "<script>import { secret } from '../server/sockets/secret.ts'</script><p>{secret.live()}</p>",
         },
     }
     await expect(buildClient(config)).rejects.toThrow(/not browser-reachable/)
@@ -78,7 +78,7 @@ test('importing a non-browser-reachable RPC into a UI page is a build error (M6,
     const config: AppConfig = {
         routes: { secret: GET(() => ({ ok: true }), { clients: { browser: false } }) },
         pages: {
-            '/': "<script>import secret from '../server/rpc/secret.ts'</script><p>{secret.peek()}</p>",
+            '/': "<script>import secret from '../server/rpc/secret.ts'</script><p>{secret.live()}</p>",
         },
     }
     await expect(buildClient(config)).rejects.toThrow(/not browser-reachable/)

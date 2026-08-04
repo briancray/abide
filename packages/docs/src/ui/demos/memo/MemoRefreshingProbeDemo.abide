@@ -11,7 +11,7 @@
     await new Promise((resolve) => setTimeout(resolve, 400))
     return runs
   })
-  const value = memo(() => (started ? (slot.peek({ id: "a" }) ?? "loading") : "idle"))
+  const value = memo(() => (started ? (slot.live({ id: "a" }) ?? "loading") : "idle"))
   const refreshingFlag = memo(() => (slot.refreshing({ id: "a" }) ? "yes" : "no"))
   const pendingFlag = memo(() => (slot.pending({ id: "a" }) ? "yes" : "no"))
   function read() { started = true }

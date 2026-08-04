@@ -2,7 +2,7 @@ import { expect, test } from './fixtures.ts'
 
 // Drives /channel: the third primitive with NO transport at all — an in-process pub/sub hub owned by a
 // browser module. Proves the three things the page claims: iterating IS the subscription, a non-void
-// `Args` isolates rooms, and the memo probe vocabulary (peek/chunks/invalidate) is implemented here too.
+// `Args` isolates rooms, and the memo probe vocabulary (live/chunks/invalidate) is implemented here too.
 
 const PAGE = '/channel'
 
@@ -63,7 +63,7 @@ test('the key positional — a void channel publishes the message alone, a keyed
     await expect(page.getByTestId('ladder-a')).toHaveText('a (loaded)')
 })
 
-test('peek() / chunks() / invalidate() — the shared read surface over a hub', async ({ page }) => {
+test('live() / chunks() / invalidate() — the shared read surface over a hub', async ({ page }) => {
     await page.goto(PAGE)
 
     await page.getByTestId('probe-publish').click()

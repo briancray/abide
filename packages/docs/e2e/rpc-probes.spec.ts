@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 
-// Drives /rpc/probes: the reactive read surface over a live RPC — peek/pending/error in a template,
+// Drives /rpc/probes: the reactive read surface over a live RPC — live/pending/error in a template,
 // pending vs refreshing, the error probe, and the watch(args, cb) method form. Assertions are relative
 // (server run counters are process-global and monotonic).
 
@@ -10,7 +10,7 @@ async function intOf(page: Page, testId: string): Promise<number> {
     return Number.parseInt(text, 10)
 }
 
-test('in-template fn.peek()/pending()/error() resolve to the value', async ({ page }) => {
+test('in-template fn.live()/pending()/error() resolve to the value', async ({ page }) => {
     await page.goto('/rpc/probes')
     // The probe block settles to the greeting value once the read resolves.
     await expect(page.getByTestId('probe-value')).toHaveText('Hello, probe!', { timeout: 15_000 })

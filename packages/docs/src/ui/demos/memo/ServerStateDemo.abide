@@ -8,7 +8,7 @@
   // modules) write and read it; `doubled` is a server-side `memo`, `fires` counts a server-side
   // `watch`. Bump → the write propagates through the derived value and fires the subscription, all on the
   // server. Nothing here is client state except this snapshot of the last read.
-  // `doubled` is `number | undefined` because the read one file over is `doubled.peek()`, and `peek` is
+  // `doubled` is `number | undefined` because the read one file over is `doubled.live()`, and that read is
   // cold-safe on every primitive — that `undefined` is the payload's real shape, not a nullable cell.
   let snap = state<{ total: number; doubled: number | undefined; fires: number } | null>(null)
   // The read is `memo: false`, so each bare call re-fetches the live server value (no client cache). A

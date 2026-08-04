@@ -25,7 +25,7 @@
   </Demo>
   <aside class="aside">
     <p>A mutation differs from a read in two things: the transport (method + body + a CSRF gate) and the default retention. A read retains forever; a mutation defaults to <code>memo: {'{'} ttl: 0 {'}'}</code> — coalesce identical concurrent calls, retain nothing — because running twice is what you usually want to avoid, not what you want cached.</p>
-    <p>So the difference is a default, not a capability. Set a <code>ttl</code> and a mutation retains like a read: here a repeat call hits the retained slot (the run number holds) while <code>.refresh()</code> re-runs the handler — read through <code>.peek()</code> / <code>.refreshing()</code>, the same probes a read uses.</p>
+    <p>So the difference is a default, not a capability. Set a <code>ttl</code> and a mutation retains like a read: here a repeat call hits the retained slot (the run number holds) while <code>.refresh()</code> re-runs the handler — read through <code>.live()</code> / <code>.refreshing()</code>, the same probes a read uses.</p>
     <p>The symmetry holds all the way out: a <code>POST</code> that yields <code>jsonl</code> is consumed by <code>{'{'}#for await{'}'}</code> exactly like a streaming read, with the same chunk probes. See <a href="/rpc/streaming">Streaming</a>.</p>
   </aside>
 </main>

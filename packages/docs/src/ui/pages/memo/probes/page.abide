@@ -1,20 +1,28 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
-  import MemoPeekProbeDemo from "$ui/demos/memo/MemoPeekProbeDemo.abide"
+  import MemoLiveReadDemo from "$ui/demos/memo/MemoLiveReadDemo.abide"
+  import MemoPeekReadDemo from "$ui/demos/memo/MemoPeekReadDemo.abide"
   import MemoPendingProbeDemo from "$ui/demos/memo/MemoPendingProbeDemo.abide"
   import MemoRefreshingProbeDemo from "$ui/demos/memo/MemoRefreshingProbeDemo.abide"
   import MemoErrorProbeDemo from "$ui/demos/memo/MemoErrorProbeDemo.abide"
+  import MemoSettledProbeDemo from "$ui/demos/memo/MemoSettledProbeDemo.abide"
   import MemoWatchProbeDemo from "$ui/demos/memo/MemoWatchProbeDemo.abide"
 </script>
 
 <main class="page">
   <h1>Reactive probes</h1>
   <p class="lead">Every <a href="/memo">memo</a> exposes the same reactive read surface — the <strong>probes</strong>. They are views of one slot's state machine (<em>idle → pending → value | error</em>, with a <code>refreshing</code> flag over a retained value). A <a href="/channel">channel</a> implements the same surface over a lossy hub, so this identical vocabulary shows up on <a href="/rpc/probes">RPC reads</a> (memo + transport) and <a href="/sockets/probes">sockets</a> (channel + transport) too — here each probe runs over a plain client-side <code>memo()</code>, one demo apiece.</p>
-  <Demo id="memo-peek" title="<code>memo.peek(args)</code>" client="src/ui/demos/memo/MemoPeekProbeDemo.abide" tab="client">
-    <MemoPeekProbeDemo />
+  <Demo id="memo-live" title="<code>memo.live(args)</code>" client="src/ui/demos/memo/MemoLiveReadDemo.abide" tab="client">
+    <MemoLiveReadDemo />
   </Demo>
   <aside class="aside">
-    <p><code>undefined</code> while the first load is in flight, the value once it resolves. Reading it subscribes the caller and kicks a coalesced load.</p>
+    <p>The <strong>display read</strong>: <code>undefined</code> while the first load is in flight, the value once it resolves. Reading it subscribes the caller <em>and</em> kicks a coalesced load, which is what makes it fill in on its own.</p>
+  </aside>
+  <Demo id="memo-peek" title="<code>memo.peek(args)</code>" client="src/ui/demos/memo/MemoPeekReadDemo.abide" tab="client">
+    <MemoPeekReadDemo />
+  </Demo>
+  <aside class="aside">
+    <p>The <strong>untracked read</strong> — the same snapshot, subscribing to nothing and starting nothing. Press <em>Peek</em> as often as you like: the slot stays cold and the line stays <code>undefined</code>. It is the escape hatch (an event handler asking &ldquo;what is on screen right now&rdquo;, a test asserting a slot was <em>not</em> filled), not the way to display a value. One word, one meaning: <code>state.peek()</code>, <code>memo.peek()</code>, <code>channel.peek()</code> and <code>socket.peek()</code> are the same operation.</p>
   </aside>
   <Demo id="memo-pending" title="<code>memo.pending(args)</code>" client="src/ui/demos/memo/MemoPendingProbeDemo.abide" tab="client">
     <MemoPendingProbeDemo />
@@ -33,6 +41,12 @@
   </Demo>
   <aside class="aside">
     <p>A rejected load lands on the slot; <code>error()</code> holds it until an <code>invalidate</code> + successful read clears it.</p>
+  </aside>
+  <Demo id="memo-settled" title="<code>memo.settled(args)</code>" client="src/ui/demos/memo/MemoSettledProbeDemo.abide" tab="client">
+    <MemoSettledProbeDemo />
+  </Demo>
+  <aside class="aside">
+    <p>Has the acquisition reached a <strong>terminal</strong> — a value or an error? It is the only way to tell a <em>cold</em> slot from a settled one: <code>pending()</code> is false for both, and a settled <code>undefined</code> reads exactly like nothing-yet — so <code>!settled() &amp;&amp; !pending()</code> is &ldquo;never asked&rdquo;. Like every probe it observes and never causes: watching this card does not start the load.</p>
   </aside>
   <Demo id="memo-watch" title="<code>memo.watch(args, cb)</code>" client="src/ui/demos/memo/MemoWatchProbeDemo.abide" tab="client">
     <MemoWatchProbeDemo />

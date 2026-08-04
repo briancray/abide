@@ -1,5 +1,6 @@
 <script module>
   import Demo from "$ui/components/Demo.abide"
+  import LiveDemo from "$ui/demos/sockets/LiveDemo.abide"
   import PeekDemo from "$ui/demos/sockets/PeekDemo.abide"
   import ChunksDemo from "$ui/demos/sockets/ChunksDemo.abide"
   import DoneDemo from "$ui/demos/sockets/DoneDemo.abide"
@@ -7,12 +8,18 @@
 
 <main class="page">
   <h1>Reactive probes</h1>
-  <p class="lead">A <a href="/sockets">socket</a> is a <a href="/channel">channel</a> on the wire, and a channel implements the same reactive read surface a <a href="/memo">memo</a> does — the <strong>probes</strong> — over a lossy hub instead of a keyed slot: <code>peek()</code> is the latest message, <code>chunks()</code> is the tail transcript, <code>done()</code> reports whether the topic is idle (no live subscription), and <code>pending()</code>/<code>refreshing()</code>/<code>error()</code> report connection status. Same vocabulary as the <a href="/memo/probes">generic-memo</a> and <a href="/rpc/probes">RPC</a> probes. The <code>peek</code>/<code>chunks</code> demos share the one <code>socketsChat</code> topic, so a publish anywhere updates both.</p>
-  <Demo id="socket-peek" title="<code>socketsChat.peek()</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/PeekDemo.abide" tab="client">
+  <p class="lead">A <a href="/sockets">socket</a> is a <a href="/channel">channel</a> on the wire, and a channel implements the same reactive read surface a <a href="/memo">memo</a> does over a lossy hub instead of a keyed slot. The <strong>active reads</strong> open the subscription — <code>live()</code> is the latest message, <code>chunks()</code> is the tail transcript — while <code>peek()</code> reads the latest message and opens nothing, and the <strong>probes</strong> only observe: <code>done()</code> reports whether the topic is idle (no live subscription), <code>settled()</code>/<code>streaming()</code> report whether the subscription has ended or is delivering, and <code>pending()</code>/<code>refreshing()</code>/<code>error()</code> report connection status. Same vocabulary as the <a href="/memo/probes">generic-memo</a> and <a href="/rpc/probes">RPC</a> probes. The <code>live</code>/<code>chunks</code> demos share the one <code>socketsChat</code> topic, so a publish anywhere updates both.</p>
+  <Demo id="socket-live" title="<code>socketsChat.live()</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/LiveDemo.abide" tab="client">
+    <LiveDemo />
+  </Demo>
+  <aside class="aside">
+    <p>The most recent message on the topic, reactive, with no list to maintain. An <strong>active read</strong>: reading it opens the subscription, so it updates live as messages arrive.</p>
+  </aside>
+  <Demo id="socket-peek" title="<code>socketsPeek.peek()</code>" server="src/server/sockets/socketsPeek.ts" client="src/ui/demos/sockets/PeekDemo.abide" tab="client">
     <PeekDemo />
   </Demo>
   <aside class="aside">
-    <p>The most recent message on the topic, reactive, with no list to maintain. Reading it opens the subscription, so it updates live as messages arrive.</p>
+    <p>The <strong>untracked read</strong>, on the surface where the difference bites hardest. On the server both reads are plain hub reads; in the browser a socket read has a <em>connection</em> behind it, so declining to subscribe means declining to connect. Press <em>Peek</em> repeatedly and the topic stays idle — <code>done()</code> never flips, because asking cost nothing.</p>
   </aside>
   <Demo id="socket-chunks" title="<code>socketsChat.chunks()</code>" server="src/server/sockets/socketsChat.ts" client="src/ui/demos/sockets/ChunksDemo.abide" tab="client">
     <ChunksDemo />

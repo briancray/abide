@@ -11,7 +11,7 @@
 
   // ONE rule, climbed a rung at a time: the key is a POSITIONAL that only exists when the callable
   // DECLARED an input. `publish` is where you see it, because it is the verb carrying a trailing payload
-  // — every other verb takes its key last or not at all (`peek()` vs `peek({ id })`), where an omittable
+  // — every other verb takes its key last or not at all (`live()` vs `live({ id })`), where an omittable
   // `void` parameter already collapses the call. `watch(handler)` / `watch({ id }, handler)` is the one
   // other trailing-payload verb and follows the same rule.
   //

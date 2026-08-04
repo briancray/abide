@@ -71,17 +71,17 @@ describe('read RPC (GET; HEAD is router-derived) — cache + coalesce', () => {
     test('read rpc exposes the reactive read surface', async () => {
         const get = GET(async (n: number) => n)
         await runInScope(makeScope(), async () => {
-            expect(typeof get.peek).toBe('function')
+            expect(typeof get.live).toBe('function')
             expect(typeof get.pending).toBe('function')
             expect(typeof get.error).toBe('function')
             expect(typeof get.refresh).toBe('function')
 
             const loading = get(7)
             expect(get.pending(7)).toBe(true)
-            expect(get.peek(7)).toBeUndefined()
+            expect(get.live(7)).toBeUndefined()
             await loading
             expect(get.pending(7)).toBe(false)
-            expect(get.peek(7)).toBe(7)
+            expect(get.live(7)).toBe(7)
         })
     })
 
@@ -155,9 +155,10 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
         const post = POST(async (n: number) => n)
         // Every reactive probe + cache verb + raw is present, exactly like a read.
         for (const method of [
-            'peek',
+            'live',
             'pending',
             'refreshing',
+            'settled',
             'error',
             'watch',
             'refresh',
@@ -198,7 +199,7 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
             expect(await post(5)).toBe(50)
             expect(calls).toBe(1)
             // The reactive probe sees the retained value — full symmetry with a read.
-            expect(post.peek(5)).toBe(50)
+            expect(post.live(5)).toBe(50)
             // refresh re-runs the handler.
             post.refresh(5)
             expect(await post(5)).toBe(50)
@@ -221,8 +222,8 @@ describe('mutation RPC (POST/PUT/PATCH/DELETE) — no cache', () => {
             // Every call runs — no coalescing/retention.
             expect(calls).toBe(2)
             // Surface still present (probes read an empty slot).
-            expect(typeof post.peek).toBe('function')
-            expect(post.peek(1)).toBeUndefined()
+            expect(typeof post.live).toBe('function')
+            expect(post.live(1)).toBeUndefined()
         })
     })
 })
@@ -269,7 +270,7 @@ describe('__rpc router metadata', () => {
             // Un-throttled these would be three more runs (calls === 5).
             expect(calls).toBe(2)
             // The retained value is served throughout — the read never blocks on the deferred load.
-            expect(get.peek(5)).toBe(50)
+            expect(get.live(5)).toBe(50)
 
             await new Promise((resolve) => setTimeout(resolve, 300))
             expect(calls).toBe(3)

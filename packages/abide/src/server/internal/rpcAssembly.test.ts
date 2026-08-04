@@ -32,9 +32,10 @@ describe('the two verbs agree on the memo half', () => {
         // missing from one is the asymmetry `attachSurface` exists to prevent.
         for (const callable of [GET(() => 1), POST(() => 1)]) {
             for (const probe of [
-                'peek',
+                'live',
                 'pending',
                 'refreshing',
+                'settled',
                 'error',
                 'watch',
                 'refresh',
@@ -43,6 +44,7 @@ describe('the two verbs agree on the memo half', () => {
                 'raw',
                 'chunks',
                 'done',
+                'streaming',
                 'resumeStream',
                 'seed',
                 'seedStream',

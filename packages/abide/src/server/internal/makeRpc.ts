@@ -30,6 +30,7 @@ import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
 import type {
     ReactiveStreamProbes,
     ReactiveValueProbes,
+    UntrackedRead,
 } from '../../shared/internal/reactiveReadSurface.ts'
 import type { Payload } from '../../shared/internal/responseSource.ts'
 import { type RpcMemoDeclaration, rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
@@ -185,15 +186,18 @@ export interface Rpc<Args, T> extends RpcCallSurface<Args, T>, ServerRouteMember
 
 // A STREAMING read — a handler that yields an `AsyncIterable<C>` (replayable-streams.md §4). The read
 // resolves to a fresh replay-then-live `consume()` cursor, and the surface is stream-correct: reactive
-// chunk probes (`latest`/`chunks`/`done`) instead of the value-shaped `peek`/`publish`/`snapshot`, which
-// are meaningless (or throw) on a stream slot. This is what a user's editor sees for a streaming read.
-// BOTH probe halves, inherited at the RPC arity: a stream has a latest value AND a transcript. The six
+// chunk reads and probes (`live`/`chunks`/`done`/`streaming`) instead of the value-shaped
+// `publish`/`snapshot`, which are meaningless (or throw) on a stream slot. This is what a user's editor
+// sees for a streaming read.
+// BOTH probe halves plus the untracked read, inherited at the RPC arity: a stream has a latest value AND
+// a transcript. The
 // names were hand-copied here and this interface extended nothing — and the copy had already drifted,
 // silently omitting `refreshing` while `RpcCallSurface` next door declared it, for no stated reason.
-// `peek` means the MOST-RECENT CHUNK here (same name and role as a value read's `peek`, over `C` rather
+// `live`/`peek` mean the MOST-RECENT CHUNK here (same names and roles as a value read's, over `C` rather
 // than `T`), which is exactly what parameterizing the surfaces by their value type buys.
 export interface StreamRead<Args, C>
-    extends ReactiveValueProbes<C, RpcCallArgs<Args>>,
+    extends UntrackedRead<C, RpcCallArgs<Args>>,
+        ReactiveValueProbes<C, RpcCallArgs<Args>>,
         ReactiveStreamProbes<C, RpcCallArgs<Args>>,
         ServerRouteMembers<Args, AsyncIterable<C>> {
     // THE READ: awaitable; resolves to a fresh cursor that replays the transcript so far then goes live.
@@ -284,9 +288,11 @@ function attachSurface<Args, T>(
     // `canonicalKey`), as does `memo: false`, and rebuilding this as a bare memo call silently routed every
     // multipart upload through the memo instead.
     callable.__bare = bare
+    callable.live = (args: Args): T | undefined => backing.live(args)
     callable.peek = (args: Args): T | undefined => backing.peek(args)
     callable.pending = (args: Args): boolean => backing.pending(args)
     callable.refreshing = (args: Args): boolean => backing.refreshing(args)
+    callable.settled = (args: Args): boolean => backing.settled(args)
     callable.error = (args: Args): unknown => backing.error(args)
     callable.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
         backing.watch(args, handler)
@@ -324,10 +330,13 @@ function attachSurface<Args, T>(
     ): void => backing.seedStream(args, source, encoding)
     callable.bindBroadcast = (sink: MemoNotify): void => setBroadcast(sink)
     // Stream probes live on the runtime object for ALL routes (they return undefined/false for a value
-    // slot); only the StreamRead/StreamMutation type surfaces them. `peek` is already stream-aware.
+    // slot); only the StreamRead/StreamMutation type surfaces them. `peek` is already stream-aware, and so
+    // is `settled` above — which is why it sits with the VALUE probes rather than here: every route has a
+    // terminal to report, and only its shape (value/error vs transcript-ended) is cardinality-dependent.
     const streamable = callable as Rpc<Args, T> & {
         chunks(args: Args): unknown[] | undefined
         done(args: Args): boolean
+        streaming(args: Args): boolean
         resumeStream(
             args: Args,
             from: number,
@@ -335,6 +344,7 @@ function attachSurface<Args, T>(
     }
     streamable.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
     streamable.done = (args: Args): boolean => backing.done(args)
+    streamable.streaming = (args: Args): boolean => backing.streaming(args)
     streamable.resumeStream = (args: Args, from: number) => backing.resumeStream(args, from)
     attachMeta(callable, { method, handler: rawSource, options, read, timeout })
 }

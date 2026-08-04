@@ -74,7 +74,7 @@ stored value is identity-free by construction, so there is nothing user-specific
 > `requestScoped === true`, the mere PRESENCE of a scope, so an unauthenticated request passed it
 > exactly as an authenticated one did; authorization for an rpc is its middleware, on the HTTP path,
 > and in-process server code can read `sharedStore()` directly regardless. What it did deliver was an
-> inconsistency: only `fn()`/`peek`/`chunks`/`done`/`resumeStream` carried the guard, so a cron job
+> inconsistency: only `fn()`/`live`/`chunks`/`done`/`resumeStream` carried the guard, so a cron job
 > could `refresh()`, `invalidate()`, `publish()` and `error()` a slot it was forbidden to read — which
 > is the exact operational shape (a background job warming a cache every request then serves) the
 > option exists for.

@@ -5,9 +5,9 @@
 
   // Slots are keyed by the whole args object; a partial selector invalidates every superset slot.
   let metricStarted = state(false)
-  const red1 = memo(() => (metricStarted ? (cacheMetric.peek({ team: "red", id: 1 })?.runs ?? "…") : "idle"))
-  const red2 = memo(() => (metricStarted ? (cacheMetric.peek({ team: "red", id: 2 })?.runs ?? "…") : "idle"))
-  const blue1 = memo(() => (metricStarted ? (cacheMetric.peek({ team: "blue", id: 1 })?.runs ?? "…") : "idle"))
+  const red1 = memo(() => (metricStarted ? (cacheMetric.live({ team: "red", id: 1 })?.runs ?? "…") : "idle"))
+  const red2 = memo(() => (metricStarted ? (cacheMetric.live({ team: "red", id: 2 })?.runs ?? "…") : "idle"))
+  const blue1 = memo(() => (metricStarted ? (cacheMetric.live({ team: "blue", id: 1 })?.runs ?? "…") : "idle"))
   function startMetric() { metricStarted = true }
   function invalidateRed() { cacheMetric.invalidate({ team: "red" }) } // partial selector → both red slots
 </script>

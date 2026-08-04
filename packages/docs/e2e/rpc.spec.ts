@@ -31,11 +31,11 @@ test.describe('Reads', () => {
         await expect(header).not.toContainText("{'{'}")
     })
 
-    test('{fn.peek() ?? "…"} renders the snapshot, the fallback handling the undefined', async ({
+    test('{fn.live() ?? "…"} renders the snapshot, the fallback handling the undefined', async ({
         page,
     }) => {
         await page.goto('/rpc/reads')
-        await expect(page.getByTestId('peek-read')).toHaveText('Hello from abide, peek!')
+        await expect(page.getByTestId('live-read')).toHaveText('Hello from abide, live!')
     })
 
     test('{#await}/{:then} renders the resolved read', async ({ page }) => {
@@ -270,15 +270,15 @@ test.describe('Streaming', () => {
         await expect(items.last()).toHaveText('step 3 of 3 done')
     })
 
-    // The chunk probes now live in one card per primitive (peek / chunks / done), each over its own
+    // The chunk probes now live in one card per primitive (live / chunks / done), each over its own
     // stream key so the cards are independent. Same probe surface, one primitive at a time.
-    test('a streaming read exposes chunk probes — peek (latest), chunks (count), done', async ({
+    test('a streaming read exposes chunk probes — live (latest), chunks (count), done', async ({
         page,
     }) => {
         await page.goto('/rpc/streaming')
 
-        // peek tracks the latest chunk (count: 4 → final label "tick 4 of 4").
-        await page.getByTestId('stream-peek-start').click()
+        // the live read tracks the latest chunk (count: 4 → final label "tick 4 of 4").
+        await page.getByTestId('stream-live-start').click()
         await expect(page.getByTestId('stream-latest')).toHaveText('tick 4 of 4', { timeout: 5000 })
 
         // chunks accumulate the transcript (count: 6).
@@ -288,5 +288,33 @@ test.describe('Streaming', () => {
         // done flips yes once the stream closes (count: 3).
         await page.getByTestId('stream-done-start').click()
         await expect(page.getByTestId('stream-done')).toHaveText('yes', { timeout: 5000 })
+    })
+
+    // The three-state stream axis. Asserting the PHASES in order is what distinguishes `streaming` from
+    // "not done yet" — a `done`-only reading cannot tell an open transcript from a never-asked one, and
+    // both of those render the same `no`.
+    test('a streaming read reports pending → streaming → settled, and probes start nothing', async ({
+        page,
+    }) => {
+        await page.goto('/rpc/streaming')
+
+        // Nothing has been asked, and merely RENDERING the probes must not change that (a probe
+        // observes; it never causes). If any of them kicked the run this would already be past 'never
+        // asked' on load.
+        await expect(page.getByTestId('stream-phase')).toHaveText('never asked')
+        await expect(page.getByTestId('stream-streaming')).toHaveText('no')
+        await expect(page.getByTestId('stream-settled')).toHaveText('no')
+
+        // The READ is what opens it — and while it is open, `streaming` is the state, not `done`.
+        await page.getByTestId('stream-streaming-start').click()
+        await expect(page.getByTestId('stream-streaming')).toHaveText('yes', { timeout: 5000 })
+        await expect(page.getByTestId('stream-phase')).toHaveText('streaming')
+        await expect(page.getByTestId('stream-streaming-done')).toHaveText('no')
+
+        // …and once it closes cleanly, both terminals agree.
+        await expect(page.getByTestId('stream-settled')).toHaveText('yes', { timeout: 5000 })
+        await expect(page.getByTestId('stream-phase')).toHaveText('settled')
+        await expect(page.getByTestId('stream-streaming-done')).toHaveText('yes')
+        await expect(page.getByTestId('stream-streaming')).toHaveText('no')
     })
 })

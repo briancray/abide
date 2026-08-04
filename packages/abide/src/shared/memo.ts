@@ -294,8 +294,8 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
     // The generic-safe two-argument form (see `ReactiveReadSurface.publish`).
     publish(args: Args, next: T | ((current: T | undefined) => T)): void
     // The WRITABLE PROJECTION of one slot (ADR 0024 §4) — and only that; reading a memo is the bare call,
-    // `{…}`, `.peek()` and `await`, which already have defined blocking behaviour. The returned cell reads
-    // the slot reactively (`.peek()` semantics) and its `set` IS `publish`, so a local write is provisional
+    // `{…}`, `.live()` and `await`, which already have defined blocking behaviour. The returned cell reads
+    // the slot reactively (`.live()` semantics) and its `set` IS `publish`, so a local write is provisional
     // until the next re-fill. That is the whole of the retired `state.linked`.
     //
     // The INITIAL is required here and the key is a `Room` positional (ADR 0027 D7): `m.state(initial)`
@@ -745,7 +745,7 @@ export function memo<Args, T>(
     }
 
     function retainedByState(slot: Slot<Args, T>): RetainedKind {
-        const state = slot.state.untracked()
+        const state = slot.state.peek()
         if (state.status === 'stream') {
             const stream = state.stream
             return stream !== undefined && stream.settled ? 'value' : 'openStream'
@@ -769,7 +769,7 @@ export function memo<Args, T>(
     // double-wake this split exists to remove.
     function setState(slot: Slot<Args, T>, next: SlotState<T>, keepRefreshing = false): void {
         if (!keepRefreshing) slot.refreshing.set(false)
-        const current = slot.state.untracked()
+        const current = slot.state.peek()
         slot.state.set(sameSlotState(current, next) ? current : next)
     }
 
@@ -787,7 +787,7 @@ export function memo<Args, T>(
         // run, so clearing it here is what keeps ONE cold retry from becoming a permanent one.
         slot.expired = false
 
-        const current = slot.state.untracked()
+        const current = slot.state.peek()
         if (keepStale && current.status === 'value') {
             // The retained value is UNCHANGED, so `setState` writes nothing and no VALUE reader wakes.
             // Raising the flag AFTER it is what makes this the one exception to `setState`'s clear —
@@ -890,7 +890,7 @@ export function memo<Args, T>(
                 isDebounce: clockIsDebounce,
                 ms: clockMs,
                 fire: () => startLoad(slot, true),
-                serving: () => slot.state.untracked().status === 'value',
+                serving: () => slot.state.peek().status === 'value',
             })
             slot.window = window
         }
@@ -931,12 +931,12 @@ export function memo<Args, T>(
                 // computed, so this is genuinely the latest — and `merged`'s next `fill()` returns that
                 // same cached object, so the identity compare there sees no move and the gate does not
                 // re-arm.
-                gate.admitted = source.untracked()
+                gate.admitted = source.peek()
                 // A LEADING-edge admission happens inside `merged`'s own run, so it is a plain field
                 // write into the computation that is about to return that very value — bumping the tick
                 // there would be a state write during a computation, and there is nobody to wake who is
                 // not already awake. A trailing one fires from a timer and must wake `merged` itself.
-                if (deferred) gate.tick.set(gate.tick.untracked() + 1)
+                if (deferred) gate.tick.set(gate.tick.peek() + 1)
             },
         })
         return gate
@@ -1070,7 +1070,7 @@ export function memo<Args, T>(
         // every override inside one land already-superseded.
         const currentRun = (): number => {
             if (gate?.admitted != null) return gate.admitted.run
-            return fill.untracked().run
+            return fill.peek().run
         }
         if (gate !== undefined) gate.source = fill
         // A PER-REQUEST slot's backing must not outlive the request: its `fill` subscribes to whatever the
@@ -1110,7 +1110,7 @@ export function memo<Args, T>(
         const backing = createAutoBacking(slot)
         // `peek` (not a tracked read): the probe establishes ITS OWN dependencies either way, and a caller
         // must not end up subscribed to a node we may be about to drop.
-        const first = backing.fill.untracked()
+        const first = backing.fill.peek()
         if ('deferred' in first) {
             backing.fill.dispose()
             void startLoad(slot, false, { produced: first.deferred }).catch(() => {
@@ -1149,8 +1149,8 @@ export function memo<Args, T>(
     // slot to idle). `eager` additionally pulls right away, which is what makes `refresh` eager.
     function autoRefill(auto: AutoBacking<T>, eager: boolean): void {
         auto.override.set(null)
-        auto.version.set(auto.version.untracked() + 1)
-        if (eager) auto.merged.untracked()
+        auto.version.set(auto.version.peek() + 1)
+        if (eager) auto.merged.peek()
     }
 
     // Remove a slot from the backing map entirely — distinct from dropSlot (which resets to idle but
@@ -1174,7 +1174,7 @@ export function memo<Args, T>(
     // that should complete for a late joiner (§2 empty-refcount policy).
     function onStreamRefCountZero(slot: Slot<Args, T>, stream: ReplayableStream<unknown>): void {
         // A stale callback (the slot already re-ran into a NEW stream under the same key) must not touch it.
-        if (slot.state.untracked().stream !== stream) return
+        if (slot.state.peek().stream !== stream) return
         if (stream.settled) {
             // Dispose a ttl:0 slot, or an OVERFLOWED transcript (never retained for replay), on drain.
             if (ttl === 0 || stream.overflowed) disposeSlot(slot)
@@ -1190,14 +1190,14 @@ export function memo<Args, T>(
     // Concurrent/late reads fan out via `consume()` (a fresh cursor each); the source is never re-run.
     function bumpStreamTick(slot: Slot<Args, T>): void {
         const tick = slot.streamTick
-        if (tick !== undefined) tick.set(tick.untracked() + 1)
+        if (tick !== undefined) tick.set(tick.peek() + 1)
     }
 
     // Incremental per-chunk accounting (replayable-streams.md §4): grow the slot's recorded size as the
     // transcript grows so an OPEN stream pressures the LRU live, and OVERFLOW past the per-stream cap so a
     // runaway can't grow unbounded. Only the two bounded server stores account; per-request/client don't.
     function accountStreamChunk(slot: Slot<Args, T>, stream: ReplayableStream<unknown>): void {
-        if (slot.state.untracked().stream !== stream) return // stale (slot re-ran)
+        if (slot.state.peek().stream !== stream) return // stale (slot re-ran)
         const store = boundedStore(slots())
         if (store === undefined) return
         if (stream.bytes > streamBufferCap()) {
@@ -1305,7 +1305,7 @@ export function memo<Args, T>(
             } finally {
                 watchdog.cancel()
                 // Only touch the slot if it STILL holds this stream (not superseded by an invalidate/re-run).
-                if (slot.state.untracked().stream === stream) {
+                if (slot.state.peek().stream === stream) {
                     // TTL-from-close (§2): the retention clock starts when the transcript settles, not at fn-resolve.
                     // A transcript the DEADLINE cut is settled-but-expired instead (ADR 0028 D7), so the next
                     // read re-runs rather than replaying a truncated one for the rest of its ttl.
@@ -1421,7 +1421,7 @@ export function memo<Args, T>(
     }
 
     function coalescedLoad(slot: Slot<Args, T>): Promise<T> {
-        const state = slot.state.untracked()
+        const state = slot.state.peek()
         // A settled/open stream slot hands back a fresh cursor over the shared buffer with no re-run — unless
         // it OVERFLOWED (not a valid replay target), in which case fall through to a fresh run.
         if (
@@ -1477,11 +1477,35 @@ export function memo<Args, T>(
         return untrack(() => coalescedLoad(slot))
     }) as Memo<Args, T>
 
-    // Reactive PEEK: the non-blocking snapshot — subscribes and kicks a coalesced load when cold. For a
+    // THE UNTRACKED READ: what this slot HOLDS, and nothing else. No subscription, no `resolveMode` (which
+    // would classify by RUNNING the body), no `startLoad`, no `touchOnRead` — so it cannot move a slot's
+    // LRU position or its retention stamp either. A cold slot answers `undefined` and STAYS cold.
+    //
+    // The whole body is inside `untrack` rather than relying on each read being untracked individually:
+    // the auto path's `autoState` pulls a computed, which subscribes the caller to the derivation's whole
+    // dependency set. One wrapper is what makes "reads nothing reactively" a property of the function
+    // instead of a property of every line in it.
+    c.peek = (args: Args): T | undefined => {
+        const slot = ensureSlot(args)
+        return untrack(() => {
+            const auto = slot.auto
+            if (auto !== undefined) return autoState(auto).value
+            const state = slot.state.peek()
+            // A stream slot's "current value" is its latest chunk, the same meaning `live` gives — read
+            // straight off the transcript, since the reactive route (`streamTick`) is the subscribing one.
+            if (state.status === 'stream' && state.stream !== undefined) {
+                const chunks = state.stream.chunks
+                return (chunks.length > 0 ? chunks[chunks.length - 1] : undefined) as T | undefined
+            }
+            return state.value
+        })
+    }
+
+    // Reactive LIVE: the non-blocking snapshot — subscribes and kicks a coalesced load when cold. For a
     // VALUE slot: the current value (or undefined while pending). For a STREAM slot: the current value is
     // the MOST-RECENT chunk (replayable-streams.md §4), reactive on chunk arrival. Use `chunks()` for the
     // whole transcript.
-    c.peek = (args: Args): T | undefined => {
+    c.live = (args: Args): T | undefined => {
         const slot = ensureSlot(args)
         // Expire on the same terms as the bare read. `peek` already kicks a load on a cold pulled slot,
         // so serving a value the ttl has retired would make the two reads disagree about the same slot.
@@ -1495,7 +1519,7 @@ export function memo<Args, T>(
             recordAuto(slot, state)
             return state.value
         }
-        if (slot.state.untracked().status === 'stream') {
+        if (slot.state.peek().status === 'stream') {
             return readStreamReactive(slot, (chunks) =>
                 chunks.length > 0 ? chunks[chunks.length - 1] : undefined,
             ) as T | undefined
@@ -1550,12 +1574,68 @@ export function memo<Args, T>(
 
     c.pending = (args: Args): boolean => slotPending(ensureSlot(args))
 
+    // THE STATE A STATUS PROBE READS. Every probe goes through here, and what it does NOT do is the point:
+    // no `resolveMode`, so a probe never classifies the memo — and classification is a RUN.
+    //
+    // A PROBE OBSERVES; IT NEVER CAUSES. That is the whole rule, and it used to hold only for `pending`.
+    // `resolveMode` is a no-op on a keyed memo but on an ARGLESS one it runs the body to find out whether
+    // this is an auto-tracked derivation or a loading one — and when the body turns out to be deferred, it
+    // starts the load. So `{#if job.settled()}` was, on a zero-arg rpc, the thing that FIRED the job it was
+    // asking about. `chunks`/`done` reached further still, through `readStreamReactive` into `startLoad`.
+    //
+    // What it costs, stated plainly: on an argless memo whose body has NEVER run, `slot.auto` is unset, so
+    // the probes read the pulled state machine and report the cold answer — `settled()` false, `error()`
+    // undefined — until some READ (a bare call, `live`, `chunks`) classifies it. That is honest rather than
+    // wrong (nothing has produced a value, so there is no outcome to report) and it is exactly what
+    // `pending()` has always done. Waking on the transition is the READ's job, because a probe that woke
+    // the moment a derivation first ran would have to be what ran it.
+    function statusState(slot: Slot<Args, T>): SlotState<T> {
+        const auto = slot.auto
+        // An already-classified derivation keeps its value in the backing computed, not in `slot.state`.
+        // Reading it subscribes the caller to the derivation's own inputs, which is the axis a probe on
+        // that path must wake for — and it is a pull of an existing node, never a fresh classification.
+        if (auto !== undefined) return autoState(auto)
+        return slot.state()
+    }
+
+    // Has this slot's acquisition reached a TERMINAL outcome? A value, an error, or a transcript that
+    // stopped — where "stopped" is `ReplayableStream.settled` (done || errored || aborted) and NOT
+    // `stream.done`, which only `close()` sets. A stream cut short by a `TimeoutError`, an `invalidate`
+    // or the per-stream buffer cap reports `done() === false` for the rest of its life; this reports the
+    // truth, which is what a caller rendering a spinner needs.
+    //
+    // An AUTO-TRACKED derivation is settled by construction: its fill is synchronous, so it is never
+    // pending and always has a value or a throw to hand back — the mirror of `slotPending`'s `false`.
+    c.settled = (args: Args): boolean => {
+        const slot = ensureSlot(args)
+        if (slot.auto !== undefined) return true
+        const state = statusState(slot)
+        if (state.status === 'stream') {
+            if (state.stream === undefined) return false
+            if (slot.streamTick !== undefined) slot.streamTick() // wake on the terminal
+            return state.stream.settled
+        }
+        return state.status === 'value' || state.status === 'error'
+    }
+
+    // Is a transcript OPEN and delivering? False for a scalar slot, an idle one, and a stream that has
+    // reached any terminal — so `pending` → `streaming` → `settled` is a total, three-state reading of the
+    // stream axis, which `done` alone could not give (its `false` covered four different situations).
+    //
+    // Like every status probe it goes through `statusState` and never through `readStreamReactive`, so it
+    // cannot reach `startLoad`: asking whether something is streaming must not be what starts it streaming.
+    c.streaming = (args: Args): boolean => {
+        const slot = ensureSlot(args)
+        if (slot.auto !== undefined) return false // a synchronous derivation has no transcript
+        const state = statusState(slot)
+        if (state.status !== 'stream' || state.stream === undefined) return false
+        if (slot.streamTick !== undefined) slot.streamTick() // wake as the transcript grows / ends
+        return !state.stream.settled
+    }
+
     c.error = (args: Args): unknown => {
         const slot = ensureSlot(args)
-        resolveMode(slot)
-        const auto = slot.auto
-        if (auto !== undefined) return autoState(auto).error
-        const state = slot.state()
+        const state = statusState(slot)
         // A stream's error lives on the ReplayableStream, not the slot state; surface it reactively.
         if (state.status === 'stream' && state.stream !== undefined) {
             if (slot.streamTick !== undefined) slot.streamTick()
@@ -1564,14 +1644,18 @@ export function memo<Args, T>(
         return state.error
     }
 
-    // Reactive stream probes (replayable-streams.md §4): full transcript snapshot, closed? (`peek()` above
-    // gives the most-recent chunk — the "current value").
-    // `resolveMode` FIRST, as the bare read and `peek` do. Reading `slot.auto` on a slot whose mode was
-    // never resolved answers "pulled" by default, so as the FIRST touch of an argless derivation these
-    // fell into `readStreamReactive` → `startLoad` and ran the body on the LOADING path — after which the
-    // next bare read ran it a SECOND time inside the classifying probe and served that value. The existing
-    // coverage misses it by ordering: `memo.test.ts` peeks (which resolves the mode) before it asks for
-    // chunks.
+    // THE TRANSCRIPT READ (replayable-streams.md §4) — a READ, not a status probe, and the one member of
+    // this group that still ACQUIRES. `{#for m of feed.chunks()}` is a rendering of the data, so a pure
+    // `chunks` would paint an empty list forever and never fill: on a socket it is what opens the
+    // subscription at all (client-sockets.md CS4.1). It is the stream-shaped sibling of `live`, and it
+    // keeps `live`'s behaviour for `live`'s reason. `done`/`streaming`/`settled` ask ABOUT the transcript
+    // and acquire nothing; if you want the status without starting anything, ask one of those.
+    //
+    // `resolveMode` FIRST, which only a member that already acquires can afford. Reading `slot.auto` on a
+    // slot whose mode was never resolved answers "pulled" by default, so as the FIRST touch of an argless
+    // derivation this fell into `readStreamReactive` → `startLoad` and ran the body on the LOADING path —
+    // after which the next bare read ran it a SECOND time inside the classifying probe and served that
+    // value.
     c.chunks = (args: Args): unknown[] | undefined => {
         const slot = ensureSlot(args)
         resolveMode(slot)
@@ -1579,12 +1663,16 @@ export function memo<Args, T>(
         touchOnRead(slot)
         return readStreamReactive(slot, (chunks) => chunks.slice())
     }
+    // `done` is a STATUS probe, so unlike `chunks` above it does not go through `readStreamReactive` and
+    // does not `touchOnRead`: it neither opens the transcript nor moves the slot's LRU/retention position.
+    // It used to do both, which made "has this finished?" a way to start it.
     c.done = (args: Args): boolean => {
         const slot = ensureSlot(args)
-        resolveMode(slot)
         if (slot.auto !== undefined) return false
-        touchOnRead(slot)
-        return readStreamReactive(slot, (_chunks, stream) => stream.done) ?? false
+        const state = statusState(slot)
+        if (state.status !== 'stream' || state.stream === undefined) return false
+        if (slot.streamTick !== undefined) slot.streamTick() // wake on the terminal
+        return state.stream.done
     }
 
     c.resumeStream = (
@@ -1594,7 +1682,7 @@ export function memo<Args, T>(
         const slot = ensureSlot(args)
         resolveMode(slot)
         if (slot.auto !== undefined) return { cursor: undefined, fresh: true }
-        const state = slot.state.untracked()
+        const state = slot.state.peek()
         // A retained, non-overflowed transcript is resumable — replay from `from` then continue live.
         if (
             state.status === 'stream' &&
@@ -1632,7 +1720,7 @@ export function memo<Args, T>(
             autoRefill(auto, false) // lazy: re-runs `fn` on the next pull
             return
         }
-        const state = slot.state.untracked()
+        const state = slot.state.peek()
         // Invalidating an OPEN stream aborts its source and gracefully ends live consumers (§4) — a value
         // slot has nothing to tear down.
         if (state.status === 'stream' && state.stream !== undefined && !state.stream.settled) {
@@ -1681,7 +1769,7 @@ export function memo<Args, T>(
             broadcast('publish', args, value)
             return
         }
-        const current = slot.state.untracked()
+        const current = slot.state.peek()
         let value: T
         if (typeof next === 'function') {
             // Updater-form. A closure can't cross the wire (rpc-core §2 tension): on a SHARED slot the
@@ -1722,12 +1810,12 @@ export function memo<Args, T>(
                     // Report an auto slot only once something has actually pulled it — reading it here would
                     // otherwise RUN `fn` for every cold derivation just to collect the seed.
                     if (!auto.filled()) continue
-                    const state = auto.merged.untracked()
+                    const state = auto.merged.peek()
                     if (state.status === 'value')
                         result.push({ args: slot.args, value: state.value as T })
                     continue
                 }
-                const state = slot.state.untracked()
+                const state = slot.state.peek()
                 if (state.status === 'value')
                     result.push({ args: slot.args, value: state.value as T })
             }
@@ -1747,18 +1835,20 @@ export function memo<Args, T>(
     }
 
     // The WRITABLE PROJECTION (ADR 0024 §4). `set` IS `publish`, so a local write holds until the next
-    // re-fill — the whole of the retired `state.linked`. Reading is `peek` semantics (reactive,
-    // non-blocking); the blocking reads stay on the memo itself.
+    // re-fill — the whole of the retired `state.linked`. The CELL READ is `live` semantics (reactive,
+    // non-blocking, kicks a cold load) and `cell.peek` is `peek` semantics (neither); the blocking reads
+    // stay on the memo itself.
     // The key is a `Room` positional and the INITIAL is the trailing payload, unpacked exactly as
     // `publish`/`watch` do: `state(initial)` on an argless memo, `state({ id }, initial)` on a keyed one.
     // Both arities unpack identically, so the generic-safe two-argument form stays correct at runtime.
     //
-    // Note what is NOT here any more: this used to read `c.peek(args) as T` twice, casting away the
+    // Note what is NOT here any more: this used to read the display value twice, casting away the
     // `undefined` a cold slot really returns, and it synthesized the untracked read as
-    // `untrack(() => c.peek(args))` — manufacturing one primitive's `peek` out of the other's, four lines
-    // apart, which was the clearest possible evidence that the word meant two things (ADR 0027 D2).
-    // With `untracked` named for what it does and an `initial` closing the cold hole, both lies are gone
-    // and the projection is a real `State<T>`.
+    // `untrack(() => <the display read>)` — manufacturing one primitive's untracked read out of the
+    // other's, four lines apart, which was the clearest possible evidence that one word meant two things
+    // (ADR 0027 D2). Both the word and the manufacture are gone: `live` and `peek` are separate members
+    // on every primitive, so the cell's `peek` FORWARDS to the memo's `peek`, and an `initial` closes the
+    // cold hole — the projection is a real `State<T>`.
     c.state = ((...args: unknown[]): State<T> => {
         // Unpacking is keyed off `fn.length`, not off arity alone, because `state` is the one trailing-
         // payload verb whose payload is OPTIONAL (a sync memo needs no initial), which would otherwise
@@ -1780,13 +1870,29 @@ export function memo<Args, T>(
         // here exactly as it would on a direct read. Reading `peek` alone would have moved the old
         // `as T` lie from "cold" to "errored" rather than removing it.
         const read = (): T => {
-            const value = c.peek(slotArgs)
+            const value = c.live(slotArgs)
             if (value !== undefined) return value
             return hasInitial ? (initial as T) : (c(slotArgs) as T)
         }
         const cell = read as State<T>
         cell.set = (value: T) => c.publish(slotArgs, value)
-        cell.untracked = () => untrack(read)
+        // Routed through the memo's OWN `peek`, not `untrack(read)`. `untrack` suspends TRACKING and
+        // nothing else — it does not stop `read`'s `live` from calling `resolveMode`/`touchOnRead`/
+        // `startLoad`, so the old spelling still kicked a cold load and moved the slot's LRU position
+        // from the one member whose whole contract is that asking costs nothing. Manufacturing this out
+        // of the display read is exactly what hid that; now that the two are separate members it is a
+        // plain forward.
+        //
+        // The ONE residual is the SYNC projection: it takes no `initial`, is typed `T`, and a cold sync
+        // slot holds no value — so there is nothing to answer with but the body's own run, and an errored
+        // slot rethrows here as it would on a direct read. It is untracked, and a synchronous derivation
+        // is not a LOAD, but it is the one path on which `peek` still causes anything. The ASYNC
+        // projection always has an `initial` and so never reaches it.
+        cell.peek = () => {
+            const value = c.peek(slotArgs)
+            if (value !== undefined) return value
+            return hasInitial ? (initial as T) : untrack(() => c(slotArgs) as T)
+        }
         return cell
     }) as Memo<Args, T>['state']
 

@@ -1,21 +1,36 @@
 <script>
   import { state } from "abide/shared/state"
   import { memo } from "abide/shared/memo"
-  import socketsChat from "$server/sockets/socketsChat"
+  import socketsPeek from "$server/sockets/socketsPeek"
 
-  // `peek()` is a reactive status probe: the latest message on the topic, no list to maintain. Reading
-  // it opens the subscription, so it updates live as messages arrive — including publishes from the
-  // other demos on this page, since they all share the one `socketsChat` topic.
-  let draft = state("latest wins")
-  const latest = memo(() => socketsChat.peek()?.text ?? "—")
-  function publish() {
-    socketsChat.publish({ id: crypto.randomUUID(), text: draft, via: "client" })
-  }
+  // THE UNTRACKED READ, on the surface where the difference is sharpest. On the server both reads are
+  // plain hub reads — but in the browser a socket read has a CONNECTION behind it, so declining to
+  // subscribe means declining to connect. `live()` opens the mux subscription; `peek()` does not, and
+  // never will, however many times you ask.
+  //
+  // So the topic below stays IDLE (`done()` = yes) no matter how often you press Peek, and the peek
+  // line reads "—" because nothing has arrived — there is no subscription for a message to arrive on.
+  // Press Open (live) and the subscription opens; from then on `peek()` can see messages, but still
+  // only when something else re-renders this line. It has no subscription of its own.
+  let peekTicks = state(0)
+  const idle = memo(() => (socketsPeek.done() ? "yes" : "no"))
+  // `peekTicks` is what re-renders this — NOT the socket. That is the property on display.
+  const latest = memo(() => {
+    peekTicks
+    return socketsPeek.peek()?.text ?? "—"
+  })
+  function peek() { peekTicks = peekTicks + 1 }
+  function open() { socketsPeek.live() }
+  function publish() { socketsPeek.publish({ id: crypto.randomUUID(), text: `ping ${peekTicks}` }) }
 </script>
 
-<p><code>peek()</code> — latest message: <strong data-testid="peek-latest">{latest}</strong></p>
+<ul class="grid">
+  <li><code>peek()</code> — latest: <strong data-testid="socket-peek-latest">{latest}</strong></li>
+  <li><code>done()</code> — still idle: <strong data-testid="socket-peek-idle">{idle}</strong></li>
+</ul>
 
 <div class="controls">
-  <input data-testid="peek-input" bind:value={draft} />
-  <button data-testid="peek-publish" onclick={publish}>Publish</button>
+  <button data-testid="socket-peek-peek" onclick={peek}>Peek (connects nothing)</button>
+  <button data-testid="socket-peek-open" onclick={open}>Open (live)</button>
+  <button data-testid="socket-peek-publish" onclick={publish}>Publish</button>
 </div>

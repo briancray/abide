@@ -3,7 +3,7 @@ import { expect, test } from './fixtures.ts'
 
 // Drives /memo + /memo/probes: the bare memo() primitive and the reactive probes over a
 // plain CLIENT-SIDE memo (no RPC, no transport). Proves the probe vocabulary is a property of the memo
-// itself — reuse holds a run count, and peek/pending/refreshing/error/watch behave as documented.
+// itself — reuse holds a run count, and live/pending/refreshing/error/watch behave as documented.
 // The argless derivation cards (auto-tracked memo, memo(source, transform).state()) live here too:
 // ADR 0024 made them the same primitive, so the docs and this spec keep them on one page.
 
@@ -153,12 +153,54 @@ test('memo(fn) with args — a slot per key; invalidate drops only that key', as
     await expect(page.getByTestId('args-beta')).toHaveText('beta #2')
 })
 
-test('peek() — undefined while pending, then the value', async ({ page }) => {
+test('live() — undefined while pending, then the value', async ({ page }) => {
     await page.goto('/memo/probes')
 
-    await expect(page.getByTestId('memopeek-value')).toHaveText('idle')
-    await page.getByTestId('memopeek-read').click()
-    await expect(page.getByTestId('memopeek-value')).toHaveText('hello a', { timeout: 15_000 })
+    await expect(page.getByTestId('memolive-value')).toHaveText('idle')
+    await page.getByTestId('memolive-read').click()
+    await expect(page.getByTestId('memolive-value')).toHaveText('hello a', { timeout: 15_000 })
+})
+
+// The negative half of the read split, which is the only half a value assertion can get wrong: `peek`
+// returning `undefined` proves nothing on its own (so does a load that has not finished). What proves it
+// is that the value NEVER arrives while only `peek` is asking — and then does, the moment `live` asks.
+test('peek() — never subscribes and never loads, so it never fills in on its own', async ({ page }) => {
+    await page.goto('/memo/probes')
+
+    await expect(page.getByTestId('memopeek-value')).toHaveText('undefined (nothing there)')
+
+    // Ask repeatedly. Each click re-renders the line, so a `peek` that kicked a load would have had
+    // three chances plus the settle time below to show one.
+    await page.getByTestId('memopeek-peek').click()
+    await page.getByTestId('memopeek-peek').click()
+    await page.getByTestId('memopeek-peek').click()
+    await page.waitForTimeout(600) // > the memo's 300ms body, so a kicked load would have landed
+    await expect(page.getByTestId('memopeek-value')).toHaveText('undefined (nothing there)')
+
+    // The DISPLAY read is the one that acquires — and now the same untracked read sees the value.
+    await page.getByTestId('memopeek-load').click()
+    await expect(page.getByTestId('memopeek-live')).toHaveText('hello a', { timeout: 15_000 })
+    await page.getByTestId('memopeek-peek').click()
+    await expect(page.getByTestId('memopeek-value')).toHaveText('hello a')
+})
+
+// `settled` is the only probe that separates a COLD slot from a settled one: `pending()` is false for
+// both, and a settled `undefined` reads exactly like nothing-yet. So assert the three phases, not the
+// flag — the flag alone cannot show what the probe is for.
+test('settled() — never asked vs pending vs settled, and asking starts nothing', async ({ page }) => {
+    await page.goto('/memo/probes')
+
+    await expect(page.getByTestId('settled-phase')).toHaveText('never asked')
+    await expect(page.getByTestId('settled-flag')).toHaveText('no')
+
+    // Rendering the probe must not be what starts the load: still cold after the body's own duration.
+    await page.waitForTimeout(600)
+    await expect(page.getByTestId('settled-phase')).toHaveText('never asked')
+
+    await page.getByTestId('settled-load').click()
+    await expect(page.getByTestId('settled-phase')).toHaveText('settled', { timeout: 15_000 })
+    await expect(page.getByTestId('settled-flag')).toHaveText('yes')
+    await expect(page.getByTestId('settled-value')).toHaveText('answer a')
 })
 
 test('pending() — yes during the first load, no once settled', async ({ page }) => {

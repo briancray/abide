@@ -53,7 +53,7 @@ test('a two-parameter generic at module scope binds only the declared name', () 
         '<script module>\n' +
             'import { channel } from "abide/shared/channel"\n' +
             'const notes = channel<{ text: string }, { room: string }>({ tail: 3 })\n' +
-            '</script><p>{notes.peek({ room: "a" })?.text}</p>',
+            '</script><p>{notes.live({ room: "a" })?.text}</p>',
     )
     expect(client).toContain('$module = { notes }')
     expect(client).toContain('const { notes } = $ensureModule($scope)')

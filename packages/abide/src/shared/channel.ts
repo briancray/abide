@@ -83,6 +83,11 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
     ch.publish = ((...args: [...Room<Args>, message: T]): void => {
         hubFor(room<Args>(args, 1)).publish(args[args.length - 1] as T)
     }) as Channel<T, Args>['publish']
+    ch.live = (args: Args): T | undefined => hubFor(args).peekLatest()
+    // Identical to `live` on this in-process core, and that is honest rather than lazy: a local hub read
+    // neither subscribes nor acquires in the first place, so there is no reactivity here for `peek` to
+    // decline. The two diverge where there IS a transport — the browser socket proxy, where `live` opens
+    // the subscription and this does not.
     ch.peek = (args: Args): T | undefined => hubFor(args).peekLatest()
     ch.chunks = (args: Args): T[] | undefined => hubFor(args).tailSnapshot()
     // Degenerate on this in-process core: a local topic is immediately live and never
@@ -96,6 +101,13 @@ export function channel<T, Args = void>(options: ChannelOptions = {}): Channel<T
     // and flipped on hydrate. Both truth surfaces say the client reading is the right one
     // (`client-sockets.md` CS5.1, ADR 0023 "true-when-idle, then false once live").
     ch.done = (args: Args): boolean => hubFor(args).idle
+    // A local topic is ETERNAL: it has no source to finish, fail or abort, so no acquisition of it ever
+    // reaches a terminal. This is the one cardinality where `settled` is a constant, and `false` is the
+    // honest constant — an idle hub is not-yet-started, which is the opposite of ended.
+    ch.settled = (): boolean => false
+    // Live and delivering = the hub has subscribers. The degenerate two-state case of the stream axis, so
+    // it reads as the exact inverse of the `done`-means-idle convention above rather than as a third state.
+    ch.streaming = (args: Args): boolean => !hubFor(args).idle
     // A source-less local channel has nothing to re-acquire, so `refresh` is a no-op. `invalidate` clears
     // the retained tail (per room, or every room when no args) without detaching live subscribers.
     ch.refresh = (): void => {}

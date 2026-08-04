@@ -4,11 +4,11 @@
   import socketsPulse from "$server/sockets/socketsPulse"
 
   // `done()` is the socket's lifecycle probe: TRUE while the topic is IDLE — no active read has opened
-  // a subscription yet — and FALSE once a live read (iterate / peek / chunks) holds one. This topic is
+  // a subscription yet — and FALSE once an active read (iterate / live / chunks) holds one. This topic is
   // untouched by the other demos, so it starts idle and reads yes. done() is a STATUS probe: reading it
   // only observes the lifecycle, it never opens the subscription itself.
   const idle = memo(() => (socketsPulse.done() ? "yes" : "no"))
-  function open() { socketsPulse.peek() } // an ACTIVE probe opens the subscription → done() flips to no
+  function open() { socketsPulse.live() } // an ACTIVE READ opens the subscription → done() flips to no
 </script>
 
 <p><code>done()</code> — idle (no live subscription): <strong data-testid="socket-done-idle">{idle}</strong></p>

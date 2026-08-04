@@ -63,10 +63,11 @@ export interface CheckModule {
 // `{children()}` as legal (and as ALWAYS a function, so `{#if children}` was always true), which is the
 // only reason the interpolation form ever looked supported.
 const HEADER =
-    // `untracked()`, not `peek()` (ADR 0027 D2) — this shim must match `shared/internal/reactive.ts`'s
-    // real `State`, and `peek` now means the REACTIVE snapshot on `memo`/`channel`, which is cold-safe
-    // (`__T | undefined`) and so cannot stand in for a value type at all (see `__AbideMemo` below).
-    `interface __AbideState<__T> { (): __T; set(value: __T): void; untracked(): __T; }\n` +
+    // `peek()` — this shim must match `shared/internal/reactive.ts`'s real `State`, where it is the
+    // untracked read (one name, one meaning, all three primitives). A cell's `peek` returns `__T`; a
+    // memo's returns `__T | undefined` and so carries no value type, which is why `__AbideMemo` below
+    // pins on `state` instead.
+    `interface __AbideState<__T> { (): __T; set(value: __T): void; peek(): __T; }\n` +
     // Every arm is BRACKETED so the conditional does not distribute. A naked `__T extends readonly
     // never[]` distributes over a union, which sent each constituent through the arms alone: the `null`
     // of a `number | null` matched `[null] extends [null | undefined]` and widened to `any`, and
@@ -78,18 +79,18 @@ const HEADER =
     // An auto-called MEMO binding (ADR 0024 §5) reads as its VALUE, exactly as a cell does — the rewrite
     // turns `d` into `d()` everywhere, including before a member access, so `d.length` is the value's
     // length. Unwrapping it here is what makes the check agree with the emit; a probe reached through the
-    // binding (`d.peek()`) is not reachable at runtime either, so it fails loudly on both sides.
+    // binding (`d.live()`) is not reachable at runtime either, so it fails loudly on both sides.
     //
-    // `__T` is pinned by `state`, NOT by `peek`, and the difference is load-bearing. `peek` returns
+    // `__T` is pinned by `state`, NOT by either read, and the difference is load-bearing. They return
     // `__T | undefined`, so inference against a `SyncMemo<T | undefined>` STRIPS the `undefined` and
     // fixes `__T = T` — after which the memo's own `(): T | undefined` is not assignable to `(): __T`,
     // the overload is rejected, and the binding falls through to the identity overload below and types
-    // as the memo OBJECT. `peek` cannot be repaired: `T | undefined` is what it returns whether or not
+    // as the memo OBJECT. Neither read can be repaired: `T | undefined` is what they return whether or not
     // `T` itself includes `undefined`, so the value type is not recoverable from it. Nor can `(): __T`
     // pin it alone — `SyncMemo<T> extends Memo<void, T>` inherits `(args: void): Promise<T>`, and
     // inference from an overloaded source takes the LAST signature, which is the inherited async one.
     // `state(): State<__T>` is exact on both counts, and it is also the member that actually MEANS memo
-    // (`peek`/`invalidate` are on the shared reactive surface, so a channel/socket binding matched them
+    // (`live`/`peek`/`invalidate` are on the shared reactive surface, so a channel/socket binding matched them
     // too; `state` is memo-only — ADR 0024 §4). The `(): __T` signature stays as the ASSIGNABILITY gate:
     // it is what keeps an async `Memo` and a keyed `SyncKeyedMemo` — neither of which the emit
     // auto-calls — falling through to identity, so the two lanes keep agreeing.
@@ -364,7 +365,7 @@ function refExpr(node: { start: number; end: number }, expr: string, e: WalkEmit
 // Same guard for a TEXT interpolation, through the sink that rejects a thenable.
 //
 // This is a CONCEPT BOUNDARY, not a typing apology (ADR 0027 D3). There are three read forms and they do
-// different things: `{await fn()}` BLOCKS (the value lands in the initial HTML), `{fn.peek()}` does NOT
+// different things: `{await fn()}` BLOCKS (the value lands in the initial HTML), `{fn.live()}` does NOT
 // (reactive `T | undefined`), and `{#await fn()}` branches. A bare `{fn()}` is none of them — it is the
 // AWAITABLE, and `emitServer` auto-awaits every expression slot — guarded (`isThenable(v) ? await v : v`),
 // but still type-blind, so it cannot tell a promise-returning read from a plain value and a thenable is
