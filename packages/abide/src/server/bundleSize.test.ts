@@ -136,13 +136,19 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     // room read, and the `UntrackedRead` declaration. A rename alone would have been free; this costs
     // bytes because there are genuinely two behaviours now where one name used to carry both.
     //
+    // 139→142 KB is the whole-codebase review's reactive-substrate fixes and the reasoning attached to
+    // them: per-effect throw isolation in `flush` (one throwing binding used to leave every effect after
+    // it in the batch permanently dead), untracked teardown in `update`/`disposeNode`, and the memo's
+    // deferred-revalidation marker. ~850 bytes measured (139,000 → 139,846), almost all of it the
+    // comments explaining failure modes that are invisible in the code.
+    //
     // The ceiling is raised rather than the comments trimmed, deliberately: this bound is a
     // heavy-item tripwire (does a TypeScript compiler / a server-only subsystem reach the client?),
     // not a shipping budget — the assertions above are the real guard, and production is minified.
     // Squeezing under it by deleting the reasoning would trade the thing that has repeatedly caught
     // real bugs in this codebase for a number that measures nothing anyone ships.
     const bytes = Buffer.byteLength(body, 'utf8')
-    expect(bytes).toBeLessThan(139_000)
+    expect(bytes).toBeLessThan(142_000)
 
     // Still a real bundle that boots the app and carries the AOT client mount runtime path.
     expect(body).toContain('bootstrapPage')

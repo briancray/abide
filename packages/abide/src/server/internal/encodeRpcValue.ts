@@ -26,6 +26,7 @@
 // value that LEAVES the process, while `.raw` is the bare call encoded and a bare call is unshaped.
 // A caller wanting the shaped wire bytes is asking for an HTTP request, and has one.
 
+import { isSingleConsumer } from '../../shared/internal/responseSource.ts'
 import { json } from '../json.ts'
 import { streamResponseFor } from './streamResponse.ts'
 
@@ -41,7 +42,14 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 }
 
 export function encodeRpcValue(value: unknown, accept: string | null | undefined): Response {
-    if (value instanceof Response) return value.clone()
+    // The clone is what lets a RETAINED Response be handed to caller after caller. It is not free: a
+    // stream body TEES, and the branch left in the slot buffers everything the returned branch reads
+    // (measured streaming 200 MB: +43 MB RSS held, against 0 MB uncloned). So it is paid only where a
+    // second reader can exist. A memo-BYPASSING mutation (`memo: false`, a `FormData` body) has one
+    // consumer by construction — no slot, nobody to hand it to twice — and is tagged at the point that
+    // knows it (`tagSingleConsumer`, in `makeRpc`'s bypass branch), because transport cannot tell a
+    // bypass from a slot by looking at the `Response`.
+    if (value instanceof Response) return isSingleConsumer(value) ? value : value.clone()
     if (isAsyncIterable(value)) return streamResponseFor(value, accept)
     return json(value)
 }

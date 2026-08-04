@@ -32,7 +32,7 @@ import type {
     ReactiveValueProbes,
     UntrackedRead,
 } from '../../shared/internal/reactiveReadSurface.ts'
-import type { Payload } from '../../shared/internal/responseSource.ts'
+import { type Payload, tagSingleConsumer } from '../../shared/internal/responseSource.ts'
 import { type RpcMemoDeclaration, rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import type {
     MutationCallArgs,
@@ -563,7 +563,13 @@ export function makeMutation<Args, R>(
                 (typeof FormData !== 'undefined' && (args as unknown) instanceof FormData)
                     ? // The memo-bypass path still gets its deadline (ADR 0028): with no slot there is
                       // nothing else left to bound it.
-                      Promise.resolve(withDeadline(handler(args), timeout))
+                      //
+                      // …and it is the path with exactly ONE consumer, which transport cannot see from
+                      // the value alone. Tagged here so `encodeRpcValue` hands a handler-built
+                      // `Response` back whole instead of teeing it — a clone whose other branch nobody
+                      // will ever read is pure retention, and on a streaming download it is the whole
+                      // body. A no-op for any non-`Response` result.
+                      Promise.resolve(withDeadline(handler(args), timeout)).then(tagSingleConsumer)
                     : settleRead(() => backing(args)),
     })
     return mutation as unknown as MutationSurface<Args, R>

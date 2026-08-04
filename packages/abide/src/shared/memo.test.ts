@@ -6,7 +6,13 @@ import {
 } from '../server/internal/requestScope.ts'
 import { until } from '../test/internal/until.ts'
 import { settled, stopAll, tick, wakeups } from '../test/internal/wakeups.ts'
-import { effect, state } from './internal/reactive.ts'
+import {
+    closeEffectScope,
+    disposeEffectScope,
+    effect,
+    openEffectScope,
+    state,
+} from './internal/reactive.ts'
 import {
     createReactiveScope,
     enterScope,
@@ -1409,8 +1415,16 @@ describe('memo — the SWR refetch clock', () => {
         })
     })
 
-    // Regression guard for the default path: a memo with no clock must reach `startLoad` unchanged.
-    test('with no clock a refresh still loads immediately and coalesces onto the in-flight run', async () => {
+    // Regression guard for the default path: a memo with no clock must load immediately, and a trigger
+    // that lands while a load is outstanding must not be DROPPED.
+    //
+    // This used to assert `2` — i.e. that the second `refresh` joined the first one's in-flight promise
+    // and vanished. That is the same code path by which a `refresh()` after a mutation vanished whenever
+    // a page render's read of the same slot happened to still be in flight, and at a read's default
+    // `ttl: Infinity` the pre-change value was then served forever. The trigger is now DEFERRED to just
+    // after the outstanding run settles (`forceLoad`), so it re-runs once: 1 cold + 1 refresh + 1
+    // deferred follow-up.
+    test('with no clock a refresh lands immediately and a second is deferred, not dropped', async () => {
         await withScope(async () => {
             let runs = 0
             const load = memo(async ({ id }: { id: number }) => {
@@ -1421,7 +1435,25 @@ describe('memo — the SWR refetch clock', () => {
             load.refresh({ id: 1 })
             load.refresh({ id: 1 })
             await tick()
-            expect(runs).toBe(2)
+            await tick()
+            expect(runs).toBe(3)
+        })
+    })
+
+    // The collapse is what keeps the deferral from being a thundering herd: the marker is a BOOLEAN, so
+    // however many triggers land during one load, exactly one follow-up run answers all of them.
+    test('many triggers during one load collapse into a single follow-up run', async () => {
+        await withScope(async () => {
+            let runs = 0
+            const load = memo(async ({ id }: { id: number }) => {
+                runs++
+                return id * runs
+            })
+            await load({ id: 1 })
+            for (let i = 0; i < 10; i++) load.refresh({ id: 1 })
+            await tick()
+            await tick()
+            expect(runs).toBe(3)
         })
     })
 
@@ -1843,5 +1875,37 @@ describe('memo — peek (untracked) vs live (display read)', () => {
         expect(derived()).toBe(7) // the bare read classifies it
         expect(calls).toBe(1)
         expect(derived.peek()).toBe(7) // and now the untracked read sees it
+    })
+})
+
+describe('memo — a component-owned derivation is torn down with its component', () => {
+    // `requestScoped` is structurally false in a browser, so the auto-backing teardown covered the
+    // server and nothing else: a `memo(() => moduleState() * 2)` declared in a component `<script>`
+    // left its `fill` computed in `moduleState`'s observer list and its slot in the tab-global scope on
+    // every mount — unbounded growth, plus O(mounts) work on every write to that module state.
+    test('50 mount/unmount cycles retain no slots', () => {
+        const moduleState = state(1)
+        const before = reactiveScope().slots.size
+        for (let i = 0; i < 50; i++) {
+            const scope = openEffectScope()
+            const derived = memo(() => moduleState() * 2)
+            derived() // the first read is what builds the auto backing
+            closeEffectScope(scope)
+            disposeEffectScope(scope)
+        }
+        expect(reactiveScope().slots.size - before).toBe(0)
+    })
+
+    // The other side of the rule: the owner is the scope the memo was DECLARED in, not the one open at
+    // its first read. A module-level memo read inside a component must survive that component.
+    test('a module-level memo survives the component that first read it', () => {
+        const moduleState = state(2)
+        const shared = memo(() => moduleState() * 3)
+        const scope = openEffectScope()
+        expect(shared()).toBe(6)
+        closeEffectScope(scope)
+        disposeEffectScope(scope)
+        moduleState.set(4)
+        expect(shared()).toBe(12)
     })
 })

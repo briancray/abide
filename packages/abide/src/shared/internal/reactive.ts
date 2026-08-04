@@ -120,7 +120,19 @@ class Reactive {
                 }
             }
         }
-        if (this.status === DIRTY) this.update()
+        if (this.status === DIRTY) {
+            try {
+                this.update()
+            } catch (caught) {
+                // An EFFECT is QUEUE-driven, and `stale` enqueues only on the CLEAN -> stale edge — so one
+                // left DIRTY by a throwing body is never enqueued again and no later write can revive it.
+                // Returning it to CLEAN is what makes the next change re-run it. A COMPUTED is PULL-driven
+                // and re-runs on read while DIRTY, so it is left stale deliberately: caching the
+                // `undefined` of a failed run would turn a throwing derivation into a silently empty one.
+                if (this.isEffect) this.status = CLEAN
+                throw caught
+            }
+        }
         this.status = CLEAN
     }
 
@@ -128,16 +140,34 @@ class Reactive {
         const prevObserver = currentObserver
         const prevSources = currentSources
         const prevIndex = currentSourcesIndex
-        currentObserver = this
-        currentSources = null
-        currentSourcesIndex = 0
 
-        // Run teardown before re-running the effect body.
+        // TEARDOWN RUNS UNTRACKED, and it runs BEFORE this node becomes the current observer. Disposal
+        // is not part of what an effect DEPENDS on: a cleanup that happens to read a cell was recording
+        // that cell as a source, so the effect then re-ran on writes to something its body never reads.
+        // The reachable case is a block helper, whose branch disposer IS its cleanup — flip
+        // `{#if a}<div bind:element={box}/>{:else}<span bind:element={box}/>{/if}` and `bindElement`'s
+        // teardown reads `box` (`accessor.read() === element`), so from then on ANY `box.set(...)` marks
+        // the `{#if}` effect dirty and rebuilds the visible branch, losing focus, scroll and uncommitted
+        // input for a change to a cell the condition does not mention. `forBlock` and `dynamicComponent`
+        // escaped only by already wrapping their disposal in `untrack`.
         if (this.isEffect && this.cleanup !== null) {
             const teardown = this.cleanup
             this.cleanup = null
-            teardown()
+            currentObserver = null
+            currentSources = null
+            currentSourcesIndex = 0
+            try {
+                teardown()
+            } finally {
+                currentObserver = prevObserver
+                currentSources = prevSources
+                currentSourcesIndex = prevIndex
+            }
         }
+
+        currentObserver = this
+        currentSources = null
+        currentSourcesIndex = 0
 
         const fn = this.fn
         if (fn === null) throw new Error('update() ran on a source node without a compute fn')
@@ -238,7 +268,21 @@ function flush(): void {
         const batchOfEffects = effectQueue
         effectQueue = []
         for (const node of batchOfEffects) {
-            if (node.status !== DISPOSED) node.updateIfNecessary()
+            if (node.status === DISPOSED) continue
+            // ISOLATED PER EFFECT. The batch is already detached from `effectQueue`, so a throw escaping
+            // this loop abandons every effect after it — and since `stale` enqueues only on the
+            // CLEAN -> stale edge, those are left stale and unqueueable, i.e. dead for the life of the
+            // process. One binding throwing once (a transiently-null read) would silently freeze the rest
+            // of the page, with no error after the first. The failure is re-thrown from a fresh microtask
+            // instead, so it still reaches the host's uncaught handler exactly as it did, with the flush
+            // intact — visibility is what a `catch` here would cost, and it is not what needs paying.
+            try {
+                node.updateIfNecessary()
+            } catch (caught) {
+                queueMicrotask(() => {
+                    throw caught
+                })
+            }
         }
     }
 }
@@ -248,7 +292,22 @@ function disposeNode(node: Reactive): void {
     if (node.cleanup !== null) {
         const teardown = node.cleanup
         node.cleanup = null
-        teardown()
+        // UNTRACKED, for the reason `update()` gives: disposal is not a dependency. Here the observer
+        // that would capture the reads is whoever is disposing — an effect tearing down a child scope —
+        // so a teardown reading a cell would subscribe the PARENT to it.
+        const prevObserver = currentObserver
+        const prevSources = currentSources
+        const prevIndex = currentSourcesIndex
+        currentObserver = null
+        currentSources = null
+        currentSourcesIndex = 0
+        try {
+            teardown()
+        } finally {
+            currentObserver = prevObserver
+            currentSources = prevSources
+            currentSourcesIndex = prevIndex
+        }
     }
     removeSourceObservers(node, 0)
     node.sources = null

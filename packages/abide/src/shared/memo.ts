@@ -62,6 +62,7 @@ import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.t
 import { type Room, room } from './internal/room.ts'
 import { markSettled } from './internal/settledRead.ts'
 import {
+    sharedCacheAbandonStream,
     sharedCacheAccount,
     sharedCacheBounded,
     sharedCachePin,
@@ -114,6 +115,10 @@ interface Slot<Args, T> {
     loadedAt: number
     // Bumped on invalidate/refresh so a superseded in-flight load discards its late result.
     generation: number
+    // A revalidation asked for while a load was already in flight, deferred to just after it settles.
+    // BOOLEAN, so any number of triggers during one load collapse into exactly ONE follow-up run — the
+    // coalescing a `refresh` deserves, without the dropping it used to get. See `forceLoad`.
+    refreshPending?: boolean
     // Reactive chunk-progress tick for a STREAM slot (set on first stream start). Bumped on every chunk
     // push and on the terminal, so `latest`/`chunks`/`done` re-run as the transcript grows — kept SEPARATE
     // from `state` so per-chunk updates never re-run the bare read (which would restart a `{#for await}`).
@@ -613,6 +618,31 @@ export function memo<Args, T>(
         )
     }
 
+    // THE SCOPE THIS MEMO WAS DECLARED IN, captured ONCE at construction — a component `<script>`, or
+    // nothing for a module-level memo (every rpc client proxy), which lives as long as the process does.
+    // Everything with the MEMO's lifetime hangs off this: today the auto-tracked backings, which are
+    // built lazily per slot and so cannot use the scope open at their own first read (that scope belongs
+    // to whichever component happened to read first, and a shared memo would then be torn down when it
+    // unmounted). One registration, not one per slot, so a memo read under a hundred keys still costs the
+    // owning scope a single disposer.
+    //
+    // A `crossRequest` memo opts out for the reason the server branch in `createAutoBacking` does: its
+    // slots live in `sharedStore()` and outlive whatever scope built them.
+    const ownerDisposal = ((): { register(teardown: () => void): void } | undefined => {
+        if (crossRequest) return undefined
+        const teardowns: (() => void)[] = []
+        const registered = onEffectScopeDispose(() => {
+            for (const teardown of teardowns) teardown()
+            teardowns.length = 0
+        })
+        if (!registered) return undefined
+        return {
+            register(teardown: () => void): void {
+                teardowns.push(teardown)
+            },
+        }
+    })()
+
     // Fire the broadcast sink for a slot-changing verb — ONLY on a crossRequest memo (broadcast is a
     // cross-request-slot concept). Transport-free: the memo just calls the injected function.
     function broadcast(
@@ -832,7 +862,20 @@ export function memo<Args, T>(
                             source?.kind !== 'stream' && !isThenable(raw) && !isStreamSource(raw)
                     }
                     const produced = (await withDeadline(raw, timeoutMs)) as T
-                    if (slot.generation !== generation) return produced as T // superseded — discard silently
+                    if (slot.generation !== generation) {
+                        // SUPERSEDED — an `invalidate` landed mid-flight, so nothing below may touch the
+                        // slot. But the awaiting caller is still handed THIS promise (`coalescedLoad`
+                        // returned `slot.inflight.then(mapRead)`), so what resolves here is still that
+                        // read's value and it still owes the see-through: returning `produced` raw hands a
+                        // `json()` handler's caller the `Response` OBJECT typed as `T`, so `value.field` is
+                        // `undefined`. Unwrap without installing — the discard is of the SLOT WRITE, not
+                        // of the result.
+                        const supersededTag = responseSourceOf(produced)
+                        if (supersededTag?.kind === 'value') return supersededTag.value as T
+                        if (supersededTag?.kind === 'stream')
+                            return supersededTag.source as unknown as T
+                        return produced as T
+                    }
                     // See through a json()/jsonl()/sse() wrapper to its pre-encoding payload, so a wrapped result
                     // caches/streams exactly like the raw form (replayable-streams.md §4).
                     const tagged = responseSourceOf(produced)
@@ -861,7 +904,17 @@ export function memo<Args, T>(
                     }
                     throw caught
                 } finally {
-                    if (slot.generation === generation) slot.inflight = null
+                    if (slot.generation === generation) {
+                        slot.inflight = null
+                        // A revalidation arrived while this run was outstanding (`forceLoad`). Run it now,
+                        // one run for however many triggers landed. Skipped when the generation moved: an
+                        // `invalidate` already dropped the slot, and the documented rule is that it
+                        // CANCELS a scheduled revalidation rather than queueing behind it.
+                        if (slot.refreshPending === true) {
+                            slot.refreshPending = false
+                            void startLoad(slot, true).catch(() => {})
+                        }
+                    }
                 }
             })()
 
@@ -879,10 +932,40 @@ export function memo<Args, T>(
     // an `invalidate`, and the ttl-expiry re-fill all reach `startLoad` directly, for the reasons the
     // option docs give. With no clock configured this is one compare and a tail call.
 
+    // AN EXPLICIT REVALIDATION, which is not the same request as a read's load — and the difference is
+    // what `startLoad`'s coalescing guard could not express. A READ joins the run in flight; that is the
+    // coalescing the memo exists for. A `refresh()` may not: it means "whatever that run is about to
+    // produce is already known to be stale", and a run started BEFORE the change cannot answer it.
+    // `startLoad` returning the in-flight promise made `refresh`, tag-refresh and the whole refetch clock
+    // TOTAL NO-OPS whenever a load happened to be outstanding — no re-run, no `refreshing()` — and at a
+    // read's default `ttl: Infinity` the pre-change value was then served permanently. The case is
+    // ordinary: a mutation writes, then calls `getUser.refresh({id})` while a page render's read of the
+    // same slot is still in flight. Note the asymmetry this removes — `invalidate` always superseded, and
+    // `refresh` never did.
+    //
+    // DEFERRED, not SUPERSEDING, and the difference is the thundering herd. Bumping the generation and
+    // starting a second run is what `invalidate` does, but `invalidate` is not called in a loop the way a
+    // tag refresh across N slots is: two triggers landing on one slot would then be two concurrent runs of
+    // the handler, three would be three. Marking the slot instead collapses ANY number of triggers during
+    // one load into exactly one follow-up run, and that run starts after the last of them — so it cannot
+    // be the one reading pre-change state either. The in-flight run is left alone rather than discarded,
+    // because the callers coalesced onto it are owed an outcome and it is still the freshest one there is.
+    function forceLoad(slot: Slot<Args, T>): void {
+        if (slot.inflight !== null) {
+            slot.refreshPending = true
+            // The refreshing axis is its own signal, so raising it here is what makes `refreshing()`
+            // honest between the trigger and the follow-up load. Only over a RETAINED value: with nothing
+            // to serve, `pending()` is already the answer and `refreshing` would be a second word for it.
+            if (slot.state.peek().status === 'value') slot.refreshing.set(true)
+            return
+        }
+        void startLoad(slot, true).catch(() => {})
+    }
+
     // A trigger arrived. Run the load now, or schedule it and let the retained value keep being served.
     function scheduleRefresh(slot: Slot<Args, T>): void {
         if (clockMs === 0) {
-            startLoad(slot, true)
+            forceLoad(slot)
             return
         }
         let window = slot.window
@@ -890,7 +973,7 @@ export function memo<Args, T>(
             window = refetchWindow({
                 isDebounce: clockIsDebounce,
                 ms: clockMs,
-                fire: () => startLoad(slot, true),
+                fire: () => forceLoad(slot),
                 serving: () => slot.state.peek().status === 'value',
             })
             slot.window = window
@@ -1090,6 +1173,27 @@ export function memo<Args, T>(
                 fill.dispose()
             })
         }
+        // `requestScoped` is structurally false in a BROWSER, so the branch above covered the server and
+        // nothing else — and a `memo(() => moduleState() * 2)` declared in a component `<script>` left
+        // its `fill` computed in `moduleState`'s observer list, and its slot in the tab-global scope, on
+        // every mount. Unbounded growth, plus O(mounts) work on every write to that module state.
+        //
+        // The owner is the scope the MEMO was declared in, captured at construction (`ownerDisposal`) —
+        // deliberately NOT whatever effect scope happens to be open at this slot's first read. Slots are
+        // created lazily, so a module-level memo's first read can land inside any component, and hanging
+        // its teardown there would tear down a shared memo when that one component unmounted. Same rule
+        // the tag registration uses, and the same reason.
+        //
+        // BOTH halves go, because the leak has two: the computed nodes hold an observer edge in whatever
+        // the body read (so every write to a module `state` walks one dead observer per past mount), and
+        // the SLOT holds an entry in the tab-global map (so the map grows without bound). Disposing the
+        // backing alone would have fixed the work and left the memory.
+        ownerDisposal?.register(() => {
+            gate?.window.cancel()
+            merged.dispose()
+            fill.dispose()
+            disposeSlot(slot)
+        })
         return {
             version,
             fill,
@@ -1284,6 +1388,33 @@ export function memo<Args, T>(
             //
             // A refreshed timer rather than a raced `next()`: racing allocates a promise and a timer per
             // chunk on the hottest path a stream has, to observe an event that almost never fires.
+            // SETTLING THE SLOT IS THE WATCHDOG'S JOB TOO, not the pump loop's alone. These three lines
+            // used to live only in the `finally` below — which is exactly the code a stalled source never
+            // reaches: `controller.abort()` is only observed by the `signal.aborted` check at the TOP of
+            // the loop, so a `for await` parked on a chunk that never comes never breaks and never runs a
+            // `finally`. That is precisely the state the deadline fires in. The slot was then left
+            // `expired: false` while its stream reported `settled` (errored), and at a read's default
+            // `ttl: Infinity` `isExpired` stayed false forever — so every later read of that `(rpc, args)`
+            // replayed the truncated transcript and re-threw the same `TimeoutError`, and the handler was
+            // never run again. ADR 0028 D7's "settled-but-EXPIRED, so the next read runs cold" did not
+            // hold on the stream path at all.
+            //
+            // Once-only, because both callers may reach it (a source that DOES honour the abort still
+            // completes its `finally` after the watchdog stamped) and `sharedCacheSettleStream` unpins.
+            let slotSettled = false
+            const settleSlot = (): void => {
+                if (slotSettled) return
+                slotSettled = true
+                // Only touch the slot if it STILL holds this stream (not superseded by an invalidate/re-run).
+                if (slot.state.peek().stream !== stream) return
+                // TTL-from-close (§2): the retention clock starts when the transcript settles, not at
+                // fn-resolve. A transcript the DEADLINE cut is settled-but-expired instead (ADR 0028 D7),
+                // so the next read re-runs rather than replaying a truncated one for the rest of its ttl.
+                slot.loadedAt = Date.now()
+                slot.expired = isTimeoutError(stream.error)
+                // The transcript is now a CLOSED value: unpin (LRU-evictable) and record its final size.
+                sharedCacheSettleStream(store, slot.key, stream.bytes)
+            }
             const watchdog = armStreamDeadline(timeoutMs, () => {
                 // `fail`, not `abort`: an aborted ReplayableStream ends its consumers SILENTLY, and a
                 // truncated list a caller cannot distinguish from a finished one is the failure mode D8
@@ -1293,6 +1424,9 @@ export function memo<Args, T>(
                 stream.fail(new DOMException('The rpc run exceeded its timeout.', 'TimeoutError'))
                 // The stream's own `onAbort` no longer runs (it is settled), so stop the SOURCE directly.
                 controller.abort()
+                // The pump's `finally` may never run — see `settleSlot`. Stamp here so the slot expires.
+                settleSlot()
+                bumpStreamTick(slot) // reflect the terminal (error) to reactive probes
             })
             try {
                 for await (const chunk of rest) {
@@ -1305,16 +1439,7 @@ export function memo<Args, T>(
                 stream.fail(caught)
             } finally {
                 watchdog.cancel()
-                // Only touch the slot if it STILL holds this stream (not superseded by an invalidate/re-run).
-                if (slot.state.peek().stream === stream) {
-                    // TTL-from-close (§2): the retention clock starts when the transcript settles, not at fn-resolve.
-                    // A transcript the DEADLINE cut is settled-but-expired instead (ADR 0028 D7), so the next
-                    // read re-runs rather than replaying a truncated one for the rest of its ttl.
-                    slot.loadedAt = Date.now()
-                    slot.expired = isTimeoutError(stream.error)
-                    // The transcript is now a CLOSED value: unpin (LRU-evictable) and record its final size.
-                    sharedCacheSettleStream(store, slot.key, stream.bytes)
-                }
+                settleSlot()
                 bumpStreamTick(slot) // reflect the terminal (done/error) to reactive probes
             }
         })()
@@ -1730,6 +1855,9 @@ export function memo<Args, T>(
     // reload on next read. The slot stays in the map so existing subscriptions stay live.
     function dropSlot(slot: Slot<Args, T>): void {
         cancelClock(slot)
+        // `invalidate` CANCELS a scheduled revalidation rather than deferring behind it — the same rule
+        // `cancelClock` applies to the refetch window, applied to the other carrier of the same intent.
+        slot.refreshPending = false
         const auto = slot.auto
         if (auto !== undefined) {
             autoRefill(auto, false) // lazy: re-runs `fn` on the next pull
@@ -1740,6 +1868,11 @@ export function memo<Args, T>(
         // slot has nothing to tear down.
         if (state.status === 'stream' && state.stream !== undefined && !state.stream.settled) {
             state.stream.abort()
+            // …and UNPIN it here, because nothing downstream will. Both paths that normally unpin
+            // (`startStream`'s `finally` and `onStreamRefCountZero`) guard on the slot still holding
+            // this stream, and the reset below is about to make that false. See
+            // `sharedCacheAbandonStream` for what a leaked pin costs a bounded cache.
+            sharedCacheAbandonStream(boundedStore(slots()), slot.key)
         }
         slot.generation++
         slot.inflight = null

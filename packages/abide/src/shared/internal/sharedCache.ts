@@ -148,3 +148,22 @@ export function sharedCacheSettleStream(
     sharedCacheUnpin(store, key)
     sharedCacheAccount(store, key, bytes)
 }
+
+// A stream was ABANDONED mid-flight — `invalidate` on an open stream, which aborts the source and
+// resets the slot to idle. The third moment, and the one that had no name: `dropSlot` aborted and
+// reset without unpinning, and neither of the two paths that normally unpin could cover for it (the
+// pump's `finally` and `onStreamRefCountZero` both guard on the slot still holding THAT stream, and by
+// then it holds none). So the key stayed pinned with its stale byte size for the life of the process —
+// verbatim the permanent leak the header above describes, and worse than a leak: `evictIfNeeded`
+// deliberately keeps COUNTING pinned bytes, so repeated mid-stream invalidations drag a bounded cache's
+// effective ceiling to zero and start evicting live entries in favour of dead ones.
+//
+// The slot holds nothing now, so it accounts for zero bytes rather than the transcript's.
+export function sharedCacheAbandonStream(
+    store: Map<string, unknown> | undefined,
+    key: string,
+): void {
+    if (store === undefined) return
+    sharedCacheUnpin(store, key)
+    sharedCacheAccount(store, key, 0)
+}
