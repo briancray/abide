@@ -358,6 +358,31 @@ function refExpr(node: { start: number; end: number }, expr: string, e: WalkEmit
     e.emitSynthetic(');\n')
 }
 
+// The same guard for an ATTRIBUTE's expression, whose node span starts at the attribute NAME rather
+// than at the value — so searching that span for the expression text finds the NAME first whenever the
+// two share a substring. `<button onclick={click}>` recorded the `click` inside `onclick`;
+// `<Card count={count}/>` recorded the prop name; `<p title={title}>` likewise. `x={x}` and
+// `on<event>={handler}` are the two most common attribute spellings in the language, so this was most
+// of them.
+//
+// The consequences are both in the MAP, which no verbatim-copy assertion can see (the bytes copied are
+// identical — only `origStart` is wrong): a `Cannot find name` diagnostic is reported at the column of
+// the name instead of the expression, and `mapOrigToGen` returns -1 for the expression's real offset,
+// so `resolvePosition` bails and hover / go-to-definition / rename / signature-help are dead on the
+// expression while hovering the attribute NAME answers instead.
+function attributeValueStart(attribute: { start: number; end: number }, source: string): number {
+    const equals = source.indexOf('=', attribute.start)
+    return equals === -1 || equals >= attribute.end ? attribute.start : equals + 1
+}
+
+function attributeRefExpr(
+    attribute: { start: number; end: number },
+    expr: string,
+    e: WalkEmit,
+): void {
+    refExpr({ start: attributeValueStart(attribute, e.source), end: attribute.end }, expr, e)
+}
+
 // Same guard for a TEXT interpolation, through the sink that rejects a thenable.
 //
 // This is a CONCEPT BOUNDARY, not a typing apology (ADR 0027 D3). There are three read forms and they do
@@ -459,12 +484,13 @@ function emitAttributes(attributes: AttributeNode[], e: WalkEmit): void {
             case 'ExpressionAttribute':
             case 'EventAttribute':
             case 'SpreadAttribute':
-                refExpr(attribute, attribute.expression, e)
+                attributeRefExpr(attribute, attribute.expression, e)
                 break
             case 'BindDirective':
             case 'ClassDirective':
             case 'StyleDirective':
-                if (attribute.expression !== null) refExpr(attribute, attribute.expression, e)
+                if (attribute.expression !== null)
+                    attributeRefExpr(attribute, attribute.expression, e)
                 break
         }
     }
@@ -518,7 +544,7 @@ function emitComponentCall(node: Extract<TemplateNode, { type: 'Component' }>, e
             case 'ExpressionAttribute':
             case 'EventAttribute':
                 e.emitSynthetic(` ${JSON.stringify(attr.name)}: (`)
-                e.emitExpr(attr.start, attr.end, attr.expression)
+                e.emitExpr(attributeValueStart(attr, e.source), attr.end, attr.expression)
                 e.emitSynthetic('),')
                 break
             case 'BindDirective':
