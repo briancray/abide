@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createTestApp } from '../test/createTestApp.ts'
+import { until } from '../test/internal/until.ts'
 import { DELETE } from './DELETE.ts'
 import { GET } from './GET.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './internal/requestScope.ts'
@@ -246,6 +247,14 @@ describe('__rpc router metadata', () => {
     // The SWR refetch clock (rpc-core §3) reaching the server memo through the rpc option bag. Triggers
     // are SPREAD, not burst: back-to-back refreshes coalesce onto one in-flight load with no clock at
     // all, so only spacing them past a settle makes the count distinguish the two implementations.
+    //
+    // The window is a SECOND for the reason its client twin's is (`clientProxy.test.ts`): "nothing has
+    // fired yet" is the one claim here a condition-wait cannot express, so it is a race whose only
+    // defence is margin. 45ms of spreading inside a 1000ms window is 20x; the 120ms-in-300ms it used to
+    // be was 2.5x, and the parallel suite lost it about one run in twelve.
+    const THROTTLE_MS = 1000
+    const SPREAD_GAP_MS = 15
+
     test('a read declaring memo: { throttle } collapses spread-out refreshes into one refetch', async () => {
         let calls = 0
         const get = GET(
@@ -253,7 +262,7 @@ describe('__rpc router metadata', () => {
                 calls++
                 return n * 10
             },
-            { memo: { throttle: 300 } },
+            { memo: { throttle: THROTTLE_MS } },
         )
         await runInScope(makeScope(), async () => {
             expect(await get(5)).toBe(50)
@@ -262,17 +271,28 @@ describe('__rpc router metadata', () => {
             get.refresh(5) // leading edge — runs at once
             expect(await get(5)).toBe(50)
             expect(calls).toBe(2)
+            // The window opens at the leading edge, so that is what the margin below is measured from.
+            const windowOpened = Date.now()
 
             for (let index = 0; index < 3; index++) {
                 get.refresh(5)
-                await new Promise((resolve) => setTimeout(resolve, 40))
+                await new Promise((resolve) => setTimeout(resolve, SPREAD_GAP_MS))
             }
+            // Asserted BEFORE the count, so a box that stalled through the whole window fails saying so
+            // rather than reporting a throttle that did not hold.
+            const elapsed = Date.now() - windowOpened
+            expect({ elapsed, insideWindow: elapsed < THROTTLE_MS }).toEqual({
+                elapsed,
+                insideWindow: true,
+            })
             // Un-throttled these would be three more runs (calls === 5).
             expect(calls).toBe(2)
             // The retained value is served throughout — the read never blocks on the deferred load.
             expect(get.live(5)).toBe(50)
 
-            await new Promise((resolve) => setTimeout(resolve, 300))
+            // Waited for, not slept past: the trailing load fires at the window's end and then has to
+            // RUN, and a fixed sleep sized to the window alone raced that second half.
+            await until('the single trailing refetch ran', () => calls >= 3)
             expect(calls).toBe(3)
         })
     })

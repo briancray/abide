@@ -18,6 +18,7 @@ import { memo } from '../../shared/memo.ts'
 import { pending } from '../../shared/pending.ts'
 import { refresh } from '../../shared/refresh.ts'
 import { refreshing } from '../../shared/refreshing.ts'
+import { until } from '../../test/internal/until.ts'
 import { makeRead, type Rpc } from './makeRpc.ts'
 import { anonymousPrincipal, type RequestScope, runInScope } from './requestScope.ts'
 
@@ -40,16 +41,6 @@ function bindLikeCreateApp<Args, T>(route: Rpc<Args, T>, name: string): void {
         const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
         publishMemoFrame(memoChannelName(name, args), frame)
     })
-}
-
-// Wait for a condition rather than sleeping a guessed interval — the suite runs in parallel, so a
-// fixed sleep sized on an idle machine becomes an intermittent failure under load.
-async function until(condition: () => boolean, timeoutMs = 2000): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (!condition()) {
-        if (Date.now() > deadline) throw new Error('until: condition not met before the deadline')
-        await new Promise((resolve) => setTimeout(resolve, 5))
-    }
 }
 
 const TIMEOUT = Symbol('timeout')
@@ -300,7 +291,7 @@ describe('cache tags — isomorphic (no crossRequest)', () => {
 
         expect(await derived()).toBe(1)
         refresh({ tags: ['bare'] })
-        await until(() => calls === 2)
+        await until('the tag refresh re-ran the memo', () => calls === 2)
         expect(calls).toBe(2) // eager, no scope needed — nothing here is server machinery
     })
 
@@ -330,7 +321,7 @@ describe('cache tags — isomorphic (no crossRequest)', () => {
         expect(sharedCalls).toBe(1)
 
         refresh({ tags: ['mixed'] })
-        await until(() => plainCalls === 2 && sharedCalls === 2)
+        await until('both tagged memos re-ran', () => plainCalls === 2 && sharedCalls === 2)
         expect(plainCalls).toBe(2)
         expect(sharedCalls).toBe(2)
     })

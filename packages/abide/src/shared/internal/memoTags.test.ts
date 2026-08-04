@@ -10,6 +10,7 @@
 // no coverage at all.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { until } from '../../test/internal/until.ts'
 import { invalidate } from '../invalidate.ts'
 import { memo } from '../memo.ts'
 import { pending } from '../pending.ts'
@@ -165,7 +166,9 @@ describe('a tagged DERIVATION agrees with its own callable', () => {
         expect(refreshing({ tags: ['derived-clock'] })).toBe(true)
         expect(derived()).toBe(1) // the admitted value keeps being served during the window
 
-        await new Promise((resolve) => setTimeout(resolve, 60))
+        // Waited for, not slept past: the debounce window ends and the derivation then has to RUN and
+        // publish, and a fixed sleep sized to the window alone raced that second half.
+        await until('the debounced derivation published', () => derived() === 2)
         expect(derived()).toBe(2)
         expect(refreshing({ tags: ['derived-clock'] })).toBe(derived.refreshing())
         expect(refreshing({ tags: ['derived-clock'] })).toBe(false)

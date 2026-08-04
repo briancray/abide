@@ -6,6 +6,7 @@
 // guard = the full suite staying green).
 
 import { describe, expect, test } from 'bun:test'
+import { until } from '../test/internal/until.ts'
 import { effect } from './internal/reactive.ts'
 import { memo } from './memo.ts'
 
@@ -105,7 +106,9 @@ describe('memo streaming — reactive peek (latest) / chunks / done', () => {
             seen.push(c.live({}) as number | undefined)
         })
 
-        await sleep(60)
+        // Waited for, not slept past: three 5ms chunks are ~15ms of work and the sleep was 60ms, which
+        // only looks like margin until the suite's other fifteen files are on the same scheduler.
+        await until('the stream closed', () => c.done({}))
         dispose()
 
         expect(c.live({}) as number | undefined).toBe(2) // most-recent chunk = the "current value"
@@ -174,7 +177,9 @@ describe('memo streaming — error & invalidate', () => {
             }
         })()
 
-        await sleep(10) // let 0,1 flush; source now parked
+        // The source parks on `gate` after yielding 1, so this cannot overshoot however long it waits —
+        // which is exactly why it can be a condition instead of a guess at how long two yields take.
+        await until('0 and 1 flushed to the consumer', () => collected.length === 2)
         expect(collected).toEqual([0, 1])
 
         c.invalidate({}) // abort the open stream
@@ -236,7 +241,7 @@ describe('memo streaming — settled/streaming vs done', () => {
         })
 
         void c.live({}) // kick the source
-        await sleep(20)
+        await until('the source is open and delivering', () => c.streaming({}))
         expect(c.streaming({})).toBe(true) // open and delivering
 
         c.invalidate({})
@@ -261,11 +266,14 @@ describe('memo streaming — settled/streaming vs done', () => {
         expect(c.settled({})).toBe(false)
 
         void c.live({}) // kick
-        await sleep(15)
+        // STREAMING: waited for rather than slept to. Stopping at the FIRST chunk is also what makes
+        // the `settled` assertion below meaningful — a fixed 15ms could land anywhere in the stream's
+        // life, including after it ended, at which point it would be asserting the wrong phase.
+        await until('the first chunk opened the stream', () => c.streaming({}))
         expect(c.streaming({})).toBe(true)
         expect(c.settled({})).toBe(false)
 
-        await sleep(30)
+        await until('the stream ended', () => c.settled({}))
         expect(c.streaming({})).toBe(false)
         expect(c.settled({})).toBe(true)
         expect(c.done({})).toBe(true) // closed CLEANLY, so here done and settled agree

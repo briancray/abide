@@ -11,6 +11,7 @@ import {
     type RequestScope,
     runInScope,
 } from '../server/internal/requestScope.ts'
+import { until } from '../test/internal/until.ts'
 import { sharedStore } from './internal/sharedCache.ts'
 import { memo } from './memo.ts'
 
@@ -152,7 +153,9 @@ describe('shared streaming — open stream is pinned', () => {
         const readerB = runInScope(makeScope(), async () => {
             for await (const v of await c({})) collectedB.push(v)
         })
-        await sleep(10)
+        // B must have JOINED A's open run before the source is released — that is the coalescing this
+        // asserts. `runs` is the observable for it; a sleep was a guess at how long a join takes.
+        await until('both readers joined the one run', () => runs === 1 && collectedA.length > 0)
         release()
         await Promise.all([readerA, readerB])
 

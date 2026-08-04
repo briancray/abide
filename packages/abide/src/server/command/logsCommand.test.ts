@@ -3,6 +3,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { logFeed } from '../../shared/internal/logFeed.ts'
 import { createTestApp, type TestApp } from '../../test/createTestApp.ts'
+import { until } from '../../test/internal/until.ts'
 import { CLI_EXIT_CODES } from './CLI_EXIT_CODES.ts'
 import { logsCommand } from './logsCommand.ts'
 
@@ -175,9 +176,14 @@ test('an abort ends the tail cleanly rather than as a failure', async () => {
             writeError: () => {},
             signal: feed.signal,
         })
-        await Bun.sleep(100)
-        logFeed.publish('log', 'myapp', 'while watching', undefined, new Date())
-        await Bun.sleep(100)
+        // Two waits, and NEITHER can be a sleep. The first stood in for "the SSE tail has attached" —
+        // and a record published before the subscriber attaches is not late, it is MISSED, so no amount
+        // of extra waiting recovers it. That is what `poke` is for: republish on every re-check until
+        // one lands. The second stood in for "the record reached the reader", which is a plain
+        // condition. Both were 100ms sized on an idle box, and the parallel suite lost them.
+        await until('a published record reached the tail', () => out.includes('while watching'), {
+            poke: () => logFeed.publish('log', 'myapp', 'while watching', undefined, new Date()),
+        })
         feed.abort()
         // A detach is how a tail normally ENDS, so it must not report failure.
         expect(await running).toBe(CLI_EXIT_CODES.ok)

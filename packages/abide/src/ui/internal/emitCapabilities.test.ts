@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { effect, state } from '../../shared/internal/reactive.ts'
+import { until } from '../../test/internal/until.ts'
 import { emitModuleSource, loadEmitted, loadEmittedServer } from './emit.ts'
 import type { Mountable } from './runtime.ts'
 
@@ -542,8 +543,12 @@ describe('done() stream-completion probe', () => {
         const stream = finite()
         const { host, dispose } = await mount(DONE_PAGE, { stream })
         expect(host.querySelector('#flag')?.textContent).toBe('streaming')
-        // Let the async iterator drain (microtask + a macrotask turn for the for-await loop).
-        await new Promise((resolve) => setTimeout(resolve, 30))
+        // Let the async iterator drain — waited for, not slept through: the flag IS the drain's
+        // completion signal, so there is nothing to estimate.
+        await until(
+            'the streamed list finished draining',
+            () => host.querySelector('#flag')?.textContent === 'DONE',
+        )
         expect([...host.querySelectorAll('.i')].map((n) => n.textContent).join('')).toBe('abc')
         expect(host.querySelector('#flag')?.textContent).toBe('DONE')
         dispose()

@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { PassThrough } from 'node:stream'
+import { until } from '../../test/internal/until.ts'
 import { lineReader } from './lineReader.ts'
 
 // A terminal reader over a pair of pipes. `terminalInput`/`terminalOutput` exist for this: readline
@@ -153,7 +154,7 @@ describe('at a terminal', () => {
         const { reader, type, printed } = atTerminal()
         const line = reader.read('> ', { complete: completes(['cacheTtl', 'cacheCounter']) })
         await type('cacheT')
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        await until('the suggestion was painted', () => printed().includes(`${DIM}tl`))
         // Only the REMAINDER is drawn, dimmed, then the cursor walks back over it.
         expect(printed()).toContain(`${DIM}tl`)
         await type('\n')
@@ -164,10 +165,12 @@ describe('at a terminal', () => {
     })
 
     test('the right arrow at the end of the line accepts it', async () => {
-        const { reader, type } = atTerminal()
+        const { reader, type, printed } = atTerminal()
         const line = reader.read('> ', { complete: completes(['cacheTtl']) })
         await type('cacheT')
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        // The arrow can only accept a suggestion that has been PAINTED, so that is the thing to wait
+        // for — a fixed 20ms was a guess at how long the reader's loop takes to get there.
+        await until('the suggestion was painted', () => printed().includes(`${DIM}tl`))
         await type(RIGHT)
         await new Promise((resolve) => setTimeout(resolve, 20))
         await type('\n')
@@ -181,7 +184,7 @@ describe('at a terminal', () => {
             complete: () => ({ candidates: [], partial: '', hint: '--name <string>' }),
         })
         await type('rpcGreet ')
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        await until('the hint was painted', () => printed().includes(`${DIM}--name <string>`))
         expect(printed()).toContain(`${DIM}--name <string>`)
         await type(RIGHT)
         await new Promise((resolve) => setTimeout(resolve, 20))
@@ -192,7 +195,7 @@ describe('at a terminal', () => {
     })
 
     test('a real candidate still wins over the hint, and is still acceptable', async () => {
-        const { reader, type } = atTerminal()
+        const { reader, type, printed } = atTerminal()
         const line = reader.read('> ', {
             complete: (typed) => ({
                 candidates: typed.endsWith('--na') ? ['--name'] : [],
@@ -201,7 +204,7 @@ describe('at a terminal', () => {
             }),
         })
         await type('rpcGreet --na')
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        await until('the candidate remainder was painted', () => printed().includes(`${DIM}me`))
         await type(RIGHT)
         await new Promise((resolve) => setTimeout(resolve, 20))
         await type('\n')
@@ -218,7 +221,9 @@ describe('at a terminal', () => {
                     : { candidates: [], partial: typed },
         })
         await type('rpcGreet ')
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        await until('the signature was painted', () =>
+            printed().includes(`${DIM}--name <string> --loud`),
+        )
         // Painted: the signature, so you can see what the command takes.
         expect(printed()).toContain(`${DIM}--name <string> --loud`)
         await type(RIGHT)
@@ -232,8 +237,11 @@ describe('at a terminal', () => {
     test('nothing is suggested with the cursor parked mid-line', async () => {
         const { reader, type, printed } = atTerminal()
         const line = reader.read('> ', { complete: completes(['cacheTtl']) })
+        // This one sets the BASELINE for the negative assertion below, so it has to wait for the paint
+        // rather than guess: a suggestion that landed after `before` was captured would be invisible to
+        // the slice, and the test would pass for the wrong reason.
         await type('cacheT')
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        await until('the suggestion was painted', () => printed().includes(DIM))
         const before = printed().length
         await type(LEFT)
         await new Promise((resolve) => setTimeout(resolve, 20))

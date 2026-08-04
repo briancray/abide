@@ -15,6 +15,7 @@
 // a shared key is a shared slot by design, which is exactly what one of these asserts.
 
 import { describe, expect, test } from 'bun:test'
+import { until } from '../test/internal/until.ts'
 import { state } from './state.ts'
 import { watch } from './watch.ts'
 
@@ -154,7 +155,14 @@ describe('state.shared — the cross-tab BroadcastChannel path', () => {
         try {
             far.postMessage({ key, value: 'from-another-tab' })
             await flush()
-            await new Promise((resolve) => setTimeout(resolve, 50))
+            // BroadcastChannel delivery is asynchronous and its latency is not ours to predict — wait
+            // for the adoption itself. (The two sibling tests below assert a NEGATIVE after a sleep,
+            // which is safe in the other direction: a slower box only gives a wrong implementation
+            // longer to misbehave.)
+            await until(
+                'the local slot adopted the remote frame',
+                () => cell() === 'from-another-tab',
+            )
             expect(cell()).toBe('from-another-tab')
         } finally {
             far.close()

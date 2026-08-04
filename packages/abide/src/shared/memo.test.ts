@@ -4,6 +4,7 @@ import {
     type RequestScope,
     runInScope,
 } from '../server/internal/requestScope.ts'
+import { until } from '../test/internal/until.ts'
 import { settled, stopAll, tick, wakeups } from '../test/internal/wakeups.ts'
 import { effect, state } from './internal/reactive.ts'
 import {
@@ -1811,7 +1812,11 @@ describe('memo — peek (untracked) vs live (display read)', () => {
         const peekReader = wakeups(() => ticker.peek({ n: 3 }))
         await settled(liveReader, peekReader)
 
-        await new Promise((resolve) => setTimeout(resolve, 40))
+        // Waited for, not slept past: three 5ms chunks land in ~15ms on an idle box and the sleep was
+        // 40ms, which reads like margin until fifteen other test files are competing for the same
+        // scheduler. `done()` is a PROBE — it observes, so waiting on it neither subscribes the waiter
+        // nor moves the peek/live counts the assertions below rest on.
+        await until('the stream ran to completion', () => ticker.done({ n: 3 }))
 
         // The cast is the raw-`memo` stream quirk, not this change: `Memo<Args, AsyncIterable<C>>` types
         // both reads as the ITERABLE while they return the latest CHUNK. Only the `StreamRead` rpc surface
