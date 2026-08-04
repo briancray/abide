@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { bundle } from '../cli/main.ts'
+import { bundle } from '../cli/bundle.ts'
 import { bundled } from '../ui/bundled.ts'
 import type { BundleMenu } from './BundleMenu.ts'
 import type { BundleMenuItem } from './BundleMenuItem.ts'

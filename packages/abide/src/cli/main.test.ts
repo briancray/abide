@@ -42,21 +42,20 @@ interface Run {
     code: number
 }
 
-// Drive the dispatcher and collect everything it reported: stdout, stderr, and the exit code it left
-// on `process.exitCode` — reset to 0 afterwards, or a `usage` asserted here fails the whole test run.
-// Bun IGNORES `process.exitCode = undefined` once a number was assigned, so the reset must be `0`.
+// Drive the dispatcher and collect everything it reported: stdout, stderr, and the exit code — which
+// `main` now RETURNS. It used to be read off `process.exitCode`, which meant this helper had to zero
+// the global first and restore it after (a `usage` asserted here otherwise failed the whole test run,
+// since Bun ignores a later `undefined` once a number has been assigned). That dance was the visible
+// cost of the exit code not being in the dispatcher's interface.
 async function run(argv: string[], cwd?: string): Promise<Run> {
     const out: string[] = []
     const err: string[] = []
-    process.exitCode = 0
-    await main(argv, {
+    const { exitCode } = await main(argv, {
         cwd: cwd ?? tempPath(),
         write: (line) => out.push(line),
         writeError: (line) => err.push(line),
     })
-    const code = typeof process.exitCode === 'number' ? process.exitCode : 0
-    process.exitCode = 0
-    return { out: out.join('\n'), err: err.join('\n'), code }
+    return { out: out.join('\n'), err: err.join('\n'), code: exitCode }
 }
 
 afterEach(() => {

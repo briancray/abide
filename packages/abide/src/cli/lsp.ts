@@ -39,7 +39,7 @@ import {
     lowerProject as sharedLowerProject,
 } from '../ui/internal/lowerProject.ts'
 import { templateSemanticTokens } from '../ui/internal/templateSemanticTokens.ts'
-import { findAbideFiles, overlayFs, SUPPRESSED_CODES } from './check.ts'
+import { collectDiagnostics, findAbideFiles, overlayFs } from './check.ts'
 import { lspCapabilities } from './LSP_FEATURES.ts'
 import { writeHealthCompanion } from './writeHealthCompanion.ts'
 
@@ -198,29 +198,11 @@ class LspEngine {
         return this.lastSnapshot
     }
 
-    // Diagnostics for the `open` generated modules.
+    // Diagnostics for the `open` generated modules. The COLLECTION rule is `check.ts`'s (this server
+    // already borrows `SUPPRESSED_CODES` and `overlayFs` from there); what this half contributes is the
+    // WARM snapshot, which is the only thing that differs between the two callers.
     diagnose(files: Record<string, string>, open: string[]): RawDiagnostic[] {
-        const diagnostics: RawDiagnostic[] = []
-        const snapshot = this.snapshot(files, open)
-        for (const file of open) {
-            const project = snapshot.getDefaultProjectForFile(file)
-            if (project === undefined) continue
-            const program = project.program
-            for (const diagnostic of [
-                ...program.getSyntacticDiagnostics(file),
-                ...program.getSemanticDiagnostics(file),
-            ]) {
-                if (diagnostic.category !== DiagnosticCategory.Error) continue
-                if (SUPPRESSED_CODES.has(diagnostic.code)) continue
-                diagnostics.push({
-                    file: diagnostic.fileName ?? file,
-                    pos: diagnostic.pos,
-                    code: diagnostic.code,
-                    text: diagnostic.text,
-                })
-            }
-        }
-        return diagnostics
+        return collectDiagnostics(this.snapshot(files, open), open)
     }
 
     // Hover: the type string (+ any doc comment) at a generated-module position, plus the hovered

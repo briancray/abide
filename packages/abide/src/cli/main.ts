@@ -21,14 +21,17 @@ import type { BundleWindow } from '../bundle/BundleWindow.ts'
 import { CLI_EXIT_CODES } from '../server/command/CLI_EXIT_CODES.ts'
 import { banner, formatDuration, hint, serveBanner } from './banner.ts'
 import { build, ensureClientBuild } from './build.ts'
+import { bundle } from './bundle.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { compile } from './compile.ts'
 import { firstPositional } from './firstPositional.ts'
 import { flagAbsent } from './flagAbsent.ts'
 import { flagPresent, flagValue } from './flagValue.ts'
+import { bunCanHostTsgo, forwardLsp } from './forwardLsp.ts'
 import { installShutdownHandlers } from './installShutdownHandlers.ts'
 import { parsePort } from './parsePort.ts'
 import { run } from './run.ts'
+import { scaffold } from './scaffold.ts'
 import { type ServeResult, serve } from './serve.ts'
 
 // THE COMMAND TABLE. One entry per subcommand, carrying its own usage line, its summary and its
@@ -47,6 +50,10 @@ interface CommandContext {
     write: (line: string) => void
     writeError: (line: string) => void
     usage: () => string
+    // Signal failure with an exit code. Returns `undefined`, so a command's failure branch stays the
+    // single statement `return fail(CLI_EXIT_CODES.usage)` — the shape the six `process.exitCode`
+    // assignments this replaces already had, minus the process global.
+    fail: (code: number) => undefined
 }
 
 interface DevCommand {
@@ -113,113 +120,6 @@ async function runStep(
     }
 }
 
-// Read the optional declarative window config (BU3) from `src/bundle/window.ts` if present. Returns
-// the default export (a BundleWindow) or an empty config when the file is absent. Dynamic-imported so
-// a project without a bundle window still bundles.
-async function loadBundleWindow(dir: string): Promise<BundleWindow> {
-    const path = join(dir, 'src', 'bundle', 'window.ts')
-    if (!(await Bun.file(path).exists())) return {}
-    const module = (await import(path)) as { default?: BundleWindow }
-    return module.default ?? {}
-}
-
-// Build the desktop bundle launcher (BU1-4, MVP). Builds the client bundle (fails loud on a broken
-// app), reads the declarative BundleWindow, and writes a self-contained launcher script under
-// dist/bundle/. The launcher — not this build step — is what opens the window, so `abide bundle`
-// never spawns UI. Host-platform only (BU1.3). Returns the absolute output dir.
-export async function bundle(dir: string): Promise<string> {
-    await build(dir)
-    const window = await loadBundleWindow(dir)
-
-    const outDir = join(dir, 'dist', 'bundle')
-    await mkdir(outDir, { recursive: true })
-    await Bun.write(join(outDir, 'window.json'), JSON.stringify(window, null, 2))
-    await Bun.write(join(outDir, 'launch.ts'), bundleLauncher(window))
-    return outDir
-}
-
-// The single default starter (CL1.2) lives as a real, dogfooded workspace package — `packages/starter`
-// — so it type-checks, lints, and runs like any authored app instead of hiding in code as strings.
-// `scaffold` copies its `src/` + the root files below verbatim, swapping only the app name and the
-// `workspace:*` abide dep for a published range. Resolved relative to this file: `src/cli` → up three
-// → `packages/`.
-const STARTER_DIR = join(import.meta.dir, '../../../starter')
-
-// Root-level template files copied verbatim. NAMED rather than globbed, because the template dir also
-// holds the monorepo-only e2e harness (`playwright.config.ts`, `e2e/`, `scripts/`) that cannot ship in
-// a scaffolded app — see the package.json stripping below.
-//
-// `.gitignore` is load-bearing, not tidiness: `scaffold` runs `git init` (unless `--no-git`), so
-// without one the first `git add .` in a fresh app commits `node_modules/`, `dist/`, and the GENERATED
-// `src/.abide/health.d.ts` — which the whole health-companion design (CO2.4) assumes is regenerated,
-// never tracked. That invariant held in this monorepo only via the ROOT `.gitignore`, which no
-// scaffolded app ever sees.
-// `README.md` rides along for the same reason: it is the only thing in a fresh app that says what the
-// scripts are and where files go, and a scaffolded project has no monorepo around it to infer that from.
-const STARTER_ROOT_FILES = ['tsconfig.json', '.gitignore', 'README.md'] as const
-
-// Copy the starter package into a fresh `name/` project. Returns the project root.
-export async function scaffold(dir: string, name: string): Promise<string> {
-    const root = join(dir, name)
-
-    // The whole src/ tree verbatim (skip any generated `.abide` output if the template was ever built).
-    const srcDir = join(STARTER_DIR, 'src')
-    const glob = new Bun.Glob('**/*')
-    for await (const relative of glob.scan({ cwd: srcDir, onlyFiles: true, dot: true })) {
-        if (relative.startsWith('.abide/')) continue
-        await Bun.write(join(root, 'src', relative), Bun.file(join(srcDir, relative)))
-    }
-
-    // tsconfig + .gitignore verbatim; package.json rewritten with the app name + a published abide range.
-    for (const file of STARTER_ROOT_FILES) {
-        await Bun.write(join(root, file), Bun.file(join(STARTER_DIR, file)))
-    }
-    const pkg = await Bun.file(join(STARTER_DIR, 'package.json')).json()
-    pkg.name = name
-    if (pkg.dependencies?.abide) pkg.dependencies.abide = '^0.0.0'
-    // The Playwright e2e harness (playwright.config, e2e/, scripts/serve-e2e) is monorepo-only
-    // dogfooding of the template — serve-e2e imports abide by workspace path and can't ship in an app.
-    // Its files live outside src/ (never copied); strip the matching scripts + dep from the output.
-    delete pkg.scripts?.e2e
-    delete pkg.scripts?.['e2e:ci']
-    delete pkg.devDependencies?.['@playwright/test']
-    await Bun.write(join(root, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`)
-
-    return root
-}
-
-// Whether Bun can host the tsgo `API` pipe in-process (today: no; the LSP forwards to node). Flip via
-// `ABIDE_LSP_INPROCESS=1` once Bun gains support — the `lspServer` code path is identical either way.
-function bunCanHostTsgo(): boolean {
-    return process.env.ABIDE_LSP_INPROCESS === '1'
-}
-
-// `abide lsp` (Bun) → `node lsp.ts` (persistent server): a dumb bidirectional byte pump over stdio.
-async function forwardLsp(cwd: string): Promise<void> {
-    const lspPath = fileURLToPath(new URL('./lsp.ts', import.meta.url))
-    const child = Bun.spawn(['node', lspPath], {
-        cwd,
-        stdin: 'pipe',
-        stdout: 'pipe',
-        stderr: 'inherit',
-    })
-    const pumpIn = (async () => {
-        const reader = Bun.stdin.stream().getReader()
-        for (;;) {
-            const { done, value } = await reader.read()
-            if (done) break
-            child.stdin.write(value)
-            await child.stdin.flush()
-        }
-        child.stdin.end()
-    })()
-    const pumpOut = (async () => {
-        for await (const chunk of child.stdout) process.stdout.write(chunk)
-    })()
-    await child.exited
-    await Promise.allSettled([pumpIn, pumpOut])
-}
-
 export const DEV_COMMANDS: Record<string, DevCommand> = {
     dev: {
         invocation: 'abide dev [--port <n>]',
@@ -284,14 +184,13 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
     scaffold: {
         invocation: 'abide scaffold <name>',
         summary: 'create a starter project, then git init + install + dev',
-        run: async ({ cwd, rest, write, writeError, usage }) => {
+        run: async ({ cwd, rest, write, writeError, usage, fail }) => {
             const name = firstPositional(rest)
             if (name === undefined || name.length === 0) {
                 // A missing <name> is a wrong command line, not a request for help: stderr + `usage`.
                 writeError('abide scaffold: missing project <name>.\n')
                 writeError(usage())
-                process.exitCode = CLI_EXIT_CODES.usage
-                return undefined
+                return fail(CLI_EXIT_CODES.usage)
             }
             const startedAt = performance.now()
             const root = await scaffold(cwd, name)
@@ -307,9 +206,8 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
                     writeError(
                         'abide scaffold: `bun install` failed — skipping the dev server. Fix the install, then run `bun run dev`.',
                     )
-                    process.exitCode = CLI_EXIT_CODES.failed
                     write(hint(`next: cd ${name} && bun install && bun run dev`))
-                    return undefined
+                    return fail(CLI_EXIT_CODES.failed)
                 }
             }
 
@@ -342,18 +240,16 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
     run: {
         invocation: 'abide run <file> [args…]',
         summary: 'run a script under the abide runtime (no HTTP; onStart/onStop run)',
-        run: async ({ cwd, rest, writeError }) => {
+        run: async ({ cwd, rest, writeError, fail }) => {
             const file = rest[0]
             if (file === undefined) {
                 writeError('abide run — usage: abide run <file> [args…]')
-                process.exitCode = CLI_EXIT_CODES.usage
-                return undefined
+                return fail(CLI_EXIT_CODES.usage)
             }
             const target = isAbsolute(file) ? file : join(cwd, file)
             if (!(await Bun.file(target).exists())) {
                 writeError(`abide run — no such file: ${file}`)
-                process.exitCode = CLI_EXIT_CODES.usage
-                return undefined
+                return fail(CLI_EXIT_CODES.usage)
             }
             // Everything after the file is the SCRIPT's, not abide's — including anything that looks
             // like an abide flag. `abide run migrate.ts --port 5` passes `--port 5` to the migration.
@@ -367,7 +263,7 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
     check: {
         invocation: 'abide check',
         summary: 'type-check .abide script bodies (best-effort, via TS7)',
-        run: async ({ cwd, write, writeError }) => {
+        run: async ({ cwd, write, writeError, fail }) => {
             const startedAt = performance.now()
             // Loaded on DEMAND: `check.ts` and `lsp.ts` both top-level-import
             // `typescript/unstable/sync`, and evaluating that costs ~17ms — which every `abide`
@@ -399,8 +295,7 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
                 `\nabide check — ${result.diagnostics.length} error${result.diagnostics.length === 1 ? '' : 's'}`,
             )
             // A type error is a real failure, not a wrong command line — `failed`, not `usage`.
-            process.exitCode = CLI_EXIT_CODES.failed
-            return undefined
+            return fail(CLI_EXIT_CODES.failed)
         },
     },
 
@@ -477,15 +372,39 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
     },
 }
 
-export async function main(
-    argv: string[],
-    options: MainOptions = {},
-): Promise<ServeResult | undefined> {
+// WHAT A COMMAND DID, as a return value. The exit code used to be written straight onto
+// `process.exitCode` from six sites inside this file, which put the one thing a CLI invocation's result
+// actually IS outside the interface — while `CommandContext` injected `cwd`, `write`, `writeError` and
+// `usage` precisely "so the dispatcher is callable from a test rather than only from a shell".
+//
+// The COMPILED surface, over the same `CLI_EXIT_CODES` table, already returns its code
+// (`runCompiledApp: Promise<number | null>`). This is that lesson applied to the dev surface, forty
+// lines from the comment that names the same asymmetry for the usage text. The cost of not having it
+// was visible in the test, which had to save/zero/restore a process global and carry a Bun-quirk note
+// explaining why.
+export interface CliOutcome {
+    // The running server, when the command started one (`dev`/`start`). The process stays alive on
+    // Bun.serve's open handles; nothing reads this but a test that wants to stop it.
+    serve?: ServeResult
+    // `CLI_EXIT_CODES.ok` (0) unless the command failed. `bin.ts` is the ONLY place this reaches
+    // `process.exitCode`, which is what makes the dispatcher a function rather than a side effect.
+    exitCode: number
+}
+
+export async function main(argv: string[], options: MainOptions = {}): Promise<CliOutcome> {
     const command = argv[0]
     const rest = argv.slice(1)
     const cwd = options.cwd ?? process.cwd()
     const write = options.write ?? ((line: string): void => console.info(line))
     const writeError = options.writeError ?? ((line: string): void => console.error(line))
+    // Recorded rather than assigned. A command signals failure by RETURNING `fail(code)`, so the code
+    // travels out with the rest of the result instead of onto a process global the caller has to
+    // remember to read (and a test has to remember to reset).
+    let exitCode: number = CLI_EXIT_CODES.ok
+    const fail = (code: number): undefined => {
+        exitCode = code
+        return undefined
+    }
 
     // OWN PROPERTY ONLY. `DEV_COMMANDS` is an object literal, so a plain index resolved inherited
     // `Object.prototype` members — `abide constructor` / `abide toString` passed the `!== undefined`
@@ -496,17 +415,18 @@ export async function main(
         command !== undefined && Object.hasOwn(DEV_COMMANDS, command)
             ? DEV_COMMANDS[command]
             : undefined
-    if (entry !== undefined)
-        return await entry.run({ rest, cwd, write, writeError, usage: usageText })
+    if (entry !== undefined) {
+        const serve = await entry.run({ rest, cwd, write, writeError, usage: usageText, fail })
+        return serve === undefined ? { exitCode } : { serve, exitCode }
+    }
 
     // Asking for help is a success; getting the command wrong is not. They used to share this branch
     // and both exit 0 — so `abide biuld` in a CI script printed the usage text and reported success.
     if (command === undefined || command === '-h' || command === '--help') {
         write(usageText())
-        return undefined
+        return { exitCode }
     }
     writeError(`abide: unknown command "${command}".\n`)
     writeError(usageText())
-    process.exitCode = CLI_EXIT_CODES.usage
-    return undefined
+    return { exitCode: CLI_EXIT_CODES.usage }
 }

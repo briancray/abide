@@ -266,31 +266,44 @@ async function diagnose(cwd: string, request: DiagnoseRequest): Promise<RawDiagn
 
 // Runs under node (types stripped by Node >= 23). Uses the sync TS7 API — which cannot open its pipe
 // under Bun, hence the subprocess bridge above. Virtual files are served through the `fs` overlay.
-export function diagnoseInProcess(cwd: string, request: DiagnoseRequest): RawDiagnostic[] {
+// WHAT COUNTS AS A DIAGNOSTIC, declared once. `check` and the LSP both ask it, and they used to ask it
+// with a verbatim-identical loop apiece — same two `get*Diagnostics` calls, same `category !== Error`
+// skip, same `SUPPRESSED_CODES` filter, same `RawDiagnostic` shape. What genuinely differs between them
+// is SNAPSHOT LIFETIME (`check` builds one and closes it; the LSP keeps a warm one keyed on the overlay
+// signature), and a lifetime is a PARAMETER — the same shape `runFillBody(call, untracked)` and the two
+// substrates' shared classification take. `CONTEXT.md` records this exact file pair failing this exact
+// way one level up, where two LSP handlers rebuilt `indexByGeneratedPath` inline.
+export function collectDiagnostics(
+    snapshot: ReturnType<API['updateSnapshot']>,
+    open: string[],
+): RawDiagnostic[] {
     const diagnostics: RawDiagnostic[] = []
+    for (const file of open) {
+        const project = snapshot.getDefaultProjectForFile(file)
+        if (project === undefined) continue
+        const program = project.program
+        for (const diagnostic of [
+            ...program.getSyntacticDiagnostics(file),
+            ...program.getSemanticDiagnostics(file),
+        ]) {
+            if (diagnostic.category !== DiagnosticCategory.Error) continue
+            if (SUPPRESSED_CODES.has(diagnostic.code)) continue
+            diagnostics.push({
+                file: diagnostic.fileName ?? file,
+                pos: diagnostic.pos,
+                code: diagnostic.code,
+                text: diagnostic.text,
+            })
+        }
+    }
+    return diagnostics
+}
+
+export function diagnoseInProcess(cwd: string, request: DiagnoseRequest): RawDiagnostic[] {
     const api = new API({ cwd, fs: overlayFs(() => request.files) })
     try {
-        const snapshot = api.updateSnapshot({ openFiles: request.open })
-        for (const file of request.open) {
-            const project = snapshot.getDefaultProjectForFile(file)
-            if (project === undefined) continue
-            const program = project.program
-            const collected = [
-                ...program.getSyntacticDiagnostics(file),
-                ...program.getSemanticDiagnostics(file),
-            ]
-            for (const diagnostic of collected) {
-                if (diagnostic.category !== DiagnosticCategory.Error) continue
-                if (SUPPRESSED_CODES.has(diagnostic.code)) continue
-                diagnostics.push({
-                    file: diagnostic.fileName ?? file,
-                    pos: diagnostic.pos,
-                    code: diagnostic.code,
-                    text: diagnostic.text,
-                })
-            }
-        }
-        return diagnostics
+        // A FRESH snapshot, closed in the `finally`: a one-shot check has nothing to keep warm.
+        return collectDiagnostics(api.updateSnapshot({ openFiles: request.open }), request.open)
     } finally {
         api.close()
     }

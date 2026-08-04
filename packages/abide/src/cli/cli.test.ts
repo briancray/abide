@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadClientBuild } from '../server/internal/clientBundle.ts'
 import { build } from './build.ts'
-import { main, scaffold } from './main.ts'
+import { main } from './main.ts'
+import { scaffold } from './scaffold.ts'
 import { type ServeResult, serve } from './serve.ts'
 
 const FIXTURE_DIR = join(import.meta.dir, '../server/__fixtures__/app')
