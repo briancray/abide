@@ -39,7 +39,7 @@ import { HEALTH_ROUTE } from '../../shared/internal/HEALTH_ROUTE.ts'
 import { IDENTITY_ROUTE } from '../../shared/internal/IDENTITY_ROUTE.ts'
 import { LOGS_ROUTE } from '../../shared/internal/LOGS_ROUTE.ts'
 import { json } from '../json.ts'
-import type { AppConfig } from './appConfig.ts'
+import { type AppConfig, routeFor } from './appConfig.ts'
 import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
 import { handleChunkAsset } from './chunkAsset.ts'
 import { logsRoute } from './logsRoute.ts'
@@ -152,8 +152,7 @@ const NAV_CLASS: RouteClass = {
 // a CSRF hole no matter what the handler was declared as.
 const RPC_CLASS: RouteClass = {
     methods(scope, config): ServedMethods {
-        const routes = config.routes ?? {}
-        const route = routes[scope.route.name]
+        const route = routeFor(config, scope.route.name)
         // GATE_IN_HANDLER for an unregistered name, for the same reason the socket face uses it: the
         // handler answers 404, and gating out front would turn an unknown rpc into a 405 whose `Allow`
         // enumerates every verb the framework serves.

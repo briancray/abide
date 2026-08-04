@@ -34,7 +34,7 @@ import { STREAM_RESUME, STREAM_RESUME_HEADER } from '../../shared/internal/STREA
 import { jsonSchemaOf, shapeToSchema } from '../../shared/internal/shapeToSchema.ts'
 import { log } from '../../shared/log.ts'
 import { validateStandard } from '../../shared/StandardSchema.ts'
-import type { AppConfig, Route } from './appConfig.ts'
+import { type AppConfig, type Route, routeFor } from './appConfig.ts'
 import { decodeQueryArgs } from './decodeQueryArgs.ts'
 import { encodeRpcValue, encodesAsStream } from './encodeRpcValue.ts'
 import { errorResponse } from './errorResponse.ts'
@@ -80,13 +80,11 @@ export async function decodeRpcArgs(
         // hand-testable form) decoded + schema-coerced when the blob is absent.
         const params = scope.route.url.searchParams
         const raw = params.get(RPC_QUERY_PARAMS.args)
-        return {
-            args:
-                raw !== null
-                    ? JSON.parse(raw)
-                    : decodeQueryArgs(params, meta.options.schemas?.input),
-            multipart: false,
+        if (raw === null) {
+            return { args: decodeQueryArgs(params, meta.options.schemas?.input), multipart: false }
         }
+        const parsed = parseJsonArgs(raw, `${RPC_QUERY_PARAMS.args} is not valid JSON`)
+        return parsed.rejected !== undefined ? parsed : { args: parsed.args, multipart: false }
     }
 
     // maxBodySize is enforced on the mutation body up front via Content-Length (multipart streams can lie
@@ -111,7 +109,23 @@ export async function decodeRpcArgs(
     // A mutation carrying a `multipart/form-data` body is a file upload (TODO #8): the args are a
     // `FormData` (a `File` rides in it, never in a JSON args object), passed straight to the handler.
     if (contentType.startsWith('multipart/form-data')) {
-        return { args: await scope.request.formData(), multipart: true }
+        // MEASURED, NOT TRUSTED — the same rule the text path below states, and the multipart path was the
+        // one that did not follow it. `formData()` consumes the stream itself, so the post-buffer re-check
+        // has nothing left to weigh; a chunked upload (no `content-length` to reject up front) therefore
+        // slipped BOTH gates and a `maxBodySize: 100` rpc took a 2 MB file. Draining through the shared
+        // cap first bounds the bytes, then re-parsing the buffered copy gives the handler the `FormData` it
+        // expects. Only a body that declared no honest length pays the copy: a `content-length` within the
+        // ceiling is the common case and is streamed straight to `formData()` as before.
+        if (Number.isFinite(declared))
+            return { args: await scope.request.formData(), multipart: true }
+        const bounded = await readBounded(scope.request, maxBodySize)
+        if (bounded.rejected !== undefined) return bounded
+        return {
+            args: await new Response(bounded.body.buffer as ArrayBuffer, {
+                headers: { 'content-type': scope.request.headers.get('content-type') ?? '' },
+            }).formData(),
+            multipart: true,
+        }
     }
     const body = await scope.request.text()
     // Enforce maxBodySize against the ACTUAL byte count too — a chunked or length-spoofed body slips past
@@ -124,7 +138,60 @@ export async function decodeRpcArgs(
             ),
         }
     }
-    return { args: body.length > 0 ? JSON.parse(body) : {}, multipart: false }
+    if (body.length === 0) return { args: {}, multipart: false }
+    const parsed = parseJsonArgs(body, 'Request body is not valid JSON')
+    return parsed.rejected !== undefined ? parsed : { args: parsed.args, multipart: false }
+}
+
+// A client-side syntax error is a 400, not a 500. Unguarded, `JSON.parse` escaped `dispatch` as a raw
+// `SyntaxError`, so a truncated `__abide_args` blob or a malformed body answered "Internal Server Error",
+// fired the app's `onError` hook, and polluted error telemetry with something that was never the app's
+// fault — while a validation failure one stage later is a well-formed 422 naming what was wrong.
+function parseJsonArgs(
+    raw: string,
+    message: string,
+): { rejected: Response } | { rejected?: undefined; args: unknown } {
+    try {
+        return { args: JSON.parse(raw) }
+    } catch {
+        return { rejected: errorResponse(400, message) }
+    }
+}
+
+// Drain a body with no trustworthy `content-length`, refusing as soon as the running total passes the
+// ceiling — so an oversize upload costs `maxBodySize` bytes rather than however many the client sends.
+async function readBounded(
+    request: Request,
+    maxBodySize: number,
+): Promise<{ rejected: Response } | { rejected?: undefined; body: Uint8Array }> {
+    const reject = {
+        rejected: errorResponse(413, `Request body exceeds maxBodySize (${maxBodySize} bytes).`),
+    }
+    const stream = request.body
+    if (stream === null) return { body: new Uint8Array(0) }
+    const chunks: Uint8Array[] = []
+    let total = 0
+    const reader = stream.getReader()
+    for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+        if (total > maxBodySize) {
+            // NOT awaited. Cancelling a server-side request body does not settle until the client stops
+            // sending, which is precisely what an oversize upload is not doing — awaiting it here hangs
+            // the request the ceiling exists to end. Fire it to stop reading and answer immediately.
+            void reader.cancel().catch(() => {})
+            return reject
+        }
+        chunks.push(value)
+    }
+    const body = new Uint8Array(total)
+    let at = 0
+    for (const chunk of chunks) {
+        body.set(chunk, at)
+        at += chunk.byteLength
+    }
+    return { body }
 }
 
 // ── CONTRACT ────────────────────────────────────────────────────────────────────────────────────────
@@ -252,8 +319,7 @@ function resumeRetainedStream(
 }
 
 export async function handleRpcRoute(scope: RequestScope, config: AppConfig): Promise<Response> {
-    const routes = config.routes ?? {}
-    const route = routes[scope.route.name]
+    const route = routeFor(config, scope.route.name)
     if (route === undefined) return errorResponse(404, `Unknown rpc: ${scope.route.name}`)
     const meta = route.__rpc as RpcMeta<unknown, unknown>
 

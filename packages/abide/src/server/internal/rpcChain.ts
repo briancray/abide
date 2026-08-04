@@ -46,7 +46,7 @@ import {
     peekReactiveScope,
     type ReactiveScope,
 } from '../../shared/internal/reactiveScope.ts'
-import type { RouteInfo } from '../../shared/internal/routeInfo.ts'
+import type { RouteInfo, RouteKind } from '../../shared/internal/routeInfo.ts'
 import { toHttpError } from '../../shared/internal/toHttpError.ts'
 import type { AppConfig, Route } from './appConfig.ts'
 import type { Rpc } from './makeRpc.ts'
@@ -129,15 +129,16 @@ const REACHED_TERMINAL = new Response(null, { status: 204 })
 // `disposers` is pre-seeded on the outer scope so the copy SHARES the array: a middleware that registers
 // a teardown must have it torn down by the request that owns the scope, and a shallow copy of an
 // `undefined` field would give the copy its own array that nobody disposes.
-function chainScope(outer: ReactiveScope | undefined, name: string, args: unknown): ReactiveScope {
+function chainScope(outer: ReactiveScope | undefined, read: ChainedRead): ReactiveScope {
+    const { kind = 'rpc', name, args } = read
     const route: RouteInfo = {
-        kind: 'rpc',
+        kind,
         name,
         // `params` IS the args object for an rpc (`auth.md` §AU7 / `routeInfo.ts`), which is what makes a
         // per-args guard work identically from every door — and why a guard should key on this rather
         // than on `url`, the one field an in-process read cannot answer truthfully.
         params: args !== null && typeof args === 'object' ? (args as Record<string, unknown>) : {},
-        url: chainUrl(outer, name, args),
+        url: chainUrl(outer, read),
         navigating: false,
     }
     if (outer === undefined) return { slots: new Map<string, unknown>(), route }
@@ -149,11 +150,23 @@ function chainScope(outer: ReactiveScope | undefined, name: string, args: unknow
 // the two non-HTTP doors describe the same read identically. The origin is the caller's when there is one;
 // scope-free there is no request to take one from, and `RouteInfo.url` is not optional, so it is a
 // stand-in — recorded here rather than left to be discovered by a middleware that trusted it.
-function chainUrl(outer: ReactiveScope | undefined, name: string, args: unknown): URL {
+function chainUrl(outer: ReactiveScope | undefined, read: ChainedRead): URL {
     const origin = outer?.route?.url.origin ?? 'http://localhost'
-    const url = new URL(`${RPC_ROUTE_PREFIX}${name}`, origin)
-    if (args !== undefined) url.searchParams.set(RPC_QUERY_PARAMS.args, JSON.stringify(args))
+    const url = new URL(read.path ?? `${RPC_ROUTE_PREFIX}${read.name}`, origin)
+    if (read.args !== undefined)
+        url.searchParams.set(RPC_QUERY_PARAMS.args, JSON.stringify(read.args))
     return url
+}
+
+// What the chain is being run FOR. `kind`/`path` default to the rpc shape because that is every caller
+// but one; the exception is MCP's socket tools, which run a socket's own middleware and must describe
+// themselves as the socket face does or an app's `route().kind === 'socket-publish'` guard cannot see
+// them.
+export interface ChainedRead {
+    kind?: RouteKind
+    name: string
+    path?: string
+    args: unknown
 }
 
 // Run `produce` at the bottom of `middleware`, and return its value — unless a middleware short-circuited,
@@ -163,16 +176,16 @@ function chainUrl(outer: ReactiveScope | undefined, name: string, args: unknown)
 // channel is a throw, and `toHttpError` is the same decoder the browser proxy uses on a non-2xx — so a
 // middleware `error(403)` reaches an in-process caller as the identical `HttpError` a browser caller
 // catches, and `fn.isError(e, name)` narrows the same on both.
-async function throughChain<T>(
+export async function throughChain<T>(
     middleware: Middleware[],
     produce: () => Promise<T>,
-    read: { name: string; args: unknown },
+    read: ChainedRead,
 ): Promise<T> {
     if (middleware.length === 0) return produce()
     const outer = peekReactiveScope()
     let captured: T | undefined
     let produced = false
-    const outcome = await enterScope(chainScope(outer, read.name, read.args), () =>
+    const outcome = await enterScope(chainScope(outer, read), () =>
         compose(middleware, async (): Promise<Response> => {
             // THE READ RUNS IN THE CALLER'S SCOPE, not the override. The override exists for the
             // MIDDLEWARE; the read's memo slots, effect scopes and disposers belong to whoever asked for

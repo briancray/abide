@@ -19,6 +19,24 @@ import type { Middleware } from './middleware.ts'
 // biome-ignore lint/suspicious/noExplicitAny: existential route type — the registry erases each rpc's concrete Args/T; `unknown` breaks assignability through RpcMeta's invariant Args.
 export type Route = Rpc<any, any> | StreamRead<any, any>
 
+// THE ONE WAY TO RESOLVE AN RPC NAME. `routes` is an ordinary object literal (`loadApp` builds one, so
+// does every hand-written config), so a plain `routes[name]` index also resolves `Object.prototype` —
+// `constructor`, `toString`, `hasOwnProperty`, `__proto__`. Every `route === undefined` check downstream
+// then read as "found", and the consequences ran in two directions at once: `handleRpcRoute` reached for
+// `route.__rpc.method` on a function and answered **500** for what is plainly a 404, firing the app's
+// `onError` for a request that was never the app's fault; and `allowedMethodsFor` saw `__rpc === undefined`
+// and fell back to ANY_RPC_METHOD, so the method gate — the thing `auth.md` §AU8 rests the SameSite=Lax
+// argument on — admitted every verb on those names.
+//
+// An own-property test rather than a `null`-prototype map, because the map arrives from callers this module
+// does not construct (`createTestApp`, a hand-built config), and a guarantee only one construction site
+// makes is not one the lookup can rely on.
+export function routeFor(config: AppConfig, name: string): Route | undefined {
+    const routes = config.routes
+    if (routes === undefined || !Object.hasOwn(routes, name)) return undefined
+    return routes[name]
+}
+
 export interface AppConfig {
     // The project root, set by the file-based loader (`loadApp`). Two consumers, both filesystem-relative:
     // `src/ui/public/**` static serving, and the client bundle's `external` list (which is derived from

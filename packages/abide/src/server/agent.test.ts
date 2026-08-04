@@ -320,7 +320,13 @@ describe('agent default tool surface', () => {
     // A stopped app must not answer as the next one's default. `provide` returns its own undo and
     // `App.stop()` calls it, so nesting is balanced rather than last-one-wins — which matters because
     // `createTestApp` boots many apps in one process.
-    test('withdrawing restores the previous provider rather than clearing it', () => {
+    //
+    // The baseline is CAPTURED rather than assumed empty. This registry is process-global and the suite
+    // shares one process, so another file's live app may be registered underneath — and the previous
+    // assertion (`toEqual([])`) only held because the save/restore implementation DESTROYED that
+    // registration on withdrawal, which is the defect this pair of tests now pins.
+    test('withdrawing restores what was registered beneath it', () => {
+        const baseline = defaultAgentSurface().map((tool) => tool.name)
         const outer = GET(() => 'outer')
         const inner = GET(() => 'inner')
         const undoOuter = provideDefaultAgentSurface(() =>
@@ -336,6 +342,28 @@ describe('agent default tool surface', () => {
         undoInner() // idempotent — a lifecycle backstop may stop twice
         expect(defaultAgentSurface().map((tool) => tool.name)).toEqual(['outer'])
         undoOuter()
-        expect(defaultAgentSurface()).toEqual([])
+        expect(defaultAgentSurface().map((tool) => tool.name)).toEqual(baseline)
+    })
+
+    // THE REASON IT IS A STACK AND NOT A SAVE/RESTORE PAIR. `createTestApp` hands each caller its own
+    // `stop()`, and test files run in parallel, so the undos do NOT reliably run in reverse. With a
+    // `previous` local, `undoFirst()` restores first's own previous (nothing) OVER second, and
+    // `undoSecond()` then reinstalls the STOPPED first — both of the failures the module's comment
+    // claims are prevented, in the one interleaving it is most likely to meet.
+    test('withdrawing OUT OF ORDER neither unregisters the live app nor revives the stopped one', () => {
+        const baseline = defaultAgentSurface().map((tool) => tool.name)
+        const first = GET(() => 'first')
+        const second = GET(() => 'second')
+        const undoFirst = provideDefaultAgentSurface(() =>
+            rpcTools({ routes: { first } }, UNUSED_ORIGIN),
+        )
+        const undoSecond = provideDefaultAgentSurface(() =>
+            rpcTools({ routes: { second } }, UNUSED_ORIGIN),
+        )
+
+        undoFirst() // the OUTER one stops while the inner is still live
+        expect(defaultAgentSurface().map((tool) => tool.name)).toEqual(['second'])
+        undoSecond()
+        expect(defaultAgentSurface().map((tool) => tool.name)).toEqual(baseline)
     })
 })

@@ -10,12 +10,15 @@
 // internal request back through the app's full middleware/auth chain, so whatever the app's
 // middleware enforces applies here uniformly with the browser and CLI surfaces.
 
+import { SOCKET_FACE_PREFIX } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { json } from '../json.ts'
 import type { Socket } from '../socket.ts'
 import { callOwnRpc } from './callOwnRpc.ts'
+import type { Middleware } from './middleware.ts'
 import type { RpcEntry, SocketEntry } from './registry.ts'
 import { buildRegistry } from './registry.ts'
 import type { AppConfig } from './router.ts'
+import { throughChain } from './rpcChain.ts'
 import {
     ANY_OBJECT_SCHEMA,
     ANY_VALUE_SCHEMA,
@@ -180,26 +183,61 @@ async function callSocketTool(
         const sock = sockets[entry.name]
         if (sock === undefined) continue
 
+        // THE SOCKET'S OWN MIDDLEWARE, ON EVERY MCP TOOL CALL. `clients.mcp` is reachability, never
+        // authorization (MS2.5/DX8, and this module's own header) — but these two tools used to reach
+        // `__socket` DIRECTLY, so they were the one door into a socket that ran none of its gate while
+        // the WS mux (`authorizeSocketJoin`) and the HTTP face (the router's `socketPolicy`) both ran it.
+        // A socket whose middleware answers `error(403)` still answered `<name>_tail` with its transcript
+        // and accepted `<name>_publish` into every subscriber. Default-on, since an absent `clients.mcp`
+        // is reachable.
+        //
+        // The OWN rung only: MCP arrives over HTTP, so the router already ran the global chain for this
+        // request — re-running it here would double-count a page's reads in a rate limiter for the same
+        // reason `rpcChainFor` gives. Same asymmetry, same rationale, as `bindRpcChains`.
+        const own = sock.__socket.options.middleware ?? []
         const toolNames = socketToolNames(entry.name)
         if (name === toolNames.tail) {
             // MCP addresses a socket as a single topic — the void room.
-            return { result: textResult(sock.__socket.tailSnapshot(undefined)) }
+            return await throughSocketGate(own, entry.name, 'socket-subscribe', undefined, () =>
+                Promise.resolve({ result: textResult(sock.__socket.tailSnapshot(undefined)) }),
+            )
         }
         if (entry.clientPublish && name === toolNames.publish) {
-            try {
+            return await throughSocketGate(own, entry.name, 'socket-publish', args, async () => {
                 await sock.__socket.ingressPublish(undefined, args)
                 return { result: textResult({ ok: true }) }
-            } catch (caught) {
-                return {
-                    result: textResult(
-                        caught instanceof Error ? caught.message : 'publish rejected',
-                        true,
-                    ),
-                }
-            }
+            })
         }
     }
     return undefined
+}
+
+// Run one socket tool inside the socket's own chain, and render a refusal the way the RPC tools next
+// door render theirs: as an ERROR tool-result the model can correct from, not as a "result" for a call
+// the app refused. A short-circuiting middleware reaches here as a thrown `HttpError` (`throughChain`
+// converts it), which lands in the same catch as a rejected publish.
+async function throughSocketGate(
+    middleware: Middleware[],
+    socketName: string,
+    kind: 'socket-subscribe' | 'socket-publish',
+    args: unknown,
+    run: () => Promise<Outcome>,
+): Promise<Outcome> {
+    try {
+        return await throughChain(middleware, run, {
+            kind,
+            name: socketName,
+            path: `${SOCKET_FACE_PREFIX}${socketName}`,
+            args,
+        })
+    } catch (caught) {
+        return {
+            result: textResult(
+                caught instanceof Error ? caught.message : 'socket call refused',
+                true,
+            ),
+        }
+    }
 }
 
 // Handle one JSON-RPC message. Returns the outcome, or null for a notification (no id → no reply).

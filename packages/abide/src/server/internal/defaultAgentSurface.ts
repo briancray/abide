@@ -26,11 +26,31 @@ import { onRegistryRebind } from './registryDerivation.ts'
 //
 // Registration is a STACK, not a slot. One process serves one app in production, but `createTestApp`
 // boots many, and a plain last-one-wins holder would leave a stopped app's tools answering for the next
-// test. `provide` returns its own undo, which `App.stop()` calls, so the nesting is balanced and a
-// stopped app never lingers as somebody else's default.
-let provider: (() => AgentSurface) | undefined
-let providerConfig: AppConfig | undefined
-let cached: AgentSurface | undefined
+// test. `provide` returns its own undo, which `App.stop()` calls, so a stopped app never lingers as
+// somebody else's default.
+//
+// A REAL stack — an array with removal BY FRAME — not the save/restore pair a `previous` local makes,
+// which is only a stack when the undos happen to run in reverse. They do not: test files run in
+// parallel, and `createTestApp` hands each caller its own `stop()` to call whenever. With A then B
+// booted, a save/restore `A.stop()` restores A's own `previous` (nothing) over B, and `B.stop()` then
+// reinstalls STOPPED A — the exact lingering this paragraph says is prevented. Removing the frame
+// instead makes any interleaving of the undos correct, and leaves the LIFO case identical.
+//
+// The memo is PER FRAME for the same reason it is scoped to a config below: two live registrations
+// project different registries, and one shared `cached` would hand the outer app the inner app's tools
+// the moment the inner one is removed.
+interface AgentFrame {
+    provider: () => AgentSurface
+    config: AppConfig | undefined
+    cached: AgentSurface | undefined
+}
+
+const frames: AgentFrame[] = []
+
+function top(): AgentFrame | undefined {
+    if (frames.length === 0) return undefined
+    return frames[frames.length - 1]
+}
 
 // SCOPED TO THE CONFIG THE CURRENT PROVIDER PROJECTS, which is why `provide` takes one. A registry
 // derivation must be a no-op for a config it holds nothing for — several apps share this process
@@ -38,7 +58,9 @@ let cached: AgentSurface | undefined
 // let ANY app's rebind drop a surface projected from a different app's registry. That is invisible in
 // production, where one app rebinds once at boot, and shows up as a cross-file flake everywhere else.
 onRegistryRebind((config) => {
-    if (config === providerConfig) cached = undefined
+    for (const frame of frames) {
+        if (frame.config === config) frame.cached = undefined
+    }
 })
 
 // `config` is the registry `next` projects — the key the rebind invalidation above matches on, and the
@@ -48,26 +70,22 @@ export function provideDefaultAgentSurface(
     next: () => AgentSurface,
     config?: AppConfig,
 ): () => void {
-    const previousProvider = provider
-    const previousConfig = providerConfig
-    const previousCached = cached
-    provider = next
-    providerConfig = config
-    cached = undefined
+    const frame: AgentFrame = { provider: next, config, cached: undefined }
+    frames.push(frame)
     let undone = false
     return (): void => {
         // Idempotent: `stop()` may be called twice (a lifecycle backstop after an `onStop` that already
         // stopped), and the second call must not pop a frame it does not own.
         if (undone) return
         undone = true
-        provider = previousProvider
-        providerConfig = previousConfig
-        cached = previousCached
+        const at = frames.indexOf(frame)
+        if (at >= 0) frames.splice(at, 1)
     }
 }
 
 export function defaultAgentSurface(): AgentSurface {
-    if (provider === undefined) return []
-    if (cached === undefined) cached = provider()
-    return cached
+    const frame = top()
+    if (frame === undefined) return []
+    if (frame.cached === undefined) frame.cached = frame.provider()
+    return frame.cached
 }

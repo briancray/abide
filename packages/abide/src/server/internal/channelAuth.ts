@@ -22,6 +22,7 @@ import { SOCKET_FACE_PREFIX } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { TAG_CHANNEL_PREFIX } from '../../shared/internal/tagChannelName.ts'
 import { log } from '../../shared/log.ts'
 import type { Socket } from '../socket.ts'
+import { routeFor } from './appConfig.ts'
 import { compose, type Middleware } from './middleware.ts'
 import { outcomeResponse } from './outcomeResponse.ts'
 import { buildRegistry } from './registry.ts'
@@ -119,8 +120,7 @@ export async function authorizeChannelJoin(
     const rpcName = parseRpcName(channelName)
     if (rpcName === undefined) return false
 
-    const routes = config.routes ?? {}
-    const route = routes[rpcName]
+    const route = routeFor(config, rpcName)
     // Only READ rpcs have cache channels; an absent route or a mutation cannot be joined.
     if (route === undefined || route.__rpc.read !== true) return false
 
