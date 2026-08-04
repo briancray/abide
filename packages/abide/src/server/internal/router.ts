@@ -31,6 +31,7 @@ import {
 } from '../../shared/internal/memoChannels.ts'
 import { NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
 import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
+import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
 import { SOCKET_FACE_PREFIX, SOCKETS_ROUTE } from '../../shared/internal/SOCKETS_ROUTE.ts'
 import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
@@ -57,8 +58,8 @@ import {
     preflightResponse,
 } from './cors.ts'
 import { provideDefaultAgentSurface } from './defaultAgentSurface.ts'
-import { enforceMethod, methodNotAllowed } from './enforceMethod.ts'
 import { errorResponse } from './errorResponse.ts'
+import { deriveRouterPolicy, handleRequest, type RouterPolicy } from './handleRequest.ts'
 import { isProd } from './isProd.ts'
 import { logFeedSettings } from './logFeedSettings.ts'
 import type { Rpc } from './makeRpc.ts'
@@ -93,178 +94,6 @@ import {
     wsUnsubscribe,
 } from './socketMux.ts'
 
-const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-
-// Does the LAST path segment carry an extension? The cheap synchronous gate in front of the
-// `src/ui/public/**` lookup — a page route (`/memo`, `/users/7`) has none and never reaches the
-// filesystem. A leading dot does not count (`/.well-known` is a directory, not a file).
-//
-// Deliberately NOT `staticAssetType(pathname) !== undefined`, which decides the same question: this
-// runs on EVERY request, and a predicate that is two `indexOf`s beats one that also hashes an
-// extension into a table and allocates a result for the file case. It must stay in step with that
-// function's rule, which is the authority — if what counts as an extension changes there, change it
-// here too.
-function looksLikeFile(pathname: string): boolean {
-    const slash = pathname.lastIndexOf('/')
-    const dot = pathname.lastIndexOf('.')
-    return dot > slash + 1 && dot < pathname.length - 1
-}
-
-// A request carries an Authorization: Bearer token → it is a stateless machine surface whose
-// identity is request-scoped and never persisted into an abide-identity cookie (AU6.3).
-function isMachineBearer(request: Request): boolean {
-    const authorization = request.headers.get('authorization')
-    return authorization !== null && /^Bearer\s+/i.test(authorization.trim())
-}
-
-// AU8 CSRF gate. Returns a 403 Response to reject, or undefined to allow. Only mutating methods
-// are checked; reads are exempt (they cannot mutate, and Lax cookies already ride them safely).
-function csrfReject(request: Request, cors: NormalizedCors | undefined): Response | undefined {
-    if (!MUTATING_METHODS.has(request.method.toUpperCase())) return undefined
-
-    const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
-    const hasAbideHeader = request.headers.get(CSRF_HEADER) !== null
-    // Compare the BASE media type (before any `;` parameters), never a substring: a cross-site simple
-    // request can smuggle `application/json` inside a spoofable parameter (e.g.
-    // `multipart/form-data; boundary=application/json`) and `.includes` would wrongly clear the gate.
-    // NB (TODO #8): `multipart/form-data` is a CORS "simple" content type a cross-site <form> CAN
-    // send, so it does NOT count as a non-simple shape here — a multipart mutation is admitted ONLY
-    // via the `x-abide` header (which a cross-site form cannot set). CSRF is not weakened for uploads.
-    const mediaType = contentType.split(';', 1)[0]?.trim() ?? ''
-    const hasNonSimpleShape = mediaType === 'application/json' || hasAbideHeader
-    if (!hasNonSimpleShape) {
-        return errorResponse(
-            403,
-            `CSRF: mutations require Content-Type: application/json or an ${CSRF_HEADER} header.`,
-        )
-    }
-
-    const app = appOrigin()
-    if (app.configured) {
-        // AU8.3 Origin/Referer check. Prefer the unforgeable `Origin`; fall back to `Referer` when a
-        // browser omitted `Origin` on the mutation (older browsers / some same-origin navs). When NEITHER
-        // is present we ALLOW — the non-simple-shape gate above is the primary CSRF defense, and a
-        // `no-referrer` policy must not break a legitimate request. `Referer` is a full URL; `Origin` is
-        // already an origin — `new URL(x).origin` normalizes both to a comparable origin.
-        const claimed = request.headers.get('origin') ?? request.headers.get('referer')
-        if (claimed !== null) {
-            let claimedOrigin: string
-            try {
-                claimedOrigin = new URL(claimed).origin
-            } catch {
-                return errorResponse(
-                    403,
-                    'CSRF: could not verify request Origin/Referer against APP_URL.',
-                )
-            }
-            const appHost = app.origin
-            if (appHost === undefined) {
-                return errorResponse(
-                    403,
-                    'CSRF: could not verify request Origin/Referer against APP_URL.',
-                )
-            }
-            // A mismatch is rejected UNLESS this RPC opted into cross-origin access for it (the
-            // `crossOrigin` allowlist) — CORS is the sanctioned way to admit a foreign origin.
-            if (
-                claimedOrigin !== appHost &&
-                corsAllowOrigin(cors ?? NO_CORS, claimedOrigin) === undefined
-            ) {
-                return errorResponse(403, 'CSRF: request Origin/Referer does not match APP_URL.')
-            }
-        }
-    }
-
-    return undefined
-}
-
-// A closed CORS policy — `corsAllowOrigin` against it admits nothing, so a `crossOrigin`-less RPC keeps
-// the strict same-origin CSRF behaviour without a null-branch at each call.
-const NO_CORS: NormalizedCors = {
-    origins: [],
-    methods: '',
-    headers: '',
-    credentials: false,
-    maxAge: 0,
-}
-
-// After dispatch, refresh (or clear) the rolling abide-identity cookie for browser identities.
-// Machine-bearer callers are stateless and get no cookie, even if identity.set() ran (AU6.3).
-// A response a SHARED cache may store must not carry a per-user `set-cookie` — the next client through
-// that cache would be handed someone else's identity. The content-addressed `/__abide/chunk/` assets are
-// the case in the box today (they declare `public, max-age=31536000, immutable`), and stamping a cookie
-// on them also defeated the caching they asked for.
-function isPubliclyCacheable(response: Response): boolean {
-    const cacheControl = response.headers.get('cache-control')
-    if (cacheControl === null) return false
-    return /(^|,)\s*public\s*(,|$)/.test(cacheControl.toLowerCase())
-}
-
-async function applyIdentityCookie(scope: RequestScope, response: Response): Promise<void> {
-    if (scope.identityStateless) return
-    if (isPubliclyCacheable(response)) {
-        // Fail safe: never leak an identity into a shared cache. A login landing on a response the app
-        // marked publicly cacheable is an app bug, so say so rather than dropping it silently.
-        if (scope.identityDirty === true || scope.identityCleared === true) {
-            log.channel('abide:identity').warn(
-                'identity.set()/clear() ran on a publicly cacheable response — the abide-identity cookie was NOT written, because a shared cache would serve it to another client. Remove `Cache-Control: public` from this route.',
-            )
-        }
-        return
-    }
-    if (scope.identityCleared) {
-        response.headers.append('set-cookie', clearIdentityCookieHeader())
-        return
-    }
-    // The rolling cookie only needs rewriting when it changed or is far enough through its life —
-    // re-sealing every response cost an AES-GCM encrypt per reply to restate what the client already holds.
-    if (scope.identityDirty !== true && !identityCookieIsDue(scope.identityExpiresAt)) return
-    response.headers.append('set-cookie', await identityCookieHeader(scope.identity))
-}
-
-// Last-resort handler for an error that escaped the middleware/dispatch chain. Runs in request scope, so
-// the app's `onError` can read request()/route()/identity() ambiently. The hook may return a Response to
-// shape the client reply; anything else (or a throwing hook) falls back to a generic 500 that never leaks
-// the detail.
-//
-// This is also the DESERIALIZING half of transport: `error()`/`redirect()` throw (`rpc = memo + transport`
-// — a handler is a memo body, and a memo's failure channel is a throw), so a deliberate outcome arrives
-// here as a `Redirect`/`HttpError` and is rendered at its own status. Both are answered BEFORE `onError`,
-// alongside the tripped-deadline case below, on the same rule: a declared 404 or a login redirect is not a
-// bug in the app, so it must not fire the app's error hook nor collapse into the generic 500 — which is
-// exactly what a thrown failure used to do, losing its status on the way out.
-async function handleUncaught(caught: unknown, config: AppConfig): Promise<Response> {
-    // A DELIBERATE outcome: rendered at the status the handler asked for (a 3xx + Location for a redirect),
-    // carrying a typed failure's name/data so `fn.isError(e, name)` narrows the same on both sides after
-    // the browser proxy decodes it back.
-    const outcome = outcomeResponse(caught)
-    if (outcome !== undefined) return outcome
-    // A tripped run deadline is not a bug in the app, so it is answered before `onError` and never
-    // reaches the generic 500 (ADR 0028 D7). It leaves as a TYPED error so the two sides of an
-    // isomorphic call agree: the browser proxy's `fn.isError(e, 'TimeoutError')` narrows on the body's
-    // `name`, which is the same value `AbortSignal.timeout` gives a caller that aborted locally. Shared
-    // with `fn.raw`, the other door that answers a read with a Response.
-    const timedOut = timeoutResponse(caught)
-    if (timedOut !== undefined) return timedOut
-    log.channel('abide:router').error('uncaught error in dispatch:', caught)
-    const onError = config.onError
-    if (onError !== undefined) {
-        try {
-            const custom = await onError(caught)
-            if (custom instanceof Response) return custom
-        } catch (hookError) {
-            // The hook shapes the reply by RETURNING a Response or by calling `error(...)`/`redirect(...)`,
-            // which throw — both are deliberate, so both shape it. Only an UNEXPECTED throw from the hook
-            // falls through to the generic 500; a hook that fails while reporting a failure cannot be
-            // trusted to have produced a reply.
-            const shaped = outcomeResponse(hookError)
-            if (shaped !== undefined) return shaped
-            log.channel('abide:router').error('onError hook threw:', hookError)
-        }
-    }
-    return errorResponse(500, 'Internal Server Error')
-}
-
 export interface App {
     server: Bun.Server<undefined>
     origin: string
@@ -276,156 +105,16 @@ export interface App {
     rebind(): void
 }
 
-// A soft-nav that a middleware short-circuited with a redirect Response is surfaced to the client as
-// a `{ redirect }` envelope (the client performs the navigation) rather than an opaque 3xx.
-function isRedirectResponse(response: Response): boolean {
-    return (
-        response.status >= 300 && response.status < 400 && response.headers.get('location') !== null
-    )
-}
-
-function routeInfo(url: URL, method: string): { kind: RouteKind; name: string } {
-    const pathname = url.pathname
-    // RPC transport lives under the framework namespace (`/__abide/rpc/<name>`), alongside
-    // `/__abide/sockets`, `/__abide/health`, and `/__abide/mcp` — so the `/rpc/*` URL space is free
-    // for app pages. Checked after the exact `/__abide/*` endpoints in `dispatch`, none of which
-    // share this prefix.
-    if (pathname.startsWith(RPC_ROUTE_PREFIX)) {
-        return { kind: 'rpc', name: pathname.slice(RPC_ROUTE_PREFIX.length) }
-    }
-    // The per-socket HTTP face (sockets.md S3.2). Classified HERE rather than short-circuited in
-    // `fetch`, so it reaches the same policy stack every other route does. Subscribe and publish are
-    // distinct kinds — both already declared on `RouteKind`, and unused until now precisely because
-    // this path never built a scope for `route()` to report.
-    if (pathname.startsWith(SOCKET_FACE_PREFIX)) {
-        const name = decodeURIComponent(pathname.slice(SOCKET_FACE_PREFIX.length))
-        const reading = method === 'GET' || method === 'HEAD'
-        return { kind: reading ? 'socket-subscribe' : 'socket-publish', name }
-    }
-    return { kind: 'nav', name: pathname }
-}
-
-// The multiplexed WS mux itself. The bare address (no trailing slash) is the WS upgrade; the
-// `/…/<name>` face above is NOT it — an upgrade cannot travel through the response pipeline. Both are
-// derived from one constant, because a browser bundle and a hand-written browser snippet both dial it.
-const SOCKET_MUX_ROUTE = SOCKETS_ROUTE
-
-// The terminal of the socket-connect chain. Compared by IDENTITY, so a middleware returning its own
-// response — of ANY status — reads as the short-circuit it is.
-const UPGRADE_ADMITTED = new Response(null, { status: 101 })
-
-// The request scope a `socket-connect` middleware runs in. Built through `makeRequestScope` like the
-// other two, because an upgrade's scope differs from an HTTP request's only in what it PUTS in the
-// fields, not in which fields exist — there is no response to write a rolling identity cookie onto, so
-// `identityExpiresAt` is `undefined`, and that is data rather than an omission. It used to be a third
-// hand-written 13-field literal here, carrying a header that said the cookie-lifecycle fields were
-// "absent rather than present-and-ignored" while three of them were set ten lines below it.
-//
-// Identity resolution FAILS CLOSED to anonymous. A tampered token that will not unseal must reach the
-// chain as "nobody", so an app's `requireLogin` denies it — degrading to anonymous is what makes the
-// gate meaningful, where throwing here would 500 and letting it through would be the bug this fixes.
-async function socketConnectScope(
-    request: Request,
-    url: URL,
-    srv: Bun.Server<SocketConnectionData>,
-    propagatedTrace: string | undefined,
-): Promise<RequestScope> {
-    const cookies = new Bun.CookieMap(request.headers.get('cookie') ?? '')
-    let identity: Principal
-    try {
-        identity = await resolveIdentity(request)
-    } catch {
-        identity = anonymousPrincipal()
-    }
-    return makeRequestScope({
-        request,
-        cookies,
-        identity,
-        identityStateless: isMachineBearer(request),
-        identityExpiresAt: undefined,
-        route: {
-            kind: 'socket-connect',
-            name: SOCKET_MUX_ROUTE,
-            params: {},
-            url,
-            navigating: false,
-        },
-        // The WS-data generic is a socket-transport concern only; the public `server()` surface stays
-        // `Bun.Server<undefined>`.
-        server: srv as unknown as Bun.Server<undefined>,
-        traceparent: propagatedTrace,
-    })
-}
-
-// Gate the method a route class declares, then let it answer. `GATE_IN_HANDLER` is the two classes whose
-// 405 must follow a match that can 404 (an unknown socket name, an unregistered rpc) — they state the
-// reason where they return it.
-function gateAndHandle(
-    routeClass: RouteClass,
-    scope: RequestScope,
-    config: AppConfig,
-): Response | Promise<Response> {
-    const methods = routeClass.methods(scope, config)
-    if (methods !== GATE_IN_HANDLER) {
-        const rejected = enforceMethod(scope.request, methods)
-        if (rejected !== undefined) return rejected
-    }
-    return routeClass.handle(scope, config)
-}
-
-// THE DISPATCH LADDER. Framework rungs, then the public-file probe, then app rungs — the precedence stated
-// once, in `routeClass.ts`, where each rung's methods and handler are declared together.
-async function dispatch(scope: RequestScope, config: AppConfig): Promise<Response> {
-    const url = scope.route.url
-
-    const frameworkClass = resolveFrameworkClass(scope)
-    if (frameworkClass !== undefined) return gateAndHandle(frameworkClass, scope, config)
-
-    // `src/ui/public/**` served at its literal path — the rung BETWEEN the two resolvers, which is where
-    // its precedence has a reason rather than an order: after everything the framework owns (so a file can
-    // never shadow `/openapi.json` or `/__abide/*`) and before everything the app owns (so an app can serve
-    // a real `/favicon.ico` without a page pattern intercepting it). Falls through when nothing matches,
-    // which is why it is not a route class.
-    //
-    // The `looksLikeFile` guard is SYNCHRONOUS and runs first on purpose: without it every request — every
-    // RPC, every page nav — would allocate a promise and take a microtask tick to `await` a lookup that
-    // answers "no" for anything without a file extension. A public asset always has one. Its own 405 lives
-    // INSIDE `servePublicFile`, after the file is known to exist, for the reason stated there.
-    if (
-        (config.dir !== undefined || config.publicFiles !== undefined) &&
-        looksLikeFile(url.pathname)
-    ) {
-        const publicResponse = await servePublicFile(
-            config.dir,
-            url.pathname,
-            scope.request,
-            config.publicFiles,
-        )
-        if (publicResponse !== undefined) return publicResponse
-    }
-
-    const appClass = resolveAppClass(scope, config)
-    if (appClass === undefined) return errorResponse(404, `Not found: ${url.pathname}`)
-    return gateAndHandle(appClass, scope, config)
-}
-
 export function createApp(config: AppConfig = {}): App {
-    // Per-route static policy, derived once per BOOT rather than per request. `crossOrigin` and `middleware`
-    // live on an immutable options object, so normalizing the CORS config and merging the global + per-rpc
-    // middleware lists on every request re-derived a constant — and the merge also allocated a fresh spread
-    // array each time. Only the final `compose` stays per-request: its inner `next` closes over that
-    // request's scope.
+    // Per-surface static policy, derived once per BOOT rather than per request. `crossOrigin` and
+    // `middleware` live on an immutable options object, so normalizing the CORS config and merging the
+    // global + per-rpc middleware lists on every request re-derived a constant — and the merge also
+    // allocated a fresh spread array each time. Only the final `compose` stays per-request: its inner
+    // `next` closes over that request's scope.
     //
-    // KEYED BY NAME, not by the Route object. `abide dev`'s rebuild reassigns `config.routes` to freshly
-    // imported callables, and an identity-keyed Map silently missed every one of them: the request then fell
-    // back to the bare global chain, so a per-rpc `middleware` and a declared `crossOrigin` stopped applying
-    // after the first file save — in the surface an author does all their work in, and with no symptom at the
-    // point of failure. A name is what dispatch looks the route up by anyway.
-    const routePolicy = new Map<
-        string,
-        { cors: NormalizedCors | undefined; middleware: Middleware[] }
-    >()
-    const socketPolicy = new Map<string, Middleware[]>()
+    // The derivation itself lives with the pipeline that reads it (`deriveRouterPolicy`); what stays here
+    // is the two REGISTRY BINDINGS beside it, which mutate route callables rather than deriving a lookup.
+    let policy: RouterPolicy = deriveRouterPolicy(config)
 
     // EVERY PER-SURFACE DERIVATION, in one place that can be run AGAIN. There were four, each its own loop
     // over a `routes`/`sockets`/`globalMiddleware` local captured at boot: the route policy above, the
@@ -434,17 +123,7 @@ export function createApp(config: AppConfig = {}): App {
     // sockets — and re-derived none of them, so the app kept serving the first build's authorization.
     const bindRoutes = (): void => {
         const routes = config.routes ?? {}
-        routePolicy.clear()
-        for (const [name, routeDef] of Object.entries(routes)) {
-            routePolicy.set(name, {
-                cors: normalizeCrossOrigin(routeDef.__rpc.options.crossOrigin),
-                // BOTH RUNGS for the HTTP door: a request is exactly what the global rung authorizes, and
-                // the router is the one composer that has one. `dispatch` then invokes `route.__bare(args)`
-                // inside this chain, so arg decoding and `schemas.input` validation stay INSIDE
-                // authorization (a 422 must not precede a 403) and the chain runs exactly once per read.
-                middleware: rpcChainFor(routeDef, config),
-            })
-        }
+        policy = deriveRouterPolicy(config)
 
         // The OWN rung, for every other door — page SSR, a handler reading a sibling rpc, a cron tick, an
         // `abide run` migration. Shared with those other boots (`rpcChain.ts`) rather than spelled here,
@@ -457,29 +136,17 @@ export function createApp(config: AppConfig = {}): App {
         // transport-free. Value-form `publish` carries a `value`; invalidate/refresh do not.
         for (const [name, route] of Object.entries(routes)) {
             const meta = route.__rpc
-            if (
-                meta.read &&
-                meta.options.memo !== false &&
-                meta.options.memo?.crossRequest === true
-            ) {
+            // Through the NORMALIZER, not a second reading of the authored option. The inline
+            // `memo !== false && memo?.crossRequest === true` this replaces produced the same answer
+            // today and was one default away from not doing — `registry.ts` records the same shape
+            // going wrong before ("it used to be a second derivation, and it disagreed").
+            if (meta.read && rpcMemoPolicy(meta.options.memo, meta.read).crossRequest) {
                 // biome-ignore lint/suspicious/noExplicitAny: existential rpc — the route's concrete Args/T are erased here; `unknown` breaks assignability through RpcMeta's invariant Args.
                 ;(route as Rpc<any, any>).bindBroadcast((verb, args, value): void => {
                     const frame: MemoFrame = verb === 'publish' ? { verb, value } : { verb }
                     publishMemoFrame(memoChannelName(name, args), frame)
                 })
             }
-        }
-        // The socket analog of `routePolicy`. A socket's own `middleware` authorizes its subscribes and
-        // publishes (CLAUDE.md: "the socket analog of an rpc's middleware"); the WS join path already runs
-        // it via `authorizeSocketJoin`, so without this the HTTP face was the one way in that skipped it.
-        // Same derivation, same reason: the merged list is a constant per socket — and re-derived here for
-        // the same reason the routes are, since a rebuild re-syncs the socket registry too.
-        socketPolicy.clear()
-        for (const [socketName, sock] of Object.entries(config.sockets ?? {})) {
-            socketPolicy.set(socketName, [
-                ...(config.middleware ?? []),
-                ...(sock.__socket.options.middleware ?? []),
-            ])
         }
     }
     bindRoutes()
@@ -540,250 +207,12 @@ export function createApp(config: AppConfig = {}): App {
         // between messages; raise it to Bun's max (255s). Long-lived streams also emit a heartbeat
         // (server/sse.ts) so they survive intermediary proxies with their own idle windows.
         idleTimeout: 255,
-        async fetch(request, srv): Promise<Response | undefined> {
-            const url = new URL(request.url)
-
-            // ── THE REQUEST PIPELINE ────────────────────────────────────────────────────────────
-            // Every response leaves this handler through `exit()`, in this order. The order is
-            // load-bearing and the exhaustiveness is the point: before this was written down, each
-            // route class was inlined at whatever point in the file its author was reading, and four
-            // of them (WS reject, CORS preflight, CSRF reject, first-load document) each acquired a
-            // different subset of the stamping — a `traceparent`-less 403, a preflight with no trace,
-            // a CSRF rejection with no `Access-Control-Allow-Origin` (so the browser reported an
-            // opaque CORS failure instead of the 403 it was handed).
-            //
-            //   1. mint trace          — every non-asset request, before anything can short-circuit
-            //   2. WS upgrade gate     — CSWSH; exits with { trace }
-            //   3. classify route      — routeInfo
-            //   4. resolve identity    — never throws out; a failure defers into scope for onError
-            //   5. build scope
-            //   6. CORS preflight      — exits with { trace, cors }
-            //   7. enter scope ─┐
-            //   8.   CSRF gate  │      — exits with { trace, cors }; NO identity cookie (a rejected
-            //   9.   middleware │        mutation never dispatches, so it earns no rolling cookie)
-            //  10.   dispatch   │
-            //  11.   redirect envelope → identity cookie → CORS → trace   (the full `exit`)
-            //  12.   compression       — before header stamping: it appends Accept-Encoding to Vary
-            //  13.   baseline headers ─┘
-            //
-            // Trace is minted FIRST so stages 2 and 6 — which run before the request scope exists —
-            // can still stamp it. `reactiveScope().traceparent` is unreachable there; the local is not.
-            // `/__abide/chunk/` is the ONE route class that gets no trace: a static byte response with
-            // no handler, no identity and an immutable long-cache, joined by no span. Minting an id per
-            // chunk fetch would spend entropy and two headers on nothing, and the immutable bytes are
-            // shared across users, so a per-request header on them is a lie. Stated here because this is
-            // where the mint happens; `chunkAsset.ts` points back at it.
-            const incomingTrace = request.headers.get('traceparent')
-            const propagatedTrace =
-                incomingTrace !== null && TRACEPARENT_PATTERN.test(incomingTrace)
-                    ? incomingTrace
-                    : url.pathname.startsWith(CHUNK_PREFIX)
-                      ? undefined
-                      : generateTraceparent()
-
-            // The ONE exit. `identityCookie` and `cors` are the only stages any caller may decline,
-            // and each declines for a stated reason at its call site. Trace is never optional — a
-            // response that carries no traceparent names no span, which is the silent default this
-            // eager mint exists to remove (CO2.3).
-            const exit = async (
-                response: Response,
-                // Both stages are declared `| undefined` rather than optional: every caller states a
-                // verdict on each one, so a new exit path cannot skip a stage by simply not
-                // mentioning it — which is the failure this pipeline exists to make unrepresentable.
-                stages: { scope: RequestScope | undefined; cors: NormalizedCors | undefined },
-            ): Promise<Response> => {
-                if (stages.scope !== undefined) await applyIdentityCookie(stages.scope, response)
-                if (stages.cors !== undefined) applyCors(stages.cors, request, response)
-                if (propagatedTrace !== undefined) {
-                    response.headers.set('traceparent', propagatedTrace)
-                    response.headers.set('traceresponse', propagatedTrace)
-                }
-                // Compression BEFORE header stamping: it appends `Accept-Encoding` to `Vary`, and the
-                // identity-scoped default that follows appends `Cookie` to the same header.
-                return applyResponseHeaders(
-                    await applyResponseCompression(response, request, url.pathname),
-                )
-            }
-
-            // Multiplexed socket WS upgrade (sockets.md S3.1). CSWSH-gated, then the GLOBAL middleware
-            // chain, then the upgrade. Identity is resolved ONCE here (same cookie/bearer ladder as the
-            // HTTP path) and carried on the connection so `@rpc:` cache-channel joins can re-authorize
-            // against it per subscribe (§2.3).
-            //
-            // THE CHAIN RUNS HERE, and did not used to. `auth.md` §13.4 says "RPC, nav, socket-connect,
-            // and HTTP-face socket ops all pass the same chain", and S4.4 says WS runs it at
-            // `socket-connect` — but this branch returned before the chain was ever composed, so no
-            // middleware ran for a WebSocket at all. `authorizeSocketJoin` then admitted any socket
-            // declaring no `middleware` of its own, on the stated premise that "the global chain already
-            // ran at the WS upgrade". It had not. An app whose only global middleware was `requireLogin`
-            // answered an anonymous rpc with 401 and admitted the same anonymous caller to a socket
-            // subscribe — and to every message published to it.
-            //
-            // Only the GLOBAL chain: a socket's own `middleware` is the per-ROOM refinement and needs
-            // room args, which no connection has (one connection carries many rooms). That runs at
-            // subscribe, in `authorizeSocketJoin`, and now genuinely layers on top of a connect gate.
-            if (url.pathname === SOCKET_MUX_ROUTE) {
-                if (!socketOriginAllowed(request)) {
-                    return exit(
-                        errorResponse(403, 'CSWSH: WebSocket Origin does not match APP_URL.'),
-                        {
-                            scope: undefined,
-                            cors: undefined,
-                        },
-                    )
-                }
-                const connectScope = await socketConnectScope(request, url, srv, propagatedTrace)
-                let admitted: Response
-                try {
-                    admitted = await runInScope(
-                        connectScope,
-                        compose(config.middleware ?? [], () => UPGRADE_ADMITTED),
-                    )
-                } catch (caught) {
-                    // A middleware short-circuits by THROWING (`error(401)`/`redirect(...)`). Render it
-                    // as the reply. Fail CLOSED on anything else: this is an authorization gate, and the
-                    // safe reading of "the chain did not reach its terminal" is that it did not
-                    // authorize — never that the upgrade may proceed.
-                    const rendered = outcomeResponse(caught)
-                    if (rendered === undefined)
-                        log.channel('abide:socket').error(
-                            'socket-connect middleware threw:',
-                            caught,
-                        )
-                    return exit(rendered ?? (await handleUncaught(caught, config)), {
-                        scope: undefined,
-                        cors: undefined,
-                    })
-                }
-                // A middleware may legitimately return its own 2xx, and returning ANY response instead
-                // of the terminal's IS the short-circuit — so the sentinel is compared by IDENTITY,
-                // never by status.
-                if (admitted !== UPGRADE_ADMITTED)
-                    return exit(admitted, { scope: undefined, cors: undefined })
-
-                const connData: SocketConnectionData = {
-                    request,
-                    identity: connectScope.identity,
-                    // Carried so a per-room re-authorization can rebuild the SAME scope this upgrade
-                    // ran in. Without it a global middleware calling `server()` threw inside the
-                    // re-auth, which fails closed — silently denying every join.
-                    server: srv as unknown as Bun.Server<undefined>,
-                }
-                if (srv.upgrade(request, { data: connData })) return undefined
-                return exit(errorResponse(426, 'Expected a WebSocket upgrade request.'), {
-                    scope: undefined,
-                    cors: undefined,
-                })
-            }
-            const info = routeInfo(url, request.method.toUpperCase())
-            const route: RouteInfo = {
-                kind: info.kind,
-                name: info.name,
-                params: {},
-                url,
-                navigating: false,
-            }
-            // Identity resolution can throw (a malformed/tampered token that fails to unseal). Degrade
-            // to an anonymous principal so the request still gets a scope, and defer the error into the
-            // in-scope try below so onError sees it (rather than escaping as a bare 500 before scope).
-            let identity: Principal
-            // The incoming cookie's expiry, so the response can skip re-sealing a cookie that is
-            // already live and nowhere near rolling. Undefined = no readable cookie → one must be written.
-            let identityExpiresAt: number | undefined
-            let scopeError: unknown
-            // Parsed once and shared with `resolveIdentity`, which reads `abide-identity` off it.
-            const cookies = new Bun.CookieMap(request.headers.get('cookie') ?? '')
-            try {
-                const resolved = await resolveIdentityDetailed(request, cookies)
-                identity = resolved.principal
-                identityExpiresAt = resolved.cookieExpiresAt
-            } catch (caught) {
-                identity = anonymousPrincipal()
-                scopeError = caught
-            }
-            const scope: RequestScope = makeRequestScope({
-                request,
-                cookies,
-                identity,
-                identityStateless: isMachineBearer(request),
-                identityExpiresAt,
-                route,
-                // The WS-data generic (SocketConnectionData) is a socket-transport concern only; the
-                // public server()/scope.server surface stays `Bun.Server<undefined>` (unchanged API).
-                server: srv as unknown as Bun.Server<undefined>,
-                traceparent: propagatedTrace,
-            })
-
-            // Read the registry LIVE, not off a boot-time local: `abide dev` reassigns `config.routes` on
-            // every rebuild, and a captured copy answers with the previous build's callables.
-            const matched = info.kind === 'rpc' ? config.routes?.[info.name] : undefined
-            const policy = matched !== undefined ? routePolicy.get(info.name) : undefined
-            const cors = policy?.cors
-            // CORS preflight: answer an OPTIONS to an RPC before the middleware onion. A crossOrigin-less
-            // RPC has no CORS policy, so preflight is simply an unsupported method (405 + Allow).
-            if (request.method.toUpperCase() === 'OPTIONS' && info.kind === 'rpc') {
-                // `preflightResponse` already stamps the CORS headers for the admitted case, so this
-                // exit declines the `cors` stage rather than stamping twice. The 405 branch has no
-                // policy to stamp. Both still get the trace.
-                return exit(
-                    cors !== undefined
-                        ? preflightResponse(cors, request)
-                        : methodNotAllowed('OPTIONS', allowedMethodsFor(matched)),
-                    { scope: undefined, cors: undefined },
-                )
-            }
-            // One selection for every route class: an rpc uses its route policy, a socket-face request
-            // uses its socket policy, everything else the global chain.
-            const socketChain =
-                info.kind === 'socket-subscribe' || info.kind === 'socket-publish'
-                    ? socketPolicy.get(info.name)
-                    : undefined
-            const chain = compose(
-                policy?.middleware ?? socketChain ?? config.middleware ?? [],
-                () => dispatch(scope, config),
-            )
-
-            // A pre-stage rather than part of `exit`: it REPLACES the response (a raw 3xx is opaque to
-            // a fetch soft-nav) instead of stamping one, and only the nav route class can produce one.
-            const softNavEnvelope = (response: Response): Response =>
-                info.kind === 'nav' && isSoftNav(request) && isRedirectResponse(response)
-                    ? json(
-                          { redirect: response.headers.get('location') ?? '', seed: {} },
-                          { headers: { vary: NAV_VARY } },
-                      )
-                    : response
-
-            return runInScope(scope, async () => {
-                // The whole request lifecycle — CSRF gate, dispatch, and post-dispatch stamping — runs
-                // inside one try so ANY throw is routed to onError in request scope (not just a throw
-                // from the middleware/dispatch chain). A deferred identity-resolution failure surfaces
-                // here too. The onError response exits through the same stages; if THAT throws, the
-                // response leaves with baseline headers only rather than recursing.
-                try {
-                    if (scopeError !== undefined) throw scopeError
-                    // AU8 CSRF gate runs before the middleware onion. A rejected mutation never
-                    // dispatches, so it earns no rolling identity cookie — the `scope` stage is
-                    // declined. It DOES get CORS: without it a browser reports an opaque CORS failure
-                    // instead of surfacing the 403 the server actually sent. A crossOrigin-allowed
-                    // origin is exempt from the gate entirely.
-                    const rejected = csrfReject(request, cors)
-                    if (rejected !== undefined)
-                        return await exit(rejected, { scope: undefined, cors })
-                    return await exit(softNavEnvelope(await chain()), { scope, cors })
-                } catch (caught) {
-                    const response = await handleUncaught(caught, config)
-                    try {
-                        return await exit(softNavEnvelope(response), { scope, cors })
-                    } catch (exitError) {
-                        log.channel('abide:router').error(
-                            'failed to finalize error response:',
-                            exitError,
-                        )
-                        return applyResponseHeaders(response)
-                    }
-                }
-            }) as Promise<Response>
-        },
+        // THE PIPELINE, by name. `Bun.serve`'s `fetch` is the ADAPTER: it supplies the request, the
+        // server and the boot-derived policy this closure owns, and nothing else. Everything the
+        // response passes through lives in `handleRequest.ts`, where the stage order is stated once and
+        // an exit path can be exercised without an OS port.
+        fetch: (request, srv): Promise<Response | undefined> =>
+            handleRequest(request, srv, config, policy),
         websocket: {
             open(ws): void {
                 connections.set(ws, { subscriptions: new Map() })
