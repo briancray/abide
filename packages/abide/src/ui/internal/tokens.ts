@@ -10,7 +10,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner } from 'typescript/unstable/ast/scanner'
-import { CONTINUATION_OPERATORS } from './CONTINUATION_OPERATORS.ts'
+import { CONTINUATION_OPERATORS, TYPE_TERMINALS } from './CONTINUATION_OPERATORS.ts'
 
 export const K = SyntaxKind
 
@@ -28,6 +28,55 @@ export interface Tok {
 // it would mis-lex the following literal text as code. We drive `reScanTemplateToken` ourselves using a
 // small frame stack: a `${` (TemplateHead) opens a template frame; the matching `}` re-scans into a
 // TemplateMiddle (another substitution follows) or TemplateTail (template ends).
+// REGEX OR DIVISION? The scanner emits `/` and `/=` and leaves the choice to the parser — and this
+// tokenizer never made it, so a regex literal came through as its component tokens and every identifier
+// inside its BODY and its FLAGS became a rewrite target for `rewriteCellRefs` and
+// `rewriteFreeIdentifiers`. Both failure modes are real and neither is caught by `abide check`, which
+// copies the expression verbatim:
+//
+//   {v.split(/[\s,]+/).length}      → $scope.v.split(/[\$scope.s,]+/).length   — a WRONG ANSWER, silent
+//   {v.replace(/\s+/g, "-")}        → /\$scope.s+/$scope.g                     — a build error in
+//                                                                                generated code
+//   const re = /n/g  (beside `let n = state(0)`) → /n()/g
+//
+// Decided by the PREVIOUS token, the classic heuristic — and decided CONSERVATIVELY here: a regex is
+// recognised only where a value provably cannot have just ended, so every position that tokenizes as
+// division today keeps doing so. `)` / `]` / `}` are deliberately left as division even though a regex
+// is legal after some of them (`if (a) /re/.test(b)`): that is a MISS, which leaves the old behaviour,
+// where guessing the other way would corrupt real division.
+function regexAllowedAfter(previous: Tok | undefined): boolean {
+    if (previous === undefined) return true
+    const kind = previous.kind
+    if (
+        kind === K.Identifier ||
+        kind === K.PrivateIdentifier ||
+        kind === K.NumericLiteral ||
+        kind === K.BigIntLiteral ||
+        kind === K.StringLiteral ||
+        kind === K.NoSubstitutionTemplateLiteral ||
+        kind === K.TemplateTail ||
+        kind === K.RegularExpressionLiteral ||
+        kind === K.CloseParenToken ||
+        kind === K.CloseBracketToken ||
+        kind === K.CloseBraceToken ||
+        kind === K.PlusPlusToken ||
+        kind === K.MinusMinusToken
+    )
+        return false
+    // A keyword is identifier-like; only the ones that are VALUES end an expression. `return`,
+    // `typeof`, `case`, `in`, `of`, `instanceof`, `new`, `delete`, `void`, `yield`, `await` all leave an
+    // operand owing, so a `/` after them opens a regex.
+    if (isIdentifierLike(kind))
+        return !(
+            kind === K.ThisKeyword ||
+            kind === K.SuperKeyword ||
+            kind === K.TrueKeyword ||
+            kind === K.FalseKeyword ||
+            kind === K.NullKeyword
+        )
+    return true
+}
+
 export function tokenize(source: string): Tok[] {
     const scanner = createScanner(true, /* Standard */ 0, source)
     const tokens: Tok[] = []
@@ -35,7 +84,12 @@ export function tokenize(source: string): Tok[] {
     for (;;) {
         let kind = scanner.scan()
         if (kind === K.EndOfFile) break
-        if (kind === K.CloseBraceToken && frames[frames.length - 1] === 'template') {
+        if (kind === K.SlashToken || kind === K.SlashEqualsToken) {
+            if (regexAllowedAfter(tokens[tokens.length - 1])) {
+                const reScanned = scanner.reScanSlashToken()
+                if (reScanned === K.RegularExpressionLiteral) kind = reScanned
+            }
+        } else if (kind === K.CloseBraceToken && frames[frames.length - 1] === 'template') {
             kind = scanner.reScanTemplateToken(false)
             if (kind === K.TemplateTail) frames.pop()
             // TemplateMiddle: another substitution follows — keep the template frame.
@@ -266,13 +320,16 @@ export function analyzeBraces(tokens: Tok[]): BraceInfo {
 // otherwise it is a mid-expression wrap (`a\n  .b()`, `c ?\n  x`, `a +\n  b`) that JS keeps as one
 // statement. `CONTINUATION_OPERATORS` already owns WHICH tokens continue; this owns the two-sided
 // question asked of them, because asking it correctly is where the copies drifted, not the set.
-export function isStatementBreak(tokens: Tok[], index: number): boolean {
+// `inType` says the token BEFORE the break sits in a type position, where `TYPE_TERMINALS` reverses:
+// a line ending in `void` or `>` has completed a type rather than dangling an operand. Defaulted false,
+// so every value-position caller reads exactly as before.
+export function isStatementBreak(tokens: Tok[], index: number, inType = false): boolean {
     const token = tokenAt(tokens, index)
     if (!token.nl || index === 0) return false
-    return (
-        !CONTINUATION_OPERATORS.afterPrev.has(tokenAt(tokens, index - 1).kind) &&
-        !CONTINUATION_OPERATORS.atNext.has(token.kind)
-    )
+    const previous = tokenAt(tokens, index - 1).kind
+    const previousContinues =
+        CONTINUATION_OPERATORS.afterPrev.has(previous) && !(inType && TYPE_TERMINALS.has(previous))
+    return !previousContinues && !CONTINUATION_OPERATORS.atNext.has(token.kind)
 }
 
 export interface StatementExtent {
@@ -305,13 +362,22 @@ export function statementExtent(tokens: Tok[], keywordIdx: number): StatementExt
     const n = tokens.length
     let depth = 0
     let lastIdx = keywordIdx
+    // Is the scan inside a declarator's TYPE ANNOTATION right now? Opened by a depth-0 `:` and closed
+    // by the depth-0 `=` that starts the initializer (or by the declaration ending). Tracked because
+    // `TYPE_TERMINALS` reverses inside it — see `isStatementBreak`. A declaration with no annotation
+    // never sets it, so the common shape is one boolean that stays false.
+    let inType = false
     for (let p = keywordIdx + 1; p < n; p++) {
         const t = tokenAt(tokens, p)
         const kind = t.kind
         if (depth === 0) {
-            if (isStatementBreak(tokens, p))
+            if (isStatementBreak(tokens, p, inType))
                 return { lastIdx, nextIdx: p, end: tokenAt(tokens, lastIdx).end }
             if (kind === K.SemicolonToken) return { lastIdx, nextIdx: p + 1, end: t.end }
+            if (kind === K.ColonToken) inType = true
+            // `=` opens the initializer; `,` opens the NEXT declarator, whose annotation (if any) will
+            // reopen the region on its own `:`.
+            else if (kind === K.EqualsToken || kind === K.CommaToken) inType = false
         }
         if (isOpen(kind)) depth++
         else if (isClose(kind)) depth--
@@ -325,7 +391,13 @@ export function statementExtent(tokens: Tok[], keywordIdx: number): StatementExt
 // The `j > start` guard is the one thing an RHS asks that a statement does not: the token BEFORE the
 // RHS is the assignment operator, and a compound one (`+=`) is not a continuation operator, so
 // without it `n +=\n 1` would read the line break as a boundary and truncate to an empty RHS.
-export function rhsExtent(tokens: Tok[], start: number): number {
+//
+// `inType` bounds a TYPE rhs (a `type X = …` alias) rather than a value one, which changes where the
+// line break falls: `type Handler = () => void` is COMPLETE at `void`, and `type Labels = Array<string>`
+// at `>`. Reading them as dangling operands ran the alias into the next statement and marked every
+// identifier there as a type position — so the statement's cell references were left un-rewritten and
+// rendered as the callable's own source text. See `TYPE_TERMINALS`.
+export function rhsExtent(tokens: Tok[], start: number, inType = false): number {
     let depth = 0
     let last = start
     for (let j = start; j < tokens.length; j++) {
@@ -333,7 +405,7 @@ export function rhsExtent(tokens: Tok[], start: number): number {
         const kind = t.kind
         if (depth === 0) {
             if (kind === K.CommaToken || kind === K.SemicolonToken) return j > start ? j - 1 : start
-            if (j > start && isStatementBreak(tokens, j)) return j - 1
+            if (j > start && isStatementBreak(tokens, j, inType)) return j - 1
         }
         if (isOpen(kind)) depth++
         else if (isClose(kind)) {

@@ -79,6 +79,14 @@ const IDENT_CHAR = /[A-Za-z0-9_$]/
 // this pattern declines to match it. Every other dotted tag names a component held at that path.
 const MEMBER_TAG = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$/
 
+// A BLOCK CLOSE IS THE WHOLE TOKEN, not the two characters `{/`. Testing only the prefix made
+// `{/^a/.test(v)}` — an interpolation whose expression opens with a regex literal — read as a close,
+// which failed the parse with `unclosed <p>`: a message about the enclosing element, for something the
+// author wrote inside it. No regex literal is one of these six lowercase words followed by `}`, so
+// matching the whole token makes the two unambiguous. Sticky, so `atBlockClose` tests at `pos` with no
+// slice; it is called per sibling node.
+const BLOCK_CLOSE = /\{\/(?:if|for|await|switch|try|component)\s*\}/y
+
 export function parse(
     source: string,
     opts?: {
@@ -178,10 +186,58 @@ export function parse(
         fail('unterminated template literal', start)
     }
 
+    // Advance past a REGEX literal starting at `pos` (the opening `/`), flags included. A character
+    // class suspends the closing-`/` test (`/[/]/`) and a backslash escapes one character.
+    //
+    // Returns false when this turns out not to be a regex — unterminated, or crossing a line, neither
+    // of which a regex literal may do — and rewinds so the caller treats the `/` as division. Guessing
+    // wrong in that direction costs nothing; guessing wrong the other way would swallow real code.
+    function scanRegexLiteral(): boolean {
+        const start = pos
+        pos++ // opening slash
+        let inClass = false
+        while (pos < length) {
+            const char = source[pos]
+            if (char === '\\') {
+                pos += 2
+                continue
+            }
+            if (char === '\n' || char === '\r') break
+            if (char === '[') inClass = true
+            else if (char === ']') inClass = false
+            else if (char === '/' && !inClass) {
+                pos++
+                while (pos < length && /[a-z]/i.test(source[pos] ?? '')) pos++ // flags
+                return true
+            }
+            pos++
+        }
+        pos = start + 1
+        return false
+    }
+
+    // Could a regex literal START at `pos`? Decided by the previous significant character, the classic
+    // heuristic — and decided CONSERVATIVELY: only where a value provably cannot have just ended, so
+    // every `/` that is division today stays division. An identifier or keyword counts as a value
+    // ender, so `return /re/` inside a nested arrow body is a miss rather than a misread.
+    function regexCanStartHere(floor: number): boolean {
+        let index = pos - 1
+        while (index >= floor && isWhitespace(source.charCodeAt(index))) index--
+        if (index < floor) return true
+        const previous = source[index] ?? ''
+        return !/[A-Za-z0-9_$)\]}'"`]/.test(previous)
+    }
+
     // From `pos`, advance over balanced expression text until the matching top-level `}` (which is
-    // NOT consumed). Nested `()[]{}`, strings, and template literals are skipped as units. Stops at
-    // end of input (caller decides whether that is an error).
+    // NOT consumed). Nested `()[]{}`, strings, template literals and REGEX LITERALS are skipped as
+    // units. Stops at end of input (caller decides whether that is an error).
+    //
+    // Regexes are skipped because their contents are not code: `{s.replace(/'/g, "-")}` failed with
+    // `unterminated string literal` (the `'` inside the pattern opened a string) and `/[)]/` or `/[{]/`
+    // unbalanced the depth counter. Same root as the tokenizer's missing `reScanSlashToken`, in the
+    // other scanner.
     function scanBalancedUntilBrace(): void {
+        const floor = pos
         let depth = 0
         while (pos < length) {
             const char = source[pos]
@@ -193,6 +249,7 @@ export function parse(
                 scanTemplateLiteral()
                 continue
             }
+            if (char === '/' && regexCanStartHere(floor) && scanRegexLiteral()) continue
             if (char === '(' || char === '[' || char === '{') {
                 depth++
                 pos++
@@ -253,8 +310,14 @@ export function parse(
         return source[pos] === '{' && source[pos + 1] === ':'
     }
 
+    // `{/` alone is not a block close — see `BLOCK_CLOSE`.
     function atBlockClose(): boolean {
-        return source[pos] === '{' && source[pos + 1] === '/'
+        // The two-character guard first, so the regex runs only where `{/` actually appears — this sits
+        // in the sibling-parsing loop. STICKY, matched against `source` at `pos`, so the test costs no
+        // slice.
+        if (source[pos] !== '{' || source[pos + 1] !== '/') return false
+        BLOCK_CLOSE.lastIndex = pos
+        return BLOCK_CLOSE.test(source)
     }
 
     // Consume `{:`, read and return the clause keyword (e.g. "else", "then", "catch"). `pos` is left
@@ -299,7 +362,9 @@ export function parse(
                     nodes.push(parseBlock())
                     continue
                 }
-                if (next === ':' || next === '/') break
+                // `atBlockClose` rather than `next === '/'`, so an interpolation opening with a regex
+                // literal (`{/^a/.test(v)}`) is still an interpolation.
+                if (next === ':' || atBlockClose()) break
                 nodes.push(parseInterpolation())
                 continue
             }
@@ -581,6 +646,12 @@ export function parse(
         const start = pos
         emit(start, start + 1, 'operator') // opening `{`
         pos++ // `{`
+        // WHITESPACE FIRST. The `...` test used to be anchored at the character right after the `{`, so
+        // `<div { ...rest }>` — legal-looking, and the spacing a formatter may produce — fell through to
+        // the shorthand branch and became an attribute NAMED `...rest`, failing the build with
+        // `Unexpected "..."` in generated code rather than saying anything about the template. Every
+        // other brace form in this grammar tolerates inner spacing; this one did not.
+        skipWhitespace()
         if (source.startsWith('...', pos)) {
             pos += 3
             const expression = readBraceContents().trim()

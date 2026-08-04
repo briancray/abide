@@ -72,6 +72,24 @@ const BOTH_ROLES: readonly SyntaxKind[] = [
     SyntaxKind.TemplateMiddle,
 ]
 
+// TOKENS THAT CONTINUE A VALUE AND COMPLETE A TYPE. The sets above are value-expression rules, and a
+// `<script>` scan applies them at positions that are sometimes TYPE positions — where the same token
+// means the opposite thing:
+//
+//   `void`  — a prefix operator in a value (`void 0`), a complete type in an annotation (`() => void`).
+//   `>`     — a comparison in a value (`a >\n b`), the close of a type-argument list (`Array<string>`).
+//
+// Applying the value rule inside a type is how a declaration ran past its own line break and absorbed
+// the NEXT statement: `let onReset: () => void` never ended, so `let count = state(0)` was swallowed
+// into its declarator text and `count` was neither a binding nor a cell — `{count}` rendered empty and
+// `count = 5` was never lowered to a `.set()`. Silently, and green under `abide check`, which shares
+// this scanner. Same shape in `typePositions`' `type X = …` alias, where the run-on instead marked the
+// following statement's identifiers as type positions and left every cell reference un-rewritten.
+export const TYPE_TERMINALS: ReadonlySet<SyntaxKind> = new Set<SyntaxKind>([
+    SyntaxKind.VoidKeyword,
+    SyntaxKind.GreaterThanToken,
+])
+
 export const CONTINUATION_OPERATORS = {
     // A line whose PREVIOUS token is one of these has a dangling operand the next line supplies.
     afterPrev: new Set<SyntaxKind>([

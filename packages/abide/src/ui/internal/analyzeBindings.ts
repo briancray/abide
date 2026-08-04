@@ -57,6 +57,7 @@ import {
     isClose,
     isIdentifierLike,
     isOpen,
+    isStatementBreak,
     K,
     numberAt,
     rhsExtent,
@@ -448,12 +449,28 @@ function collectVarBindings(
     const names: number[] = []
     let depth = 0
     let mode: 'name' | 'after' | 'init' = 'name'
+    let inType = false
     for (let j = kw + 1; j < tokens.length; j++) {
         const t = tokenAt(tokens, j)
         const kind = t.kind
         if (depth === 0) {
             if (kind === K.SemicolonToken) break
-            if (t.nl && j > kw + 1) break // statement boundary (ASI heuristic)
+            // THE ASI RULE, not a bare "any line break ends it". Breaking on every depth-0 newline meant
+            // that in
+            //
+            //     let a = 1,
+            //         count = state(0)
+            //
+            // every declarator after the first was neither registered as a declaration name nor
+            // shadowed — and was then rewritten as a REFERENCE at its own declaration site, emitting
+            // `count.set( state(0))`, which fails the build on generated source. `emitCheck` splits the
+            // same input correctly, so `abide check` stayed green over it: the documented lane
+            // asymmetry, and the reason this asks the shared `isStatementBreak` rather than re-spelling
+            // the test. `inType` tracks a declarator's annotation for the same reason `statementExtent`
+            // does — `let onReset: () => void` is complete at `void`.
+            if (j > kw + 1 && isStatementBreak(tokens, j, inType)) break
+            if (kind === K.ColonToken) inType = true
+            else if (kind === K.EqualsToken || kind === K.CommaToken) inType = false
         }
         if (isOpen(kind)) {
             depth++
@@ -627,14 +644,22 @@ export function rewriteCellRefs(code: string, bindings: CellBindings): string {
         return true
     }
 
-    // Object-literal property key or method name (`{ n: … }`, `{ n() {} }`) — not a reference.
+    // A property KEY or a shorthand method name (`{ n: … }`, `{ n() {} }`) — not a reference.
     const isObjectKey = (i: number): boolean => {
-        const encl = numberAt(enclBraceOpen, i)
-        if (encl === -1 || !isObjectBrace.has(encl)) return false
         const prev = i > 0 ? tokenAt(tokens, i - 1).kind : undefined
         if (prev !== K.OpenBraceToken && prev !== K.CommaToken) return false // property position only
         const next = tokens[i + 1]?.kind
-        return next === K.ColonToken || next === K.OpenParenToken
+        // `name:` at property position is a KEY however the brace is classified — an object literal, a
+        // destructuring PATTERN, or a statement label. None of the three is a value read, so this must
+        // not ask `isObjectBrace`: requiring it is what made a RENAMING pattern emit
+        // `const { open(): initialOpen } = props()` — a build error on generated code, hit whenever a
+        // destructured prop happens to share a name with a cell, which for `props()` is the common case.
+        if (next === K.ColonToken) return true
+        // `name(` is a shorthand METHOD only inside an object literal; inside a block it is a CALL, and
+        // a call on a cell-named binding is a read the rewrite owes.
+        const encl = numberAt(enclBraceOpen, i)
+        if (encl === -1 || !isObjectBrace.has(encl)) return false
+        return next === K.OpenParenToken
     }
 
     // Object-literal shorthand (`{ n }`, `{ a, n }`) — a READ, rewritten to `n: n()`.

@@ -302,6 +302,29 @@ function markMemberTypes(
         // hide the annotation that follows it (`#p: rest`).
         const nameKind = tokenAt(tokens, i).kind
         if (!isIdentifierLike(nameKind) && nameKind !== K.PrivateIdentifier) continue
+        // MEMBER POSITION, not merely member DEPTH — and asked of an OBJECT LITERAL only, where members
+        // are comma-separated so a name can sit nowhere but after the opening brace, after a comma, or
+        // after an `async`/`get`/`set` prefix. Value position inside a member is still member depth, so
+        // without this a call in a property VALUE matched the shorthand-method shape `name (`:
+        //
+        //     const style = { width: count > 5 ? big(count) : count }
+        //
+        // `big(` looked like a method, and `markParamTypes`' return-type probe then read the enclosing
+        // TERNARY's `:` as a return annotation and marked the else branch as a type — so that `count`
+        // was left un-rewritten and `style.width` was the raw callable whenever the condition was false.
+        // A class body keeps the depth-only rule: its members are separated by nothing at all (a `}`,
+        // a newline), and modifiers/decorators make "what precedes a member" an open set there.
+        if (!isClassBody) {
+            const previousKind = tokens[i - 1]?.kind
+            const startsMember =
+                i === open + 1 ||
+                previousKind === K.OpenBraceToken ||
+                previousKind === K.CommaToken ||
+                previousKind === K.AsyncKeyword ||
+                previousKind === K.GetKeyword ||
+                previousKind === K.SetKeyword
+            if (!startsMember) continue
+        }
         const nextKind = tokens[i + 1]?.kind
         if (nextKind === K.OpenParenToken) {
             const paramClose = matchClose.get(i + 1)
@@ -395,7 +418,8 @@ export function markTypeSkips(tokens: Tok[], braces: BraceInfo): Set<number> {
             if (tokens[j]?.kind !== K.EqualsToken) continue
             skip.add(i)
             skip.add(nameIdx)
-            const end = rhsExtent(tokens, j + 1)
+            // A TYPE rhs — the alias's whole right-hand side is one. See `rhsExtent`'s `inType`.
+            const end = rhsExtent(tokens, j + 1, true)
             for (let m = j + 1; m <= end; m++)
                 if (isIdentifierLike(tokenAt(tokens, m).kind)) skip.add(m)
             continue
