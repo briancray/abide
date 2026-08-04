@@ -16,6 +16,7 @@ import {
     decodeStreamResponse,
     isStreamContentType,
 } from '../../shared/internal/decodeStreamResponse.ts'
+import type { StreamSeedSource } from '../../shared/internal/hydrationSeed.ts'
 import { isTypedError } from '../../shared/internal/isTypedError.ts'
 import { memoChannelName } from '../../shared/internal/memoChannelName.ts'
 import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
@@ -311,11 +312,8 @@ export function clientProxy<Args = unknown, T = unknown>(
         backing.publish(args, next)
     rpc.snapshot = (): Array<{ args: Args; value: T }> => backing.snapshot()
     rpc.seed = (args: Args, value: T): void => backing.seed(args, value)
-    rpc.seedStream = (
-        args: Args,
-        source: readonly unknown[] | AsyncIterable<unknown>,
-        encoding?: 'jsonl' | 'sse',
-    ): void => backing.seedStream(args, source, encoding)
+    rpc.seedStream = (args: Args, source: StreamSeedSource, encoding?: 'jsonl' | 'sse'): void =>
+        backing.seedStream(args, source, encoding)
     rpc.bindBroadcast = (): void => {} // server-only seam; inert on the client proxy
     return rpc
 }

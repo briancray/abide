@@ -24,7 +24,7 @@
 
 import { identity } from '../../shared/identity.ts'
 import { decodeStreamResponse } from '../../shared/internal/decodeStreamResponse.ts'
-import type { HydrationSeed } from '../../shared/internal/hydrationSeed.ts'
+import type { HydrationSeed, HydrationSeedSurface } from '../../shared/internal/hydrationSeed.ts'
 import { identityAmbient } from '../../shared/internal/identityAmbient.ts'
 import { outgoingTraceparent } from '../../shared/internal/outgoingTraceparent.ts'
 import { rpcUrl } from '../../shared/internal/rpcUrl.ts'
@@ -145,11 +145,13 @@ function replayStreams(seed: HydrationSeed, imports: Record<string, unknown>, ba
     for (const handle of streams) {
         if (handle === null || typeof handle !== 'object') continue
         if (handle.name === null || !Array.isArray(handle.values)) continue
+        // Typed against the REAL seed surface, not a local `{ source: unknown }` shape. The `unknown`
+        // this used to declare is what let `StreamSeed` fall out of `RpcCallSurface.seedStream` without
+        // a compile error at the one call site that passes one — the mode-B branch below.
         const proxy = imports[handle.name] as
-            | {
-                  seedStream?: (args: unknown, source: unknown) => void
+            | (Partial<HydrationSeedSurface<unknown, unknown>> & {
                   invalidate?: (args: unknown) => void
-              }
+              })
             | undefined
         if (proxy === undefined || typeof proxy.seedStream !== 'function') continue
         if (handle.done === true) {

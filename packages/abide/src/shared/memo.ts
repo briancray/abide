@@ -34,6 +34,11 @@
 // PRs): the client-side channel join/apply.
 
 import { canonicalKey } from './internal/codec.ts'
+import type {
+    HydrationSeedSurface,
+    StreamSeed,
+    StreamSeedSource,
+} from './internal/hydrationSeed.ts'
 import { isBrowser } from './internal/isBrowser.ts'
 import { isThenable } from './internal/isThenable.ts'
 import { isTimeoutError } from './internal/isTimeoutError.ts'
@@ -286,7 +291,7 @@ export type SyncMemoOptions = MemoOptions
 // probe/verb vocabulary — peek/pending/refreshing/error/chunks/done/refresh/invalidate/publish/watch,
 // inherited below), plus the memo-specific extras: the awaitable bare read, hydration seed/snapshot, and
 // stream resume. A `socket`/`channel` implements the SAME surface over its hub (ADR 0023 step 6).
-export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
+export interface Memo<Args, T> extends ReactiveReadSurface<Args, T>, HydrationSeedSurface<Args, T> {
     // THE READ (Promise-read model): the bare call is the awaitable, coalesced load. It ALSO subscribes
     // the calling reactive context to the slot, so a reactive `{await memo()}` re-runs and re-awaits when
     // the slot invalidates. Resolves with the value or rejects with the error.
@@ -327,30 +332,6 @@ export interface Memo<Args, T> extends ReactiveReadSurface<Args, T> {
         args: Args,
         from: number,
     ): { cursor: AsyncIterable<unknown> | undefined; fresh: boolean }
-    // Every resolved slot in the active context — the SSR record source for the hydration seed
-    // (rpc-core §5). Only `value`-state slots are reported; pending/error/idle are skipped.
-    snapshot(): Array<{ args: Args; value: T }>
-    // Replay a recorded (args, value) into the cache as a settled `value` slot, so a matching read
-    // resolves from cache instead of re-loading — the client half of §5 hydration seeding.
-    seed(args: Args, value: T): void
-    // The STREAMING analog of `seed` (§5): install a warm stream slot from an SSR handoff so a hydrate read
-    // replays it with NO client re-invoke, and `peek`/`chunks`/`done`/`refresh` reflect it. A finite array
-    // is a completed (mode-A) transcript; a `StreamSeed` is the mode-B flushed-prefix + resumed-tail pair;
-    // a bare AsyncIterable is any other warm source (it closes the slot when it ends).
-    seedStream(
-        args: Args,
-        source: readonly unknown[] | AsyncIterable<unknown> | StreamSeed,
-        encoding?: 'jsonl' | 'sse',
-    ): void
-}
-
-// A mode-B (OPEN) SSR handoff: the flushed `prefix` is already known, `rest` resumes the tail over the
-// wire. Kept as its own shape rather than one pre-concatenated generator so `startStream` can push the
-// prefix SYNCHRONOUSLY — attach-hydration reads the transcript in the SAME TICK to bind each painted
-// item's value and claim the server's nodes, and a generator's first yield is already a microtask late.
-export interface StreamSeed {
-    prefix: readonly unknown[]
-    rest: AsyncIterable<unknown>
 }
 
 // A `StreamSeed` vs a bare iterable source. Keyed on the `prefix` array rather than on the ABSENCE of
@@ -1315,7 +1296,10 @@ export function memo<Args, T>(
 
     function startStream(
         slot: Slot<Args, T>,
-        source: AsyncIterable<unknown> | Iterable<unknown>,
+        // `StreamSeed` belongs in this union: the `isStreamSeed` branch below is reached only through
+        // `seedStream`, and while the parameter omitted it that branch was unreachable by every declared
+        // type on every path in — the mode-B handoff worked but nothing typed said it could.
+        source: AsyncIterable<unknown> | Iterable<unknown> | StreamSeed,
         encoding?: 'jsonl' | 'sse',
     ): ReplayableStream<unknown> {
         const controller = new AbortController()
@@ -2044,11 +2028,7 @@ export function memo<Args, T>(
         return cell
     }) as Memo<Args, T>['state']
 
-    c.seedStream = (
-        args: Args,
-        source: readonly unknown[] | AsyncIterable<unknown>,
-        encoding?: 'jsonl' | 'sse',
-    ): void => {
+    c.seedStream = (args: Args, source: StreamSeedSource, encoding?: 'jsonl' | 'sse'): void => {
         // Pump the SSR handoff through `startStream` — it wraps the source in a ReplayableStream and
         // installs the slot. A finite array (mode A) closes immediately (stamps the close clock); an
         // AsyncIterable (mode B: prefix then resumed tail) stays open until it ends, then closes. Either

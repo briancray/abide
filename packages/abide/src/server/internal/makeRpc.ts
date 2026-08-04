@@ -25,11 +25,13 @@
 // (it can't be safely keyed — see §1).
 
 import { envMs } from '../../shared/internal/envMs.ts'
+import type { StreamSeedSource } from '../../shared/internal/hydrationSeed.ts'
 import { isTypedError } from '../../shared/internal/isTypedError.ts'
 import { memoOptionsFor } from '../../shared/internal/memoOptionsFor.ts'
 import type {
     ReactiveStreamProbes,
     ReactiveValueProbes,
+    SlotSelectorVerbs,
     UntrackedRead,
 } from '../../shared/internal/reactiveReadSurface.ts'
 import { type Payload, tagSingleConsumer } from '../../shared/internal/responseSource.ts'
@@ -200,12 +202,14 @@ export interface StreamRead<Args, C>
     extends UntrackedRead<C, RpcCallArgs<Args>>,
         ReactiveValueProbes<C, RpcCallArgs<Args>>,
         ReactiveStreamProbes<C, RpcCallArgs<Args>>,
+        // The two selector verbs, inherited — the fourth copy of a declaration that is identical on every
+        // surface carrying it. Here `refresh` re-runs the source and `invalidate` additionally ABORTS an
+        // open stream before dropping it (replayable-streams.md §4); that is a per-cardinality meaning of
+        // one verb, which is what `SlotSelectorVerbs` documents, not a different signature.
+        SlotSelectorVerbs<Args>,
         ServerRouteMembers<Args, AsyncIterable<C>> {
     // THE READ: awaitable; resolves to a fresh cursor that replays the transcript so far then goes live.
     (...args: RpcInvokeArgs<Args>): Promise<AsyncIterable<C>>
-    // Re-run the source; `invalidate` aborts an open stream + drops it (replayable-streams.md §4).
-    refresh(args?: Partial<Args> | Args): void
-    invalidate(args?: Partial<Args> | Args): void
     // The bare call, encoded: this caller's own replay-then-live cursor served as jsonl/sse (the
     // handler's tagged choice first, then `init`'s `Accept`) over the ONE run the slot holds.
     raw(args: Args, init?: RequestInit): Promise<Response>
@@ -347,7 +351,7 @@ function attachSurface<Args, T>(
     callable.seed = (args: Args, value: T): void => backing.seed(args, value)
     callable.seedStream = (
         args: Args,
-        source: readonly unknown[] | AsyncIterable<unknown>,
+        source: StreamSeedSource,
         encoding?: 'jsonl' | 'sse',
     ): void => backing.seedStream(args, source, encoding)
     callable.bindBroadcast = (sink: MemoNotify): void => setBroadcast(sink)

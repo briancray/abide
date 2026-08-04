@@ -12,7 +12,12 @@
 // surface is identical for reads and mutations, on the server and in the browser.
 
 import type { MemoNotify } from '../memo.ts'
-import type { ReactiveValueProbes, UntrackedRead } from './reactiveReadSurface.ts'
+import type { HydrationSeedSurface } from './hydrationSeed.ts'
+import type {
+    ReactiveValueProbes,
+    SlotSelectorVerbs,
+    UntrackedRead,
+} from './reactiveReadSurface.ts'
 
 // A read-call argument tuple. A ZERO-arg read infers `Args = unknown`, which makes the argument
 // OPTIONAL so a bare `fn()` type-checks; a declared arg stays REQUIRED because `Args` is then a
@@ -59,7 +64,13 @@ export type MutationCallArgs<Args> = unknown extends Args
 // no transcript, so `chunks`/`done`/`streaming` stay off it and `StreamRead` adds them.
 export interface RpcCallSurface<Args, T>
     extends UntrackedRead<T, RpcCallArgs<Args>>,
-        ReactiveValueProbes<T, RpcCallArgs<Args>> {
+        ReactiveValueProbes<T, RpcCallArgs<Args>>,
+        // The §5 seed triple, at the SAME arity a memo takes it (all three name the key explicitly, so
+        // there is nothing to re-parameterize). Inherited rather than restated — restating it is how
+        // `seedStream` came to accept `StreamSeed` on the memo and not here.
+        HydrationSeedSurface<Args, T>,
+        // The two selector verbs, likewise inherited rather than restated.
+        SlotSelectorVerbs<Args> {
     // THE READ (Promise-read model): the bare call is the awaitable, coalesced load; it also subscribes
     // the calling reactive context, so `{await fn()}` / `{#await fn()}` re-await on invalidate. Use
     // `.live()` for the non-blocking `T | undefined` snapshot.
@@ -74,24 +85,9 @@ export interface RpcCallSurface<Args, T>
     raw(args: Args, init?: RequestInit): Promise<Response>
     // Narrow a caught value to this RPC's typed error by name (`fn.isError(e, "RateLimited")`).
     isError(e: unknown, name: string): boolean
-    // Partial selector matches every superset slot (spec: partial-object match); mirrors `Memo`.
-    refresh(args?: Partial<Args> | Args): void
-    invalidate(args?: Partial<Args> | Args): void
-    // Mutate the retained value in place (value-form or updater-form); mirrors `Memo`. On a `shared`
+    // Mutate the retained value in place (value-form or updater-form). On a `shared`
     // read this broadcasts (value-form directly, updater-form resolves server-side then broadcasts).
     publish(args: Args, next: T | ((current: T | undefined) => T)): void
-    // §5 hydration: `snapshot()` records this read's resolved slots for the seed; `seed()` replays a
-    // recorded (args, value) into the cache so the client resolves from cache instead of re-fetching.
-    snapshot(): Array<{ args: Args; value: T }>
-    seed(args: Args, value: T): void
-    // §5 streaming hydration: install a warm stream slot from an SSR `{#for await}` handoff (a mode-A
-    // array transcript, or a mode-B "prefix then resumed tail" AsyncIterable) so the client replays it with
-    // no re-invoke and the chunk probes + refresh work.
-    seedStream(
-        args: Args,
-        source: readonly unknown[] | AsyncIterable<unknown>,
-        encoding?: 'jsonl' | 'sse',
-    ): void
     // SERVER-ONLY broadcast seam (rpc-core §8, PR2). `createApp` calls this on a `shared` read to bind
     // the memo's transport-free `notify` sink to a channel publish. Transport stays out of makeRpc —
     // the sink is supplied by createApp (which alone knows the route NAME). A no-op until bound, and

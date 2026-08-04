@@ -143,7 +143,12 @@ export interface ReactiveProbeSurface<Args, T>
         ReactiveValueProbes<T, [args: Args]>,
         ReactiveStreamProbes<unknown, [args: Args]> {}
 
-export interface ReactiveReadSurface<Args, T> extends ReactiveProbeSurface<Args, T> {
+// The two SELECTOR verbs, declared once. Unlike the probes these need NO arity parameter: both take the
+// partial selector in the same optional slot on every surface that has them, so the memo/rpc spellings
+// were already byte-identical — which is precisely why they were re-typed by hand on `RpcCallSurface`
+// for as long as they were. A partial selector matches every superset slot (spec: partial-object match);
+// calling with no argument selects the whole callable.
+export interface SlotSelectorVerbs<Args> {
     // EAGER re-acquire: a memo re-runs its `fn` keeping the stale value visible; a socket re-subscribes
     // keeping the tail visible until the new subscription is live.
     refresh(args?: Partial<Args> | Args): void
@@ -151,6 +156,11 @@ export interface ReactiveReadSurface<Args, T> extends ReactiveProbeSurface<Args,
     // source to abort; it clears the retained tail and re-subscribes on next read, it does NOT abort a
     // pulled source the way a memo-stream's `invalidate` does.
     invalidate(args?: Partial<Args> | Args): void
+}
+
+export interface ReactiveReadSurface<Args, T>
+    extends ReactiveProbeSurface<Args, T>,
+        SlotSelectorVerbs<Args> {
     // The single write verb, cardinality-polymorphic: REPLACE on a scalar slot, APPEND on a stream/socket
     // slot. Takes a VALUE — the read-modify-write updater form is scalar-only and lives on `Memo` (a
     // channel only appends, so an updater is meaningless there), so it is NOT in the shared surface.
