@@ -24,8 +24,9 @@ import { GET } from '../server/GET.ts'
 import type { Route } from '../server/internal/router.ts'
 import { firstPositional } from './firstPositional.ts'
 import { flagAbsent } from './flagAbsent.ts'
-import { flagValue } from './flagValue.ts'
+import { flagPresent, flagValue } from './flagValue.ts'
 import { DEV_COMMANDS, main } from './main.ts'
+import { parsePort } from './parsePort.ts'
 
 const tempDirs: string[] = []
 
@@ -91,6 +92,38 @@ describe('main — argv helpers', () => {
         expect(flagAbsent(['--no-install'], '--no-git')).toBe(true)
         expect(flagAbsent([], '--no-git')).toBe(true)
     })
+
+    // `--flag=value` used to parse as NOTHING, with no error — so the default silently applied. The
+    // worst of those was `abide compile --target=bun-linux-x64`, which dropped the target, wrote a
+    // host-architecture binary, and printed the success banner naming the path you were about to ship.
+    test('flagValue accepts the = spelling as well as the space one', () => {
+        expect(flagValue(['--target=bun-linux-x64'], '--target')).toBe('bun-linux-x64')
+        expect(flagValue(['--out=dist/x', '--target=bun-darwin-arm64'], '--target')).toBe(
+            'bun-darwin-arm64',
+        )
+        // A value containing `=` survives intact — only the FIRST separator splits.
+        expect(flagValue(['--url=https://x/?a=b'], '--url')).toBe('https://x/?a=b')
+        // `--flag=` names no value, exactly as a bare trailing `--flag` does.
+        expect(flagValue(['--target='], '--target')).toBeUndefined()
+        // A prefix collision is not a match.
+        expect(flagValue(['--targeted=x'], '--target')).toBeUndefined()
+    })
+
+    test('flagPresent sees both spellings, which is what --platforms turns on', () => {
+        expect(flagPresent(['--platforms'], '--platforms')).toBe(true)
+        expect(flagPresent(['--platforms=a,b'], '--platforms')).toBe(true)
+        expect(flagPresent(['--platform'], '--platforms')).toBe(false)
+        expect(flagPresent([], '--platforms')).toBe(false)
+    })
+
+    test('parsePort reads both spellings and still validates the range', () => {
+        expect(parsePort(['--port', '4100'])).toBe(4100)
+        expect(parsePort(['--port=4100'])).toBe(4100)
+        expect(parsePort(['--port=0'])).toBe(0)
+        expect(parsePort(['--port=99999'])).toBeUndefined()
+        expect(parsePort(['--port=abc'])).toBeUndefined()
+        expect(parsePort([])).toBeUndefined()
+    })
 })
 
 describe('main — dispatch', () => {
@@ -140,6 +173,17 @@ describe('main — dispatch', () => {
         expect(result.err).toContain('Usage:')
         expect(result.out).toBe('')
         expect(result.code).toBe(2)
+    })
+
+    // `DEV_COMMANDS` is an object literal, so a plain index resolved inherited members: these names
+    // passed the `entry !== undefined` guard and died on `entry.run is not a function` at exit 1
+    // (failed) — which a CI script reads as "the build ran and failed", not "you typed it wrong".
+    test('an Object.prototype name is a usage error like any other unknown command', async () => {
+        for (const name of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']) {
+            const result = await run([name])
+            expect([name, result.code]).toEqual([name, 2])
+            expect(result.err).toContain(`unknown command "${name}"`)
+        }
     })
 
     test('run without a <file> is a usage error', async () => {

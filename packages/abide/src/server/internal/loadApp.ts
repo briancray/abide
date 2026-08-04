@@ -27,7 +27,6 @@ import {
 } from './appModuleShape.ts'
 import { type DeriveEntry, deriveSchemas } from './deriveSchema.ts'
 import { mergeSchemas } from './mergeSchemas.ts'
-import type { Middleware } from './middleware.ts'
 import type { AppConfig, Route } from './router.ts'
 import { type AppSources, scanAppSources } from './scanAppSources.ts'
 
@@ -39,6 +38,28 @@ export interface BakedSchemas {
 }
 
 const BAKED_SCHEMAS_FILE = 'dist/schemas.json'
+
+// THE MODULE REGISTRY IS KEYED ON THE RESOLVED PATH, and nothing evicts it. Every project module below
+// is reached through `await import(absolutePath)`, so a SECOND `loadApp` on the same directory in the
+// same process gets the identical namespaces and the identical `Route` objects it already had.
+//
+// That is correct — and free — for every lane that loads once per process (`abide start`, `abide run`,
+// `createTestApp`, a compiled binary). It is the whole bug in the one lane that loads twice: `abide dev`'s
+// watcher calls `loadApp(dir, { schemas: 'source' })` on every save and then `App.rebind()`s the result.
+// The rebuild reported success, the reload signal published, the browser did a full `location.reload()`
+// — and the server went on executing the PREVIOUS handler and the PREVIOUS `config.middleware` for the
+// rest of the session. Only `.abide` pages and layouts reflected edits, because those are re-read as
+// TEXT rather than imported. It defeats `App.rebind()`'s stated purpose (that per-rpc `middleware` /
+// `crossOrigin` not be served from a stale build) and contradicts `build-pipeline.md` BP2.4.
+//
+// A query suffix is what makes the specifier a different registry key. It LEAKS the previous instances —
+// nothing can unload an ES module — which is why it is opt-in per call rather than always-on: a dev
+// session trades a bounded per-save leak for edits that actually take, and no other lane pays either.
+let reloadGeneration = 0
+
+function projectImport(path: string, reload: boolean): Promise<unknown> {
+    return import(reload ? `${path}?abide-reload=${reloadGeneration}` : path)
+}
 
 // The process-lifecycle hooks a project's `src/app.ts` may export alongside `middleware` (CL3).
 // `onHealth` is NOT here — it is consumed by the router per request, so it rides on `AppConfig`.
@@ -59,11 +80,12 @@ export interface LoadedApp extends AppConfig, AppLifecycle {}
 
 async function loadRoutes(
     sources: AppSources['rpc'],
+    reload: boolean,
 ): Promise<{ routes: Record<string, Route>; derivationTargets: DeriveEntry[] }> {
     const routes: Record<string, Route> = {}
     const derivationTargets: DeriveEntry[] = []
     for (const { name, path: absolute } of sources) {
-        const module = (await import(absolute)) as Record<string, unknown>
+        const module = (await projectImport(absolute, reload)) as Record<string, unknown>
         const exported = singleExport(module)
         if (exported === undefined || !isRoute(exported.value)) continue
         routes[name] = exported.value
@@ -146,10 +168,11 @@ export async function writeBakedSchemas(dir: string, routes: Record<string, Rout
 
 async function loadSockets(
     sources: AppSources['sockets'],
+    reload: boolean,
 ): Promise<Record<string, Socket<unknown>>> {
     const sockets: Record<string, Socket<unknown>> = {}
     for (const { name, path } of sources) {
-        const module = (await import(path)) as Record<string, unknown>
+        const module = (await projectImport(path, reload)) as Record<string, unknown>
         const exported = singleExport(module)
         if (exported === undefined || !isSocket(exported.value)) continue
         sockets[name] = exported.value
@@ -185,16 +208,19 @@ async function loadLayouts(
 }
 
 // Import `src/app.ts` (if present) for its middleware array + lifecycle hooks.
-async function loadAppModule(appPath: string | undefined): Promise<AppModuleExports> {
+async function loadAppModule(
+    appPath: string | undefined,
+    reload: boolean,
+): Promise<AppModuleExports> {
     if (appPath === undefined) return { middleware: [], lifecycle: {} }
-    return appModuleExports((await import(appPath)) as Record<string, unknown>)
+    return appModuleExports((await projectImport(appPath, reload)) as Record<string, unknown>)
 }
 
 // Import `src/server/config.ts` (if present) for its boot-time `env(...)` side effect (CO1). The
 // module itself has no export we consume — importing it validates config at load.
-async function loadConfig(configPath: string | undefined): Promise<void> {
+async function loadConfig(configPath: string | undefined, reload: boolean): Promise<void> {
     if (configPath === undefined) return
-    await import(configPath)
+    await projectImport(configPath, reload)
 }
 
 // Seed the default log channel (CO2.2) from the project's package.json `name`, so `log(...)` lines
@@ -239,6 +265,11 @@ export interface LoadAppOptions {
     // was still reachable by saying nothing. The doc block above enumerated the lanes it had thought
     // about and named neither of them.
     schemas: 'baked' | 'source'
+    // RE-IMPORT the project's modules instead of taking whatever the module registry already holds.
+    // Only `abide dev`'s rebuild sets it — see `projectImport` for what it costs and why every
+    // load-once lane declines it. Absent means "this process has not loaded this project before",
+    // which is true of every caller but that one.
+    reload?: boolean
 }
 
 // Scan `dir` (a project root) and build the createApp config by importing its modules. Directories
@@ -246,14 +277,18 @@ export interface LoadAppOptions {
 export async function loadApp(dir: string, options: LoadAppOptions): Promise<LoadedApp> {
     await seedAppName(dir)
     const sources = await scanAppSources(dir)
-    await loadConfig(sources.config)
+    // ONE generation per load, so every module in this pass agrees. Bumping per import would give a
+    // route and the `app.ts` that middlewares it two different copies of any module they share.
+    const reload = options.reload === true
+    if (reload) reloadGeneration++
+    await loadConfig(sources.config, reload)
 
-    const { routes, derivationTargets } = await loadRoutes(sources.rpc)
+    const { routes, derivationTargets } = await loadRoutes(sources.rpc, reload)
     await applyDerivedSchemas(dir, routes, derivationTargets, options.schemas)
-    const sockets = await loadSockets(sources.sockets)
+    const sockets = await loadSockets(sources.sockets, reload)
     const pages = await loadPages(sources.pages)
     const layouts = await loadLayouts(sources.layouts)
-    const app = await loadAppModule(sources.app)
+    const app = await loadAppModule(sources.app, reload)
 
     const loaded: LoadedApp = {
         dir,

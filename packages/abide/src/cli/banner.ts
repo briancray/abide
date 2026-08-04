@@ -101,7 +101,13 @@ export interface ServeBannerOptions {
 }
 
 export function serveBanner(options: ServeBannerOptions): string {
-    const port = new URL(options.url).port
+    // `URL.port` is the EMPTY STRING when the port is the scheme's default (80 for `http:`), so reading
+    // it back off the URL loses exactly the port a privileged bind uses. Two things broke on it and both
+    // are visible: the network row rendered as `http://192.168.1.24:` — an address the banner's own rules
+    // say is there to be clicked or copied — and the hop note compared `"80" !== ""` and announced
+    // `port 80 was taken` for a bind that succeeded. Default it back rather than re-deriving.
+    const parsed = new URL(options.url)
+    const port = parsed.port !== '' ? parsed.port : parsed.protocol === 'https:' ? '443' : '80'
     const rows: BannerRow[] = [{ label: 'local', value: options.url }]
 
     // Omitted rather than shown as `unavailable` when there is no external interface: a row that

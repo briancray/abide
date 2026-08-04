@@ -233,7 +233,13 @@ function startWatch(
         try {
             // From SOURCE: this is the rebuild, so a bake from an earlier `abide build` is by
             // definition the thing being replaced.
-            const fresh = await loadApp(dir, { schemas: 'source' })
+            //
+            // `reload` for the same reason, one layer down: without it every `await import` below is
+            // answered from the module registry, so this rebuild handed back the SAME `Route` objects
+            // and the SAME `middleware` array it already had. The watcher fired, `rebind()` ran, the
+            // browser reloaded — and the server kept running the code you had just edited away from,
+            // for the whole session. Only `.abide` files worked, because they are re-read as text.
+            const fresh = await loadApp(dir, { schemas: 'source', reload: true })
             // Regenerated before anything else: an edit to `onHealth` changes the app's health TYPE,
             // and an editor that reads the stale companion would report the old shape against the new
             // hook. The router reads `config.onHealth` live (a getter), so the two land together.

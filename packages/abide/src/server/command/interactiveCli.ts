@@ -16,6 +16,7 @@
 // editing, history and a ctrl-c that abandons the line; through a pipe it is still newline-framed
 // bytes, so `printf 'greet\n' | app` behaves exactly as it did. No completion yet.
 
+import { flagValue } from '../../cli/flagValue.ts'
 import { colourEnabled } from '../../shared/internal/colourEnabled.ts'
 import { COERCE_FAILED, tryCoerceStringToType } from '../../shared/internal/jsonSchema.ts'
 import { type Paint, painter } from '../../shared/internal/painter.ts'
@@ -116,8 +117,10 @@ async function promptField(
 // `serve [--port n]` from the prompt: bind the app on a real port and keep it there. `argv` is what
 // followed the word, as every other reserved command receives it.
 async function hostFromPrompt(options: InteractiveCliOptions, argv: string[]): Promise<number> {
-    const flagIndex = argv.indexOf('--port')
-    const raw = flagIndex === -1 ? undefined : argv[flagIndex + 1]
+    // Both spellings, through the one helper that knows them — a bare `indexOf('--port')` here read
+    // `serve --port=9000` as no flag at all and bound 3000 in silence, in the same binary whose global
+    // options and rpc flags both accept `=`.
+    const raw = flagValue(argv, '--port')
     const port = raw === undefined ? undefined : Number(raw)
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) {
         options.writeError(`serve: --port expects a port number — got "${raw}"\n`)
@@ -280,9 +283,21 @@ export async function interactiveCli(options: InteractiveCliOptions): Promise<nu
             continue
         }
 
+        const commandArgv = tokens.slice(1)
+        // `--help` REACHES THE SAME TEXT FROM EITHER SIDE OF THE SUBCOMMAND — the invariant
+        // `reservedCliDispatch` states, which held for the reserved half and not for this one. The
+        // one-shot path gates here before parsing (`runCompiledApp`), the REPL did not, so `greet --help`
+        // at the prompt answered `unknown flag --help for greet` (or `--help needs a value`) and exited
+        // `usage`, while `./app greet --help` printed the generated help.
+        if (commandArgv.includes('--help') || commandArgv.includes('-h')) {
+            options.write(`${cliUsage(options.name, options.commands, command)}\n`)
+            lastCode = CLI_EXIT_CODES.ok
+            continue
+        }
+
         let args: Record<string, unknown> = {}
-        if (tokens.length > 1) {
-            const parsed = parseCliArgs(command, tokens.slice(1))
+        if (commandArgv.length > 0) {
+            const parsed = parseCliArgs(command, commandArgv)
             if (parsed.errors.length > 0) {
                 for (const message of parsed.errors) options.writeError(`${paint.error(message)}\n`)
                 lastCode = CLI_EXIT_CODES.usage

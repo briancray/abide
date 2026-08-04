@@ -38,6 +38,7 @@ import { appName } from '../../shared/internal/appName.ts'
 import { escapeRegExp } from '../../shared/internal/escapeRegExp.ts'
 import { type RpcSpec, rpcSpecOf } from '../../shared/internal/rpcSpec.ts'
 import { encodeMaxAge, type SocketSpec } from '../../shared/internal/socketSpec.ts'
+import { log } from '../../shared/log.ts'
 import type { BindingAnalysis } from '../../ui/internal/analyzeBindings.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
 import { resolvePassThroughImport } from '../../ui/internal/resolvePassThroughImport.ts'
@@ -611,6 +612,14 @@ export function clientBuildFor(config: AppConfig): Promise<ClientBuild> {
 // `dist/manifest.json` pointer, so `abide start` serves the exact build output with NO bundler at boot.
 // Returns undefined when no build is present (the caller builds instead). Every file is read into memory
 // once at boot and served from the same `files` map the in-memory build uses.
+//
+// "IS THERE A BUILD?" IS ANSWERED BY THE ASSETS, NOT BY THE POINTER ALONE. The manifest's existence used
+// to be the whole test, and every file it names was then read unconditionally — so a `dist/` whose
+// `manifest.json` outlived its `_app/<hash>/` directory (a deploy that shipped the pointer but pruned or
+// partially uploaded the assets, a `rm -rf dist/_app` cleanup) failed `abide start` at boot with a bare
+// `ENOENT … loader-abc.js` and no indication that a rebuild was the fix. A manifest pointing at assets
+// that are not there means the same thing as no manifest: there is no build, so return undefined and let
+// `ensureClientBuild` build one — which is the documented "builds first if absent".
 export async function loadClientBuild(dir: string): Promise<ClientBuild | undefined> {
     const manifestFile = Bun.file(join(dir, 'dist', 'manifest.json'))
     if (!(await manifestFile.exists())) return undefined
@@ -623,21 +632,32 @@ export async function loadClientBuild(dir: string): Promise<ClientBuild | undefi
     // CONCURRENTLY: this is on the critical path of `abide start`, before the port binds, and the reads
     // are independent. Serially it was up to three awaits per file (identity, `.gz`, `.br`) chained
     // end-to-end — ~185 round trips for a 61-chunk build, each waiting on the last for no reason.
-    const loaded = await Promise.all(
-        manifest.files.map(async (name): Promise<[string, ChunkAsset]> => {
-            const available = encodings[name] ?? []
-            const [identity, gzip, brotli] = await Promise.all([
-                Bun.file(join(buildDir, name)).bytes(),
-                available.includes('gzip')
-                    ? Bun.file(join(buildDir, name + ENCODING_EXTENSION.gzip)).bytes()
-                    : null,
-                available.includes('brotli')
-                    ? Bun.file(join(buildDir, name + ENCODING_EXTENSION.brotli)).bytes()
-                    : null,
-            ])
-            return [name, { identity, gzip, brotli }]
-        }),
-    )
+    let loaded: [string, ChunkAsset][]
+    try {
+        loaded = await Promise.all(
+            manifest.files.map(async (name): Promise<[string, ChunkAsset]> => {
+                const available = encodings[name] ?? []
+                const [identity, gzip, brotli] = await Promise.all([
+                    Bun.file(join(buildDir, name)).bytes(),
+                    available.includes('gzip')
+                        ? Bun.file(join(buildDir, name + ENCODING_EXTENSION.gzip)).bytes()
+                        : null,
+                    available.includes('brotli')
+                        ? Bun.file(join(buildDir, name + ENCODING_EXTENSION.brotli)).bytes()
+                        : null,
+                ])
+                return [name, { identity, gzip, brotli }]
+            }),
+        )
+    } catch (caught) {
+        // The manifest named assets that are not on disk. Treated as "no build" (see the header) — loud
+        // enough to explain the rebuild that follows, not fatal.
+        log.channel('abide:bundle').warn(
+            `dist/manifest.json points at missing assets in ${buildDir} — rebuilding:`,
+            caught instanceof Error ? caught.message : caught,
+        )
+        return undefined
+    }
     const files = new Map<string, ChunkAsset>(loaded)
     return clientBuildFrom({
         entry: manifest.entry,

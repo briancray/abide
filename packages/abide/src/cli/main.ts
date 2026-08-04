@@ -25,7 +25,7 @@ import { bundleLauncher } from './bundleLauncher.ts'
 import { compile } from './compile.ts'
 import { firstPositional } from './firstPositional.ts'
 import { flagAbsent } from './flagAbsent.ts'
-import { flagValue } from './flagValue.ts'
+import { flagPresent, flagValue } from './flagValue.ts'
 import { installShutdownHandlers } from './installShutdownHandlers.ts'
 import { parsePort } from './parsePort.ts'
 import { run } from './run.ts'
@@ -434,7 +434,7 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
         run: async ({ cwd, rest, write }) => {
             const startedAt = performance.now()
             // `--platforms` with no value (or a trailing flag after it) means the default release set.
-            const platforms = rest.includes('--platforms')
+            const platforms = flagPresent(rest, '--platforms')
                 ? (flagValue(rest, '--platforms')?.split(',').filter(Boolean) ?? [])
                 : undefined
             const built = await compile(cwd, {
@@ -487,7 +487,15 @@ export async function main(
     const write = options.write ?? ((line: string): void => console.info(line))
     const writeError = options.writeError ?? ((line: string): void => console.error(line))
 
-    const entry = command === undefined ? undefined : DEV_COMMANDS[command]
+    // OWN PROPERTY ONLY. `DEV_COMMANDS` is an object literal, so a plain index resolved inherited
+    // `Object.prototype` members — `abide constructor` / `abide toString` passed the `!== undefined`
+    // guard and died on `entry.run is not a function`, exiting `1` (failed). A CI script branching on
+    // `$?` then read a typo as "the build ran and failed" rather than "you typed it wrong", which the
+    // documented table says is `2` (usage). `runCompiledApp` already uses a `Map` for the same reason.
+    const entry =
+        command !== undefined && Object.hasOwn(DEV_COMMANDS, command)
+            ? DEV_COMMANDS[command]
+            : undefined
     if (entry !== undefined)
         return await entry.run({ rest, cwd, write, writeError, usage: usageText })
 
