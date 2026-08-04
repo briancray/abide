@@ -14,15 +14,11 @@
 // `dev`/`start` return the running `ServeResult` (the process stays alive on Bun.serve's handles);
 // `build`/`scaffold` return undefined after their one-shot work.
 
-import { mkdir } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import type { BundleWindow } from '../bundle/BundleWindow.ts'
 import { CLI_EXIT_CODES } from '../server/command/CLI_EXIT_CODES.ts'
 import { banner, formatDuration, hint, serveBanner } from './banner.ts'
 import { build, ensureClientBuild } from './build.ts'
 import { bundle } from './bundle.ts'
-import { bundleLauncher } from './bundleLauncher.ts'
 import { compile } from './compile.ts'
 import { firstPositional } from './firstPositional.ts'
 import { flagAbsent } from './flagAbsent.ts'

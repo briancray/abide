@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { reachableFrom, SRC_ROOT } from '../../test/internal/moduleGraph.ts'
+import { reachableFrom } from '../../test/internal/moduleGraph.ts'
 
 // THE COMPILED BINARY HAS A DEPENDENCY FLOOR: nothing that reads the project's SOURCE may reach it.
 //
@@ -26,7 +26,6 @@ import { reachableFrom, SRC_ROOT } from '../../test/internal/moduleGraph.ts'
 // fails if that stops being true.
 
 const COMMAND_DIR = import.meta.dir
-const SRC = SRC_ROOT
 
 // Each is a module only the dev/build lane can use, with what a binary would be unable to do with it.
 const FORBIDDEN = new Map([

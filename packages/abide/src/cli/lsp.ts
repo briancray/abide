@@ -22,7 +22,7 @@ import {
     type Node,
     SyntaxKind,
 } from 'typescript/unstable/ast'
-import { API, DiagnosticCategory, SymbolFlags } from 'typescript/unstable/sync'
+import { API, SymbolFlags } from 'typescript/unstable/sync'
 import { ABIDE_SEMANTIC_TOKENS_LEGEND } from '../ui/internal/ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import {
     type GeneratedIndex,

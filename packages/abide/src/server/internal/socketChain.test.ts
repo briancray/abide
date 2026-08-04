@@ -24,7 +24,7 @@ function appWith(own: Middleware[] | undefined, global: Middleware[]): AppConfig
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: existential socket registry, as everywhere it is addressed.
-const feedOf = (config: AppConfig): any => (config.sockets ?? {}).feed
+const feedOf = (config: AppConfig): any => config.sockets?.feed
 
 describe('which rung each socket door owes', () => {
     test('the HTTP face owes BOTH rungs — it is an ordinary request and nothing has run', () => {

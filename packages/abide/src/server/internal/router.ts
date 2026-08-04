@@ -1,26 +1,18 @@
-// The abide APP ROUTER — boots Bun.serve and dispatches each request (M2 + M7 auth).
+// The abide APP — `createApp` boots `Bun.serve`, owns the boot-derived policy, and holds the WebSocket
+// mux. THE REQUEST PIPELINE ITSELF IS `handleRequest.ts`: what happens to a request between arriving and
+// leaving — trace mint, identity, scope, CSRF, the middleware onion, dispatch, and the one `exit()` every
+// response goes through — lives there, as a named module rather than as a closure inside `fetch`.
 //
-// For every request the router resolves the caller's identity via the built-in bearer/cookie
-// ladder (auth.ts), builds a fresh RequestScope (raw Request, parsed cookies, that identity,
-// empty bag, route info derived from the URL, the Bun server, and a per-request cache Map),
-// runs the composed middleware onion — global middleware wrapping the matched rpc's own
-// middleware wrapping the handler — inside that scope, then re-seals the rolling abide-identity
-// cookie onto the Response (unless the caller is a stateless machine bearer).
+// What stays here is everything that is about the SERVER rather than about a request:
 //
-// CSRF (AU8): mutating requests (POST/PUT/PATCH/DELETE) are rejected unless they carry the
-// abide client's non-simple request shape (Content-Type: application/json or an `x-abide`
-// header) — a cross-site <form> cannot set those. When APP_URL is set and an Origin header is
-// present, a mismatched Origin is also rejected. Reads (GET/HEAD) are exempt.
-//
-// Routing is intentionally thin: `/rpc/<name>` dispatches to a registered Rpc/Mutation,
-// `/__abide/health` reports reachability, everything else 404s. Read rpcs (GET/HEAD) take
-// their args from the `__abide_args` query blob (or flat query params) and go through the
-// cache-backed `load`; mutations take args from the JSON body and call the handler directly. A
-// handler that already returned
-// a Response passes through untouched; a bare value is wrapped in `json()`.
+//   • the boot-derived policy (`deriveRouterPolicy`) and the two REGISTRY BINDINGS beside it, which
+//     mutate route callables rather than deriving a lookup — the per-read chain and the broadcast sink;
+//   • `rebind()`, which re-runs all of that for `abide dev`'s in-place config reload;
+//   • the boot-time posture warnings (`APP_URL`, `NODE_ENV`), the health clock and the log feed;
+//   • the WebSocket half of the mux — `open`/`message`/`close` and the per-connection subscription state.
+//     The UPGRADE is the pipeline's (it has to run the global chain first); what a live socket then does
+//     is transport, and it has no request.
 
-import { CSRF_HEADER } from '../../shared/internal/CSRF_HEADER.ts'
-import { generateTraceparent } from '../../shared/internal/generateTraceparent.ts'
 import { provideHealthSource } from '../../shared/internal/healthSource.ts'
 import { logFeed } from '../../shared/internal/logFeed.ts'
 import { MUX_UPSTREAM } from '../../shared/internal/MUX_UPSTREAM.ts'
@@ -29,70 +21,20 @@ import {
     memoChannelName,
     publishMemoFrame,
 } from '../../shared/internal/memoChannels.ts'
-import { NAV_VARY } from '../../shared/internal/NAV_HEADERS.ts'
-import { RPC_ROUTE_PREFIX } from '../../shared/internal/RPC_ROUTE_PREFIX.ts'
 import { rpcMemoPolicy } from '../../shared/internal/rpcMemoPolicy.ts'
-import { SOCKET_FACE_PREFIX, SOCKETS_ROUTE } from '../../shared/internal/SOCKETS_ROUTE.ts'
-import { TRACEPARENT_PATTERN } from '../../shared/internal/TRACEPARENT_PATTERN.ts'
 import { log } from '../../shared/log.ts'
-import { json } from '../json.ts'
 import type { AppConfig } from './appConfig.ts'
-import { applyResponseCompression } from './applyResponseCompression.ts'
-import { applyResponseHeaders } from './applyResponseHeaders.ts'
-import { appOrigin } from './appOrigin.ts'
-import {
-    clearIdentityCookieHeader,
-    identityCookieHeader,
-    identityCookieIsDue,
-    resolveIdentity,
-    resolveIdentityDetailed,
-    unrecognizedNodeEnv,
-} from './auth.ts'
-import { CHUNK_PREFIX } from './CHUNK_PREFIX.ts'
+import { unrecognizedNodeEnv } from './auth.ts'
 import type { SocketConnectionData } from './channelAuth.ts'
-import {
-    applyCors,
-    corsAllowOrigin,
-    type NormalizedCors,
-    normalizeCrossOrigin,
-    preflightResponse,
-} from './cors.ts'
 import { provideDefaultAgentSurface } from './defaultAgentSurface.ts'
-import { errorResponse } from './errorResponse.ts'
 import { deriveRouterPolicy, handleRequest, type RouterPolicy } from './handleRequest.ts'
 import { isProd } from './isProd.ts'
 import { logFeedSettings } from './logFeedSettings.ts'
 import type { Rpc } from './makeRpc.ts'
-import { compose, type Middleware } from './middleware.ts'
-import { isSoftNav } from './navRoute.ts'
-import { outcomeResponse, timeoutResponse } from './outcomeResponse.ts'
 import { rebindRegistryDerivations } from './registryDerivation.ts'
-import {
-    anonymousPrincipal,
-    makeRequestScope,
-    type Principal,
-    type RequestScope,
-    type RouteInfo,
-    type RouteKind,
-    runInScope,
-} from './requestScope.ts'
-import {
-    GATE_IN_HANDLER,
-    type RouteClass,
-    resolveAppClass,
-    resolveFrameworkClass,
-} from './routeClass.ts'
-import { bindRpcChains, rpcChainFor } from './rpcChain.ts'
-import { allowedMethodsFor } from './rpcRoute.ts'
+import { bindRpcChains } from './rpcChain.ts'
 import { rpcTools } from './rpcTools.ts'
-import { servePublicFile } from './servePublicFile.ts'
-import {
-    type SocketConnection,
-    socketOriginAllowed,
-    wsPublish,
-    wsSubscribe,
-    wsUnsubscribe,
-} from './socketMux.ts'
+import { type SocketConnection, wsPublish, wsSubscribe, wsUnsubscribe } from './socketMux.ts'
 
 export interface App {
     server: Bun.Server<undefined>

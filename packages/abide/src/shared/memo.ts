@@ -46,15 +46,7 @@ import { isThenable } from './internal/isThenable.ts'
 import { isTimeoutError } from './internal/isTimeoutError.ts'
 import { registerTaggedMemo } from './internal/memoTags.ts'
 import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
-import {
-    type Computed,
-    computed,
-    effect,
-    onEffectScopeDispose,
-    type State,
-    state,
-    untrack,
-} from './internal/reactive.ts'
+import { effect, onEffectScopeDispose, type State, state, untrack } from './internal/reactive.ts'
 import type { ReactiveReadSurface } from './internal/reactiveReadSurface.ts'
 import {
     exitScope,
@@ -683,7 +675,7 @@ export function memo<Args, T>(
         const state = slot.state.peek()
         if (state.status === 'stream') {
             const stream = state.stream
-            return stream !== undefined && stream.settled ? 'value' : 'openStream'
+            return stream?.settled ? 'value' : 'openStream'
         }
         return state.status === 'value' || state.status === 'error' ? 'value' : 'nothing'
     }
