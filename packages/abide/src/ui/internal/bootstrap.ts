@@ -33,7 +33,14 @@ import { traceAmbient } from '../../shared/internal/traceAmbient.ts'
 import { route } from '../../shared/route.ts'
 import { url } from '../../shared/url.ts'
 import { watch } from '../../shared/watch.ts'
-import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
+import {
+    currentNavGen,
+    disposeActive,
+    handlePopState,
+    isKnownPage,
+    mountPathname,
+    navigate,
+} from '../navigate.ts'
 import { makeClientImports } from './clientProxy.ts'
 import { HYDRATED_ATTRIBUTE } from './HYDRATED_ATTRIBUTE.ts'
 import { HYDRATION_ELEMENT_ID } from './HYDRATION_ELEMENT_ID.ts'
@@ -323,7 +330,11 @@ export function bootstrapApp(
     // `mountPathname` is async now (it imports the current route's code-split chunk); the SSR HTML is
     // already visible, so hydration completes a tick later once the chunk loads. A load failure leaves
     // the page as server-rendered (non-interactive) — graceful degradation, no reload loop.
-    void mountPathname(location.pathname + location.search)
+    //
+    // STAMPED with the nav generation as of boot, so a click that starts a soft-nav while this chunk is
+    // still loading WINS — the listeners below are installed synchronously, so that window is real. See
+    // `currentNavGen`.
+    void mountPathname(location.pathname + location.search, undefined, currentNavGen())
     // Bare (window-level) listeners: click for link interception, popstate for back/forward.
     addEventListener('click', onDocumentClick as EventListener)
     addEventListener('popstate', handlePopState)

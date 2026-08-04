@@ -439,8 +439,19 @@ export function applyAttribute(element: Element, name: string, value: unknown): 
 // this attribute/class/style (decision 9); values are re-applied not verified (decision 5). `read`
 // runs on every pass (so its deps are tracked from the first run), but `apply` is skipped once while
 // priming. Used by every whole-value binding (`setAttr`/`toggleClass`/`setStyleProp`).
-function hydratableEffect(read: () => unknown, apply: (value: unknown) => void): Disposer {
-    let primed = hydrating
+//
+// `serverApplied` is the PREMISE, made checkable. Suppressing the first apply is only sound where the
+// server's serialization actually took effect, and for `bind:value` that is true of `<input>` and false
+// of `<select>`/`<textarea>`: neither has a `value` content attribute, so `applyBind`'s `value="beta"`
+// is inert markup and the browser paints the first option / an empty box. Priming there skipped the one
+// write that would have corrected it — leaving the control showing one thing while the cell held
+// another, until a user edit wrote the WRONG value back into the cell.
+function hydratableEffect(
+    read: () => unknown,
+    apply: (value: unknown) => void,
+    serverApplied = true,
+): Disposer {
+    let primed = hydrating && serverApplied
     return effect(() => {
         const value = read()
         if (primed) {
@@ -590,11 +601,16 @@ export function bindBoolean(element: Element, accessor: Accessor, property: stri
 
 export function bindValue(element: Element, accessor: Accessor): Disposer {
     const input = element as HTMLInputElement
+    // A `<select>`'s state lives in `<option selected>` and a `<textarea>`'s in its text content, so the
+    // `value` ATTRIBUTE the server wrote is inert on both — nothing was applied, so nothing is primed.
+    const tag = element.tagName
+    const serverApplied = tag !== 'SELECT' && tag !== 'TEXTAREA'
     const dispose = hydratableEffect(
         () => accessor.read(),
         (value) => {
             input.value = value === null || value === undefined ? '' : String(value)
         },
+        serverApplied,
     )
     const isNumber = input.type === 'number' || input.type === 'range'
     const eventName = element.tagName === 'SELECT' ? 'change' : 'input'

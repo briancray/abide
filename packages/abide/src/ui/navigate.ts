@@ -98,6 +98,17 @@ let mountClaimed = true
 // checks it before acting on a stale response (a redirect or claim from a superseded nav must not fire).
 let navGen = 0
 
+// The token a caller OUTSIDE this module can hold, so the first-load mount is supersedable like every
+// other one. `bootstrapApp` starts `mountPathname` for the current location and then installs the click
+// interceptor synchronously — so a click landing before that route's chunk resolves runs a full soft-nav,
+// swaps the container and mounts the new route, and the resolving first-load mount would then dispose
+// THAT chain and hydrate its own entry over the new DOM. Unlike the mid-nav races this one does not
+// self-heal: the URL says one route, `route()` says another, and nothing re-reconciles them. The guard
+// existed; the one caller facing the coldest chunk was the one that could not pass a generation.
+export function currentNavGen(): number {
+    return navGen
+}
+
 // Scroll to the top the moment the destination's SHELL lands — not after the frame stream drains. A
 // streaming page (a `{#for await}` whose source runs for seconds) keeps the response body open long
 // after its DOM is in place; scrolling at end-of-stream would leave the reader scrolled through the
@@ -515,6 +526,15 @@ async function softLoad(
         location.href = path
         return
     }
+
+    // RE-CHECKED IMMEDIATELY BEFORE ACTING, like every other DOM-touching step in this file
+    // (`partialCrossNav` re-checks on every frame). The guard at the top of this block is stale by now:
+    // `classifyNavResponse` is awaited in between, which is one to two microtask ticks — ample for a
+    // programmatic `navigate()` to a same-pattern URL to start, classify as a PARAM nav, and keep the
+    // live mount. This nav would then dispose that mount and null `activeChain`, bail at the next guard
+    // without swapping anything, and leave the page on screen with every effect dead: no reactivity, no
+    // `{#await}` fills, no `bind:` write-backs, until something forces a full nav.
+    if (gen !== navGen) return
 
     // Dispose the previous page mount BEFORE swapping so its still-live effects don't react to the shell
     // swap / streamed patch fills (the dispose-first invariant — see mountPathname's note). `mountPathname`

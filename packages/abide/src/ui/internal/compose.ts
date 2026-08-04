@@ -137,7 +137,12 @@ function childComponent(
                     holder.dispose = mountLevels(newLevels, newScope)
                     claimed = true
                 } catch {
-                    // fall through to a fresh mount below
+                    // Fall through to a fresh mount below. What the swallow does NOT leak any more is the
+                    // failed attempt's `<script>` effects: the emitted `mount` disposes its own setup
+                    // scope on every path that does not hand a disposer back (`emitClient.ts`), and a
+                    // throw from a nested level propagates through each enclosing `$mount0`, so the whole
+                    // partially-mounted chain tears itself down before we retry. Without that, the retry
+                    // below left one live `watch` per level per failed claim, permanently.
                 }
                 endHydration()
                 if (claimed) return

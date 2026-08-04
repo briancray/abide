@@ -106,16 +106,28 @@ class ClientEmitter {
             // (§C4.5: no `onDestroy`; a `watch` teardown IS the cleanup hook). The scope closes before
             // `$mount0` so template wiring keeps owning its own effects through `$sink`, and the `finally`
             // makes a throwing preamble close it too rather than strand it open across the next mount.
+            //
+            // CLOSING IS NOT DISPOSING, and a failed mount owes both. `disposeEffectScope` used to live
+            // ONLY in the returned disposer — which a throwing `$mount0` never produces — so the scope's
+            // effects stayed LIVE with nothing holding a handle to them. `hydrate`'s fallback below then
+            // mounts a second time, so a page whose claim pass failed ran every `<script>` `watch` twice
+            // for the life of the tab: two subscribers on the same cell, two `search()` calls per
+            // keystroke, two `BroadcastChannel` handles, and `disposeActive()` able to tear down only the
+            // second set. `$ok` distinguishes the success path (the caller owns disposal from here) from
+            // every failure path (nobody will ever call the disposer, so dispose now).
             `\nexport function mount($target, $scope, $anchor) {\n` +
             `  const $setup = $rt.openEffectScope();\n` +
+            `  let $ok = false;\n` +
             `  try {\n` +
             indent(emitInstanceSetup(this.analysis), 2) +
             indent(fns, 4) +
             `    $rt.closeEffectScope($setup);\n` +
             `    const $dispose = $mount0($target, $anchor === undefined ? null : $anchor, $scope);\n` +
+            `    $ok = true;\n` +
             `    return () => { $dispose(); $rt.disposeEffectScope($setup); };\n` +
             `  } finally {\n` +
             `    $rt.closeEffectScope($setup);\n` +
+            `    if (!$ok) $rt.disposeEffectScope($setup);\n` +
             `  }\n` +
             `}\n\n` +
             // Whole-page fallback (PR6, decision 5): if a mismatch escapes every block-level recovery (the
