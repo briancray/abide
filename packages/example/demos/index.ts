@@ -22,6 +22,7 @@ const LOADERS: Record<SuiteName, () => Promise<{ default: Suite }>> = {
     channel: () => import('./channel.ts'),
     watch: () => import('./watch.ts'),
     scope: () => import('./scope.ts'),
+    routing: () => import('./routing.ts'),
     template: () => import('./template.ts'),
     client: () => import('./client.ts'),
     server: () => import('./server.ts'),

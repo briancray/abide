@@ -47,5 +47,25 @@ export {
     type TagSelector,
 } from './memo.ts'
 export { type Cell, type Memo, type State, scope, state, untrack, watch } from './reactive.ts'
+// Routing. `route()` is an ambient like `request()`, but a reactive one — a client moves without a
+// new caller arriving. `useHrefSource` and `useHistorySink` are deliberately absent: they are how the
+// two lanes install their own edge of it — `abide/server` the request's URL, the same way it installs
+// the scope source, and `abide/ui` the document's address bar — and nothing else may reach either.
+export {
+    type Loader,
+    type NavigateOptions,
+    navigate,
+    outlet,
+    type Params,
+    type Route,
+    type RouteEntry,
+    type RouteKind,
+    ready,
+    route,
+    routes,
+    url,
+    type View,
+    type ViewModule,
+} from './router.ts'
 // Where a compiled `<style>` block lands. `styles()` is what a server render puts in <head>.
 export { adopt, styleTags } from './styles.ts'

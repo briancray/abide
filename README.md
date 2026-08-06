@@ -16,6 +16,8 @@ packages/abide/src/
                               the three shapes a value arrives in — value, load, stream
     memo.ts             302   memo(load) — args-keyed cache, coalescing, probes, ttl, pacing
     channel.ts          160   channel — pub/sub with a reactive read surface, rooms, maxAge
+    router.ts           324   route/url/navigate/routes/outlet — the route as four cells, per caller
+    internal/patterns.ts 162  a pattern: parse it, order it, run a path through it
     html.ts             147   the template tag + THE one slot classifier
     internal/{slots,tags,keys}.ts  101   the slot cache, the tag registry, the args key
     reactive.ts + index.ts          44   the public faces
@@ -25,6 +27,7 @@ packages/abide/src/
     index.ts             30   mount · hydrate
   server/               streaming SSR, in-order + out-of-order suspend
     index.ts            392   the walk
+    pages.ts             54   src/ui/pages/** as a route table — routing's one non-isomorphic half
     internal/emit.ts     26   attributes, the patch script
 packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, so a template
                           expression is the same language as the rest of the file
@@ -217,6 +220,69 @@ form needs none of that: its cache is already a map, so scoping it is choosing a
 so the facade forwards straight through — the scope suite benches that arm against `{ global }`, which
 is the same memo with no facade at all.
 
+### Routing
+
+A URL names a page, and `route()` is what that page may ask about the caller who asked for it. It is
+an ambient like `request()` — and the one that has to be **reactive**, because a client moves without
+a new caller arriving.
+
+```ts
+routes([
+    { path: '/', page: () => import('./pages/page.abide') },
+    { path: '/users/new', page: () => import('./pages/users/new/page.abide') },
+    {
+        path: '/users/[id]',
+        page: () => import('./pages/users/[id]/page.abide'),
+        layouts: [() => import('./pages/layout.abide')],
+    },
+    { path: '/files/[...path]', page: () => import('./pages/files/[...path]/page.abide') },
+])
+
+route().name       // '/users/[id]' — the PATTERN, so it is stable across every URL matching it
+route().params.id  // '42'
+route().url        // the whole URL, query included
+route().navigating // a page whose module has not arrived yet
+
+url('/users/[id]', { id: 42 }, { tab: 'posts' }) // '/users/42?tab=posts'
+await navigate('/users/43')
+```
+
+Precedence is **literal > required > optional > rest**, and the table is sorted once at install, so a
+match is a walk that stops at the first hit rather than a score kept over every route.
+
+`route()` is **four small cells behind a facade, not one record**, and every property is its own read:
+
+| | `/users/1` → `/users/2` | `?tab=a` → `?tab=b` |
+| --- | --- | --- |
+| a reader of `route().name` | asleep | asleep |
+| a reader of `route().params.id` | wakes | asleep |
+| a reader of `route().url` | wakes | wakes |
+
+So a same-route navigation is a **republish**: `outlet()` reads the name and nothing else, so it does
+not re-run at all, and the page's own reads re-fire in place — no DOM swap, no re-hydrate. One record
+rebuilt per navigation cannot express a single row of that table: it is a fresh object every time, so
+the identity check never holds and everybody wakes. The bench counts it against exactly that
+hand-written arm, because the values on screen are identical either way.
+
+Three more rules fall out of it:
+
+- **A route is committed only once its page has arrived**, so nothing ever renders a page that is not
+  there. That is the whole of what `navigating` reports — and a navigation to a route already loaded
+  has no in-flight window, so it never sets it and never wakes a spinner for nothing.
+- **The route is per-caller**, through the same storage a memo's cache uses. A server answers two
+  visitors at two URLs at once; on a client there is one caller forever and it costs a null check.
+  It is also what decides whether `navigate` writes to the address bar: a request being served, or a
+  test driving a route on the side, has a scope, and a browser app is the only thing that does not.
+  The address bar itself arrives from `abide/ui`, which is the package that owns the DOM — routing
+  keeps the rule and neither lane's edge, so nothing shared has to guess which one it is running in.
+- **`url()` refuses to build a wrong href.** A missing required segment, and a param the pattern has
+  no segment for, are typos every time, and both otherwise link to the wrong page.
+
+The **directory is the pattern and the filename is the kind**: `pages('src/ui/pages')` hands back the
+table above, with every `layout` above a page attached outermost-first. That half lives in
+`abide/server`, because a filesystem is not isomorphic; what it produces is the same ordinary table
+`routes()` takes on either side.
+
 ### One surface on every source
 
 | | `state` | `memo` (derive) | `m(args)` handle | `channel` |
@@ -395,6 +461,7 @@ separate unit-test suite to drift from the pages, and `bun test` is the pages be
 | | |
 | --- | --- |
 | `/state` `/memo` `/verbs` `/channel` `/watch` | the primitives, one capability per card |
+| `/routing` | the router, with a card that drives the **real address bar** — back and forward work |
 | `/template` | one `html` template rendered **both ways side by side** — server string next to live DOM |
 | `/client` | mount, keyed lists, disposal, with the **DOM calls counted** |
 | `/server` | streaming SSR, and a live frame you can watch an out-of-order patch land in |
@@ -464,6 +531,11 @@ a test:
   live effect *per patch* — each closing over superseded values, all writing to the same binder. The
   output stays correct, because the newest effect runs last and wins; only a wake count can see it,
   and it grows without bound.
+- **A same-route navigation wakes only what moved.** `route()` is four cells behind a facade rather
+  than a `{ name, params, url }` record, because a record is rebuilt per navigation and therefore
+  wakes every reader of it every time — including the outlet, which then tears the page down and
+  rebuilds it to show the same page. Both routers render the right screen; only a wake count can tell
+  them apart, and the bench runs the record as its vanilla arm.
 - **`watch` inside a `scope` registers automatically.** There is no second opt-in spelling: an
   ownership rule that only applies when you remember the other function is not a rule, and the
   failure mode is an invisible leak.
@@ -495,7 +567,10 @@ a test:
   `undefined` before the load lands; the settle cannot. Splitting them is a public-API change.
 - **No subtree-scoped `<style>`.** A top-level one is scoped to its component; the nested form is a
   compile error naming what is missing.
-- **No routing.** `route()`, `url()` and `navigate()` do not exist, so `src/ui/pages/**` means nothing.
+- **A route's modules are reached through a loader, and nothing generates that list for a browser.**
+  `pages()` reads `src/ui/pages/**` off the filesystem, which is a server. A client is handed the
+  same table by whatever built its bundle — and there is no CLI yet, so today that means writing it
+  down. The table's SHAPE is the same either way, which is the part that had to be settled.
 - **`identity()` and `trace()` do not exist.** The caller scope carries `request()`, `bag()` and
   `cookies()`; a principal needs a resolver hook, which is a policy decision, not plumbing.
 - **The example dev server runs with `development: { hmr: false }`**, and it is a workaround rather
@@ -557,7 +632,7 @@ a test:
 ## Roadmap
 
 1. **Transports** to close the two laws. The seam is settled — see `packages/example/spike`.
-2. **Routing**, which is what makes hydration worth having on more than one page.
+2. **A CLI**, which is what turns `pages()` into a table a browser bundle also has.
 
 ## Provenance
 

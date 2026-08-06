@@ -1,0 +1,4 @@
+<!-- A layout nested under another one: an outer layout reaches in, an inner one never reaches out. -->
+<section class="users">
+    <slot/>
+</section>

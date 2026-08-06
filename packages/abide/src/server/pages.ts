@@ -1,0 +1,82 @@
+// `src/ui/pages/**` as a route table.
+//
+// The DIRECTORY is the pattern and the FILENAME is the kind — `page` is a route, `layout` wraps
+// every route under it — so a route's address is legible in a file tree and there is nothing to keep
+// in step with a list somewhere else. A scan rather than the registration the transport spike uses
+// for `server/rpc/**`, because a route has to be reachable BEFORE its module is imported: that is
+// the whole point of a loader, and a `register(…)` call inside the page cannot run until it is.
+//
+// Server-only, and the one part of routing that is: a filesystem is not isomorphic. What it produces
+// is an ordinary `RouteEntry[]`, which `routes()` takes on either side — so a client that cannot
+// scan a directory is handed the same table by whatever built its bundle.
+//
+// The loaders are dynamic imports, which is what makes a page's code absent until someone asks for
+// it. A `.abide` page needs the compiler plugin registered (`abide/compiler/preload`), exactly as
+// importing one by hand does.
+
+import type { Loader, RouteEntry, ViewModule } from '$shared/router.ts'
+
+const PAGE = 'page.'
+const LAYOUT = 'layout.'
+
+/**
+ * Every `page.abide` / `page.ts` under `dir`, with the `layout` files above each one attached
+ * outermost first.
+ *
+ * Not sorted: precedence belongs to `routes()`, which is also where a hand-written table gets it.
+ */
+export async function pages(dir: string | URL): Promise<RouteEntry[]> {
+    const root = typeof dir === 'string' ? dir : Bun.fileURLToPath(dir)
+    const base = Bun.pathToFileURL(root.endsWith('/') ? root : `${root}/`)
+    const glob = new Bun.Glob('**/{page,layout}.{abide,ts}')
+
+    // Directory relative to the root (`''` is the root itself) to the whole relative path, which is
+    // what a loader and a diagnostic both want.
+    const layouts = new Map<string, string>()
+    const found = new Map<string, string>()
+    for await (const entry of glob.scan({ cwd: root, onlyFiles: true })) {
+        const file = entry.replaceAll('\\', '/')
+        const cut = file.lastIndexOf('/')
+        const inside = cut === -1 ? '' : file.slice(0, cut)
+        const name = cut === -1 ? file : file.slice(cut + 1)
+        const into = name.startsWith(LAYOUT) ? layouts : name.startsWith(PAGE) ? found : null
+        if (into === null) continue
+        const held = into.get(inside)
+        if (held !== undefined) collision(held, file, into === layouts ? 'layout' : 'page')
+        into.set(inside, file)
+    }
+
+    const table: RouteEntry[] = []
+    for (const [inside, file] of found) {
+        // Every directory from the root down to the page's own, so an outer layout reaches in and an
+        // inner one never reaches out — the same containment a nested `<style>` has.
+        const wraps: Loader[] = []
+        let prefix = ''
+        const outermost = layouts.get('')
+        if (outermost !== undefined) wraps.push(loaderFor(base, outermost))
+        if (inside !== '') {
+            for (const part of inside.split('/')) {
+                prefix = prefix === '' ? part : `${prefix}/${part}`
+                const held = layouts.get(prefix)
+                if (held !== undefined) wraps.push(loaderFor(base, held))
+            }
+        }
+        table.push({
+            path: inside === '' ? '/' : `/${inside}`,
+            page: loaderFor(base, file),
+            layouts: wraps,
+        })
+    }
+    return table
+}
+
+function loaderFor(base: URL, file: string): Loader {
+    const href = new URL(file, base).href
+    return () => import(href) as Promise<ViewModule>
+}
+
+function collision(first: string, second: string, kind: string): never {
+    throw new Error(
+        `abide: "${first}" and "${second}" are two ${kind}s for one directory — a directory is one route`,
+    )
+}

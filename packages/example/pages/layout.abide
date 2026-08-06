@@ -1,0 +1,10 @@
+<!-- The root layout. Every page under this directory renders through the <slot/> below, so the
+     chrome is written once and a page never has to remember to include it. -->
+<script>
+import { route } from 'abide'
+</script>
+
+<main>
+    <nav>abide · {route().url.pathname}</nav>
+    <slot/>
+</main>

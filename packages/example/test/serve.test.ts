@@ -9,8 +9,8 @@
 // The test that matters here is INTERLEAVING. `isolate` refuses it; this is what `serve` is for.
 
 import { expect, test } from 'bun:test'
-import { memo } from 'abide'
-import { bag, cookies, isServing, request, serve } from 'abide/server'
+import { html, memo, outlet, type RouteEntry, ready, route, routes } from 'abide'
+import { bag, cookies, isServing, renderToString, request, serve } from 'abide/server'
 import { sleep } from 'abide/tests'
 
 test('two requests interleaving across their awaits do not share a cache', async () => {
@@ -128,6 +128,76 @@ test('an ambient outside a request throws rather than guessing', () => {
     expect(isServing()).toBe(false)
     expect(() => request()).toThrow(/outside a request/)
     expect(() => bag()).toThrow(/outside a request/)
+})
+
+// --- routing ------------------------------------------------------------------
+//
+// The seam `abide/server` installs: a request's URL is where that request thinks it is. Here rather
+// than in `demos/routing.ts` for the reason at the top of this file — the demos drive a route with an
+// explicit `navigate` inside an `isolate`, which is the CLIENT path and never consults the href
+// source at all. Two requests at two URLs at once is an ALS claim, and no browser card can make it.
+
+/** A page that is not in the bundle yet, which is what makes `ready()` mean anything. */
+const LATE: RouteEntry[] = [
+    {
+        path: '/users/[id]',
+        page: async () => {
+            await sleep(5)
+            return { default: () => html`<b>user ${() => route().params.id}</b>` }
+        },
+    },
+]
+
+test('a request routes by its own URL, and two do so at once', async () => {
+    routes(LATE)
+
+    const [first, second] = await Promise.all([
+        serve(new Request('https://x.test/users/1'), async () => {
+            await ready()
+            return [route().name, route().params.id, await renderToString(outlet())]
+        }),
+        serve(new Request('https://x.test/users/2'), async () => {
+            await ready()
+            return [route().name, route().params.id, await renderToString(outlet())]
+        }),
+    ])
+
+    // The NAME is shared — it is the app's shape — and everything about the caller is not.
+    expect(first).toEqual(['/users/[id]', '1', '<b>user 1</b>'])
+    expect(second).toEqual(['/users/[id]', '2', '<b>user 2</b>'])
+})
+
+test('`ready()` is what makes a server render a snapshot', async () => {
+    // A fresh install, so the module this table loads has not landed yet: `routes()` rebuilds every
+    // entry, and a view resolved by an earlier test lives on the entry it was resolved into.
+    routes(LATE)
+
+    const answered = await serve(new Request('https://x.test/users/7'), async () => {
+        // A tree with a hole in it is not a tree. Rendering before the page has arrived is the thing
+        // `ready()` exists to make unnecessary, so it has to be observable that it would.
+        const early = await renderToString(outlet())
+        await ready()
+        return [early, await renderToString(outlet())]
+    })
+
+    expect(answered).toEqual(['', '<b>user 7</b>'])
+})
+
+test('a route already in the bundle is waited on by nothing', async () => {
+    routes([{ path: '/', page: () => ({ default: () => html`<b>home</b>` }) }])
+
+    const answered = await serve(new Request('https://x.test/'), async () => {
+        // No `ready()` first: a loader that hands its module back in the call has no in-flight window
+        // at all, so the page is there the moment the outlet asks for it.
+        const straight = await renderToString(outlet())
+        // And `ready()` then hands back the ONE settled promise rather than allocating a fresh one
+        // per request — which is the whole of what a server pays for routing it did not need.
+        const once = ready()
+        const again = ready()
+        return [straight, once === again]
+    })
+
+    expect(answered).toEqual(['<b>home</b>', true])
 })
 
 test('a failed handler still drops its scope', async () => {

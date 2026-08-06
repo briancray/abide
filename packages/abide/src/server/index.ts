@@ -548,5 +548,8 @@ export async function* renderDocument(
 // What every renderer here takes. `RenderContext` stays internal: it is the walk's own state, and
 // its `document` field is typed by a `DocumentContext` no caller can name.
 export type { RenderOptions } from './internal/emit.ts'
+// The one part of routing that is NOT isomorphic, because a filesystem is not. What it hands back is
+// an ordinary route table, and `routes()` takes the same one on either side.
+export { pages } from './pages.ts'
 // The caller scope and its ambients. `serve` is what makes every module-level `memo` per-request.
 export { bag, cookies, isServing, request, serve } from './scopes.ts'

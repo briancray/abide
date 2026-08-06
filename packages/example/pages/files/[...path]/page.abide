@@ -1,0 +1,5 @@
+<script>
+import { route } from 'abide'
+</script>
+
+<h1>files {route().params.path}</h1>

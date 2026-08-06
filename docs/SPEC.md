@@ -17,7 +17,7 @@ either.
 | --- | --- |
 | `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope |
 | `abide/ui` | the DOM substrate — `mount`, `hydrate` |
-| `abide/server` | the SSR substrate — the render walk, `suspend`, and the request scope |
+| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope, and `pages()` |
 | `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing |
 | `abide/compiler` | `compile()` and its diagnostics. Pure: text in, text out, no filesystem |
 | `abide/compiler/plugin` | the Bun plugin that compiles `.abide` on import |
@@ -33,7 +33,6 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | Area | Absent |
 | --- | --- |
 | transport | `rpc`, `socket` — the two transport laws in the paragraph above |
-| routing | `route()`, `url()`, `navigate()`, and therefore `src/ui/pages/**` |
 | ambients | `identity()`, `trace()`, `health()`, `online()`, `appDataDir()` |
 | lifecycle | `onStart`/`onHealth` and the config table's env vars |
 | `<style>` | the subtree-scoped (nested) form — a compile error naming what is missing |
@@ -42,8 +41,9 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
-`request`, `bag`, `cookies`, `isServing`), the template tag and its runtime, both render substrates,
-hydration, the `.abide` compiler, and the test kit.
+`request`, `bag`, `cookies`, `isServing`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
+`outlet`, and `pages()` for `src/ui/pages/**`), the template tag and its runtime, both render
+substrates, hydration, the `.abide` compiler, and the test kit.
 
 ## Terms
 
@@ -277,7 +277,7 @@ is no honest answer, so each throws rather than guessing.
 
 | Form | Behavior |
 | --- | --- |
-| `route()` *(not built)* | The route being served — its name, kind, parameters, URL, and whether a navigation is in flight. |
+| `route()` | The route being served — its name, kind, parameters, URL, and whether a navigation is in flight. The one ambient that is REACTIVE, because a client moves without a new caller arriving. |
 | `identity()` *(not built)* | The principal the server resolved for this caller, never null and never guessed by the client. |
 | `trace()` *(not built)* | The identifier tying this work to the operation it belongs to. |
 | `request()` | The request being served. |
@@ -518,11 +518,24 @@ would have to lie.
 | `[name]` | required dynamic segment → `route().params.name` |
 | `[[name]]` | optional segment (absent → param omitted) |
 | `[...name]` | rest / catch-all (terminal) → the `/`-joined remaining segments |
-| precedence | literal > required > optional > rest |
-| `route()` *(not built)* | `.url`, `.params`, `.name`, `.kind`, `.navigating` |
-| `url(path, params?, query?)` *(not built)* | build an in-app href |
-| `navigate(target, options?)` *(not built)* | move to one — `{ replace?, keepScroll? }`. Same-route param/query nav = a pure `route()` republish (reads re-fire in place, no DOM swap, no re-hydrate) |
+| precedence | literal > required > optional > rest. Sorted once, at install, so a match stops at the first hit |
+| `route()` | `.url`, `.params`, `.name`, `.kind`, `.navigating` — each its own read |
+| `url(path, params?, query?)` | build an in-app href. A missing required segment, or a param the pattern has no segment for, THROWS: both are typos every time, and both otherwise point at the wrong page |
+| `navigate(target, options?)` | move to one — `{ replace?, keepScroll? }`. Same-route param/query nav = a pure `route()` republish (reads re-fire in place, no DOM swap, no re-hydrate) |
+| `routes(table)` | install the app's routes: `{ path, page, layouts? }`, where a page is reached through a LOADER so its code is absent until someone asks for it |
+| `outlet()` | the current route's page wrapped in its layouts. Reads the route's NAME and nothing else, which is what makes a same-route navigation patch in place |
+| `ready()` | resolve the current route's modules, so the render that follows is a snapshot with nothing left to await. What a server render calls before `renderToString`; `navigate` awaits it for you |
+| `pages(dir)` *(`abide/server`)* | `src/ui/pages/**` as a route table. The one part of routing that is not isomorphic, because a filesystem is not — what it hands back is the same table `routes()` takes on either side |
 | `/__abide/` | all abide controlled endpoints are mounted under `__abide` such as `/__abide/rpc/<path>`
+
+`route()` is a facade over four small cells — name, params, url, navigating — rather than one record,
+and every claim above about what a navigation does NOT wake follows from that. A record rebuilt per
+navigation is a fresh object every time, so an identity check on it never holds and every reader
+wakes for every navigation; it is the same trap `refreshing` avoids by being its own node. `kind` is
+derived from the name rather than held, so there is no second record of one fact.
+
+A route is committed only once its page has arrived, which is the whole of what `navigating` reports
+— and a navigation to a route already loaded has no in-flight window, so it never sets it.
 
 # Environment variables
 

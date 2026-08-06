@@ -223,6 +223,73 @@ export function keyedCache<T>(body: (key: string) => Promise<T>): {
     }
 }
 
+// --- a router, by hand ------------------------------------------------------
+
+/** Filling a pattern the way anyone would, with one pass of `replace`. */
+export function hrefFor(pattern: string, params: Record<string, string | number>): string {
+    return pattern.replace(/\[([^\]]+)\]/g, (_, name: string) => encodeURIComponent(String(params[name])))
+}
+
+export interface VanillaRoute {
+    name: string
+    params: Record<string, string>
+    pathname: string
+}
+
+/**
+ * The router everyone writes first: a regex per pattern, and ONE record rebuilt per navigation.
+ *
+ * The careful half is real — the regexes are compiled once, at construction, not per navigation. The
+ * careless half is the record, and it is careless in a way that is invisible: the values it reports
+ * are right every time. What it cannot do is tell a reader of the route's NAME that nothing it reads
+ * moved, because the record it hands back is a different object on every navigation and the notify
+ * goes to everyone. That is the count on the bench, and it is the reason `route()` is four cells.
+ */
+export function routerRecord(patterns: string[]): {
+    go(pathname: string): void
+    current(): VanillaRoute
+    subscribe(listener: () => void): () => void
+} {
+    const compiled: { name: string; names: string[]; test: RegExp }[] = []
+    for (const pattern of patterns) {
+        const names: string[] = []
+        let source = ''
+        for (const part of pattern.split('/')) {
+            if (part === '') continue
+            if (part.startsWith('[') && part.endsWith(']')) {
+                names.push(part.slice(1, -1))
+                source += '/([^/]+)'
+            } else {
+                source += `/${part}`
+            }
+        }
+        compiled.push({ name: pattern, names, test: new RegExp(`^${source === '' ? '/' : source}$`) })
+    }
+
+    let current: VanillaRoute = { name: '', params: {}, pathname: '/' }
+    const listeners = new Set<() => void>()
+    return {
+        go(pathname: string) {
+            for (const entry of compiled) {
+                const found = entry.test.exec(pathname)
+                if (found === null) continue
+                const params: Record<string, string> = {}
+                for (let i = 0; i < entry.names.length; i++) {
+                    params[entry.names[i] as string] = decodeURIComponent(found[i + 1] as string)
+                }
+                current = { name: entry.name, params, pathname }
+                break
+            }
+            for (const listener of listeners) listener()
+        },
+        current: () => current,
+        subscribe(listener: () => void) {
+            listeners.add(listener)
+            return () => void listeners.delete(listener)
+        },
+    }
+}
+
 // --- DOM lists, by hand -----------------------------------------------------
 
 export interface Row {

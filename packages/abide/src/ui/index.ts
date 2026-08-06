@@ -7,7 +7,13 @@
 
 import type { TemplateResult } from '$shared/html.ts'
 import { scope, watch } from '$shared/reactive.ts'
+import { installHistory } from './internal/history.ts'
 import { ChildPart } from './internal/parts.ts'
+
+// Routing's client edge, handed to `$shared` here rather than found there: importing this entry point
+// is what says there is a document, exactly as calling `serve` says there is a request. At import and
+// not on the first `mount`, because an app navigates to where it already is before it renders.
+installHistory()
 
 export interface Mounted {
     dispose(): void

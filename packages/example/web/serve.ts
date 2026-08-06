@@ -11,6 +11,7 @@ import compiler from './compiler.html'
 import hydrate from './hydrate.html'
 import memo from './memo.html'
 import overview from './overview.html'
+import routing from './routing.html'
 import scope from './scope.html'
 import server from './server.html'
 import state from './state.html'
@@ -43,6 +44,10 @@ const running = Bun.serve({
         '/channel': channel,
         '/watch': watch,
         '/scope': scope,
+        '/routing': routing,
+        // The routing card drives the address bar for real, so the subtree it navigates into has to
+        // be served by the same page — a demo the browser can reach and a reload cannot is broken.
+        '/routing/*': routing,
         '/template': template,
         '/client': client,
         '/server': server,

@@ -18,6 +18,7 @@ import {
     settling,
     useScopeSource,
 } from '$shared/internal/scopes.ts'
+import { useHrefSource } from '$shared/router.ts'
 
 interface Serving {
     scope: Scope
@@ -46,6 +47,9 @@ function storage(): AsyncLocalStorage<Serving> {
     // Falls back to the plain scope, so `isolate` still works on a server and a test does not have
     // to know which source is in force.
     useScopeSource(() => STORAGE?.getStore()?.scope ?? plainScope())
+    // Where a request thinks it is. Installed rather than pushed at every `serve`, so a request that
+    // never asks about its route pays nothing at all for routing existing.
+    useHrefSource(() => STORAGE?.getStore()?.request.url ?? null)
     return STORAGE
 }
 

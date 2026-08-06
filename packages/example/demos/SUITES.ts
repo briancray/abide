@@ -78,6 +78,16 @@ export const META = {
             'there is one caller forever, so nothing here costs anything.',
         tag: 'per-caller caches · { global }',
     },
+    routing: {
+        name: 'routing',
+        title: 'routing',
+        blurb:
+            'Which page a URL names, and what that page may ask about the caller that asked for it. ' +
+            '`route()` is an ambient like `request()`, but a REACTIVE one — a client moves without a new ' +
+            'caller arriving — so it is four small cells rather than one record, and a same-route ' +
+            'navigation is a republish rather than a remount.',
+        tag: 'route · url · navigate',
+    },
     template: {
         name: 'template',
         title: 'html',
@@ -137,6 +147,7 @@ export const ORDER: SuiteName[] = [
     'channel',
     'watch',
     'scope',
+    'routing',
     'template',
     'client',
     'server',

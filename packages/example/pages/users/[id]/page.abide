@@ -1,0 +1,6 @@
+<!-- `[id]` in the DIRECTORY name is the parameter, and `route().params` is where it arrives. -->
+<script>
+import { route } from 'abide'
+</script>
+
+<h1>user {route().params.id}</h1>

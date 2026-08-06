@@ -737,10 +737,7 @@ state.shared = <T>(key: string, initial: T, transform?: (value: T) => T): State<
 // that returns a promise becomes a load — its dependencies are the ones read BEFORE the first
 // `await`, which is everything tracking can honestly see. Args-keyed memoisation lives in `memo.ts`.
 export function derive<T>(fn: () => Promise<T>, transform?: (value: T) => unknown): Memo<T | undefined>
-export function derive<T>(
-    fn: () => AsyncIterable<T>,
-    transform?: (value: T) => unknown,
-): Memo<T | undefined>
+export function derive<T>(fn: () => AsyncIterable<T>, transform?: (value: T) => unknown): Memo<T | undefined>
 export function derive<T>(fn: () => T, transform?: (value: T) => unknown): Memo<T>
 // biome-ignore lint/suspicious/noExplicitAny: the overloads above ARE the public type; unifying them in the implementation signature would widen the two return types the overloads exist to keep apart.
 export function derive(fn: () => unknown, transform?: (value: unknown) => unknown): any {
