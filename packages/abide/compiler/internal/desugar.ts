@@ -50,14 +50,21 @@ const SOURCE_SURFACE = new Set([
     'isError',
     'watch',
     'then',
-    'state',
 ])
 
 /** The constructors whose result is a SOURCE, so `const x = state(…)` makes `x` reactive. */
 export const REACTIVE_CONSTRUCTORS = new Set(['state', 'memo', 'channel'])
 
 /** Prop types that mean "this prop IS a source", read off the declared `Args` member. */
-export const REACTIVE_TYPES = new Set(['State', 'Memo', 'MemoHandle', 'Cell', 'Channel', 'KeyedMemo'])
+export const REACTIVE_TYPES = new Set([
+    'State',
+    'Memo',
+    'MemoHandle',
+    'Cell',
+    'Channel',
+    'KeyedMemo',
+    'RoomChannel',
+])
 
 const COMPOUND_ASSIGN = new Map<SyntaxKind, string>([
     [SyntaxKind.PlusEqualsToken, '+'],
@@ -82,13 +89,13 @@ const LOGICAL_ASSIGN = new Map<SyntaxKind, string>([
     [SyntaxKind.BarBarEqualsToken, '||'],
 ])
 
-const OPENERS = new Set<SyntaxKind>([
+export const OPENERS = new Set<SyntaxKind>([
     SyntaxKind.OpenParenToken,
     SyntaxKind.OpenBracketToken,
     SyntaxKind.OpenBraceToken,
     SyntaxKind.TemplateHead,
 ])
-const CLOSERS = new Set<SyntaxKind>([
+export const CLOSERS = new Set<SyntaxKind>([
     SyntaxKind.CloseParenToken,
     SyntaxKind.CloseBracketToken,
     SyntaxKind.CloseBraceToken,
@@ -307,11 +314,16 @@ export function desugar(
 
             // `const count = state(0)` DECLARES the cell rather than hiding one, so it must not
             // shadow: treating it like any other binding makes the name reactive everywhere except
-            // the body it was introduced in, which is every use of it.
-            if (
-                REACTIVE_CONSTRUCTORS.has(tokens[end + 1]?.text ?? '') &&
-                tokens[end + 2]?.kind === SyntaxKind.OpenParenToken
-            ) {
+            // the body it was introduced in, which is every use of it. `state.shared(key, …)` is
+            // the same declaration with an address in front of the value.
+            const maker = tokens[end + 1]?.text ?? ''
+            const declares =
+                (REACTIVE_CONSTRUCTORS.has(maker) && tokens[end + 2]?.kind === SyntaxKind.OpenParenToken) ||
+                (maker === 'state' &&
+                    tokens[end + 2]?.kind === SyntaxKind.DotToken &&
+                    tokens[end + 3]?.text === 'shared' &&
+                    tokens[end + 4]?.kind === SyntaxKind.OpenParenToken)
+            if (declares) {
                 for (const index of names) binding.add(index)
                 continue
             }

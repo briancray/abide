@@ -10,7 +10,7 @@
 // What a compiled `class:`/`style:` toggle lands on. Authoring vocabulary too — nothing stops a
 // hand-written template from calling them.
 export { classes, styles } from './attrs.ts'
-export { type Channel, type ChannelOptions, channel } from './channel.ts'
+export { type Channel, type ChannelOptions, channel, type RoomChannel } from './channel.ts'
 export {
     Awaited,
     awaited,

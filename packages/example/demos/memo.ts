@@ -4,7 +4,7 @@
 //   memo(({ id }) => fetch(id))  args    -> the args ARE the cache key
 
 import { memo, state, watch } from 'abide'
-import { keep, reader, show, sleep, suite, tick } from 'abide/tests'
+import { keep, reader, show, sleep, suite, tick, until } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -830,6 +830,115 @@ export default suite({
                 attempts[1]?.resolve('recovered')
                 await tick()
                 is('and the settle does', get({ id: 1 })(), 'recovered')
+            },
+        },
+
+        {
+            title: 'a body that yields is a STREAM, and a dependency moving re-streams it',
+            note: 'The same law a promise gets: an async iterable is not a value to hold, it is chunks to receive. A dependency of the body moving tears the old stream down — the generator’s own `finally` runs — and starts a new transcript rather than interleaving into the last one.',
+            async run({ is, log }) {
+                let closed = 0
+                async function* run(n: number): AsyncGenerator<string> {
+                    try {
+                        for (let i = 0; i < 3; i++) {
+                            await sleep(4)
+                            yield `${n}.${i}`
+                        }
+                    } finally {
+                        closed++
+                    }
+                }
+                const seed = state(1)
+                const feed = memo(() => run(seed()))
+                const view = reader(() => feed())
+
+                await until(() => feed.done())
+                is('chunks()', feed.chunks(), ['1.0', '1.1', '1.2'])
+                is('the value is the last chunk', feed(), '1.2')
+
+                seed.set(2)
+                // The chunks node still holds the OLD transcript until the re-run replaces it, so
+                // the condition has to name the new stream rather than "three and done".
+                await until(() => feed.done() && feed.chunks()[0] === '2.0')
+                is('a new transcript, not a continuation', feed.chunks(), ['2.0', '2.1', '2.2'])
+                is('and the old generator was closed', closed, 2)
+                // One per chunk across both runs, plus the reader's own first run — and NOT one for
+                // the re-stream itself: starting a stream moves no value, so nobody wakes for it.
+                is('the reader woke once per chunk', view.seen.length, 7)
+                log('the reader saw', view.seen.join(' → '))
+                view.dispose()
+            },
+        },
+
+        {
+            title: 'invalidate mid-stream closes the generator at its next yield',
+            note: 'Cancellation is OBSERVED, not preempted: the chunk already in flight is produced and then dropped, because nothing can reach into a suspended `await`. What is guaranteed is that it never lands, and that the generator’s `finally` runs.',
+            async run({ is }) {
+                let produced = 0
+                let closed = 0
+                async function* forever(): AsyncGenerator<number> {
+                    try {
+                        for (;;) {
+                            await sleep(4)
+                            produced++
+                            yield produced
+                        }
+                    } finally {
+                        closed++
+                    }
+                }
+                const cell = state<number | undefined>(undefined)
+                cell.set(forever())
+                await until(() => cell.chunks().length >= 3)
+
+                cell.invalidate()
+                const atCancel = produced
+                await sleep(40)
+                is('the generator was closed', closed, 1)
+                is('and stopped producing', produced <= atCancel + 1, true)
+                is('nothing landed after the cancel', cell.chunks(), [])
+                is('streaming()', cell.streaming(), false)
+                is('and the cell is cold', cell.settled(), false)
+            },
+        },
+
+        {
+            title: 'a transform runs UNTRACKED over whatever the body produced',
+            note: 'The body declares the dependencies; the transform shapes the answer. What the transform reads does NOT subscribe, which is the whole difference from writing the same code at the end of the body — and on a load it runs over the value that landed, not over the promise.',
+            async run({ is }) {
+                const rows = state([3, 1, 2])
+                const cutoff = state(2)
+                let transforms = 0
+                const kept = memo(
+                    () => rows(),
+                    (values: number[]) => {
+                        transforms++
+                        return values.filter((n) => n <= cutoff()).sort((a, b) => a - b)
+                    },
+                )
+                is('the memo IS the transform’s return value', kept(), [1, 2])
+                is('transforms', transforms, 1)
+
+                cutoff.set(9)
+                is('a read inside the TRANSFORM is not a dependency', kept(), [1, 2])
+                is('transforms', transforms, 1)
+
+                rows.set([9, 1])
+                is('a dependency of the BODY is', kept(), [1, 9])
+                is('transforms', transforms, 2)
+            },
+        },
+
+        {
+            title: 'a transform on a keyed slot sees the LOADED value',
+            note: 'It is the same rule one argument along: the args pick the slot, the body loads it, and the transform is what the slot ends up holding. That is what lets the shape a caller wants live next to the call rather than at every read site.',
+            async run({ is }) {
+                const name = memo(
+                    async ({ id }: { id: number }) => ({ id, first: 'ada', last: 'lovelace' }),
+                    (row: { id: number; first: string; last: string }) => `${row.first} ${row.last}`,
+                )
+                is('await', await name({ id: 7 }), 'ada lovelace')
+                is('and the slot holds the transformed value', name({ id: 7 }).peek(), 'ada lovelace')
             },
         },
 

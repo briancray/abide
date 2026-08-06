@@ -13,7 +13,8 @@
 // face of what is here; nothing outside abide imports this module.
 
 import { markSource } from './BRANDS.ts'
-import { isThenable } from './probes.ts'
+import { isAsyncIterable, isNamedError, isThenable } from './probes.ts'
+import { storeFor } from './scopes.ts'
 
 // Annotated `number` rather than left as literal types: `status` is mutated re-entrantly (a source's
 // `pull()` can promote this node to DIRTY mid-loop), so literal narrowing would make the compiler
@@ -46,6 +47,9 @@ export class Node {
     hasValue = false
     // Allocated on first contact with a promise or a probe, never before.
     asyncTrack: Async | null = null
+    // Every write passes through this before it is stored — `state(initial, transform)` and
+    // `memo(fn, transform)`. Null on almost every node, so the cost is one field and one null check.
+    transform: ((value: unknown) => unknown) | null = null
 
     constructor(payload: unknown, fn: (() => unknown) | null, isEffect = false) {
         this.fn = fn
@@ -132,12 +136,18 @@ export class Node {
             adopt(this, next)
             return
         }
+        // …and an async iterable is a STREAM, by the same law: the value is the latest chunk.
+        if (isAsyncIterable(next)) {
+            consume(this, next)
+            return
+        }
         // A body that went back to a sync value clears whatever the async side was reporting.
         if (this.asyncTrack !== null) {
             this.asyncTrack.generation++
             settleValue(this, next)
             return
         }
+        if (this.transform !== null) next = transformed(this, next)
         // Memoise: only wake observers when the derived value actually moved.
         if (before !== next) for (const observer of this.observers) observer.status = DIRTY
         this.value = next
@@ -154,6 +164,7 @@ export class Node {
             track.generation++
             track.pending.write(false)
             track.refreshing.write(false)
+            track.streaming.write(false)
             if (track.waiters !== null) {
                 finish(track, new Error('abide: disposed before the load settled'), true)
             }
@@ -193,6 +204,31 @@ function flush(): void {
     }
 }
 
+// The transcript a cell that has never streamed hands back. One shared array, so a reader of
+// `chunks()` on an ordinary cell sees the same identity every time and never wakes for it.
+const NO_CHUNKS: unknown[] = []
+
+/**
+ * Put a value through the node's `transform` before it is stored, reading nothing under tracking —
+ * a transform is UNTRACKED by definition, and `set` is routinely called from inside an effect.
+ *
+ * Applied at exactly the four places a value becomes the node's own: `state`'s initial, a sync write
+ * on a cell with no tracker, a settle, and a derivation's sync result. `resetNode` deliberately is
+ * NOT one of them — dropping to `undefined` is un-settling, not a write, and a clamp that turned it
+ * back into a number would make `invalidate` unable to go cold.
+ */
+function transformed(node: Node, value: unknown): unknown {
+    const fn = node.transform
+    if (fn === null) return value
+    const previous = current
+    current = null
+    try {
+        return fn(value)
+    } finally {
+        current = previous
+    }
+}
+
 // --- async cells ----------------------------------------------------------
 //
 // Handing a cell a promise — `state(fetchUser())`, `x.set(p)`, or an argless `memo` body that
@@ -216,6 +252,10 @@ class Async {
     readonly pending = new Node(false, null) // cold — a load in flight with nothing to show
     readonly refreshing = new Node(false, null) // warm — a load in flight OVER a retained value
     readonly settled: Node
+    /** Chunks produced so far, in order. The shared empty array until a stream actually runs. */
+    readonly chunks = new Node(NO_CHUNKS, null)
+    /** A stream is running: chunks are still arriving. Its own signal, like `refreshing`. */
+    readonly streaming = new Node(false, null)
     /**
      * The failure, and the ONLY record of one: `undefined` here IS "not failed". That is what
      * `REJECTED_WITH_UNDEFINED` buys — a rejection can never write `undefined` — and it is why there
@@ -276,15 +316,86 @@ function wakeReaders(node: Node): void {
 function settleValue(node: Node, value: unknown): void {
     if (node.status === DEAD) return
     const track = trackerFor(node)
+    if (node.transform !== null) {
+        // A transform that throws is a failed settle, not a throw out of a promise callback nobody
+        // is standing under — the cell reports it exactly as a rejected load.
+        try {
+            value = transformed(node, value)
+        } catch (error) {
+            settleError(node, error)
+            return
+        }
+    }
+    hold(node, track, value)
+    markSettled(track)
+    finish(track, value, false)
+}
+
+/** Store a value the load produced, and stop the read throwing if the last one failed. */
+function hold(node: Node, track: Async, value: unknown): void {
     const recovered = track.error.value !== undefined
     node.hasValue = true
     node.write(value) // identity-deduped: a re-fill of unchanged data wakes nobody
-    if (recovered) wakeReaders(node) // …unless it is what stops the read throwing
+    if (recovered) {
+        track.error.write(undefined)
+        wakeReaders(node) // …the value did not move, but the OUTCOME of reading it did
+    }
+}
+
+/** Nothing is in flight any more, and it ended without a failure. */
+function markSettled(track: Async): void {
     track.error.write(undefined)
     track.pending.write(false)
     track.refreshing.write(false)
     track.settled.write(true)
-    finish(track, value, false)
+}
+
+// --- streams --------------------------------------------------------------
+//
+// An async iterable handed to a cell is a STREAM, the same way a promise handed to one is a load:
+// the cell holds the LATEST chunk, `chunks()` holds the transcript, and the read is the ordinary
+// call throughout. The probes compose rather than needing a vocabulary of their own — cold until the
+// first chunk (`pending`), then a load in flight over a value that is already being served
+// (`refreshing`), `streaming` all the way through, and `settled` + `done` when it ends cleanly.
+//
+// The transcript is rebuilt per chunk rather than pushed into, so `chunks()` moving is a new array
+// and every reader of it wakes. That is a copy per chunk, which is what `channel` already pays per
+// publish; a stream long enough for it to matter wants `channel({ tail })`, which caps it.
+function consume(node: Node, source: AsyncIterable<unknown>): void {
+    const track = trackerFor(node)
+    const generation = ++track.generation
+    if (node.hasValue && node.value !== undefined) track.refreshing.write(true)
+    else track.pending.write(true)
+    track.streaming.write(true)
+    track.chunks.write(NO_CHUNKS) // a new run is a new transcript, not a continuation of the last
+
+    void (async () => {
+        try {
+            for await (const raw of source) {
+                // A newer load, a `set`, an `invalidate` or a disposal all bump the generation, and
+                // any of them means nobody wants the rest of this stream.
+                if (generation !== track.generation) return
+                const chunk = node.transform === null ? raw : transformed(node, raw)
+                track.chunks.write((track.chunks.value as unknown[]).concat(chunk))
+                hold(node, track, chunk)
+                // There is something to show now, so the blank-slate signal stands down and the
+                // in-flight one takes over — the same pair a warm reload reports.
+                track.pending.write(false)
+                track.refreshing.write(true)
+            }
+        } catch (error) {
+            if (generation !== track.generation) return
+            track.streaming.write(false)
+            settleError(node, error)
+            return
+        }
+        if (generation !== track.generation) return
+        track.streaming.write(false)
+        // The last chunk is already held and already transformed, so ending is bookkeeping alone —
+        // routing it back through `settleValue` would put the value through the transform twice.
+        markSettled(track)
+        finish(track, node.value, false)
+    })()
 }
 
 // A failed load makes the READ throw — a caller that ignores it is not handling it. The retained
@@ -305,6 +416,7 @@ function settleError(node: Node, error: unknown): void {
     if (changed) wakeReaders(node)
     track.pending.write(false)
     track.refreshing.write(false)
+    track.streaming.write(false)
     track.settled.write(true)
     finish(track, error, true)
 }
@@ -353,6 +465,26 @@ function attachAsync(read: Cell<unknown>, node: Node): void {
     read.refreshing = () => trackerFor(node).refreshing.read() as boolean
     read.settled = () => trackerFor(node).settled.read() as boolean
     read.error = () => trackerFor(node).error.read()
+    read.chunks = () => trackerFor(node).chunks.read() as unknown[]
+    read.streaming = () => trackerFor(node).streaming.read() as boolean
+    // No node of its own: "landed, did not fail, nothing still arriving" is exactly three nodes that
+    // already exist, and reading all three is what subscribes a reader to any of them moving. A
+    // fourth node would be a second record of the same fact for the settle paths to keep in step with.
+    //
+    // `streaming` is in the conjunction and `refreshing` is not, and that asymmetry is the point:
+    // a warm reload has an OUTCOME already — the last load finished, and `done` reports that — while
+    // a stream mid-flight has not produced one yet, however many chunks it has handed over.
+    read.done = () => {
+        const track = trackerFor(node)
+        return (
+            track.settled.read() === true &&
+            track.error.read() === undefined &&
+            track.streaming.read() !== true
+        )
+    }
+    read.isError = (error: unknown, name: string) => isNamedError(error, name)
+    read.watch = (handler: (value: unknown) => unknown) =>
+        watch(read as () => unknown, handler as (value: unknown) => void)
     // Cast because `then` is generic in its two result types and this one implementation serves
     // every instantiation — the erased signature is the honest description of it.
     const target = read as unknown as {
@@ -385,12 +517,14 @@ export const internals = {
      * fires on `()` and on `await`, and on no other member — so a slot kicks its own load from the
      * read while `peek` and the probes still start nothing.
      */
-    cold<T>(beforeRead: () => void): State<T | undefined> {
-        return makeCell(new Node(undefined, null), beforeRead) as State<T | undefined>
+    cold<T>(beforeRead: () => void, transform?: (value: unknown) => unknown): State<T | undefined> {
+        const node = new Node(undefined, null)
+        if (transform !== undefined) node.transform = transform
+        return makeCell(node, beforeRead) as State<T | undefined>
     },
     /** A derivation whose read runs `beforeRead` first — how an argless memo applies its ttl. */
-    derived<T>(fn: () => unknown, beforeRead: () => void): Memo<T> {
-        return makeDerived(fn, beforeRead) as Memo<T>
+    derived<T>(fn: () => unknown, beforeRead: () => void, transform?: (value: unknown) => unknown): Memo<T> {
+        return makeDerived(fn, beforeRead, transform) as Memo<T>
     },
     loading<T>(cell: Cell<T>): boolean {
         const track = nodeOf(cell as Cell<unknown>).asyncTrack
@@ -415,7 +549,9 @@ function resetNode(node: Node): void {
         track.error.write(undefined)
         track.pending.write(false)
         track.refreshing.write(false)
+        track.streaming.write(false)
         track.settled.write(false)
+        track.chunks.write(NO_CHUNKS)
         if (wasFailed) wakeReaders(node)
         if (track.waiters !== null) {
             finish(track, new Error('abide: invalidated before the load settled'), true)
@@ -444,18 +580,44 @@ export interface Cell<T> extends PromiseLike<T> {
     (): T
     /** The retained value, subscribing to nothing and never throwing. The escape hatch. */
     peek(): T
-    /** Write it directly. A promise here is a LOAD; anything else settles the cell in the call. */
-    set(value: T | Promise<T>): void
+    /**
+     * Write it directly. A promise here is a LOAD and an async iterable is a STREAM; anything else
+     * settles the cell in the call.
+     */
+    set(value: T | Promise<T> | AsyncIterable<T>): void
     /** Drop the value and any error, cancel what is in flight, and go back to cold. */
     invalidate(): void
+    /** Everything a stream has produced so far, in order. Empty on a cell that never streamed. */
+    chunks(): T[]
     /** A cold load is in flight — nothing retained to show. */
     pending(): boolean
     /** A load is in flight OVER a retained value. Its own signal; never wakes value readers. */
     refreshing(): boolean
+    /** Chunks are still arriving. */
+    streaming(): boolean
     /** The last load's rejection, or `undefined`. Probes never throw. */
     error(): unknown
     /** Has a value or an error ever landed? */
     settled(): boolean
+    /**
+     * It landed, it did not fail, and nothing is still arriving — as opposed to `settled()`, which
+     * is true however it finished.
+     */
+    done(): boolean
+    /**
+     * Is a caught failure the one named `name` — directly, or wrapped as another's `cause`?
+     *
+     * The NAME, not the class: an error that crossed a wire arrives as a plain object, and
+     * `instanceof` on it is false however faithfully it was serialised.
+     */
+    isError(error: unknown, name: string): boolean
+    /**
+     * Run `handler` with the value now, and again whenever it changes. The dependency is DECLARED,
+     * so the handler is untracked — what it reads does not subscribe it. Returns the disposer, and a
+     * function the handler returns is the teardown, exactly as in `watch`.
+     */
+    // biome-ignore lint/suspicious/noConfusingVoidType: the union IS the contract — a handler either returns nothing or returns its teardown.
+    watch(handler: (value: T) => void | (() => void)): () => void
     /** Narrowed from `PromiseLike` to a real promise — `await x`, and `.catch` on the result. */
     then<Fulfilled = T, Rejected = never>(
         onFulfilled?: ((value: T) => Fulfilled | PromiseLike<Fulfilled>) | null,
@@ -491,14 +653,18 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
             adopt(node, value)
             return
         }
+        if (isAsyncIterable(value)) {
+            consume(node, value)
+            return
+        }
         const track = node.asyncTrack
         // A sync write is the newer answer: it CANCELS whatever is in flight.
         if (track !== null) {
             track.generation++
-            settleValue(node, value)
+            settleValue(node, value) // transforms on the way in
         } else {
             node.hasValue = true
-            node.write(value)
+            node.write(node.transform === null ? value : transformed(node, value))
         }
         // On a DERIVATION the write is now the current value, so the body must not be re-run out
         // from under it on the next read. It runs again when a dependency moves, or on `refresh` —
@@ -525,32 +691,69 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
     return read
 }
 
-export function state<T>(initial: Promise<T>): State<T | undefined>
-export function state<T>(initial: T): State<T>
+export function state<T>(initial: Promise<T>, transform?: (value: T) => T): State<T | undefined>
+export function state<T>(initial: AsyncIterable<T>, transform?: (value: T) => T): State<T | undefined>
+export function state<T>(initial: T, transform?: (value: T) => T): State<T>
 // biome-ignore lint/suspicious/noExplicitAny: the overloads above ARE the public type; unifying them in the implementation signature would widen the two return types the overloads exist to keep apart.
-export function state(initial: unknown): any {
+export function state(initial: unknown, transform?: (value: unknown) => unknown): any {
     const node = new Node(undefined, null)
+    if (transform !== undefined) node.transform = transform
     if (isThenable(initial)) {
         adopt(node, initial)
+    } else if (isAsyncIterable(initial)) {
+        consume(node, initial)
     } else {
-        node.value = initial
+        // The initial IS the first write — a clamp that let an out-of-range initial through would be
+        // a clamp with a hole in it exactly where the value came from the author rather than a user.
+        node.value = transform === undefined ? initial : transformed(node, initial)
         node.hasValue = true
     }
     return makeCell(node, null)
 }
 
+// Cells shared BY KEY rather than by reference, and the map they live in.
+//
+// Per-caller, for the same reason a memo's cache is: a module-level map is filled once and outlives
+// the request that filled it, so on a server "shared across every component instance" would quietly
+// mean "shared across every visitor". `SHARED` is the fallback every caller uses when there is no
+// caller scope — a client, a script, a test — where there is one caller forever.
+const SHARED = new Map<string, State<unknown>>()
+const makeShared = (): Map<string, State<unknown>> => new Map()
+
+/**
+ * One cell per `key`, handed to every caller that asks for that key. The first call decides the
+ * value; later ones get the cell that already exists and their `initial` is not consulted.
+ */
+state.shared = <T>(key: string, initial: T, transform?: (value: T) => T): State<T> => {
+    const held = storeFor(SHARED, makeShared, SHARED)
+    const existing = held.get(key)
+    if (existing !== undefined) return existing as State<T>
+    const made = state(initial, transform as never) as State<unknown>
+    held.set(key, made)
+    return made as State<T>
+}
+
 // The ARGLESS form of abide's `memo`: auto-tracked derivation, lazy, memoised on identity. A body
 // that returns a promise becomes a load — its dependencies are the ones read BEFORE the first
 // `await`, which is everything tracking can honestly see. Args-keyed memoisation lives in `memo.ts`.
-export function derive<T>(fn: () => Promise<T>): Memo<T | undefined>
-export function derive<T>(fn: () => T): Memo<T>
+export function derive<T>(fn: () => Promise<T>, transform?: (value: T) => unknown): Memo<T | undefined>
+export function derive<T>(
+    fn: () => AsyncIterable<T>,
+    transform?: (value: T) => unknown,
+): Memo<T | undefined>
+export function derive<T>(fn: () => T, transform?: (value: T) => unknown): Memo<T>
 // biome-ignore lint/suspicious/noExplicitAny: the overloads above ARE the public type; unifying them in the implementation signature would widen the two return types the overloads exist to keep apart.
-export function derive(fn: () => unknown): any {
-    return makeDerived(fn, null)
+export function derive(fn: () => unknown, transform?: (value: unknown) => unknown): any {
+    return makeDerived(fn, null, transform)
 }
 
-function makeDerived(fn: () => unknown, beforeRead: (() => void) | null): Memo<unknown> {
+function makeDerived(
+    fn: () => unknown,
+    beforeRead: (() => void) | null,
+    transform?: (value: unknown) => unknown,
+): Memo<unknown> {
     const node = new Node(undefined, fn)
+    if (transform !== undefined) node.transform = transform
     const read = makeCell(node, beforeRead) as Memo<unknown>
     // Re-run NOW. A load started by the body reports `refreshing` over the retained value, so the
     // old one keeps being served — the same shape a keyed slot's refresh has.
@@ -574,9 +777,34 @@ function makeDerived(fn: () => unknown, beforeRead: (() => void) | null): Memo<u
 // A watch created inside a `scope` REGISTERS with it automatically. There is deliberately no second
 // opt-in spelling: an ownership rule that only applies when you remember to use the other function
 // is not an ownership rule, and the failure mode is a leak nobody sees.
+//
+// `watch(source, handler)` is the same effect with its dependency DECLARED rather than discovered:
+// the source is the only thing read under tracking, so the handler is free to read whatever it likes
+// without subscribing to it. That is the whole difference — one body, two ways of saying what wakes it.
 // biome-ignore lint/suspicious/noConfusingVoidType: the union IS the contract — an effect either returns nothing or returns its teardown, and that is the whole lifecycle story.
-export function watch(fn: () => void | (() => void)): () => void {
-    const node = new Node(undefined, fn as () => unknown, true)
+export function watch(fn: () => void | (() => void)): () => void
+export function watch<T>(
+    source: () => T,
+    // biome-ignore lint/suspicious/noConfusingVoidType: same contract, one argument along.
+    handler: (value: T) => void | (() => void),
+): () => void
+export function watch(first: () => unknown, handler?: (value: unknown) => unknown): () => void {
+    let body: () => unknown = first
+    if (handler !== undefined) {
+        // Hoisted rather than `untrack(() => handler(value))`: an effect re-runs, and the closure
+        // form allocates one per run for a call the engine can make directly.
+        body = () => {
+            const value = first()
+            const previous = current
+            current = null
+            try {
+                return handler(value)
+            } finally {
+                current = previous
+            }
+        }
+    }
+    const node = new Node(undefined, body, true)
     node.pull()
     const dispose = (): void => node.dispose()
     if (collecting !== null) collecting.push(dispose)

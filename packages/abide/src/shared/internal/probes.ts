@@ -22,3 +22,24 @@ export function isAsyncIterable(value: unknown): value is AsyncIterable<unknown>
     if (type !== 'object' && type !== 'function') return false
     return typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
 }
+
+// How deep a `cause` chain is followed. A cap rather than a seen-set: a cycle is the only thing an
+// unbounded walk has to fear, and eight links is already further than a wrapped error ever nests.
+const CAUSE_DEPTH = 8
+
+/**
+ * Is `error` the one named `name` — directly, or wrapped as the `cause` of something else?
+ *
+ * The NAME rather than the class, because the question outlives the constructor: an error that
+ * crossed a wire arrives as a plain object, and `instanceof` on it is false however faithfully it
+ * was serialised. Backing `fn.isError` on the shared surface.
+ */
+export function isNamedError(error: unknown, name: string): boolean {
+    let at = error
+    for (let depth = 0; depth < CAUSE_DEPTH; depth++) {
+        if (at === null || typeof at !== 'object') return false
+        if ((at as { name?: unknown }).name === name) return true
+        at = (at as { cause?: unknown }).cause
+    }
+    return false
+}

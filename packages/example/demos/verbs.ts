@@ -6,7 +6,7 @@
 // split has to read identically on a state, a derivation, a keyed slot and a channel.
 
 import { channel, invalidate, memo, refresh, state } from 'abide'
-import { reader, sleep, suite, tick } from 'abide/tests'
+import { reader, sleep, suite, tick, until } from 'abide/tests'
 import { button, el, row } from './dom.ts'
 import { META } from './SUITES.ts'
 
@@ -504,6 +504,127 @@ export default suite({
                         },
                     },
                 ],
+            },
+        },
+
+        {
+            title: 'throttle — one now, then at most one per window',
+            note: 'It paces EXPLICIT revalidation of a slot that already holds a value. A cold slot has nothing on screen for a window to protect, so its first load still runs in the call — which is also why a read that finds a slot cold never comes through here.',
+            async run({ is }) {
+                let runs = 0
+                const feed = memo(async ({ id: _id }: { id: number }) => `load ${++runs}`, { throttle: 40 })
+                is('the cold load is not paced', await feed({ id: 1 }), 'load 1')
+
+                feed({ id: 1 }).refresh()
+                is('the first refresh fires immediately', runs, 2)
+                feed({ id: 1 }).refresh()
+                feed({ id: 1 }).refresh()
+                feed({ id: 1 }).refresh()
+                is('and the rest of the burst does not', runs, 2)
+
+                await until(() => runs > 2)
+                is('one more at the end of the window', runs, 3)
+                await sleep(60)
+                is('and nothing after that — the burst was three calls, not three runs', runs, 3)
+            },
+            interact({ host, log }) {
+                let runs = 0
+                const feed = memo(
+                    async ({ id: _id }: { id: number }) => {
+                        await sleep(50)
+                        return `load ${++runs}`
+                    },
+                    { throttle: 1_000 },
+                )
+                const report = (): void => {
+                    log.live('body runs', runs)
+                    log.live('feed({id:1}).peek()', feed({ id: 1 }).peek())
+                }
+                void feed({ id: 1 }).then(report)
+                host.append(
+                    row(
+                        button('refresh() — click it fast, repeatedly', () => {
+                            feed({ id: 1 }).refresh()
+                            setTimeout(report, 80)
+                        }),
+                    ),
+                )
+            },
+        },
+
+        {
+            title: 'debounce — the same window, resolved the other way',
+            note: 'Throttle answers now and then at most once per window. Debounce answers once the asking STOPS. Both are about explicit revalidation over data already on screen, and neither touches a cold load.',
+            async run({ is }) {
+                let runs = 0
+                const search = memo(async ({ q: _q }: { q: string }) => `hit ${++runs}`, { debounce: 30 })
+                is('the cold load is not paced', await search({ q: 'ada' }), 'hit 1')
+
+                for (let i = 0; i < 5; i++) search({ q: 'ada' }).refresh()
+                is('nothing fires while they keep coming', runs, 1)
+
+                await until(() => runs > 1)
+                is('one run once they stop', runs, 2)
+                await sleep(50)
+                is('and exactly one, for five triggers', runs, 2)
+            },
+        },
+
+        {
+            title: 'invalidate CANCELS a window that has not closed yet',
+            note: '`invalidate` starts nothing, and that has to include what a window was about to start — a queued revalidation of data now declared WRONG is a load nobody wants.',
+            async run({ is }) {
+                let runs = 0
+                const rows = memo(async ({ page: _page }: { page: number }) => `rows ${++runs}`, {
+                    debounce: 20,
+                })
+                await rows({ page: 1 })
+                rows({ page: 1 }).refresh() // queued for 20 ms from now
+                rows({ page: 1 }).invalidate()
+                await sleep(50)
+                is('the queued run never happened', runs, 1)
+                is('and the slot is cold', rows({ page: 1 }).peek(), undefined)
+            },
+        },
+
+        {
+            title: 'done — it landed, it did not fail, and nothing is still arriving',
+            note: '`settled` is the wider question — is anything still in flight? `done` is the one a caller asks before trusting the value. A stream is why the two are not the same probe: chunks can have landed without there being an outcome yet.',
+            async run({ is }) {
+                const ready = state(1)
+                is('a sync cell is done in the call', ready.done(), true)
+
+                const failed = state<string | undefined>(undefined)
+                failed.set(Promise.reject(new Error('offline')))
+                await tick()
+                is('settled() — it finished', failed.settled(), true)
+                is('done() — but not cleanly', failed.done(), false)
+
+                failed.invalidate()
+                is('cold is neither', [failed.settled(), failed.done()], [false, false])
+
+                // A channel is the one source whose stream has no end, so it is never done.
+                const feed = channel<string>()
+                feed.publish('a')
+                is('a channel has arrived but never finished', [feed.settled(), feed.done()], [true, false])
+                is('and it is always streaming', feed.streaming(), true)
+            },
+        },
+
+        {
+            title: 'isError names a failure instead of testing its class',
+            note: 'The NAME, not the constructor: an error that crossed a wire arrives as a plain object, and `instanceof` on it is false however faithfully it was serialised. A wrapped one is found through its `cause`.',
+            async run({ is }) {
+                const row = state<string | undefined>(undefined)
+                const missing = Object.assign(new Error('no such user'), { name: 'NotFound' })
+                row.set(Promise.reject(new Error('while loading the page', { cause: missing })))
+                await tick()
+
+                const caught = row.error()
+                is('the wrapper’s own name', row.isError(caught, 'Error'), true)
+                is('and the declared one, through its cause', row.isError(caught, 'NotFound'), true)
+                is('a name it does not carry', row.isError(caught, 'Forbidden'), false)
+                is('over a plain object off a wire', row.isError({ name: 'NotFound' }, 'NotFound'), true)
             },
         },
 

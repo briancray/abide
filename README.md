@@ -6,22 +6,26 @@ would have written by hand.
 
 A bun workspace: `packages/abide` is the framework, `packages/example` is the dogfood.
 
+Lines are CODE lines — comments and blanks excluded — because this file is heavily commented and
+counting the prose would be counting the wrong thing.
+
 ```
 packages/abide/src/
   shared/               the isomorphic half — same import, same call, both sides
-    internal/graph.ts   607   the reactive engine: state / derive / watch / untrack / scope
-    memo.ts             254   memo(load) — args-keyed cache, coalescing, probes, ttl
-    html.ts             110   the template tag + THE one slot classifier
-    channel.ts           97   channel — pub/sub with a reactive read surface
-    internal/{slots,tags,keys}.ts  110   the slot cache, the tag registry, the args key
-    reactive.ts + index.ts          53   the public faces
+    internal/graph.ts   557   the reactive engine: state / derive / watch / untrack / scope, and
+                              the three shapes a value arrives in — value, load, stream
+    memo.ts             302   memo(load) — args-keyed cache, coalescing, probes, ttl, pacing
+    channel.ts          160   channel — pub/sub with a reactive read surface, rooms, maxAge
+    html.ts             147   the template tag + THE one slot classifier
+    internal/{slots,tags,keys}.ts  101   the slot cache, the tag registry, the args key
+    reactive.ts + index.ts          44   the public faces
   ui/                   the DOM renderer — parse-once templates, per-slot effects, keyed lists
-    internal/parts.ts   290   child parts, keyed lists, instances
-    internal/prepare.ts  79   parse once per call site
-    index.ts             39   mount · keyed
+    internal/parts.ts   686   child parts, keyed lists, instances
+    internal/prepare.ts  92   parse once per call site
+    index.ts             30   mount · hydrate
   server/               streaming SSR, in-order + out-of-order suspend
-    index.ts            194   the walk
-    internal/emit.ts     38   attributes, the patch script
+    index.ts            392   the walk
+    internal/emit.ts     26   attributes, the patch script
 packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, so a template
                           expression is the same language as the rest of the file
     internal/lex.ts        the one tokenizer: where an embedded expression ENDS
@@ -100,8 +104,8 @@ Three primitives, isomorphic — same import, same call, both sides:
 
 | | |
 | --- | --- |
-| `state(initial)` | **own** a value. Callable: `x()` reads, `x.set(v)` writes, `x.peek()` reads untracked. A promise is a *load* — see below. |
-| `memo(body, opts?)` | **derive or load** one. |
+| `state(initial, transform?)` | **own** a value. Callable: `x()` reads, `x.set(v)` writes, `x.peek()` reads untracked. A promise is a *load* and an async iterable a *stream* — see below. `state.shared(key, …)` is one cell per key rather than per call site. |
+| `memo(body, transform?, opts?)` | **derive or load** one. |
 | `channel(opts?)` | **subscribe** to them. |
 
 `memo` is one name with two forms, split by whether the body **declares inputs** — abide's rule
@@ -112,9 +116,20 @@ const doubled = memo(() => count() * 2)                 // no args -> deps infer
 const search  = memo(async ({ q }) => fetchIt(q))       // args    -> the args ARE the cache key
 ```
 
-Both forms take the same options (`ttl`, `tags`) and carry the same verbs. Declaring inputs decides
-where the cache key comes from, and nothing else — so `refresh`, `invalidate` and `set` are spelled
-the same on an argless async memo as on a keyed one.
+Both forms take the same options (`ttl`, `tags`, `global`, `throttle`, `debounce`) and carry the
+same verbs. Declaring inputs decides where the cache key comes from, and nothing else — so
+`refresh`, `invalidate` and `set` are spelled the same on an argless async memo as on a keyed one.
+
+`throttle` and `debounce` pace **explicit revalidation of data already on screen**: a cold slot has
+nothing for a window to protect, so its first load still runs in the call, and a read that finds a
+slot cold never comes through the window at all.
+
+A second argument that is a **function** is a `transform`: the body declares the dependencies and
+the transform, which runs untracked over whatever the body produced, shapes the answer.
+
+```ts
+const names = memo(() => rows(), (all) => all.map((r) => r.name))
+```
 
 The load form's call **selects a slot** and hands back its **handle** — which is a cell, so it needs
 no vocabulary of its own. The args address the slot once, at the call:
@@ -206,8 +221,10 @@ is the same memo with no facade at all.
 
 | | `state` | `memo` (derive) | `m(args)` handle | `channel` |
 | --- | --- | --- | --- | --- |
-| `x()` read, `x.peek()` | ✓ | ✓ | ✓ | ✓ |
+| `x()` read, `x.peek()`, `x.chunks()` | ✓ | ✓ | ✓ | ✓ |
 | `pending` / `refreshing` / `error` / `settled` | ✓ | ✓ | ✓ | ✓ (always cold) |
+| `streaming` / `done` | ✓ | ✓ | ✓ | ✓ (always `true` / `false`) |
+| `x.isError(e, name)`, `x.watch(handler)` | ✓ | ✓ | ✓ | ✓ |
 | `x.set(v)` | ✓ | ✓ | ✓ | `publish` |
 | `x.invalidate()` | ✓ | ✓ | ✓ | ✓ |
 | `x.refresh()` | — | ✓ | ✓ | — |
@@ -216,6 +233,12 @@ is the same memo with no facade at all.
 `refresh` is the one verb that isn't universal: re-running requires a body to re-run, and a `state`
 has none. The spec's "every source carries every verb" does not survive contact with that, so the
 rule here is narrower and true — **`invalidate` needs only data, `refresh` needs a body.**
+
+A channel answers the rest of the surface honestly rather than uniformly: it never loads, so the
+load probes are the cold answer, and its stream has no end, so it is always `streaming` and never
+`done`. `channel<T, Args>()` splits it into rooms — `ch(args)` selects one and hands back an
+ordinary channel, the way `m(args)` hands back a slot — and `{ maxAge }` makes a message current
+only while it is young, waking readers when it stops being.
 
 ## Sync or async is not a different spelling
 
@@ -240,10 +263,15 @@ true, `pending()` false, `await x` already resolved):
 | --- | --- |
 | `x()` | the settled value, retained across a re-load. **Throws if the last load failed** |
 | `x.peek()` | the retained value, subscribing to nothing and never throwing — the escape hatch |
+| `x.chunks()` | everything a stream has produced, in order. Empty, and identity-stable, on a cell that never streamed |
 | `x.pending()` | a **cold** load — nothing retained to show |
 | `x.refreshing()` | a load **over** a retained value; its own signal, so it never wakes value readers |
+| `x.streaming()` | chunks are still arriving |
 | `x.error()` | the last rejection. Probes never throw |
 | `x.settled()` | has a value or an error ever landed |
+| `x.done()` | it landed, it did not fail, and nothing is still arriving |
+| `x.isError(e, name)` | is a caught failure the one named — by NAME, through `cause`, so it survives a wire |
+| `x.watch(handler)` | react to it without reaching for `watch`; the handler is untracked, since the source you asked IS the declaration |
 | `await x` | the settled value; rejects if the load did |
 
 **A failed load throws from the read**, in every form — `x()` for a cell, `search({q})()` for a
@@ -254,6 +282,18 @@ rethrown from a fresh microtask, so one failed cell never strands the rest of th
 
 The bookkeeping is allocated on first contact with a promise or a probe, so a cell that only ever
 holds sync values still costs exactly one node, as it always did.
+
+**An async iterable is a STREAM**, by the same law and through the same members. The cell holds the
+latest chunk, `chunks()` holds the transcript, and the probes compose rather than needing a
+vocabulary of their own — `pending` until the first chunk, then `refreshing` over a value already
+being served, `streaming` throughout, and `done` only once it ends cleanly.
+
+```ts
+const line = state<string | undefined>(undefined)
+line.set(tokens())      // an async generator
+line()                  // the latest chunk; line.chunks() is all of them so far
+await line              // resolves when the stream ENDS, with the last chunk
+```
 
 Three rules fall out of "a promise is a load":
 

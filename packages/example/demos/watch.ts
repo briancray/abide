@@ -1,7 +1,7 @@
 // `watch` — the effect. Its RETURN is the lifecycle hook: a returned function is the teardown, run
 // before every re-run and once on disposal. That is why there is no onMount/onDestroy.
 
-import { memo, scope, state, untrack, watch } from 'abide'
+import { channel, memo, scope, state, untrack, watch } from 'abide'
 import { keep, reader, sleep, suite, tick } from 'abide/tests'
 import { button, el, row } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -229,6 +229,110 @@ export default suite({
                         }),
                     ),
                 )
+            },
+        },
+
+        {
+            title: 'watch(source, handler) — the dependency DECLARED instead of discovered',
+            note: 'The source is the only thing read under tracking, so the handler is free to read whatever it likes without subscribing to it. Same effect, same teardown, same disposer — one body, two ways of saying what wakes it.',
+            async run({ is }) {
+                const count = state(0)
+                const other = state('a')
+                const seen: number[] = []
+                let teardowns = 0
+
+                const stop = watch(count, (value) => {
+                    void other() // read freely — it is NOT a dependency
+                    seen.push(value)
+                    return () => {
+                        teardowns++
+                    }
+                })
+                is('it runs immediately, like every effect', seen, [0])
+
+                count.set(1)
+                await tick()
+                is('and again when the declared source moved', seen, [0, 1])
+                is('the teardown ran before the re-run', teardowns, 1)
+
+                other.set('b')
+                await tick()
+                is('a read inside the HANDLER wakes nothing', seen, [0, 1])
+
+                stop()
+                is('and disposal runs the last teardown', teardowns, 2)
+            },
+            bench: {
+                kind: 'wake',
+                arms: [
+                    {
+                        label: 'abide — watch(source, handler)',
+                        run: async () => {
+                            const declared = state(0)
+                            const noise = state(0)
+                            let runs = 0
+                            watch(declared, () => {
+                                void noise()
+                                runs++
+                            })
+                            await tick()
+                            for (let i = 0; i < 100; i++) noise.set(i)
+                            await tick()
+                            return {
+                                count: runs - 1,
+                                of: 're-runs from 100 writes to what the HANDLER reads',
+                            }
+                        },
+                    },
+                    {
+                        label: 'abide — watch(handler), same two reads',
+                        run: async () => {
+                            const declared = state(0)
+                            const noise = state(0)
+                            let runs = 0
+                            watch(() => {
+                                void declared()
+                                void noise()
+                                runs++
+                            })
+                            await tick()
+                            for (let i = 0; i < 100; i++) noise.set(i)
+                            await tick()
+                            return { count: runs - 1, of: 're-runs from 100 writes to what the BODY reads' }
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'x.watch(handler) — the same effect, spelled off the source',
+            note: 'Every source carries it, so a caller holding one cell does not have to reach for the effect to react to it. The handler is untracked for the same reason: which source you asked IS the declaration.',
+            async run({ is }) {
+                const name = state('ada')
+                const seen: string[] = []
+                const stop = name.watch((value) => {
+                    seen.push(value)
+                })
+                name.set('grace')
+                await tick()
+                is('seen', seen, ['ada', 'grace'])
+
+                stop()
+                name.set('lovelace')
+                await tick()
+                is('the disposer unsubscribes for good', seen, ['ada', 'grace'])
+
+                // …and a channel carries it too, over messages rather than values.
+                const feed = channel<string>()
+                const heard: (string | undefined)[] = []
+                const off = feed.watch((message) => {
+                    heard.push(message)
+                })
+                feed.publish('one')
+                await tick()
+                is('on a channel', heard, [undefined, 'one'])
+                off()
             },
         },
 

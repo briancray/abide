@@ -19,7 +19,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { scopeCss, scopeName } from './css.ts'
-import { desugar, REACTIVE_CONSTRUCTORS, REACTIVE_TYPES } from './desugar.ts'
+import { CLOSERS, desugar, OPENERS, REACTIVE_CONSTRUCTORS, REACTIVE_TYPES } from './desugar.ts'
 import { Lexer, type Token } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
@@ -112,27 +112,80 @@ function reactiveBindings(source: string, from: number, to: number, into: Reacti
         if ((tokens[i] as Token).kind !== SyntaxKind.OpenParenToken) continue
         const callee = calleeBefore(tokens, i)
         if (callee < 1) continue
-        const call = tokens[callee] as Token
-        if (!REACTIVE_CONSTRUCTORS.has(call.text)) continue
-        if (tokens[callee - 1]?.kind !== SyntaxKind.EqualsToken) continue
-        const name = tokens[callee - 2]
+        let at = callee
+        let maker = (tokens[callee] as Token).text
+        // `state.shared(key, …)` is `state` with an address in front of the value, so the binding is
+        // a cell exactly as `state(…)` is. Stepping back over the member access is what lets the one
+        // rule below see it — without this the callee reads as `shared`, which constructs nothing.
+        if (
+            maker === 'shared' &&
+            tokens[at - 1]?.kind === SyntaxKind.DotToken &&
+            tokens[at - 2]?.text === 'state'
+        ) {
+            at -= 2
+            maker = 'state'
+        }
+        if (!REACTIVE_CONSTRUCTORS.has(maker)) continue
+        if (tokens[at - 1]?.kind !== SyntaxKind.EqualsToken) continue
+        const name = tokens[at - 2]
         if (name === undefined || name.kind !== SyntaxKind.Identifier) continue
 
-        if (call.text !== 'memo') {
+        if (maker === 'channel') {
+            // `channel<T, Args>()` is the ROOM form, and the second type argument is the only place
+            // that is visible: there is no body to read a parameter off, so the declaration says it
+            // in the one way a syntactic rule can see. The call selects a room, so it is read by
+            // CALL — the same split `memo` has between its two forms.
+            if (multipleTypeArguments(tokens, at + 1, i)) into.keyed.add(name.text)
+            else into.cells.add(name.text)
+            continue
+        }
+        if (maker !== 'memo') {
             into.cells.add(name.text)
             continue
         }
         // Past an `async`, the body's own parameter list decides the form.
-        let at = i + 1
-        if (tokens[at]?.kind === SyntaxKind.AsyncKeyword) at++
-        if (tokens[at]?.kind !== SyntaxKind.OpenParenToken) {
+        let body = i + 1
+        if (tokens[body]?.kind === SyntaxKind.AsyncKeyword) body++
+        if (tokens[body]?.kind !== SyntaxKind.OpenParenToken) {
             // `memo(fn)` — a reference, whose shape is not visible here. Read by name, as before.
             into.cells.add(name.text)
             continue
         }
-        if (tokens[at + 1]?.kind === SyntaxKind.CloseParenToken) into.cells.add(name.text)
+        if (tokens[body + 1]?.kind === SyntaxKind.CloseParenToken) into.cells.add(name.text)
         else into.keyed.add(name.text)
     }
+}
+
+/**
+ * Does the type argument list between `from` and `to` declare more than one type?
+ *
+ * Counted rather than parsed: a comma at the list's own depth separates two type arguments, and one
+ * nested inside a `{ … }`, a tuple or another list does not. `=>` is skipped by kind, because the
+ * character walk that closes `<…>` would otherwise read a function type's arrow as a close.
+ */
+function multipleTypeArguments(tokens: Token[], from: number, to: number): boolean {
+    let depth = 0
+    for (let at = from; at < to; at++) {
+        const token = tokens[at] as Token
+        if (token.kind === SyntaxKind.EqualsGreaterThanToken) continue
+        if (token.kind === SyntaxKind.CommaToken) {
+            if (depth === 1) return true
+            continue
+        }
+        if (OPENERS.has(token.kind)) {
+            depth++
+            continue
+        }
+        if (CLOSERS.has(token.kind)) {
+            depth--
+            continue
+        }
+        for (const character of token.text) {
+            if (character === '<') depth++
+            else if (character === '>') depth--
+        }
+    }
+    return false
 }
 
 /**
@@ -173,7 +226,9 @@ function reactiveProps(script: string, into: Reactive): void {
         const match = member.exec(body)
         if (match === null) return
         const type = match[2] as string
-        if (type === 'KeyedMemo') into.keyed.add(match[1] as string)
+        // The two types whose CALL is the source: a keyed memo selects a slot, a room channel
+        // selects a room. Everything else in the set is read by name.
+        if (type === 'KeyedMemo' || type === 'RoomChannel') into.keyed.add(match[1] as string)
         else if (REACTIVE_TYPES.has(type)) into.cells.add(match[1] as string)
     }
 }

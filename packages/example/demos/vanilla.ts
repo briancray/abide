@@ -135,6 +135,58 @@ export function feed<T>(tail = 0): VanillaFeed<T> {
     }
 }
 
+// --- consuming an async iterable, by hand ------------------------------------
+
+export interface VanillaStream<T> {
+    latest(): T | undefined
+    chunks(): T[]
+    streaming(): boolean
+    done(): boolean
+    subscribe(listener: () => void): () => void
+}
+
+/**
+ * What a cell that consumes an async iterable replaces: a loop, four fields, and a notify.
+ *
+ * The careless part is the notify — one per chunk is right, and the shape everyone reaches for is a
+ * single "state changed" record rebuilt per chunk, which cannot dedupe anything and wakes every
+ * reader for every field. This one notifies once per chunk on purpose, so the bench is measuring the
+ * framework against a hand-written form that already got the wake count right.
+ */
+export function stream<T>(source: AsyncIterable<T>): VanillaStream<T> {
+    let latest: T | undefined
+    let transcript: T[] = []
+    let running = true
+    let finished = false
+    const listeners = new Set<() => void>()
+    const notify = (): void => {
+        for (const listener of listeners) listener()
+    }
+    void (async () => {
+        try {
+            for await (const chunk of source) {
+                latest = chunk
+                transcript = transcript.concat(chunk)
+                notify()
+            }
+            finished = true
+        } finally {
+            running = false
+            notify()
+        }
+    })()
+    return {
+        latest: () => latest,
+        chunks: () => transcript,
+        streaming: () => running,
+        done: () => finished,
+        subscribe(listener: () => void) {
+            listeners.add(listener)
+            return () => void listeners.delete(listener)
+        },
+    }
+}
+
 // --- an args-keyed cache, by hand -------------------------------------------
 
 export function keyedCache<T>(body: (key: string) => Promise<T>): {

@@ -4,7 +4,7 @@
 
 import { channel, html, memo } from 'abide'
 import { renderToString } from 'abide/server'
-import { container, reader, sleep, suite, tick } from 'abide/tests'
+import { container, reader, sleep, suite, tick, until } from 'abide/tests'
 import { mount } from 'abide/ui'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -245,6 +245,98 @@ export default suite({
                     }
                     log('loop ended', 'the generator’s `finally` unsubscribes')
                 })()
+            },
+        },
+
+        {
+            title: 'rooms — the CALL selects one, the way a keyed memo selects a slot',
+            note: '`channel<T, Args>()` splits one stream into independent rooms, and the call is what tells the two forms apart: with no argument it is the read every source spells the same way, with one it hands back an ordinary channel. Rooms are process-wide, because a channel is not a cache — a publisher has to reach subscribers that arrived some other way.',
+            async run({ is }) {
+                const chat = channel<string, { room: string }>({ tail: 3 })
+                chat({ room: 'general' }).publish('hello')
+                chat({ room: 'random' }).publish('cat picture')
+
+                is('each room has its own latest', chat({ room: 'general' })(), 'hello')
+                is('…and its own transcript', chat({ room: 'random' }).chunks(), ['cat picture'])
+                // Two calls, one room — selecting is a lookup, not a construction.
+                const first = chat({ room: 'general' })
+                const again = chat({ room: 'general' })
+                is('selecting the same room twice is the same channel', first === again, true)
+                // A room IS a channel, so nothing below it is a second vocabulary.
+                is('and it answers the whole source surface', chat({ room: 'general' }).settled(), true)
+
+                chat.invalidate({ room: 'random' })
+                is('a pattern reaches only what matches', chat({ room: 'random' }).peek(), undefined)
+                is('general is untouched', chat({ room: 'general' }).peek(), 'hello')
+
+                chat.invalidate()
+                is('and no pattern means every room', chat({ room: 'general' }).peek(), undefined)
+            },
+            interact({ host, log }) {
+                const chat = channel<string, { room: string }>({ tail: 5 })
+                const rooms = ['general', 'random']
+                const out = stage(host)
+                const panes = rooms.map((room) => {
+                    const pane = el('p', 'font-mono text-xs text-emerald-300 min-h-5')
+                    out.append(pane)
+                    reader(() => {
+                        pane.textContent = `#${room}: ${chat({ room }).chunks().join(' · ')}`
+                    })
+                    return pane
+                })
+                void panes
+                let n = 0
+                host.append(
+                    row(
+                        ...rooms.map((room) =>
+                            button(`publish to #${room}`, () => {
+                                chat({ room }).publish(`msg ${++n}`)
+                                log.live('latest in #general', chat({ room: 'general' }).peek())
+                                log.live('latest in #random', chat({ room: 'random' }).peek())
+                            }),
+                        ),
+                        button('chat.invalidate()', () => chat.invalidate()),
+                    ),
+                )
+            },
+        },
+
+        {
+            title: 'maxAge — a message counts as current only while it is young',
+            note: 'It goes stale by the passage of time, so something has to WAKE for it: a reader that only found out on its next read would go on showing a message the channel had already stopped claiming.',
+            async run({ is, log }) {
+                const presence = channel<string>({ tail: 4, maxAge: 30 })
+                const view = reader(() => presence())
+                presence.publish('ada is typing')
+                await tick()
+                is('while it is current', presence(), 'ada is typing')
+                is('settled()', presence.settled(), true)
+
+                await until(() => presence.peek() === undefined)
+                is('past maxAge it is no longer the latest', presence(), undefined)
+                is('and it has left the transcript', presence.chunks(), [])
+                is('settled() — nothing current has arrived', presence.settled(), false)
+                is('the reader woke for the expiry', view.seen, ['undefined', 'ada is typing', 'undefined'])
+                log('', 'expiry is a publish of nothing, so it costs one wake like any other')
+                view.dispose()
+            },
+            interact({ host, log }) {
+                const presence = channel<string>({ tail: 4, maxAge: 3_000 })
+                const out = stage(host)
+                const shown = el('p', 'text-lg text-slate-100 min-h-7')
+                out.append(shown)
+                reader(() => {
+                    shown.textContent = presence() ?? '(nothing current)'
+                    log.live('chunks', presence.chunks())
+                    log.live('settled()', presence.settled())
+                })
+                host.append(
+                    row(
+                        button('someone is typing (3 s of life)', () =>
+                            presence.publish(`typing at ${new Date().toLocaleTimeString()}`),
+                        ),
+                    ),
+                )
             },
         },
 

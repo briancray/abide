@@ -471,6 +471,47 @@ export default suite({
         },
 
         {
+            title: 'which SPELLING declares a source, and which one declares a keyed one',
+            note: 'Both questions are answered syntactically, at the declaration, because the emit path must not need a type-checker. `state.shared(key, …)` is `state` with an address in front of the value, so the binding is a cell. `channel<T, Args>()` has no body to read a parameter off, so the second TYPE ARGUMENT is the declaration — and a comma nested inside one type is not a second type.',
+            async run({ is }) {
+                const shared = template(
+                    "<script>const theme = state.shared('theme', 'dark')</script><p>{theme.length}</p>",
+                )
+                is('state.shared declares a cell', shared.includes('${() => theme().length}'), true)
+                is(
+                    '…and it is written by name too',
+                    template(
+                        "<script>const theme = state.shared('theme', 'dark')</script>" +
+                            "<button onclick={() => { theme = 'light' }}>x</button>",
+                    ).includes("theme.set('light')"),
+                    true,
+                )
+
+                const rooms = template(
+                    '<script>const chat = channel<string, { room: string }>()</script>' +
+                        "<p>{chat({ room: 'a' }) + '!'}</p>",
+                )
+                is('a room is read by its CALL', rooms.includes("chat({ room: 'a' })() + '!'"), true)
+                is(
+                    '…and named alone it hands over the room itself',
+                    template(
+                        '<script>const chat = channel<string, { room: string }>()</script>' +
+                            "<p>{chat({ room: 'a' })}</p>",
+                    ).includes("${() => chat({ room: 'a' })}"),
+                    true,
+                )
+                // The depth rule: `Map<string, number>` is ONE type argument, not two.
+                is(
+                    'a comma inside a type argument does not make it a room',
+                    template(
+                        '<script>const wide = channel<Map<string, number>>()</script><p>{wide.size}</p>',
+                    ).includes('${() => wide().size}'),
+                    true,
+                )
+            },
+        },
+
+        {
             title: 'a condition NARROWS its branch, because it reads once into a const',
             note: 'Every abide read is a call, and TypeScript narrows a const but never a call — so `{#if session}{session.name}{/if}` had no way to typecheck: the test and the use were two separate `session()` calls with nothing tying them together. A condition takes its reads into locals and the branch narrows off those. It also costs LESS: separate reads subscribe to the same cell twice and both wake, where one hoisted read wakes the branch once.',
             async run({ is }) {

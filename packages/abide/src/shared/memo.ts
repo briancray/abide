@@ -84,6 +84,76 @@ export interface MemoOptions<Args = unknown> {
      * every row a memo holds.
      */
     tags?: string[] | ((args: Args) => string[])
+    /**
+     * ms. Explicit revalidation of a slot that already holds a value fires immediately, then at most
+     * once per window — a burst of `refresh` calls is one run now and one at the end of the window.
+     */
+    throttle?: number
+    /**
+     * ms. Explicit revalidation of a slot that already holds a value waits until the triggers stop.
+     * Set with `throttle`, this wins — the two are answers to the same question.
+     */
+    debounce?: number
+}
+
+/**
+ * A timer that survives neither a request nor a process exit on its own account.
+ *
+ * `unref` where the runtime has it: a window that has not closed yet is not a reason for a server to
+ * stay up, and a test that ends with one armed should still end.
+ */
+function arm(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
+    const timer = setTimeout(fn, ms)
+    ;(timer as unknown as { unref?: () => void }).unref?.()
+    return timer
+}
+
+/**
+ * The `throttle` / `debounce` window, per slot.
+ *
+ * COLD is never paced: a slot with nothing retained has nothing on screen for a window to protect,
+ * so its first load runs in the call. That is also why this sits on `refresh` alone — the read-driven
+ * load of a cold slot never comes through here.
+ */
+function pacer(
+    throttleMs: number,
+    debounceMs: number,
+): { fire(warm: boolean, run: () => void): void; cancel(): void } {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let firedAt = 0
+    return {
+        fire(warm, run) {
+            if (!warm) {
+                run()
+                return
+            }
+            if (debounceMs > 0) {
+                if (timer !== null) clearTimeout(timer)
+                timer = arm(() => {
+                    timer = null
+                    run()
+                }, debounceMs)
+                return
+            }
+            const since = Date.now() - firedAt
+            if (since >= throttleMs) {
+                firedAt = Date.now()
+                run()
+                return
+            }
+            if (timer !== null) return // the tail of this window is already claimed
+            timer = arm(() => {
+                timer = null
+                firedAt = Date.now()
+                run()
+            }, throttleMs - since)
+        },
+        cancel() {
+            if (timer === null) return
+            clearTimeout(timer)
+            timer = null
+        },
+    }
 }
 
 export interface TagSelector {
@@ -101,8 +171,12 @@ export function refresh(selector: TagSelector, scope?: unknown): void {
 function keyedMemo<Args, T>(
     body: (args: Args) => T | Promise<T>,
     options: MemoOptions<Args>,
+    transform?: (value: unknown) => unknown,
 ): KeyedMemo<Args, T> {
     const ttl = options.ttl ?? Infinity
+    const throttleMs = options.throttle ?? 0
+    const debounceMs = options.debounce ?? 0
+    const paced = throttleMs > 0 || debounceMs > 0
     const tags = options.tags
     const shared = new Map<string, { slot: Slot<T>; args: Args }>()
     const isGlobal = options.global === true
@@ -126,7 +200,7 @@ function keyedMemo<Args, T>(
         const slot = { handle: undefined as unknown as MemoHandle<T>, loadedAt: 0 }
         const handle = internals.cold<T>(() => {
             if (stale(slot) && !internals.loading(handle)) start(args, slot)
-        }) as MemoHandle<T>
+        }, transform) as MemoHandle<T>
         slot.handle = handle
 
         // Everything below is bound ONCE per slot, not per call.
@@ -138,11 +212,21 @@ function keyedMemo<Args, T>(
             write(value)
         }
         const drop = handle.invalidate
+        const window = paced ? pacer(throttleMs, debounceMs) : null
         handle.invalidate = () => {
+            // A queued revalidation of data now declared WRONG is a load nobody wants: `invalidate`
+            // starts nothing, and that has to include what a window was about to start.
+            window?.cancel()
             slot.loadedAt = 0
             drop()
         }
-        handle.refresh = () => start(args, slot)
+        handle.refresh =
+            window === null
+                ? () => start(args, slot)
+                : () => window.fire(slot.loadedAt !== 0, () => start(args, slot))
+        // A window armed inside one request must not fire inside the next: a per-caller slot goes
+        // away with its caller, and the timer holding it has to go with it.
+        if (window !== null && !isGlobal) disposeWith(() => window.cancel())
 
         // Tags are resolved per SLOT, so `tags: ({id}) => ['user:' + id]` names one row rather than
         // every row this memo holds.
@@ -229,7 +313,11 @@ function keyedMemo<Args, T>(
 // load's result is discarded rather than landing on top of the newer one.
 //
 // It carries the SAME options as the keyed form — `ttl` and `tags` mean what they mean there.
-function buildArgless<T>(body: () => T, options: MemoOptions): Memo<T> {
+function buildArgless<T>(
+    body: () => T,
+    options: MemoOptions,
+    transform?: (value: unknown) => unknown,
+): Memo<T> {
     const ttl = options.ttl ?? Infinity
     let loadedAt = 0
 
@@ -254,17 +342,35 @@ function buildArgless<T>(body: () => T, options: MemoOptions): Memo<T> {
 
     const cell: Memo<T> =
         ttl === Infinity
-            ? derive(timed as () => T)
-            : internals.derived<T>(timed, () => {
-                  // Expired → recompute during THIS read, which is what "the next read runs cold"
-                  // means when there is no args key to hang the staleness off.
-                  //
-                  // `loading` is not optional here: `loadedAt` is stamped when the body SETTLES, so
-                  // every read between expiry and the answer landing would start another run — a
-                  // thundering herd off a stale timestamp. The keyed path guards the same way.
-                  if (loadedAt === 0 || internals.loading(cell)) return
-                  if (Date.now() - loadedAt >= ttl) cell.refresh()
-              })
+            ? derive(timed as () => T, transform)
+            : internals.derived<T>(
+                  timed,
+                  () => {
+                      // Expired → recompute during THIS read, which is what "the next read runs cold"
+                      // means when there is no args key to hang the staleness off.
+                      //
+                      // `loading` is not optional here: `loadedAt` is stamped when the body SETTLES, so
+                      // every read between expiry and the answer landing would start another run — a
+                      // thundering herd off a stale timestamp. The keyed path guards the same way.
+                      if (loadedAt === 0 || internals.loading(cell)) return
+                      if (Date.now() - loadedAt >= ttl) cell.refresh()
+                  },
+                  transform,
+              )
+
+    // The pacing is the keyed form's, one cell instead of one slot: it wraps the EXPLICIT verb, so a
+    // ttl expiring on a read still recomputes in the call and only `refresh` waits for a window.
+    if (options.throttle !== undefined || options.debounce !== undefined) {
+        const window = pacer(options.throttle ?? 0, options.debounce ?? 0)
+        const run = cell.refresh
+        cell.refresh = () => window.fire(loadedAt !== 0, run)
+        const drop = cell.invalidate
+        cell.invalidate = () => {
+            window.cancel()
+            drop()
+        }
+        if (options.global !== true) disposeWith(() => window.cancel())
+    }
 
     if (options.tags !== undefined) {
         const names = typeof options.tags === 'function' ? options.tags(undefined) : options.tags
@@ -310,10 +416,15 @@ function scopedArgless<T>(fallback: Memo<T>, build: () => Memo<T>): Memo<T> {
         invalidate: () => pick().invalidate(),
         refresh: () => pick().refresh(),
         dispose: () => pick().dispose(),
+        chunks: () => pick().chunks(),
         pending: () => pick().pending(),
         refreshing: () => pick().refreshing(),
+        streaming: () => pick().streaming(),
         error: () => pick().error(),
         settled: () => pick().settled(),
+        done: () => pick().done(),
+        isError: (error, name) => pick().isError(error, name),
+        watch: (handler) => pick().watch(handler),
         // Cast for the same reason `attachAsync` casts: one implementation serves every instantiation
         // of `then`'s two type parameters, and the erased signature is the honest description of it.
         then: ((onFulfilled: unknown, onRejected: unknown) =>
@@ -326,21 +437,53 @@ function scopedArgless<T>(fallback: Memo<T>, build: () => Memo<T>): Memo<T> {
     return facade
 }
 
-function arglessMemo<T>(body: () => T, options: MemoOptions): Memo<T> {
-    const fallback = buildArgless(body, options)
+function arglessMemo<T>(
+    body: () => T,
+    options: MemoOptions,
+    transform?: (value: unknown) => unknown,
+): Memo<T> {
+    const fallback = buildArgless(body, options, transform)
     if (options.global === true) return fallback
-    return scopedArgless(fallback, () => buildArgless(body, options))
+    return scopedArgless(fallback, () => buildArgless(body, options, transform))
 }
 
+// `transform` first, because it is the more specific second argument: an options bag is a WEAK type
+// (every member optional), so a function with none of its members is not assignable to it and the
+// overload that takes one is skipped rather than matched by accident.
+export function memo<T, Out>(
+    body: () => Promise<T>,
+    transform: (value: T) => Out,
+    options?: MemoOptions,
+): Memo<Out | undefined>
+export function memo<T, Out>(
+    body: () => AsyncIterable<T>,
+    transform: (value: T) => Out,
+    options?: MemoOptions,
+): Memo<Out | undefined>
+export function memo<T, Out>(body: () => T, transform: (value: T) => Out, options?: MemoOptions): Memo<Out>
+export function memo<Args, T, Out>(
+    body: (args: Args) => T | Promise<T> | AsyncIterable<T>,
+    transform: (value: T) => Out,
+    options?: MemoOptions<Args>,
+): KeyedMemo<Args, Out>
 export function memo<T>(body: () => Promise<T>, options?: MemoOptions): Memo<T | undefined>
+// A body that YIELDS is a stream, so what the memo holds is a chunk — the same widening a promise
+// gets, for the same reason: there is nothing there until the first one lands.
+export function memo<T>(body: () => AsyncIterable<T>, options?: MemoOptions): Memo<T | undefined>
 export function memo<T>(body: () => T, options?: MemoOptions): Memo<T>
 export function memo<Args, T>(
-    body: (args: Args) => T | Promise<T>,
+    body: (args: Args) => T | Promise<T> | AsyncIterable<T>,
     options?: MemoOptions<Args>,
 ): KeyedMemo<Args, T>
-export function memo(body: (args?: unknown) => unknown, options: MemoOptions = {}): unknown {
+export function memo(
+    body: (args?: unknown) => unknown,
+    second?: ((value: unknown) => unknown) | MemoOptions,
+    third?: MemoOptions,
+): unknown {
+    const transform = typeof second === 'function' ? second : undefined
+    const options = (typeof second === 'function' ? third : second) ?? {}
     // Declaring an argument IS the declaration that args are the dependency set. Args are also the
     // way to get a KEYED cache — one handle per key, each with its own probes and its own tags.
-    if (body.length >= 1) return keyedMemo(body as (a: unknown) => unknown, options)
-    return arglessMemo(body as () => unknown, options)
+    if (body.length >= 1) return keyedMemo(body as (a: unknown) => unknown, options, transform)
+    return arglessMemo(body as () => unknown, options, transform)
 }

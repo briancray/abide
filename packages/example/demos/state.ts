@@ -2,15 +2,23 @@
 // what it demonstrates: the values AND the wake-ups, because a cell that reports the right thing
 // while waking readers nothing moved for is the wrong implementation.
 
-import { state, watch } from 'abide'
-import { keep, reader, settled, sleep, suite, tick } from 'abide/tests'
-import { button, field, row, stage } from './dom.ts'
+import { isolate, state, watch } from 'abide'
+import { keep, reader, settled, sleep, suite, tick, until } from 'abide/tests'
+import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
 async function fetchSession(name: string): Promise<{ name: string }> {
     await sleep(20)
     return { name }
+}
+
+/** A stream of `n` chunks, yielding on the microtask queue rather than a timer. */
+async function* chunks(n: number): AsyncGenerator<number> {
+    for (let i = 0; i < n; i++) {
+        await Promise.resolve()
+        yield i
+    }
 }
 
 export default suite({
@@ -226,6 +234,183 @@ export default suite({
                 is('the reader woke', view.seen.length, 2)
                 log('the reader saw', view.seen.join(' → '))
                 view.dispose()
+            },
+        },
+
+        {
+            title: 'an async iterable is a STREAM, the way a promise is a load',
+            note: 'The cell holds the LATEST chunk and `chunks()` holds the transcript. The probes compose rather than needing a vocabulary of their own — cold until the first chunk, then a load in flight over a value already being served, and `done` only once it ends cleanly.',
+            async run({ is, log }) {
+                async function* words(): AsyncGenerator<string> {
+                    for (const word of ['the', 'quick', 'brown']) {
+                        await sleep(5)
+                        yield word
+                    }
+                }
+                const line = state<string | undefined>(undefined)
+                const view = reader(() => line())
+                line.set(words())
+
+                is('pending() before the first chunk', line.pending(), true)
+                is('streaming()', line.streaming(), true)
+                is('chunks()', line.chunks(), [])
+
+                await until(() => line.chunks().length === 1)
+                is('the value IS the latest chunk', line(), 'the')
+                is('pending() — there is something to show now', line.pending(), false)
+                is('refreshing() — and more is coming', line.refreshing(), true)
+                // The cell settled long ago holding `undefined`, so `settled` is the wrong question
+                // mid-stream — `done` is the one that asks whether there is an OUTCOME yet.
+                is('done() — chunks have landed, but not an outcome', line.done(), false)
+
+                is('await resolves when the stream ENDS', await line, 'brown')
+                is('chunks()', line.chunks(), ['the', 'quick', 'brown'])
+                is('streaming() after', line.streaming(), false)
+                is('settled() after', line.settled(), true)
+                is('done() — it ended cleanly', line.done(), true)
+                // One per chunk. The end moves no value, so it wakes nobody a fourth time.
+                is('the reader woke once per chunk', view.seen.length, 4)
+                log('the reader saw', view.seen.join(' → '))
+                view.dispose()
+            },
+            interact({ host, log }) {
+                async function* typing(): AsyncGenerator<string> {
+                    for (const word of 'a stream is a value that arrives in pieces'.split(' ')) {
+                        await sleep(120)
+                        yield word
+                    }
+                }
+                const line = state<string | undefined>(undefined)
+                const out = stage(host)
+                const shown = el('p', 'text-lg text-slate-100 min-h-7')
+                out.append(shown)
+                reader(() => {
+                    shown.textContent = line.chunks().join(' ')
+                    log.live('[pending, streaming, done]', [line.pending(), line.streaming(), line.done()])
+                    log.live('chunks', line.chunks().length)
+                })
+                host.append(
+                    row(
+                        button('line.set(typing())', () => line.set(typing())),
+                        button('line.invalidate() — mid-stream', () => line.invalidate()),
+                    ),
+                )
+            },
+            bench: {
+                kind: 'wake',
+                arms: [
+                    {
+                        label: 'abide — state.set(asyncIterable)',
+                        run: async () => {
+                            const line = state<number | undefined>(undefined)
+                            let runs = 0
+                            watch(() => {
+                                void line()
+                                runs++
+                            })
+                            await tick()
+                            line.set(chunks(20))
+                            await until(() => line.done())
+                            await tick()
+                            return { count: runs - 1, of: 'wakes for a 20-chunk stream' }
+                        },
+                    },
+                    {
+                        label: 'vanilla — the loop, by hand',
+                        run: async () => {
+                            let runs = 0
+                            const held = vanilla.stream(chunks(20))
+                            held.subscribe(() => runs++)
+                            await until(() => held.done())
+                            return { count: runs, of: 'wakes for a 20-chunk stream' }
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'a transform is where a write is normalised',
+            note: 'Every write passes through it before it is stored — the INITIAL too, because a clamp with a hole in it exactly where the author put the value is not a clamp. It runs untracked, and a promise is still a load: it sees what landed, not the promise.',
+            async run({ is }) {
+                const volume = state(11, (n: number) => Math.max(0, Math.min(10, n)))
+                is('the initial passed through it too', volume(), 10)
+                volume.set(-5)
+                is('after set(-5)', volume(), 0)
+                volume.set(7)
+                is('after set(7)', volume(), 7)
+
+                volume.set(Promise.resolve(99))
+                await tick()
+                is('a loaded value is a write like any other', volume(), 10)
+
+                const heard = reader(() => volume())
+                volume.set(50) // clamps to the value already held
+                await tick()
+                is('a write that normalises to what is held wakes nobody', heard.seen.length, 1)
+                heard.dispose()
+            },
+            interact({ host, log }) {
+                const volume = state(5, (n: number) => Math.max(0, Math.min(10, n)))
+                const report = (): void => log.live('volume()', volume())
+                host.append(
+                    row(
+                        button('volume.set(volume.peek() + 3)', () => {
+                            volume.set(volume.peek() + 3)
+                            report()
+                        }),
+                        button('volume.set(-100)', () => {
+                            volume.set(-100)
+                            report()
+                        }),
+                    ),
+                    field('volume.set(', (value) => {
+                        volume.set(Number(value))
+                        report()
+                    }),
+                )
+                report()
+            },
+        },
+
+        {
+            title: 'a transform that throws is a failed write',
+            note: 'In the call it throws where the caller is standing. On a load it settles the cell as a failure exactly as a rejection would — there is nobody under a promise callback to catch it.',
+            async run({ is, throws }) {
+                const port = state(3000, (n: number) => {
+                    if (!Number.isInteger(n)) throw new Error(`not a port: ${n}`)
+                    return n
+                })
+                throws('a sync write throws at the call', () => port.set(1.5), 'not a port')
+                is('and the cell still holds what it had', port(), 3000)
+
+                port.set(Promise.resolve(2.5))
+                await tick()
+                throws('a loaded one settles as a failure', () => port(), 'not a port')
+                is('error()', (port.error() as Error).message, 'not a port: 2.5')
+                is('done() — it finished, but not cleanly', port.done(), false)
+            },
+        },
+
+        {
+            title: 'state.shared — one cell per KEY, not per call site',
+            note: 'Two components asking for the same key get the same cell, so a write in one is a read in the other with nothing wired between them. Per-caller, for the reason a memo’s cache is: on a server, "shared across every component instance" must not quietly mean "shared across every visitor".',
+            async run({ is }) {
+                const one = state.shared('demo:theme', 'dark')
+                const two = state.shared('demo:theme', 'light') // a different initial, not consulted
+                is('the same cell', one === two, true)
+                is('so both read the same thing', two(), one())
+
+                one.set('solarized')
+                is('a write in one is a read in the other', two(), 'solarized')
+                is('a different key is a different cell', state.shared('demo:locale', 'en') === one, false)
+
+                isolate(() => {
+                    const mine = state.shared('demo:theme', 'zenburn')
+                    is('another caller gets its own', mine === one, false)
+                    is('…so ITS initial is the one that lands', mine(), 'zenburn')
+                })
+                is('and the first caller is untouched', one(), 'solarized')
             },
         },
 

@@ -7,6 +7,21 @@ effect (**`watch`**), and two transport laws over them: **`rpc` = `memo` + trans
 **`socket` = `channel` + transport**. Every primitive has the same import, the same call, and the same
 meaning on both the server and the client.
 
+## Entry points
+
+Six specifiers, and which half of the stack each one is. The split is what a page pays for: the two
+renderers are separate because only one of them ships to a browser, and nothing in `abide` imports
+either.
+
+| Specifier | Holds |
+| --- | --- |
+| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope |
+| `abide/ui` | the DOM substrate — `mount`, `hydrate` |
+| `abide/server` | the SSR substrate — the render walk, `suspend`, and the request scope |
+| `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing |
+| `abide/compiler` | `compile()` and its diagnostics. Pure: text in, text out, no filesystem |
+| `abide/compiler/plugin` | the Bun plugin that compiles `.abide` on import |
+
 ## What is spec'd here and NOT built
 
 This is a design document, and it describes more than the runtime implements. The gap is listed here
@@ -21,20 +36,22 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | routing | `route()`, `url()`, `navigate()`, and therefore `src/ui/pages/**` |
 | ambients | `identity()`, `trace()`, `health()`, `online()`, `appDataDir()` |
 | lifecycle | `onStart`/`onHealth` and the config table's env vars |
-| source surface | `state.shared`, `memo(fn, transform)`, `throttle`/`debounce`, `fn.done()`, `fn.streaming()`, `watch(source, handler)` |
 | `<style>` | the subtree-scoped (nested) form — a compile error naming what is missing |
+| logging | `log` and its channels, and therefore the `DEBUG` gating below |
+| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the environment table — there is no binary yet, so nothing reads any of it |
 
-What IS built is `state` / `memo` / `channel` / `watch`, the shared source surface, the caller scope
-(`serve`, `isolate`, `request`, `bag`, `cookies`), both render substrates, hydration, and the
-`.abide` compiler.
+What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
+(`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
+`request`, `bag`, `cookies`, `isServing`), the template tag and its runtime, both render substrates,
+hydration, the `.abide` compiler, and the test kit.
 
 ## Terms
 
-| Term | Defintion |
+| Term | Definition |
 | --- | --- |
 | `value` | anything representable by typescript |
 | `expr` | any expression in typescript |
-| `key` | idempotent string that represents another `value`
+| `key` | idempotent string that represents another `value` |
 | `serializable` | any value that can be serialized into JSON |
 | `initial` | Any initial value |
 | `function` | Any function or thenable |
@@ -55,11 +72,15 @@ What IS built is `state` / `memo` / `channel` / `watch`, the shared source surfa
 | Form | Behavior |
 | --- | --- |
 | `state(initial)` | Creates a cell that holds a value you write yourself. |
-| `state(initial, transform)` | The same cell, but every write passes through `transform` before it is stored. |
-| `state.shared(key, initial, transform)` | A cell whose value is shared by `key` across every component instance. |
-| `x()` | Reads the value and subscribes the caller, so the caller re-runs when it changes. |
-| `x.set(v)` | Writes a new value and wakes every subscriber. |
-| `x.peek()` | Reads the value without subscribing to it. |
+| `state(promise)` | The same cell, started cold on a LOAD rather than holding the promise — so the read is the same call either way, and the cell is `pending` until it lands. |
+| `state(asyncIterable)` | The same cell again, started on a STREAM: it holds the LATEST chunk, `chunks()` holds the transcript, and the read is the same call a third time. |
+| `state(initial, transform)` | The same cell, but every write passes through `transform` before it is stored — the `initial` included, because a normaliser with a hole in it exactly where the author put the value is not a normaliser. `transform` is untracked, and on a load or a stream it sees what LANDED. A throw is a failed write: it throws at the call site on a sync write, and settles the cell as a failure on a load. |
+| `state.shared(key, initial, transform?)` | A cell whose value is shared by `key` across every component instance. The first call decides the value; a later one gets the cell that exists and its `initial` is not consulted. Per-caller, like a memo's cache — on a server, "every component instance" must not quietly mean "every visitor". |
+| `x()` | Reads the value and subscribes the caller, so the caller re-runs when it changes. THROWS if the last load failed — ignoring that is not handling it. |
+| `x.set(v)` | Writes a new value and wakes every subscriber. A promise is a load and an async iterable is a stream; anything else settles the cell in the call. |
+| `x.peek()` | Reads the value without subscribing to it, and without ever throwing. |
+| `x.invalidate()` | Drops the value and any error, cancels what is in flight, and goes back to cold. |
+| `await x` | Waits for the cell to settle and resolves the loaded value — narrower than `x()`, which may find nothing there yet. |
 
 ## `memo` — the loaded value
 
@@ -67,32 +88,56 @@ What IS built is `state` / `memo` / `channel` / `watch`, the shared source surfa
 | --- | --- |
 | `memo(fn)` | A derived value that recomputes whenever anything it read changes. |
 | `memo((args) => …)` | A value computed per argument key, with one independently cached slot per distinct set of arguments. only argument key tracked; body is untracked |
-| `memo(fn, transform)` | memo derived value passes to transform which runs untracked and memo becomes transform return value. |
+| `memo(fn, transform)` | memo derived value passes to transform which runs untracked and memo becomes transform return value. The body declares the dependencies; what the transform reads is not one. On a load it runs over the value that landed. Options still follow: `memo(fn, transform, opts)`. |
 | `memo(fn, { ttl })` | The same value, served for at most `ttl` milliseconds before the next read recomputes it. |
 | `memo(fn, { global })` | One slot shared by every caller, regardless of which request or process asked. Without it a memo's cache belongs to the caller that filled it. |
-| `memo(fn, { tags })` | The value joins named groups so it can be refreshed or invalidated by tag rather than by name. |
-| `memo(fn, { throttle })` | Explicit revalidation of a slot that already holds a value fires immediately, then at most once per window. |
-| `memo(fn, { debounce })` | Explicit revalidation of a slot that already holds a value waits until the triggers stop. |
-| `m(args)` | Reads the value, subscribing the caller and starting a load if there is nothing there yet. |
-| `m(args).state(initial)` | A writable view of memo, where a local write holds until the next real load replaces it. |
+| `memo(fn, { tags })` | The value joins named groups so it can be refreshed or invalidated by tag rather than by name. A function receives the slot's args, which is how a tag names one ROW rather than every row the memo holds. |
+| `memo(fn, { throttle })` | Explicit revalidation of a slot that already holds a value fires immediately, then at most once per window. A cold slot is never paced — there is nothing on screen for a window to protect — so a read that finds a slot cold still loads in the call. |
+| `memo(fn, { debounce })` | Explicit revalidation of a slot that already holds a value waits until the triggers stop. Same rule about cold; set with `throttle`, this wins. |
+| `m(args)` | SELECTS the slot and hands back its cell. Selecting starts nothing; the read is what kicks a load. |
+| `m.refresh()` / `m.invalidate()` | Every slot, or every slot matching a `Partial<Args>` pattern — compared the way slots are keyed. One slot is `m(args).invalidate()`, which is why the pattern form is free to mean "match". |
+
+A slot is a cell, so it already has `set` — there is no separate writable view, and no second
+spelling for "write it directly". `m(args).set(v)` IS the local write, and it holds until the next
+real load replaces it, exactly as it does on any other cell with a body.
 
 ## `channel` — the subscribed value
 
 | Form | Behavior |
 | --- | --- |
 | `channel<T>()` | A single stream of messages that anyone may publish to and anyone may subscribe to. |
-| `channel<T, Args>()` | The same, split into independent rooms addressed by `Args`. |
-| `channel({ tail })` | The stream remembers its last `tail` messages for whoever subscribes next. |
-| `channel({ maxAge })` | A message counts as current only while it is younger than `maxAge`. |
+| `channel<T, Args>()` | The same, split into independent rooms addressed by `Args`. `ch(args)` SELECTS a room and hands back an ordinary channel; the CALL is what tells the two forms apart, exactly as it does for `memo`. Rooms are process-wide, because a channel is not a cache: a publisher has to reach subscribers that arrived some other way. |
+| `ch.invalidate(pattern?)` | On the room form: every room matching a `Partial<Args>`. No pattern means every room, and the stream a bare `ch()` reads along with them. |
+| `channel({ tail })` | The stream remembers its last `tail` messages for whoever subscribes next. Default 0 — latest only. |
+| `channel({ maxAge })` | A message counts as current only while it is younger than `maxAge`. Expiry WAKES: a reader that only found out on its next read would go on showing a message the channel had stopped claiming. |
+| `ch()` | The latest message, subscribing the caller — the same call every other source spells a read with. |
+| `ch.peek()` | The latest message, subscribing to nothing. |
+| `ch.chunks()` | The session transcript, capped at `tail`, and reactive. |
+| `ch.publish(msg)` | Sends one message to every current subscriber. Delivery is against a snapshot, so subscribing during a round does not receive that round's message and unsubscribing does not cancel it. |
+| `ch.subscribe(fn)` | A plain listener outside the graph; returns its own unsubscribe. |
 | `for await (const m of ch)` | Subscribes and receives every message published from that moment on. |
-| `ch.publish(msg)` | Sends one message to every current subscriber. |
+| `ch.invalidate()` | Forgets what has arrived — the verb means here what it means everywhere: this is no longer good. |
+
+A channel never loads, so `pending()` / `refreshing()` / `error()` are always the cold answer. They
+are present so a reader can treat any source alike instead of having to know which primitive it was
+handed; `settled()` asks whether anything CURRENT has arrived at all. It is also the one source
+whose stream has no end, so `streaming()` is true and `done()` is false, always.
 
 ## `watch` — the effect
 
 | Form | Behavior |
 | --- | --- |
-| `watch(handler)` | Runs side effects |
-| `watch(source, handler)` | `source` becomes `dependencies` for side effects |
+| `watch(handler)` | Runs side effects. Reading a cell inside the handler IS the subscription — there is no dependency array. Effects are batched onto a microtask. |
+| `watch(source, handler)` | The dependency DECLARED rather than discovered: `source` is the only thing read under tracking, so `handler` — which receives the value — may read whatever it likes without subscribing to it. Same immediate first run, same teardown, same disposer. |
+| `x.watch(handler)` | The same effect spelled off the source, so a caller holding one cell does not have to reach for `watch` to react to it. Which source you asked IS the declaration, so the handler is untracked for the same reason. |
+| the return of `watch` | The disposer. Calling it unsubscribes the effect for good. |
+| the return of `handler` | The teardown, run before every re-run and once on disposal. This is the whole lifecycle story — there is no `onMount`/`onDestroy` because the effect already has both ends. |
+| `untrack(fn)` | Runs `fn` reading whatever it likes without any of it becoming a dependency. |
+| `scope(fn)` | Runs `fn` and returns `{ value, dispose }`, where `dispose` tears down every `watch` created inside it, in reverse order. |
+
+A `watch` created inside a `scope` registers with it automatically. There is deliberately no second
+opt-in spelling: an ownership rule that applies only when you remember the other function is not an
+ownership rule, and the failure mode is a leak nobody sees.
 
 ## `rpc` — `memo` + transport
 
@@ -126,40 +171,87 @@ What IS built is `state` / `memo` / `channel` / `watch`, the shared source surfa
 | `opts.clients` | Which surfaces can reach it. |
 | `opts.middleware` | The chain that authorizes each subscribe and each publish, per room. |
 
+### How a handler is addressed *(not built — settled in `packages/example/spike`)*
+
+The one decision that would force a redesign if guessed wrong: how a handler declared ONCE is
+reached from a browser without its body going there.
+
+| Rule | Why it is this |
+| --- | --- |
+| The directory is the kind — `server/rpc/**` is rpc, `server/sockets/**` is a socket | A Bun plugin filter is a PATH regex, so a `'use server'` directive would mean intercepting every `.ts` in the graph. A path costs one regex, tells the plugin which stub to write before it reads the file, and gives a misplaced declaration something to disagree with. |
+| An endpoint is recognised SYNTACTICALLY — `export const NAME = GET(…)` | The same rule `.abide` lives by, for the same reason: the emit path must not need a type-checker, because the browser lane produces the stub from a file it is about to throw away. Any other export in those directories is a compile error naming the export. |
+| Everything abide serves is under `/__abide/`, and the module's own path is the rest | One reserved prefix means an app author needs one rule to know what is theirs and an operator needs one pattern to proxy, cache, CSP or exclude. `dispatch` returns nothing for anything outside it. |
+| There is no hash | Mandating the directory removed the ambiguity a hash existed to resolve, and the filesystem already forbids two files at one path. An address legible in a stack trace is worth more than the bytes. |
+
+| File | Export | Served at |
+| --- | --- | --- |
+| `server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` |
+| `server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` |
+| `server/sockets/feed.ts` | `ticks` | `/__abide/socket/feed/ticks` |
+
+The kind stays in the path even though the rest is already unique, because a socket is a websocket
+upgrade rather than a POST — genuinely different routes — and because a network panel showing the
+address says what happened without anyone decoding it.
+
+What the proof establishes is the LAW, not the plumbing: three concurrent readers of one key cost
+one request, and nothing in the transport does that — the memo slot does, exactly as it already did
+for a local load. The server half of a socket is `channel()` unchanged, and the whole transport is
+one `subscribe` on upgrade and one unsubscribe on close.
+
+Still open, and none of it changes the shape above: options do not cross the wire (an option may
+reference a server-only import, so client cache policy has to arrive some other way); serialization
+is `JSON.stringify`, so named errors surviving the wire is unbuilt; the socket is receive-only and
+does not reconnect.
+
 ## The shared surface
 
-Every `state` `memo`, `channel`, (and therefore `socket` `rpc` carries the same verbs and probes. A key argument
-appears only when the callable has one.
+Every `state`, `memo` and `channel` — and therefore `rpc` and `socket` — carries the same verbs and
+probes, and **none of them takes arguments**. Arguments select a slot exactly once, at the call:
+`m(args)` hands back that slot's cell and everything below is read off the cell. That is why there
+is no `peek(args)` / `publish(args, v)` / `chunks(args)` spelling — a slot you have already selected
+is just a source, and one vocabulary covers both.
+
+The one place args reappear is on the keyed memo — or the room channel — ITSELF, where they are a
+*pattern* rather than a key: `m.invalidate(pattern?)` reaches every slot matching a subset of the
+args, and `m(args).invalidate()` reaches exactly one.
+
+`x.watch(handler)` is on every source too; it is in the `watch` section above, with the effect it is
+a spelling of, rather than here — it neither causes a change to the source nor observes one.
 
 ### Verbs — they cause
 
 | Form | Behavior |
 | --- | --- |
-| `fn.invalidate(args?)` | Discards what is held so the next read starts over. |
-| `fn.refresh(args?)` | Recomputes now while continuing to serve what is already held. |
-| `fn.publish(args, value)` | Sets the value directly instead of computing it. |
-| `invalidate({ tags })` / `refresh({ tags })` | Does the same to everything carrying the tag, on every side that holds it. |
+| `x.invalidate()` | Discards what is held, and any error, so the next read starts over cold. |
+| `x.refresh()` | Recomputes now while continuing to serve what is already held. Needs a body to re-run, so it is on `memo` and a keyed handle, never on a plain `state`. |
+| `x.set(v)` | Sets the value directly instead of computing it. A promise is a load and an async iterable is a stream. On anything with a body, the write holds until the next real load replaces it — there is no separate writable-view spelling, because a cell already writes. |
+| `x.publish(msg)` | A `channel`'s write — it appends to a stream rather than replacing a value, which is why it is not `set`. |
+| `x.dispose()` | Drops a `memo`'s own subscriptions. |
+| `invalidate({ tags })` / `refresh({ tags })` | Does the same to everything carrying the tag, on every side that holds it, without the caller knowing which memo that is. |
 
 ### Reads — they subscribe, and may start work
 
 | Form | Behavior |
 | --- | --- |
-| `fn(args)` | The current value or nothing yet, filling in on its own once it arrives. |
-| `fn.chunks(args)` | Everything a stream has produced so far, in order. |
-| `fn.peek(args)` | Exactly what is there right now, subscribing to nothing and starting nothing. |
+| `x()` | The current value, or nothing yet, filling in on its own once it arrives. Throws if the last load failed. On a stream this is the LATEST chunk. |
+| `x.chunks()` | Everything a stream has produced so far, in order. Empty on a source that never streamed, and the same array every time, so a reader of it never wakes for one. |
+| `x.peek()` | Exactly what is there right now, subscribing to nothing, starting nothing, and never throwing. |
+| `await x` | The settled value. Waits, so it resolves the loaded type rather than "the value or nothing yet". |
 
 ### Probes — they only observe
 
+Probes never throw and never start work, so an error is something you ask about rather than
+something you catch.
+
 | Form | Behavior |
 | --- | --- |
-| `fn.pending()` | A first load is in flight and there is nothing to show yet. |
-| `fn.refreshing()` | A reload is in flight over a value that is still being served. |
-| `fn.settled()` | It has finished, however it finished. |
-| `fn.done()` | It finished cleanly, as opposed to failing or being cut off. |
-| `fn.streaming()` | It is currently producing chunks. |
-| `fn.error()` | The failure it ended with, if it failed. |
-| `fn.isError(e, name)` | Whether a caught failure is the declared one you named. |
-| `fn.watch(handler)` | Runs `handler` whenever the value changes. |
+| `x.pending()` | A first load is in flight and there is nothing to show yet. A stream reports this until its first chunk, and `refreshing` after it. |
+| `x.refreshing()` | A reload is in flight over a value that is still being served. Its own signal — it never wakes value readers. |
+| `x.settled()` | It has finished, however it finished. |
+| `x.done()` | It landed, it did not fail, and nothing is still arriving. `streaming` is in that conjunction and `refreshing` is not, and the asymmetry is the point: a warm reload has an outcome already and `done` reports it, while a stream mid-flight has produced none however many chunks it has handed over. |
+| `x.streaming()` | It is currently producing chunks. |
+| `x.error()` | The failure it ended with, if it failed. |
+| `x.isError(e, name)` | Whether a caught failure is the one named — directly, or wrapped as another's `cause`. The NAME rather than the class, because the question outlives the constructor: an error that crossed a wire arrives as a plain object and `instanceof` on it is false however faithfully it was serialised. |
 
 ## The caller scope
 
@@ -171,6 +263,7 @@ data. Per-caller is the default; `{ global }` is how something that belongs to t
 | --- | --- |
 | `isolate(fn)` | Runs `fn` with its own caches and ambients, and drops them when it settles. |
 | `serve(request, fn)` | The same, for one request, and what makes the ambients below answerable. |
+| `isServing()` | Whether there is a request scope to ask at all — the one probe here, so a shared code path can take the honest branch instead of catching a throw. |
 
 `isolate` is one variable set and put back, so it holds across an `await` but cannot represent two
 callers at once — starting a second while an async one is in flight throws. `serve` is async-local
@@ -193,7 +286,7 @@ is no honest answer, so each throws rather than guessing.
 | `online()` *(not built)* | Whether the client currently has connectivity. |
 | `health()` *(not built)* | The app's own account of whether it is working. |
 
-# Logging
+## Logging
 
 | Form | Behavior |
 | --- | --- |
@@ -220,11 +313,15 @@ is sugar over it, not a replacement.
 | shadowing | a `const`/`let`/parameter/`{#for}` binding of the same name shadows, so a loop variable is never read as a cell |
 | narrowing | a `{#if}`/`{:else if}`/`{#switch}` condition reads ONCE into a local, and its branch narrows off that — `{#if session}{session.name}{/if}` needs no `?.`. A read is a call, and TypeScript narrows a const but never a call. The body's other reads keep their own thunks, so `{#if mode}{count}{/if}` still wakes on `count` alone |
 
-What counts as a cell is decided **syntactically** — `const x = state(…)` in a `<script>`, or a prop
-whose declared `Args` member is `State<…>`/`Memo<…>`/`Cell<…>`/`Channel<…>`. Which of the two `memo`
-forms a binding is comes from the same place: `memo(() => …)` declares no arguments, so the NAME is
-the cell; `memo(({ id }) => …)` does, so the CALL is. An **imported** cell
-cannot be seen that way, so it keeps the explicit spelling; `{count}` alone still renders correctly.
+What counts as a cell is decided **syntactically** — `const x = state(…)` or `state.shared(key, …)`
+in a `<script>`, or a prop whose declared `Args` member is
+`State<…>`/`Memo<…>`/`Cell<…>`/`Channel<…>`. Whether the NAME or the CALL is the source comes from
+the same place, and each primitive says it where it can be seen: `memo(() => …)` declares no
+arguments so the name is the cell, `memo(({ id }) => …)` does so the call is; `channel<T>()` is one
+stream so the name is the source, `channel<T, Args>()` declares rooms in the only place a channel
+can — its second TYPE argument — so the call is. (A comma nested inside one type argument is not a
+second one.) An **imported** source cannot be seen that way, so it keeps the explicit spelling;
+`{count}` alone still renders correctly.
 
 ## Template expressions
 
@@ -302,8 +399,36 @@ hand. Every expression gets its own thunk, so a `{#if}` subscribes to its condit
 | `&ref=${x}` | `bind:element` — the NODE itself, so nothing is emitted for it during SSR |
 | `...=${obj}` | `{...expr}` on an element; names are not known until the value arrives |
 
-`classes()` and `styles()` in `abide` are what `class:name={c}` and `style:prop={v}` merge into —
-one attribute however many toggles it carries.
+## The template runtime
+
+Nine names, and they are the WHOLE set a compiled `.abide` file may import from `abide` on its own
+behalf. Each one is ordinary authoring vocabulary too — nothing stops a hand-written template from
+calling them, which is what makes "the file you would have written" literally true rather than a
+figure of speech.
+
+| Form | Emitted for | Behavior |
+| --- | --- | --- |
+| `html\`…\`` | every template | The one tagged template both substrates consume. Returns a `TemplateResult`; renders nothing by itself. |
+| `raw(s)` | `{html(…)}` | Marks a string as already-HTML so the escape is skipped. The `.abide` spelling is `html(…)` and the runtime spelling is `raw(…)` — the template already owns the name `html`. |
+| `keyed(k, t)` | `{#for … by key}` | Tags a row with its identity, so a reconcile MOVES it instead of rebuilding it. |
+| `classes(base, …[on, name])` | `class:name={c}` | Merges a static class list and any number of toggles into one attribute value. `null` when nothing survives, so no empty attribute is written. |
+| `styles(base, …[prop, value])` | `style:prop={v}` | The same for one style property at a time, into one `style` attribute. |
+| `awaited(v, branches)` | `{#await}` | The operand plus the arms to call once it settles. The operand is evaluated by the slot's own effect and the arms are closures, so settling never re-evaluates it. |
+| `boundary(body, branches)` | `{#try}` | A synchronous error boundary around a body thunk. |
+| `streamed(source, row, catch?)` | `{#for await}` | A list fed by an async source, torn down and re-streamed when a reactive dependency of the source changes. |
+| `adopt(scope, css)` | `<style>` | Registers one scoped block by its scope name at MODULE scope. Idempotent, so importing a component twice writes one sheet. |
+
+Everything else on the surface is for a caller doing the rendering rather than a compiled file:
+
+| Form | Behavior |
+| --- | --- |
+| `escape(s)` | The text escape both substrates use. Probes before it replaces, so text with nothing to escape costs one test. |
+| `styleTags()` | Every registered block as its own `<style data-abide="…">`, in registration order — what a server render puts in `<head>` and what `adopt` recognises on the client. One element per scope, because the scope name is the only thing telling a hydrating client which blocks are already there. |
+| `classifySlots(strings)` | THE one slot classifier, shared by both substrates so neither is allowed its own idea of what a slot is. Returns a `SlotKind` per hole — `child`, `attr`, `event`, `property`, `ref`, `spread`. |
+| `isTemplate(v)` / `isKeyed(v)` / `KEY` | The brands, for a renderer deciding what it was handed. |
+
+A slot inside a tag is one of four sigils or it is an attribute, and that is the whole vocabulary:
+`.prop` a DOM property, `@event` a listener, `&ref` the node itself, `...` a spread.
 
 ## Script / style blocks
 
@@ -314,6 +439,75 @@ one attribute however many toggles it carries.
 | nested `<script>` | branch-local (per-ITEM in a `{#for}`). Must be the FIRST node of a block body — whitespace and comments do not count — carries no `import` (it reuses the component's), and its bindings resolve off the level's `scope`: shadowing inside the branch, invisible outside it. A `{#for}` splices the statements into the row closure it already has; every other body pays one call |
 | `<style>` | component-scoped: every element the component writes carries `data-a<hash>`, and every selector requires it on its rightmost compound. Registered once at module scope; `styleTags()` is what a server render puts in `<head>` — one `<style data-abide="…">` per scope, so a hydrating client can see what the document already carries and not append a second copy |
 | nested `<style>` | subtree-scoped — an element carries every scope in force, so an outer rule reaches in and an inner one cannot reach out |
+
+## The compiler — `abide/compiler`
+
+One pure function and what a caller needs to REPORT what it did. No filesystem, no resolver, no
+cache: `compile` takes text and returns text, which is what lets a demo case assert an emitted file
+the same way it asserts a rendered one. The Bun plugin and the check lane are thin shells over it
+and neither has any compiling of its own.
+
+| Form | Behavior |
+| --- | --- |
+| `compile(source, { filename })` | The `.abide` text as `{ code, map, segments }`. `filename` names the default export and every diagnostic. |
+| `.code` | The emitted module — the `html` template you would have written by hand. |
+| `.map` | A v3 source map with the `.abide` file inlined. |
+| `.segments` | The same mapping unencoded, which is what moves a diagnostic back to the source. |
+| `originalPosition(segments, position)` | A position in emitted code back to its position in the `.abide` file. |
+| `locate(source, position)` | That position as one-based line and column, so an error names a place in the file. |
+| `describe(source, filename, error)` | A thrown compile failure as one `file:line:col message` string. Anything else stringifies unchanged. |
+| `ParseError` | The class, so a caller can tell a compile failure from any other throw. A lexer error deliberately is not exported — the shells only format it. |
+| `abide/compiler/plugin` | The Bun plugin: compiles `.abide` on import, in both lanes, off the same `compile`. |
+
+Type errors inside a template are reported by the real checker, on the `.abide` line — that is what
+`segments` is for, and it is why the compiler owns a mapping rather than only emitting one.
+
+## The test kit — `abide/tests`
+
+A demo IS the test and the bench, so there is one place to change rather than three. This is the
+shape that makes that hold: a `Case` has three optional faces, and the same object drives `bun test`
+headless and the browser card.
+
+| Face | Where it runs |
+| --- | --- |
+| `run(ctx)` | Headless AND in the browser card. Carries the assertions. |
+| `interact(ctx)` | Browser only — buttons and inputs. Skipped by the runner, because a claim that needs a click is a claim no test can make. |
+| `bench` | Measurement arms. Smoke-run headless to prove they still run. |
+
+| Form | Behavior |
+| --- | --- |
+| `suite({ name, title, blurb, cases })` | Identity, and the one place a suite naming nothing is caught. |
+| `ctx.host` | The live area — a detached element headless, the card's body in the browser. |
+| `ctx.is(label, actual, expected)` | Structural equality. Records the line either way; throws on a mismatch. |
+| `ctx.throws(label, fn, match?)` / `ctx.rejects(label, p, match?)` | The two failure assertions, matching a message by substring or pattern. |
+| `ctx.log(label, value?)` / `ctx.log.live(…)` | A recorded line; `live` REPLACES the last one with the same label, for a counter that ticks. |
+| `runHeadless(case)` | Runs a case the way `bun test` does and returns its lines. |
+| `collector()` | A sink that collects instead of rendering — what the headless runner writes into. |
+
+A bench makes one of four kinds of claim, because the project makes four kinds of claim. None
+carries its own prose: the case's `note` IS the claim, so the page and the test cannot drift into
+describing two different things.
+
+| Kind | The claim |
+| --- | --- |
+| `time` | How long an operation takes, as a RATIO against a hand-written arm in the same substrate. The first arm is always abide. `per` divides for a per-row number; `floor: 'flush'` drains the microtask queue so the effect flush is inside the number. |
+| `work` | How much DOM work it does. Counted, never timed — the wrong implementation produces the right output at full cost, and only a counter tells them apart. |
+| `wake` | How many times a reader RE-RAN. In a reactive system this is the contract, and values cannot show it. |
+| `budget` | What the emitted code costs: DOM nodes per list item, microtask turns per row. A number that quietly grows by an order of magnitude is invisible to both a timing and a correctness test. |
+
+The third budget number — JS allocations per template node — is deliberately absent: no engine this
+runs on exposes one, so it stays something to read off the emitted code rather than a counter that
+would have to lie.
+
+| Form | Behavior |
+| --- | --- |
+| `install()` | Patches the DOM so the counters see every mutation. |
+| `measure(fn)` | The `Counts` a synchronous region caused. `measureFlush` includes the effect flush. |
+| `nodesMade(counts)` | Every node the region made — the per-item budget in one number. |
+| `total(counts)` | How much the region CHANGED the document, as opposed to what it merely built. |
+| `nonZero(counts)` | Only the counters that actually moved, as `label: n` pairs. |
+| `timeArms` / `duration` / `ratioText` / `verdict` | The timing half: run the arms, and say whether a ratio is real or inside the noise. |
+| `quiesce` / `settled` / `microtasks` / `frame` / `tick` | Waiting primitives, so a bench measures the work rather than the harness. |
 
 ## Pages / routing
 
@@ -328,6 +522,7 @@ one attribute however many toggles it carries.
 | `route()` *(not built)* | `.url`, `.params`, `.name`, `.kind`, `.navigating` |
 | `url(path, params?, query?)` *(not built)* | build an in-app href |
 | `navigate(target, options?)` *(not built)* | move to one — `{ replace?, keepScroll? }`. Same-route param/query nav = a pure `route()` republish (reads re-fire in place, no DOM swap, no re-hydrate) |
+| `/__abide/` | all abide controlled endpoints are mounted under `__abide` such as `/__abide/rpc/<path>`
 
 # Environment variables
 
