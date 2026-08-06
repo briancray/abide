@@ -1,4 +1,7 @@
 {
     "extends": "../../tsconfig.json",
-    "include": ["**/*.ts"]
+    // `SOURCES.d.ts` declares `*.abide?source`, which is not a file and so cannot be resolved. The
+    // root program picks it up from `packages/abide/compiler`; this one has to name it, or the
+    // example's own typecheck fails on an import the loader handles fine.
+    "include": ["**/*.ts", "../abide/compiler/SOURCES.d.ts"]
 }

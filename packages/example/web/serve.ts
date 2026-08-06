@@ -1,7 +1,7 @@
 // The example server. `bun run web` from the repo root.
 //
 // Bun's HTML routes bundle the `<script type="module">` and the `<link>`ed stylesheet on demand, so
-// there is no build step and no bundler config — the pages import `abide` and `$tests` directly, and
+// there is no build step and no bundler config — the pages import `abide` and `abide/tests` directly, and
 // what the browser runs is the source in this repo.
 
 import bench from './bench.html'
@@ -29,11 +29,12 @@ const running = Bun.serve({
     // 'import_visitor3.visitEachChildOfJSDocParameterTag')`. A `Bun.build` of the same entry is fine,
     // because it inlines modules in dependency order. Three lines reproduce it with no abide in them.
     //
-    // `false` rather than `{ hmr: false }`, because the object form re-bundles the route on EVERY
-    // document request — 8-10ms a navigation, where `false` caches and serves in 0.3ms. The cost is
-    // the error overlay and console forwarding; the cards report their own pass/fail, and Safari's
-    // console is still right there.
-    development: false,
+    // `{ hmr: false }` rather than plain `false`, because `false` is a PRODUCTION build and minifies:
+    // every card's `Function.prototype.toString` then reads back as one mangled line, so the source a
+    // card shows is not the source anybody wrote. Development mode re-bundles the route per document
+    // request — 3.4ms a navigation against 0.3ms cached, on 84KB against 48KB — which buys back the
+    // one thing the cards exist to do.
+    development: { hmr: false },
     routes: {
         '/': overview,
         '/state': state,

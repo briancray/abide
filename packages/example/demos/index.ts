@@ -9,7 +9,7 @@
 // The loaders are keyed by `SuiteName`, so a suite listed in `ORDER` and missing here is a type
 // error rather than a suite that quietly never runs.
 
-import type { Suite } from '$tests'
+import type { Suite } from 'abide/tests'
 import { ORDER, type SuiteName } from './SUITES.ts'
 
 export { META, NAV, ORDER, type SuiteMeta, type SuiteName } from './SUITES.ts'

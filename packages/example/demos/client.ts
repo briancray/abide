@@ -6,7 +6,6 @@
 // flush — the effect is what touches the DOM, not the write.
 
 import { html, memo, state, type TemplateResult } from 'abide'
-import { keyed, mount } from 'abide/ui'
 import {
     container,
     countCalls,
@@ -19,7 +18,8 @@ import {
     sleep,
     suite,
     tick,
-} from '$tests'
+} from 'abide/tests'
+import { keyed, mount } from 'abide/ui'
 import { button, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -211,6 +211,9 @@ export default suite({
                 const label = state('steady')
                 const out = stage(host)
                 mount(out, () => html`<p class=${() => level()}>${() => label()}</p>`)
+                // The claim is that a write costs NOTHING, and an empty work record looks the same
+                // whether the button ran or was never wired up — so the clicks are counted too.
+                let writes = 0
                 host.append(
                     row(
                         button('set both to the SAME values', async () => {
@@ -218,6 +221,7 @@ export default suite({
                                 level.set('high')
                                 label.set('steady')
                             })
+                            log.live('writes', ++writes)
                             log.live('same values', nonZero(work))
                         }),
                         button('set both to NEW values', async () => {
@@ -225,6 +229,7 @@ export default suite({
                                 level.set(`l${rand()}`)
                                 label.set(`s${rand()}`)
                             })
+                            log.live('writes', ++writes)
                             log.live('new values', nonZero(work))
                         }),
                     ),
@@ -866,7 +871,10 @@ export default suite({
 
                 const swap = await measureFlush(() => mode.set('b'))
                 is('a different call site rebuilds', host.querySelector('p') === first, false)
-                is('…which means an element WAS created', swap.createElement > 0, true)
+                // Cloned, not created: `createElement` fires when a call site is PREPARED, which
+                // happens once per process — so pricing the rebuild with it read `1` the first time
+                // this case ran and `0` every time after, and the page runs it after `bun test` has.
+                is('…which means the pane was CLONED fresh', swap.cloneNode > 0, true)
                 is('the new pane', host.querySelector('p')?.className, 'pane-b')
                 host.remove()
             },
@@ -1045,22 +1053,38 @@ export default suite({
             interact({ host, log }) {
                 const seed = state(0)
                 const out = stage(host)
+                const shown = (): string => out.querySelector('p')?.textContent?.trim() ?? ''
                 mount(
                     out,
                     () =>
                         html`<p class="text-slate-100">
                             ${() => {
                                 const current = seed()
-                                return sleep(current === 1 ? 600 : 60).then(() => `settled: seed ${current}`)
+                                // Odd seeds are slow, even ones fast — so a click is a fresh round
+                                // rather than a replay that ends on the text already on screen.
+                                const slow = current % 2 === 1
+                                return sleep(slow ? 600 : 60).then(() => {
+                                    // What the claim is about is the paint that does NOT happen, so
+                                    // the log reports what the pane reads after each settle. A
+                                    // macrotask, because the binder paints from this same chain.
+                                    setTimeout(() =>
+                                        log(
+                                            `seed ${current} settled (${slow ? 600 : 60}ms)`,
+                                            `the pane reads “${shown()}”`,
+                                        ),
+                                    )
+                                    return `settled: seed ${current}`
+                                })
                             }}
                         </p>`,
                 )
+                let round = 0
                 host.append(
                     row(
-                        button('seed 1 (slow), then seed 2 (fast)', () => {
-                            seed.set(1)
-                            setTimeout(() => seed.set(2), 20)
-                            log('watch it', 'the 600ms answer for seed 1 lands last and is dropped')
+                        button('a slow load, then a fast one', () => {
+                            round++
+                            seed.set(round * 2 - 1)
+                            setTimeout(() => seed.set(round * 2), 20)
                         }),
                     ),
                 )

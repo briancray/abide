@@ -2,7 +2,7 @@
 // before every re-run and once on disposal. That is why there is no onMount/onDestroy.
 
 import { memo, scope, state, untrack, watch } from 'abide'
-import { keep, reader, sleep, suite, tick } from '$tests'
+import { keep, reader, sleep, suite, tick } from 'abide/tests'
 import { button, el, row } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -16,19 +16,22 @@ import * as vanilla from './vanilla.ts'
  *
  * `preventDefault` on the DOM `error` event is not enough under Bun — the rethrow reaches the
  * process before any window listener sees it — so the process handler is the one that matters and
- * the window listener is what covers the browser.
+ * the window listener is what covers the browser. Read off `globalThis`, because a browser bundle
+ * has no `process` at all: the bare name threw a ReferenceError before the window listener it was
+ * paired with could cover anything, and the card failed on the one line meant to keep it alive.
  */
 async function whileSwallowingUncaught(fn: () => Promise<void>): Promise<void> {
     const swallowEvent = (event: Event): void => event.preventDefault()
     const swallowProcess = (): void => undefined
+    const host = globalThis.process as typeof process | undefined
     globalThis.addEventListener?.('error', swallowEvent)
-    process.on('uncaughtException', swallowProcess)
+    host?.on('uncaughtException', swallowProcess)
     try {
         await fn()
         await tick() // let the deliberate rethrow land while the handlers are still installed
     } finally {
         globalThis.removeEventListener?.('error', swallowEvent)
-        process.off('uncaughtException', swallowProcess)
+        host?.off('uncaughtException', swallowProcess)
     }
 }
 
@@ -190,6 +193,22 @@ export default suite({
                             const n = state(1)
                             const after: number[] = []
                             let thrown = 0
+                            // The rethrow comes out of a fresh microtask, so it reaches
+                            // `window.onerror` and never this handler — catching it here is the only
+                            // way the card can show the failure stayed OBSERVABLE rather than being
+                            // swallowed by the scheduler. (The dev server runs with HMR off and pops
+                            // no overlay, so there is nothing else on screen to point at.)
+                            const rethrown = new Promise<string>((resolve) => {
+                                const onError = (event: ErrorEvent): void => {
+                                    window.removeEventListener('error', onError)
+                                    resolve(event.message)
+                                }
+                                window.addEventListener('error', onError)
+                                void sleep(400).then(() => {
+                                    window.removeEventListener('error', onError)
+                                    resolve('(nothing reached window.onerror)')
+                                })
+                            })
                             watch(() => {
                                 if (n() === 2) {
                                     thrown++
@@ -206,10 +225,10 @@ export default suite({
                             n.set(3)
                             await tick()
                             log('and the thrower RECOVERS on the next write', after)
+                            log('the rethrow stayed observable', await rethrown)
                         }),
                     ),
                 )
-                log('note', 'the dev server pops its error overlay — that overlay is the proof')
             },
         },
 

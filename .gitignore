@@ -1,3 +1,10 @@
 node_modules/
 dist/
 .DS_Store
+
+# Generated beside every `.abide` file so the real type-checker can see it. The `.abide` is the source.
+*.abide.ts
+*.d.abide.ts
+# The map inlines the whole `.abide` via `sourcesContent`, so a tracked one is a second copy of the
+# source that drifts from it on every edit.
+*.abide.ts.map

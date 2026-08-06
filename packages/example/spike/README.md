@@ -7,6 +7,12 @@ runs both laws end to end.
 
 Delete the directory or promote its pieces. Nothing else imports it.
 
+`exports.ts` reaches into `$compiler/internal/lex.ts` for the tokenizer — the one place anything
+outside `packages/abide` imports a framework internal. That is deliberate and it is the measure of
+how unpromoted this is: the elision check wants the compiler's own scanner because it belongs *in*
+the compiler. Promoting it makes the import relative and the exception disappear; exporting `Lexer`
+to keep it where it sits would grow the public surface to hold scratch in place.
+
 ## What it beats
 
 `vanilla.ts` is the hand-written form: 20 lines, no cache, and the call declared **three** times —
@@ -81,7 +87,7 @@ happy-dom for every test file, and happy-dom replaces `Response` and `URL` with 
 `Bun.serve` cannot serialise — and its `fetch` preflights every cross-origin call and then rejects
 the 204 it gets back. A transport is not exercisable in that lane at all. `wire.ts` is therefore a
 separate process that `spike.test.ts` spawns. Before rpc demos are written, decide whether that is a
-second bunfig, a spawn helper in `$tests`, or an `unregister()` around the suite — because
+second bunfig, a spawn helper in `abide/tests`, or an `unregister()` around the suite — because
 "a demo IS the test" has to keep holding.
 
 **A mount point needs a preflight answer** before anything cross-origin works. `dispatch` answers

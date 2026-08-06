@@ -1,10 +1,10 @@
 // The hub. Three primitives, one template tag, two substrates — on one screen.
 
-import { channel, html, memo, state, type TemplateResult } from 'abide'
+import { channel, html, memo, state, type TemplateResult, watch } from 'abide'
 import { renderToString } from 'abide/server'
+import { container, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
-import { container, sleep, suite, tick } from '$tests'
-import { button, field, row, stage } from './dom.ts'
+import { button, field, output, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 
 export default suite({
@@ -109,9 +109,14 @@ export default suite({
                         field('filter', (value) => filter.set(value)),
                     ),
                 )
-                void renderToString(view()).then((markup) =>
-                    log('the same component, renderToString', `${markup.trim().length} bytes of HTML`),
-                )
+                // The markup itself, and re-rendered inside an effect: a byte count asks to be taken
+                // on trust, and a one-shot snapshot stops agreeing with the live half on the first
+                // click — which is the claim this card is making.
+                const pane = output(host)
+                watch(() => {
+                    void renderToString(view()).then((markup) => (pane.textContent = markup.trim()))
+                })
+                log('', 'the same component as the live half above, rendered to a string')
             },
         },
     ],

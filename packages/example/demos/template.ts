@@ -2,18 +2,21 @@
 // template both ways — to a string with `renderToString`, and to live DOM with `mount` — so the
 // difference between the lanes is visible where there is one, and asserted where there is not.
 
-import { classifySlots, escape, html, isTemplate, raw, state, type TemplateResult } from 'abide'
+import { classifySlots, escape, html, isTemplate, raw, state, type TemplateResult, watch } from 'abide'
 import { renderToString } from 'abide/server'
+import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
-import { container, install, keep, measureFlush, show, sleep, suite, tick } from '$tests'
 import { button, el, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
 install()
 
+/** Which substrate is asking. Only the cases that COUNT their own evaluations need to know. */
+type Lane = 'client' | 'server'
+
 /** Render one template both ways, into a two-column card. Browser only — this is furniture. */
-function both(host: HTMLElement, view: () => TemplateResult): void {
+function both(host: HTMLElement, view: (lane: Lane) => TemplateResult): void {
     const grid = el('div', 'grid gap-3 md:grid-cols-2')
     const serverPane = el('div', 'rounded-lg border border-dashed border-slate-700 bg-slate-900/60 p-3')
     serverPane.append(el('div', 'text-[10px] uppercase tracking-widest text-slate-600 mb-1', 'server'))
@@ -28,8 +31,22 @@ function both(host: HTMLElement, view: () => TemplateResult): void {
     grid.append(serverPane, clientPane)
     host.append(grid)
 
-    mount(live, view)
-    void renderToString(view()).then((markup) => (pre.textContent = markup.trim()))
+    mount(live, () => view('client'))
+    // The server pane re-renders inside an effect rather than once at mount: the walk calls every
+    // thunk synchronously, so the same reads that subscribe the client half subscribe this. A frozen
+    // snapshot went out of step with the client on the first click, which is the one thing a card
+    // about "same authoring, both substrates" must not show — and on the attribute cards the markup
+    // IS the claim, since a removed attribute has nothing to look at on the live side.
+    let generation = 0
+    watch(() => {
+        // Stamped for the same reason a child part stamps what it is showing: a render is a
+        // SNAPSHOT with no supersede rule of its own, so a slow one started first lands last and
+        // paints the older markup over the newer.
+        const mine = ++generation
+        void renderToString(view('server')).then((markup) => {
+            if (mine === generation) pre.textContent = markup.trim()
+        })
+    })
 }
 
 export default suite({
@@ -134,10 +151,20 @@ export default suite({
             interact({ host }) {
                 const level = state<'high' | 'low' | null>('high')
                 const disabled = state(true)
-                both(
-                    host,
-                    () => html`<button class=${() => level()} disabled=${() => disabled()}>styled</button>`,
-                )
+                // Real classes, because `class="high"` paints nothing: the whole attribute is the
+                // slot, so `null` strips the styling off the live button as well as the markup, and
+                // the two halves of the claim are both on screen instead of only in the inspector.
+                const LEVEL = {
+                    high: 'rounded px-3 py-1 text-white bg-rose-600 disabled:opacity-40',
+                    low: 'rounded px-3 py-1 text-white bg-slate-600 disabled:opacity-40',
+                }
+                // Named, so the template stays on ONE line: the server pane prints the markup as
+                // authored, and a wrapped tag buries the attribute that is the whole point of it.
+                const classFor = (): string | null => {
+                    const current = level()
+                    return current === null ? null : LEVEL[current]
+                }
+                both(host, () => html`<button class=${classFor} disabled=${() => disabled()}>styled</button>`)
                 host.append(
                     row(
                         button('level: high / low / null', () =>
@@ -186,6 +213,63 @@ export default suite({
         },
 
         {
+            title: 'ref slots — the NODE itself, client only',
+            note: '`&ref=${x}` hands over the element. A cell takes it through `set`; a function is a handler whose RETURN is its teardown — the contract `watch` already has, rather than a second lifecycle spelling. Like an event, the value IS the function: a slot kind that answered "is a function a thunk?" with an exception list per call site left this one calling the handler with no arguments.',
+            async run({ is }) {
+                const node = state<Element | null>(null)
+                is(
+                    'server emits nothing — there are no nodes there',
+                    await renderToString(html`<p &ref=${node}>x</p>`),
+                    '<p>x</p>',
+                )
+
+                const host = container()
+                mount(host, () => html`<p &ref=${node}>x</p>`)
+                is('a cell is handed the element', node()?.tagName, 'P')
+                host.remove()
+
+                // A handler's teardown belongs to the INSTANCE, not to one update: a patch that
+                // re-runs an unrelated slot must not tear the ref down, and disposing must.
+                const events: string[] = []
+                const beat = state(0)
+                const refHost = container()
+                const mounted = mount(
+                    refHost,
+                    () =>
+                        html`<p
+                            &ref=${() => {
+                                events.push('attach')
+                                return () => events.push('teardown')
+                            }}
+                        >
+                            ${() => beat()}
+                        </p>`,
+                )
+                is('handler ran once', events, ['attach'])
+                beat.set(1)
+                await tick()
+                is('a patch does NOT tear it down', events, ['attach'])
+                mounted.dispose()
+                is('disposing does', events, ['attach', 'teardown'])
+                refHost.remove()
+            },
+            interact({ host, log }) {
+                const node = state<Element | null>(null)
+                both(host, () => html`<p class="text-slate-100" &ref=${node}>the element this cell holds</p>`)
+                host.append(
+                    row(
+                        button('read the ref', () =>
+                            log.live(
+                                'node',
+                                `${node()?.tagName ?? 'null'} · ${node()?.textContent?.trim() ?? ''}`,
+                            ),
+                        ),
+                    ),
+                )
+            },
+        },
+
+        {
             title: 'property slots — a DOM property, never an attribute',
             note: 'Deliberately emits nothing on the server: a DOM property has no serialisation. Use an attribute slot when the value must survive SSR.',
             async run({ is }) {
@@ -206,18 +290,37 @@ export default suite({
                 is('and it updates', node.value, 'hello')
                 host.remove()
             },
-            interact({ host }) {
+            interact({ host, log }) {
                 const text = state('typed by the cell')
                 both(
                     host,
                     () => html`<input class="rounded bg-slate-800 px-2 py-1" .value=${() => text()} />`,
                 )
+                // The property moves and the attribute never does — and neither half of that is
+                // visible on an input, whose displayed text is the property and whose markup pane
+                // shows the tag it was never written into.
+                const report = async (): Promise<void> => {
+                    await sleep(0)
+                    const node = host.querySelector('input') as HTMLInputElement
+                    log.live('the PROPERTY, .value', node.value === '' ? '(empty string)' : node.value)
+                    log.live(
+                        'the attribute',
+                        node.hasAttribute('value') ? node.getAttribute('value') : '(never written)',
+                    )
+                }
                 host.append(
                     row(
-                        button('text.set("hello")', () => text.set('hello')),
-                        button('text.set("")', () => text.set('')),
+                        button('text.set("hello")', () => {
+                            text.set('hello')
+                            void report()
+                        }),
+                        button('text.set("")', () => {
+                            text.set('')
+                            void report()
+                        }),
                     ),
                 )
+                void report()
             },
         },
 
@@ -259,29 +362,44 @@ export default suite({
             },
             interact({ host, log }) {
                 const n = state(1)
-                let staticReads = 0
-                let thunkReads = 0
+                // Counted per lane, because both panes run this body: the client builds the template
+                // ONCE and re-runs the thunk slot per write, while every server render is a fresh
+                // snapshot that calls both. One shared counter reported the sum and read as though
+                // the static slot had re-evaluated.
+                const evaluations = { client: { static: 0, thunk: 0 }, server: { static: 0, thunk: 0 } }
                 // A plain call, evaluated once when the template is BUILT…
-                const readStatic = (): number => {
-                    staticReads++
+                const readStatic = (lane: Lane): number => {
+                    evaluations[lane].static++
                     return n.peek()
                 }
                 // …and a thunk, which the client wraps in an effect and re-runs per write.
-                const readThunk = (): number => {
-                    thunkReads++
-                    return n()
+                const readThunk = (lane: Lane): (() => number) => {
+                    return () => {
+                        evaluations[lane].thunk++
+                        return n()
+                    }
                 }
-                both(host, () => html`<p>static: ${readStatic()} · thunk: ${readThunk}</p>`)
+                both(host, (lane) => html`<p>static: ${readStatic(lane)} · thunk: ${readThunk(lane)}</p>`)
+                const report = (): void => {
+                    log.live(
+                        'client — static / thunk',
+                        `${evaluations.client.static} / ${evaluations.client.thunk}`,
+                    )
+                    log.live(
+                        'server — a fresh render calls both',
+                        `${evaluations.server.static} / ${evaluations.server.thunk}`,
+                    )
+                }
                 host.append(
                     row(
                         button('n.set(n + 1)', async () => {
                             n.set(n.peek() + 1)
                             await sleep(0)
-                            log.live('static slot evaluations', staticReads)
-                            log.live('thunk slot evaluations', thunkReads)
+                            report()
                         }),
                     ),
                 )
+                report()
             },
         },
 
@@ -369,6 +487,7 @@ export default suite({
             },
             interact({ host, log }) {
                 const seed = state(0)
+                const shown = (): string => host.querySelector('p')?.textContent?.trim() ?? ''
                 both(
                     host,
                     () =>
@@ -378,18 +497,37 @@ export default suite({
                                 // Reading it inside the `.then` would run 500ms later, outside the
                                 // tracking context — the slot would subscribe to nothing at all.
                                 const current = seed()
-                                return sleep(current === 1 ? 900 : 120).then(
-                                    () => `settled for seed ${current}`,
-                                )
+                                // Odd seeds are the slow load, even ones the fast one that
+                                // supersedes it — so every click is a fresh round rather than a
+                                // replay that ends on the text already there.
+                                const slow = current % 2 === 1
+                                return sleep(slow ? 900 : 120).then(() => {
+                                    // The discard is the ABSENCE of a paint, so the log has to say
+                                    // what the pane reads AFTER each settle lands. The slow one
+                                    // reports last and the pane is still showing the fast answer.
+                                    // A macrotask, not a microtask: the binder paints from the same
+                                    // promise chain, so a microtask here reads the pane one write
+                                    // early and every line would name the PREVIOUS answer. `live`,
+                                    // because BOTH substrates run this body — one line per seed, not
+                                    // one per lane.
+                                    setTimeout(() =>
+                                        log.live(
+                                            `seed ${current} settled (${slow ? 900 : 120}ms)`,
+                                            `the client pane reads “${shown()}”`,
+                                        ),
+                                    )
+                                    return `settled for seed ${current}`
+                                })
                             }}
                         </p>`,
                 )
+                let round = 0
                 host.append(
                     row(
                         button('one slow load, then a fast one', () => {
-                            seed.set(1) // 900ms
-                            setTimeout(() => seed.set(2), 50) // …superseded by a 120ms one
-                            log('watch it', 'the 900ms answer for seed 1 lands last and is discarded')
+                            round++
+                            seed.set(round * 2 - 1) // the 900ms one…
+                            setTimeout(() => seed.set(round * 2), 50) // …superseded by a 120ms one
                         }),
                     ),
                 )
@@ -398,7 +536,7 @@ export default suite({
 
         {
             title: 'a thunk handing back a CELL is read one step further',
-            note: '`${() => search({ q: filter() })}` needs no trailing `()`. Cells are recognised by a registry-symbol brand, not by being callable — so neither substrate imports the reactive graph to spot one, and a plain function passed to a `.prop` slot is still a plain function.',
+            note: "`${() => search({ q: filter() })}` needs no trailing `()`. Cells are recognised by a registry-symbol brand, not by being callable — so neither substrate imports the reactive graph to spot one, and a plain function passed to a `.prop` slot is still a plain function. EVERY slot kind reads that step, not just child slots: an attribute that read one step short rendered the cell's own source text where the client rendered its value.",
             async run({ is }) {
                 const cell = state('a cell, not a function')
                 const host = container()
@@ -412,6 +550,34 @@ export default suite({
                 await tick()
                 is('and it stays subscribed', host.querySelector('p')?.textContent, 'updated')
                 host.remove()
+
+                // The same step, in the two slot kinds that are NOT a child — and asserted against
+                // the server, because a lane that reads one step short is a hydration mismatch.
+                const cls = state('big')
+                const attrs = state<Record<string, unknown>>({ id: 'x', hidden: true })
+                const attrHost = container()
+                mount(attrHost, () => html`<div class=${() => cls}>a</div>`)
+                is('attribute slot, client', attrHost.querySelector('div')?.getAttribute('class'), 'big')
+                is(
+                    'attribute slot, server',
+                    await renderToString(html`<div class=${() => cls}>a</div>`),
+                    '<div class="big">a</div>',
+                )
+                attrHost.remove()
+
+                const spreadHost = container()
+                mount(spreadHost, () => html`<div ...=${() => attrs}>a</div>`)
+                is(
+                    'spread slot, client',
+                    spreadHost.querySelector('div')?.outerHTML,
+                    '<div id="x" hidden="">a</div>',
+                )
+                is(
+                    'spread slot, server',
+                    await renderToString(html`<div ...=${() => attrs}>a</div>`),
+                    '<div id="x" hidden>a</div>',
+                )
+                spreadHost.remove()
             },
             interact({ host }) {
                 const cell = state('a cell, not a function')

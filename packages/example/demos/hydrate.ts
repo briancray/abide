@@ -11,8 +11,18 @@
 
 import { awaited, html, state, type TemplateResult } from 'abide'
 import { renderToString } from 'abide/server'
+import {
+    container,
+    install,
+    measure,
+    measureFlush,
+    nodesMade,
+    nonZero,
+    suite,
+    tick,
+    total,
+} from 'abide/tests'
 import { hydrate, keyed, mount } from 'abide/ui'
-import { container, install, measure, measureFlush, nodesMade, nonZero, suite, tick, total } from '$tests'
 import { button, output, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -34,10 +44,9 @@ async function served(view: () => TemplateResult): Promise<HTMLElement> {
     return host
 }
 
-interface Item {
-    id: number
-    label: string
-}
+// The same row type the vanilla arm builds, so the two are handed identical data rather than two
+// shapes that agree by inspection.
+type Item = vanilla.Row
 
 const build = (n: number): Item[] => vanilla.rows(n)
 
@@ -111,15 +120,23 @@ export default suite({
                 const out = stage(host)
                 const view = (): TemplateResult => html`<p class="text-slate-100">hello ${() => name()}!</p>`
                 const pane = output(host)
+                let adopted = false
                 host.append(
                     row(
                         button('render on the “server”, then adopt', async () => {
                             out.innerHTML = await renderToString(view(), { hydratable: true })
                             pane.textContent = out.innerHTML
                             const work = measure(() => void hydrate(out, view))
+                            adopted = true
                             log.live('work to adopt', nonZero(work))
                         }),
+                        // Before the adopt there is nothing for a write to be live AGAINST, and a
+                        // report of no work over an empty frame reads like the claim failing.
                         button('name.set(random) — is it live?', async () => {
+                            if (!adopted) {
+                                log.live('work for one write', 'adopt first — nothing is mounted yet')
+                                return
+                            }
                             const work = await measureFlush(() =>
                                 name.set(Math.random().toString(36).slice(2, 6)),
                             )

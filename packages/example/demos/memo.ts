@@ -4,7 +4,7 @@
 //   memo(({ id }) => fetch(id))  args    -> the args ARE the cache key
 
 import { memo, state, watch } from 'abide'
-import { deferred, keep, reader, show, sleep, suite, tick } from '$tests'
+import { keep, reader, show, sleep, suite, tick } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -54,7 +54,12 @@ export default suite({
                     bodyRuns++
                     return `${first()} ${last()}`
                 })
+                // A write that moves nothing leaves every other line untouched, so without a count
+                // of the writes themselves the card cannot tell "nothing re-ran" from "nothing
+                // happened".
+                let writes = 0
                 const report = (): void => {
+                    log.live('writes', writes)
                     log.live('full()', full())
                     log.live('body runs', bodyRuns)
                 }
@@ -62,14 +67,17 @@ export default suite({
                     row(
                         button('first.set("grace")', () => {
                             first.set('grace')
+                            writes++
                             report()
                         }),
                         button('first.set(same)', () => {
                             first.set(first.peek())
+                            writes++
                             report()
                         }),
                         button('last.set(random)', () => {
                             last.set(Math.random().toString(36).slice(2, 7))
+                            writes++
                             report()
                         }),
                     ),
@@ -344,7 +352,7 @@ export default suite({
             note: 'The same generation stamp `state` uses. Without it the answer to the older question ends up on screen.',
             async run({ is }) {
                 const id = state(1)
-                const gate = [deferred<string>(), deferred<string>()]
+                const gate = [Promise.withResolvers<string>(), Promise.withResolvers<string>()]
                 let runs = 0
                 const user = memo(() => {
                     id()
@@ -453,7 +461,7 @@ export default suite({
             title: 'disposing mid-load ENDS it: awaiters are told, later awaits do not hang',
             note: 'A settle after disposal is dropped, so an in-flight load has to be ended rather than left looking in flight — or anyone already awaiting it parks forever.',
             async run({ is }) {
-                const gate = deferred<string>()
+                const gate = Promise.withResolvers<string>()
                 const user = memo(() => gate.promise)
                 // `.then` directly, not `Promise.resolve(user)`: assimilation calls `then` a
                 // microtask later, which would park the waiter AFTER the dispose it must observe.
@@ -691,10 +699,14 @@ export default suite({
                 is('body runs', bodyRuns, 2)
             },
             interact({ host, log }) {
+                // The load is stamped, or a refresh reads as a button that does nothing: the verb
+                // re-runs the body and lands the same fields, so every logged line is identical
+                // unless the value itself records which run produced it.
+                let loads = 0
                 const profile = memo(async ({ id }: { id: number }) => {
                     await sleep(80)
                     if (id === 0) throw new Error('no such user')
-                    return { id, name: `user#${id}` }
+                    return { id, name: `user#${id}`, load: ++loads }
                 })
                 const id = state(1)
                 host.append(
@@ -704,7 +716,7 @@ export default suite({
                         button('id = 0 (fails)', () => id.set(0)),
                         button('refresh this slot', () => profile({ id: id.peek() }).refresh()),
                         button('set() a local value', () =>
-                            profile({ id: id.peek() }).set({ id: -1, name: 'local' }),
+                            profile({ id: id.peek() }).set({ id: -1, name: 'local', load: 0 }),
                         ),
                         button('invalidate this slot', () => profile({ id: id.peek() }).invalidate()),
                     ),
@@ -804,7 +816,7 @@ export default suite({
                     reject(e: unknown): void
                 }[] = []
                 const get = memo(({ id: _id }: { id: number }) => {
-                    const attempt = deferred<string>()
+                    const attempt = Promise.withResolvers<string>()
                     attempts.push(attempt)
                     return attempt.promise
                 })

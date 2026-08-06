@@ -3,7 +3,7 @@
 // while waking readers nothing moved for is the wrong implementation.
 
 import { state, watch } from 'abide'
-import { deferred, keep, reader, settled, sleep, suite, tick } from '$tests'
+import { keep, reader, settled, sleep, suite, tick } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -38,7 +38,12 @@ export default suite({
             interact({ host, log }) {
                 const count = state(0)
                 const tracked = reader(() => count())
+                // The write count is what makes the negative claim legible: a click that moves
+                // nothing leaves every other line where it was, and without this one the card is
+                // indistinguishable from a button that is not wired up.
+                let writes = 0
                 const report = (): void => {
+                    log.live('writes', writes)
                     log.live('count()', count.peek())
                     queueMicrotask(() =>
                         log.live('reader woke', `${tracked.seen.length}× — ${tracked.seen.join(', ')}`),
@@ -48,10 +53,12 @@ export default suite({
                     row(
                         button('count.set(count.peek() + 1)', () => {
                             count.set(count.peek() + 1)
+                            writes++
                             report()
                         }),
                         button('count.set(same value)', () => {
                             count.set(count.peek())
+                            writes++
                             report()
                         }),
                     ),
@@ -391,8 +398,8 @@ export default suite({
             title: 'the newest write wins, however the loads settle',
             note: 'The classic type-ahead bug: two loads in flight, the first settling last. A generation stamp on every adoption drops the stale settle.',
             async run({ is }) {
-                const slow = deferred<string>()
-                const fast = deferred<string>()
+                const slow = Promise.withResolvers<string>()
+                const fast = Promise.withResolvers<string>()
                 const query = state<string | undefined>(undefined)
 
                 query.set(slow.promise)
@@ -409,7 +416,7 @@ export default suite({
             title: 'a sync write cancels an in-flight load',
             note: 'It is the newer answer, so the load in flight is no longer wanted.',
             async run({ is }) {
-                const slow = deferred<string>()
+                const slow = Promise.withResolvers<string>()
                 const draft = state<string | undefined>(undefined)
                 draft.set(slow.promise)
                 is('pending() while it is in flight', draft.pending(), true)

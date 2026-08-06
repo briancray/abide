@@ -1,0 +1,21 @@
+{
+    "name": "abide",
+    "version": "0.0.0",
+    "type": "module",
+    "private": true,
+    "exports": {
+        ".": "./src/shared/index.ts",
+        "./ui": "./src/ui/index.ts",
+        "./server": "./src/server/index.ts",
+        "./tests": "./tests/index.ts",
+        "./compiler": "./compiler/index.ts",
+        "./compiler/plugin": "./compiler/plugin.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@happy-dom/global-registrator": "^20.10.6",
+        "happy-dom": "^20.10.6"
+    }
+}

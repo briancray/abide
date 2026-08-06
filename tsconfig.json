@@ -6,13 +6,42 @@
         "moduleResolution": "bundler",
         "moduleDetection": "force",
         "allowImportingTsExtensions": true,
+        // `.abide` files resolve to the `.d.abide.ts` the compiler generates beside them, so a
+        // template expression is checked by the real checker rather than by a second one.
+        "allowArbitraryExtensions": true,
         "verbatimModuleSyntax": true,
         "noEmit": true,
         "strict": true,
         "skipLibCheck": true,
         "noUncheckedIndexedAccess": true,
         "exactOptionalPropertyTypes": true,
-        "types": ["bun"]
+        "types": ["bun"],
+        // The directories the source is split into. Everything crosses these seams by alias, so a
+        // file's imports say which SUBSTRATE it depends on rather than how many `../` it sits from.
+        //
+        // `$shared` is the only one that carries real traffic, and that is the architecture showing
+        // through: `$ui` and `$server` may import shared, never each other, and nothing may import a
+        // renderer except through its public entry point. The test kit has no alias for the same
+        // reason — it is reached as `abide/tests`, and an alias would be a way around that.
+        "paths": {
+            "$shared/*": ["./packages/abide/src/shared/*"],
+            "$ui/*": ["./packages/abide/src/ui/*"],
+            "$server/*": ["./packages/abide/src/server/*"],
+            "$compiler/*": ["./packages/abide/compiler/*"],
+            "$shared": ["./packages/abide/src/shared/index.ts"],
+            "$ui": ["./packages/abide/src/ui/index.ts"],
+            "$server": ["./packages/abide/src/server/index.ts"],
+            "$compiler": ["./packages/abide/compiler/index.ts"]
+        }
+        // The public specifiers — `abide`, `abide/ui`, `abide/server`, `abide/tests`,
+        // `abide/compiler` — are deliberately NOT aliased here: the example resolves them through
+        // the workspace link and abide's own `exports` map, so a broken public entry point fails in
+        // the example's typecheck rather than being papered over.
     },
-    "include": ["src/**/*.ts", "test/**/*.ts", "example/**/*.ts"]
+    "include": [
+        "packages/abide/src/**/*.ts",
+        "packages/abide/tests/**/*.ts",
+        "packages/abide/compiler/**/*.ts",
+        "packages/example/**/*.ts"
+    ]
 }

@@ -1,2 +1,6 @@
 [test]
-preload = ["./happydom.ts"]
+# The ui substrate needs a DOM, and a demo that is also a test runs the SAME body in both places —
+# so the emulator is registered for every test file rather than per-suite. The `.abide` loader is
+# registered the same way and for the same reason: a compiled component is imported like any other
+# module, so no build step sits between what the tests load and what the pages run.
+preload = ["./packages/abide/tests/internal/happydom.ts", "./packages/abide/compiler/preload.ts"]

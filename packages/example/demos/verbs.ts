@@ -6,7 +6,7 @@
 // split has to read identically on a state, a derivation, a keyed slot and a channel.
 
 import { channel, invalidate, memo, refresh, state } from 'abide'
-import { deferred, reader, sleep, suite, tick } from '$tests'
+import { reader, sleep, suite, tick } from 'abide/tests'
 import { button, el, row } from './dom.ts'
 import { META } from './SUITES.ts'
 
@@ -142,7 +142,7 @@ export default suite({
             title: 'invalidating mid-load TELLS the awaiters instead of stranding them',
             note: 'A settle after a repudiation is dropped — so the load has to be ended here, or anyone already awaiting it parks forever.',
             async run({ is }) {
-                const gate = deferred<string>()
+                const gate = Promise.withResolvers<string>()
                 const slow = memo(({ n: _n }: { n: number }) => gate.promise)
                 const waiting = slow({ n: 1 }).then(
                     () => 'landed',
@@ -159,7 +159,7 @@ export default suite({
             async run({ is }) {
                 const attempts: { promise: Promise<string>; resolve(v: string): void }[] = []
                 const get = memo(({ id: _id }: { id: number }) => {
-                    const attempt = deferred<string>()
+                    const attempt = Promise.withResolvers<string>()
                     attempts.push(attempt)
                     return attempt.promise
                 })
@@ -509,7 +509,7 @@ export default suite({
 
         {
             title: 'the argless form carries the same options and the same verbs',
-            note: 'It used to accept `options` and drop them on the floor — `memo(fn, { ttl })` looked like it worked — and had no `refresh` at all, so an argless async memo could not be reloaded by anything but a dependency moving.',
+            note: 'One `memo`, one options bag, one set of verbs. `ttl` and `tags` mean here what they mean on the keyed form, and `refresh` / `invalidate` / `set` are spelled the same — declaring inputs decides where the cache key comes from, and nothing else.',
             async run({ is }) {
                 let runs = 0
                 const session = memo(async () => `session#${++runs}`, { ttl: 20, tags: ['totals'] })

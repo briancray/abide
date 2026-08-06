@@ -8,7 +8,7 @@
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
 import { render, renderDocument, renderToString, suspend, toStream } from 'abide/server'
-import { floorTicks, keep, microtasks, sleep, suite } from '$tests'
+import { floorTicks, keep, microtasks, sleep, suite } from 'abide/tests'
 import { button, el, output, row } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -230,7 +230,7 @@ export default suite({
 
         {
             title: 'the markers a hydratable render adds, and what they cost',
-            note: 'What production actually serves, and the one render nothing used to time. Two comments per CHILD slot — an attribute slot needs none, because the prepared template and the live document agree on its element positionally. The markers are markup, so the cost is bytes and concatenation rather than a different walk.',
+            note: 'What production actually serves. Two comments per CHILD slot — an attribute slot needs none, because the prepared template and the live document agree on its element positionally. The markers are markup, so the cost is bytes and concatenation rather than a different walk.',
             async run({ is }) {
                 const view = (): TemplateResult =>
                     html`<ul>${ROWS_200.map((r) => html`<li>${r.label}</li>`)}</ul>`

@@ -6,10 +6,11 @@
 // `app.abide` and `app.ts` are the same component written twice, and the compiler's whole claim is
 // that the two are indistinguishable at the output AND at the cost.
 
+import { adopt, styleTags } from 'abide'
 import { compile, originalPosition } from 'abide/compiler'
 import { renderToString } from 'abide/server'
+import { container, install, keep, measureFlush, nonZero, sleep, suite, tick, until } from 'abide/tests'
 import { mount } from 'abide/ui'
-import { container, install, keep, measureFlush, nonZero, sleep, suite, tick, until } from '$tests'
 import Compiled, {
     count as compiledCount,
     filter as compiledFilter,
@@ -41,6 +42,9 @@ function normalize(markup: string): string {
         .replace(/\s*(<|>)\s*/g, '$1')
         .trim()
 }
+
+/** How long the streaming case waits for a row that a throttled tab may be a second late with. */
+const STREAM_BUDGET_MS = 20_000
 
 /** Compile a fragment and hand back just the template, which is what most claims are about. */
 function template(source: string): string {
@@ -339,7 +343,9 @@ export default suite({
                             const work = await measureFlush(() => compiledCount.set(compiledCount.peek() + 1))
                             log.live('work for one write', nonZero(work))
                         }),
-                        button('filter.set("a")', () => compiledFilter.set('a')),
+                        // "be" and not "a": every word in the component's list contains an `a`, so
+                        // the filter the claim is about narrowed nothing and the list never moved.
+                        button('filter.set("be")', () => compiledFilter.set('be')),
                         button('filter.set("")', () => compiledFilter.set('')),
                     ),
                 )
@@ -407,7 +413,7 @@ export default suite({
 
         {
             title: 'a condition NARROWS its branch, because it reads once into a const',
-            note: 'Every abide read is a call, and TypeScript narrows a const but never a call — so `{#if session}{session.name}{/if}` had no way to typecheck: the test and the use were two separate `session()` calls with nothing tying them together. A condition now takes its reads into locals and the branch narrows off those. It also costs LESS: the condition and the body used to subscribe separately and both woke, where now the branch wakes once.',
+            note: 'Every abide read is a call, and TypeScript narrows a const but never a call — so `{#if session}{session.name}{/if}` had no way to typecheck: the test and the use were two separate `session()` calls with nothing tying them together. A condition takes its reads into locals and the branch narrows off those. It also costs LESS: separate reads subscribe to the same cell twice and both wake, where one hoisted read wakes the branch once.',
             async run({ is }) {
                 const head =
                     '<script>const s = state(0)\nconst m = memo(async ({ id }: { id: number }) => 1)</script>'
@@ -457,7 +463,7 @@ export default suite({
 
         {
             title: 'a keyed row renders on the SERVER too, not just in the DOM',
-            note: 'A key says which row this is, which only matters to a renderer that moves rows — so `keyed` is data and belongs on the isomorphic surface. It used to live in `$ui`, and the server had no case for it: a `{#for … by key}` list stringified its wrappers into `[object Object]`. Nothing caught it while every keyed list was hand-written and client-only.',
+            note: 'A key says which row this is, which only matters to a renderer that MOVES rows — so `keyed` is data, not a client concept, and it belongs on the isomorphic surface. The server carries the key and drops it; what it must never do is stringify the wrapper into `[object Object]`, which is what this asserts.',
             async run({ is }) {
                 query.set('a')
                 shelf.set(['dune', 'neuromancer', 'anathem'])
@@ -514,6 +520,36 @@ export default suite({
         },
 
         {
+            title: 'the sheet crosses to the client TAGGED, so it is not served twice',
+            note: 'A server render puts one `<style data-abide="…">` per scope in `<head>`, and `adopt` looks for exactly that before appending its own. The scope name is the whole contract: an anonymous blob is one a hydrating client cannot recognise, so every scoped component\'s rules went out once from the server and again from the client.',
+            async run({ is }) {
+                const scope = 'data-aSpec01'
+                const css = `.spec[${scope}] { color: red }`
+
+                // The server half: one tagged element per scope, not one anonymous blob.
+                adopt(scope, css)
+                const tags = styleTags()
+                is('the block is tagged with its scope', tags.includes(`<style data-abide="${scope}">`), true)
+                is('and carries its rules', tags.includes(css), true)
+
+                // The client half: the document already has it, so `adopt` must leave it alone.
+                const already = 'data-aSpec02'
+                const served = document.createElement('style')
+                served.setAttribute('data-abide', already)
+                served.textContent = `.b[${already}] { color: blue }`
+                document.head.append(served)
+
+                adopt(already, `.b[${already}] { color: blue }`)
+                is(
+                    'a scope the server already wrote is not appended again',
+                    document.head.querySelectorAll(`style[data-abide="${already}"]`).length,
+                    1,
+                )
+                served.remove()
+            },
+        },
+
+        {
             title: '{#await} splits the operand from its branches, so a promise cannot re-make itself',
             note: 'The thunk evaluates ONLY the operand and hands over four unevaluated closures, so its effect subscribes to what the operand reads and nothing else — the part paints the branches later without ever waking it. Choosing a branch in the thunk instead, by reading `pending()`, makes settling wake the thunk, which re-evaluates the operand into a fresh promise, which settles: an unbounded loop with real requests behind it. Counting the operand evaluations is the only way to see this; the output looks right either way.',
             async run({ is }) {
@@ -560,23 +596,27 @@ export default suite({
                 const rows = (): (string | null)[] =>
                     Array.from(host.querySelectorAll('li')).map((li) => li.textContent)
 
-                await sleep(60)
+                // Waited FOR rather than slept past — every wait in this case. The fixture yields
+                // every 8 ms, so a fixed `sleep` was asserting that exactly N rows had landed inside
+                // a few-millisecond margin: a claim about the timer, not about the stream, and it
+                // failed whenever the machine was busy. What the case is actually about — rows in
+                // yield order, and a second source that does not INTERLEAVE — holds at any speed.
+                //
+                // The budget is generous because a card starts on LOAD: a page opened in a background
+                // tab has its timers clamped to about a second each, which turns a 24 ms stream into
+                // a three-second one and failed the card the reader eventually switched to.
+                await until(() => rows().length === 3, STREAM_BUDGET_MS)
                 is('rows arrive as they are yielded', rows(), ['lobby 1', 'lobby 2', 'lobby 3'])
 
-                // Waited FOR rather than slept past. The fixture yields every 8 ms, so a fixed
-                // `sleep(20)` was asserting that exactly two rows had landed in a four-millisecond
-                // margin — a claim about the timer, not about the stream, and it failed whenever the
-                // machine was busy. What the case is actually about is that the list does not
-                // INTERLEAVE the two sources, and that holds at any row count.
                 room.set('bad')
-                await until(() => rows().some((line) => line?.startsWith('bad') === true))
+                await until(() => rows().some((line) => line?.startsWith('bad') === true), STREAM_BUDGET_MS)
                 is(
                     'a new source starts over, it does not interleave',
                     rows().filter((line) => line?.startsWith('lobby') === true),
                     [],
                 )
 
-                await until(() => rows()[0] === 'Error: stream failed')
+                await until(() => rows()[0] === 'Error: stream failed', STREAM_BUDGET_MS)
                 is('and {:catch} takes a source that threw', rows(), ['Error: stream failed'])
                 host.remove()
             },

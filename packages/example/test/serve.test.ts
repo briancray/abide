@@ -10,8 +10,8 @@
 
 import { expect, test } from 'bun:test'
 import { memo } from 'abide'
-import { context, cookies, isServing, request, serve } from 'abide/server'
-import { sleep } from '$tests'
+import { bag, cookies, isServing, request, serve } from 'abide/server'
+import { sleep } from 'abide/tests'
 
 test('two requests interleaving across their awaits do not share a cache', async () => {
     let bodyRuns = 0
@@ -82,10 +82,10 @@ test('a synchronous handler never becomes a promise', () => {
 
 test('the ambients answer for the request being served', async () => {
     const answered = await serve(new Request('https://x.test/deep?q=1'), async () => {
-        context().set('trace', 't-1')
+        bag().set('trace', 't-1')
         return {
             url: request().url,
-            carried: context().get('trace'),
+            carried: bag().get('trace'),
             serving: isServing(),
         }
     })
@@ -127,7 +127,7 @@ test('a request with no cookie header has no cookies', async () => {
 test('an ambient outside a request throws rather than guessing', () => {
     expect(isServing()).toBe(false)
     expect(() => request()).toThrow(/outside a request/)
-    expect(() => context()).toThrow(/outside a request/)
+    expect(() => bag()).toThrow(/outside a request/)
 })
 
 test('a failed handler still drops its scope', async () => {

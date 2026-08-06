@@ -22,8 +22,13 @@ const BUTTON =
     'rounded-md bg-slate-800 px-3 py-1.5 text-sm text-slate-100 hover:bg-slate-700 ' +
     'active:bg-slate-600 border border-slate-700'
 
-export function button(label: string, onClick: () => void): HTMLButtonElement {
-    const node = el('button', BUTTON, label)
+/** The row-sized variant: a control that has to sit inside a table row without setting its height. */
+export const SMALL_BUTTON =
+    'rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-700 ' +
+    'active:bg-slate-600 border border-slate-700'
+
+export function button(label: string, onClick: () => void, className = BUTTON): HTMLButtonElement {
+    const node = el('button', className, label)
     node.addEventListener('click', onClick)
     return node
 }

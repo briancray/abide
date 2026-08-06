@@ -4,8 +4,8 @@
 
 import { channel, html, memo } from 'abide'
 import { renderToString } from 'abide/server'
+import { container, reader, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
-import { container, reader, sleep, suite, tick } from '$tests'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -15,7 +15,7 @@ export default suite({
     cases: [
         {
             title: 'a channel in a slot is READ, on both substrates',
-            note: 'SPEC calls `state`, `memo` and `channel` alike a `source`, and a source in a slot means its value. The brand that says so used to cover only cells: the server recurses through any function and printed the message, while the client asks the brand and printed the channel’s own source text. One word, one brand, one behaviour.',
+            note: 'SPEC calls `state`, `memo` and `channel` alike a `source`, and a source in a slot means its value. One brand answers that for both substrates, which is what makes this the same claim twice rather than two renderers agreeing by luck.',
             async run({ is }) {
                 const room = channel<string>()
                 room.publish('hello')
@@ -35,7 +35,7 @@ export default suite({
 
         {
             title: 'publish → the call is the read, and it is reactive',
-            note: '`feed()` used to be `feed.live()` — a second name for the one thing every other source spells by being called. Publishing the SAME text still wakes: a channel is a stream of MESSAGES, and receiving one twice is two events. That is the one place its semantics part company with a cell.',
+            note: 'The call IS the read, as it is for every other source — there is no second name for it. Publishing the SAME text still wakes: a channel is a stream of MESSAGES, and receiving one twice is two events. That is the one place its semantics part company with a cell.',
             async run({ is }) {
                 const feed = channel<string>()
                 const view = reader(() => feed())

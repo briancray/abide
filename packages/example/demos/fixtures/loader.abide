@@ -16,7 +16,7 @@ export const user = state(new Promise<{ name: string }>((resolve) => setTimeout(
          settling never wakes this effect, and an inline promise cannot re-make itself. -->
     {#await user}<em>loading…</em>{:then u}<b>{u?.name}</b>{:catch e}<i>{e}</i>{/await}
 
-    <!-- A promise made right here, which is the shape that used to loop forever. -->
+    <!-- A promise made right here — the shape that loops forever if settling wakes the effect that made it. -->
     {#await (bump(), new Promise<string>((r) => setTimeout(() => r('made inline'), 10)))}…{:then made}<span>{made}</span>{/await}
 
     <p>{label}</p>

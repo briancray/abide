@@ -11,7 +11,7 @@
 // await and one variable cannot tell two of them apart.
 
 import { isolate, memo, state } from 'abide'
-import { suite } from '$tests'
+import { suite } from 'abide/tests'
 import { button, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 

@@ -1,0 +1,60 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        // The widest hand-written line in src is 108 columns.
+        "lineWidth": 110
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "jsxQuoteStyle": "double",
+            "semicolons": "asNeeded",
+            "trailingCommas": "all",
+            "arrowParentheses": "always",
+            "bracketSpacing": true
+        }
+    },
+    "json": {
+        "formatter": {
+            "trailingCommas": "none"
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended",
+            "style": {
+                // `noUncheckedIndexedAccess` is on, so `!` is how indexed reads that the surrounding
+                // loop already bounds get narrowed. Re-checking them in hot paths costs a branch.
+                "noNonNullAssertion": "off"
+            },
+            "suspicious": {
+                // `escape` in src/html.ts is an exported public name; the global is never used here.
+                "noShadowRestrictedNames": "off",
+                // The framework implements thenables on purpose (async cells settle through `then`).
+                "noThenProperty": "off",
+                // Tests and template literals carry `${...}` inside plain strings as expected output.
+                "noTemplateCurlyInString": "off"
+            }
+        }
+    },
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    },
+    // No per-file overrides. There used to be one for the bench, which assigned to a module-level
+    // sink inside an expression to defeat dead-code elimination; `keep()` in `abide/tests` names that
+    // intent instead, so the rule no longer has anything to be turned off for.
+    "overrides": []
+}
