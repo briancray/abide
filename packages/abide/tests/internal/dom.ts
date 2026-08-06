@@ -36,6 +36,16 @@ export interface Counts {
     cloneNode: number
     setAttribute: number
     removeAttribute: number
+    /**
+     * Listeners attached and detached.
+     *
+     * A binding that re-attaches on every patch is invisible to every other counter here — the same
+     * listener ends up on the same element and the clicks still land — so only counting the calls can
+     * see it. A row's `@click` closes over its item and is therefore a FRESH function each reconcile,
+     * which is exactly the case that used to churn one pair per row per update.
+     */
+    addListener: number
+    removeListener: number
     textWrite: number
     innerHTML: number
 }
@@ -50,6 +60,8 @@ const counts: Counts = {
     cloneNode: 0,
     setAttribute: 0,
     removeAttribute: 0,
+    addListener: 0,
+    removeListener: 0,
     textWrite: 0,
     innerHTML: 0,
 }
@@ -294,6 +306,28 @@ export function install(): void {
         removeAttribute.call(this, name)
     }
 
+    // Typed against the lib's own overloads, which take a non-null listener — the DOM accepts `null`
+    // as a no-op, and forwarding it unchanged is the whole job here.
+    const target = ownerOf(sampleElement, 'addEventListener') as EventTarget
+    const addEventListener = target.addEventListener
+    target.addEventListener = function (
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions,
+    ): void {
+        counts.addListener++
+        addEventListener.call(this, type, listener, options)
+    }
+    const removeEventListener = target.removeEventListener
+    target.removeEventListener = function (
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | EventListenerOptions,
+    ): void {
+        counts.removeListener++
+        removeEventListener.call(this, type, listener, options)
+    }
+
     // The three accessors that write text or markup. Counted through their setters, since a write is
     // an assignment rather than a call.
     countSetter(ownerOf(sampleText, 'data'), 'data', 'textWrite')
@@ -363,6 +397,8 @@ const LABELS: Record<keyof Counts, string> = {
     cloneNode: 'nodes cloned',
     setAttribute: 'setAttribute',
     removeAttribute: 'removeAttribute',
+    addListener: 'listeners attached',
+    removeListener: 'listeners detached',
     textWrite: 'text writes',
     innerHTML: 'innerHTML assignments',
 }
@@ -386,6 +422,8 @@ const MUTATIONS: (keyof Counts)[] = [
     'remove',
     'setAttribute',
     'removeAttribute',
+    'addListener',
+    'removeListener',
     'textWrite',
     'innerHTML',
 ]

@@ -280,6 +280,7 @@ html`<a href=${url} class=${() => cls()} @click=${onClick} .value=${() => text()
 | `@event=${fn}` | event listener (client only; the server emits nothing) |
 | `.prop=${v}` | DOM property, never an attribute |
 | `${() => v}` | a **thunk is the reactivity convention** — the server calls it, the client wraps it in an effect |
+| `${v}` | a plain value, written once — the compiler emits this for any hole that cannot read |
 
 A value may be a primitive, a nested `html` template, an array, a promise, an async iterable, or
 `raw(...)`. Lists take `keyed(key, template)` so a reorder moves DOM instead of rebuilding it.
@@ -407,6 +408,17 @@ a test:
   ordinary first update — which writes nothing precisely *because* every binding compares first. The
   proof is that it costs one inserted node; a second renderer that merely produced the right screen
   would look identical.
+- **A hole that cannot read gets no thunk.** A thunk costs a closure per instance *and* an effect
+  node per slot, and being fresh every time it also defeats the identity cutoff that skips an
+  unchanged row — so a one-row edit of a thousand-row list re-ran all thousand. The compiler drops it
+  when the emitted form is a call-free path (`{item.id}`, a branch-local `const`, a `{#if}`'s hoisted
+  local, a cell named alone in a child slot). Call-free is the load-bearing half: `{helper()}` may
+  read a cell and nothing about the expression says so. The test is on what the emit *produced*, not
+  on what was written, which is why one rule answers both `{count}` in a slot and `{count}` in an
+  attribute — the first comes back as `count`, the second as `count()`.
+- **An event slot attaches one listener and swaps the handler behind it.** A row's `@click` closes
+  over its item, so it is a fresh function on every reconcile; comparing identities meant a detach
+  and an attach per row per update, for a listener whose identity nothing outside can observe.
 - **A patch replaces the previous run's effects instead of stacking another one.** Every thunk slot
   creates an effect, so patching an instance without first tearing down the last run's leaves one
   live effect *per patch* — each closing over superseded values, all writing to the same binder. The

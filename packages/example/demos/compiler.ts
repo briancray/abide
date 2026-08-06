@@ -68,7 +68,7 @@ export default suite({
                 is(
                     'named alone — the cell itself',
                     template('<script>const n = state(0)</script><p>{n}</p>'),
-                    '<p>${() => n}</p>',
+                    '<p>${n}</p>',
                 )
                 is(
                     'a member read',
@@ -127,7 +127,7 @@ export default suite({
                 is(
                     'a {#for} binding shadows',
                     template(`${source}<ul>{#for count of xs}<li>{count}</li>{/for}</ul>`),
-                    '<ul>${() => (xs ?? []).map((count) => html`<li>${() => count}</li>`)}</ul>',
+                    '<ul>${() => (xs ?? []).map((count) => html`<li>${count}</li>`)}</ul>',
                 )
             },
         },
@@ -222,12 +222,71 @@ export default suite({
                 is(
                     'a keyed for MOVES its rows',
                     template('<ul>{#for w of ws by w}<li>{w}</li>{/for}</ul>'),
-                    '<ul>${() => (ws ?? []).map((w) => keyed(w, html`<li>${() => w}</li>`))}</ul>',
+                    '<ul>${() => (ws ?? []).map((w) => keyed(w, html`<li>${w}</li>`))}</ul>',
                 )
                 is(
                     'keyless is positional',
                     template('<ul>{#for w, i of ws}<li>{i}</li>{/for}</ul>'),
-                    '<ul>${() => (ws ?? []).map((w, i) => html`<li>${() => i}</li>`)}</ul>',
+                    '<ul>${() => (ws ?? []).map((w, i) => html`<li>${i}</li>`)}</ul>',
+                )
+            },
+        },
+
+        {
+            title: 'a hole that cannot READ gets no thunk',
+            note: 'A thunk is the reactivity convention, and on the client it costs a closure per instance AND an effect node per slot — plus, being fresh every time, it defeats the identity cutoff that skips an unchanged row. So a hole whose emitted form is a call-free path gets none. The test is on what the emit PRODUCED, not on what was written: a cell in a child slot comes back as `count` and a cell in an attribute comes back as `count()`, so one rule answers both positions. Call-free is the load-bearing half — `{helper()}` may read a cell and nothing about the expression says so.',
+            run({ is }) {
+                const cell = '<script>const n = state(0)</script>'
+
+                // The cases that keep it, and WHY each one has to.
+                is('a read is a read', template(`${cell}<p>{n + 1}</p>`), '<p>${() => n() + 1}</p>')
+                is(
+                    'a call could read anything',
+                    template(`${cell}<p>{helper()}</p>`),
+                    '<p>${() => helper()}</p>',
+                )
+                is(
+                    'a path OFF a cell is a read',
+                    template('<script>const s = state({ a: 1 })</script><p>{s.a}</p>'),
+                    '<p>${() => s().a}</p>',
+                )
+
+                // …and the cases that drop it.
+                is('a cell named alone in a slot', template(`${cell}<p>{n}</p>`), '<p>${n}</p>')
+                is(
+                    'a path rooted at an ordinary binding',
+                    template('<ul>{#for item of xs}<li>{item.id}</li>{/for}</ul>'),
+                    '<ul>${() => (xs ?? []).map((item) => html`<li>${item.id}</li>`)}</ul>',
+                )
+                is(
+                    'a branch-local const',
+                    template('<ul>{#for x of xs}<script>const w = x * 2</script><li>{w}</li>{/for}</ul>'),
+                    '<ul>${() => (xs ?? []).map((x) => {\nconst w = x * 2\nreturn html`<li>${w}</li>` })}</ul>',
+                )
+
+                // An ATTRIBUTE was handed the read rather than the cell, so the same name keeps its
+                // thunk there. This is the pair that would break if the rule looked at the SOURCE.
+                is(
+                    'the same cell in an attribute is a call, so it stays',
+                    template(`${cell}<p title={n}>x</p>`),
+                    '<p title=${() => n()}>x</p>',
+                )
+                is(
+                    '…and a static one there drops it too',
+                    template('<ul>{#for item of xs}<li class={item.kind}>x</li>{/for}</ul>'),
+                    '<ul>${() => (xs ?? []).map((item) => html`<li class=${item.kind}>x</li>`)}</ul>',
+                )
+
+                // One live hole is enough to make the joined string move.
+                is(
+                    'an interpolated attribute — every hole static',
+                    template('<ul>{#for item of xs}<li class="row {item.kind}">x</li>{/for}</ul>'),
+                    '<ul>${() => (xs ?? []).map((item) => html`<li class=${`row ${item.kind}`}>x</li>`)}</ul>',
+                )
+                is(
+                    '…and one that is not',
+                    template(`${cell}<p class="row {n}">x</p>`),
+                    '<p class=${() => `row ${n()}`}>x</p>',
                 )
             },
         },
@@ -378,7 +437,7 @@ export default suite({
                 )
                 is(
                     '…and the branch narrows off that local, so `.pages` needs no `?.`',
-                    code.includes('if ($0) return html`${() => $0.pages} pages`'),
+                    code.includes('if ($0) return html`${$0.pages} pages`'),
                     true,
                 )
                 is(
@@ -425,12 +484,12 @@ export default suite({
                 is(
                     'a cell read once, then narrowed',
                     body('<p>{#if s}{s}{/if}</p>'),
-                    '<p>${() => { const $0 = s(); if ($0) return html`${() => $0}`; return null }}</p>',
+                    '<p>${() => { const $0 = s(); if ($0) return html`${$0}`; return null }}</p>',
                 )
                 is(
                     'a keyed call is hoisted WHOLE, arguments and all',
                     body('<p>{#if m({ id: 1 })}{m({ id: 1 })}{/if}</p>'),
-                    '<p>${() => { const $0 = m({ id: 1 })(); if ($0) return html`${() => $0}`; return null }}</p>',
+                    '<p>${() => { const $0 = m({ id: 1 })(); if ($0) return html`${$0}`; return null }}</p>',
                 )
                 is(
                     'an else-if is still lazy — its read only runs when the first misses',
@@ -448,7 +507,7 @@ export default suite({
                 // A body that reads something ELSE keeps its own thunk, so it still wakes alone.
                 is(
                     'only the condition’s own reads are hoisted',
-                    body('<p>{#if s}{other}{/if}</p>').includes('html`${() => other}`'),
+                    body('<p>{#if s}{other}{/if}</p>').includes('html`${other}`'),
                     true,
                 )
 
@@ -685,7 +744,7 @@ export default suite({
                 ).code
                 is(
                     'the statements go straight into the row closure',
-                    emitted.includes('(x) => {\nconst n = x * 2\nreturn html`<li>${() => n}</li>`'),
+                    emitted.includes('(x) => {\nconst n = x * 2\nreturn html`<li>${n}</li>`'),
                     true,
                 )
 

@@ -967,6 +967,123 @@ export default suite({
         },
 
         {
+            title: 'a row whose values did not MOVE is skipped whole',
+            note: 'A list update hands every surviving row a fresh `values` array over identical entries — one changed row of a thousand means 999 arrays that are new objects holding the same things — so `Instance.update` compares by identity before it does anything. The cutoff only works if the entries ARE stable, which is why the compiler emits `${item.id}` rather than `${() => item.id}` for a hole that cannot read: a fresh closure per row is never identical, and the cutoff it defeats is worth more than the thunk it saves. Nothing about the output can show this — every arm below renders the same list — so the claim is a count of paints.',
+            async run({ is }) {
+                // A slot value that records being WRITTEN. A row that was skipped never reaches its
+                // binder; a row that was walked and found equal does, and only this tells them apart.
+                let painted = 0
+                const label = (text: string): { toString(): string } => ({
+                    toString: () => {
+                        painted++
+                        return text
+                    },
+                })
+                interface Item {
+                    id: string
+                    label: { toString(): string }
+                }
+                const build = (n: number): Item[] => {
+                    const out: Item[] = []
+                    for (let i = 0; i < n; i++) out.push({ id: `k${i}`, label: label(`row ${i}`) })
+                    return out
+                }
+
+                const items = state(build(50))
+                const host = container()
+                mount(
+                    host,
+                    () => html`<ul>${() => items().map((i) => keyed(i.id, html`<li>${i.label}</li>`))}</ul>`,
+                )
+                await tick()
+                is('50 rows, 50 paints on mount', painted, 50)
+
+                painted = 0
+                const next = items.peek().slice()
+                next[10] = { id: 'k10', label: label('row 10 — edited') }
+                items.set(next)
+                await tick()
+                is('one row changed, ONE row painted', painted, 1)
+                is(
+                    '…and it is the one that changed',
+                    host.querySelectorAll('li')[10]?.textContent,
+                    'row 10 — edited',
+                )
+
+                // The same list, one hole per row behind a thunk — what the compiler used to emit.
+                // A thunk is a fresh closure on every reconcile, so no row can ever be skipped.
+                painted = 0
+                const thunked = state(build(50))
+                const other = container()
+                mount(
+                    other,
+                    () =>
+                        html`<ul>${() => thunked().map((i) => keyed(i.id, html`<li>${() => i.label}</li>`))}</ul>`,
+                )
+                await tick()
+                painted = 0
+                const moved = thunked.peek().slice()
+                moved[10] = { id: 'k10', label: label('row 10 — edited') }
+                thunked.set(moved)
+                await tick()
+                is('behind a thunk, every row paints', painted, 50)
+                is(
+                    '…for the same one-row change',
+                    other.querySelectorAll('li')[10]?.textContent,
+                    'row 10 — edited',
+                )
+
+                host.remove()
+                other.remove()
+            },
+            bench: {
+                kind: 'wake',
+                arms: (() => {
+                    const ROWS = 200
+                    interface Item {
+                        id: string
+                        label: { toString(): string }
+                    }
+                    // One arm per SHAPE of hole, over the same list and the same one-row edit. A full
+                    // rebuild would score both the same; a one-row edit is what separates them.
+                    const arm = (thunk: boolean) => async (): Promise<{ count: number; of: string }> => {
+                        let painted = 0
+                        const label = (text: string): { toString(): string } => ({
+                            toString: () => {
+                                painted++
+                                return text
+                            },
+                        })
+                        const build = (): Item[] => {
+                            const out: Item[] = []
+                            for (let i = 0; i < ROWS; i++) out.push({ id: `k${i}`, label: label(`row ${i}`) })
+                            return out
+                        }
+                        const items = state(build())
+                        const host = container()
+                        mount(host, () =>
+                            thunk
+                                ? html`<ul>${() => items().map((i) => keyed(i.id, html`<li>${() => i.label}</li>`))}</ul>`
+                                : html`<ul>${() => items().map((i) => keyed(i.id, html`<li>${i.label}</li>`))}</ul>`,
+                        )
+                        await tick()
+                        painted = 0
+                        const next = items.peek().slice()
+                        next[100] = { id: 'k100', label: label('edited') }
+                        items.set(next)
+                        await tick()
+                        host.remove()
+                        return { count: painted, of: `rows painted for a 1-row edit of ${ROWS}` }
+                    }
+                    return [
+                        { label: 'abide — a hole that cannot read, emitted bare', run: arm(false) },
+                        { label: 'the same hole behind a thunk', run: arm(true) },
+                    ]
+                })(),
+            },
+        },
+
+        {
             title: 'a template whose ROOT is a slot paints on the first render',
             note: 'A top-level child slot inserts what it renders before its anchor comment, which is still inside the fragment while the instance is being built. Recording the instance’s nodes before that first update captured only the anchor — so the content was left orphaned in the fragment and the template painted BLANK until some later update happened to re-place it.',
             async run({ is }) {

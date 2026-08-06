@@ -6,10 +6,16 @@
 // what pre-scanning would buy is one scan per call site per process, against a stack trace that no
 // longer points at anything a person wrote.
 //
-// The one invariant every emit rule serves: EVERY expression gets its own thunk, and evaluating an
-// `html` tag does not call the thunks inside it. So the thunk around a `{#if}` subscribes to the
-// condition and nothing else, and a `{count}` deep inside the branch still wakes alone. Wrapping a
-// whole branch body in one thunk would produce identical output at a much coarser wake.
+// The one invariant every emit rule serves: an expression that could READ something reactive gets its
+// own thunk, and evaluating an `html` tag does not call the thunks inside it. So the thunk around a
+// `{#if}` subscribes to the condition and nothing else, and a `{count}` deep inside the branch still
+// wakes alone. Wrapping a whole branch body in one thunk would produce identical output at a much
+// coarser wake.
+//
+// The exceptions are named by `unthunked` rather than left implicit, because a thunk is not free on
+// the client: it is a closure per instance AND an effect node with an observer set per slot. A fresh
+// closure per row also defeats `Instance.update`'s identity cutoff, so an unchanged row of a
+// thousand-row list can never be skipped — which made a one-row edit cost the whole list.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { scopeCss, scopeName } from './css.ts'
@@ -382,6 +388,28 @@ function held(expr: Expr, context: Context): string {
     return code(expr, context, 'cell')
 }
 
+const PLAIN_PATH = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
+
+/**
+ * Whether an emitted slot expression can go in WITHOUT its thunk.
+ *
+ * The test is on what `code` PRODUCED, not on what the author wrote, and that is what makes it both
+ * safe and complete. `code` has already resolved the position: a cell in a child slot comes back as
+ * `count` — a value the slot reads for itself — while the same cell in an attribute comes back as
+ * `count()`, which has a call and stays deferred. A `{#if}`'s hoisted read comes back as `$0`, a
+ * plain const, wherever it appears. One rule answers all three, so no position argument is needed.
+ *
+ * CALL-FREE is the load-bearing half: `{helper()}` where `helper` reads a cell IS reactive, and
+ * nothing about the expression says so. `{session.name}` is a read too, and comes back as
+ * `session().name` — a call, so it is excluded by the same test rather than by a second one.
+ */
+function unthunked(emitted: string, context: Context): boolean {
+    if (!PLAIN_PATH.test(emitted)) return false
+    // A keyed memo named alone is its HANDLE — `m` is not `m(args)` — so it is not a value to render.
+    const dot = emitted.indexOf('.')
+    return !live(context).keyed.has(dot < 0 ? emitted : emitted.slice(0, dot))
+}
+
 /** Record a runtime helper the emitted file turned out to need, so the header imports it. */
 function need(context: Context, name: Runtime): Runtime {
     context.used.add(name)
@@ -428,8 +456,11 @@ function child(node: Node, context: Context): string {
             const value = node.raw
                 ? `${need(context, 'raw')}(${text.replace(/^html\s*\(/, '').replace(/\)$/, '')})`
                 : text
+            const marked = mark(node.value.start, value)
+            // Nothing here can read a source, or it IS one — either way the thunk would only cost.
+            if (unthunked(value, context)) return `\${${marked}}`
             // Inside a `{#try}` the boundary is one unit, so nothing gets its own thunk.
-            return slot(mark(node.value.start, value), context)
+            return slot(marked, context)
         }
         case 'element':
             return element(node, context)
@@ -616,12 +647,21 @@ function element(
                 if (attribute.name === 'style' && styleToggles.length > 0) break
                 open += ` ${attribute.name}="${attribute.value.replace(/"/g, '&quot;')}"`
                 break
-            case 'expression':
-                open += ` ${attribute.name}=\${() => ${mark(attribute.value.start, code(attribute.value, context))}}`
+            case 'expression': {
+                const emitted = code(attribute.value, context)
+                const marked = mark(attribute.value.start, emitted)
+                open += unthunked(emitted, context)
+                    ? ` ${attribute.name}=\${${marked}}`
+                    : ` ${attribute.name}=\${() => ${marked}}`
                 break
-            case 'interpolated':
-                open += ` ${attribute.name}=\${() => \`${interpolate(attribute.parts, context)}\`}`
+            }
+            case 'interpolated': {
+                const joined = interpolate(attribute.parts, context)
+                open += joined.reads
+                    ? ` ${attribute.name}=\${() => \`${joined.text}\`}`
+                    : ` ${attribute.name}=\${\`${joined.text}\`}`
                 break
+            }
             case 'event':
                 open += ` @${attribute.name}=\${${mark(attribute.value.start, code(attribute.value, context))}}`
                 break
@@ -660,12 +700,25 @@ const ELEMENT_TYPES: Record<string, string> = {
     textarea: 'HTMLTextAreaElement',
 }
 
-function interpolate(parts: (string | Expr)[], context: Context): string {
-    let out = ''
+/** `reads` is whether ANY hole is live — one is enough to make the joined string move. */
+interface Interpolated {
+    text: string
+    reads: boolean
+}
+
+function interpolate(parts: (string | Expr)[], context: Context): Interpolated {
+    let text = ''
+    let reads = false
     for (const part of parts) {
-        out += typeof part === 'string' ? literal(part) : `\${${code(part, context)}}`
+        if (typeof part === 'string') {
+            text += literal(part)
+            continue
+        }
+        const emitted = code(part, context)
+        if (!unthunked(emitted, context)) reads = true
+        text += `\${${emitted}}`
     }
-    return out
+    return { text, reads }
 }
 
 /** `bind:value={x}` is a read AND a write, which is two slots on the same element. */
@@ -746,7 +799,7 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
                 props.push(`${key(attribute.name)}: ${held(attribute.value, context)}`)
                 break
             case 'interpolated':
-                props.push(`${key(attribute.name)}: \`${interpolate(attribute.parts, context)}\``)
+                props.push(`${key(attribute.name)}: \`${interpolate(attribute.parts, context).text}\``)
                 break
             case 'event':
                 // No element to attach to, so it is an ordinary prop the component places itself.

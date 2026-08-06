@@ -180,7 +180,7 @@ export default suite({
 
         {
             title: 'event slots — client only; the server emits nothing',
-            note: 'There are no listeners in a string. `@click=${fn}` is a value that IS the function, never a thunk producing one — which is why the client does not wrap it in an effect.',
+            note: 'There are no listeners in a string. `@click=${fn}` is a value that IS the function, never a thunk producing one — which is why the client does not wrap it in an effect. The binding attaches ONE listener for the life of the element and swaps the handler behind it by assignment: a row’s handler closes over its item and is therefore a fresh function on every reconcile, so comparing identities meant a detach and an attach per row per update.',
             async run({ is }) {
                 let clicks = 0
                 const label = state('go')
@@ -199,6 +199,31 @@ export default suite({
                 is('both clicks landed on one listener', clicks, 2)
                 is('and the other slot updated', node.textContent, 'stop')
                 host.remove()
+
+                // The handler is a FRESH function every patch, which is the case that used to churn.
+                // Counted rather than clicked: re-attaching produces identical behaviour, so a click
+                // test passes either way.
+                const patch = state(0)
+                const rows = container()
+                mount(
+                    rows,
+                    () =>
+                        html`<ul>
+                            ${() =>
+                                [1, 2, 3].map((n) => {
+                                    const bump = (): void => {
+                                        clicks += n + patch()
+                                    }
+                                    return html`<li @click=${bump}>r</li>`
+                                })}
+                        </ul>`,
+                )
+                await tick()
+                const work = await measureFlush(() => patch.set(1))
+                is('three rows re-rendered, no listener touched', work.addListener + work.removeListener, 0)
+                ;(rows.querySelectorAll('li')[2] as HTMLElement).click()
+                is('…and the NEWEST handler is the one that ran', clicks, 6)
+                rows.remove()
             },
             interact({ host, log }) {
                 let clicks = 0

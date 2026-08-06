@@ -826,13 +826,24 @@ class Instance {
         }
         const element = target as Element
         if (kind.kind === 'event') {
-            let attached: EventListener | null = null
+            // One listener for the life of the element, with the handler behind it swapped by
+            // assignment. A row's `@click` closes over its item, so it is a FRESH function on every
+            // reconcile — comparing identities meant a removeEventListener plus an addEventListener
+            // per row per update, and a thousand-row list re-attached a thousand listeners to change
+            // one. Nothing outside can observe which function is registered, so the indirection is
+            // invisible: `dispatch` sits on the same element, so `event.currentTarget` is unchanged.
+            let handler: EventListener | null = null
+            let listening = false
+            const dispatch: EventListener = (event) => {
+                if (handler !== null) handler.call(element, event)
+            }
             return (value) => {
-                const next = (value ?? null) as EventListener | null
-                if (next === attached) return
-                if (attached !== null) element.removeEventListener(kind.name, attached)
-                attached = next
-                if (next !== null) element.addEventListener(kind.name, next)
+                handler = (value ?? null) as EventListener | null
+                // Never detached. A slot that goes null and back is the only case it would serve, and
+                // a dead branch in `dispatch` answers it for nothing — the listener dies with the node.
+                if (handler === null || listening) return
+                listening = true
+                element.addEventListener(kind.name, dispatch)
             }
         }
         if (kind.kind === 'property') {
