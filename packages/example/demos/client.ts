@@ -1,0 +1,1169 @@
+// The client substrate: `mount`, per-slot effects, parse-once templates, keyed lists, disposal.
+//
+// The claims here are about WORK, not output, so the cases COUNT DOM calls: a binding that assigns
+// the value already present produces identical markup at full DOM cost, and only a counter can tell
+// the two apart. Effects are microtask-batched, so every measurement brackets the write AND the
+// flush — the effect is what touches the DOM, not the write.
+
+import { html, memo, state, type TemplateResult } from 'abide'
+import { keyed, mount } from 'abide/ui'
+import {
+    container,
+    countCalls,
+    install,
+    keep,
+    measureFlush,
+    nodesMade,
+    nonZero,
+    settled,
+    sleep,
+    suite,
+    tick,
+} from '$tests'
+import { button, field, row, stage } from './dom.ts'
+import { META } from './SUITES.ts'
+import * as vanilla from './vanilla.ts'
+
+install()
+
+// The rows every arm starts from come from the vanilla module, so the abide arm and the arm it is
+// measured against are handed the SAME data rather than two builders that agree by inspection.
+type Item = vanilla.Row
+
+const build = (n: number): Item[] => vanilla.rows(n)
+
+function swapped(items: Item[], a: number, b: number): Item[] {
+    const next = items.slice()
+    const held = next[a] as Item
+    next[a] = next[b] as Item
+    next[b] = held
+    return next
+}
+
+function rand(): string {
+    return Math.random().toString(36).slice(2, 6)
+}
+
+const list = (rows: () => Item[]): TemplateResult =>
+    html`<ul class="font-mono text-xs">
+        ${() => rows().map((item) => html`<li>${item.label}</li>`)}
+    </ul>`
+
+const keyedList = (rows: () => Item[]): TemplateResult =>
+    html`<ul class="font-mono text-xs">
+        ${() => rows().map((item) => keyed(item.id, html`<li>${item.label}</li>`))}
+    </ul>`
+
+// --- bench fixtures ---------------------------------------------------------
+//
+// Detached: the benches must not be measuring layout and paint of a visible list. Built once at
+// module scope so an arm is timed on a WARM list rather than on its own first render.
+
+const detached = document.createElement('div')
+const ROWS_1000 = build(1000)
+const ROWS_200 = build(200)
+// Ten thousand ROWS, but no ten-thousand-row list standing at module scope: the array is cheap and
+// the DOM is not, so the build arms make theirs and tear it down again.
+const ROWS_10000 = build(10000)
+
+const listHost = document.createElement('ul')
+detached.append(listHost)
+
+const bigListHost = document.createElement('ul')
+detached.append(bigListHost)
+
+// One persistent abide list, kept in sync with a cell — the "update one row of a thousand" arm.
+const liveRows = state(ROWS_1000)
+const liveHost = document.createElement('ul')
+detached.append(liveHost)
+mount(liveHost, () => list(liveRows))
+
+// …and the keyed equivalent, for the reorder cases.
+const keyedRows = state(ROWS_200)
+const keyedHost = document.createElement('ul')
+detached.append(keyedHost)
+mount(keyedHost, () => keyedList(keyedRows))
+
+// …and an UNKEYED one over the same data, which is the arm a keyed swap has to beat.
+const unkeyedRows = state(ROWS_200)
+const unkeyedHost = document.createElement('ul')
+detached.append(unkeyedHost)
+mount(unkeyedHost, () => list(unkeyedRows))
+
+const vanillaHost = document.createElement('ul')
+detached.append(vanillaHost)
+vanilla.buildRows(vanillaHost, ROWS_200)
+
+const vanillaBigHost = document.createElement('ul')
+detached.append(vanillaBigHost)
+vanilla.buildRows(vanillaBigHost, ROWS_1000)
+
+const innerHost = document.createElement('ul')
+detached.append(innerHost)
+vanilla.buildRowsInnerHTML(innerHost, ROWS_1000)
+
+// The two reorders, precomputed. A timed reorder arm ALTERNATES between two orders rather than
+// preparing once: a list already in the order it is being set to moves nothing, so an arm that
+// swapped the same pair every iteration would time the first op and then time nothing.
+const SWAP_ADJACENT = swapped(ROWS_200, 1, 2)
+const SWAP_DISTANT = swapped(ROWS_200, 1, 198)
+
+const adjacentRows = state(ROWS_200)
+const adjacentHost = document.createElement('ul')
+detached.append(adjacentHost)
+mount(adjacentHost, () => keyedList(adjacentRows))
+
+const distantRows = state(ROWS_200)
+const distantHost = document.createElement('ul')
+detached.append(distantHost)
+mount(distantHost, () => keyedList(distantRows))
+
+// Growth: a thousand rows with ten more on the end, alternating. This is what a feed does on every
+// poll, and it is the mutation the whole-array benches above cannot show — a reconcile that is right
+// for an edit can still rebuild the tail.
+const ROWS_1010 = build(1010)
+const growRows = state(ROWS_1000)
+const growHost = document.createElement('ul')
+detached.append(growHost)
+mount(growHost, () => list(growRows))
+
+const growVanillaHost = document.createElement('ul')
+detached.append(growVanillaHost)
+vanilla.buildRows(growVanillaHost, ROWS_1000)
+
+export default suite({
+    ...META.client,
+    cases: [
+        {
+            title: 'mount — one effect per slot, not one per render',
+            note: 'Writing `count` re-runs that slot’s binding and nothing else. The counters are the proof: one text write, no elements created, nothing inserted.',
+            async run({ is, log }) {
+                const count = state(0)
+                const name = state('ada')
+                const host = container()
+                mount(
+                    host,
+                    () =>
+                        html`<p><span>name</span> ${() => name()} · <span>count</span> ${() => count()}</p>`,
+                )
+                is('the first paint', host.querySelector('p')?.textContent, 'name ada · count 0')
+
+                const work = await measureFlush(() => count.set(1))
+                is('one count write — text writes', work.textWrite, 1)
+                is('…and nothing else', work.createElement + work.insert + work.setAttribute, 0)
+                is('the DOM', host.querySelector('p')?.textContent, 'name ada · count 1')
+                log('work for one count write', nonZero(work))
+                host.remove()
+            },
+            interact({ host, log }) {
+                const count = state(0)
+                const name = state('ada')
+                const out = stage(host)
+                mount(
+                    out,
+                    () => html`
+                        <p class="text-slate-100">
+                            <span class="text-slate-500">name</span> ${() => name()} ·
+                            <span class="text-slate-500">count</span> ${() => count()}
+                        </p>
+                    `,
+                )
+                host.append(
+                    row(
+                        button('count.set(count + 1)', async () => {
+                            const work = await measureFlush(() => count.set(count.peek() + 1))
+                            log.live('work for one count write', nonZero(work))
+                        }),
+                        button('name.set(random)', async () => {
+                            const work = await measureFlush(() => name.set(rand()))
+                            log.live('work for one name write', nonZero(work))
+                        }),
+                    ),
+                )
+            },
+        },
+
+        {
+            title: 'a binding that would write the SAME value writes nothing',
+            note: 'Asserted by call count, not by output: the wrong implementation produces identical markup at full DOM cost.',
+            async run({ is }) {
+                const level = state('high')
+                const label = state('steady')
+                const host = container()
+                mount(host, () => html`<p class=${() => level()}>${() => label()}</p>`)
+
+                const same = await measureFlush(() => {
+                    level.set('high')
+                    label.set('steady')
+                })
+                is('setting both to the values already held', same.textWrite + same.setAttribute, 0)
+
+                const moved = await measureFlush(() => {
+                    level.set('low')
+                    label.set('moving')
+                })
+                is('a real move writes the text once', moved.textWrite, 1)
+                is('…and the attribute once', moved.setAttribute, 1)
+                host.remove()
+            },
+            interact({ host, log }) {
+                const level = state('high')
+                const label = state('steady')
+                const out = stage(host)
+                mount(out, () => html`<p class=${() => level()}>${() => label()}</p>`)
+                host.append(
+                    row(
+                        button('set both to the SAME values', async () => {
+                            const work = await measureFlush(() => {
+                                level.set('high')
+                                label.set('steady')
+                            })
+                            log.live('same values', nonZero(work))
+                        }),
+                        button('set both to NEW values', async () => {
+                            const work = await measureFlush(() => {
+                                level.set(`l${rand()}`)
+                                label.set(`s${rand()}`)
+                            })
+                            log.live('new values', nonZero(work))
+                        }),
+                    ),
+                )
+            },
+        },
+
+        {
+            title: 'an unrelated attribute is not rewritten',
+            note: 'Two attribute slots on one element; one of them moves. `setAttribute` is counted directly, because both spellings produce the same markup.',
+            async run({ is }) {
+                const cls = state('a')
+                const other = state(0)
+                const host = container()
+                mount(host, () => html`<i class=${() => cls()} data-n=${() => String(other())}>x</i>`)
+
+                const spy = countCalls(Element.prototype, 'setAttribute')
+                other.set(1) // moves only data-n
+                await tick()
+                spy.restore()
+
+                is('data-n', host.querySelector('i')?.getAttribute('data-n'), '1')
+                is('class was not touched', spy.calls, 1)
+                host.remove()
+            },
+        },
+
+        {
+            title: 'only the changed row is touched in a list',
+            note: '1000 rows, one of them edited. A whole-list rebuild produces the same screen and a thousand times the work. The hand-written arm wins on TIME and always will — it walks nothing, because the author already knew which row it was — so the arm to read the abide one against is the third: setting an array asks for the whole list to be described again, and describing it is most of what the op costs before any reconciling starts.',
+            async run({ is, log }) {
+                const rows = state(build(1000))
+                const host = container()
+                mount(host, () => list(rows))
+                is('1000 rows', host.querySelectorAll('li').length, 1000)
+                const nodes = Array.from(host.querySelectorAll('li'))
+
+                const work = await measureFlush(() => {
+                    const next = rows.peek().slice()
+                    next[500] = { id: 500, label: 'row 500 · edited' }
+                    rows.set(next)
+                })
+                is('one text write for one edited row', work.textWrite, 1)
+                // `createElement` alone could not carry this claim: abide clones a prepared template
+                // rather than building elements by hand, so that counter is zero here whether one row
+                // changed or the whole list was rebuilt. Every node-making operation is counted.
+                is('nothing was created', nodesMade(work), 0)
+                is('nothing was moved', work.insert, 0)
+                is('the edit landed', nodes[500]?.textContent, 'row 500 · edited')
+                is('and every other row is the SAME element', host.querySelectorAll('li')[999], nodes[999])
+                log('one edited row of 1000', nonZero(work))
+                host.remove()
+            },
+            interact({ host, log }) {
+                const rows = state(build(1000))
+                const out = stage(host, 'live (scroll)')
+                out.className += ' max-h-40 overflow-auto'
+                mount(out, () => list(rows))
+                host.append(
+                    row(
+                        button('edit row 500', async () => {
+                            const work = await measureFlush(() => {
+                                const next = rows.peek().slice()
+                                next[500] = { id: 500, label: `row 500 · edited ${rand()}` }
+                                rows.set(next)
+                            })
+                            log.live('one edited row of 1000', nonZero(work))
+                        }),
+                        button('append 10 rows', async () => {
+                            const work = await measureFlush(() => {
+                                const next = rows.peek().slice()
+                                for (let i = 0; i < 10; i++)
+                                    next.push({ id: next.length, label: `row ${next.length}` })
+                                rows.set(next)
+                            })
+                            log.live('ten appended rows', nonZero(work))
+                        }),
+                    ),
+                )
+            },
+            bench: {
+                kind: 'time',
+                floor: 'flush',
+                arms: [
+                    {
+                        label: 'abide — set the array, one text write',
+                        run: async (i: number) => {
+                            const next = ROWS_1000.slice()
+                            next[500] = { id: 500, label: `row 500 · ${i}` }
+                            liveRows.set(next)
+                            await settled()
+                        },
+                    },
+                    {
+                        label: 'vanilla — surgical textContent',
+                        run: (i: number) => vanilla.updateRow(vanillaBigHost, 500, `row 500 · ${i}`),
+                    },
+                    {
+                        // Neither abide nor a rebuild: the slice and the thousand `html` tags the
+                        // SLOT THUNK evaluates before either of them is reached. Setting an array is
+                        // asking for the whole list to be described again, and describing it is not
+                        // free — so this is the floor the shape imposes, and the difference between
+                        // it and the abide arm is what the reconcile itself costs.
+                        label: 'the API floor — build the 1000 results, reconcile nothing',
+                        run: (i: number) => {
+                            const next = ROWS_1000.slice()
+                            next[500] = { id: 500, label: `row 500 · ${i}` }
+                            keep(next.map((item) => html`<li>${item.label}</li>`))
+                        },
+                    },
+                    {
+                        label: 'vanilla — innerHTML rebuild',
+                        run: (i: number) => {
+                            const next = ROWS_1000.slice()
+                            next[500] = { id: 500, label: `row 500 · ${i}` }
+                            vanilla.buildRowsInnerHTML(innerHost, next)
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'update one row of a thousand — the DOM CALLS',
+            note: 'The same three arms, counted instead of timed. Time says the surgical hand-written version wins — it walks nothing, because the author already knew which row it was. The counters say abide does the same amount of DOM work to get there, which is the part a rebuild cannot match at any size.',
+            bench: {
+                kind: 'work',
+                arms: [
+                    {
+                        label: 'abide — one text write',
+                        run: () => {
+                            const next = ROWS_1000.slice()
+                            next[500] = { id: 500, label: `row 500 · counted ${Math.random()}` }
+                            liveRows.set(next)
+                        },
+                    },
+                    {
+                        label: 'vanilla — surgical textContent',
+                        run: () =>
+                            vanilla.updateRow(vanillaBigHost, 500, `row 500 · counted ${Math.random()}`),
+                    },
+                    {
+                        label: 'vanilla — innerHTML rebuild',
+                        run: () => vanilla.buildRowsInnerHTML(innerHost, ROWS_1000),
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'build 1000 rows from cold',
+            note: 'Teardown included on every arm, so each one pays for a full build. `innerHTML` is the one to beat on build; it is also the one that loses every update case.',
+            bench: {
+                kind: 'time',
+                per: { n: 1000, label: 'row' },
+                arms: [
+                    {
+                        label: 'abide — mount + dispose',
+                        run: () => {
+                            const mounted = mount(
+                                listHost,
+                                () => html`${ROWS_1000.map((r) => html`<li>${r.label}</li>`)}`,
+                            )
+                            mounted.dispose()
+                        },
+                    },
+                    {
+                        label: 'vanilla — createElement loop',
+                        run: () => {
+                            vanilla.buildRows(listHost, ROWS_1000)
+                            listHost.replaceChildren()
+                        },
+                    },
+                    {
+                        label: 'vanilla — innerHTML',
+                        run: () => {
+                            vanilla.buildRowsInnerHTML(listHost, ROWS_1000)
+                            listHost.innerHTML = ''
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'build 10000 rows from cold',
+            note: 'The same three arms as the thousand-row build, ten times the size — and the two are meant to be read together, because the number that matters is PER ROW. One size cannot tell a per-row cost from a fixed one: both look like a constant. Measured cold in a fresh page, the vanilla arms hold their per-row cost across the two sizes and abide does NOT — it is several times cheaper per row here than at a thousand, which says a size-independent cost dominates the smaller list. Read this one in a FRESH page: ten thousand nodes an op leaves enough garbage that a case run after it measures this one.',
+            bench: {
+                kind: 'time',
+                per: { n: 10000, label: 'row' },
+                arms: [
+                    {
+                        label: 'abide — mount + dispose',
+                        run: () => {
+                            const mounted = mount(
+                                bigListHost,
+                                () => html`${ROWS_10000.map((r) => html`<li>${r.label}</li>`)}`,
+                            )
+                            mounted.dispose()
+                        },
+                    },
+                    {
+                        label: 'vanilla — createElement loop',
+                        run: () => {
+                            vanilla.buildRows(bigListHost, ROWS_10000)
+                            bigListHost.replaceChildren()
+                        },
+                    },
+                    {
+                        label: 'vanilla — innerHTML',
+                        run: () => {
+                            vanilla.buildRowsInnerHTML(bigListHost, ROWS_10000)
+                            bigListHost.innerHTML = ''
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'keyed — a reorder MOVES DOM instead of rebuilding it, and costs the DISTANCE',
+            note: 'No element is re-created: every row survives as the same object. But placement is a simple in-order walk, not a minimal-move (LIS) reconcile, and this prices that honestly — a swap costs one move per row BETWEEN the two. Adjacent rows cost 1; rows 1 and 98 of 100 cost 97, where a minimal reconcile would cost 2. A five-row swap cannot see this, because 4 of 5 rows is both "minimal" and "the whole list".',
+            async run({ is }) {
+                for (const [a, b, expected] of [
+                    [1, 2, 1],
+                    [1, 20, 19],
+                    [1, 98, 97],
+                ] as const) {
+                    const source = build(100)
+                    const rows = state(source)
+                    const host = container()
+                    mount(host, () => keyedList(rows))
+                    await tick()
+                    const before = new Map(
+                        Array.from(host.querySelectorAll('li')).map((li) => [li.textContent, li]),
+                    )
+
+                    const spy = countCalls(Node.prototype, 'insertBefore')
+                    rows.set(swapped(source, a, b))
+                    await tick()
+                    spy.restore()
+
+                    const after = Array.from(host.querySelectorAll('li'))
+                    is(
+                        `swap ${a}↔${b} — the order`,
+                        after.map((li) => li.textContent),
+                        swapped(source, a, b).map((item) => `row ${item.id}`),
+                    )
+                    // Every element is the SAME object it was — a swap moved them, nothing was rebuilt.
+                    for (const li of after) {
+                        if (before.get(li.textContent) !== li) {
+                            is(`swap ${a}↔${b} — "${li.textContent}" was rebuilt`, false, true)
+                        }
+                    }
+                    is(`swap ${a}↔${b} — moves`, spy.calls, expected)
+                    host.remove()
+                }
+            },
+            interact({ host, log }) {
+                const rows = state(build(200))
+                const out = stage(host, 'live (scroll)')
+                out.className += ' max-h-40 overflow-auto'
+                mount(out, () => keyedList(rows))
+                host.append(
+                    row(
+                        button('swap rows 1 and 2 (adjacent)', async () => {
+                            const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 2)))
+                            log.live('adjacent swap', nonZero(work))
+                        }),
+                        button('swap rows 1 and 198 (distant)', async () => {
+                            const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 198)))
+                            log.live('distant swap — one move per row between', nonZero(work))
+                        }),
+                        button('reverse all 200', async () => {
+                            const work = await measureFlush(() => rows.set(rows.peek().slice().reverse()))
+                            log.live('full reverse of 200', nonZero(work))
+                        }),
+                        button('remove row 0', async () => {
+                            const work = await measureFlush(() => rows.set(rows.peek().slice(1)))
+                            log.live('one removal', nonZero(work))
+                        }),
+                    ),
+                )
+                log('', 'the same swap on an UNKEYED list rewrites both rows’ text — see the next case')
+            },
+            bench: {
+                kind: 'work',
+                arms: [
+                    {
+                        label: 'abide — keyed, ADJACENT rows (optimal)',
+                        prepare: async () => {
+                            keyedRows.set(ROWS_200)
+                            await tick()
+                        },
+                        run: () => keyedRows.set(swapped(ROWS_200, 1, 2)),
+                    },
+                    {
+                        label: 'abide — keyed, DISTANT rows (one move per row between)',
+                        prepare: async () => {
+                            keyedRows.set(ROWS_200)
+                            await tick()
+                        },
+                        run: () => keyedRows.set(swapped(ROWS_200, 1, 198)),
+                    },
+                    {
+                        label: 'abide — unkeyed, same data (rewrites two rows’ text)',
+                        prepare: async () => {
+                            unkeyedRows.set(ROWS_200)
+                            await tick()
+                        },
+                        run: () => unkeyedRows.set(swapped(ROWS_200, 1, 198)),
+                    },
+                    {
+                        label: 'vanilla — two insertBefore calls',
+                        run: () => vanilla.swapRows(vanillaHost, 1, 198),
+                    },
+                    {
+                        label: 'vanilla — innerHTML rebuild',
+                        run: () => vanilla.buildRowsInnerHTML(innerHost, swapped(ROWS_200, 1, 198)),
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'the same two reorders, TIMED',
+            note: 'The counters above say a distant swap moves 197 rows where a hand-written one moves 2. This is what that costs on a clock, and it is the number the counters cannot give: the walk itself is O(n) whatever it moves, so the adjacent swap — which moves ONE row — still pays for a pass over two hundred. A reconcile that is cheap in moves and linear in walk is priced honestly by having both cards.',
+            bench: {
+                kind: 'time',
+                floor: 'flush',
+                arms: [
+                    {
+                        label: 'abide — keyed, adjacent swap',
+                        run: async (i: number) => {
+                            adjacentRows.set(i % 2 === 0 ? SWAP_ADJACENT : ROWS_200)
+                            await settled()
+                        },
+                    },
+                    {
+                        label: 'abide — keyed, distant swap',
+                        run: async (i: number) => {
+                            distantRows.set(i % 2 === 0 ? SWAP_DISTANT : ROWS_200)
+                            await settled()
+                        },
+                    },
+                    {
+                        label: 'vanilla — two insertBefore calls',
+                        run: () => vanilla.swapRows(vanillaHost, 1, 198),
+                    },
+                    {
+                        label: 'vanilla — innerHTML rebuild',
+                        run: (i: number) =>
+                            vanilla.buildRowsInnerHTML(innerHost, i % 2 === 0 ? SWAP_DISTANT : ROWS_200),
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'ten rows appended to a thousand',
+            note: 'What a feed does on every poll, and the mutation the whole-array cases cannot show: a reconcile that is right for an EDIT can still rebuild the tail. The thousand rows already there must be left alone — same elements, no text writes — and only the ten new ones created.',
+            async run({ is, log }) {
+                const rows = state(build(1000))
+                const host = container()
+                mount(host, () => list(rows))
+                const nodes = Array.from(host.querySelectorAll('li'))
+
+                const work = await measureFlush(() => {
+                    const next = rows.peek().slice()
+                    for (let i = 0; i < 10; i++) next.push({ id: 1000 + i, label: `row ${1000 + i}` })
+                    rows.set(next)
+                })
+                // abide never calls `createElement` on its build path — it CLONES a prepared
+                // template — which is why this case counts clones. A row is two cloned nodes, the
+                // `<li>` and its anchor comment, plus the text node the slot makes: a template that
+                // IS one element clones that element rather than the fragment around it.
+                is('nothing was built by hand', work.createElement, 0)
+                is('ten rows cloned, not a thousand', work.cloneNode, 20)
+                is('…and ten text nodes with them', work.createText, 10)
+                is('no row already there was rewritten', work.textWrite, 0)
+                is('the first row is the SAME element', host.querySelectorAll('li')[0], nodes[0])
+                is('and the list grew', host.querySelectorAll('li').length, 1010)
+                log('ten appended to a thousand', nonZero(work))
+                host.remove()
+            },
+            bench: {
+                kind: 'time',
+                floor: 'flush',
+                arms: [
+                    {
+                        label: 'abide — set the longer array',
+                        run: async (i: number) => {
+                            growRows.set(i % 2 === 0 ? ROWS_1010 : ROWS_1000)
+                            await settled()
+                        },
+                    },
+                    {
+                        label: 'vanilla — append ten, then drop them',
+                        run: (i: number) => {
+                            if (i % 2 === 0) {
+                                const fragment = document.createDocumentFragment()
+                                for (let n = 1000; n < 1010; n++) {
+                                    const li = document.createElement('li')
+                                    li.textContent = `row ${n}`
+                                    fragment.append(li)
+                                }
+                                growVanillaHost.append(fragment)
+                                return
+                            }
+                            for (let n = 0; n < 10; n++) growVanillaHost.lastChild?.remove()
+                        },
+                    },
+                    {
+                        label: 'vanilla — innerHTML rebuild',
+                        run: (i: number) =>
+                            vanilla.buildRowsInnerHTML(innerHost, i % 2 === 0 ? ROWS_1010 : ROWS_1000),
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'the reconcile is right under ARBITRARY mutation, not just the ones with cases',
+            note: 'The placement walk starts at the last row that changed and stops once it is below the first, which is what makes an edit of one row of a thousand read one `nextSibling` instead of a thousand — and it is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap and edit, at random positions, two hundred times, with the whole list checked after every one. The seed is fixed, so a failure is a failure anybody can reproduce.',
+            async run({ is }) {
+                const rows = state(build(30))
+                const host = container()
+                mount(host, () => keyedList(rows))
+                await tick()
+
+                // A fixed seed rather than `Math.random`: a fuzz nobody can re-run is a fuzz that
+                // reports a bug once and never again.
+                let seed = 987654
+                const rand = (): number => {
+                    seed = (seed * 1103515245 + 12345) % 2147483648
+                    return seed / 2147483648
+                }
+                let mismatches = 0
+                for (let step = 0; step < 200; step++) {
+                    const next = rows.peek().slice()
+                    const roll = rand()
+                    if (roll < 0.3 && next.length > 1) next.splice(Math.floor(rand() * next.length), 1)
+                    else if (roll < 0.6) {
+                        next.splice(Math.floor(rand() * (next.length + 1)), 0, {
+                            id: 5000 + step,
+                            label: `new ${step}`,
+                        })
+                    } else if (roll < 0.8 && next.length > 1) {
+                        const a = Math.floor(rand() * next.length)
+                        const b = Math.floor(rand() * next.length)
+                        const held = next[a] as Item
+                        next[a] = next[b] as Item
+                        next[b] = held
+                    } else if (next.length > 0) {
+                        const at = Math.floor(rand() * next.length)
+                        next[at] = { id: (next[at] as Item).id, label: `edited ${step}` }
+                    }
+                    rows.set(next)
+                    await tick()
+                    const shown = Array.from(host.querySelectorAll('li')).map((li) => li.textContent)
+                    const wanted = next.map((item) => item.label)
+                    if (shown.length !== wanted.length || shown.some((t, i) => t !== wanted[i])) {
+                        mismatches++
+                    }
+                }
+                is('200 random mutations, every one landing right', mismatches, 0)
+                is('and the list is still live', host.querySelectorAll('li').length, rows.peek().length)
+                host.remove()
+            },
+        },
+
+        {
+            title: 'the DOM-node budget of a list row',
+            note: 'One of the three numbers this project budgets emitted code in, and the one a timing hides: a row that quietly grew a wrapper element still renders correctly and still passes every count of text writes. A row is three — the element, its anchor comment, and the text node — against the two a hand-written loop makes. The anchor is what lets a slot own a RANGE rather than a node, and it is the whole of the difference. The vanilla arm reads lower than the two it makes because `textContent =` builds its text node inside the DOM rather than through `createTextNode`, which no counter here can see; the number to compare is the anchor.',
+            bench: {
+                kind: 'budget',
+                arms: [
+                    {
+                        label: 'abide — 200 rows built from cold',
+                        async run() {
+                            const rows = state(build(200))
+                            const host = document.createElement('ul')
+                            detached.append(host)
+                            const work = await measureFlush(() => {
+                                mount(host, () => list(rows))
+                            })
+                            host.remove()
+                            return { count: nodesMade(work), of: 'DOM nodes for 200 rows' }
+                        },
+                    },
+                    {
+                        label: 'vanilla — createElement loop over the same 200',
+                        async run() {
+                            const host = document.createElement('ul')
+                            detached.append(host)
+                            const work = await measureFlush(() => vanilla.buildRows(host, ROWS_200))
+                            host.remove()
+                            return { count: nodesMade(work), of: 'DOM nodes for 200 rows' }
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'a full reverse of 200 keyed rows',
+            note: 'The worst case for the in-order walk, and the one where a hand-written version has no better answer either: reversing really does need a move per row. It is also the case that CANNOT distinguish a keyed reconcile from a rebuild — which is why the swap above is the one that earns its place.',
+            bench: {
+                kind: 'work',
+                arms: [
+                    {
+                        label: 'abide — keyed, in-order placement',
+                        prepare: async () => {
+                            keyedRows.set(ROWS_200)
+                            await tick()
+                        },
+                        run: () => keyedRows.set(ROWS_200.slice().reverse()),
+                    },
+                    {
+                        label: 'vanilla — append per row',
+                        run: () => {
+                            const children = Array.from(vanillaHost.children).reverse()
+                            for (const child of children) vanillaHost.append(child)
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'a re-render that changes NOTHING',
+            note: 'Every binding compares before it writes. A binding that assigns the value already present produces identical output at full DOM cost — which only a counter can see.',
+            bench: {
+                kind: 'work',
+                arms: [
+                    {
+                        label: 'abide — same array contents',
+                        prepare: async () => {
+                            liveRows.set(ROWS_1000)
+                            await tick()
+                        },
+                        run: () => liveRows.set(ROWS_1000.slice()),
+                    },
+                    {
+                        label: 'vanilla — innerHTML with the same markup',
+                        run: () => vanilla.buildRowsInnerHTML(innerHost, ROWS_1000),
+                    },
+                    {
+                        label: 'vanilla — textContent per row, unguarded',
+                        run: () => {
+                            const children = vanillaBigHost.children
+                            for (let i = 0; i < children.length; i++) {
+                                ;(children[i] as HTMLElement).textContent = (ROWS_1000[i] as Item).label
+                            }
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'attribute bindings that did not move',
+            note: 'The same contract on the attribute lane. Five slots re-evaluated, none of them changed.',
+            bench: {
+                kind: 'work',
+                arms: (() => {
+                    const level = state('high')
+                    const host = document.createElement('div')
+                    detached.append(host)
+                    mount(
+                        host,
+                        () =>
+                            html`<p
+                                class=${() => level()}
+                                data-a=${() => level()}
+                                data-b=${() => level()}
+                                data-c=${() => level()}
+                                data-d=${() => level()}
+                            ></p>`,
+                    )
+                    const plain = document.createElement('p')
+                    detached.append(plain)
+                    return [
+                        { label: 'abide — five slots, same value', run: () => level.set('high') },
+                        {
+                            label: 'vanilla — setAttribute, unguarded',
+                            run: () => {
+                                for (const name of ['class', 'data-a', 'data-b', 'data-c', 'data-d']) {
+                                    plain.setAttribute(name, 'high')
+                                }
+                            },
+                        },
+                    ]
+                })(),
+            },
+        },
+
+        {
+            title: 'an unkeyed list edits IN PLACE, which is right until it is a reorder',
+            note: 'Without a key a row is identified by its index, so a swap rewrites both rows’ text rather than moving two nodes. That is cheaper for an edit and wrong for a reorder — which is the whole reason `keyed` exists.',
+            async run({ is }) {
+                const rows = state(build(5))
+                const host = container()
+                mount(host, () => list(rows))
+                const nodes = Array.from(host.querySelectorAll('li'))
+
+                const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 3)))
+                is(
+                    'the screen is right',
+                    Array.from(host.querySelectorAll('li')).map((li) => li.textContent),
+                    ['row 0', 'row 3', 'row 2', 'row 1', 'row 4'],
+                )
+                is('but the ELEMENTS never moved', host.querySelectorAll('li')[1], nodes[1])
+                is('their text was rewritten instead', work.textWrite, 2)
+                is('and nothing was inserted', work.insert, 0)
+                host.remove()
+            },
+        },
+
+        {
+            title: 'nested templates patch in place when the call site is the same',
+            note: 'Identity of the `strings` array is the test, so a nested template from the same literal updates rather than rebuilding — and a different literal rebuilds, which is what makes a branch swap correct.',
+            async run({ is }) {
+                const mode = state<'a' | 'b'>('a')
+                const value = state(1)
+                const host = container()
+                const paneA = (n: number): TemplateResult => html`<p class="pane-a">pane A · ${n}</p>`
+                const paneB = (n: number): TemplateResult => html`<p class="pane-b">pane B · ${n}</p>`
+                mount(
+                    host,
+                    () => html`<div>${() => (mode() === 'a' ? paneA(value()) : paneB(value()))}</div>`,
+                )
+                const first = host.querySelector('p')
+
+                const same = await measureFlush(() => value.set(2))
+                is('same call site — the element survives', host.querySelector('p'), first)
+                is('…and nothing was created', same.createElement, 0)
+                is('the text was patched', host.querySelector('p')?.textContent, 'pane A · 2')
+
+                const swap = await measureFlush(() => mode.set('b'))
+                is('a different call site rebuilds', host.querySelector('p') === first, false)
+                is('…which means an element WAS created', swap.createElement > 0, true)
+                is('the new pane', host.querySelector('p')?.className, 'pane-b')
+                host.remove()
+            },
+            interact({ host, log }) {
+                const mode = state<'a' | 'b'>('a')
+                const value = state(1)
+                const out = stage(host)
+                const paneA = (n: number): TemplateResult => html`<p class="text-sky-300">pane A · ${n}</p>`
+                const paneB = (n: number): TemplateResult => html`<p class="text-amber-300">pane B · ${n}</p>`
+                mount(out, () => html`<div>${() => (mode() === 'a' ? paneA(value()) : paneB(value()))}</div>`)
+                host.append(
+                    row(
+                        button('bump the value (same call site)', async () => {
+                            const work = await measureFlush(() => value.set(value.peek() + 1))
+                            log.live('same call site', nonZero(work))
+                        }),
+                        button('switch pane (different call site)', async () => {
+                            const work = await measureFlush(() => mode.set(mode.peek() === 'a' ? 'b' : 'a'))
+                            log.live('different call site', nonZero(work))
+                        }),
+                    ),
+                )
+            },
+        },
+
+        {
+            title: 'a patch REPLACES the previous run’s effects instead of stacking another one',
+            note: 'Every thunk slot creates an effect, so a patch that does not first tear down the previous run’s leaves one live effect per patch — each closing over superseded values, all writing to the same binder. The output stays right, because the newest effect runs last and wins, which is exactly why only a WAKE count can see it. Hand-written templates rarely reach this path; a compiled one takes it on every patch.',
+            async run({ is }) {
+                const value = state(1)
+                const patch = state(0)
+                let runs = 0
+                // Same `strings` on every call, so the nested template PATCHES rather than rebuilds.
+                const pane = (n: number): TemplateResult =>
+                    html`<p>${() => {
+                        runs++
+                        return `${n}:${value()}`
+                    }}</p>`
+
+                const host = container()
+                mount(host, () => html`<div>${() => pane(patch())}</div>`)
+                is('one run on mount', runs, 1)
+
+                for (let i = 1; i <= 3; i++) {
+                    patch.set(i)
+                    await tick()
+                }
+                is('three patches, three more runs', runs, 4)
+
+                const before = runs
+                value.set(2)
+                await tick()
+                is('ONE effect woke, not one per patch', runs - before, 1)
+                is(
+                    'and the text is what the newest effect wrote',
+                    host.querySelector('p')?.textContent,
+                    '3:2',
+                )
+                host.remove()
+            },
+            bench: {
+                kind: 'wake',
+                arms: [
+                    {
+                        label: 'effects alive after 50 patches of the same call site',
+                        async run() {
+                            const value = state(1)
+                            const patch = state(0)
+                            let runs = 0
+                            const pane = (n: number): TemplateResult =>
+                                html`<p>${() => {
+                                    runs++
+                                    return `${n}:${value()}`
+                                }}</p>`
+                            const host = container()
+                            mount(host, () => html`<div>${() => pane(patch())}</div>`)
+                            for (let i = 1; i <= 50; i++) {
+                                patch.set(i)
+                                await tick()
+                            }
+                            const before = runs
+                            value.set(2)
+                            await tick()
+                            host.remove()
+                            return { count: runs - before, of: 'wakes on one write' }
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'a template whose ROOT is a slot paints on the first render',
+            note: 'A top-level child slot inserts what it renders before its anchor comment, which is still inside the fragment while the instance is being built. Recording the instance’s nodes before that first update captured only the anchor — so the content was left orphaned in the fragment and the template painted BLANK until some later update happened to re-place it.',
+            async run({ is }) {
+                const items = state(['a', 'b'])
+                const host = container()
+                mount(host, () => html`${() => items().map((x) => html`<li>${x}</li>`)}`)
+                is(
+                    'a list at the root',
+                    Array.from(host.querySelectorAll('li')).map((li) => li.textContent),
+                    ['a', 'b'],
+                )
+
+                const label = state('hello')
+                const text = container()
+                mount(text, () => html`${() => label()}`)
+                is('a bare text slot at the root', text.textContent, 'hello')
+                host.remove()
+                text.remove()
+            },
+        },
+
+        {
+            title: 'an async cell paints when it lands, with the ordinary read',
+            note: 'No `<Suspense>` and no second spelling: the slot reads the cell, and the cell wakes it once the load settles.',
+            async run({ is }) {
+                const session = state(Promise.resolve('ada'))
+                const host = container()
+                mount(host, () => html`<p>${() => (session.pending() ? '…' : session())}</p>`)
+                is('while it is cold', host.querySelector('p')?.textContent, '…')
+                await tick()
+                is('once it lands', host.querySelector('p')?.textContent, 'ada')
+                host.remove()
+            },
+            interact({ host, log }) {
+                const results = state<string[] | undefined>(undefined)
+                const out = stage(host)
+                mount(
+                    out,
+                    () =>
+                        html`<p class="text-slate-100">
+                            ${() => (results() === undefined ? 'loading…' : (results() as string[]).join(', '))}
+                        </p>`,
+                )
+                let generation = 0
+                host.append(
+                    field('search', (text) => {
+                        const mine = ++generation
+                        results.set(undefined)
+                        void sleep(300).then(() => {
+                            if (mine !== generation) return
+                            results.set(['alpha', 'beta', 'gamma'].filter((word) => word.includes(text)))
+                        })
+                    }),
+                )
+                log('', 'a promise placed directly in the slot behaves the same way — see the html page')
+            },
+        },
+
+        {
+            title: 'a promise superseded before it lands never paints over the newer one',
+            note: 'Each child part stamps what it is showing, so a settle that arrives after it has been replaced — or after the tree was disposed — is discarded.',
+            async run({ is }) {
+                const query = state('a')
+                const gate: ((value: string) => void)[] = []
+                const host = container()
+                mount(
+                    host,
+                    () =>
+                        html`<p>${() => {
+                            query()
+                            return new Promise<string>((resolve) => gate.push(resolve))
+                        }}</p>`,
+                )
+                query.set('b')
+                await tick()
+                is('two loads are in flight', gate.length, 2)
+                gate[1]?.('second')
+                await tick()
+                gate[0]?.('first') // the stale load lands last
+                await tick()
+                is('the newer answer survives', host.querySelector('p')?.textContent, 'second')
+                host.remove()
+            },
+            interact({ host, log }) {
+                const seed = state(0)
+                const out = stage(host)
+                mount(
+                    out,
+                    () =>
+                        html`<p class="text-slate-100">
+                            ${() => {
+                                const current = seed()
+                                return sleep(current === 1 ? 600 : 60).then(() => `settled: seed ${current}`)
+                            }}
+                        </p>`,
+                )
+                host.append(
+                    row(
+                        button('seed 1 (slow), then seed 2 (fast)', () => {
+                            seed.set(1)
+                            setTimeout(() => seed.set(2), 20)
+                            log('watch it', 'the 600ms answer for seed 1 lands last and is dropped')
+                        }),
+                    ),
+                )
+            },
+        },
+
+        {
+            title: 'a cell handed back by a thunk is READ, not rendered as a function',
+            note: 'No trailing `()`. A handle in a slot means its value, on both substrates — which is what lets a keyed slot be dropped straight into a template.',
+            async run({ is }) {
+                const search = memo(async ({ q }: { q: string }) => `results for ${q}`)
+                const query = state('a')
+                const host = container()
+                mount(host, () => html`<p>${() => search({ q: query() })}</p>`)
+                is('cold', host.querySelector('p')?.textContent, '')
+                await tick()
+                is('once it lands', host.querySelector('p')?.textContent, 'results for a')
+
+                query.set('b')
+                await tick()
+                is(
+                    'a new key is a new slot, and the slot paints',
+                    host.querySelector('p')?.textContent,
+                    'results for b',
+                )
+                host.remove()
+            },
+        },
+
+        {
+            title: 'dispose tears the tree down and stops updates',
+            note: '`mount` returns a handle. Everything created under it — every slot effect, every nested part, every list row — disposes together, because they were all created inside one `scope`.',
+            async run({ is }) {
+                const n = state(1)
+                let runs = 0
+                const host = container()
+                const view = mount(
+                    host,
+                    () =>
+                        html`<p>${() => {
+                            runs++
+                            return n()
+                        }}</p>`,
+                )
+                is('the first run', runs, 1)
+
+                view.dispose()
+                n.set(2)
+                await tick()
+                is('the slot effect is gone', runs, 1)
+                is('and the container is empty', host.childNodes.length, 0)
+                host.remove()
+            },
+            interact({ host, log }) {
+                const n = state(0)
+                const out = stage(host)
+                const mounted = mount(out, () => html`<p class="text-slate-100">n = ${() => n()}</p>`)
+                let disposed = false
+                host.append(
+                    row(
+                        button('n.set(n + 1)', async () => {
+                            const work = await measureFlush(() => n.set(n.peek() + 1))
+                            log.live('work per write', `${nonZero(work)}${disposed ? ' — disposed' : ''}`)
+                        }),
+                        button('dispose()', () => {
+                            mounted.dispose()
+                            disposed = true
+                            log('disposed', 'the container is empty and further writes reach nothing')
+                        }),
+                    ),
+                )
+            },
+        },
+
+        {
+            title: 'parse once per call site',
+            note: 'One call site is parsed once no matter how many rows come out of it, and every later row is a clone plus a walk. A browser clock is clamped to about a millisecond, so read the 1000-row number, not the single-row one.',
+            interact({ host, log }) {
+                const out = stage(host, 'live (scroll)')
+                out.className += ' max-h-40 overflow-auto'
+                const rows = state<Item[]>([])
+                mount(out, () => list(rows))
+
+                const time = async (n: number): Promise<void> => {
+                    rows.set([])
+                    await tick()
+                    const started = performance.now()
+                    rows.set(build(n))
+                    await tick()
+                    const elapsed = performance.now() - started
+                    log(
+                        `${n} rows`,
+                        `${elapsed.toFixed(2)}ms · ${((elapsed / n) * 1000).toFixed(1)}µs per row`,
+                    )
+                }
+                host.append(
+                    row(
+                        button('1 row', () => void time(1)),
+                        button('100 rows', () => void time(100)),
+                        button('1000 rows', () => void time(1000)),
+                    ),
+                )
+            },
+        },
+    ],
+})

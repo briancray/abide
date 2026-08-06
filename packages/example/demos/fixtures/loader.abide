@@ -1,0 +1,23 @@
+<script module>
+import { state } from 'abide'
+
+let made = 0
+/** How many times the inline operand has been evaluated. A loop would make this unbounded. */
+export const calls = (): number => made
+export const bump = (): void => {
+    made++
+}
+export const label = state('idle')
+export const user = state(new Promise<{ name: string }>((resolve) => setTimeout(() => resolve({ name: 'ada' }), 20)))
+</script>
+
+<div>
+    <!-- The operand is evaluated by THIS thunk; the branches are closures the part calls later. So
+         settling never wakes this effect, and an inline promise cannot re-make itself. -->
+    {#await user}<em>loading…</em>{:then u}<b>{u?.name}</b>{:catch e}<i>{e}</i>{/await}
+
+    <!-- A promise made right here, which is the shape that used to loop forever. -->
+    {#await (bump(), new Promise<string>((r) => setTimeout(() => r('made inline'), 10)))}…{:then made}<span>{made}</span>{/await}
+
+    <p>{label}</p>
+</div>

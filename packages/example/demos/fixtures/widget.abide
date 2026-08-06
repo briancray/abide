@@ -1,0 +1,15 @@
+<script module>
+import { state } from 'abide'
+
+// Small enough to assert whole, and loaded through the real plugin — so what these cases render is
+// what `bun test`, `bun run web` and `bun run example` all load, with no build step in between.
+export const slug = state('two')
+export const text = state('a')
+export const on = state(true)
+</script>
+
+<div>
+    <a href="/x/{slug}/y">go</a>
+    <input bind:value={text} />
+    <input type="checkbox" bind:checked={on} />
+</div>

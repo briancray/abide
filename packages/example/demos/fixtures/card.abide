@@ -1,0 +1,21 @@
+<script module>
+import { state } from 'abide'
+
+export const open = state(true)
+</script>
+
+<article class="card">
+    <h3>scoped</h3>
+    <p>Only this component's rules reach these elements.</p>
+    <button onclick={() => open = !open}>toggle</button>
+</article>
+
+<style>
+.card { border: 1px solid; padding: 8px }
+.card h3, .card p { margin: 0 }
+h3:hover { color: rebeccapurple }
+@media (min-width: 40rem) {
+    .card { padding: 16px }
+}
+@keyframes pulse { from { opacity: 0 } to { opacity: 1 } }
+</style>

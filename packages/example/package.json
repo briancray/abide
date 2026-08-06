@@ -1,0 +1,18 @@
+{
+    "name": "example",
+    "version": "0.0.0",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "web": "bun web/serve.ts",
+        "server": "bun server.ts",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "abide": "workspace:*"
+    },
+    "devDependencies": {
+        "bun-plugin-tailwind": "^0.1.2",
+        "tailwindcss": "^4.3.3"
+    }
+}

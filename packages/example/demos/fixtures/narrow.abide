@@ -1,0 +1,18 @@
+<script module>
+import { memo, state } from 'abide'
+
+export const title = state('dune')
+export const session = state(new Promise<{ name: string }>((resolve) => resolve({ name: 'ada' })))
+export const details = memo(async ({ title }: { title: string }) => ({ pages: title.length }))
+</script>
+
+<div>
+    <!-- A cell read is a CALL, and TypeScript narrows a const, never a call. So a condition takes
+         its reads into locals and the branch narrows off those — `.name` here needs no `?.`. -->
+    {#if session}<p>{session.name}</p>{:else}<p>anonymous</p>{/if}
+
+    <!-- The same for a keyed memo, where the CALL is the cell. -->
+    {#if details({ title })}<p>{details({ title }).pages} pages</p>{/if}
+
+    {#switch session}{:case undefined}<em>loading</em>{:default}<b>{session.name}</b>{/switch}
+</div>

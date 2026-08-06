@@ -1,0 +1,21 @@
+<script module>
+import { state } from 'abide'
+
+export const rate = state(2)
+export const items = state([
+    { id: 'a', width: 3, height: 4 },
+    { id: 'b', width: 5, height: 6 },
+])
+</script>
+
+<ul>
+    {#for item of items by item.id}
+        <!-- Branch-local: `area` exists per ITEM, and `rate` here shadows the outer source. -->
+        <script>
+        const area = item.width * item.height
+        const rate = `${item.width}:${item.height}`
+        </script>
+        <li>{item.id} — area {area}, ratio {rate}</li>
+    {/for}
+</ul>
+<p>outer rate is still a source: {rate}</p>

@@ -1,0 +1,12 @@
+# The example pages are Tailwind-styled; Bun's HTML bundler runs the plugin over the `<link>`ed css.
+#
+# Declared HERE rather than in the root bunfig because the plugin is resolved relative to the config
+# that names it, and `bun-plugin-tailwind` is an example dependency — abide itself has no styling and
+# must not acquire one by being in the same repo.
+[serve.static]
+plugins = ["bun-plugin-tailwind", "../abide/compiler/plugin.ts"]
+
+# The pages import `.abide` files directly, so the loader has to be in force for the module graph the
+# HTML routes bundle — declared rather than inherited, so the browser lane does not depend on which
+# config happened to be read first.
+preload = ["../abide/compiler/preload.ts"]

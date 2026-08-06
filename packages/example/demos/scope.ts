@@ -1,0 +1,288 @@
+// The caller scope — what makes a module-level `memo` safe to put on a server.
+//
+// A memo declared at module scope is created ONCE, at import, and its cache lives as long as the
+// process. On a client that is exactly right: there is one caller, forever. On a server it means the
+// answer computed for one request is served to the next one, and that is not a stale cache, it is
+// the wrong person's data. So the cache is per-caller by default, and `{ global }` is how something
+// that genuinely belongs to the process says so.
+//
+// `isolate` is the plain-variable form — a client, a test, a script. `serve(request, fn)` in
+// `abide/server` is the async-local form a server needs, because requests interleave across every
+// await and one variable cannot tell two of them apart.
+
+import { isolate, memo, state } from 'abide'
+import { suite } from '$tests'
+import { button, row, stage } from './dom.ts'
+import { META } from './SUITES.ts'
+
+export default suite({
+    ...META.scope,
+    cases: [
+        {
+            title: 'the default is per-caller — two callers, two caches',
+            note: 'Same memo, same key, two isolates: the body runs once per caller and neither sees the other’s value.',
+            run({ is }) {
+                let bodyRuns = 0
+                const profile = memo(({ id }: { id: number }) => {
+                    bodyRuns++
+                    return { id, seat: bodyRuns }
+                })
+
+                const first = isolate(() => profile({ id: 1 })())
+                const second = isolate(() => profile({ id: 1 })())
+
+                is('the body ran once per caller', bodyRuns, 2)
+                is('first caller', first, { id: 1, seat: 1 })
+                is('second caller sees its OWN load', second, { id: 1, seat: 2 })
+            },
+        },
+
+        {
+            title: 'a caller’s cache is its own, and coalesces within the caller',
+            note: 'Per-caller is not per-read: inside one caller the slot behaves exactly as it always did.',
+            run({ is }) {
+                let bodyRuns = 0
+                const profile = memo(({ id }: { id: number }) => {
+                    bodyRuns++
+                    return id * 2
+                })
+
+                const seen = isolate(() => [profile({ id: 3 })(), profile({ id: 3 })(), profile({ id: 3 })()])
+
+                is('three reads of one key', seen, [6, 6, 6])
+                is('one body run', bodyRuns, 1)
+            },
+        },
+
+        {
+            title: '{ global } is one cache for every caller',
+            note: 'For what belongs to the process rather than to whoever asked — a config file, a currency table.',
+            run({ is }) {
+                let bodyRuns = 0
+                const rates = memo(
+                    ({ pair }: { pair: string }) => {
+                        bodyRuns++
+                        return `${pair}:${bodyRuns}`
+                    },
+                    { global: true },
+                )
+
+                const first = isolate(() => rates({ pair: 'usd' })())
+                const second = isolate(() => rates({ pair: 'usd' })())
+
+                is('the body ran once in total', bodyRuns, 1)
+                is('both callers got the same value', [first, second], ['usd:1', 'usd:1'])
+            },
+        },
+
+        {
+            title: 'the argless form is per-caller too',
+            note: 'It has no args to key a cache by, so the CELL is what varies — a `GET(() => …)` with no arguments is exactly the leaky case.',
+            run({ is }) {
+                const who = state('nobody')
+                let bodyRuns = 0
+                const greeting = memo(() => {
+                    bodyRuns++
+                    return `hello ${who()}`
+                })
+
+                who.set('ada')
+                const first = isolate(() => greeting())
+                who.set('grace')
+                const second = isolate(() => greeting())
+
+                is('the body ran once per caller', bodyRuns, 2)
+                is('first caller', first, 'hello ada')
+                is('second caller', second, 'hello grace')
+            },
+        },
+
+        {
+            title: 'the cache goes away with the caller',
+            note: 'A scope is torn down when its body settles, so nothing a request loaded outlives it.',
+            run({ is }) {
+                let bodyRuns = 0
+                const thing = memo(({ id }: { id: number }) => {
+                    bodyRuns++
+                    return id
+                })
+
+                isolate(() => thing({ id: 1 })())
+                isolate(() => thing({ id: 1 })())
+                isolate(() => thing({ id: 1 })())
+
+                is('three callers, three loads', bodyRuns, 3)
+            },
+        },
+
+        {
+            title: 'no caller scope means one cache — which is a client',
+            note: 'Read outside any isolate and the memo behaves exactly as it did before scoping existed. This is the client’s whole story.',
+            run({ is }) {
+                let bodyRuns = 0
+                const doubled = memo(({ n }: { n: number }) => {
+                    bodyRuns++
+                    return n * 2
+                })
+
+                is('first read', doubled({ n: 4 })(), 8)
+                is('second read', doubled({ n: 4 })(), 8)
+                is('one body run', bodyRuns, 1)
+
+                const argless = memo(() => {
+                    bodyRuns++
+                    return 'once'
+                })
+                is('argless reads', [argless(), argless()], ['once', 'once'])
+                is('and ran once', bodyRuns, 2)
+            },
+        },
+
+        {
+            title: 'a caller’s scope survives its awaits',
+            note: 'A handler is async, so the cache has to follow the continuation and not just the synchronous call.',
+            async run({ is }) {
+                let bodyRuns = 0
+                const load = memo(async ({ id }: { id: number }) => {
+                    bodyRuns++
+                    return id * 10
+                })
+
+                const value = await isolate(async () => {
+                    const before = await load({ id: 2 })
+                    // The read AFTER the await must still be this caller's.
+                    const after = load({ id: 2 }).peek()
+                    return [before, after]
+                })
+
+                is('both reads landed in one cache', value, [20, 20])
+                is('one body run', bodyRuns, 1)
+            },
+        },
+
+        {
+            title: 'overlapping callers are refused, not approximated',
+            note: 'While an async isolate is in flight, another is indistinguishable from one nested inside it — so both are refused rather than guessed at. A server uses `serve`, which is async-local and allows both.',
+            async run({ is, throws }) {
+                let release = (): void => {}
+                const gate = new Promise<void>((resolve) => {
+                    release = resolve
+                })
+                const first = isolate(async () => {
+                    await gate
+                    return 'first'
+                })
+
+                throws(
+                    'a second isolate while one is in flight',
+                    () => isolate(() => 'second'),
+                    'still in flight',
+                )
+
+                release()
+                is('the first still finishes', await first, 'first')
+            },
+        },
+
+        {
+            title: 'interact — two callers, one memo',
+            interact({ host, log }) {
+                let bodyRuns = 0
+                const profile = memo((_: { id: number }) => {
+                    bodyRuns++
+                    return `loaded #${bodyRuns}`
+                })
+                const shared = memo(
+                    (_: { id: number }) => {
+                        bodyRuns++
+                        return `loaded #${bodyRuns}`
+                    },
+                    { global: true },
+                )
+
+                host.append(
+                    stage(
+                        row(
+                            button('call as a new caller', () => {
+                                const value = isolate(() => profile({ id: 1 })())
+                                log.live('per-caller (default)', value)
+                                log.live('body runs', bodyRuns)
+                            }),
+                            button('call { global } as a new caller', () => {
+                                const value = isolate(() => shared({ id: 1 })())
+                                log.live('{ global }', value)
+                                log.live('body runs', bodyRuns)
+                            }),
+                        ),
+                    ),
+                )
+                log('per-caller (default)', '—')
+                log('{ global }', '—')
+                log('body runs', bodyRuns)
+            },
+        },
+
+        {
+            title: 'what the facade costs when there is no caller scope',
+            note:
+                'The argless form has no args key, so scoping it means handing back a facade over “whichever cell belongs to the caller”. ' +
+                'The `{ global }` arm is the raw cell with no facade at all, so the ratio IS the added cost — about 1.7ns a read under JSC, ' +
+                'and on a client the branch always goes the same way.',
+            bench: {
+                kind: 'time',
+                arms: [
+                    {
+                        label: 'memo() — per-caller facade, no scope active',
+                        run: (): unknown => SCOPED_READ(),
+                    },
+                    {
+                        label: 'memo({ global }) — the raw cell',
+                        run: (): unknown => GLOBAL_READ(),
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'what a CALLER costs — the scope a request opens and drops',
+            note: 'The other half of the facade’s price, and the one every request pays whether or not it reads anything: a scope is a `Map` and an array, and dropping it runs whatever derivations the caller made. Three arms rather than two, because the scope and the read it wraps are separate costs and one number cannot tell them apart — and because every caller’s cache starts EMPTY, so the read inside is necessarily cold. That is what per-caller means, not an artefact of the arm. Bench only: a synchronous `isolate` is refused while the async one two cases up is still in flight, and on the page every case starts at once.',
+            bench: {
+                kind: 'time',
+                arms: (() => {
+                    const lookup = memo(({ id }: { id: number }) => id * 2)
+                    return [
+                        {
+                            // The scope ALONE, so the two costs are not read as one. A caller that
+                            // never touches a memo still opens and drops one of these.
+                            label: 'abide — isolate() around nothing',
+                            run: (): unknown => isolate(() => 0),
+                        },
+                        {
+                            // What a request actually does. Every caller's cache starts empty, so
+                            // this read is necessarily COLD — that is what per-caller means, not an
+                            // artefact of the arm.
+                            label: 'abide — isolate() + one keyed read, cold in a fresh cache',
+                            run: (): unknown => isolate(() => lookup({ id: 7 })()),
+                        },
+                        {
+                            label: 'vanilla — a fresh Map per caller, one miss, no disposal',
+                            run: (): unknown => {
+                                const cache = new Map<number, number>()
+                                const held = cache.get(7)
+                                if (held !== undefined) return held
+                                const made = 14
+                                cache.set(7, made)
+                                return made
+                            },
+                        },
+                    ]
+                })(),
+            },
+        },
+    ],
+})
+
+// Built once, outside the arms: a bench measures the READ, not the construction.
+const SOURCE_CELL = state(1)
+const SCOPED_READ = memo(() => SOURCE_CELL() * 2)
+const GLOBAL_READ = memo(() => SOURCE_CELL() * 2, { global: true })

@@ -1,0 +1,32 @@
+<script module>
+import { state } from 'abide'
+
+export const room = state('lobby')
+
+/** A fresh stream per room, so changing rooms tears the list down and re-streams. */
+async function* lines(name: string): AsyncGenerator<string> {
+    for (let i = 1; i <= 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 8))
+        yield `${name} ${i}`
+    }
+    if (name === 'bad') throw new Error('stream failed')
+}
+
+export const feed = (name: string): AsyncGenerator<string> => lines(name)
+export const failing = state(true)
+
+/** Throws on demand, so the boundary has something real to catch. */
+export const explode = (on: boolean): string => {
+    if (on) throw new Error('boom')
+    return 'fine'
+}
+</script>
+
+<div>
+    <ul>
+        {#for await line of feed(room)}<li>{line}</li>{:catch e}<li class="err">{String(e)}</li>{/for}
+    </ul>
+
+    <!-- A boundary is one unit: the body is evaluated whole, so a throw anywhere in it lands here. -->
+    {#try}<b>{explode(failing)}</b>{:catch e}<i>caught: {String(e)}</i>{:finally}<small>done</small>{/try}
+</div>
