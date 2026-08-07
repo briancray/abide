@@ -27,6 +27,7 @@ import { keyOf, matcher } from './internal/keys.ts'
 import { isThenable } from './internal/probes.ts'
 import { currentScope, disposeWith, storeFor } from './internal/scopes.ts'
 import { byTag, joinTags } from './internal/tags.ts'
+import { arm } from './internal/timers.ts'
 
 export type { Memo, State }
 
@@ -94,18 +95,6 @@ export interface MemoOptions<Args = unknown> {
      * Set with `throttle`, this wins — the two are answers to the same question.
      */
     debounce?: number
-}
-
-/**
- * A timer that survives neither a request nor a process exit on its own account.
- *
- * `unref` where the runtime has it: a window that has not closed yet is not a reason for a server to
- * stay up, and a test that ends with one armed should still end.
- */
-function arm(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
-    const timer = setTimeout(fn, ms)
-    ;(timer as unknown as { unref?: () => void }).unref?.()
-    return timer
 }
 
 /**

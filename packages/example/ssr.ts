@@ -1,5 +1,8 @@
 // Render the example on the server. Same component, no DOM, no reactivity — a render is a snapshot,
 // so every thunk is simply called.
+//
+// Named `ssr` rather than `server`, because `server/` beside it is the transport directory the
+// compiler recognises — one word for two things in one folder is one word too many.
 
 import { renderDocument, renderToString } from 'abide/server'
 import { App, count, filter, search } from './app.ts'

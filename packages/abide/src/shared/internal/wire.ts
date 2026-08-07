@@ -1,0 +1,230 @@
+// What goes over the wire, described ONCE so the two lanes cannot disagree about it.
+//
+// Three things travel: a value (JSON), a stream of values (one JSON value per line), and a failure.
+// A failure carries its NAME, because that is the question `isError` asks and the one that outlives
+// the constructor — an error that crossed a wire arrives as a plain object, and `instanceof` on it
+// is false however faithfully it was serialised.
+
+import { ARGS_PARAM } from './PATHS.ts'
+import { isThenable } from './probes.ts'
+
+/** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */
+export const NDJSON_TYPE = 'application/x-ndjson'
+export const JSON_TYPE = 'application/json'
+
+/**
+ * How long the client may serve what it just loaded, in MILLISECONDS.
+ *
+ * The one option that crosses the wire, and it crosses as a response header rather than as source
+ * the stub copies: an option may reference a server-only import, so there is nothing to copy. Not
+ * `cache-control: max-age`, whose unit is whole seconds — a `ttl` of 500 ms would arrive as 0 or as
+ * 1000, and quietly serving data for twice as long as declared is the failure this exists to avoid.
+ */
+export const TTL_HEADER = 'abide-ttl'
+
+/**
+ * Past this many characters a read's args travel in a body instead.
+ *
+ * A read is an HTTP GET so that its address says what it is and an intermediary may cache it, and
+ * that puts the args in the URL — where every proxy has a ceiling. The server accepts either for a
+ * read, so the fallback is one branch here rather than a second endpoint.
+ */
+export const MAX_GET_URL = 2000
+
+/**
+ * A call's args as the JSON that carries them.
+ *
+ * `?? null` because `undefined` is not JSON: an argless call has to travel as SOMETHING, and `null`
+ * is what `decodeArgs` maps back — otherwise an in-process call and a wire call would hand the
+ * handler different args.
+ */
+export function encodeArgs(args: unknown): string {
+    return JSON.stringify(args ?? null)
+}
+
+/** The same args as the query a read and a socket upgrade carry them in. */
+export function argsQuery(encoded: string): string {
+    return `?${ARGS_PARAM}=${encodeURIComponent(encoded)}`
+}
+
+/** The other half of `encodeArgs`. Absent and empty both mean an argless call. */
+export function decodeArgs(text: string | null): unknown {
+    if (text === null || text === '') return undefined
+    const parsed = JSON.parse(text) as unknown
+    return parsed === null ? undefined : parsed
+}
+
+export interface WireError {
+    name: string
+    message: string
+}
+
+/**
+ * How a failure is told once the status line is already out.
+ *
+ * A stream's chunks are the handler's own values, so the failure line has to be distinguishable from
+ * one — an `{ error }` shape is something a handler could legitimately yield. This key is not.
+ */
+const FAILED = '__abide_failed'
+
+/**
+ * A failure as it travels, from the two strings that survive the trip.
+ *
+ * Takes them rather than an `Error`, because the gate in `registry.ts` refuses with neither in hand —
+ * building one there only to read two fields back off it captures a stack per 404.
+ */
+export function errorFrame(name: string, message: string): { error: WireError } {
+    return { error: { name, message } }
+}
+
+/** A failure, reduced to what survives `JSON.stringify` and still answers `isError`. */
+export function errorPayload(error: unknown): { error: WireError } {
+    if (error instanceof Error) return errorFrame(error.name, error.message)
+    return errorFrame('Error', String(error))
+}
+
+/**
+ * The failure a caller sees, rebuilt with the name the server gave it.
+ *
+ * The address is prepended to the message rather than replacing it: a stack trace in a browser names
+ * the stub, so the endpoint has to be in the text or nothing says which call failed.
+ */
+export function wireError(id: string, status: number, payload: unknown): Error {
+    const carried = (payload as { error?: WireError } | null)?.error
+    if (carried === undefined || carried === null) {
+        const plain = new Error(`abide: ${id} failed with ${status}${text(payload)}`)
+        plain.name = 'AbideTransportError'
+        return plain
+    }
+    const rebuilt = new Error(`abide: ${id} — ${carried.message}`)
+    rebuilt.name = carried.name
+    return rebuilt
+}
+
+function text(payload: unknown): string {
+    if (typeof payload !== 'string' || payload === '') return ''
+    return ` — ${payload}`
+}
+
+/** A response body as JSON, or as the text it turned out to be. Never throws on a malformed body. */
+export async function payloadOf(response: Response): Promise<unknown> {
+    const body = await response.text()
+    if (body === '') return null
+    if (!(response.headers.get('content-type') ?? '').includes(JSON_TYPE)) return body
+    try {
+        return JSON.parse(body) as unknown
+    } catch {
+        return body
+    }
+}
+
+/** Is the response a stream of chunks rather than one value? */
+export function isChunked(response: Response): boolean {
+    return (response.headers.get('content-type') ?? '').includes(NDJSON_TYPE)
+}
+
+/**
+ * A response body as the chunks it carries.
+ *
+ * Line-delimited rather than framed: a chunk is a JSON value and JSON has no unescaped newline, so
+ * the delimiter costs one character and needs no length prefix to be re-read.
+ */
+export async function* chunksOf(id: string, response: Response): AsyncGenerator<unknown> {
+    const body = response.body
+    if (body === null) return
+    // A READER rather than `for await` over the stream: async iteration of a `ReadableStream` is a
+    // recent addition and not everything that answers `Symbol.asyncIterator` actually iterates, so
+    // the portable spelling is the one that works in every lane this runs in.
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    let held = ''
+    // A CURSOR rather than re-slicing the buffer per line: dropping the head of a k-line read copies
+    // what is left of it k times, and a stream's whole point is that the buffer is not small.
+    let from = 0
+    for (;;) {
+        const step = await reader.read()
+        if (step.done === true) break
+        if (from > 0) {
+            held = held.slice(from)
+            from = 0
+        }
+        held += decoder.decode(step.value, { stream: true })
+        for (;;) {
+            const at = held.indexOf('\n', from)
+            if (at < 0) break
+            const line = held.slice(from, at)
+            from = at + 1
+            if (line !== '') yield chunk(id, line)
+        }
+    }
+    const rest = held.slice(from) + decoder.decode()
+    if (rest.trim() !== '') yield chunk(id, rest)
+}
+
+function chunk(id: string, line: string): unknown {
+    const parsed = JSON.parse(line) as unknown
+    if (parsed === null || typeof parsed !== 'object') return parsed
+    const failure = (parsed as Record<string, unknown>)[FAILED]
+    if (failure === undefined) return parsed
+    throw wireError(id, 200, { error: failure as WireError })
+}
+
+function stepsOf<T>(source: AsyncIterable<T> | Iterable<T>): AsyncIterator<T> | Iterator<T> {
+    const asAsync = (source as AsyncIterable<T>)[Symbol.asyncIterator]
+    if (typeof asAsync === 'function') return asAsync.call(source)
+    return (source as Iterable<T>)[Symbol.iterator]()
+}
+
+/**
+ * A sequence as the bytes of a response body, one frame per value.
+ *
+ * `pull` rather than a loop: the source is asked for its next value only once the consumer has taken
+ * the last one, so back-pressure reaches a generator as its own `next()` not being called yet.
+ *
+ * Without `failed`, a source that throws ERRORS the body — the status line is already out, so a
+ * truncated chunked response is the only thing HTTP itself has left to say. A lane with a decoder of
+ * its own passes one in and says it in the body instead.
+ */
+export function framedBody<T>(
+    source: AsyncIterable<T> | Iterable<T>,
+    frame: (value: T) => string,
+    failed?: (error: unknown) => string,
+): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder()
+    const steps = stepsOf(source)
+    return new ReadableStream<Uint8Array>({
+        async pull(controller) {
+            try {
+                // Guarded, not awaited: a sync iterable settles in the call, and an unconditional
+                // await would cost a microtask tick per value to learn that.
+                const stepped = steps.next()
+                const step = isThenable(stepped) ? await stepped : (stepped as IteratorResult<T>)
+                if (step.done === true) {
+                    controller.close()
+                    return
+                }
+                controller.enqueue(encoder.encode(frame(step.value)))
+            } catch (error) {
+                if (failed === undefined) {
+                    controller.error(error)
+                    return
+                }
+                controller.enqueue(encoder.encode(failed(error)))
+                controller.close()
+            }
+        },
+        cancel: (reason) => void steps.return?.(reason),
+    })
+}
+
+/** One JSON value per line — the frame both line-delimited bodies are written in. */
+export function jsonLine(value: unknown): string {
+    return `${JSON.stringify(value)}\n`
+}
+
+/** The other half of the rpc wire: chunks as the bytes of a response body. */
+export function chunkedBody(chunks: AsyncIterable<unknown>): ReadableStream<Uint8Array> {
+    // A failure mid-stream goes out as one more LINE, and the consumer throws on reading it: the
+    // client half of this file decodes every chunk, so it has somewhere to be told.
+    return framedBody(chunks, jsonLine, (error) => jsonLine({ [FAILED]: errorPayload(error).error }))
+}

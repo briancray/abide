@@ -69,3 +69,19 @@ export {
 } from './router.ts'
 // Where a compiled `<style>` block lands. `styles()` is what a server render puts in <head>.
 export { adopt, styleTags } from './styles.ts'
+// The client half of the two transport laws — what a generated stub imports, and what a hand-written
+// one would. The DECLARING half is in `abide/server`, because a handler's body must not ship to a
+// browser; these two are the same shapes with a fetch and a websocket for bodies.
+export {
+    type CallOptions,
+    type Kind,
+    type Method,
+    type RemoteOptions,
+    type RemoteSocket,
+    type RemoteSocketOptions,
+    type Rpc,
+    type RpcHandle,
+    remote,
+    remoteSocket,
+    type Wire,
+} from './transport.ts'

@@ -223,6 +223,36 @@ export function keyedCache<T>(body: (key: string) => Promise<T>): {
     }
 }
 
+// --- a remote call, by hand -------------------------------------------------
+
+/**
+ * What an rpc replaces: a handler, a route that reaches it, and a client stub that calls it — the
+ * same call DECLARED THREE TIMES, with nothing checking that the three agree. The line count is not
+ * the argument; the third declaration is.
+ *
+ * Same substrate as the abide arm — a real `Request`, a real `Response`, a real JSON round trip —
+ * so the ratio is what the transport COSTS rather than what a `Response` costs.
+ */
+export function remoteByHand<Args, T>(path: string, handler: (args: Args) => T): (args: Args) => Promise<T> {
+    const origin = 'http://vanilla.test'
+    // The route, still declared separately from the handler and from the stub below — that third
+    // declaration is the argument, and it stays visible even though only `call` is handed back.
+    const serve = (request: Request): Response | undefined => {
+        const url = new URL(request.url)
+        if (url.pathname !== path) return undefined
+        const args = JSON.parse(url.searchParams.get('a') ?? 'null') as Args
+        return new Response(JSON.stringify(handler(args)), {
+            headers: { 'content-type': 'application/json' },
+        })
+    }
+    return async function call(args: Args): Promise<T> {
+        const query = encodeURIComponent(JSON.stringify(args))
+        const response = serve(new Request(`${origin}${path}?a=${query}`))
+        if (response === undefined) throw new Error(`no route at ${path}`)
+        return JSON.parse(await response.text()) as T
+    }
+}
+
 // --- a router, by hand ------------------------------------------------------
 
 /** Filling a pattern the way anyone would, with one pass of `replace`. */

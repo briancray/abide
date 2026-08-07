@@ -8,7 +8,7 @@
 // depend on the renderer, or a bug in `$ui` takes its own demonstration off the air.
 
 import { type Case, context, type LogLine, type Sink, type Suite } from 'abide/tests'
-import { el } from '../demos/dom.ts'
+import { el, LABEL } from '../demos/dom.ts'
 import { NAV } from '../demos/SUITES.ts'
 
 export function page(suite: Suite): Promise<void> {
@@ -90,7 +90,7 @@ function card(spec: Case): { node: HTMLElement; start: () => Promise<void> } {
     const head = el('div', 'px-5 pt-4 pb-3')
     const title = el('div', 'flex items-baseline justify-between gap-4')
     title.append(el('h2', 'text-lg font-medium text-slate-100', spec.title))
-    const status = el('span', 'text-[10px] uppercase tracking-widest text-slate-600', badge(spec))
+    const status = el('span', `${LABEL} text-slate-600`, badge(spec))
     title.append(status)
     head.append(title)
     if (spec.note !== undefined) head.append(el('p', 'mt-1 text-sm text-slate-400', spec.note))
@@ -134,11 +134,11 @@ function card(spec: Case): { node: HTMLElement; start: () => Promise<void> } {
                 await spec.run(ctx)
                 status.textContent = 'passing'
             }
-            status.className = 'text-[10px] uppercase tracking-widest text-emerald-500'
+            status.className = `${LABEL} text-emerald-500`
             spec.interact?.(ctx)
         } catch (error: unknown) {
             status.textContent = 'FAILED'
-            status.className = 'text-[10px] uppercase tracking-widest text-rose-400'
+            status.className = `${LABEL} text-rose-400`
             write({ label: 'the case threw', value: String(error), kind: 'fail' }, false)
         }
     }

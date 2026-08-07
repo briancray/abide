@@ -125,6 +125,15 @@ export const META = {
             'nothing, because every binding compares before it writes. One node is inserted: the root anchor.',
         tag: 'adopt the server’s markup',
     },
+    transport: {
+        name: 'transport',
+        title: 'rpc · socket',
+        blurb:
+            'Two laws over the three primitives: `rpc` is a `memo` whose body is a fetch, `socket` is a ' +
+            '`channel` whose subscribers arrived over a wire. The right-hand sides are already written, ' +
+            'so three concurrent readers of one key cost one request without the transport doing anything.',
+        tag: 'rpc = memo + transport',
+    },
     compiler: {
         name: 'compiler',
         title: 'compiler',
@@ -152,6 +161,7 @@ export const ORDER: SuiteName[] = [
     'client',
     'server',
     'hydrate',
+    'transport',
     'compiler',
 ]
 

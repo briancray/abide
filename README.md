@@ -20,15 +20,21 @@ packages/abide/src/
     internal/patterns.ts 162  a pattern: parse it, order it, run a path through it
     html.ts             147   the template tag + THE one slot classifier
     internal/{slots,tags,keys}.ts  101   the slot cache, the tag registry, the args key
+    transport.ts        294   remote / remoteSocket — the client half of both laws: a keyed memo
+                              with a fetch for a body, a channel with a websocket for one
+    internal/wire.ts     87   what goes over the wire: one value, a stream of them, or a failure
     reactive.ts + index.ts          44   the public faces
   ui/                   the DOM renderer — parse-once templates, per-slot effects, keyed lists
     internal/parts.ts   686   child parts, keyed lists, instances
     internal/prepare.ts  92   parse once per call site
     index.ts             30   mount · hydrate
-  server/               streaming SSR, in-order + out-of-order suspend
+  server/               streaming SSR, the transport's declaring half, in-order + out-of-order suspend
     index.ts            392   the walk
-    pages.ts             54   src/ui/pages/** as a route table — routing's one non-isomorphic half
+    pages.ts             54   a pages directory as a route table — routing's one non-isomorphic half
     internal/emit.ts     26   attributes, the patch script
+    rpc.ts              245   GET…DELETE and socket — the DECLARING half: middleware, timeout,
+                              retention, the cross-origin gate, and one call as a Response
+    registry.ts         204   dispatch — id -> handler, and the websocket half of the mount point
 packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, so a template
                           expression is the same language as the rest of the file
     internal/lex.ts        the one tokenizer: where an embedded expression ENDS
@@ -36,7 +42,8 @@ packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, 
     internal/parse.ts      the file -> a node tree
     internal/emit.ts       the node tree -> the `html` template you would have written
     internal/css.ts        scoped <style>: one attribute, selectors rewritten
-    index.ts               compile() — pure, no I/O
+    internal/elide.ts      a transport module -> the stub, or the module plus its own address
+    index.ts               compile() + elide() — pure, no I/O
 packages/abide/tests/   the test kit (abide/tests): the Case shape, assertions, DOM counters, bench timing
 ```
 
@@ -278,10 +285,57 @@ Three more rules fall out of it:
 - **`url()` refuses to build a wrong href.** A missing required segment, and a param the pattern has
   no segment for, are typos every time, and both otherwise link to the wrong page.
 
-The **directory is the pattern and the filename is the kind**: `pages('src/ui/pages')` hands back the
+The **directory is the pattern and the filename is the kind**: `pages(dir)` hands back the
 table above, with every `layout` above a page attached outermost-first. That half lives in
 `abide/server`, because a filesystem is not isomorphic; what it produces is the same ordinary table
 `routes()` takes on either side.
+
+### Transports
+
+Two laws over the primitives, and the whole of both is that the right-hand side is already written:
+
+```ts
+// server/rpc/users.ts — the DIRECTORY is what makes this an endpoint
+import { GET, POST } from 'abide/server'
+import { findUser, renameUser } from '../db.ts'
+
+export const getUser = GET(({ id }: { id: number }) => findUser(id))
+export const rename  = POST(({ id, name }: { id: number; name: string }) => renameUser(id, name))
+```
+
+```ts
+// anywhere — the same import on both sides
+import { getUser } from './server/rpc/users.ts'
+
+await getUser({ id: 7 })       // the value, wherever this is running
+getUser({ id: 7 }).peek()      // …and every other thing a keyed memo's handle answers
+```
+
+An `rpc` **is** a keyed `memo` whose body happens to be a fetch, so nothing about the surface is
+transport-shaped, and **three concurrent readers of one key cost one request** because the *slot*
+coalesces — exactly as it already did for a local load. A `socket` is a `channel` whose subscribers
+arrived over a wire; the server half is `channel()` unchanged, and the entire transport is one
+`subscribe` on upgrade and one unsubscribe on close.
+
+- **The directory is the kind.** `server/rpc/**` is an rpc and `server/sockets/**` is a socket. A Bun
+  plugin filter is a *path* regex, so a `'use server'` directive would mean intercepting every `.ts`
+  in the graph; a path costs one regex and tells the plugin which stub to write before it reads the
+  file. A `socket` under `server/rpc/` is a compile error naming the file, the export and both.
+- **An endpoint is recognised syntactically** — `export const NAME = GET(…)`. The same rule `.abide`
+  lives by, for the same reason: the browser lane builds the stub from a file it is about to throw
+  away, so the emit path must not need a type-checker. Any other export there is a compile error
+  naming the export, because the alternative is a stub exporting `undefined` for a helper somebody
+  imported.
+- **The module's own path is the address**, under one reserved prefix: `server/rpc/admin/audit.ts`'s
+  `recent` is served at `/__abide/rpc/admin/audit/recent`. No hash — the filesystem already forbids
+  two files at one path, and an address legible in a network panel is worth the bytes.
+- **The browser gets the address and none of the body.** The server gets the module verbatim with a
+  `register(…)` appended, so every line keeps its number and a stack trace still points at the
+  handler.
+- **`dispatch(request, server?)` is the whole server side.** It returns `undefined` synchronously for
+  anything outside `/__abide/`, so an app mounts it in front of its own routes and forgets it, and it
+  runs each handler inside `serve(request, …)` — so an rpc's slot belongs to the caller that filled
+  it.
 
 ### One surface on every source
 
@@ -466,6 +520,7 @@ separate unit-test suite to drift from the pages, and `bun test` is the pages be
 | `/client` | mount, keyed lists, disposal, with the **DOM calls counted** |
 | `/server` | streaming SSR, and a live frame you can watch an out-of-order patch land in |
 | `/hydrate` | the client adopting that markup, with the **DOM calls counted** — the number is one |
+| `/transport` | `rpc` and `socket`, against a `dispatch` called in-process: **three readers, one request** |
 | `/bench` | every capability against a hand-written equivalent, one table row per arm |
 
 The bench runs four kinds of case, because the framework makes four kinds of claim: **time**, as a
@@ -568,7 +623,7 @@ a test:
 - **No subtree-scoped `<style>`.** A top-level one is scoped to its component; the nested form is a
   compile error naming what is missing.
 - **A route's modules are reached through a loader, and nothing generates that list for a browser.**
-  `pages()` reads `src/ui/pages/**` off the filesystem, which is a server. A client is handed the
+  `pages(dir)` reads that directory off the filesystem, which is a server. A client is handed the
   same table by whatever built its bundle — and there is no CLI yet, so today that means writing it
   down. The table's SHAPE is the same either way, which is the part that had to be settled.
 - **`identity()` and `trace()` do not exist.** The caller scope carries `request()`, `bag()` and
@@ -619,9 +674,14 @@ a test:
   looks right either way.
 - **A pending cell renders blank on the server**, because a server render is a snapshot with nothing
   to wake later. `suspend(cell, (v) => …)` — cells are thenable — is how a load reaches SSR.
-- **No transports.** `rpc = memo + transport` and `socket = channel + transport` are the laws; only
-  the left-hand sides exist here. `packages/example/spike` settles how a handler is addressed and
-  elided, and proves both laws end to end, but nothing of it is framework code yet.
+- **A transport's OPTIONS do not cross the wire**, and cannot: `GET(fn, { middleware: [auth] })` is
+  server-side text, and an option may reference a server-only import, so there is nothing a stub
+  could copy. What crosses is the consequence — a `ttl` arrives as an `abide-ttl` response header and
+  the client's slot goes cold on the server's schedule. Tags do not cross, so `invalidate({ tags })`
+  reaches one side at a time. `opts.schemas` and `opts.clients` are spec'd and unbuilt.
+- **A handler streams iff it is written `function*`.** The browser lane builds its stub from a file
+  it never loads, so the syntax is the whole answer; a generator assembled elsewhere and passed in is
+  not seen as one. Same rule `.abide` lives by, same reason.
 - Lists are keyed but placement is a simple in-order walk, not a minimal-move (LIS) reconcile.
   Nothing is ever re-created — every row survives as the same element — but a swap costs **one move
   per row between the two**: rows 1 and 198 of 200 is 197 moves where a minimal reconcile is 2.
@@ -631,8 +691,10 @@ a test:
 
 ## Roadmap
 
-1. **Transports** to close the two laws. The seam is settled — see `packages/example/spike`.
-2. **A CLI**, which is what turns `pages()` into a table a browser bundle also has.
+1. **A CLI**, which is what turns `pages()` into a table a browser bundle also has, and what would
+   read the environment table the spec describes.
+2. **The ambients** — `identity()`, `trace()`, `health()`, `online()` — which is the half of a
+   request an rpc's middleware currently has to carry itself.
 
 ## Provenance
 

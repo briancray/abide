@@ -6,7 +6,7 @@
 
 import { dirname, resolve } from 'node:path'
 import type { BunPlugin } from 'bun'
-import { compile, describe } from './index.ts'
+import { compile, describe, elide, TRANSPORT_MODULE } from './index.ts'
 
 // `import source from './x.abide?source'` — the file's own TEXT, as a module.
 //
@@ -31,6 +31,27 @@ const SOURCE_NAMESPACE = 'abide-source'
 export const abidePlugin: BunPlugin = {
     name: 'abide',
     setup(build): void {
+        // Which LANE this is, and the only discriminator available: the bundler populates
+        // `build.config` — `target: "browser"` for both `Bun.build` and the dev server's HTML routes
+        // — and a runtime `plugin()` registration leaves it undefined. A wrong answer here ships a
+        // database driver to a browser, silently, so `demos/transport.ts` asserts both halves rather
+        // than trusting this.
+        const browser = (build as { config?: { target?: string } }).config?.target === 'browser'
+
+        // A transport module: the browser gets addresses, the server gets the module plus its own
+        // address. Registered on this plugin rather than a second one because an app registers one
+        // plugin and both transformations are the same question — what does this lane load?
+        build.onLoad({ filter: TRANSPORT_MODULE }, async (args) => {
+            const source = await Bun.file(args.path).text()
+            try {
+                const elided = elide(source, { filename: args.path, browser })
+                if (elided === null) return undefined
+                return { loader: 'ts', contents: elided.code }
+            } catch (error) {
+                throw new Error(describe(source, args.path, error))
+            }
+        })
+
         build.onResolve({ filter: /\.abide\?source$/ }, (args) => ({
             path: resolve(dirname(args.importer), args.path),
             namespace: SOURCE_NAMESPACE,

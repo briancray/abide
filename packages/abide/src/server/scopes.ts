@@ -23,7 +23,8 @@ import { useHrefSource } from '$shared/router.ts'
 interface Serving {
     scope: Scope
     request: Request
-    bag: Map<string, unknown>
+    /** Both built on first ask, like `cookies` — most requests open neither. */
+    bag: Map<string, unknown> | null
     cookies: Map<string, string> | null
 }
 
@@ -38,7 +39,7 @@ let STORAGE: AsyncLocalStorage<Serving> | null = null
 
 function storage(): AsyncLocalStorage<Serving> {
     if (STORAGE !== null) return STORAGE
-    if (typeof AsyncLocalStorage !== 'function') {
+    if (!canServe()) {
         throw new Error(
             'abide: serve() is server-only — there is no AsyncLocalStorage here. On a client there is one caller forever, so nothing needs scoping; `isolate` is the spelling that works in both places.',
         )
@@ -69,8 +70,20 @@ function serving(verb: string): Serving {
  * a handler that forgets to think about it still cannot serve the previous caller's data.
  */
 export function serve<T>(request: Request, fn: () => T): T {
-    const held: Serving = { scope: newScope(), request, bag: new Map(), cookies: null }
+    const held: Serving = { scope: newScope(), request, bag: null, cookies: null }
     return storage().run(held, () => settling(fn, () => dropScope(held.scope)))
+}
+
+/**
+ * Serve one request where there may be no scoping to do.
+ *
+ * The branch lives HERE rather than at each entry point, so the next one does not have to remember
+ * it: `serve` throws where there is no `AsyncLocalStorage`, which is the right answer for anyone who
+ * called it directly and the wrong one for a browser dispatching to itself — there is one caller
+ * forever there, so a memo's cache belongs to it by definition.
+ */
+export function serveIfScoped<T>(request: Request, fn: () => T): T {
+    return canServe() ? serve(request, fn) : fn()
 }
 
 /** Whether there is a caller to ask about at all. */
@@ -78,14 +91,28 @@ export function isServing(): boolean {
     return STORAGE?.getStore() !== undefined
 }
 
+/**
+ * Can requests be scoped here at all?
+ *
+ * False in exactly one place — a browser, where Bun bundles `node:async_hooks` as an empty object.
+ * Asked rather than catching the throw, so `serve` keeps throwing for a direct caller.
+ */
+function canServe(): boolean {
+    return typeof AsyncLocalStorage === 'function'
+}
+
 /** The request being served. Throws outside one — there is no honest answer to guess. */
 export function request(): Request {
     return serving('request').request
 }
 
-/** A bag of values carried for the life of one request. */
+/** A bag of values carried for the life of one request. Built on first ask. */
 export function bag(): Map<string, unknown> {
-    return serving('bag').bag
+    const held = serving('bag')
+    if (held.bag !== null) return held.bag
+    const made = new Map<string, unknown>()
+    held.bag = made
+    return made
 }
 
 /** The cookies of the request being served. Parsed once per request, on first ask. */

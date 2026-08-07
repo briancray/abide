@@ -16,6 +16,7 @@ import scope from './scope.html'
 import server from './server.html'
 import state from './state.html'
 import template from './template.html'
+import transport from './transport.html'
 import verbs from './verbs.html'
 import watch from './watch.html'
 
@@ -52,6 +53,7 @@ const running = Bun.serve({
         '/client': client,
         '/server': server,
         '/hydrate': hydrate,
+        '/transport': transport,
         '/compiler': compiler,
         '/bench': bench,
     },

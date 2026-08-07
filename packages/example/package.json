@@ -5,7 +5,7 @@
     "private": true,
     "scripts": {
         "web": "bun web/serve.ts",
-        "server": "bun server.ts",
+        "ssr": "bun ssr.ts",
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {

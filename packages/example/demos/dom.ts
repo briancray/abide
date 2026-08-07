@@ -22,6 +22,9 @@ const BUTTON =
     'rounded-md bg-slate-800 px-3 py-1.5 text-sm text-slate-100 hover:bg-slate-700 ' +
     'active:bg-slate-600 border border-slate-700'
 
+/** The small-caps ramp every caption, badge and column head in the demo pages shares. */
+export const LABEL = 'text-[10px] uppercase tracking-widest'
+
 /** The row-sized variant: a control that has to sit inside a table row without setting its height. */
 export const SMALL_BUTTON =
     'rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300 hover:bg-slate-700 ' +
@@ -52,7 +55,7 @@ export function field(label: string, onInput: (value: string) => void, initial =
 /** A framed area a case renders live DOM into, so the reader can see what abide owns. */
 export function stage(host: HTMLElement, label = 'live'): HTMLElement {
     const wrap = el('div', 'rounded-lg border border-dashed border-slate-700 bg-slate-900/60')
-    wrap.append(el('div', 'px-3 pt-2 text-[10px] uppercase tracking-widest text-slate-600', label))
+    wrap.append(el('div', `px-3 pt-2 ${LABEL} text-slate-600`, label))
     const inner = el('div', 'px-3 pb-3 pt-1')
     wrap.append(inner)
     host.append(wrap)

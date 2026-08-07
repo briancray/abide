@@ -124,9 +124,13 @@ function paused(out: Out): Promise<void> | null {
  *
  * That is what "streams in document order" means and it is the only moment a consumer could be
  * starved: a slot that has to wait holds the walk, and everything before it is already out.
+ *
+ * NOT `async`, and guarded at every call site like `Rest` beside it: `renderToString` has no
+ * consumer at all — including inside every deferred boundary, which renders through it — so an
+ * unconditional promise here costs a wrap and a tick PER ROW of a streamed list to learn that.
  */
-async function handOver(out: Out): Promise<void> {
-    if (out.flush !== null) await out.flush()
+function handOver(out: Out): Promise<void> | null {
+    return out.flush === null ? null : out.flush()
 }
 
 // --- the walk ----------------------------------------------------------------
@@ -273,7 +277,8 @@ function emitArray(nodes: Renderable[], context: RenderContext, out: Out, from: 
 // resumption: they are the slow path by definition, so readable beats allocation-free here.
 
 async function emitAwaited(node: Awaited, context: RenderContext, out: Out): Promise<void> {
-    await handOver(out)
+    const handed = handOver(out)
+    if (handed !== null) await handed
     let arms: unknown
     try {
         arms = settledArms(node.branches, undefined, await node.value, false)
@@ -289,20 +294,23 @@ async function emitAwaited(node: Awaited, context: RenderContext, out: Out): Pro
 // Taken and awaited through `unknown`: `Renderable` includes `Promise<Renderable>`, so a `PromiseLike<Renderable>`
 // here makes the fulfillment type reference itself.
 async function emitPromise(node: PromiseLike<unknown>, context: RenderContext, out: Out): Promise<void> {
-    await handOver(out)
+    const handed = handOver(out)
+    if (handed !== null) await handed
     const settled: unknown = await node
     const more = emit(settled as Renderable, context, out)
     if (more !== null) await more
 }
 
 async function emitStreamed(node: Streamed, context: RenderContext, out: Out): Promise<void> {
-    await handOver(out)
+    const handed = handOver(out)
+    if (handed !== null) await handed
     try {
         let index = 0
         for await (const item of node.source as AsyncIterable<never>) {
             const more = emit(node.row(item, index++) as Renderable, context, out)
             if (more !== null) await more
-            await handOver(out)
+            const handed = handOver(out)
+            if (handed !== null) await handed
         }
     } catch (error) {
         if (node.failure === undefined) throw error
@@ -316,11 +324,13 @@ async function emitAsyncIterable(
     context: RenderContext,
     out: Out,
 ): Promise<void> {
-    await handOver(out)
+    const handed = handOver(out)
+    if (handed !== null) await handed
     for await (const child of node) {
         const more = emit(child as Renderable, context, out)
         if (more !== null) await more
-        await handOver(out)
+        const handed = handOver(out)
+        if (handed !== null) await handed
     }
 }
 
@@ -355,7 +365,8 @@ function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
 }
 
 async function emitSuspendInline(node: Suspend, context: RenderContext, out: Out): Promise<void> {
-    await handOver(out)
+    const handed = handOver(out)
+    if (handed !== null) await handed
     const more = emit(node.body((await node.value) as never), context, out)
     if (more !== null) await more
 }
@@ -551,5 +562,34 @@ export type { RenderOptions } from './internal/emit.ts'
 // The one part of routing that is NOT isomorphic, because a filesystem is not. What it hands back is
 // an ordinary route table, and `routes()` takes the same one on either side.
 export { pages } from './pages.ts'
+// The transport seam: what a handler is DECLARED as, and the one entry point that serves it. Here
+// rather than on the isomorphic surface because a handler's body must not reach a browser — the
+// compiler elides the whole module, and `abide` carries the stub's half.
+export { dispatch, register, registered, websocket } from './registry.ts'
+// What an app's own route answers with. Server-side because a `Response` is: the browser lane reads
+// one, it never builds one.
+export {
+    error,
+    type Failure,
+    HttpError,
+    json,
+    jsonl,
+    type RedirectStatus,
+    redirect,
+    sse,
+} from './responses.ts'
+export {
+    DELETE,
+    GET,
+    PATCH,
+    POST,
+    PUT,
+    type RpcMiddleware,
+    type RpcOptions,
+    type SocketEvent,
+    type SocketMiddleware,
+    type SocketOptions,
+    socket,
+} from './rpc.ts'
 // The caller scope and its ambients. `serve` is what makes every module-level `memo` per-request.
 export { bag, cookies, isServing, request, serve } from './scopes.ts'

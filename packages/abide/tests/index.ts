@@ -49,6 +49,7 @@ export {
     tick,
     total,
 } from './internal/dom.ts'
+export { type Loopback, loopback } from './internal/loopback.ts'
 
 // --- what a case says -------------------------------------------------------
 

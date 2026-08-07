@@ -27,6 +27,7 @@ const LOADERS: Record<SuiteName, () => Promise<{ default: Suite }>> = {
     client: () => import('./client.ts'),
     server: () => import('./server.ts'),
     hydrate: () => import('./hydrate.ts'),
+    transport: () => import('./transport.ts'),
     compiler: () => import('./compiler.ts'),
 }
 

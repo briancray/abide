@@ -16,6 +16,7 @@
 import { markSource } from './internal/BRANDS.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isNamedError } from './internal/probes.ts'
+import { arm } from './internal/timers.ts'
 import { state, watch } from './reactive.ts'
 
 interface Received<T> {
@@ -127,9 +128,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Roo
         const held = cell.peek()
         const oldest = held.stamps.length > 0 ? (held.stamps[0] as number) : held.got ? held.at : 0
         if (oldest === 0) return
-        expiry = setTimeout(expire, Math.max(0, oldest + maxAge - Date.now()))
-        // A window that has not closed yet is not a reason for a server to stay up.
-        ;(expiry as unknown as { unref?: () => void }).unref?.()
+        expiry = arm(expire, Math.max(0, oldest + maxAge - Date.now()))
     }
 
     function expire(): void {

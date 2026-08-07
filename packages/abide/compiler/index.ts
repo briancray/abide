@@ -11,11 +11,22 @@
 // `.abide` source. `ParseError` is exported so a caller can tell a compile failure from any other
 // throw — `SyntaxError_` deliberately is not, because a lexer error is one the shells only format.
 
+import { type Endpoint, endpointsOf, type Kind, kindOf, registration, stub } from './internal/elide.ts'
 import { emit } from './internal/emit.ts'
 import { SyntaxError_ } from './internal/lex.ts'
 import { positionAt, type Segment, sourceMap, startsOf } from './internal/map.ts'
 import { ParseError, parse } from './internal/parse.ts'
 
+// `Method` deliberately stays internal: the compiler's is a DECLARATION keyword — it includes
+// `socket` — and `abide` already exports a `Method` that is the HTTP verb a call travels as.
+export {
+    ElisionError,
+    type Endpoint,
+    endpointId,
+    type Kind,
+    kindOf,
+    TRANSPORT_MODULE,
+} from './internal/elide.ts'
 export { original as originalPosition, type Segment } from './internal/map.ts'
 export { ParseError } from './internal/parse.ts'
 
@@ -26,7 +37,7 @@ export interface CompileOptions {
 
 export interface Compiled {
     code: string
-    /** A v3 source map with the `.abide` file inlined. */
+    /** A v3 source map with the `.abide` file inlined. Encoded on first read, then held. */
     map: string
     /** The same mapping, unencoded — what `abide check` moves a diagnostic through. */
     segments: Segment[]
@@ -37,7 +48,18 @@ export function compile(source: string, options: CompileOptions = {}): Compiled 
     const blocks = parse(source)
     const { code, segments } = emit(source, blocks, { filename })
     const base = filename.split('/').pop() ?? filename
-    return { code, map: sourceMap(segments, base, source), segments }
+    // Encoded ON DEMAND. `plugin.ts` reads only `code`, and it is the caller that runs per `.abide`
+    // file per bundle — the dev server re-bundles a route on every document request — while VLQ
+    // encoding every segment and inlining the whole source is the expensive half of a compile.
+    let encoded: string | null = null
+    return {
+        code,
+        segments,
+        get map(): string {
+            encoded ??= sourceMap(segments, base, source)
+            return encoded
+        },
+    }
 }
 
 /** Line and column for a diagnostic position, so an error names a place in the file. One-based. */
@@ -46,7 +68,40 @@ export function locate(source: string, position: number): { line: number; column
     return { line: at.line + 1, column: at.column + 1 }
 }
 
+export interface ElideOptions {
+    /** Names the addresses and every diagnostic — the module path IS the address. */
+    filename: string
+    /** The browser lane, which gets the stub instead of the module. */
+    browser?: boolean
+}
+
+export interface Elided {
+    /** The stub, or the module plus its own registration. */
+    code: string
+    kind: Kind
+    endpoints: Endpoint[]
+}
+
+/**
+ * A transport module for one lane. `null` for a file under neither transport directory, which is
+ * what lets a caller ask about any file at all.
+ *
+ * The same pass over the same text produces both lanes, so the browser's stub and the server's
+ * registration cannot disagree about what an endpoint is called or where it is served.
+ */
+export function elide(source: string, options: ElideOptions): Elided | null {
+    const kind = kindOf(options.filename)
+    if (kind === null) return null
+    const endpoints = endpointsOf(source, options.filename, kind)
+    const code =
+        options.browser === true
+            ? stub(options.filename, kind, endpoints)
+            : source + registration(options.filename, kind, endpoints)
+    return { code, kind, endpoints }
+}
+
 export function describe(source: string, filename: string, error: unknown): string {
+    // `ParseError` and `ElisionError` are both `SyntaxError_`, so one guard places all three.
     if (!(error instanceof SyntaxError_) && !(error instanceof ParseError)) return String(error)
     const { line, column } = locate(source, error.position)
     return `${filename}:${line}:${column} ${error.message}`

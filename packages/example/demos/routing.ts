@@ -34,7 +34,7 @@ import { hrefFor, routerRecord } from './vanilla.ts'
 // --- the pages ---------------------------------------------------------------
 //
 // Hand-written rather than `.abide` files, because a browser card cannot read a directory. The
-// filesystem half — `pages()` turning `src/ui/pages/**` into this same table — is proved in
+// filesystem half — `pages(dir)` turning a pages directory into this same table — is proved in
 // `test/pages.test.ts` against real `.abide` files, for the same reason `serve` is tested there.
 
 const Home: View = () => html`<b>home</b>`

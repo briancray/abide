@@ -15,12 +15,16 @@ either.
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope |
+| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, and the client half of both transports (`remote`, `remoteSocket`) |
 | `abide/ui` | the DOM substrate — `mount`, `hydrate` |
-| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope, and `pages()` |
-| `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing |
-| `abide/compiler` | `compile()` and its diagnostics. Pure: text in, text out, no filesystem |
-| `abide/compiler/plugin` | the Bun plugin that compiles `.abide` on import |
+| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`) |
+| `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
+| `abide/compiler` | `compile()`, `elide()` and their diagnostics. Pure: text in, text out, no filesystem |
+| `abide/compiler/plugin` | the Bun plugin: compiles `.abide` on import, and elides a transport module to the stub or the registration its lane needs |
+
+A handler is DECLARED through `abide/server` and CALLED through the module it lives in, so an app
+imports one name and the lane decides what is behind it. The client half is on the isomorphic surface
+because that is what a generated stub imports — `remote(id)` written by hand is the same file.
 
 ## What is spec'd here and NOT built
 
@@ -32,18 +36,19 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 
 | Area | Absent |
 | --- | --- |
-| transport | `rpc`, `socket` — the two transport laws in the paragraph above |
+| transport | `opts.schemas` / `opts.schema` and `opts.clients` — declaring a shape and which surfaces may reach a handler. Everything else in both laws is built |
 | ambients | `identity()`, `trace()`, `health()`, `online()`, `appDataDir()` |
-| lifecycle | `onStart`/`onHealth` and the config table's env vars |
+| lifecycle | `onStart`/`onHealth` and the config table's env vars, except the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) |
 | `<style>` | the subtree-scoped (nested) form — a compile error naming what is missing |
 | logging | `log` and its channels, and therefore the `DEBUG` gating below |
-| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the environment table — there is no binary yet, so nothing reads any of it |
+| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it |
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
 `request`, `bag`, `cookies`, `isServing`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
-`outlet`, and `pages()` for `src/ui/pages/**`), the template tag and its runtime, both render
-substrates, hydration, the `.abide` compiler, and the test kit.
+`outlet`, and `pages(dir)` for a pages directory), both transports and the seam that addresses them, the
+template tag and its runtime, both render substrates, hydration, the `.abide` compiler, and the test
+kit.
 
 ## Terms
 
@@ -145,17 +150,17 @@ ownership rule, and the failure mode is a leak nobody sees.
 | --- | --- |
 | `GET(fn, opts?)` | Declares a read that any surface may call, addressed by its arguments. |
 | `POST` / `PUT` / `PATCH` / `DELETE` | Declare a mutation, which retains nothing by default. |
-| `fn(args)` | Calls the handler and resolves to its value, wherever the caller happens to be running. |
+| `fn(args)` | SELECTS the slot and hands back its cell, exactly as a keyed `memo` does — an rpc IS one. Reading it is what reaches the handler, wherever the caller happens to be running. |
 | `fn(args, { signal })` | The same call, abandoned when the signal aborts, without affecting anyone else waiting on it. |
 | `fn.raw(args, init?)` | The same call, handed back as the raw response instead of a decoded value. |
-| `for await (const c of fn(args))` | Consumes a handler that yields chunks, replaying what already happened before following what comes next. |
+| `for await (const c of fn(args))` | Consumes a handler that yields chunks, replaying what already happened before following what comes next. A handler yields iff it is declared `function*`, which is how the browser lane knows without a type-checker. |
 | `opts.description` | The human description carried onto every generated surface. |
-| `opts.schemas` | The declared shape of the input, output and files, enforced at every door the call can arrive through. |
-| `opts.clients` | Which surfaces — UI, MCP, CLI — can reach this handler at all. |
+| `opts.schemas` *(not built)* | The declared shape of the input, output and files, enforced at every door the call can arrive through. |
+| `opts.clients` *(not built)* | Which surfaces — UI, MCP, CLI — can reach this handler at all. |
 | `opts.middleware` | The chain that authorizes and observes every read, from every caller, including in-process ones. |
 | `opts.memo` | `memo` options; What the call retains, how long, and under which tags. |
 | `opts.timeout` | The longest the call may go without progress before it fails. |
-| `opts.crossOrigin` | Which other origins may call it, closed unless declared. |
+| `opts.crossOrigin` | Which other origins may call it, closed unless declared. `'*'` opens it to every origin; a websocket upgrade is gated by the same list, because CORS does not reach one. |
 | `opts.maxBodySize` | The largest request body a mutation will accept. |
 
 ## `socket` — `channel` + transport
@@ -166,14 +171,14 @@ ownership rule, and the failure mode is a leak nobody sees.
 | `for await (const m of sock)` | Subscribes and receives messages live, reconnecting on its own if the connection drops. |
 | `sock.publish(msg)` | Sends one message to every subscriber, fire-and-forget. |
 | `opts.channel` | `channel` options; The underlying stream's own memory: how many messages it keeps and how long one stays current. |
-| `opts.clientPublish` | Whether clients may publish at all, and if so what happens to what they send. |
-| `opts.schema` | The declared shape of a message. |
-| `opts.clients` | Which surfaces can reach it. |
+| `opts.clientPublish` | Whether clients may publish at all, and if so what happens to what they send. `false` by default — a socket is a broadcast until an app says otherwise. |
+| `opts.schema` *(not built)* | The declared shape of a message. |
+| `opts.clients` *(not built)* | Which surfaces can reach it. |
 | `opts.middleware` | The chain that authorizes each subscribe and each publish, per room. |
 
-### How a handler is addressed *(not built — settled in `packages/example/spike`)*
+### How a handler is addressed
 
-The one decision that would force a redesign if guessed wrong: how a handler declared ONCE is
+The one decision that would have forced a redesign if guessed wrong: how a handler declared ONCE is
 reached from a browser without its body going there.
 
 | Rule | Why it is this |
@@ -193,15 +198,37 @@ The kind stays in the path even though the rest is already unique, because a soc
 upgrade rather than a POST — genuinely different routes — and because a network panel showing the
 address says what happened without anyone decoding it.
 
-What the proof establishes is the LAW, not the plumbing: three concurrent readers of one key cost
-one request, and nothing in the transport does that — the memo slot does, exactly as it already did
-for a local load. The server half of a socket is `channel()` unchanged, and the whole transport is
-one `subscribe` on upgrade and one unsubscribe on close.
+What each lane is handed for `server/rpc/users.ts`:
 
-Still open, and none of it changes the shape above: options do not cross the wire (an option may
-reference a server-only import, so client cache policy has to arrive some other way); serialization
-is `JSON.stringify`, so named errors surviving the wire is unbuilt; the socket is receive-only and
-does not reconnect.
+| Lane | Gets |
+| --- | --- |
+| browser | `export const getUser = remote("users/getUser", { method: "GET" })` — the address, and none of the module |
+| server | the module VERBATIM, plus an appended `register("rpc", [["users/getUser", "getUser"]], { getUser })`. Appended, so every line the author wrote keeps its number and a stack trace still points at the handler |
+
+A read travels as an HTTP GET with its args JSON in one query parameter, so the address says what it
+is and an intermediary may cache it; past the ceiling every proxy puts on a URL the same read falls
+back to a POST body, which the server accepts for a read and only for a read. A mutation travels as
+its own method with a body.
+
+What that establishes is the LAW, not the plumbing: three concurrent readers of one key cost one
+request, and nothing in the transport does that — the memo slot does, exactly as it already did for a
+local load. The server half of a socket is `channel()` unchanged, and the whole transport is one
+`subscribe` on upgrade and one unsubscribe on close.
+
+A declaration's OPTIONS do not cross the wire, and cannot: `GET(fn, { middleware: [auth] })` is
+server-side text and an option may reference a server-only import, so there is nothing a stub could
+copy. What crosses is the CONSEQUENCE — a `ttl` arrives as an `abide-ttl` response header, in
+milliseconds, and the client's slot goes cold on the server's schedule. Tags do not cross, so
+`invalidate({ tags })` reaches one side at a time.
+
+A failure crosses as `{ name, message }` and is rebuilt with its name, which is what makes
+`isError(e, name)` answer over a wire — the NAME rather than the class, because `instanceof` on a
+deserialised error is false however faithfully it was written out.
+
+`dispatch(request, server?)` is the whole server side: it returns `undefined` synchronously for a
+path outside `/__abide/`, so an app mounts it in front of its own routes and never thinks about it
+again, and it runs every handler inside `serve(request, …)` — so an rpc's own slot belongs to the
+caller that filled it. `websocket` is handed straight to `Bun.serve({ websocket })`.
 
 ## The shared surface
 
@@ -456,8 +483,10 @@ and neither has any compiling of its own.
 | `originalPosition(segments, position)` | A position in emitted code back to its position in the `.abide` file. |
 | `locate(source, position)` | That position as one-based line and column, so an error names a place in the file. |
 | `describe(source, filename, error)` | A thrown compile failure as one `file:line:col message` string. Anything else stringifies unchanged. |
-| `ParseError` | The class, so a caller can tell a compile failure from any other throw. A lexer error deliberately is not exported — the shells only format it. |
-| `abide/compiler/plugin` | The Bun plugin: compiles `.abide` on import, in both lanes, off the same `compile`. |
+| `ParseError` / `ElisionError` | The two classes, so a caller can tell a compile failure from any other throw. A lexer error deliberately is not exported — the shells only format it. |
+| `elide(source, { filename, browser })` | A transport module for one lane: `{ code, kind, endpoints }`, or `null` for a file under neither transport directory. One pass over one text produces BOTH lanes, so the browser's stub and the server's registration cannot disagree about an address. |
+| `endpointId(path, name)` / `kindOf(path)` | The address, and which law a module declares. Both are facts about the path. |
+| `abide/compiler/plugin` | The Bun plugin: compiles `.abide` on import and elides a transport module, in both lanes, off the same two pure functions. |
 
 Type errors inside a template are reported by the real checker, on the `.abide` line — that is what
 `segments` is for, and it is why the compiler owns a mapping rather than only emitting one.
@@ -483,6 +512,7 @@ headless and the browser card.
 | `ctx.log(label, value?)` / `ctx.log.live(…)` | A recorded line; `live` REPLACES the last one with the same label, for a counter that ticks. |
 | `runHeadless(case)` | Runs a case the way `bun test` does and returns its lines. |
 | `collector()` | A sink that collects instead of rendering — what the headless runner writes into. |
+| `loopback()` | `dispatch` and the websocket half, called IN-PROCESS: a `fetch` and an `open` a `remote`/`remoteSocket` can be pointed at, plus the request counter the coalescing claim is made with. A card cannot start a server, and both laws are exercisable without one. |
 
 A bench makes one of four kinds of claim, because the project makes four kinds of claim. None
 carries its own prose: the case's `note` IS the claim, so the page and the test cannot drift into
@@ -513,8 +543,8 @@ would have to lie.
 
 | Feature | Notes |
 | --- | --- |
-| `src/ui/pages/**/page.abide` | a route |
-| `src/ui/pages/**/layout.abide` | a layout; renders its child page through `<slot/>` |
+| `<dir>/**/page.abide` | a route, under the directory handed to `pages(dir)` |
+| `<dir>/**/layout.abide` | a layout; renders its child page through `<slot/>` |
 | `[name]` | required dynamic segment → `route().params.name` |
 | `[[name]]` | optional segment (absent → param omitted) |
 | `[...name]` | rest / catch-all (terminal) → the `/`-joined remaining segments |
@@ -525,7 +555,7 @@ would have to lie.
 | `routes(table)` | install the app's routes: `{ path, page, layouts? }`, where a page is reached through a LOADER so its code is absent until someone asks for it |
 | `outlet()` | the current route's page wrapped in its layouts. Reads the route's NAME and nothing else, which is what makes a same-route navigation patch in place |
 | `ready()` | resolve the current route's modules, so the render that follows is a snapshot with nothing left to await. What a server render calls before `renderToString`; `navigate` awaits it for you |
-| `pages(dir)` *(`abide/server`)* | `src/ui/pages/**` as a route table. The one part of routing that is not isomorphic, because a filesystem is not — what it hands back is the same table `routes()` takes on either side |
+| `pages(dir)` *(`abide/server`)* | a pages directory as a route table — the DIRECTORY is the argument, not a fixed path. The one part of routing that is not isomorphic, because a filesystem is not — what it hands back is the same table `routes()` takes on either side |
 | `/__abide/` | all abide controlled endpoints are mounted under `__abide` such as `/__abide/rpc/<path>`
 
 `route()` is a facade over four small cells — name, params, url, navigating — rather than one record,
@@ -550,7 +580,7 @@ A route is committed only once its page has arrived, which is the whole of what 
 | `ABIDE_IDENTITY_TTL` | Identity cookie/token TTL in ms (default 30d, rolling). |
 | `ABIDE_APP_TOKEN` | Bearer token for the remote CLI & desktop bundle. |
 | `ABIDE_APP_URL` | App URL for the remote CLI & desktop bundle (also marks a cross-origin proxy, which then declines to volunteer `traceparent`). |
-| `ABIDE_RPC_TIMEOUT` | Default RPC run deadline in ms (default `300000` = 5 min) — a fallback ceiling; per-RPC `timeout` is the real knob. |
+| `ABIDE_RPC_TIMEOUT` | Default RPC run deadline in ms (default `300000` = 5 min) — a fallback ceiling; per-RPC `timeout` is the real knob. On a handler that yields it is the longest gap BETWEEN chunks. |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | Default ceiling on a mutation's request body (unset = no ceiling); per-RPC `maxBodySize` overrides. Over-size declared `content-length` → 413 before buffering. |
 | `ABIDE_MAX_GLOBAL_CACHE_SIZE` | Byte ceiling (LRU) for the global + default-context memo cache (default: no limit). |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | Per-stream transcript cap in bytes (default: no limit; exceeding it overflows the buffer and disables replay). |
@@ -586,3 +616,22 @@ A route is committed only once its page has arrived, which is the whole of what 
 | `abide` · `-h` · `--help` | Usage, GENERATED from that same table. Asking for help is a success (stdout, `0`); an unknown subcommand is not (stderr, `2`) — a mistyped command exiting `0` tells CI the build succeeded. |
 
 Exit codes (`CLI_EXIT_CODES`, shared verbatim with the compiled binary): `0` ok · `1` failed/unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx.
+
+# Response helpers
+
+What an app's OWN route answers with (`abide/server`). abide serves `/__abide/**` through `dispatch`
+and hands back nothing at all for any other path, so everything else is an ordinary Bun route. Each
+helper below returns a plain `Response` and takes a `ResponseInit` the caller's headers ride in — a
+route that outgrows one drops to `new Response(...)` and loses nothing.
+
+| Helper | Purpose |
+| --- | --- |
+| `json` | Serialize `data` and tag it `application/json`. `undefined` is not JSON, so a route that answered with nothing sends `null` rather than the literal text `undefined`. |
+| `jsonl` | Emit one JSON value per line from a sync or async iterable; `application/jsonl`. Written per `pull`, so back-pressure reaches the source as its own `next()` not being called yet. |
+| `sse` | The same machine as `jsonl`, framed as `data: <json>\n\n`; `text/event-stream` + `Cache-Control: no-cache` + `X-Accel-Buffering: no`. |
+| `redirect` | NAVIGATE. The status is restricted to the 3xx literals (`301`/`302`/`303`/`307`/`308`, default `302`) — a type here rather than `Response.redirect`'s runtime `RangeError`, and unlike it there is an `init`, which is where a login's cookie goes. |
+| `error` | Throws an `HttpError` (`status`, `kind`) rather than returning one, because a handler's return type is its VALUE and a failure has nowhere else to go; declared `never`, so the checker treats the next line as unreachable. `error.typed(name, status)` builds a reusable factory for a named, narrowable failure, and its name rides on `kind` — carried as the error's `name`, which is what crosses the wire and what `fn.isError(e, name)` matches. |
+
+A source that throws mid-`jsonl`/`sse` ERRORS the body: the status line is already out, so a truncated
+response is all HTTP itself has left to say. The rpc lane's `application/x-ndjson` stream is the same
+machine with one extra frame — it has a decoder on the other end, so it says the failure in a line.

@@ -6,7 +6,7 @@ import { classifySlots, escape, html, isTemplate, raw, state, type TemplateResul
 import { renderToString } from 'abide/server'
 import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
-import { button, el, row, stage } from './dom.ts'
+import { button, el, LABEL, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -19,12 +19,12 @@ type Lane = 'client' | 'server'
 function both(host: HTMLElement, view: (lane: Lane) => TemplateResult): void {
     const grid = el('div', 'grid gap-3 md:grid-cols-2')
     const serverPane = el('div', 'rounded-lg border border-dashed border-slate-700 bg-slate-900/60 p-3')
-    serverPane.append(el('div', 'text-[10px] uppercase tracking-widest text-slate-600 mb-1', 'server'))
+    serverPane.append(el('div', `${LABEL} text-slate-600 mb-1`, 'server'))
     const pre = el('pre', 'font-mono text-xs text-emerald-300 whitespace-pre-wrap break-all')
     serverPane.append(pre)
 
     const clientPane = el('div', 'rounded-lg border border-dashed border-slate-700 bg-slate-900/60 p-3')
-    clientPane.append(el('div', 'text-[10px] uppercase tracking-widest text-slate-600 mb-1', 'client'))
+    clientPane.append(el('div', `${LABEL} text-slate-600 mb-1`, 'client'))
     const live = el('div', 'text-slate-100')
     clientPane.append(live)
 
