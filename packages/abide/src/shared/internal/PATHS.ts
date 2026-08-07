@@ -12,5 +12,11 @@ export const ABIDE_PREFIX = '/__abide/'
 export const RPC_PREFIX = `${ABIDE_PREFIX}rpc/`
 export const SOCKET_PREFIX = `${ABIDE_PREFIX}socket/`
 
+/**
+ * The remote log feed. Not a prefix: it addresses one thing, and there is nothing under it — an id
+ * here would name a second feed nobody asked for.
+ */
+export const LOGS_PATH = `${ABIDE_PREFIX}logs`
+
 /** The query parameter carrying JSON args: a read's arguments, and a socket's room. */
 export const ARGS_PARAM = 'a'

@@ -10,7 +10,7 @@
 // `abide/server` is the async-local form a server needs, because requests interleave across every
 // await and one variable cannot tell two of them apart.
 
-import { isolate, memo, state } from 'abide'
+import { isolate, memo, online, state, watch } from 'abide'
 import { suite } from 'abide/tests'
 import { button, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -181,6 +181,41 @@ export default suite({
 
                 release()
                 is('the first still finishes', await first, 'first')
+            },
+        },
+
+        {
+            title: 'online() is an ambient that WAKES',
+            note: 'Connectivity changes without a new caller arriving, which is the same reason `route()` is reactive: a probe that only answered on the next ask would leave an offline banner up after the network came back, and take one down nobody had noticed go up. So it is a cell behind a call, fed by the two events the platform already fires — the browser’s own answer, which is a lower bound and says so. A server is always online in the only sense the question has: it is not asking whether the process can reach the internet, it is asking whether the caller can reach the thing it is talking to, and a server IS that thing.',
+            async run({ is }) {
+                let runs = 0
+                let seen = false
+                const stop = watch(() => {
+                    runs++
+                    seen = online()
+                })
+
+                is('online to start', seen, true)
+                is('and the effect ran once', runs, 1)
+
+                if (typeof dispatchEvent !== 'function' || navigator?.onLine === undefined) {
+                    // No platform events to fire — a lane with no DOM at all. The constant answer IS
+                    // the claim there, and it is the one a server makes.
+                    stop()
+                    return
+                }
+
+                dispatchEvent(new Event('offline'))
+                await Promise.resolve()
+                is('going offline woke the reader', runs, 2)
+                is('…with the new answer', seen, false)
+
+                dispatchEvent(new Event('online'))
+                await Promise.resolve()
+                is('and coming back woke it again', runs, 3)
+                is('…with that answer', seen, true)
+
+                stop()
             },
         },
 

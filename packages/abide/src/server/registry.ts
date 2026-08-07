@@ -9,20 +9,23 @@
 
 import type { Server, ServerWebSocket } from 'bun'
 import type { Channel, RoomChannel } from '$shared/channel.ts'
-import { ABIDE_PREFIX, ARGS_PARAM, RPC_PREFIX, SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
+import { ABIDE_PREFIX, ARGS_PARAM, LOGS_PATH, RPC_PREFIX, SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { decodeArgs } from '$shared/internal/wire.ts'
 import type { Kind, Rpc } from '$shared/transport.ts'
+import { logs } from './logs.ts'
+import { headersFor } from './responses.ts'
 import {
     authorize,
-    failed,
     nameRpc,
     policyOf,
+    refuse,
     respond,
     type SocketEvent,
     type SocketPolicy,
     socketPolicyOf,
 } from './rpc.ts'
+import { server as running } from './running.ts'
 import { serveIfScoped } from './scopes.ts'
 
 type AnyRpc = Rpc<unknown, unknown>
@@ -63,6 +66,8 @@ export function registered(kind: Kind): string[] {
 // needs no headers; anything else is a call from somewhere the declaration did not name.
 
 const NOT_CROSS_ORIGIN: Record<string, string> = {}
+/** A preflight needs no content-type of its own — it goes through the funnel for the trace alone. */
+const NO_DEFAULTS: Record<string, string> = {}
 
 function crossOrigin(request: Request, url: URL, allowed: string[] | null): Record<string, string> | null {
     const origin = request.headers.get('origin')
@@ -76,12 +81,6 @@ function crossOrigin(request: Request, url: URL, allowed: string[] | null): Reco
         'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
         vary: 'origin',
     }
-}
-
-// The message does NOT name abide: it is wrapped as `abide: <address> — <message>` when it reaches a
-// caller, and a reader of the raw body has the address in the URL bar already.
-function refuse(message: string, status: number, headers?: Record<string, string>): Response {
-    return failed('AbideTransportError', message, status, headers)
 }
 
 // --- the entry point ---------------------------------------------------------
@@ -107,6 +106,9 @@ export function dispatch(
     request: Request,
     server?: Server<SocketData>,
 ): Response | Promise<Response | undefined> | undefined {
+    // Latched BEFORE the prefix test — one pointer store — so `server()` is answerable from the first
+    // request an app takes, including every one this hands straight back.
+    if (server !== undefined) running.set(server)
     // The raw URL text first: `new URL()` parses and allocates, and an app that mounted this in
     // front of its own routes pays that on every request of its own to learn the answer is no. The
     // substring test is a cheap SUPERSET — a query string could carry the prefix — so the parsed
@@ -115,7 +117,22 @@ export function dispatch(
     const url = new URL(request.url)
     const path = url.pathname
     if (!path.startsWith(ABIDE_PREFIX)) return undefined
+    // Past this line the request is ABIDE'S, and all of it is served inside one scope — opened here
+    // rather than in each lane, so the next `/__abide/*` endpoint does not have to remember to. It is
+    // what makes `traceresponse` answerable on every response including the refusals, what gives a
+    // socket's `authorize` a `request()` and a `trace()` to ask about, and what makes every
+    // module-level `memo` a handler touches belong to this caller and go away with it.
+    return serveIfScoped(request, () => served(request, url, path, server))
+}
+
+function served(
+    request: Request,
+    url: URL,
+    path: string,
+    server: Server<SocketData> | undefined,
+): Response | Promise<Response | undefined> {
     if (path.startsWith(SOCKET_PREFIX)) return upgrade(request, url, path, server)
+    if (path === LOGS_PATH) return logs(request)
     if (!path.startsWith(RPC_PREFIX)) return refuse(`nothing is served at ${path}`, 404)
     return call(request, url, path)
 }
@@ -129,7 +146,11 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
     if (headers === null) {
         return refuse(`${id} is not open to ${request.headers.get('origin')}`, 403)
     }
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers })
+    // Through `headersFor` like every other response, so the preflight is not the one thing abide
+    // answers with that carries no `traceresponse`.
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: headersFor(headers, NO_DEFAULTS) })
+    }
 
     // A read travels as a GET with its args in the query, and falls back to a POST when they are too
     // long for a URL — so a read accepts both and a mutation accepts only its own method.
@@ -159,9 +180,7 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
         return refuse(`${id} was called with arguments that are not JSON`, 400, headers)
     }
 
-    // Inside a request scope, so every module-level `memo` the handler touches — including the rpc's
-    // own slot — belongs to this caller and goes away with it.
-    return serveIfScoped(request, (): Response | Promise<Response> => respond(rpc, args, headers))
+    return respond(rpc, args, headers)
 }
 
 function upgrade(
@@ -173,7 +192,10 @@ function upgrade(
     const id = path.slice(SOCKET_PREFIX.length)
     const stream = SOCKETS.get(id)
     if (stream === undefined) return refuse(`no socket at ${id}`, 404)
-    if (server === undefined) {
+    // The argument is the exact answer — it is THIS server, whatever else is listening in this
+    // process — and the latch is what an app that handed it over some other way already set.
+    const target = server ?? running.peek<SocketData>()
+    if (target === null) {
         return refuse('a socket needs the Bun server — `dispatch(request, server)`', 500)
     }
     const policy = socketPolicyOf(stream)
@@ -188,7 +210,7 @@ function upgrade(
     } catch {
         return refuse(`${id} was subscribed to with a room that is not JSON`, 400)
     }
-    return authorized(request, server, id, room, stream, policy)
+    return authorized(request, target, id, room, stream, policy)
 }
 
 async function authorized(

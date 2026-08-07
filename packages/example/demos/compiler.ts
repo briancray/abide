@@ -620,6 +620,51 @@ export default suite({
         },
 
         {
+            title: 'a nested <style> scopes a SUBTREE, and an element carries every scope in force',
+            note: "The subtree form is the same machine as the component form pointed at fewer elements: one more `data-a<hash>` on the nodes the block sits among, and their descendants. That is what makes the containment asymmetric on purpose — an outer selector still matches inside, because the outer attribute is on every element the component writes; an inner one cannot match outside, because the inner attribute is only on the subtree. Blocks are content-addressed, so a nested block spelling exactly the outer block's rules is the SAME scope and is not written onto the tag twice.",
+            async run({ is }) {
+                const emitted = compile(
+                    '<main><p>outer</p>{#if on}<style>p { color: blue }</style><p>inner</p>{/if}</main>' +
+                        '\n<style>p { color: red }</style>',
+                    { filename: 'Nested.abide' },
+                ).code
+                const scopes = [...emitted.matchAll(/adopt\('(\w+)'/g)].map((m) => `data-a${m[1]}`)
+                const [outer, inner] = scopes as [string, string]
+
+                is('both blocks registered', scopes.length, 2)
+                is('the component block goes first', emitted.indexOf(outer) < emitted.indexOf(inner), true)
+                is('an element outside carries the outer scope alone', emitted.includes(`<p ${outer}>`), true)
+                is('one inside carries both', emitted.includes(`<p ${outer} ${inner}>`), true)
+                is(
+                    'and the enclosing element is NOT in the subtree',
+                    emitted.includes(`<main ${outer}>`),
+                    true,
+                )
+                is(
+                    'each block requires its own attribute',
+                    emitted.includes(`p[${outer}] { color: red }`),
+                    true,
+                )
+                is('…including the nested one', emitted.includes(`p[${inner}] { color: blue }`), true)
+
+                // Content-addressed: the same rules are the same sheet, so the attribute is already
+                // in force and a second copy of it in the tag would be a duplicate attribute.
+                const same = compile(
+                    '<main>{#if on}<style>p { color: red }</style><p>x</p>{/if}</main>\n<style>p { color: red }</style>',
+                    {
+                        filename: 'Same.abide',
+                    },
+                ).code
+                is(
+                    'a nested block repeating the outer rules is one sheet',
+                    [...same.matchAll(/adopt\(/g)].length,
+                    1,
+                )
+                is('and is not written onto the tag twice', /<p (data-a\w+) \1>/.test(same), false)
+            },
+        },
+
+        {
             title: 'the sheet crosses to the client TAGGED, so it is not served twice',
             note: 'A server render puts one `<style data-abide="…">` per scope in `<head>`, and `adopt` looks for exactly that before appending its own. The scope name is the whole contract: an anonymous blob is one a hydrating client cannot recognise, so every scoped component\'s rules went out once from the server and again from the client.',
             async run({ is }) {

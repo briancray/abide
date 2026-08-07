@@ -45,6 +45,8 @@ export type Node =
     | { kind: 'component'; name: string; attributes: Attribute[]; children: Node[] }
     | { kind: 'slot' }
     | { kind: 'script'; body: string; start: number }
+    /** A nested `<style>` — subtree-scoped. A top-level one is lifted into `Blocks.styles` instead. */
+    | { kind: 'style'; body: string; start: number }
     | { kind: 'if'; branches: Branch[] }
     | {
           kind: 'for'
@@ -322,20 +324,9 @@ function parseTag(reader: Reader): Node {
         if (block.module) {
             fail(reader, '<script module> is module scope, so it cannot be nested in a branch', start)
         }
-        if (lower === 'style') {
-            // SPEC's subtree-scoped form: an element carries every scope in force, so an outer rule
-            // reaches in and an inner one cannot reach out. The component-level scope is built; this
-            // one is not, and dropping the block silently would be worse than saying so.
-            fail(
-                reader,
-                'a nested <style> is subtree-scoped and is not implemented yet — move it to the top ' +
-                    'level of the file, where it scopes the component',
-                start,
-            )
-        }
         reader.at = block.end
         return {
-            kind: 'script',
+            kind: lower === 'style' ? 'style' : 'script',
             body: reader.source.slice(block.bodyStart, block.bodyEnd),
             start: block.bodyStart,
         }

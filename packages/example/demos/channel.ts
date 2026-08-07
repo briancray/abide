@@ -110,17 +110,33 @@ export default suite({
                 const tailed = channel<number>({ tail: 3 })
                 for (const n of [1, 2, 3, 4, 5]) tailed.publish(n)
                 is('tail 3 keeps the last three', tailed.chunks(), [3, 4, 5])
+
+                // `ch.tail()` is that transcript AND what comes next, as one sequence that never
+                // ends — the replay and the subscribe happen in the same synchronous run, so a
+                // message published between them is missed by neither. Iterating a channel instead
+                // starts from whatever is published after.
+                const following = tailed.tail()
+                const seen: number[] = []
+                for (let i = 0; i < 3; i++) seen.push((await following.next()).value as number)
+                is('tail() replays the ring first', seen, [3, 4, 5])
+                tailed.publish(6)
+                is('…then follows what arrives next', (await following.next()).value, 6)
+                await following.return(undefined)
             },
             bench: {
                 kind: 'time',
                 arms: (() => {
-                    // Same allocation on both sides — a concat and a slice per message. `tail` is
-                    // not where the cost is.
-                    const feed = channel<number>({ tail: 8 })
+                    // Two tails an order of magnitude apart, because the thing worth measuring is
+                    // whether the retention SIZE reaches the publish at all. It must not: the buffer
+                    // is pushed into and compacted once per `tail` messages, so both abide arms sit
+                    // on top of the hand-written one and neither moves when the cap grows.
+                    const small = channel<number>({ tail: 8 })
+                    const large = channel<number>({ tail: 500 })
                     const plain = vanilla.feed<number>(8)
                     return [
-                        { label: 'abide — channel({ tail: 8 })', run: (i: number) => feed.publish(i) },
-                        { label: 'vanilla — array concat + slice', run: (i: number) => plain.publish(i) },
+                        { label: 'abide — channel({ tail: 8 })', run: (i: number) => small.publish(i) },
+                        { label: 'abide — channel({ tail: 500 })', run: (i: number) => large.publish(i) },
+                        { label: 'vanilla — push + shift', run: (i: number) => plain.publish(i) },
                     ]
                 })(),
             },
@@ -143,6 +159,32 @@ export default suite({
                     ),
                 )
                 report()
+            },
+        },
+
+        {
+            title: 'the retention SIZE never reaches the publish',
+            note: 'A `tail` is a cap on what is REMEMBERED, and it has no business being a cost on every message. Rebuilding the transcript per publish made it one — 94 ns at `tail: 8` against 1314 ns at `tail: 500` — so raising a scrollback silently taxed a hot path nobody was looking at, and the same shape uncapped made a stream O(n²). The buffer is pushed into and compacted once per `tail` messages instead, which is what a ring was always supposed to mean.',
+            async run({ is }) {
+                // A ratio between two abide arms in the same substrate: an absolute number here
+                // would describe the machine, and a correctness test cannot see this at all — the
+                // wrong implementation retains exactly the right messages, just slowly.
+                const perPublish = (tail: number): number => {
+                    const feed = channel<number>({ tail })
+                    for (let i = 0; i < 20_000; i++) feed.publish(i) // warm, and fill past the cap
+                    let best = Infinity
+                    for (let round = 0; round < 5; round++) {
+                        const at = performance.now()
+                        for (let i = 0; i < 20_000; i++) feed.publish(i)
+                        best = Math.min(best, performance.now() - at)
+                    }
+                    return best
+                }
+
+                const ratio = perPublish(512) / perPublish(8)
+                // 64x the retention. The bound is loose because a clock inside a browser card is;
+                // what it has to separate is ~1x from the ~14x a per-publish rebuild costs.
+                is(`a 64x larger cap costs no more per publish (${ratio.toFixed(1)}x)`, ratio < 4, true)
             },
         },
 

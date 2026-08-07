@@ -272,6 +272,14 @@ export default suite({
                 is('the reader woke once per chunk', view.seen.length, 4)
                 log('the reader saw', view.seen.join(' → '))
                 view.dispose()
+
+                // A new array per chunk is what a reader of `chunks()` wakes on, and the same one
+                // between chunks is what stops it doing the work twice. Both still hold now that the
+                // transcript is pushed into rather than rebuilt — a VERSION is what moves, and the
+                // array is built on the read that follows it.
+                const asked = line.chunks()
+                const askedAgain = line.chunks()
+                is('chunks() is stable between chunks', asked === askedAgain, true)
             },
             interact({ host, log }) {
                 async function* typing(): AsyncGenerator<string> {
@@ -326,6 +334,30 @@ export default suite({
                         },
                     },
                 ],
+            },
+        },
+
+        {
+            title: 'a long stream costs its LENGTH, not its length squared',
+            note: 'The transcript is what a stream accumulates, and unlike a channel’s it has no cap — so rebuilding it per chunk was O(n²) over the whole stream. At 64k chunks that was 98% of the entire cost of streaming: 781 ms, of which 770 ms was copying an array that had just been copied. It is pushed into now, with a version counter to wake readers, so `chunks()` still hands back a new array per chunk — built on the read that follows, which a stream nobody reads the transcript of never pays for.',
+            async run({ is }) {
+                async function* counted(n: number): AsyncGenerator<number> {
+                    for (let i = 0; i < n; i++) yield i
+                }
+                const drain = async (n: number): Promise<number> => {
+                    const cell = state<number | undefined>(undefined)
+                    const at = performance.now()
+                    cell.set(counted(n))
+                    await until(() => cell.done(), 30_000)
+                    const took = performance.now() - at
+                    is(`${n} chunks all arrived`, cell.chunks().length, n)
+                    return took
+                }
+
+                // Four times the chunks. Linear says about 4x; the quadratic shape this replaced was
+                // 8x between these two sizes and got worse from there.
+                const ratio = (await drain(16_000)) / (await drain(4_000))
+                is(`4x the chunks costs about 4x, not 16x (${ratio.toFixed(1)}x)`, ratio < 8, true)
             },
         },
 

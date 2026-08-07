@@ -1,0 +1,58 @@
+// The remote log feed: `GET /__abide/logs`, which is what `./app logs` tails.
+//
+// It is `channel({ tail })` and `ch.tail()` and nothing else — the ring, the cap, the replay and the
+// live subscribe are all the primitive's, so the feed is one `publish` per line written and one
+// subscriber per reader. That is the whole implementation, and it is the reason there is no second
+// retention policy to keep in step with the one `channel` has.
+//
+// What it carries is what was WRITTEN. The `DEBUG` gate decides that, here as at the console: a tail
+// showing lines the console did not would be a second answer to the same question, and an operator
+// comparing the two would be right to call one of them broken.
+//
+// Closed unless `ABIDE_LOGS` says otherwise, because an open feed is an app's own log output readable
+// by whoever can reach the port.
+
+import type { Channel } from '$shared/channel.ts'
+import { channel } from '$shared/channel.ts'
+import { env, envNumber, type LogRecord, useLogSink } from '$shared/log.ts'
+import { jsonl } from './responses.ts'
+import { refuse } from './rpc.ts'
+
+/** Records, not bytes: a ring sized in lines is one an operator can reason about without measuring. */
+const DEFAULT_BUFFER = 500
+
+// Built on the first line recorded rather than at import, so an app that never opts in never
+// allocates the ring — and so `ABIDE_LOG_BUFFER` is read after an app has had a chance to set it.
+let feed: Channel<LogRecord> | null = null
+
+function ring(): Channel<LogRecord> {
+    if (feed !== null) return feed
+    feed = channel<LogRecord>({ tail: Math.floor(envNumber('ABIDE_LOG_BUFFER', DEFAULT_BUFFER)) })
+    return feed
+}
+
+/**
+ * Asked per line rather than once at import.
+ *
+ * The read is a property on `Bun.env`, which is what every other gate on this path already costs, and
+ * it is what lets a test — or an app deciding late — turn the feed on without reloading the module.
+ */
+function isOpen(): boolean {
+    return env('ABIDE_LOGS') !== undefined
+}
+
+// The gate is the SINK's, not the callback's: a closed feed is the default, and a record built for
+// it would be a `Date` and an object allocated per line to be thrown away.
+useLogSink((record) => ring().publish(record), isOpen)
+
+/**
+ * The endpoint. A 404 rather than a 403 when it is closed, because a closed feed is one that is not
+ * there — an app that never opted in has nothing to refuse access to.
+ */
+export function logs(request: Request): Response {
+    if (!isOpen()) return refuse('the log feed is closed — set ABIDE_LOGS', 404)
+    if (request.method !== 'GET') return refuse('the log feed is a GET', 405)
+    // Line-delimited JSON, one record per line, written as the reader takes it — so a tail that stops
+    // reading applies back-pressure rather than filling a buffer nobody is draining.
+    return jsonl(ring().tail())
+}

@@ -3,7 +3,7 @@
 //
 // It is an endpoint because of WHERE IT IS, and it is addressed by the same fact: `users/getUser`.
 
-import { GET, POST } from 'abide/server'
+import { GET, POST, server } from 'abide/server'
 import { findUser, renameUser } from '../db.ts'
 
 export const getUser = GET(({ id }: { id: number }) => findUser(id))
@@ -19,3 +19,9 @@ export const countdown = GET(async function* ({ from }: { from: number }) {
 })
 
 export const rename = POST(({ id, name }: { id: number; name: string }) => renameUser(id, name))
+
+/**
+ * The one thing a handler cannot be handed: `fetch(request, self)` is two layers above this file, and
+ * nothing between them has any other reason to know a server exists.
+ */
+export const listening = GET(() => ({ origin: server().url.origin }))

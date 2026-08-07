@@ -52,6 +52,10 @@ export {
     refresh,
     type TagSelector,
 } from './memo.ts'
+// The second REACTIVE ambient, and reactive for the same reason `route()` is: connectivity changes
+// without a new caller arriving, so a probe answering only on the next ask would leave an offline
+// banner up after the network came back.
+export { online } from './online.ts'
 export { type Cell, type Memo, type State, scope, state, untrack, watch } from './reactive.ts'
 // Routing. `route()` is an ambient like `request()`, but a reactive one — a client moves without a
 // new caller arriving. `useHrefSource` and `useHistorySink` are deliberately absent: they are how the

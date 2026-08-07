@@ -32,6 +32,7 @@ import {
     json,
     jsonl,
     POST,
+    page,
     redirect,
     register,
     socket,
@@ -356,6 +357,13 @@ export default suite({
                 )
                 is('the default is 302', redirect('/login').status, 302)
 
+                // `page` takes what a render PRODUCED rather than doing the render, so one helper
+                // serves `renderToString`, `toStream` and `renderDocument` — and a document stops
+                // being the one response an app serves that this file never touched.
+                const document = page('<!doctype html><p>hi</p>')
+                is('page is a document', await document.text(), '<!doctype html><p>hi</p>')
+                is('…tagged as one', document.headers.get('content-type'), 'text/html; charset=utf-8')
+
                 let caught: unknown
                 try {
                     error('that is not a number', 422)
@@ -364,6 +372,53 @@ export default suite({
                 }
                 is('error throws its status', (caught as HttpError).status, 422)
                 is('…and a typed one throws its name', error.typed('Forbidden', 403).kind, 'Forbidden')
+            },
+        },
+
+        {
+            title: 'every response abide builds names the operation that answered it',
+            note: '`traceresponse` is the W3C header a caller stitches its own span to, and it goes on through one funnel — so an answer, a refusal and the 404 for an address nobody registered all carry it. A failure is the response you most want to correlate, which is why the refusals are the point rather than the exception. The scope it is read from is opened by `dispatch` itself, so an app that mounted `dispatch` and nothing else has this already.',
+            async run({ is }) {
+                const parent = /^00-([\da-f]{32})-([\da-f]{16})-[\da-f]{2}$/
+
+                const getUser = GET(({ id }: { id: number }) => find(id))
+                register('rpc', [['demo/traced/getUser', 'getUser']], { getUser })
+
+                const answered = await wire.fetch(
+                    `/__abide/rpc/demo/traced/getUser?a=${encodeURIComponent('{"id":1}')}`,
+                    {},
+                )
+                is('a call that answered', await answered.json(), { id: 1, name: 'user 1' })
+                is('…carries it', parent.test(answered.headers.get('traceresponse') ?? ''), true)
+
+                // The refusals are the whole claim: each of these returns from a DIFFERENT point in
+                // `dispatch`, and a header applied per-lane would have been missed by at least one.
+                const missing = await wire.fetch('/__abide/rpc/nobody/registered/this', {})
+                is('a 404 for an unregistered id', missing.status, 404)
+                is('…carries it too', parent.test(missing.headers.get('traceresponse') ?? ''), true)
+
+                const nowhere = await wire.fetch('/__abide/not-a-lane', {})
+                is('so does the refusal for a path no lane claims', nowhere.status, 404)
+                is('…with an id of its own', parent.test(nowhere.headers.get('traceresponse') ?? ''), true)
+
+                // The whole value of Trace Context is that the id is the CALLER's when there is one:
+                // the span is ours, so the caller stitches its own to the entry point we answered at.
+                const carried = '00-1234567890abcdef1234567890abcdef-abcdef1234567890-01'
+                const continued = await wire.fetch('/__abide/rpc/nobody/registered/this', {
+                    headers: { traceparent: carried },
+                })
+                const matched = parent.exec(continued.headers.get('traceresponse') ?? '')
+                is('an inbound traceparent is CONTINUED', matched?.[1], '1234567890abcdef1234567890abcdef')
+                is('…with a span of ours, not the caller’s', matched?.[2] !== 'abcdef1234567890', true)
+
+                // Two requests are two operations. The ids differing is what makes correlating by one
+                // mean anything at all.
+                const second = await wire.fetch('/__abide/rpc/nobody/registered/this', {})
+                is(
+                    'two requests are two operations',
+                    missing.headers.get('traceresponse') !== second.headers.get('traceresponse'),
+                    true,
+                )
             },
         },
 

@@ -16,6 +16,7 @@ import { markSource } from './internal/BRANDS.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
 import { arm } from './internal/timers.ts'
+import { traceHeaders } from './internal/trace.ts'
 import {
     argsQuery,
     chunksOf,
@@ -215,6 +216,32 @@ export interface RemoteOptions {
     fetch?: (input: string, init: RequestInit) => Promise<Response>
 }
 
+/**
+ * The caller's headers plus the trace, so the next hop CONTINUES this operation rather than
+ * starting one. Without this a trace stopped at the first outbound call, which is the one place
+ * it was worth anything.
+ *
+ * The caller's own win: an explicit `traceparent` on `fn.raw(args, init)` is somebody saying
+ * where this call belongs, and a framework default has no business overruling it.
+ *
+ * On a CLIENT there is never a source installed, so this is one null compare and the caller's
+ * headers come back untouched and unallocated — a browser has no request to belong to, and one
+ * inventing a trace id would be asserting a relationship to work it cannot see.
+ *
+ * Module scope because it captures nothing from a declaration: one function for the process rather
+ * than a closure per declared endpoint.
+ */
+// Two signatures because the two call sites genuinely differ: a mutation always has a
+// `content-type` to merge into, so its result is never absent, and only a bare read's can be.
+function continued(carried: Record<string, string>): Record<string, string>
+function continued(carried: Record<string, string> | undefined): Record<string, string> | undefined
+function continued(carried: Record<string, string> | undefined): Record<string, string> | undefined {
+    const traced = traceHeaders()
+    if (traced === null) return carried
+    if (carried === undefined) return traced
+    return { ...traced, ...carried }
+}
+
 export function remote<Args, T>(id: string, options: RemoteOptions = {}): Rpc<Args, T> {
     const method = options.method ?? 'GET'
     const streams = options.stream === true
@@ -230,13 +257,18 @@ export function remote<Args, T>(id: string, options: RemoteOptions = {}): Rpc<Ar
         if (method === 'GET') {
             const url = address + argsQuery(encoded)
             if (url.length <= MAX_GET_URL) {
-                return send(url, { method: 'GET', ...init })
+                const headers = continued(init?.headers as Record<string, string> | undefined)
+                // The key is omitted rather than set to `undefined`: a read with no headers at all is
+                // the client's whole path, and it should allocate nothing to stay that way.
+                return headers === undefined
+                    ? send(url, { method: 'GET', ...init })
+                    : send(url, { method: 'GET', ...init, headers })
             }
         }
         return send(address, {
             ...init,
             method: method === 'GET' ? 'POST' : method,
-            headers: { 'content-type': JSON_TYPE, ...(init?.headers as Record<string, string>) },
+            headers: continued({ 'content-type': JSON_TYPE, ...(init?.headers as Record<string, string>) }),
             body: encoded,
         })
     }
@@ -376,6 +408,7 @@ export function remoteSocket<T, Args = void>(
         isError: (error, name) => held().isError(error, name),
         watch: (handler) => held().watch(handler),
         subscribe: (listener) => held().subscribe(listener),
+        tail: () => held().tail(),
         [Symbol.asyncIterator]: () => held()[Symbol.asyncIterator](),
     }
     Object.assign(self, forward)
@@ -435,6 +468,7 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     const chunks = received.chunks
     const subscribe = received.subscribe
     const iterator = received[Symbol.asyncIterator].bind(received)
+    const tail = received.tail.bind(received)
 
     // Reads may start work; probes may not. `peek` and the probes therefore never open a connection,
     // which is what keeps them questions rather than causes.
@@ -454,6 +488,10 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     self[Symbol.asyncIterator] = () => {
         start()
         return iterator()
+    }
+    self.tail = () => {
+        start()
+        return tail()
     }
     // A client publish goes to the SERVER, which decides what happens to it — `clientPublish` is a
     // policy, and the policy is not here. Nothing is published locally: the echo, if the server

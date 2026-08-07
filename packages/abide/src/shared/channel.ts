@@ -23,13 +23,39 @@ interface Received<T> {
     latest: T | undefined
     /** When `latest` arrived. Only consulted under `maxAge`. */
     at: number
-    transcript: T[]
-    /** Arrival times, parallel to `transcript`. Only consulted under `maxAge`. */
+    /**
+     * Messages oldest-first, PUSHED into rather than rebuilt per publish.
+     *
+     * Carries up to `tail + slack`, of which the LAST `tail` are the ones `chunks()` shows. The
+     * slack is what makes a publish O(1) amortised: rebuilding the transcript per message cost a
+     * copy of the whole retention every time, which is 1242 ns at `tail: 500` against 8 ns here.
+     */
+    buffer: T[]
+    /** Arrival times, parallel to `buffer`. Only consulted under `maxAge`. */
     stamps: number[]
+    /**
+     * The live window as its own array, built on first ask and held for this version.
+     *
+     * A COPY, because the buffer keeps being pushed into — so `chunks()` still hands back a new
+     * array after every publish and the same one between them, exactly as it did when the copy was
+     * per publish. A channel nobody reads the transcript of now pays for none of them.
+     */
+    view: T[] | null
     got: boolean
 }
 
-const EMPTY: Received<never> = { latest: undefined, at: 0, transcript: [], stamps: [], got: false }
+// One shared empty array, so a `chunks()` reader on a channel with no retention sees the same
+// identity every time and never wakes for it.
+const NO_MESSAGES: never[] = []
+
+const EMPTY: Received<never> = {
+    latest: undefined,
+    at: 0,
+    buffer: NO_MESSAGES,
+    stamps: NO_MESSAGES,
+    view: NO_MESSAGES,
+    got: false,
+}
 
 export interface Channel<T> {
     /** Latest message, reactive. Subscribes the caller. */
@@ -56,6 +82,13 @@ export interface Channel<T> {
     // biome-ignore lint/suspicious/noConfusingVoidType: the union IS the contract — a handler either returns nothing or returns its teardown.
     watch(handler: (message: T | undefined) => void | (() => void)): () => void
     subscribe(listener: (message: T) => void): () => void
+    /**
+     * The transcript, then everything published after it, as one sequence that never ends.
+     *
+     * What iterating gives you plus the replay — the snapshot and the subscribe happen in the same
+     * synchronous run, so a message published between them is missed by neither.
+     */
+    tail(): AsyncGenerator<T>
     [Symbol.asyncIterator](): AsyncIterator<T>
 }
 
@@ -85,6 +118,11 @@ export function channel<T, Args>(options?: ChannelOptions): RoomChannel<Args, T>
 export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & RoomChannel<Args, T> {
     const tail = options.tail ?? 0
     const maxAge = options.maxAge ?? Infinity
+    // How far past `tail` the buffer may run before it compacts — what turns the copy from per
+    // publish into once per `tail` publishes. NONE under `maxAge`: the timer arms for `stamps[0]` as
+    // the oldest surviving message, so a message the tail has already evicted must not still be
+    // sitting at the front claiming to be it.
+    const slack = maxAge === Infinity ? tail : 0
     const listeners = new Set<(message: T) => void>()
     // One cell holds the whole observable state, so a publish is one wake, not two.
     const cell = state<Received<T>>(EMPTY as Received<T>)
@@ -139,11 +177,16 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Roo
         while (drop < held.stamps.length && now - (held.stamps[drop] as number) >= maxAge) drop++
         const staleLatest = held.got && now - held.at >= maxAge
         if (drop > 0 || staleLatest) {
+            if (drop > 0) {
+                held.buffer.splice(0, drop)
+                held.stamps.splice(0, drop)
+            }
             cell.set({
                 latest: staleLatest ? undefined : held.latest,
                 at: staleLatest ? 0 : held.at,
-                transcript: drop > 0 ? held.transcript.slice(drop) : held.transcript,
-                stamps: drop > 0 ? held.stamps.slice(drop) : held.stamps,
+                buffer: held.buffer,
+                stamps: held.stamps,
+                view: drop > 0 ? null : held.view,
                 got: !staleLatest,
             })
         }
@@ -153,17 +196,27 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Roo
     self.publish = (message: T): void => {
         const held = cell.peek()
         const at = Date.now()
-        let transcript = held.transcript
+        let buffer = held.buffer
         let stamps = held.stamps
+        // No retention means the transcript is never touched, so `chunks()` keeps handing back the
+        // one shared empty array rather than a fresh one per publish.
+        let view = held.view
         if (tail > 0) {
-            transcript = held.transcript.concat(message)
-            stamps = held.stamps.concat(at)
-            if (transcript.length > tail) {
-                transcript = transcript.slice(-tail)
-                stamps = stamps.slice(-tail)
+            // The empty transcript is SHARED. The first publish takes one of its own rather than
+            // pushing into the constant every channel starts from.
+            if (buffer === (NO_MESSAGES as unknown as T[])) {
+                buffer = []
+                stamps = []
             }
+            buffer.push(message)
+            stamps.push(at)
+            if (buffer.length > tail + slack) {
+                buffer.splice(0, buffer.length - tail)
+                stamps.splice(0, stamps.length - tail)
+            }
+            view = null
         }
-        cell.set({ latest: message, at, transcript, stamps, got: true })
+        cell.set({ latest: message, at, buffer, stamps, view, got: true })
         if (maxAge !== Infinity) schedule()
         // Delivery is against a SNAPSHOT: a listener that subscribes while this message is going out
         // must not receive it, and one that unsubscribes must still finish this round. The copy is
@@ -182,7 +235,16 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Roo
         for (const listener of [...listeners]) listener(message)
     }
     self.peek = () => cell.peek().latest
-    self.chunks = () => cell().transcript
+    self.chunks = () => windowOf(cell())
+
+    /** The last `tail` of the buffer, as its own array. Built once per version and held on it. */
+    function windowOf(held: Received<T>): T[] {
+        if (held.view === null) {
+            const from = held.buffer.length - tail
+            held.view = from > 0 ? held.buffer.slice(from) : held.buffer.slice()
+        }
+        return held.view
+    }
     self.settled = () => cell().got
     self.invalidate = (pattern?: Partial<Args>): void => {
         if (rooms !== null) {
@@ -212,8 +274,12 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Roo
         listeners.add(listener)
         return () => void listeners.delete(listener)
     }
-    self[Symbol.asyncIterator] = async function* (): AsyncIterator<T> {
-        const pending: T[] = []
+    // The one protocol both iterating faces have: a queue, a wake latch, and an unsubscribe on the
+    // way out. The seed is read INSIDE the body rather than at the call, so it and the `subscribe`
+    // land in the same synchronous run — a message published between them would otherwise be missed
+    // by the snapshot and dropped by the not-yet-subscriber.
+    async function* follow(replay: boolean): AsyncGenerator<T> {
+        const pending: T[] = replay ? [...windowOf(cell.peek())] : []
         let wake: (() => void) | null = null
         const off = self.subscribe((message) => {
             pending.push(message)
@@ -228,8 +294,12 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Roo
                 })
             }
         } finally {
+            // Reached when the consumer goes away — a cancelled reader calls `return()`, which is what
+            // a closed connection is. Without it every abandoned reader stays subscribed for good.
             off()
         }
     }
+    self.tail = () => follow(true)
+    self[Symbol.asyncIterator] = () => follow(false)
     return self
 }

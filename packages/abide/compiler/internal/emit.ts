@@ -33,8 +33,20 @@ export interface EmitOptions {
 
 interface Context {
     source: string
-    /** `data-a<hash>` for the component's `<style>` block, written onto every element it emits. */
+    /** What a scope name is hashed against, so two files with the same rules keep their own. */
+    filename: string
+    /**
+     * Every scope in force here, as the attribute text an element carries — `data-a<hash>` for the
+     * component's own `<style>`, plus one more for each nested block enclosing this position. Already
+     * joined, because the walk reads it far more often than it extends it.
+     */
     scope: string | null
+    /**
+     * Every block registered so far, scope name → its `adopt(…)` statement, in registration order.
+     * Shared by reference across every derived context, so a nested block found deep in the walk
+     * still lands at module scope — and so the cascade order is the order they were WRITTEN.
+     */
+    sheets: Map<string, string>
     reactive: Reactive
     /** Names bound by a `{#for}` or a branch, which shadow a reactive name of the same spelling. */
     shadow: Set<string>
@@ -479,9 +491,55 @@ function literal(text: string): string {
 // --- children --------------------------------------------------------------
 
 function children(nodes: Node[], context: Context): string {
+    const inner = subtreeScoped(nodes, context)
     let out = ''
-    for (const node of nodes) out += child(node, context)
+    for (const node of nodes) out += child(node, inner)
     return out
+}
+
+/**
+ * A nested `<style>` scopes the nodes it sits among and everything under them — its SIBLINGS, not the
+ * element that holds them, which is what makes "an outer rule reaches in and an inner one cannot
+ * reach out" true in both directions at once: the outer attribute is on every element here, the inner
+ * one only on these.
+ *
+ * Every list of children asks, so the rule holds inside an element and inside a block body without
+ * either one knowing about it. The common case is no block at all, and it costs one `kind` compare
+ * per node and no allocation.
+ */
+function subtreeScoped(nodes: Node[], context: Context): Context {
+    let css = ''
+    let found = false
+    for (const node of nodes) {
+        if (node.kind !== 'style') continue
+        found = true
+        css += node.body
+    }
+    if (!found) return context
+
+    const attribute = registerSheet(css, context)
+    // Already in force — the same rules, reached by the same attribute. A second copy of it in the
+    // tag would be a duplicate attribute in the markup, and the sheet is one either way.
+    const inForce = context.scope
+    if (inForce === null) return { ...context, scope: attribute }
+    if (inForce.includes(attribute)) return context
+    return { ...context, scope: `${inForce} ${attribute}` }
+}
+
+/**
+ * One block into the module-scope registry, and back out as the attribute its elements carry.
+ *
+ * Content-addressed, so two blocks spelling the same rules — in one file or across a subtree and the
+ * component around it — share one sheet and one attribute rather than fighting over the cascade.
+ */
+function registerSheet(css: string, context: Context): string {
+    const name = scopeName(context.filename, css)
+    const attribute = `data-a${name}`
+    if (!context.sheets.has(name)) {
+        const scoped = JSON.stringify(scopeCss(css, attribute))
+        context.sheets.set(name, `${need(context, 'adopt')}('${name}', ${scoped})\n`)
+    }
+    return attribute
 }
 
 /**
@@ -524,6 +582,9 @@ function child(node: Node, context: Context): string {
         case 'slot':
             return slot('args.children', context)
         case 'script':
+        case 'style':
+            // Both are lifted: the script into the level's closure, the style into the module-scope
+            // registry `subtreeScoped` already wrote it to.
             return ''
         // `conditional` and `switched` hand back a whole thunk, since an else-if chain needs a body
         // rather than an expression.
@@ -572,8 +633,11 @@ function scoped(nodes: Node[], context: Context): Scoped {
     for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i] as Node
         // Whitespace and comments are not nodes anyone means; a comment explaining the script sits
-        // above it far more often than not.
+        // above it far more often than not. A nested `<style>` is not one either — it declares
+        // nothing and is lifted out of the markup, so ordering it against the script is a rule with
+        // no consequence behind it.
         if (node.kind === 'text' && node.value.replace(/<!--[\s\S]*?-->/g, '').trim() === '') continue
+        if (node.kind === 'style') continue
         first = i
         break
     }
@@ -1108,8 +1172,10 @@ export function emit(
 
     const context: Context = {
         source,
+        filename: options.filename,
         reactive,
         scope: null,
+        sheets: new Map(),
         eager: false,
         shadow: new Set(),
         hoisted: new Map(),
@@ -1117,18 +1183,16 @@ export function emit(
         counter: { n: 0 },
     }
 
-    // A `<style>` block scopes the component: every element it emits carries the attribute, every
-    // selector in it requires that attribute on its rightmost compound, and the rules are registered
-    // once at MODULE scope — so by the time anything renders, every imported component has declared
-    // its CSS and the server can put the whole sheet in `<head>` without tracking what a render
-    // reached.
-    let adopted = ''
+    // A top-level `<style>` block scopes the COMPONENT: every element it emits carries the attribute,
+    // every selector in it requires that attribute on its rightmost compound, and the rules are
+    // registered once at MODULE scope — so by the time anything renders, every imported component has
+    // declared its CSS and the server can put the whole sheet in `<head>` without tracking what a
+    // render reached. A nested block is the same machine over a subtree, and registers itself during
+    // the walk below; this one goes first so the component's own rules sit above them in the cascade.
     if (blocks.styles.length > 0) {
         let css = ''
         for (const block of blocks.styles) css += block.body
-        const name = scopeName(options.filename, css)
-        context.scope = `data-a${name}`
-        adopted = `${need(context, 'adopt')}('${name}', ${JSON.stringify(scopeCss(css, context.scope))})\n`
+        context.scope = registerSheet(css, context)
     }
 
     // Inline components are hoisted into the setup body so they can be passed as values.
@@ -1150,6 +1214,11 @@ export function emit(
     context.used.add('html')
     const runtime = [...context.used].sort()
     const header = `import { ${runtime.join(', ')}, type TemplateResult } from 'abide'`
+
+    // Joined only now: `children` above is what discovers a nested block, so the registry is not
+    // complete until the walk is done.
+    let adopted = ''
+    for (const statement of context.sheets.values()) adopted += statement
 
     const setupBody = indent(desugarBody(blocks.setup, setup.rest, reactive))
     const assembled =

@@ -12,7 +12,8 @@
 // suffix" is true in both, and it is also the claim — the absolute name is the app's business.
 
 import { log } from 'abide'
-import { suite } from 'abide/tests'
+import type { LogRecord } from 'abide/server'
+import { loopback, suite } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 
@@ -27,7 +28,7 @@ export default suite({
                 const written = capture(() => {
                     log('the app started')
                     log.info('an info line')
-                    log.trace('a trace line')
+                    log.debug('a debug line')
                 })
 
                 is('three lines, with nothing turned on', written.length, 3)
@@ -94,7 +95,7 @@ export default suite({
                 const written = capture(() => {
                     cards('swallowed')
                     cards.info('swallowed')
-                    cards.trace('swallowed')
+                    cards.debug('swallowed')
                     cards.warning('never swallowed')
                     cards.error('never swallowed')
                 })
@@ -215,16 +216,25 @@ export default suite({
 
                 const tsv = await withEnv('ABIDE_LOG_FORMAT', 'tsv', () => capture(() => log('a piped line')))
                 const fields = (tsv[0]?.text ?? '').split('\t')
-                is('four fields', fields.length, 4)
+                // Five columns ALWAYS, empty where there is no id: a row whose column count depends
+                // on whether a request was in flight is one no `cut -f` can read.
+                is('five fields', fields.length, 5)
                 is('level', fields[1], 'log')
                 is('channel', fields[2], defaultChannel())
                 is('message', fields[3], 'a piped line')
+                is('and the trace column, empty outside a request', fields[4], '')
 
                 const json = await withEnv('ABIDE_LOG_FORMAT', 'json', () =>
                     capture(() => log.error('a collected line')),
                 )
                 const record = JSON.parse(json[0]?.text ?? '{}') as Record<string, string>
-                is('the same four, named', Object.keys(record), ['time', 'level', 'channel', 'message'])
+                is('the same five, named', Object.keys(record), [
+                    'time',
+                    'level',
+                    'channel',
+                    'message',
+                    'trace',
+                ])
                 is('level', record.level, 'error')
                 is('channel', record.channel, defaultChannel())
 
@@ -232,8 +242,89 @@ export default suite({
                     capture(() => log('one\ttwo\nthree')),
                 )
                 is('one message is one record', split.length, 1)
-                is('the separators are escaped, not emitted', (split[0]?.text ?? '').split('\t').length, 4)
+                is('the separators are escaped, not emitted', (split[0]?.text ?? '').split('\t').length, 5)
                 is('and the message survives', (split[0]?.text ?? '').split('\t')[3], 'one\\ttwo\\nthree')
+            },
+        },
+
+        {
+            title: 'the remote feed is a channel with a tail — closed until ABIDE_LOGS opens it',
+            note: 'The feed is `channel({ tail })` and nothing else: the ring, the cap and the live subscribe are the primitive’s, so there is no second retention policy to keep in step with. `GET /__abide/logs` replays what the ring holds and then follows, and the snapshot and the subscribe happen in the SAME synchronous run — a line published between them would otherwise be missed by the one and dropped by the other. What it carries is what was WRITTEN, gate included: a tail showing lines the console did not would be a second answer to the same question.',
+            async run({ is }) {
+                await setDebug(undefined)
+                const wire = loopback()
+
+                // Closed is the default, and closed answers 404 rather than 403 — an app that never
+                // opted in has nothing to refuse access to.
+                is('closed by default', (await wire.fetch(LOGS, { method: 'GET' })).status, 404)
+
+                if (!DECLARABLE) {
+                    // A browser has no environment to opt in from, so the feed is closed there and
+                    // that IS the claim. The rest of it is asserted in the lane that can open one.
+                    return
+                }
+
+                // Asked before the feed opens: `defaultChannel()` writes a line, and a line written
+                // while it is open is a record this case would then have to account for.
+                const base = defaultChannel()
+
+                await withEnv('ABIDE_LOG_BUFFER', '2', () =>
+                    withEnv('ABIDE_LOGS', '1', async () => {
+                        capture(() => {
+                            log('one')
+                            log('two')
+                            log('three')
+                        })
+
+                        const feed = await wire.fetch(LOGS, { method: 'GET' })
+                        is('opened', feed.status, 200)
+                        is('one JSON value per line', feed.headers.get('content-type'), 'application/jsonl')
+
+                        const reader = lines(feed)
+                        const replayed = [await reader.next(), await reader.next()]
+                        is('the ring is capped at ABIDE_LOG_BUFFER', replayed.map(messageOf), [
+                            'two',
+                            'three',
+                        ])
+                        is('and a record is the five fields', Object.keys(replayed[0] as LogRecord), [
+                            'time',
+                            'level',
+                            'channel',
+                            'message',
+                            'trace',
+                        ])
+                        // Nothing served these lines, so there is no operation to belong to — and a
+                        // feed that invented one would be asserting a relationship it cannot see.
+                        is('with no trace outside a request', replayed[0]?.trace, null)
+                        is('on the app’s own channel', replayed[0]?.channel, base)
+
+                        // Published while the tail is open: the same channel, now reaching a
+                        // subscriber rather than the ring.
+                        const cards = log.channel('never-turned-on')
+                        capture(() => {
+                            cards('a gated line the console never saw')
+                            cards.warning('never gated, on any channel')
+                        })
+
+                        // The NEXT record is the warning, not the gated line before it — which is the
+                        // only way to assert a skip on a stream: the one that was suppressed has no
+                        // record to look for.
+                        const followed = await reader.next()
+                        is(
+                            'the gated line never reached the feed',
+                            followed?.message,
+                            'never gated, on any channel',
+                        )
+                        is('…and the one that did carries its level', followed?.level, 'warning')
+                        is('on the named channel', followed?.channel, `${base}:never-turned-on`)
+
+                        await reader.stop()
+                    }),
+                )
+
+                // The ring is built once, on the first record, so what it holds outlives the opt-in.
+                // Closing the feed is what makes it unreachable — which is the whole contract.
+                is('closed again', (await wire.fetch(LOGS, { method: 'GET' })).status, 404)
             },
         },
 
@@ -463,6 +554,44 @@ function channelOf(line: Written | undefined): string {
 /** The app's own channel, asked rather than assumed — it is `ABIDE_APP_NAME`, a package.json, or `abide`. */
 function defaultChannel(): string {
     return channelOf(capture(() => log('naming itself'))[0])
+}
+
+const LOGS = '/__abide/logs'
+
+/**
+ * A jsonl body, read one record at a time.
+ *
+ * One record per ask rather than "drain it", because the feed is a stream that never ends: draining
+ * it hangs, and a fixed count read ahead of what has been published hangs on the last one. Asking for
+ * exactly the record the case just caused is what keeps the claim about ORDER honest.
+ */
+function lines(response: Response): { next(): Promise<LogRecord | undefined>; stop(): Promise<void> } {
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let held = ''
+    return {
+        async next(): Promise<LogRecord | undefined> {
+            for (;;) {
+                const at = held.indexOf('\n')
+                if (at >= 0) {
+                    const line = held.slice(0, at)
+                    held = held.slice(at + 1)
+                    if (line !== '') return JSON.parse(line) as LogRecord
+                    continue
+                }
+                const step = await reader.read()
+                if (step.done === true) return undefined
+                held += decoder.decode(step.value, { stream: true })
+            }
+        },
+        // The cancel is what unsubscribes the tail: `framedBody` calls `return()` on the generator,
+        // whose `finally` drops the listener. Without it every case that opened a feed leaves one.
+        stop: () => reader.cancel(),
+    }
+}
+
+function messageOf(record: LogRecord | undefined): string {
+    return record?.message ?? ''
 }
 
 // Built once, outside the arms: a bench measures the gate, not the construction.

@@ -115,18 +115,23 @@ export interface VanillaFeed<T> {
 
 export function feed<T>(tail = 0): VanillaFeed<T> {
     let latest: T | undefined
-    let transcript: T[] = []
+    // Pushed into and capped in place — what anyone writing a bounded feed by hand actually writes.
+    // Nobody rebuilds the whole retention per message, so an arm that did would be measuring abide
+    // against its own mistake and reporting a ratio of 1.
+    const transcript: T[] = []
     const listeners = new Set<(message: T) => void>()
     return {
         publish(message: T) {
             latest = message
             if (tail > 0) {
-                transcript = transcript.concat(message)
-                if (transcript.length > tail) transcript = transcript.slice(-tail)
+                transcript.push(message)
+                if (transcript.length > tail) transcript.shift()
             }
             for (const listener of listeners) listener(message)
         },
         latest: () => latest,
+        // The live array, not a copy. This is the honest hand-written answer AND the thing abide
+        // cannot do: a reactive transcript has to be a new array for a reader to see that it moved.
         chunks: () => transcript,
         subscribe(listener: (message: T) => void) {
             listeners.add(listener)

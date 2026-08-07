@@ -209,6 +209,19 @@ function flush(): void {
 const NO_CHUNKS: unknown[] = []
 
 /**
+ * Forget the transcript: a new run is a new one, not a continuation of the last.
+ *
+ * Silent when there was nothing to forget — the version only moves when a reader would see a
+ * different array, so re-streaming a cell whose transcript was already empty wakes nobody.
+ */
+function resetChunks(track: Async): void {
+    if (track.buffer.length === 0) return
+    track.buffer = []
+    track.view = NO_CHUNKS
+    track.chunks.write((track.chunks.value as number) + 1)
+}
+
+/**
  * Put a value through the node's `transform` before it is stored, reading nothing under tracking —
  * a transform is UNTRACKED by definition, and `set` is routinely called from inside an effect.
  *
@@ -252,8 +265,25 @@ class Async {
     readonly pending = new Node(false, null) // cold — a load in flight with nothing to show
     readonly refreshing = new Node(false, null) // warm — a load in flight OVER a retained value
     readonly settled: Node
+    /**
+     * How many times the transcript CHANGED — not the transcript itself.
+     *
+     * A reader of `chunks()` subscribes to this, which is what lets the buffer below be pushed into
+     * rather than rebuilt. Rebuilding it per chunk made the array's identity the wake signal, and
+     * paid a copy of the whole transcript for it: `concat` per chunk is O(n²) over a stream, and at
+     * 64k chunks that was 98% of the cost of streaming at all.
+     */
+    readonly chunks = new Node(0, null)
     /** Chunks produced so far, in order. The shared empty array until a stream actually runs. */
-    readonly chunks = new Node(NO_CHUNKS, null)
+    buffer: unknown[] = NO_CHUNKS
+    /**
+     * `buffer` as the array `chunks()` hands out, built on first ask and held for this version.
+     *
+     * A COPY, because the buffer keeps being pushed into — so a reader still sees a new array after
+     * every chunk and the same one within a version, exactly as it did when the copy was per chunk.
+     * The difference is that a stream nobody reads the transcript of now pays for none of them.
+     */
+    view: unknown[] | null = NO_CHUNKS
     /** A stream is running: chunks are still arriving. Its own signal, like `refreshing`. */
     readonly streaming = new Node(false, null)
     /**
@@ -358,16 +388,20 @@ function markSettled(track: Async): void {
 // first chunk (`pending`), then a load in flight over a value that is already being served
 // (`refreshing`), `streaming` all the way through, and `settled` + `done` when it ends cleanly.
 //
-// The transcript is rebuilt per chunk rather than pushed into, so `chunks()` moving is a new array
-// and every reader of it wakes. That is a copy per chunk, which is what `channel` already pays per
-// publish; a stream long enough for it to matter wants `channel({ tail })`, which caps it.
+// The transcript is PUSHED into and a version counter is what wakes a reader — see `Async.chunks`.
+// `chunks()` still hands back a new array after every chunk and the same one within a version; the
+// copy that produces it moved from the write to the read, so a stream nobody reads the transcript of
+// pays for none.
 function consume(node: Node, source: AsyncIterable<unknown>): void {
     const track = trackerFor(node)
     const generation = ++track.generation
     if (node.hasValue && node.value !== undefined) track.refreshing.write(true)
     else track.pending.write(true)
     track.streaming.write(true)
-    track.chunks.write(NO_CHUNKS) // a new run is a new transcript, not a continuation of the last
+    resetChunks(track)
+    // NO_CHUNKS is SHARED. A run that is about to push needs one of its own, and swapping an empty
+    // array for an empty array is nothing a reader can see, so it wakes nobody.
+    if (track.buffer === NO_CHUNKS) track.buffer = []
 
     void (async () => {
         try {
@@ -376,7 +410,9 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
                 // any of them means nobody wants the rest of this stream.
                 if (generation !== track.generation) return
                 const chunk = node.transform === null ? raw : transformed(node, raw)
-                track.chunks.write((track.chunks.value as unknown[]).concat(chunk))
+                track.buffer.push(chunk)
+                track.view = null
+                track.chunks.write((track.chunks.value as number) + 1)
                 hold(node, track, chunk)
                 // There is something to show now, so the blank-slate signal stands down and the
                 // in-flight one takes over — the same pair a warm reload reports.
@@ -465,7 +501,12 @@ function attachAsync(read: Cell<unknown>, node: Node): void {
     read.refreshing = () => trackerFor(node).refreshing.read() as boolean
     read.settled = () => trackerFor(node).settled.read() as boolean
     read.error = () => trackerFor(node).error.read()
-    read.chunks = () => trackerFor(node).chunks.read() as unknown[]
+    read.chunks = () => {
+        const track = trackerFor(node)
+        track.chunks.read() // the VERSION is what a reader subscribes to; the buffer is pushed into
+        if (track.view === null) track.view = track.buffer.slice()
+        return track.view
+    }
     read.streaming = () => trackerFor(node).streaming.read() as boolean
     // No node of its own: "landed, did not fail, nothing still arriving" is exactly three nodes that
     // already exist, and reading all three is what subscribes a reader to any of them moving. A
@@ -551,7 +592,7 @@ function resetNode(node: Node): void {
         track.refreshing.write(false)
         track.streaming.write(false)
         track.settled.write(false)
-        track.chunks.write(NO_CHUNKS)
+        resetChunks(track)
         if (wasFailed) wakeReaders(node)
         if (track.waiters !== null) {
             finish(track, new Error('abide: invalidated before the load settled'), true)

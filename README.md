@@ -12,19 +12,22 @@ counting the prose would be counting the wrong thing.
 ```
 packages/abide/src/
   shared/               the isomorphic half — same import, same call, both sides
-    internal/graph.ts   557   the reactive engine: state / derive / watch / untrack / scope, and
+    internal/graph.ts   574   the reactive engine: state / derive / watch / untrack / scope, and
                               the three shapes a value arrives in — value, load, stream
     memo.ts             302   memo(load) — args-keyed cache, coalescing, probes, ttl, pacing
-    channel.ts          160   channel — pub/sub with a reactive read surface, rooms, maxAge
+    channel.ts          191   channel — pub/sub with a reactive read surface, rooms, maxAge, tail
     router.ts           324   route/url/navigate/routes/outlet — the route as four cells, per caller
     internal/patterns.ts 162  a pattern: parse it, order it, run a path through it
     html.ts             147   the template tag + THE one slot classifier
     internal/{slots,tags,keys}.ts  101   the slot cache, the tag registry, the args key
-    transport.ts        294   remote / remoteSocket — the client half of both laws: a keyed memo
+    transport.ts        332   remote / remoteSocket — the client half of both laws: a keyed memo
                               with a fetch for a body, a channel with a websocket for one
+    internal/trace.ts    12   where the isomorphic half asks about the current trace: the id for a
+                              log line, the headers for an outbound call. null on a client
     internal/wire.ts     87   what goes over the wire: one value, a stream of them, or a failure
-    log.ts              193   log — channels, levels, the DEBUG gate, and the three shapes a line
+    log.ts              222   log — channels, levels, the DEBUG gate, and the three shapes a line
                               takes: readable, tsv, json
+    online.ts            10   online() — the second reactive ambient, off the platform's own events
     reactive.ts + index.ts          44   the public faces
   ui/                   the DOM renderer — parse-once templates, per-slot effects, keyed lists
     internal/parts.ts   686   child parts, keyed lists, instances
@@ -34,10 +37,18 @@ packages/abide/src/
     index.ts            392   the walk
     pages.ts             54   a pages directory as a route table — routing's one non-isomorphic half
     internal/emit.ts     26   attributes, the patch script
-    rpc.ts              245   GET…DELETE and socket — the DECLARING half: middleware, timeout,
+    rpc.ts              256   GET…DELETE and socket — the DECLARING half: middleware, timeout,
                               retention, the cross-origin gate, and one call as a Response
-    registry.ts         204   dispatch — id -> handler, and the websocket half of the mount point
-    app.ts               22   the one thing naming a channel needs a filesystem for: package.json
+    registry.ts         217   dispatch — id -> handler, the request scope every lane is served in,
+                              and the websocket half of the mount point
+    running.ts           20   server() — the Bun server that is listening, latched where Bun hands
+                              it over, so nothing under the entry point has to be threaded it
+    logs.ts              21   GET /__abide/logs — the remote feed, which is one channel and its tail
+    scopes.ts           164   serve — the async-local caller scope, request/cookies/bag, and the
+                              whole W3C trace context: id, our span, flags, tracestate, both headers
+    responses.ts         78   page · json · jsonl · sse · redirect · error — and the one header
+                              helper that puts traceresponse on every response abide builds
+    app.ts               35   the two things that need a filesystem: package.json, appDataDir()
 packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, so a template
                           expression is the same language as the rest of the file
     internal/lex.ts        the one tokenizer: where an embedded expression ENDS
@@ -95,7 +106,10 @@ A `<style>` block is **scoped without a runtime**: every element the component w
 `data-a<hash>` attribute (static markup, free at render) and every selector gains that attribute on
 its *rightmost* compound — so `main p` still reaches in from outside while nothing inside reaches
 out. The rules register once at module scope, which is what lets a server render put the whole sheet
-in `<head>` without tracking which components it happened to reach.
+in `<head>` without tracking which components it happened to reach. A **nested** `<style>` is the
+same machine pointed at fewer elements: one more attribute on the nodes it sits among and their
+descendants, so an element carries every scope in force and the containment is asymmetric on purpose.
+Blocks are content-addressed, so two spelling the same rules are one sheet and one attribute.
 
 Type errors inside a template are reported by the real checker, **on the `.abide` line**.
 `bun run typecheck` writes the compiled module, a `.d.abide.ts` (which is what
@@ -220,8 +234,35 @@ serve(request, async () => profile({ id }))   // a server: async-local, requests
 isolate(() => profile({ id }))                // a client, a test, a script: one variable
 ```
 
-`serve` also makes the ambients answerable — `request()`, `bag()`, `cookies()` — and each throws
-outside one rather than guessing. The argless form is scoped too, which matters because a `GET(() =>
+`serve` also makes the request-scoped ambients answerable — `request()`, `bag()`, `cookies()`,
+`trace()` — and each throws outside one rather than guessing.
+
+`trace()` is W3C Trace Context, and it is **not** `log.debug`: the word means the distributed-tracing
+context here and only that, which is why the log level that used to be called `trace` is not. abide
+mints exactly **one span per hop** and models no span tree — a tree is a tracing SDK's job, and the
+value of Trace Context is that this hands off to a real one cleanly rather than growing a worse one.
+
+```ts
+trace()                    // the trace id — the OPERATION
+trace.span()               // this hop's span, minted per request
+trace.sampled()            // the caller's decision, carried. abide never votes
+trace.state()              // tracestate, a live Map — like bag() and cookies()
+trace.headers()            // OUTBOUND: traceparent naming our span as the parent
+trace.responseHeaders()    // traceresponse, so a caller stitches its span to ours
+```
+
+Three things fall out of having a span of our own, which is what was missing: an outbound `remote`
+call carries `trace.headers()` automatically, so a trace does not stop at the first hop; every
+response abide builds carries `traceresponse`, because they share one header helper; and every log
+line carries the operation it was written in — full id in `tsv`/`json`, first eight hex on a
+terminal, `null` on a client and outside a request. None of that is something a call site passes. Three ambients answer *without* a request, because none of them is about a caller: `online()`,
+which is reactive off the platform's own `online`/`offline` events and always true on a server — it is
+not asking whether the process can reach the internet — `appDataDir()` from `abide/server`, the
+per-user path this app may write to, as a path and nothing else, and `server()` from the same place,
+the Bun server that is listening. Bun hands that to `fetch(request, self)` and nowhere else, so
+`requestIP` or `publish` three layers down means a parameter threaded through code with no other
+reason to know a server exists; `dispatch(request, self)` latches it, and an app that mounts nothing
+says so once with `server.set(Bun.serve({ … }))`. The argless form is scoped too, which matters because a `GET(() =>
 …)` with no arguments is exactly the leaky case; having no args key means the **cell** is what varies,
 so that form is handed back as a facade over "whichever cell belongs to the caller asking". The keyed
 form needs none of that: its cache is already a map, so scoping it is choosing a different map.
@@ -338,7 +379,8 @@ arrived over a wire; the server half is `channel()` unchanged, and the entire tr
 - **`dispatch(request, server?)` is the whole server side.** It returns `undefined` synchronously for
   anything outside `/__abide/`, so an app mounts it in front of its own routes and forgets it, and it
   runs each handler inside `serve(request, …)` — so an rpc's slot belongs to the caller that filled
-  it.
+  it. It also latches the server Bun handed it, before it even tests the path, which is what makes
+  `server()` answerable from a handler that was threaded nothing.
 
 ### One surface on every source
 
@@ -374,6 +416,7 @@ import { log } from 'abide'
 log('the app started')            // the app's own channel. Always writes.
 const cards = log.channel('cards')  // `<app name>:cards`. DEBUG=docs:cards, or docs:*, or *
 cards('rendered 12 rows')           // silent until somebody asks for it
+cards.debug('12 rows, 3ms')         // the finest LEVEL. not tracing — see trace() above
 cards.warning('one row had no id')  // not silent. Ever.
 ```
 
@@ -389,8 +432,8 @@ Two rules, and the exception is the interesting one:
   default while a hydration mismatch still reaches the console — and the framework's root stays
   `abide` however the embedding app is named, so the two namespaces cannot be confused.
 
-A message is a string and a line is one record, so the four fields a machine reads — time, level,
-channel, message — are the whole shape in every format. `ABIDE_LOG_FORMAT` declares one; unset, the
+A message is a string and a line is one record, so the five fields a machine reads — time, level,
+channel, message, trace — are the whole shape in every format. `ABIDE_LOG_FORMAT` declares one; unset, the
 shape follows the terminal: readable with `+12ms` deltas and colour at a TTY, `tsv` through a pipe. A
 browser console is neither, so it is always the readable form and never carries ANSI. `error` and
 `warning` go to stderr in every format — the one routing decision a pipe cannot make for itself.
@@ -402,6 +445,16 @@ whole of what a suppressed call costs there — so it is held for the rest of th
 dropped on the next microtask. A loop pays for one read; a change typed into a console is a later
 turn and is still seen on it. Reading once at import, which is what debug-npm does, would be faster
 again and would mean reloading the page to change anything.
+
+The same lines are readable from off the box at `GET /__abide/logs` — `dispatch` serves it, so an app
+that mounted that has it already. It is **`channel({ tail })` and nothing else**: the ring, the cap
+and the live subscribe are the primitive's, so the endpoint is a replay of `chunks()` followed by a
+`subscribe`, taken in one synchronous run because a line published between the two would otherwise be
+missed by the one and dropped by the other. `ABIDE_LOGS` opts it in — closed is the default, and a
+closed feed answers **404**, not 403: an app that never opted in has nothing to refuse access to.
+`ABIDE_LOG_BUFFER` sizes the ring in records (default 500). What it carries is what was *written*,
+gate included: a tail showing lines the console did not would be a second answer to the same
+question.
 
 ## Sync or async is not a different spelling
 
@@ -664,14 +717,14 @@ a test:
 - **`{:then v}` is typed `T | undefined`** for a `state(promise)`, because `Cell<T>` uses one type
   parameter for both what a READ returns and what an `await` resolves to. The read really can be
   `undefined` before the load lands; the settle cannot. Splitting them is a public-API change.
-- **No subtree-scoped `<style>`.** A top-level one is scoped to its component; the nested form is a
-  compile error naming what is missing.
 - **A route's modules are reached through a loader, and nothing generates that list for a browser.**
   `pages(dir)` reads that directory off the filesystem, which is a server. A client is handed the
   same table by whatever built its bundle — and there is no CLI yet, so today that means writing it
   down. The table's SHAPE is the same either way, which is the part that had to be settled.
-- **`identity()` and `trace()` do not exist.** The caller scope carries `request()`, `bag()` and
-  `cookies()`; a principal needs a resolver hook, which is a policy decision, not plumbing.
+- **`identity()` does not exist.** The caller scope carries `request()`, `bag()`, `cookies()` and
+  `trace()`; a principal needs a resolver hook, which is a policy decision, not plumbing.
+- **A websocket upgrade carries no `traceparent`.** A browser cannot set headers on one, so a socket
+  subscription is correlated by nothing. The rpc lane is unaffected — that is a `fetch`.
 - **The example dev server runs with `development: { hmr: false }`**, and it is a workaround rather
   than a preference.
   Bun's dev server wraps every module in a registry function so it can swap them, and that wrapping
@@ -737,8 +790,9 @@ a test:
 
 1. **A CLI**, which is what turns `pages()` into a table a browser bundle also has, and what would
    read the environment table the spec describes.
-2. **The ambients** — `identity()`, `trace()`, `health()`, `online()` — which is the half of a
-   request an rpc's middleware currently has to carry itself.
+2. **`identity()` and `health()`** — the two ambients left. A principal needs a resolver hook, and
+   `health()` is `onHealth` merged over a baseline, so it lands with the lifecycle hooks. Together
+   they are the half of a request an rpc's middleware currently has to carry itself.
 
 ## Provenance
 

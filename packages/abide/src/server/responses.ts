@@ -10,10 +10,12 @@
 // treats what follows a call as unreachable and narrows the value the caller was guarding.
 
 import { framedBody, JSON_TYPE, jsonLine } from '$shared/internal/wire.ts'
+import { traceResponse } from './scopes.ts'
 
 /** One JSON value per line. JSON has no unescaped newline, so the delimiter needs no length prefix. */
 const JSONL_TYPE = 'application/jsonl'
 const SSE_TYPE = 'text/event-stream'
+const HTML_TYPE = 'text/html; charset=utf-8'
 
 type Values<T> = AsyncIterable<T> | Iterable<T>
 
@@ -30,6 +32,15 @@ export function headersFor(carried: HeadersInit | undefined, defaults: Record<st
     const headers = new Headers(carried)
     for (const name in defaults) {
         if (!headers.has(name)) headers.set(name, defaults[name] as string)
+    }
+    // Every response abide builds says which operation answered it — this helper is the one funnel
+    // all of them go through, including the rpc wire and every refusal `dispatch` writes. A failure
+    // is the response you most want to correlate, so the 404 carries it too.
+    //
+    // `has` first, like the defaults above: a caller that set its own means it.
+    if (!headers.has('traceresponse')) {
+        const parent = traceResponse()
+        if (parent !== null) headers.set('traceresponse', parent)
     }
     return headers
 }
@@ -76,6 +87,25 @@ export function sse<T>(values: Values<T>, init?: ResponseInit): Response {
 
 function sseFrame(value: unknown): string {
     return `data: ${JSON.stringify(value)}\n\n`
+}
+
+/**
+ * A rendered document as a response.
+ *
+ * Takes what a render PRODUCED rather than doing the render, so one helper serves `renderToString`, `toStream`
+ * and `renderDocument` without restating any of their options — and so this file keeps importing
+ * nothing from the walk.
+ *
+ * It exists because a page render is the one response abide could not reach: the other helpers here
+ * build a `Response` and this had no equivalent, so a document was the only thing an app served that
+ * carried no `traceresponse`. A hole in the correlation is a hole in exactly the request a user is
+ * complaining about.
+ */
+export function page(body: string | ReadableStream<Uint8Array>, init?: ResponseInit): Response {
+    return new Response(body, {
+        ...init,
+        headers: headersFor(init?.headers, { 'content-type': HTML_TYPE }),
+    })
 }
 
 // --- navigate ----------------------------------------------------------------

@@ -73,6 +73,7 @@ test('both laws meet over a real wire', async () => {
         'users/slowUser',
         'users/countdown',
         'users/rename',
+        'users/listening',
         'admin/audit/recent',
     ])
     expect(result.registeredSockets).toEqual(['feed/ticks', 'feed/rooms'])
@@ -98,6 +99,11 @@ test('both laws meet over a real wire', async () => {
 
     // A mutation ran and the read that follows it sees what it wrote.
     expect(result.renamed).toBe('ada')
+
+    // A handler reached the server it is running under with nothing threaded to it: Bun hands the
+    // instance to `fetch(request, self)`, `dispatch` latched it there, and `server()` read it back
+    // two layers down.
+    expect(result.handlerOrigin).toBe(result.servingOrigin)
 
     // A missing endpoint fails the way a failed load fails: from the read.
     expect(result.missingError).toMatch(/no endpoint/)

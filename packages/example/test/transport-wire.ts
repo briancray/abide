@@ -75,6 +75,10 @@ const rename = remote<{ id: number; name: string }, { name: string }>('users/ren
 await rename({ id: 2, name: 'ada' })
 const renamed = await remote<{ id: number }, { name: string }>('users/getUser', { base })({ id: 2 })
 
+// A handler asking which server it is running under, having been handed nothing: `dispatch` latched
+// what `fetch` gave it, and `server()` is where the handler reads it back.
+const listening = await remote<Record<string, never>, { origin: string }>('users/listening', { base })({})
+
 let missingError = ''
 try {
     await remote<{ id: number }, unknown>('users/nope', { base })({ id: 1 })
@@ -125,6 +129,8 @@ const result = {
     streamed,
     streamedChunks: countdown({ from: 3 }).chunks(),
     renamed: renamed.name,
+    handlerOrigin: listening.origin,
+    servingOrigin: base,
     missingError,
     appRouteStatus: appRoute.status,
     appRouteBody: await appRoute.text(),

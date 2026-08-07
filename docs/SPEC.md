@@ -15,9 +15,9 @@ either.
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, and the client half of both transports (`remote`, `remoteSocket`) |
+| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, `online()`, and the client half of both transports (`remote`, `remoteSocket`) |
 | `abide/ui` | the DOM substrate — `mount`, `hydrate` |
-| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`) |
+| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`), `appDataDir()`, `server()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`) |
 | `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
 | `abide/compiler` | `compile()`, `elide()` and their diagnostics. Pure: text in, text out, no filesystem |
 | `abide/compiler/plugin` | the Bun plugin: compiles `.abide` on import, and elides a transport module to the stub or the registration its lane needs |
@@ -37,18 +37,17 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | Area | Absent |
 | --- | --- |
 | transport | `opts.schemas` / `opts.schema` and `opts.clients` — declaring a shape and which surfaces may reach a handler. Everything else in both laws is built |
-| ambients | `identity()`, `trace()`, `health()`, `online()`, `appDataDir()` |
-| lifecycle | `onStart`/`onHealth`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) and the five logging reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`) |
-| `<style>` | the subtree-scoped (nested) form — a compile error naming what is missing |
-| logging | the remote log feed only — `GET /__abide/logs`, `ABIDE_LOGS` and `ABIDE_LOG_BUFFER`. It exists to be tailed by `./app logs`, so it lands with the CLI. `log` itself and the `DEBUG` gating are built |
-| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it |
+| ambients | `identity()` — a principal needs a resolver, which is a policy decision rather than plumbing — and `health()`, which is `onHealth` merged over a baseline and lands with the lifecycle hooks |
+| lifecycle | `onStart`/`onHealth`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) and the seven the logging half reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`, `ABIDE_LOGS`, `ABIDE_LOG_BUFFER`) |
+| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it. `./app logs` is the one command whose ENDPOINT exists ahead of it: `GET /__abide/logs` is served, and what is missing is a client for it |
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
-`request`, `bag`, `cookies`, `isServing`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
+`request`, `bag`, `cookies`, `trace`, `isServing`) and the three ambients that answer outside one
+(`online`, `appDataDir`, `server`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
 `outlet`, and `pages(dir)` for a pages directory), both transports and the seam that addresses them, the
-template tag and its runtime, both render substrates, hydration, `log` and its channels, the `.abide`
-compiler, and the test kit.
+template tag and its runtime, both render substrates, hydration, `<style>` in both its component and
+its subtree form, `log` with its channels and its remote feed, the `.abide` compiler, and the test kit.
 
 ## Terms
 
@@ -117,10 +116,11 @@ real load replaces it, exactly as it does on any other cell with a body.
 | `channel({ maxAge })` | A message counts as current only while it is younger than `maxAge`. Expiry WAKES: a reader that only found out on its next read would go on showing a message the channel had stopped claiming. |
 | `ch()` | The latest message, subscribing the caller — the same call every other source spells a read with. |
 | `ch.peek()` | The latest message, subscribing to nothing. |
-| `ch.chunks()` | The session transcript, capped at `tail`, and reactive. |
+| `ch.chunks()` | The session transcript, capped at `tail`, and reactive. A new array per publish, the same one between publishes. The cap bounds what is REMEMBERED and never reaches the publish: the buffer is pushed into and compacted once per `tail` messages, so `tail: 500` costs a publish no more than `tail: 8` does. |
 | `ch.publish(msg)` | Sends one message to every current subscriber. Delivery is against a snapshot, so subscribing during a round does not receive that round's message and unsubscribing does not cancel it. |
 | `ch.subscribe(fn)` | A plain listener outside the graph; returns its own unsubscribe. |
 | `for await (const m of ch)` | Subscribes and receives every message published from that moment on. |
+| `ch.tail()` | The same sequence with the transcript REPLAYED in front of it. The snapshot and the subscribe happen in the same synchronous run, so a message published between them is missed by neither — which is what makes it the whole of the remote log feed. |
 | `ch.invalidate()` | Forgets what has arrived — the verb means here what it means everywhere: this is no longer good. |
 
 A channel never loads, so `pending()` / `refreshing()` / `error()` are always the cold answer. They
@@ -227,8 +227,13 @@ deserialised error is false however faithfully it was written out.
 
 `dispatch(request, server?)` is the whole server side: it returns `undefined` synchronously for a
 path outside `/__abide/`, so an app mounts it in front of its own routes and never thinks about it
-again, and it runs every handler inside `serve(request, …)` — so an rpc's own slot belongs to the
-caller that filled it. `websocket` is handed straight to `Bun.serve({ websocket })`.
+again. Everything past that test it runs inside ONE `serve(request, …)`, opened by `dispatch` rather
+than by each lane — so an rpc's own slot belongs to the caller that filled it, a socket's `authorize`
+has a `request()` and a `trace()` to ask about, and every response including the refusals can name
+the operation that answered it. A lane added later gets all three without having to remember to. `websocket` is handed straight to `Bun.serve({ websocket })`. The `server`
+argument is what a socket upgrades through, and it is also where `server()` gets its answer: it is
+latched before the path is even tested, so every request an app takes makes it answerable — the
+argument stays because it is EXACT, and the latch is what a second server in one process cannot be.
 
 ## The shared surface
 
@@ -261,7 +266,7 @@ a spelling of, rather than here — it neither causes a change to the source nor
 | Form | Behavior |
 | --- | --- |
 | `x()` | The current value, or nothing yet, filling in on its own once it arrives. Throws if the last load failed. On a stream this is the LATEST chunk. |
-| `x.chunks()` | Everything a stream has produced so far, in order. Empty on a source that never streamed, and the same array every time, so a reader of it never wakes for one. |
+| `x.chunks()` | Everything a stream has produced so far, in order. A NEW array after each chunk — that is what a reader wakes on — and the same one between chunks, so asking twice does the work once. Empty on a source that never streamed, and the same empty array every time, so a reader of it never wakes for one. The transcript is pushed into and the array is built on the read that follows, so a stream nobody asks for the transcript of pays nothing to keep one; cost is linear in the chunks, not quadratic. |
 | `x.peek()` | Exactly what is there right now, subscribing to nothing, starting nothing, and never throwing. |
 | `await x` | The settled value. Waits, so it resolves the loaded type rather than "the value or nothing yet". |
 
@@ -299,18 +304,25 @@ behaves exactly as it would with no scope at all.
 
 ## Ambient values
 
-Each answers about the caller's own context and is available on both sides. Outside a `serve` there
-is no honest answer, so each throws rather than guessing.
+Each answers about the caller's own context. Outside a `serve` there is no honest answer to a
+request-scoped one, so each of those throws rather than guessing.
 
 | Form | Behavior |
 | --- | --- |
-| `route()` | The route being served — its name, kind, parameters, URL, and whether a navigation is in flight. The one ambient that is REACTIVE, because a client moves without a new caller arriving. |
+| `route()` | The route being served — its name, kind, parameters, URL, and whether a navigation is in flight. REACTIVE, because a client moves without a new caller arriving. |
+| `online()` | Whether the caller currently has connectivity. The second REACTIVE one, for the same reason: connectivity changes without a new caller arriving, so an answer only given on the next ask would leave a banner up after the network came back. A server is always online in the only sense the question has — it is not asking whether the process can reach the internet, it is asking whether the caller can reach the thing it is talking to, and a server IS that thing. |
 | `identity()` *(not built)* | The principal the server resolved for this caller, never null and never guessed by the client. |
-| `trace()` *(not built)* | The identifier tying this work to the operation it belongs to. |
+| `trace()` | The identifier tying this work to the operation it belongs to: the inbound `traceparent`'s trace-id, or a fresh one when there is none. W3C Trace Context, because an id abide invented instead would tie this work to nothing. **Nothing to do with `log.debug`**, which is a level — `trace` in this codebase means the W3C context and only that. |
+| `trace.span()` | THIS hop's span id, minted per request. What an outbound call and the response name as their parent, and the reason the trace is unbroken across a boundary. abide mints exactly ONE span per hop and models no span tree: a tree is a tracing SDK's job, and the value of Trace Context is that this hands off to a real one cleanly rather than growing a worse one here. |
+| `trace.sampled()` | The caller's sampling decision, carried through. abide is not a sampler and never votes — the flags byte propagates verbatim. A trace that STARTS here is `03`: sampled, and flagged random-trace-id, because we did generate it randomly. |
+| `trace.state()` | `tracestate`, live and mutable — a `Map`, exactly like `bag()` and `cookies()`, because a third spelling for "a store that lives as long as this request" is a third thing to remember. Untouched, the inbound text propagates byte for byte rather than being re-serialised into an equivalent-but-different string. |
+| `trace.headers()` | What an outbound REQUEST carries so the next hop CONTINUES this operation: `traceparent` naming our span as its parent, plus `tracestate` when there is one. This is the whole of how a trace is "added to" — you become the parent, and nothing is appended. Attached automatically by `remote`, so a trace does not stop at the first call; an explicit `traceparent` on `fn.raw(args, init)` is not overruled. |
+| `trace.responseHeaders()` | What a RESPONSE carries: `traceresponse`, same four fields, with our span as the parent-id so the caller stitches its span to our entry point. Set automatically on every response abide builds. |
 | `request()` | The request being served. |
 | `cookies()` | The cookies of the request being served. |
 | `bag()` | A bag of values carried for the life of one request. |
-| `online()` *(not built)* | Whether the client currently has connectivity. |
+| `server()` *(`abide/server`)* | The Bun server that is listening — `requestIP`, `publish`, `pendingWebSockets`, `stop`. Bun hands the instance to `fetch(request, self)` and nowhere else, so anything under the entry point would otherwise be handed it one parameter at a time through code with no other reason to know a server exists. A PROCESS fact like `appDataDir()` rather than a caller's, and answerable from the first request an app takes: `dispatch(request, self)` latches what Bun gave it before it even tests the path, so mounting it IS the wiring. An app that mounts nothing says so once with `server.set(Bun.serve({ … }))`, which returns what it was given. `server.peek()` observes and never throws; `server()` throws before anything has served, like `request()`. |
+| `appDataDir()` *(`abide/server`)* | The per-user directory this app may write to, as a PATH. A question about the PROCESS rather than about a caller, so it needs no `serve` — and it is not created here, because `Bun.write` makes the parents of what it writes and a getter that touched the filesystem could throw for a caller that only wanted to print the path. |
 | `health()` *(not built)* | The app's own account of whether it is working. |
 
 ## Logging
@@ -321,7 +333,7 @@ is no honest answer, so each throws rather than guessing.
 | `log.info(string)` | Info level log |
 | `log.warning(string)` | Warn level log |
 | `log.error(string)` | Error level log |
-| `log.trace(string)` | Trace level log |
+| `log.debug(string)` | Debug level log. NOT distributed tracing — see `trace()`, which is the only thing the word `trace` means here. It writes to `console.debug` and `DEBUG` is what gates it, so the name matches both its sink and its gate |
 | `log.channel(string)` | Named channel. Prefixed with `<app name>:`. Abide's default is `abide:`. Channel has same log levels, and `.channel()` again appends another segment. The same name hands back the same logger. Gated by `DEBUG` in debug-npm grammar (`abide:*`, `docs:cards,docs:db`, `*`, `*,-abide:*`) — read from the environment on a server and from `localStorage.debug` in a browser |
 
 Two rules decide whether a line is written at all. The DEFAULT channel always writes — it is the app
@@ -333,18 +345,37 @@ a failure nobody sees — which is also what keeps abide's own `abide:*` channel
 while a hydration mismatch still reaches the console.
 
 A message is one line, and one line is one record: `log(string)` takes a string and nothing else, so
-the four fields a machine reads — time, level, channel, message — are the whole shape in every
-format, and a tab or a newline inside a message is escaped rather than emitted.
+the five fields a machine reads — time, level, channel, message, trace — are the whole shape in every
+format, and a tab or a newline inside a message is escaped rather than emitted. The trace is not
+something a call site passes; it is the operation the line was WRITTEN in, and it is `null` on a
+client and outside a request. It is always present, because a field that appears only sometimes is
+one every consumer has to branch on.
 
 | Shape | When |
 | --- | --- |
-| readable | `<channel> <level> <message> +<n>ms`, coloured at a TTY. The delta is since the last line on THAT channel. A browser console is neither a terminal nor a pipe, so it is always this, and never with ANSI in it |
-| `tsv` | four tab-separated fields — what a pipe gets unless something says otherwise |
-| `json` | the same four, named |
+| readable | `<channel> <level> <message> <trace8> +<n>ms`, coloured at a TTY. The delta is since the last line on THAT channel. The trace is the first EIGHT hex — enough to pick one operation out by eye, where 32 on every line is a wall — and the machine formats carry the whole id, so what you paste into an APM is never the truncated one. A browser console is neither a terminal nor a pipe, so it is always this, and never with ANSI in it |
+| `tsv` | five tab-separated fields — what a pipe gets unless something says otherwise. Five ALWAYS, empty where there is no trace: a row whose column count depends on whether a request was in flight is one no `cut -f` can read |
+| `json` | the same five, named |
 
 `ABIDE_LOG_FORMAT` declares one outright. Unset, the shape follows the TTY, with `NO_COLOR` forcing
 `tsv` and `FORCE_COLOR` forcing the readable form off one. `error` and `warning` go to stderr in
 every format: that is the one routing decision a pipe cannot make for itself.
+
+### The remote feed
+
+| Form | Behavior |
+| --- | --- |
+| `GET /__abide/logs` | Every record the ring holds, then every one that arrives next, as one jsonl body that never ends. Served by `dispatch`, so an app that mounted that has it already. |
+| `ABIDE_LOGS` | Opts it IN. Closed is the default and a closed feed answers 404 — an app that never opted in has nothing to refuse access to. |
+| `ABIDE_LOG_BUFFER` | The ring's size in RECORDS (default `500`). Records rather than bytes, so an operator can reason about it without measuring one. |
+
+The feed is `channel({ tail })` and `ch.tail()` and nothing else: the ring, the cap, the replay and
+the live subscribe are all the primitive's, so there is no second retention policy to keep in step
+with the one a channel already has.
+
+What it carries is what was WRITTEN — the `DEBUG` gate decides that here exactly as it does at the
+console. A tail showing lines the console did not would be a second answer to the same question, and
+an operator comparing the two would be right to call one of them broken.
 
 A closed channel costs the gate read and a compare — it rebuilds no channel name and recompiles no
 pattern. On a server that read is a property on an ordinary object and is live. In a browser it is
@@ -654,11 +685,17 @@ route that outgrows one drops to `new Response(...)` and loses nothing.
 
 | Helper | Purpose |
 | --- | --- |
+| `page` | A rendered document as a response — `text/html`. Takes what a render PRODUCED rather than doing the render, so one helper serves `renderToString`, `toStream` and `renderDocument` without restating their options. |
 | `json` | Serialize `data` and tag it `application/json`. `undefined` is not JSON, so a route that answered with nothing sends `null` rather than the literal text `undefined`. |
 | `jsonl` | Emit one JSON value per line from a sync or async iterable; `application/jsonl`. Written per `pull`, so back-pressure reaches the source as its own `next()` not being called yet. |
 | `sse` | The same machine as `jsonl`, framed as `data: <json>\n\n`; `text/event-stream` + `Cache-Control: no-cache` + `X-Accel-Buffering: no`. |
 | `redirect` | NAVIGATE. The status is restricted to the 3xx literals (`301`/`302`/`303`/`307`/`308`, default `302`) — a type here rather than `Response.redirect`'s runtime `RangeError`, and unlike it there is an `init`, which is where a login's cookie goes. |
 | `error` | Throws an `HttpError` (`status`, `kind`) rather than returning one, because a handler's return type is its VALUE and a failure has nowhere else to go; declared `never`, so the checker treats the next line as unreachable. `error.typed(name, status)` builds a reusable factory for a named, narrowable failure, and its name rides on `kind` — carried as the error's `name`, which is what crosses the wire and what `fn.isError(e, name)` matches. |
+
+Every response built through one of these carries `traceresponse` — they share one header helper, so
+the rpc wire and every refusal `dispatch` writes get it too. A failure is the response you most want
+to correlate. Outside a request the header is absent rather than carrying an id for an operation that
+does not exist, and a caller that set its own is not overruled.
 
 A source that throws mid-`jsonl`/`sse` ERRORS the body: the status line is already out, so a truncated
 response is all HTTP itself has left to say. The rpc lane's `application/x-ndjson` stream is the same

@@ -19,19 +19,10 @@ import {
     NDJSON_TYPE,
     TTL_HEADER,
 } from '$shared/internal/wire.ts'
+import { envNumber } from '$shared/log.ts'
 import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
 import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { headersFor } from './responses.ts'
-
-/** An env var, read where there may be no `process` at all — this entry point stays loadable in a browser. */
-function ms(name: string, fallback: number): number {
-    const held = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[
-        name
-    ]
-    if (held === undefined) return fallback
-    const parsed = Number(held)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
 
 /**
  * The chain that authorizes and observes every call, INCLUDING an in-process one.
@@ -150,7 +141,7 @@ function declare<Args, T>(
     options: RpcOptions<Args, T>,
 ): Rpc<Args, T> {
     const streams = isGenerator(body)
-    const limit = options.timeout ?? ms('ABIDE_RPC_TIMEOUT', 300_000)
+    const limit = options.timeout ?? envNumber('ABIDE_RPC_TIMEOUT', 300_000)
     const run = chained(body, options.middleware)
 
     // A read retains what it loaded; a mutation retains nothing, which is `ttl: 0` — the slot still
@@ -160,7 +151,7 @@ function declare<Args, T>(
     const policy: RpcPolicy = {
         address: method,
         crossOrigin: options.crossOrigin ?? null,
-        maxBodySize: options.maxBodySize ?? ms('ABIDE_MAX_REQUEST_BODY_SIZE', Infinity),
+        maxBodySize: options.maxBodySize ?? envNumber('ABIDE_MAX_REQUEST_BODY_SIZE', Infinity),
         ttl,
     }
 
@@ -242,6 +233,16 @@ export function failed(
         status,
         headers: wireHeaders(Infinity, JSON_TYPE, extra),
     })
+}
+
+/**
+ * A refusal from the mount point itself, under the one name every `/__abide/**` lane refuses with.
+ *
+ * The message does NOT name abide: it is wrapped as `abide: <address> — <message>` when it reaches a
+ * caller, and a reader of the raw body has the address in the URL bar already.
+ */
+export function refuse(message: string, status: number, headers?: Record<string, string>): Response {
+    return failed('AbideTransportError', message, status, headers)
 }
 
 /**

@@ -42,9 +42,9 @@ import {
     type RenderContext,
     type RenderOptions,
 } from './internal/emit.ts'
-// Side effect only: installs the package.json fallback under `ABIDE_APP_NAME`, which is what names
-// `log`'s default channel. Importing `abide/server` at all is the signal that there is a filesystem to
-// ask — nothing in it is public, so there is nothing to re-export.
+// Imported for its side effect as much as for `appDataDir`: it installs the package.json fallback
+// under `ABIDE_APP_NAME`, which is what names `log`'s default channel. Importing `abide/server` at
+// all is the signal that there is a filesystem to ask.
 import './app.ts'
 
 /** Everything the walk knows how to write. */
@@ -560,6 +560,12 @@ export async function* renderDocument(
     yield `</body></html>`
 }
 
+// The shape one line takes on the remote feed. The endpoint itself is `dispatch`'s — an app mounts
+// that and gets `/__abide/logs` with it — but a reader of the feed needs the record to decode into.
+export type { LogRecord } from '$shared/log.ts'
+// Where this app may write, which is a question about the PROCESS rather than about a caller — so it
+// needs no `serve`, and it lives with the other thing that needs a filesystem to answer.
+export { appDataDir } from './app.ts'
 // What every renderer here takes. `RenderContext` stays internal: it is the walk's own state, and
 // its `document` field is typed by a `DocumentContext` no caller can name.
 export type { RenderOptions } from './internal/emit.ts'
@@ -578,6 +584,7 @@ export {
     HttpError,
     json,
     jsonl,
+    page,
     type RedirectStatus,
     redirect,
     sse,
@@ -595,5 +602,9 @@ export {
     type SocketOptions,
     socket,
 } from './rpc.ts'
+// The server that is listening, as an ambient. A process fact rather than a caller's, like
+// `appDataDir` above it — Bun hands the instance to `fetch(request, self)` and nowhere else, and this
+// is what stops that being threaded through every layer under it.
+export { type RunningServer, server } from './running.ts'
 // The caller scope and its ambients. `serve` is what makes every module-level `memo` per-request.
-export { bag, cookies, isServing, request, serve } from './scopes.ts'
+export { bag, cookies, isServing, request, serve, type Trace, trace } from './scopes.ts'
