@@ -9,6 +9,7 @@
 // the browser lane, so nothing about this file — or anything it imports — reaches a browser.
 
 import { type Channel, type ChannelOptions, channel, type RoomChannel } from '$shared/channel.ts'
+import { envNumber } from '$shared/internal/env.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
@@ -20,7 +21,6 @@ import {
     NDJSON_TYPE,
     TTL_HEADER,
 } from '$shared/internal/wire.ts'
-import { envNumber } from '$shared/log.ts'
 import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
 import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { headersFor } from './responses.ts'

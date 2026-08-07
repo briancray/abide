@@ -9,7 +9,7 @@ meaning on both the server and the client.
 
 ## Entry points
 
-Six specifiers, and which half of the stack each one is. The split is what a page pays for: the two
+The specifiers, and which half of the stack each one is. The split is what a page pays for: the two
 renderers are separate because only one of them ships to a browser, and nothing in `abide` imports
 either.
 
@@ -20,9 +20,10 @@ either.
 | `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`, `identity`), `appDataDir()`, `server()`, `onHealth()`, `onIdentity()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`, `Schema`) |
 | `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
 | `abide/compiler` | `compile()`, `elide()` and their diagnostics. Pure: text in, text out, no filesystem |
-| `abide/compiler/check` | the check lane: `emitFor` writes the module, its declaration and its map beside a `.abide`, and `remap` moves a `tsc` diagnostic back onto the `.abide` line |
+| `abide/compiler/check` | the check lane: `emitFor` writes the module, its declaration and its map beside a `.abide`, `remap` moves a `tsc` diagnostic back onto the `.abide` line, and `diagnose` is the two of them over a project — what `abide check` runs |
 | `abide/compiler/shapes` | the second speed: `deriveShapes` runs the real checker over a project and answers with the shapes tokens cannot read |
 | `abide/compiler/plugin` | the Bun plugin: compiles `.abide` on import, and elides a transport module to the stub or the registration its lane needs |
+| `abide/cli` | the binary's own module face: `cli(argv)`, the `COMMANDS` table the usage screen is generated from, and `CLI_EXIT_CODES`. The `abide` bin IS this file |
 
 A handler is DECLARED through `abide/server` and CALLED through the module it lives in, so an app
 imports one name and the lane decides what is behind it. The client half is on the isomorphic surface
@@ -39,8 +40,8 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | Area | Absent |
 | --- | --- |
 | transport | `opts.clients` — which surfaces may reach a handler, which says nothing until there is a surface other than the UI to name. Everything else in both laws is built |
-| lifecycle | `onStart`. Every env var in the config table is now read by something EXCEPT the four a binary would own — `PORT`, `APP_URL`, `ABIDE_APP_TOKEN`, `ABIDE_APP_URL` — which is the CLI's row below rather than this one |
-| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the four environment variables only a binary reads — there is no binary yet, so nothing reads any of it. `./app logs` is the one command whose ENDPOINT exists ahead of it: `GET /__abide/logs` is served, and what is missing is a client for it |
+| lifecycle | `onStart`, and the app-level exports beside it — `middleware`, `onStop`, `onError`. All four are read off an app's own module by a binary that BOOTS one, and the commands that boot one are the absent half of the row below |
+| the CLI | the commands that need a bundler or a server: `scaffold`, `dev`, `build`, `start`, `compile`, `bundle`, and `lsp`. Every env var in the config table is now read by something — `PORT` and `APP_URL` only as what `abide logs` falls back to, never yet to BIND one |
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
@@ -50,7 +51,8 @@ ambients that answer outside one
 `outlet`, and `pages(dir)` for a pages directory), both transports and the seam that addresses them, the
 template tag and its runtime, both render substrates, hydration, `<style>` in both its component and
 its subtree form, `log` with its channels and its remote feed, the three ceilings, the `.abide`
-compiler, and the test kit.
+compiler, the test kit, and the CLI's spine — the usage screen, the exit codes, and the four
+commands that need neither a bundler nor a boot (`repl`, `run`, `check`, `logs`).
 
 ## Terms
 
@@ -601,6 +603,7 @@ every format: that is the one routing decision a pipe cannot make for itself.
 | `GET /__abide/logs` | Every record the ring holds, then every one that arrives next, as one jsonl body that never ends. Served by `dispatch`, so an app that mounted that has it already. |
 | `ABIDE_LOGS` | Opts it IN. Closed is the default and a closed feed answers 404 — an app that never opted in has nothing to refuse access to. |
 | `ABIDE_LOG_BUFFER` | The ring's size in RECORDS (default `500`). Records rather than bytes, so an operator can reason about it without measuring one. |
+| `abide logs` | The client for it. A RECORD crosses rather than a rendered line, so the reader prints it by the rules its OWN stdout answers to — which is what lets one tail be piped as `tsv` while another is read on a terminal. |
 
 The feed is `channel({ tail })` and `ch.tail()` and nothing else: the ring, the cap, the replay and
 the live subscribe are all the primitive's, so there is no second retention policy to keep in step
@@ -955,25 +958,25 @@ is all HTTP itself has left to say.
 
 | Name | Purpose |
 | --- | --- |
-| `PORT` | Listen port (default `3000`). `--port` overrides. `abide dev` hops to the next open port if taken; `abide start` binds directly and fails hard on `EADDRINUSE`. |
-| `APP_URL` | Public URL / mount base, and the expected origin both origin gates compare against (WS CSWSH gate, CSRF gate). A `abide dev` port hop carries it to the port actually bound. |
+| `PORT` | Listen port (default `3000`). `--port` overrides. `abide dev` hops to the next open port if taken; `abide start` binds directly and fails hard on `EADDRINUSE`. Read today by `abide logs` alone, as the last fallback for which app to tail. |
+| `APP_URL` | Public URL / mount base, and the expected origin both origin gates compare against (WS CSWSH gate, CSRF gate). A `abide dev` port hop carries it to the port actually bound. Read today by `abide logs`, under `ABIDE_APP_URL` and over `PORT`. |
 | `NODE_ENV` | Production vs development. Gates the identity-secret requirement and `Secure` on the identity cookie — both built — plus `Strict-Transport-Security` and other prod-only behaviour that is not. |
 | `ABIDE_APP_NAME` | The app's own name, and therefore `log`'s default channel. Falls back to the nearest package.json `name` above the working directory — which needs a filesystem, so `abide/server` installs that half — then to `abide`. |
 | `ABIDE_DATA_DIR` | Override the per-user data dir backing `appDataDir()`. |
 | `ABIDE_IDENTITY_SECRET` | Seals the `abide-identity` cookie. Required in production for `identity.set()` — a development process with nothing declared mints a random key and says so on `abide:identity`, so sessions do not survive a restart, which is exactly what an undeclared secret means. |
 | `ABIDE_IDENTITY_TTL` | Identity cookie TTL in ms (default 30d, rolling — re-sealed on the first resolve past half its life). |
-| `ABIDE_APP_TOKEN` | Bearer token for the remote CLI & desktop bundle. |
-| `ABIDE_APP_URL` | App URL for the remote CLI & desktop bundle (also marks a cross-origin proxy, which then declines to volunteer `traceparent`). |
+| `ABIDE_APP_TOKEN` | Bearer token for the remote CLI & desktop bundle. Sent as `Authorization: Bearer` on what a command asks the app for — the door in front of it, since abide's own endpoints gate themselves. |
+| `ABIDE_APP_URL` | App URL for the remote CLI & desktop bundle (also marks a cross-origin proxy, which then declines to volunteer `traceparent`). The first thing `abide logs` asks for the app to tail. |
 | `ABIDE_RPC_TIMEOUT` | Default RPC run deadline in ms (default `300000` = 5 min) — a fallback ceiling; per-RPC `timeout` is the real knob. On a handler that yields it is the longest gap BETWEEN chunks. |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | Default ceiling on a mutation's request body (unset = no ceiling); per-RPC `maxBodySize` overrides. Over-size declared `content-length` → 413 before buffering. |
 | `ABIDE_MAX_GLOBAL_CACHE_SIZE` | Byte ceiling (LRU) for the global + default-context memo cache, as one number for the whole process (default: no limit). Charged per SETTLE, and the select is what says which row is least recently used. See Ceilings. |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | Per-stream transcript cap in bytes (default: no limit; exceeding it drops the transcript and disables replay for the rest of that stream — the cell still holds every chunk). Charged in O(1) per chunk. See Ceilings. |
 | `ABIDE_SSR_STREAM_BUDGET` | Total wall budget in ms for an SSR stream (default: no limit). Passing it abandons the walk and ends the response as an `AbideTimeoutError`, with everything written already out. See Ceilings. |
-| `ABIDE_LOGS` | Opt IN to the remote log feed (`GET /__abide/logs`, what `./app logs` tails). Default closed → 404. |
+| `ABIDE_LOGS` | Opt IN to the remote log feed (`GET /__abide/logs`, what `abide logs` tails). Default closed → 404. |
 | `ABIDE_LOG_BUFFER` | Ring size in records for that log feed (default `500`). |
 | `ABIDE_LOG_FORMAT` (`tsv` \| `json`) | Machine log format. Unset, the shape follows the TTY: pretty at a terminal, `tsv` through a pipe. |
 | `DEBUG` | Log-channel gating, in debug-npm grammar. Read here on a server and from `localStorage.debug` in a browser; where both exist — a DOM emulator under a test runner — the environment is asked first. |
-| `NO_COLOR` | Disable colour everywhere (log lines, CLI banner, REPL banner + ghost text); forces `tsv` log output. |
+| `NO_COLOR` | Disable colour everywhere (log lines, CLI banner, REPL banner + ghost text — and with no colour there is no ghost, since a suggestion that cannot be told from what was typed is worse than none); forces `tsv` log output. |
 | `FORCE_COLOR` | Force colour/pretty output even when not a TTY. |
 
 | Export | Signature | Purpose |
@@ -989,18 +992,51 @@ is all HTTP itself has left to say.
 
 | Command | Purpose |
 | --- | --- |
-| `abide scaffold <name>` | Write a starter project, then `git init` + `bun install` + `abide dev` — each skippable (`--no-git`/`--no-install`/`--no-dev`). |
-| `abide dev [--port <n>]` | Same pipeline as `build`, plus watch + full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken — and the hop carries `APP_URL` with it, since that's the origin both gates compare against (WS CSWSH, CSRF); left stale the server rejects its own browser. Graceful `onStop` on SIGINT/SIGTERM/crash. |
-| `abide build` | Code-split client → content-hashed chunks + `manifest.json`, each asset minified and precompressed (`.br`/`.gz` sidecars listed in the manifest's `encodings`) |
-| `abide start [--port <n>]` | Serve against the `abide build`. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` can't drift. |
-| `abide run <file> [args…]` | Run a script under the abide runtime. Everything after `<file>` belongs to the SCRIPT |
-| `abide check` | Type-check `.abide` script bodies |
-| `abide lsp` | `.abide` language server over stdio |
-| `abide compile [--target] [--out] [--platforms]` | ONE standalone executable (`bun build --compile`; `--platforms` cross-compiles a release set for the price of one client build (with it, `--out` names a DIRECTORY). |
-| `abide bundle` | Desktop launcher for the host platform (embeds assets, first-run setup screen). Native windowing is best-effort — a system webview binary or the default browser. |
+| `abide scaffold <name>` *(not built)* | Write a starter project, then `git init` + `bun install` + `abide dev` — each skippable (`--no-git`/`--no-install`/`--no-dev`). |
+| `abide dev [--port <n>]` *(not built)* | Same pipeline as `build`, plus watch + full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken — and the hop carries `APP_URL` with it, since that's the origin both gates compare against (WS CSWSH, CSRF); left stale the server rejects its own browser. Graceful `onStop` on SIGINT/SIGTERM/crash. |
+| `abide build` *(not built)* | Code-split client → content-hashed chunks + `manifest.json`, each asset minified and precompressed (`.br`/`.gz` sidecars listed in the manifest's `encodings`) |
+| `abide start [--port <n>]` *(not built)* | Serve against the `abide build`. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` can't drift. |
+| `abide repl` | A prompt with the isomorphic surface in scope and the `.abide` loader registered, so `await import('./page.abide')` compiles on the way in. What a line declares is there on the next one; a bare expression prints its value, and a source prints what it HOLDS rather than `[Function]` — read through `peek`, so printing one starts nothing. Piped input is the same evaluation without the terminal, which is the lane a test can drive. |
+| `abide run <file> [args…]` | Run a script under the abide runtime — the `.abide` loader, and nothing else. Everything after `<file>` belongs to the SCRIPT, including a flag this binary also answers to, so it is SPAWNED rather than imported: the script reads its own `argv`, and keeps its own exit code. |
+| `abide check [dir…]` | Type-check `.abide` script bodies, reporting every diagnostic on the `.abide` line. The list is stdout — it is the command's output, and the exit code is what says it failed. |
+| `abide logs` | Tail `GET /__abide/logs`: the ring replayed, then every line as it is written. Each record is printed by the rules the app's own console follows, decided by THIS process's stdout — so a pipe gets `tsv` and a terminal gets the readable form, with the `+Nms` delta rebuilt from the times the records carry. |
+| `abide lsp` *(not built)* | `.abide` language server over stdio |
+| `abide compile [--target] [--out] [--platforms]` *(not built)* | ONE standalone executable (`bun build --compile`; `--platforms` cross-compiles a release set for the price of one client build (with it, `--out` names a DIRECTORY). |
+| `abide bundle` *(not built)* | Desktop launcher for the host platform (embeds assets, first-run setup screen). Native windowing is best-effort — a system webview binary or the default browser. |
 | `abide` · `-h` · `--help` | Usage, GENERATED from that same table. Asking for help is a success (stdout, `0`); an unknown subcommand is not (stderr, `2`) — a mistyped command exiting `0` tells CI the build succeeded. |
 
 Exit codes (`CLI_EXIT_CODES`, shared verbatim with the compiled binary): `0` ok · `1` failed/unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx.
+
+The table is DATA, and the dispatch reads the same rows the screen does — so a command that exists is
+one the help names, and there is no second list to fall out of step with it. A row that is not there
+is a command that does not exist: `abide dev` answers `2` like any other word this binary does not
+know, rather than a stub apologising for itself on a help screen. Each row's body is loaded only when
+its name is the one that arrived, because `--help` is the most common thing a binary is asked for and
+it should not pay for a compiler it is not going to run.
+
+The REPL is a `node:vm` script rather than an `eval`, and that is a correctness choice rather than a
+taste one: a global lexical binding made by `eval` does not survive the call in JavaScriptCore, so
+`const x = 1` would be gone by the next line — and `runInThisContext` hands back the completion value,
+which is what prints a bare expression with nothing parsing statements to find one. `Bun.Transpiler`
+decides both whether a line is TypeScript it can run and whether it has FINISHED, so multi-line input
+is the language's own answer rather than a bracket counter that disagrees with it about templates and
+comments, and dead-code elimination is turned off because a prompt's input is exactly the code whose
+only purpose is its value. A top-level `await` is the FALLBACK: the line fails to compile, nothing has
+run, and the retry through an async wrapper is reached by the engine's answer instead of by a regex
+deciding what "top level" means.
+
+Ghost text is a dim completion of the word being typed, taken with Tab or a right arrow at the end of
+the line, and it is off wherever colour is — an undimmed suggestion cannot be told from what you
+typed, and a line editor that lies about which characters are yours is worse than one making no
+suggestions. It is its own editor rather than `node:readline` because drawing after the cursor means
+owning the repaint, and it takes its terminal as HOOKS, so the one part of this binary a spawned
+process cannot exercise is driven in a test by feeding it a string of keystrokes.
+
+`abide logs` asks `ABIDE_APP_URL`, then `APP_URL`, then a local `PORT` — an app running in the next
+terminal is the case the command exists for — and sends `ABIDE_APP_TOKEN` as a bearer, which is for
+whatever an operator put in FRONT of the app rather than for the feed itself: the feed's own gate is
+`ABIDE_LOGS`, and a closed one answers 404, which is exit `5`. Nothing answering at all has no status
+to map and is exit `1` — that difference is the whole reason the codes past `2` are HTTP outcomes.
 
 # Response helpers
 

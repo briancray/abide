@@ -8,8 +8,9 @@
     ],
     "scripts": {
         "test": "bun test",
+        "cli": "bun packages/abide/cli/index.ts",
         "abide": "bun packages/abide/compiler/check.ts packages/example",
-        "typecheck": "bun packages/abide/compiler/check.ts packages/example --check",
+        "typecheck": "bun packages/abide/cli/index.ts check packages/example",
         "shapes": "bun packages/abide/compiler/shapes.ts packages/example --out .abide/shapes.json --pretty",
         "web": "bun run --filter example web",
         "example": "bun run --filter example ssr",

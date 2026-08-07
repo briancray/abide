@@ -6,36 +6,8 @@
 // way it is. The one rule worth restating at the code: `warning` and `error` are never gated, on any
 // channel, because the gate exists to control volume rather than to hide breakage.
 
+import { colourAllowed, env, stdoutIsTTY } from './internal/env.ts'
 import { traceId } from './internal/trace.ts'
-
-// Where the environment is, if there is one. The OBJECT is captured, not its values: `Bun.env` is a
-// live view of `process.env`, so a test that sets `DEBUG` mid-run is seen by the next line.
-const ENVIRONMENT: Record<string, string | undefined> =
-    (globalThis as { Bun?: { env: Record<string, string | undefined> } }).Bun?.env ??
-    (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ??
-    {}
-
-const STDOUT = (globalThis as { process?: { stdout?: { isTTY?: boolean } } }).process?.stdout
-
-/** Empty string and unset are the same answer — `DEBUG=` is not a request to enable nothing. */
-export function env(name: string): string | undefined {
-    const held = ENVIRONMENT[name]
-    return held === undefined || held === '' ? undefined : held
-}
-
-/**
- * The same read as a POSITIVE number — a size, a deadline, a ring.
- *
- * Every knob abide reads this way is one where zero and negative are not answers, so an unparseable
- * or nonsensical spelling falls back rather than disabling the thing it was meant to size. Here
- * beside `env` so the empty-is-unset rule is asked once rather than restated per reader.
- */
-export function envNumber(name: string, fallback: number): number {
-    const held = env(name)
-    if (held === undefined) return fallback
-    const parsed = Number(held)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
 
 // --- the app's own name ------------------------------------------------------
 
@@ -153,27 +125,34 @@ function enabledIn(spec: string, channel: string): boolean {
 
 // --- what a line looks like --------------------------------------------------
 
-type Shape = 'colour' | 'plain' | 'tsv' | 'json'
+/**
+ * The four forms one line takes. Exported because a line is written in one process and READ in
+ * another — `abide logs` renders a record the feed handed it, and it renders it by the rules the
+ * console was already following.
+ */
+export type LogShape = 'colour' | 'plain' | 'tsv' | 'json'
 
 // A browser is decided by having a document and no terminal behind it: ANSI would arrive as literal
 // junk in the console, and a tab is not a field separator anybody there can use.
-const IN_BROWSER = typeof document !== 'undefined' && STDOUT?.isTTY !== true
+const IN_BROWSER = typeof document !== 'undefined' && !stdoutIsTTY()
 
 /**
  * One decision, not two. Whether a line is machine-readable and whether it carries colour are the
- * same question asked of the same three variables, and answering them separately meant keeping the
- * `NO_COLOR` / `FORCE_COLOR` / `isTTY` ordering consistent in two places by hand.
+ * same question asked of the same variables, and answering them separately meant keeping the
+ * `NO_COLOR` / `FORCE_COLOR` / `isTTY` ordering consistent in two places by hand — so that ordering
+ * is `colourAllowed`'s, which the CLI's usage screen asks too.
+ *
+ * Exported for the tail: a CLI printing somebody else's records answers the same question about its
+ * OWN stdout.
  */
-function shape(): Shape {
+export function logShape(): LogShape {
     // Declared beats inferred everywhere, which is also what makes the machine formats testable from a
     // demo that runs in both lanes.
     const declared = env('ABIDE_LOG_FORMAT')
     if (declared === 'json') return 'json'
     if (declared === 'tsv') return 'tsv'
     if (IN_BROWSER) return 'plain'
-    if (env('NO_COLOR') !== undefined) return 'tsv'
-    if (env('FORCE_COLOR') !== undefined) return 'colour'
-    return STDOUT?.isTTY === true ? 'colour' : 'tsv'
+    return colourAllowed() ? 'colour' : 'tsv'
 }
 
 // Six that stay legible on both a light and a dark terminal, picked by hashing the channel so one
@@ -347,7 +326,7 @@ function emit(level: Level, channel: string, message: string, now: number, since
     // request. Asked only for a line being WRITTEN: the gate has already run by here.
     const traced = traceId()
 
-    const form = shape()
+    const form = logShape()
     // ISO-8601 is what the feed and both machine formats carry, and formatting one costs more than
     // everything else on this path put together — so it is built once, for the readers that exist.
     const feeding = sink !== null && sinkWants()
@@ -365,29 +344,52 @@ function emit(level: Level, channel: string, message: string, now: number, since
         })
     }
 
-    let line: string
-    if (form === 'json') {
-        line = JSON.stringify({ time: stamped, level, channel, message, trace: traced })
-    } else if (form === 'tsv') {
-        // Five columns always, empty where there is no id: a row whose column count depends on
-        // whether a request was in flight is one no `cut -f` can read.
-        line = `${stamped}\t${level}\t${channel}\t${oneLine(message)}\t${traced ?? ''}`
-    } else {
-        const delta = `+${since}ms`
-        const suffix = level === 'log' ? '' : ` ${level}`
-        // Short, and trailing with the delta rather than leading: both are metadata about the line,
-        // and the message is what someone reading a terminal is scanning for.
-        const short = traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
-        line =
-            form === 'colour'
-                ? `\x1b[${channelColour(channel)}m${channel}\x1b[0m` +
-                  (suffix === '' ? '' : `\x1b[${LEVEL_COLOURS[level]}m${suffix}\x1b[0m`) +
-                  ` ${message}\x1b[90m${short} ${delta}\x1b[0m`
-                : `${channel}${suffix} ${message}${short} ${delta}`
-    }
+    writeLogLine(level, formatLogLine(level, channel, message, stamped, traced, since, form))
+}
 
-    // Failures go to stderr in every format — that is the one routing decision a pipe cannot make for
-    // itself, and it holds whether the other end is a terminal or a collector.
+/**
+ * The five fields as the line one shape writes.
+ *
+ * POSITIONAL rather than taking a `LogRecord`, because the writer above does not have one and must
+ * not have to build one: a record costs an object and — worse — the ISO string, which is the most
+ * expensive thing on this path and is skipped outright for a terminal. A reader that HAS a record
+ * spreads its fields in, which is the cheap direction.
+ */
+export function formatLogLine(
+    level: Level,
+    channel: string,
+    message: string,
+    stamped: string,
+    traced: string | null,
+    since: number,
+    form: LogShape,
+): string {
+    if (form === 'json') return JSON.stringify({ time: stamped, level, channel, message, trace: traced })
+    // Five columns always, empty where there is no id: a row whose column count depends on whether a
+    // request was in flight is one no `cut -f` can read.
+    if (form === 'tsv') return `${stamped}\t${level}\t${channel}\t${oneLine(message)}\t${traced ?? ''}`
+
+    const delta = `+${since}ms`
+    const suffix = level === 'log' ? '' : ` ${level}`
+    // Short, and trailing with the delta rather than leading: both are metadata about the line, and
+    // the message is what someone reading a terminal is scanning for.
+    const short = traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
+    if (form !== 'colour') return `${channel}${suffix} ${message}${short} ${delta}`
+    return (
+        `\x1b[${channelColour(channel)}m${channel}\x1b[0m` +
+        (suffix === '' ? '' : `\x1b[${LEVEL_COLOURS[level]}m${suffix}\x1b[0m`) +
+        ` ${message}\x1b[90m${short} ${delta}\x1b[0m`
+    )
+}
+
+/**
+ * Where a line goes.
+ *
+ * Failures go to stderr in every format — that is the one routing decision a pipe cannot make for
+ * itself, and it holds whether the other end is a terminal or a collector. The other three are named
+ * rather than folded into `console.log` because a browser console filters by them.
+ */
+export function writeLogLine(level: Level, line: string): void {
     if (level === 'error') console.error(line)
     else if (level === 'warning') console.warn(line)
     else if (level === 'info') console.info(line)

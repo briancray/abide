@@ -22,7 +22,8 @@
 // real work and may walk the value. A charge that had to be exact would be the per-write cost the
 // ceiling exists to avoid.
 
-import { abideLog, envNumber } from '../log.ts'
+import { abideLog } from '../log.ts'
+import { envNumber } from './env.ts'
 import { NO_LIMIT } from './timers.ts'
 
 const streamLog = abideLog.channel('stream')

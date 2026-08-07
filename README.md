@@ -24,12 +24,15 @@ packages/abide/src/
                               with a fetch for a body, a channel with a websocket for one
     internal/trace.ts    12   where the isomorphic half asks about the current trace: the id for a
                               log line, the headers for an outbound call. null on a client
-    internal/wire.ts    175   what goes over the wire: one value, a stream of them, a failure — and
+    internal/wire.ts    176   what goes over the wire: one value, a stream of them, a failure — and
                               a FILE, which travels beside the args with a reference where it sat
     internal/shapes.ts   39   JsonSchema — the one shape language, so the compiler and the runtime
                               cannot disagree about what a declaration means
-    log.ts              222   log — channels, levels, the DEBUG gate, and the three shapes a line
-                              takes: readable, tsv, json
+    internal/env.ts      22   what the process was told, and whether its stdout may carry ANSI —
+                              apart from log.ts so `abide --help` need not load a logger to ask
+    log.ts              214   log — channels, levels, the DEBUG gate, and the three shapes a line
+                              takes: readable, tsv, json — rendered where `abide logs` can reach it,
+                              so a tailed record and a written line cannot look different
     internal/ceilings.ts 96   the three caps a process runs under — a stream's transcript, the
                               global memo cache's LRU, an SSR render's wall budget — and the charge
                               they are measured by: O(1) per chunk, and a walk per settle
@@ -87,6 +90,23 @@ packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, 
     internal/assemble.ts   the one place a schema is ASSEMBLED, so the two derivations above cannot
                            answer the same type two ways
     index.ts               compile() + elide() — pure, no I/O
+packages/abide/cli/     the `abide` binary — the table IS the help, and a command's number is the
+                        exit code
+    COMMANDS.ts          53   the whole surface as data: the rows the usage screen is generated
+                              from, and the lazy body each one dispatches to
+    CLI_EXIT_CODES.ts    21   0 ok · 1 unreachable · 2 usage · 3 422 · 4 401/403 · 5 404 · 6 504
+    internal/repl.ts    275   the prompt: node:vm so a `const` survives the line, Bun.Transpiler so
+                              the language decides when one has finished, and a source printed as
+                              what it holds
+    internal/editor.ts  176   one line and the ghost of what it could be — its own editor, because
+                              drawing after the cursor means owning the repaint
+    internal/logs.ts    100   the tail — a never-ending jsonl body, printed by log.ts's own line
+                              rules, so a tailed record and a written line cannot look different
+    internal/run.ts      14   a script under the `.abide` loader, spawned so its argv is its own
+    internal/check.ts     8   the checker over a project, which is compiler/check.ts's already
+    internal/paint.ts     8   the four ANSI codes, over env.ts's one answer about whether they may
+                              be written — so NO_COLOR is one promise rather than three
+    index.ts             22   argv in, exit code out
 packages/abide/tests/   the test kit (abide/tests): the Case shape, assertions, DOM counters, bench timing
 packages/example/types/ the typing contract: `valid/` asserts EXACT types, `invalid/` is code that
                         must be REJECTED — checked by real tsc in `test/types.test.ts`
@@ -143,9 +163,9 @@ descendants, so an element carries every scope in force and the containment is a
 Blocks are content-addressed, so two spelling the same rules are one sheet and one attribute.
 
 Type errors inside a template are reported by the real checker, **on the `.abide` line**.
-`bun run typecheck` writes the compiled module, a `.d.abide.ts` (which is what
-`allowArbitraryExtensions` makes `tsc` resolve `./app.abide` to) and a v3 source map beside each
-file, runs `tsc`, and moves every diagnostic back:
+`abide check` — which is what `bun run typecheck` runs — writes the compiled module, a `.d.abide.ts`
+(which is what `allowArbitraryExtensions` makes `tsc` resolve `./app.abide` to) and a v3 source map
+beside each file, runs `tsc`, and moves every diagnostic back:
 
 ```
 packages/example/demos/fixtures/bad.abide(7,9): error TS2339: Property 'nmae' does not exist on …
@@ -487,6 +507,13 @@ closed feed answers **404**, not 403: an app that never opted in has nothing to 
 gate included: a tail showing lines the console did not would be a second answer to the same
 question.
 
+`abide logs` is the client for it, and what crosses is a **record** rather than a rendered line — so
+the tail prints by the rules *its own* stdout answers to. Piped, that is `tsv`; on a terminal it is
+the readable form, colour and all, with the `+12ms` delta rebuilt from the times the records carry
+rather than from when this process happened to read them. A replayed ring therefore shows the spacing
+the app actually wrote at. The formatting itself is `log.ts`'s, called from the CLI: two copies of
+those rules is exactly the drift the feed exists not to have.
+
 ## Sync or async is not a different spelling
 
 A cell holds a **settled value**. Handing one a promise starts a *load* instead of storing the
@@ -625,6 +652,95 @@ marker by marker; a slot whose range is not what this template writes warns and 
 instead. A stale cache or a non-deterministic render degrades to a rebuild rather than a blank screen.
 
 `bun run example` renders the example component through both substrates.
+
+## The CLI
+
+```
+$ abide
+abide
+
+usage: abide <command> [args…]
+
+  repl                An abide prompt: the isomorphic surface in scope, and `.abide` files importable.
+  run <file> [args…]  Run a script under the abide runtime. Everything after <file> belongs to the script.
+  check [dir…]        Type-check `.abide` script bodies, reporting on the `.abide` line.
+  logs                Tail a running app's log feed. ABIDE_APP_URL names it; ABIDE_APP_TOKEN is its bearer.
+  -h, --help          This.
+```
+
+That screen is **generated from the command table**, and the dispatch reads the same rows — so a
+command that exists is one the help names, and there is no second list to fall out of step with it.
+What is not in the table does not exist: `abide dev` answers `2` like any other unknown word rather
+than being a stub apologising for itself on a help screen. The rest of the spec's table — `scaffold`,
+`dev`, `build`, `start`, `compile`, `bundle`, `lsp` — needs a bundler or a boot, and is what is left.
+
+Three things it is careful about:
+
+- **Asking for help is a success**, on stdout, exit `0`. An unknown subcommand is a *usage* failure
+  on stderr, exit `2` — not `1`, because nothing ran, and not `0`, because a mistyped command
+  exiting `0` tells CI the build succeeded.
+- **Exit codes past `2` are HTTP outcomes** (`CLI_EXIT_CODES`): `5` is a 404, `4` is 401/403, `1` is
+  nothing answering at all. A script wrapping `abide logs` can tell "the feed is closed" from "the
+  app is not there" without grepping stderr for it.
+- **A command's body is loaded only when its name arrives.** `--help` is the most common thing a
+  binary is asked for, and it should not pay to load a compiler it is not going to run. What the
+  binary loads before it knows the command is ~1.3ms — the table, the codes and four ANSI strings.
+  It was 7.0ms while one `const` in the shared env read held `process.stdout`, which bun BUILDS on
+  first touch; the question is now asked per call, so a command that never colours anything never
+  pays it.
+
+`abide run` **spawns** rather than importing: everything after the file belongs to the script,
+including a flag this binary answers to itself, and the script keeps its own `argv` and its own exit
+code. What the command adds is the `.abide` loader, so a one-off script imports a component exactly
+as the served app does.
+
+### The prompt
+
+```
+$ abide repl
+abide repl
+bun 1.3.14 · state · memo · channel · watch and the rest of `abide` are in scope · ctrl-d to leave
+abide> const count = state(1)
+abide> count
+state 1
+abide> count.set(4); count
+state 4
+abide> const Page = (await import('./app.abide')).default
+abide> typeof Page
+"function"
+```
+
+The **isomorphic** surface is what is in scope — `state`, `memo`, `channel`, `watch`, `html`, `log`,
+the router, both transports' client halves. A renderer is one line away (`await import('abide/server')`)
+and deliberately not preloaded: a prompt that imported both substrates to open would be paying for
+the half of the framework you were not asking about.
+
+Naming a source prints **what it holds**, not `[Function]` — read through `peek`, so printing a memo
+cannot be the thing that made it load, and one that has not run says `memo (cold)` rather than
+`undefined`, which is a value it could legitimately be holding.
+
+Three things are load-bearing under it:
+
+- **`node:vm`, not `eval`.** A global lexical binding made by `eval` does not survive the call in
+  JavaScriptCore, so `const x = 1` would be gone by the next line. `runInThisContext` keeps it *and*
+  hands back the completion value, which is what prints a bare expression with nothing parsing
+  statements to find one.
+- **`Bun.Transpiler` answers both questions a prompt has** — is this TypeScript I can run, and has
+  the line *finished*. The second comes out of the error message, so multi-line input is the
+  language's own answer rather than a bracket counter that disagrees with it about templates and
+  comments. Dead-code elimination is turned **off**: a prompt's input is precisely the code whose only
+  purpose is its value, and `({ a: 1 })` is not dead.
+- **Top-level `await` is the fallback, not the shape.** A line holding one fails to *compile* —
+  nothing has run — so the retry through an async wrapper is reached by the engine's own answer
+  instead of by a regex deciding what "top level" means. The common line has no await and runs
+  plainly, which is what keeps `const` persistent.
+
+Ghost text completes the word being typed, dimmed, taken with Tab or a right arrow at the end of the
+line — and it is **off wherever colour is**, because an undimmed suggestion cannot be told from what
+you typed. It is a line editor of our own rather than `node:readline` for one reason: drawing after
+the cursor means owning the repaint, and owning the repaint is most of a line editor. It takes its
+terminal as *hooks*, which is how the one part of this binary a spawned process cannot exercise — a
+keystroke needs a tty — is tested by feeding it a string.
 
 ## The example pages
 
@@ -858,14 +974,14 @@ a test:
 
 ## Roadmap
 
-1. **A CLI**, which is what turns `pages()` into a table a browser bundle also has, and what would
-   read the environment table the spec describes. It is what is left: `identity()` landed, and with
-   it the last of the ambients — a principal sealed into a cookie, `onIdentity` over the claims it
-   carried, served at `GET /__abide/identity`, and registered as a call for the same reason
-   `onHealth` is, until there is a binary to read an app's export.
-2. **The app-level exports** the CLI would read — `middleware`, `onStart`, `onStop`, `onError`.
-   `onError` and `middleware` have a seam already: `dispatch` opens one request scope every lane is
-   served in. `onStart` is the one that genuinely needs the binary, because it WRAPS the socket bind.
+1. **The rest of the CLI.** The binary exists — the table, the exit codes, `repl`, `run`, `check` and
+   `logs` — and what is left is every command that needs a bundler or a boot: `build` and `start`,
+   `dev` with its watch and live-reload, `scaffold`, `compile`, `bundle`, `lsp`. `build` is the one
+   that turns `pages()` into a table a browser bundle also has.
+2. **The app-level exports** a booting command would read — `middleware`, `onStart`, `onStop`,
+   `onError`. `onError` and `middleware` have a seam already: `dispatch` opens one request scope
+   every lane is served in. `onStart` is the one that genuinely needs the boot, because it WRAPS the
+   socket bind — which is why it is still absent while `onHealth` and `onIdentity` are calls.
 
 ## Provenance
 

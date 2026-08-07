@@ -42,6 +42,7 @@
         "packages/abide/src/**/*.ts",
         "packages/abide/tests/**/*.ts",
         "packages/abide/compiler/**/*.ts",
+        "packages/abide/cli/**/*.ts",
         "packages/example/**/*.ts"
     ],
     // The type fixtures under `types/invalid` are SUPPOSED to fail. They are checked deliberately by

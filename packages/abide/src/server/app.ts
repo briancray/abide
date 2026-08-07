@@ -11,7 +11,8 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { appName, env, useAppNameSource } from '$shared/log.ts'
+import { env } from '$shared/internal/env.ts'
+import { appName, useAppNameSource } from '$shared/log.ts'
 
 /** What the climb below is looking for: the two facts an app is identified by. */
 interface Manifest {

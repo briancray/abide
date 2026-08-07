@@ -9,11 +9,9 @@
 // return type is its VALUE, so a failure has nowhere to go but out. Declared `never`, so the checker
 // treats what follows a call as unreachable and narrows the value the caller was guarding.
 
-import { framedBody, JSON_TYPE, jsonLine } from '$shared/internal/wire.ts'
+import { framedBody, JSON_TYPE, JSONL_TYPE, jsonLine } from '$shared/internal/wire.ts'
 import { pendingCookies, traceResponse } from './scopes.ts'
 
-/** One JSON value per line. JSON has no unescaped newline, so the delimiter needs no length prefix. */
-const JSONL_TYPE = 'application/jsonl'
 const SSE_TYPE = 'text/event-stream'
 const HTML_TYPE = 'text/html; charset=utf-8'
 

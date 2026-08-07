@@ -11,6 +11,14 @@ import { hasFile, isFile, isThenable } from './probes.ts'
 /** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */
 export const NDJSON_TYPE = 'application/x-ndjson'
 export const JSON_TYPE = 'application/json'
+/**
+ * One JSON value per line. JSON has no unescaped newline, so the delimiter needs no length prefix.
+ *
+ * Here beside the other two rather than with the response that serves it, because the log feed is
+ * written by `abide/server` and read by `abide logs` — a media type both halves name is the one kind
+ * of string that cannot be spelled in the half that happens to own the writer.
+ */
+export const JSONL_TYPE = 'application/jsonl'
 
 /**
  * How long the client may serve what it just loaded, in MILLISECONDS.

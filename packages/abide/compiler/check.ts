@@ -83,15 +83,15 @@ export function remap(line: string, byModule: Map<string, EmitResult>): string {
     return `${emitted.source}(${position.line},${position.column}): ${rest}`
 }
 
-if (import.meta.main) {
-    const roots = Bun.argv.slice(2).filter((argument) => !argument.startsWith('-'))
-    const check = Bun.argv.includes('--check')
+/**
+ * Emit every `.abide` under `roots`, run the real checker over the project, and hand back what it
+ * said — every diagnostic already moved back onto the `.abide` line it came from.
+ *
+ * A LIST rather than a printed report and an exit code: what to print and what to exit with is the
+ * caller's, and `abide check` is the caller. Empty means clean, which is the whole of the decision.
+ */
+export async function diagnose(roots: string[]): Promise<string[]> {
     const written = await emitAll(roots.length > 0 ? roots : ['.'])
-
-    if (!check) {
-        for (const item of written) console.log(item.module)
-        process.exit(0)
-    }
 
     const byModule = new Map<string, EmitResult>()
     for (const item of written) {
@@ -106,11 +106,18 @@ if (import.meta.main) {
         stderr: 'pipe',
     })
     const output = `${tsc.stdout.toString()}${tsc.stderr.toString()}`
-    let failed = false
+    const found: string[] = []
     for (const line of output.split('\n')) {
         if (line.trim() === '') continue
-        failed = true
-        console.log(remap(line, byModule))
+        found.push(remap(line, byModule))
     }
-    process.exit(failed ? 1 : 0)
+    return found
+}
+
+// The EMIT on its own, which is the one thing `abide check` is not: it writes the generated modules
+// and says where they went, without a checker. `abide check` is the checking front door.
+if (import.meta.main) {
+    const roots = Bun.argv.slice(2).filter((argument) => !argument.startsWith('-'))
+    const written = await emitAll(roots.length > 0 ? roots : ['.'])
+    for (const item of written) console.log(item.module)
 }

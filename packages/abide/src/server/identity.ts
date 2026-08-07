@@ -25,9 +25,10 @@
 // correct outcome for a lane that may not decide who a caller is.
 
 import { anonymous, type Identity, type IdentitySource, useIdentitySource } from '$shared/identity.ts'
+import { env, envNumber } from '$shared/internal/env.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { errorPayload } from '$shared/internal/wire.ts'
-import { abideLog, env, envNumber } from '$shared/log.ts'
+import { abideLog } from '$shared/log.ts'
 import { json } from './responses.ts'
 import { refuse } from './rpc.ts'
 import { cookies, heldIdentity, holdIdentity, isServing, writeCookie } from './scopes.ts'

@@ -12,7 +12,11 @@
         "./compiler/check": "./compiler/check.ts",
         "./compiler/shapes": "./compiler/shapes.ts",
         "./compiler/assemble": "./compiler/internal/assemble.ts",
-        "./compiler/plugin": "./compiler/plugin.ts"
+        "./compiler/plugin": "./compiler/plugin.ts",
+        "./cli": "./cli/index.ts"
+    },
+    "bin": {
+        "abide": "./cli/index.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit"

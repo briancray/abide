@@ -14,7 +14,8 @@
 
 import type { Channel } from '$shared/channel.ts'
 import { channel } from '$shared/channel.ts'
-import { env, envNumber, type LogRecord, useLogSink } from '$shared/log.ts'
+import { env, envNumber } from '$shared/internal/env.ts'
+import { type LogRecord, useLogSink } from '$shared/log.ts'
 import { jsonl } from './responses.ts'
 import { refuse } from './rpc.ts'
 
