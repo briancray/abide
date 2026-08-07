@@ -12,9 +12,9 @@ counting the prose would be counting the wrong thing.
 ```
 packages/abide/src/
   shared/               the isomorphic half — same import, same call, both sides
-    internal/graph.ts   574   the reactive engine: state / derive / watch / untrack / scope, and
+    internal/graph.ts   589   the reactive engine: state / derive / watch / untrack / scope, and
                               the three shapes a value arrives in — value, load, stream
-    memo.ts             304   memo(load) — args-keyed cache, coalescing, probes, ttl, pacing
+    memo.ts             322   memo(load) — args-keyed cache, coalescing, probes, ttl, pacing
     channel.ts          191   channel — pub/sub with a reactive read surface, rooms, maxAge, tail
     router.ts           324   route/url/navigate/routes/outlet — the route as four cells, per caller
     internal/patterns.ts 162  a pattern: parse it, order it, run a path through it
@@ -30,6 +30,9 @@ packages/abide/src/
                               cannot disagree about what a declaration means
     log.ts              222   log — channels, levels, the DEBUG gate, and the three shapes a line
                               takes: readable, tsv, json
+    internal/ceilings.ts 96   the three caps a process runs under — a stream's transcript, the
+                              global memo cache's LRU, an SSR render's wall budget — and the charge
+                              they are measured by: O(1) per chunk, and a walk per settle
     online.ts            10   online() — the second reactive ambient, off the platform's own events
     health.ts            40   health() — the app's own account: composed in the process that serves
                               it, fetched anywhere else, which is what `reachable` reports
@@ -41,10 +44,11 @@ packages/abide/src/
     internal/prepare.ts  92   parse once per call site
     index.ts             30   mount · hydrate
   server/               streaming SSR, the transport's declaring half, in-order + out-of-order suspend
-    index.ts            392   the walk
+    index.ts            491   the walk and the document, both phases racing one wall budget from
+                              ceilings.ts when an operator declares one
     pages.ts             54   a pages directory as a route table — routing's one non-isomorphic half
     internal/emit.ts     26   attributes, the patch script
-    rpc.ts              337   GET…DELETE and socket — the DECLARING half: middleware, timeout,
+    rpc.ts              316   GET…DELETE and socket — the DECLARING half: middleware, timeout,
                               retention, the cross-origin gate, the declared shapes, and one call
                               as a Response
     schema.ts           325   the three forms a shape is declared in, and the validator for the
@@ -647,6 +651,7 @@ separate unit-test suite to drift from the pages, and `bun test` is the pages be
 | `/logging` | `log`, with a card that turns a channel on by typing a `DEBUG` spelling into it |
 | `/health` | `health()` and `onHealth`, with a card that reports a field — or a failure — and asks again |
 | `/identity` | `identity()`, with a card that asks — and watches the two writers refuse, because a client may not decide who it is |
+| `/ceilings` | the three caps on what a process remembers, with a card that fills a bounded cache and watches rows drop |
 | `/bench` | every capability against a hand-written equivalent, one table row per arm |
 
 The bench runs four kinds of case, because the framework makes four kinds of claim: **time**, as a

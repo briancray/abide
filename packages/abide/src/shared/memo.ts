@@ -22,9 +22,10 @@
 // ask for the value, `()` and `await`, are the two that start one.
 
 import { markSource } from './internal/BRANDS.ts'
+import { admit, Bounded, release, touch } from './internal/ceilings.ts'
 import { derive, internals, type Memo, type State, untrack } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
-import { isThenable } from './internal/probes.ts'
+import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { currentScope, disposeWith, storeFor } from './internal/scopes.ts'
 import { byTag, joinTags } from './internal/tags.ts'
 import { arm } from './internal/timers.ts'
@@ -52,6 +53,14 @@ interface Slot<T> {
     handle: MemoHandle<T>
     /** When the slot last settled. 0 is never — cold, so the next read runs the body. */
     loadedAt: number
+    /**
+     * The slot's entry in the process-wide LRU, or `null` when nothing bounds it.
+     *
+     * Non-null only for a slot living in the PROCESS cache — a `{ global }` memo's, or one filled
+     * where there was no caller scope. A per-caller slot is already bounded by the request that owns
+     * it, so the field is the null check that keeps the ceiling off a server's hot path entirely.
+     */
+    bounded: Bounded | null
 }
 
 export interface KeyedMemo<Args, T> {
@@ -182,11 +191,21 @@ function keyedMemo<Args, T>(
         const slots = cache()
         const key = keyOf(args)
         const entry = slots.get(key)
-        if (entry !== undefined) return entry.slot
+        if (entry !== undefined) {
+            // The SELECT is the recency signal, because it is the one thing every access to a slot
+            // goes through — a read, a peek and a probe alike all start at `m(args)`.
+            const bound = entry.slot.bounded
+            if (bound !== null) touch(bound)
+            return entry.slot
+        }
 
         // COLD, not `state(undefined)`: the slot holds nothing, it has not loaded nothing. The read
         // is what kicks it — selecting the slot, peeking at it or probing it starts nothing.
-        const slot = { handle: undefined as unknown as MemoHandle<T>, loadedAt: 0 }
+        const slot: Slot<T> = {
+            handle: undefined as unknown as MemoHandle<T>,
+            loadedAt: 0,
+            bounded: null,
+        }
         const handle = internals.cold<T>(() => {
             if (stale(slot) && !internals.loading(handle)) start(args, slot)
         }, transform) as MemoHandle<T>
@@ -199,6 +218,12 @@ function keyedMemo<Args, T>(
             // read would kick a load that immediately overwrites what was just written.
             slot.loadedAt = Date.now()
             write(value)
+            // A promise here is a LOAD, so the charge waits for what lands — `start` makes it. An
+            // async iterable is a STREAM, and a stream is never charged here at all: what it retains
+            // is the transcript, which has a ceiling of its own, and charging the latest chunk would
+            // put a cache measurement inside a hot loop.
+            const bound = slot.bounded
+            if (bound !== null && !isThenable(value) && !isAsyncIterable(value)) admit(bound, value)
         }
         const drop = handle.invalidate
         const window = paced ? pacer(throttleMs, debounceMs) : null
@@ -207,6 +232,9 @@ function keyedMemo<Args, T>(
             // starts nothing, and that has to include what a window was about to start.
             window?.cancel()
             slot.loadedAt = 0
+            // Cold holds nothing, so it is charged nothing — and a slot charged nothing is one the
+            // ceiling has no reason to evict ahead of something that is actually occupying it.
+            if (slot.bounded !== null) release(slot.bounded)
             drop()
         }
         handle.refresh =
@@ -219,14 +247,21 @@ function keyedMemo<Args, T>(
 
         // Tags are resolved per SLOT, so `tags: ({id}) => ['user:' + id]` names one row rather than
         // every row this memo holds.
+        let leave: (() => void) | null = null
         if (tags !== undefined) {
-            const leave = joinTags(typeof tags === 'function' ? tags(args) : tags, {
+            leave = joinTags(typeof tags === 'function' ? tags(args) : tags, {
                 owner: call,
                 target: handle,
             })
             // A per-caller slot must leave the registry with its caller, or the module-level map
             // grows by one entry per request forever.
             if (!isGlobal) disposeWith(leave)
+        }
+
+        // Only the PROCESS cache is bounded — `{ global }`'s map, and the one every caller shares
+        // where there is no caller scope. Those are the two that outlive whoever filled them.
+        if (slots === shared) {
+            slot.bounded = new Bounded(slots as Map<string, unknown>, key, leave)
         }
 
         slots.set(key, { args, slot })
@@ -261,6 +296,10 @@ function keyedMemo<Args, T>(
         const stamped = produced.then(
             (value) => {
                 slot.loadedAt = Date.now()
+                // Charged where it LANDS. A rejection charges nothing and releases nothing: a warm
+                // slot whose refresh failed is still serving what it holds, so the cache is still
+                // holding it.
+                if (slot.bounded !== null) admit(slot.bounded, value)
                 return value
             },
             (error: unknown) => {

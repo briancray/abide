@@ -15,6 +15,7 @@ import { log } from 'abide'
 import type { LogRecord } from 'abide/server'
 import { loopback, suite } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
+import { DECLARABLE, withEnv, writeEnv } from './env.ts'
 import { META } from './SUITES.ts'
 
 export default suite({
@@ -446,16 +447,10 @@ export default suite({
 
 // Where the gate is written. A server reads `DEBUG` off the environment and a browser reads
 // `localStorage.debug`; where both exist — a DOM emulator under `bun test` — the environment is what
-// the runtime asks first, so that is what this sets.
-const ENVIRONMENT = (globalThis as { Bun?: { env: Record<string, string | undefined> } }).Bun?.env
-
-/** Whether a format can be DECLARED here at all — false in a browser, which has no environment. */
-const DECLARABLE = ENVIRONMENT !== undefined
-
+// the runtime asks first, so that is what `writeEnv` sets.
 function writeDebug(spec: string | undefined): void {
-    if (ENVIRONMENT !== undefined) {
-        if (spec === undefined) delete ENVIRONMENT.DEBUG
-        else ENVIRONMENT.DEBUG = spec
+    if (DECLARABLE) {
+        writeEnv('DEBUG', spec)
         return
     }
     if (spec === undefined) localStorage.removeItem('debug')
@@ -474,24 +469,6 @@ function writeDebug(spec: string | undefined): void {
 async function setDebug(spec: string | undefined): Promise<void> {
     writeDebug(spec)
     await Promise.resolve()
-}
-
-/**
- * One env var, set for the duration of `fn` and put back.
- *
- * Awaited rather than sync because a body may change the gate too: restoring in a `finally` that ran
- * before the body settled would put the name back while the body was still using it.
- */
-async function withEnv<T>(name: string, value: string, fn: () => T | Promise<T>): Promise<T> {
-    if (ENVIRONMENT === undefined) return await fn()
-    const held = ENVIRONMENT[name]
-    ENVIRONMENT[name] = value
-    try {
-        return await fn()
-    } finally {
-        if (held === undefined) delete ENVIRONMENT[name]
-        else ENVIRONMENT[name] = held
-    }
 }
 
 // Built rather than written as literals: an escape character inside a regex literal is a lint error,

@@ -5,6 +5,7 @@
 // what the browser runs is the source in this repo.
 
 import bench from './bench.html'
+import ceilings from './ceilings.html'
 import channel from './channel.html'
 import client from './client.html'
 import compiler from './compiler.html'
@@ -60,6 +61,7 @@ const running = Bun.serve({
         '/logging': logging,
         '/health': health,
         '/identity': identity,
+        '/ceilings': ceilings,
         '/compiler': compiler,
         '/bench': bench,
     },

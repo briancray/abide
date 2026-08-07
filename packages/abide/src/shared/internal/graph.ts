@@ -13,8 +13,10 @@
 // face of what is here; nothing outside abide imports this module.
 
 import { markSource } from './BRANDS.ts'
+import { chunkCharge, reportOverflow, streamCeiling } from './ceilings.ts'
 import { isAsyncIterable, isNamedError, isThenable } from './probes.ts'
 import { storeFor } from './scopes.ts'
+import { NO_LIMIT } from './timers.ts'
 
 // Annotated `number` rather than left as literal types: `status` is mutated re-entrantly (a source's
 // `pull()` can promote this node to DIRTY mid-loop), so literal narrowing would make the compiler
@@ -403,6 +405,12 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
     // array for an empty array is nothing a reader can see, so it wakes nobody.
     if (track.buffer === NO_CHUNKS) track.buffer = []
 
+    // The transcript's ceiling, declared ONCE per stream — the cap is per-stream, so no chunk reads
+    // an environment and a stream nobody capped charges nothing at all.
+    const ceiling = streamCeiling()
+    let charged = 0
+    let keeping = true
+
     void (async () => {
         try {
             for await (const raw of source) {
@@ -410,9 +418,26 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
                 // any of them means nobody wants the rest of this stream.
                 if (generation !== track.generation) return
                 const chunk = node.transform === null ? raw : transformed(node, raw)
-                track.buffer.push(chunk)
-                track.view = null
-                track.chunks.write((track.chunks.value as number) + 1)
+                if (keeping) {
+                    if (ceiling !== NO_LIMIT) charged += chunkCharge(chunk)
+                    if (charged > ceiling) {
+                        // DROPPED, not trimmed. What overflowed is a REPLAY, and a replay missing
+                        // its middle is a transcript with a hole no reader can see — where an empty
+                        // one says plainly that there is nothing to replay. The version moves once
+                        // for the drop and never again, so a reader wakes for it and then sleeps.
+                        keeping = false
+                        track.buffer = []
+                        track.view = NO_CHUNKS
+                        reportOverflow(charged, ceiling)
+                    } else {
+                        track.buffer.push(chunk)
+                        track.view = null
+                    }
+                    track.chunks.write((track.chunks.value as number) + 1)
+                }
+                // Outside the guard: the cap is on what is REMEMBERED. The cell still holds the
+                // latest chunk and its readers still wake — an overflow disables replay, not the
+                // stream.
                 hold(node, track, chunk)
                 // There is something to show now, so the blank-slate signal stands down and the
                 // in-flight one takes over — the same pair a warm reload reports.

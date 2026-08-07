@@ -30,9 +30,11 @@ import {
     settledBoundary,
     type TemplateResult,
 } from '$shared/html.ts'
+import { renderBudget } from '$shared/internal/ceilings.ts'
 import { closeMarker, OPEN_MARKER } from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { slotsOf, unwrap } from '$shared/internal/slots.ts'
+import { arm, NO_LIMIT, timeoutError } from '$shared/internal/timers.ts'
 import { styleTags } from '$shared/styles.ts'
 import {
     attribute,
@@ -375,6 +377,41 @@ async function emitSuspendInline(node: Suspend, context: RenderContext, out: Out
     if (more !== null) await more
 }
 
+/**
+ * One render's wall budget: a single clock every PHASE of that render races against.
+ *
+ * A document render has two — the in-order walk, and the out-of-order drain after it — and `suspend`
+ * under a document defers into the second. A clock armed per phase would be a per-phase budget
+ * wearing a wall budget's name, and a page that suspends is exactly the page the budget is for.
+ *
+ * Armed on the first phase that actually WAITS, so a synchronous page still costs no timer: the
+ * rejection is built once and handed to every race after it, which is also why it can never go
+ * unhandled — it is created inside the `Promise.race` that consumes it.
+ */
+class Budget {
+    private timer: ReturnType<typeof setTimeout> | null = null
+    private expires: Promise<never> | null = null
+    constructor(private readonly limit: number) {}
+
+    /** `waiting`, or the deadline — whichever lands first. */
+    race<V>(waiting: Promise<V>): Promise<V> {
+        let expires = this.expires
+        if (expires === null) {
+            expires = new Promise<never>((_, reject) => {
+                const limit = this.limit
+                this.timer = arm(() => reject(timeoutError('the SSR stream', 'did not finish', limit)), limit)
+            })
+            this.expires = expires
+        }
+        return Promise.race([waiting, expires])
+    }
+
+    /** The render is over. A finished one must not hold a timer for the rest of its budget. */
+    close(): void {
+        if (this.timer !== null) clearTimeout(this.timer)
+    }
+}
+
 // --- the streaming face ------------------------------------------------------
 
 // A consumer that breaks out of `for await` abandons the walk. The rejection is what unwinds it, so
@@ -394,7 +431,11 @@ const ABANDONED = Symbol('abide.abandoned')
  * list, measured, against none for the same render into a string — to split markup nobody was
  * waiting on into more pieces.
  */
-function stream(node: Renderable, context: RenderContext): AsyncGenerator<string> {
+function stream(node: Renderable, context: RenderContext, budget: Budget | null): AsyncGenerator<string> {
+    // A clock handed in belongs to the render that made it — a document's, spanning this walk AND
+    // the drain after it. One made here belongs to this walk alone and closes with it.
+    let clock = budget
+    let ownClock: Budget | null = null
     const queue: string[] = []
     let wakeConsumer: (() => void) | null = null
     let resumeWalk: (() => void) | null = null
@@ -440,14 +481,46 @@ function stream(node: Renderable, context: RenderContext): AsyncGenerator<string
         return held
     }
 
+    /** Declared return type for the reason `takeResume` has one: the only writer is `walk`. */
+    function ownedClock(): Budget | null {
+        return ownClock
+    }
+
+    /** Unwind a walk parked on something nobody is waiting for any more. Set the flag AND reject. */
+    function abandon(): void {
+        abandoned = true
+        const reject = takeReject()
+        if (reject !== null) reject(ABANDONED)
+    }
+
     async function walk(): Promise<void> {
         try {
             const waiting = emit(node, context, out)
-            if (waiting !== null) await waiting
+            if (waiting !== null) {
+                // Read on the branch that actually waited: a page with no promise in it cannot run
+                // out of wall clock, so a render that never suspends never even asks. Undeclared,
+                // the walk is awaited exactly as it was before there was a budget at all — no timer,
+                // no race, and no second promise per render to learn that nobody set one.
+                if (clock === null) {
+                    const limit = renderBudget()
+                    if (limit !== NO_LIMIT) {
+                        ownClock = new Budget(limit)
+                        clock = ownClock
+                    }
+                }
+                if (clock === null) await waiting
+                else await clock.race(waiting)
+            }
         } catch (error) {
             if (error !== ABANDONED) {
                 failed = true
                 failure = error
+                // The walk is still parked somewhere past the deadline, and abandoning it is what
+                // unwinds it — the same path a consumer breaking out of `for await` takes, so an
+                // infinite source inside it gets its `return()` rather than running on under a
+                // response nobody is reading. Everything already written still goes out: the status
+                // line left long ago, and a truncated body is all HTTP itself has left to say.
+                abandon()
             }
         }
         if (out.text !== '') {
@@ -474,9 +547,8 @@ function stream(node: Renderable, context: RenderContext): AsyncGenerator<string
                 })
             }
         } finally {
-            abandoned = true
-            const reject = takeReject()
-            if (reject !== null) reject(ABANDONED)
+            abandon()
+            ownedClock()?.close()
         }
         await walking
         if (failed) throw failure
@@ -485,7 +557,7 @@ function stream(node: Renderable, context: RenderContext): AsyncGenerator<string
 
 /** The walk as a stream of chunks — one per suspension, and one per buffer-full of markup. */
 export function render(node: Renderable, options?: RenderOptions): AsyncGenerator<string> {
-    return stream(node, contextFor(options))
+    return stream(node, contextFor(options), null)
 }
 
 function contextFor(options: RenderOptions | undefined): RenderContext {
@@ -508,7 +580,7 @@ export async function renderToString(node: Renderable, options?: RenderOptions):
 
 export function toStream(node: Renderable, options?: RenderOptions): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder()
-    const chunks = stream(node, contextFor(options))
+    const chunks = stream(node, contextFor(options), null)
     return new ReadableStream({
         async pull(controller) {
             const step = await chunks.next()
@@ -527,37 +599,52 @@ export async function* renderDocument(
 ): AsyncGenerator<string> {
     const document = { nextId: 0, deferred: [] as Deferred[] }
     const context: RenderContext = { hydratable: options?.hydratable === true, document }
-    // Every scoped `<style>` registers at MODULE scope, so by the time a render starts, every
-    // component that was imported has already declared its rules — which is why the whole sheet can
-    // go out in the shell without tracking what this particular render reached. Each block carries
-    // its scope name, which is what stops the client appending a second copy of every one.
-    yield `<!doctype html><html><head>${head}${styleTags()}</head><body>`
-    yield PATCH_SCRIPT
-    yield* stream(body(), context)
+    // ONE clock for the whole document. `suspend` under a document does not hold the walk — it
+    // defers into the drain below — so a budget that only reached the walk would miss the very case
+    // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
+    // where the render begins; the clock arms itself on the first phase that actually waits, so a
+    // document with nothing to await still costs no timer.
+    const limit = renderBudget()
+    const clock = limit === NO_LIMIT ? null : new Budget(limit)
+    try {
+        // Every scoped `<style>` registers at MODULE scope, so by the time a render starts, every
+        // component that was imported has already declared its rules — which is why the whole sheet
+        // can go out in the shell without tracking what this particular render reached. Each block
+        // carries its scope name, which stops the client appending a second copy of every one.
+        yield `<!doctype html><html><head>${head}${styleTags()}</head><body>`
+        yield PATCH_SCRIPT
+        yield* stream(body(), context, clock)
 
-    // `deferred` is append-only and one cursor says what has been armed. Re-scanning it instead
-    // would re-arm what was already flushed and spin forever.
-    // The race carries the settled MARKUP, not the deferred: `ready.html` is settled by definition
-    // once it wins, so awaiting it again would buy a microtask tick per suspended subtree.
-    const inFlight = new Map<number, Promise<{ id: number; text: string }>>()
-    let cursor = 0
-    const arm = (): void => {
-        for (; cursor < document.deferred.length; cursor++) {
-            const d = document.deferred[cursor] as Deferred
-            inFlight.set(
-                d.id,
-                d.html.then((text) => ({ id: d.id, text })),
-            )
+        // `deferred` is append-only and one cursor says what has been armed. Re-scanning it instead
+        // would re-arm what was already flushed and spin forever.
+        // The race carries the settled MARKUP, not the deferred: `ready.html` is settled by
+        // definition once it wins, so awaiting it again would buy a microtask tick per subtree.
+        const inFlight = new Map<number, Promise<{ id: number; text: string }>>()
+        let cursor = 0
+        const take = (): void => {
+            for (; cursor < document.deferred.length; cursor++) {
+                const d = document.deferred[cursor] as Deferred
+                inFlight.set(
+                    d.id,
+                    d.html.then((text) => ({ id: d.id, text })),
+                )
+            }
         }
+        take()
+        while (inFlight.size > 0) {
+            const settling = Promise.race(inFlight.values())
+            // Nothing to abandon here, unlike the walk: a deferred subtree is an independent async
+            // function with no handle to unwind, and a consumer breaking out of this loop already
+            // leaves it running. What the budget ends is the RESPONSE.
+            const ready = clock === null ? await settling : await clock.race(settling)
+            inFlight.delete(ready.id)
+            yield `<template id="t${ready.id}">${ready.text}</template><script>$p(${ready.id})</script>`
+            take() // a patch may itself have registered more
+        }
+        yield `</body></html>`
+    } finally {
+        clock?.close()
     }
-    arm()
-    while (inFlight.size > 0) {
-        const ready = await Promise.race(inFlight.values())
-        inFlight.delete(ready.id)
-        yield `<template id="t${ready.id}">${ready.text}</template><script>$p(${ready.id})</script>`
-        arm() // a patch may itself have registered more
-    }
-    yield `</body></html>`
 }
 
 // The principal, and the half only the server can supply. `identity` itself is on the isomorphic

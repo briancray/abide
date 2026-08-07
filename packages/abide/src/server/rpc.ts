@@ -11,7 +11,7 @@
 import { type Channel, type ChannelOptions, channel, type RoomChannel } from '$shared/channel.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
-import { arm } from '$shared/internal/timers.ts'
+import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
 import {
     chunkedBody,
     errorFrame,
@@ -139,30 +139,6 @@ export function describeRpc(rpc: object, shapes: Shapes | undefined): void {
     }
 }
 
-const NO_TIMEOUT = Infinity
-
-function timeoutError(id: string, what: string, limit: number): Error {
-    const failure = new Error(`abide: ${id} ${what} within ${limit}ms`)
-    failure.name = 'AbideTimeoutError'
-    return failure
-}
-
-function race<V>(promise: PromiseLike<V>, limit: number, failure: Error): Promise<V> {
-    return new Promise<V>((resolve, reject) => {
-        const timer = arm(() => reject(failure), limit)
-        promise.then(
-            (value) => {
-                clearTimeout(timer)
-                resolve(value)
-            },
-            (error: unknown) => {
-                clearTimeout(timer)
-                reject(error as Error)
-            },
-        )
-    })
-}
-
 /** Does this declaration yield? Read off the function itself, so no caller has to declare it twice. */
 function isGenerator(body: unknown): boolean {
     const tag = Object.prototype.toString.call(body)
@@ -245,14 +221,14 @@ function declare<Args, T>(
         }
         const produced = run(checked)
         const source = (isThenable(produced) ? await produced : produced) as AsyncIterable<T>
-        if (limit === NO_TIMEOUT && output === null) {
+        if (limit === NO_LIMIT && output === null) {
             yield* source
             return
         }
         const iterator = source[Symbol.asyncIterator]()
         // Built ONCE for the stream, not once per chunk: constructing an `Error` captures a stack,
         // and the timeout is the exception this arms for, never the value it hands back.
-        const failure = limit === NO_TIMEOUT ? null : timeoutError(policy.address, 'stopped producing', limit)
+        const failure = limit === NO_LIMIT ? null : timeoutError(policy.address, 'stopped producing', limit)
         try {
             for (;;) {
                 const stepping = iterator.next()
@@ -290,7 +266,7 @@ function declare<Args, T>(
         // wrap and no microtask before the first read sees it.
         if (!isThenable(produced)) return output === null ? produced : (output(produced) as Produced<T>)
         const settling: Promise<T> =
-            limit === NO_TIMEOUT
+            limit === NO_LIMIT
                 ? (produced as Promise<T>)
                 : race(
                       produced as PromiseLike<T>,

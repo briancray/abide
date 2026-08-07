@@ -1,6 +1,6 @@
 # abide primitives
 
-This document is meant to spec all the primitive public apis with simple tables of form | description (1 sentence about behavior, not implementation)
+This document is meant to spec all the primitive public apis with simple tables of form | description (1 sentence about behavior, not implementation). Not for prose.
 
 Three isomorphic primitives — **`state`** (own), **`memo`** (load), **`channel`** (subscribe) — one
 effect (**`watch`**), and two transport laws over them: **`rpc` = `memo` + transport** and
@@ -39,8 +39,8 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | Area | Absent |
 | --- | --- |
 | transport | `opts.clients` — which surfaces may reach a handler, which says nothing until there is a surface other than the UI to name. Everything else in both laws is built |
-| lifecycle | `onStart`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`), the seven the logging half reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`, `ABIDE_LOGS`, `ABIDE_LOG_BUFFER`) and the three identity reads (`NODE_ENV`, `ABIDE_IDENTITY_SECRET`, `ABIDE_IDENTITY_TTL`) |
-| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it. `./app logs` is the one command whose ENDPOINT exists ahead of it: `GET /__abide/logs` is served, and what is missing is a client for it |
+| lifecycle | `onStart`. Every env var in the config table is now read by something EXCEPT the four a binary would own — `PORT`, `APP_URL`, `ABIDE_APP_TOKEN`, `ABIDE_APP_URL` — which is the CLI's row below rather than this one |
+| the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the four environment variables only a binary reads — there is no binary yet, so nothing reads any of it. `./app logs` is the one command whose ENDPOINT exists ahead of it: `GET /__abide/logs` is served, and what is missing is a client for it |
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
@@ -49,7 +49,8 @@ ambients that answer outside one
 (`online`, `health` with `onHealth` under it, `appDataDir`, `server`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
 `outlet`, and `pages(dir)` for a pages directory), both transports and the seam that addresses them, the
 template tag and its runtime, both render substrates, hydration, `<style>` in both its component and
-its subtree form, `log` with its channels and its remote feed, the `.abide` compiler, and the test kit.
+its subtree form, `log` with its channels and its remote feed, the three ceilings, the `.abide`
+compiler, and the test kit.
 
 ## Terms
 
@@ -96,7 +97,7 @@ its subtree form, `log` with its channels and its remote feed, the `.abide` comp
 | `memo((args) => …)` | A value computed per argument key, with one independently cached slot per distinct set of arguments. only argument key tracked; body is untracked |
 | `memo(fn, transform)` | memo derived value passes to transform which runs untracked and memo becomes transform return value. The body declares the dependencies; what the transform reads is not one. On a load it runs over the value that landed. Options still follow: `memo(fn, transform, opts)`. |
 | `memo(fn, { ttl })` | The same value, served for at most `ttl` milliseconds before the next read recomputes it. |
-| `memo(fn, { global })` | One slot shared by every caller, regardless of which request or process asked. Without it a memo's cache belongs to the caller that filled it. |
+| `memo(fn, { global })` | One slot shared by every caller, regardless of which request or process asked. Without it a memo's cache belongs to the caller that filled it. This is the cache `ABIDE_MAX_GLOBAL_CACHE_SIZE` bounds — see Ceilings. |
 | `memo(fn, { tags })` | The value joins named groups so it can be refreshed or invalidated by tag rather than by name. A function receives the slot's args, which is how a tag names one ROW rather than every row the memo holds. |
 | `memo(fn, { throttle })` | Explicit revalidation of a slot that already holds a value fires immediately, then at most once per window. A cold slot is never paced — there is nothing on screen for a window to protect — so a read that finds a slot cold still loads in the call. |
 | `memo(fn, { debounce })` | Explicit revalidation of a slot that already holds a value waits until the triggers stop. Same rule about cold; set with `throttle`, this wins. |
@@ -690,10 +691,13 @@ second one.) An **imported** source cannot be seen that way, so it keeps the exp
 | `render(node)` | The same walk as an async iterable of chunks. |
 | `toStream(node, opts?)` | The same walk as a `ReadableStream`, so the response back-pressures. |
 | `renderDocument(head, body, opts?)` | A whole document: shell, body in order, then out-of-order patches as they resolve. |
-| `suspend(value, body, fallback?)` | Emit a placeholder now and the real subtree when the value lands. |
+| `suspend(value, body, fallback?)` | Emit a placeholder now and the real subtree when the value lands. Inside a `renderDocument`, this defers rather than holding the walk. |
 | `opts.hydratable` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
 | `mount(container, view)` | Build live DOM and keep it live. Returns `{ dispose }`. |
 | `hydrate(container, view)` | The same, over markup a `{ hydratable: true }` render already wrote — every part adopts its range instead of building one. A divergence rebuilds that subtree and warns. |
+
+Every streaming face — `render`, `toStream`, `renderDocument` — is bounded by `ABIDE_SSR_STREAM_BUDGET`
+when one is declared, as one clock over the whole render. See Ceilings.
 
 Only a CHILD slot carries markers: an opening comment before its value and, after it, the anchor the
 client's template already uses. Elements holding any other slot kind are found positionally, and a
@@ -882,6 +886,71 @@ derived from the name rather than held, so there is no second record of one fact
 A route is committed only once its page has arrived, which is the whole of what `navigating` reports
 — and a navigation to a route already loaded has no in-flight window, so it never sets it.
 
+# Ceilings
+
+Three knobs, one law: **a cap on what is REMEMBERED must not become a cost per write.** They bound
+the three places a process grows without anyone deciding it should — a stream's transcript, the memo
+cache that belongs to the process rather than to a caller, and how long a streaming render may run.
+
+| Form | Behavior |
+| --- | --- |
+| `ABIDE_MAX_GLOBAL_CACHE_SIZE` | An LRU byte ceiling over the GLOBAL and default-context memo cache, as one number for the whole process. Unset: no limit. |
+| `ABIDE_MAX_STREAM_BUFFER_SIZE` | A per-stream transcript ceiling. Passing it drops the transcript for the rest of that stream. Unset: no limit. |
+| `ABIDE_SSR_STREAM_BUDGET` | The wall budget for one streaming render. Passing it ends the response as a failure. Unset: no limit. |
+
+All three are read where each could FIRST matter — once per stream, once per settle, once per render
+that waits — rather than latched at import. That is what lets an app declare one from its own entry
+point, and what makes turning one off actually turn it off: the registry lets go of what it was
+tracking on the next settle rather than going on enforcing a number nobody is asking for.
+
+**Unset is the default for all three**, and unset costs one property read at each of those three
+moments and nothing on the paths between them — not even the timer the render budget would arm. A
+limit chosen for an app abide has never seen is a cache miss, a dropped transcript, or a response cut
+off mid-render that nobody asked for.
+
+A byte here is **charged**, not measured, and there are two charges because the two MOMENTS have
+different budgets. A slot's runs once, behind a load that already went to a network or a disk, so it
+may walk the value. A chunk's runs on every chunk of a stream, so it is O(1) by contract: a string is
+charged its length and a binary chunk its `byteLength` — the two shapes a stream actually carries,
+both exact — and anything else is charged a flat overhead rather than encoded on the way past. A
+charge that had to be exact would be the per-write cost these exist to avoid, and re-measuring what
+is held on every write is the O(n²) trap `channel({ tail })` already had to climb out of once.
+
+The cache ceiling is on the CACHE rather than on any memo in it: a per-memo cap is a number an
+operator would have to multiply by however many memos an app declares to learn what the process may
+hold. Recency comes off the SELECT, since `m(args)` is the one thing every access goes through — a
+read, a peek and a probe all start there. It reaches the global and default-context maps and nothing
+else, because those are the two that outlive whoever filled them; a per-caller cache is already
+bounded by the request that owns it, and evicting from one would answer a memory question nobody
+asked with a cache miss inside a live request. An eviction is the CACHE forgetting — whoever already
+holds that handle keeps a working cell, and the tag leaves the registry with the slot.
+
+A transcript that overflows is DROPPED rather than trimmed: what overflowed is a replay, and a replay
+missing its middle is a hole no reader can see, where an empty one says plainly there is nothing to
+replay. The version moves once so a reader wakes for the drop and then sleeps, the cell goes on
+holding every chunk that arrives, and the stream still finishes — an overflow disables replay, not
+the stream. It is said once on `abide:stream` as a warning, since the `DEBUG` gate controls volume
+rather than breakage.
+
+The render budget, once declared, is WALL time rather than per slot: a slot holds the walk for as
+long as what it waits on takes, so a page that waits thirty times has no single slot to blame for a
+response that never ends — and the whole run is the only number a proxy in front of it is measuring
+anyway. It is a timer rather than a poll, because a walk parked on a promise that never settles never
+returns to a place a check could live.
+
+It is one clock per RENDER rather than one per walk, because a document render has two phases and
+`suspend` lives in the second: given a document to patch it emits a placeholder and defers the real
+subtree, so the walk finishes long before the subtree does. Both the in-order walk and the
+out-of-order drain race the same clock, and the clock arms itself on the first phase that actually
+waits — so a page with nothing to await still costs no timer.
+
+Passing it ABANDONS the walk, the same path a consumer breaking out of `for await` takes, so an
+infinite source inside it gets its `return()`. A deferred subtree has no handle to unwind — it is an
+independent async function, and a consumer breaking out of the drain already leaves it running — so
+what the budget ends there is the RESPONSE. Everything already written has already gone out and the
+failure is an `AbideTimeoutError` on the stream: the status line left long ago, so a truncated body
+is all HTTP itself has left to say.
+
 # Environment variables
 
 | Name | Purpose |
@@ -897,9 +966,9 @@ A route is committed only once its page has arrived, which is the whole of what 
 | `ABIDE_APP_URL` | App URL for the remote CLI & desktop bundle (also marks a cross-origin proxy, which then declines to volunteer `traceparent`). |
 | `ABIDE_RPC_TIMEOUT` | Default RPC run deadline in ms (default `300000` = 5 min) — a fallback ceiling; per-RPC `timeout` is the real knob. On a handler that yields it is the longest gap BETWEEN chunks. |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | Default ceiling on a mutation's request body (unset = no ceiling); per-RPC `maxBodySize` overrides. Over-size declared `content-length` → 413 before buffering. |
-| `ABIDE_MAX_GLOBAL_CACHE_SIZE` | Byte ceiling (LRU) for the global + default-context memo cache (default: no limit). |
-| `ABIDE_MAX_STREAM_BUFFER_SIZE` | Per-stream transcript cap in bytes (default: no limit; exceeding it overflows the buffer and disables replay). |
-| `ABIDE_SSR_STREAM_BUDGET` | Total wall budget in ms for an SSR stream (default `300000`). |
+| `ABIDE_MAX_GLOBAL_CACHE_SIZE` | Byte ceiling (LRU) for the global + default-context memo cache, as one number for the whole process (default: no limit). Charged per SETTLE, and the select is what says which row is least recently used. See Ceilings. |
+| `ABIDE_MAX_STREAM_BUFFER_SIZE` | Per-stream transcript cap in bytes (default: no limit; exceeding it drops the transcript and disables replay for the rest of that stream — the cell still holds every chunk). Charged in O(1) per chunk. See Ceilings. |
+| `ABIDE_SSR_STREAM_BUDGET` | Total wall budget in ms for an SSR stream (default: no limit). Passing it abandons the walk and ends the response as an `AbideTimeoutError`, with everything written already out. See Ceilings. |
 | `ABIDE_LOGS` | Opt IN to the remote log feed (`GET /__abide/logs`, what `./app logs` tails). Default closed → 404. |
 | `ABIDE_LOG_BUFFER` | Ring size in records for that log feed (default `500`). |
 | `ABIDE_LOG_FORMAT` (`tsv` \| `json`) | Machine log format. Unset, the shape follows the TTY: pretty at a terminal, `tsv` through a pipe. |

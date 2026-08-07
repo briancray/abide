@@ -161,6 +161,15 @@ export const META = {
             'are the server’s, and a browser calling one gets a message rather than a different answer.',
         tag: 'the sealed principal',
     },
+    ceilings: {
+        name: 'ceilings',
+        title: 'ceilings',
+        blurb:
+            'What a process is allowed to remember, and what asking for a bound costs. All three ' +
+            'knobs are unset by default, and a ceiling nobody declared has to cost nothing — so each ' +
+            'is read where it could first matter and nothing on the paths between them charges anything.',
+        tag: 'retention · LRU · wall budget',
+    },
     compiler: {
         name: 'compiler',
         title: 'compiler',
@@ -192,6 +201,7 @@ export const ORDER: SuiteName[] = [
     'logging',
     'health',
     'identity',
+    'ceilings',
     'compiler',
 ]
 
