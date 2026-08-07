@@ -143,6 +143,15 @@ export const META = {
             'the gate is there to control volume, not to hide breakage.',
         tag: 'channels · levels · DEBUG',
     },
+    health: {
+        name: 'health',
+        title: 'health',
+        blurb:
+            'What the app says about itself, asked with the same call on both sides. abide fills in a ' +
+            'floor — version, start, uptime — and `onHealth` merges the app’s own fields over it. A ' +
+            'reporter that throws is an account of not working rather than a route falling over.',
+        tag: 'the app’s own account',
+    },
     compiler: {
         name: 'compiler',
         title: 'compiler',
@@ -172,6 +181,7 @@ export const ORDER: SuiteName[] = [
     'hydrate',
     'transport',
     'logging',
+    'health',
     'compiler',
 ]
 

@@ -11,7 +11,7 @@
 import { expect, test } from 'bun:test'
 import { homedir } from 'node:os'
 import { dirname, sep } from 'node:path'
-import { html, log, memo, outlet, type RouteEntry, ready, remote, route, routes } from 'abide'
+import { health, html, log, memo, outlet, type RouteEntry, ready, remote, route, routes } from 'abide'
 import {
     appDataDir,
     bag,
@@ -364,6 +364,32 @@ test('the sampling decision is carried, never made here', async () => {
     // randomly and abide's own log records it.
     const minted = await serve(new Request('https://x.test/'), () => trace.headers().traceparent)
     expect(minted).toMatch(/^00-[\da-f]{32}-[\da-f]{16}-03$/)
+})
+
+test('asking a downstream app for its health CONTINUES the trace', async () => {
+    const id = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
+    const sent: (Record<string, string> | undefined)[] = []
+    const record = (_input: string, init: RequestInit): Promise<Response> => {
+        sent.push(init.headers as Record<string, string> | undefined)
+        return Promise.resolve(Response.json({ reachable: true }))
+    }
+
+    const span = await serve(
+        new Request('https://x.test/', { headers: { traceparent: `00-${id}-0011223344556677-01` } }),
+        async () => {
+            await health({ base: 'https://downstream.test', fetch: record })
+            return trace.span()
+        },
+    )
+
+    // The one abide-built outbound call that used to start a fresh trace. A health check of a
+    // dependency belongs to the operation that asked for it, or correlating the two is guesswork.
+    expect(sent[0]?.traceparent).toBe(`00-${id}-${span}-01`)
+
+    // And outside a request there is nothing to belong to, so the init stays unallocated rather than
+    // carrying an id this caller invented.
+    await health({ base: 'https://downstream.test', fetch: record })
+    expect(sent[1]).toBeUndefined()
 })
 
 test('tracestate is a Map, like bag() and cookies(), and propagates', async () => {

@@ -24,5 +24,12 @@ export const LOGS_PATH = `${ABIDE_PREFIX}logs`
  */
 export const SCHEMA_PATH = `${ABIDE_PREFIX}schema`
 
+/**
+ * The app's own account of whether it is working — one document, like the catalogue above it. Here
+ * rather than in the server half because the CLIENT half of `health()` is what asks for it, and an
+ * address only one side knows is an address the two can spell differently.
+ */
+export const HEALTH_PATH = `${ABIDE_PREFIX}health`
+
 /** The query parameter carrying JSON args: a read's arguments, and a socket's room. */
 export const ARGS_PARAM = 'a'

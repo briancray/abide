@@ -12,6 +12,7 @@ import type { Channel, RoomChannel } from '$shared/channel.ts'
 import {
     ABIDE_PREFIX,
     ARGS_PARAM,
+    HEALTH_PATH,
     LOGS_PATH,
     RPC_PREFIX,
     SCHEMA_PATH,
@@ -22,6 +23,7 @@ import type { EndpointShape, Shapes } from '$shared/internal/shapes.ts'
 import { decodeArgs, decodeForm, isMultipart } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import type { Kind, Rpc } from '$shared/transport.ts'
+import { serveHealth } from './health.ts'
 import { logs } from './logs.ts'
 import { headersFor, json } from './responses.ts'
 import {
@@ -206,6 +208,7 @@ function served(
     if (path.startsWith(SOCKET_PREFIX)) return upgrade(request, url, path, server)
     if (path === LOGS_PATH) return logs(request)
     if (path === SCHEMA_PATH) return schema(request)
+    if (path === HEALTH_PATH) return serveHealth(request)
     if (!path.startsWith(RPC_PREFIX)) return refuse(`nothing is served at ${path}`, 404)
     return call(request, url, path)
 }

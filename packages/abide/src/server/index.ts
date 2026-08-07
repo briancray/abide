@@ -566,6 +566,9 @@ export type { LogRecord } from '$shared/log.ts'
 // Where this app may write, which is a question about the PROCESS rather than about a caller — so it
 // needs no `serve`, and it lives with the other thing that needs a filesystem to answer.
 export { appDataDir } from './app.ts'
+// The app's own account of whether it is working. `health()` itself is on the isomorphic surface —
+// asking is the same call anywhere — and this is the half only the app being asked about can supply.
+export { type HealthReporter, onHealth } from './health.ts'
 // What every renderer here takes. `RenderContext` stays internal: it is the walk's own state, and
 // its `document` field is typed by a `DocumentContext` no caller can name.
 export type { RenderOptions } from './internal/emit.ts'

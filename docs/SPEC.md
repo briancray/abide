@@ -15,9 +15,9 @@ either.
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, `online()`, and the client half of both transports (`remote`, `remoteSocket`) |
+| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, `online()`, `health()`, and the client half of both transports (`remote`, `remoteSocket`) |
 | `abide/ui` | the DOM substrate — `mount`, `hydrate` |
-| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`), `appDataDir()`, `server()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`, `Schema`) |
+| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`), `appDataDir()`, `server()`, `onHealth()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`, `Schema`) |
 | `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
 | `abide/compiler` | `compile()`, `elide()` and their diagnostics. Pure: text in, text out, no filesystem |
 | `abide/compiler/check` | the check lane: `emitFor` writes the module, its declaration and its map beside a `.abide`, and `remap` moves a `tsc` diagnostic back onto the `.abide` line |
@@ -39,14 +39,14 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | Area | Absent |
 | --- | --- |
 | transport | `opts.clients` — which surfaces may reach a handler, which says nothing until there is a surface other than the UI to name. Everything else in both laws is built |
-| ambients | `identity()` — a principal needs a resolver, which is a policy decision rather than plumbing — and `health()`, which is `onHealth` merged over a baseline and lands with the lifecycle hooks |
-| lifecycle | `onStart`/`onHealth`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) and the seven the logging half reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`, `ABIDE_LOGS`, `ABIDE_LOG_BUFFER`) |
+| ambients | `identity()` — a principal needs a resolver, which is a policy decision rather than plumbing |
+| lifecycle | `onStart`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) and the seven the logging half reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`, `ABIDE_LOGS`, `ABIDE_LOG_BUFFER`) |
 | the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it. `./app logs` is the one command whose ENDPOINT exists ahead of it: `GET /__abide/logs` is served, and what is missing is a client for it |
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
-`request`, `bag`, `cookies`, `trace`, `isServing`) and the three ambients that answer outside one
-(`online`, `appDataDir`, `server`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
+`request`, `bag`, `cookies`, `trace`, `isServing`) and the four ambients that answer outside one
+(`online`, `health` with `onHealth` under it, `appDataDir`, `server`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
 `outlet`, and `pages(dir)` for a pages directory), both transports and the seam that addresses them, the
 template tag and its runtime, both render substrates, hydration, `<style>` in both its component and
 its subtree form, `log` with its channels and its remote feed, the `.abide` compiler, and the test kit.
@@ -458,7 +458,39 @@ request-scoped one, so each of those throws rather than guessing.
 | `bag()` | A bag of values carried for the life of one request. |
 | `server()` *(`abide/server`)* | The Bun server that is listening — `requestIP`, `publish`, `pendingWebSockets`, `stop`. Bun hands the instance to `fetch(request, self)` and nowhere else, so anything under the entry point would otherwise be handed it one parameter at a time through code with no other reason to know a server exists. A PROCESS fact like `appDataDir()` rather than a caller's, and answerable from the first request an app takes: `dispatch(request, self)` latches what Bun gave it before it even tests the path, so mounting it IS the wiring. An app that mounts nothing says so once with `server.set(Bun.serve({ … }))`, which returns what it was given. `server.peek()` observes and never throws; `server()` throws before anything has served, like `request()`. |
 | `appDataDir()` *(`abide/server`)* | The per-user directory this app may write to, as a PATH. A question about the PROCESS rather than about a caller, so it needs no `serve` — and it is not created here, because `Bun.write` makes the parents of what it writes and a getter that touched the filesystem could throw for a caller that only wanted to print the path. |
-| `health()` *(not built)* | The app's own account of whether it is working. |
+| `health()` | The app's own account of whether it is working, as one document — `onHealth`'s fields merged over a baseline abide fills in. Always a promise, on both sides: a call whose return type differed between the lanes would not be one call. |
+
+### The health document
+
+| Form | Behavior |
+| --- | --- |
+| `health()` | The account of the app this call is IN: composed in the process that is serving, fetched anywhere else. That difference is the whole of what `reachable` reports. |
+| `health({ base, fetch })` | The same two options `remote` takes — one `WireOptions`, so they cannot drift. An option names a WIRE, and a wire is another app, so it is asked over that wire even in a process that could have composed an answer itself. The FIELDS name it rather than the argument: `health({})` named no wire and still asks about itself. The request carries `traceparent` like every other outbound call abide builds, so a dependency's account belongs to the operation that asked for it. |
+| `onHealth(fn)` *(`abide/server`)* | The app's reporter: fields to merge, sync or async. Returns the way off again. |
+| `GET /__abide/health` | The same document over the wire. Open, like the schema catalogue: a health check an operator has to configure a secret into is one that is not wired up on the day it matters. |
+
+| Baseline field | What it says |
+| --- | --- |
+| `reachable` | Whether the account arrived at all. True by construction where it is composed, and the ONLY field a caller that reached nothing writes down — one that filled in a version for a server that never replied would be inventing the thing it was asked about. |
+| `version` | The app's version, off the same package.json its name comes from. Empty rather than absent when nothing declared one, for the reason the log's trace column is empty rather than dropped. |
+| `startedAt` | When the process started, ISO-8601. |
+| `uptime` | Milliseconds since it did. `performance.timeOrigin` and `performance.now()` are one instant and the count from it, so the two fields cannot disagree — and the count is monotonic, where two `Date.now()` readings step backwards through a clock correction. |
+
+The four are a FLOOR rather than a claim about the app's own dependencies, so an app's fields win
+every collision — including `version`, where a build stamp knows something a manifest climb cannot.
+The baseline is there so an app that reported nothing still answers something an operator can
+correlate a deploy by and tell a restart from a hang with.
+
+A reporter that THROWS is an app saying it is not working, which is the case a health check exists
+for — so it does not escape as a throw and take the document with it. The account keeps the baseline
+and gains `error: { name, message }`, and the endpoint's status comes off that one field, so an app
+that puts one there deliberately says the same thing. It is also written to `abide:health` as a
+warning, which the `DEBUG` gate never swallows. A reporter returning something with no fields to
+merge — a number, an array — is warned about on the same channel and the baseline stands.
+
+`onHealth` is spelled as a REGISTRATION rather than read off an app's exports because there is no CLI
+to read them yet; when there is, it hands the export to this. Its return is the way back off, since a
+hook that cannot be removed is one nothing can register twice.
 
 ## Logging
 
@@ -816,7 +848,7 @@ A route is committed only once its page has arrived, which is the whole of what 
 | `onStart` | `(start: () => Promise<void>) => void \| Promise<void>` | WRAPS the real boot. Do setup, then `await start()` — the socket binds only inside it, so nothing serves until setup finishes. Returning without calling `start()` is a breakout: the app never boots. Awaited. |
 | `onStop` | `(stop: () => Promise<void>) => void \| Promise<void>` | Mirrors `onStart` for teardown: drain, then `await stop()`. Backstopped, so teardown still happens if the hook skips it. Runs on SIGINT/SIGTERM/crash. Awaited |
 | `onError` | `(error: unknown) => unknown` | Request-scoped; runs when a request throws an UNEXPECTED error. A DELIBERATE outcome never reaches it |
-| `onHealth` | `() => unknown \| Promise<unknown>` | Returns fields merged OVER the framework baseline `{ reachable, version, startedAt, uptime }`. It is what `health()` composes into its document on EVERY server-side call |
+| `onHealth` | `() => unknown \| Promise<unknown>` | Returns fields merged OVER the framework baseline `{ reachable, version, startedAt, uptime }`. It is what `health()` composes into its document on EVERY server-side call. BUILT, and reached as `onHealth(fn)` from `abide/server` until there is a binary to read the export |
 
 # abide cli
 

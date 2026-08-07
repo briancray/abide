@@ -11,6 +11,10 @@
 // hand-written template from calling them.
 export { classes, styles } from './attrs.ts'
 export { type Channel, type ChannelOptions, channel, type RoomChannel } from './channel.ts'
+// The app's own account of whether it is working, asked the same way on both sides. `useHealthSource`
+// is deliberately absent: it is how `abide/server` installs the LOCAL answer — the same shape as the
+// app-name source under `log` — and a caller installing one would be answering for an app it is not.
+export { type Health, health } from './health.ts'
 export {
     Awaited,
     awaited,
@@ -94,4 +98,6 @@ export {
     remote,
     remoteSocket,
     type Wire,
+    // Which app a call is addressed to, which `health()` takes and means the same by.
+    type WireOptions,
 } from './transport.ts'

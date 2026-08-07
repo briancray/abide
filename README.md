@@ -31,6 +31,8 @@ packages/abide/src/
     log.ts              222   log — channels, levels, the DEBUG gate, and the three shapes a line
                               takes: readable, tsv, json
     online.ts            10   online() — the second reactive ambient, off the platform's own events
+    health.ts            40   health() — the app's own account: composed in the process that serves
+                              it, fetched anywhere else, which is what `reachable` reports
     reactive.ts + index.ts          44   the public faces
   ui/                   the DOM renderer — parse-once templates, per-slot effects, keyed lists
     internal/parts.ts   686   child parts, keyed lists, instances
@@ -51,11 +53,14 @@ packages/abide/src/
     running.ts           20   server() — the Bun server that is listening, latched where Bun hands
                               it over, so nothing under the entry point has to be threaded it
     logs.ts              21   GET /__abide/logs — the remote feed, which is one channel and its tail
+    health.ts            66   onHealth + GET /__abide/health — a baseline abide fills in, the app's
+                              own fields over it, and a reporter's throw as an account rather than one
     scopes.ts           164   serve — the async-local caller scope, request/cookies/bag, and the
                               whole W3C trace context: id, our span, flags, tracestate, both headers
     responses.ts         78   page · json · jsonl · sse · redirect · error — and the one header
                               helper that puts traceresponse on every response abide builds
-    app.ts               35   the two things that need a filesystem: package.json, appDataDir()
+    app.ts               54   the two things that need a filesystem: package.json (name and the
+                              version the health document publishes), appDataDir()
 packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, so a template
                           expression is the same language as the rest of the file
     internal/lex.ts        the one tokenizer: where an embedded expression ENDS
@@ -635,6 +640,7 @@ separate unit-test suite to drift from the pages, and `bun test` is the pages be
 | `/hydrate` | the client adopting that markup, with the **DOM calls counted** — the number is one |
 | `/transport` | `rpc` and `socket`, against a `dispatch` called in-process: **three readers, one request** |
 | `/logging` | `log`, with a card that turns a channel on by typing a `DEBUG` spelling into it |
+| `/health` | `health()` and `onHealth`, with a card that reports a field — or a failure — and asks again |
 | `/bench` | every capability against a hand-written equivalent, one table row per arm |
 
 The bench runs four kinds of case, because the framework makes four kinds of claim: **time**, as a
@@ -840,9 +846,10 @@ a test:
 
 1. **A CLI**, which is what turns `pages()` into a table a browser bundle also has, and what would
    read the environment table the spec describes.
-2. **`identity()` and `health()`** — the two ambients left. A principal needs a resolver hook, and
-   `health()` is `onHealth` merged over a baseline, so it lands with the lifecycle hooks. Together
-   they are the half of a request an rpc's middleware currently has to carry itself.
+2. **`identity()`** — the one ambient left. A principal needs a resolver hook, which is a policy
+   decision rather than plumbing, and it is the half of a request an rpc's middleware currently has
+   to carry itself. `health()` landed: `onHealth` merged over a baseline, served at
+   `GET /__abide/health`, and registered as a call until there is a binary to read an app's export.
 
 ## Provenance
 

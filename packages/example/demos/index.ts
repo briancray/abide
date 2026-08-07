@@ -29,6 +29,7 @@ const LOADERS: Record<SuiteName, () => Promise<{ default: Suite }>> = {
     hydrate: () => import('./hydrate.ts'),
     transport: () => import('./transport.ts'),
     logging: () => import('./logging.ts'),
+    health: () => import('./health.ts'),
     compiler: () => import('./compiler.ts'),
 }
 

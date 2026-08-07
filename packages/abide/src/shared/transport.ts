@@ -200,21 +200,30 @@ export function asRpc<Args, T>(call: KeyedMemo<Args, T>, spec: RpcSpec<Args>): R
 
 // --- rpc, the browser lane ---------------------------------------------------
 
-export interface RemoteOptions {
-    method?: Method
+/**
+ * Which app a call is addressed to.
+ *
+ * One declaration rather than one per caller — `remote` and `health` mean the same thing by these two
+ * words, and two bags with the same fields drift without the checker ever noticing.
+ */
+export interface WireOptions {
     /**
-     * Where the server is. Omitted in a browser, where the path is relative and there is nothing to
+     * Where the app is. Omitted in a browser, where the path is relative and there is nothing to
      * sniff: a stub is only ever LOADED in the browser lane, and a caller anywhere else has to say
      * where the server is rather than have a DOM emulator's `location` guessed on its behalf.
      */
     base?: string
-    /** The handler YIELDS, so the response is a stream of chunks. Emitted by the compiler. */
-    stream?: boolean
     /**
      * The transport. Anything `fetch`-shaped — a proxy, a client that carries a header, or a
      * `dispatch` called in-process, which is what lets a demo make the same claims with no wire.
      */
     fetch?: (input: string, init: RequestInit) => Promise<Response>
+}
+
+export interface RemoteOptions extends WireOptions {
+    method?: Method
+    /** The handler YIELDS, so the response is a stream of chunks. Emitted by the compiler. */
+    stream?: boolean
 }
 
 /**
