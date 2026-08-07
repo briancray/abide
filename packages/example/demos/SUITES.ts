@@ -134,6 +134,15 @@ export const META = {
             'so three concurrent readers of one key cost one request without the transport doing anything.',
         tag: 'rpc = memo + transport',
     },
+    logging: {
+        name: 'logging',
+        title: 'log',
+        blurb:
+            'The app’s own channel always writes; a named one is off until `DEBUG` names it, in the ' +
+            'debug-npm spelling every operator already knows. `warning` and `error` are never gated — ' +
+            'the gate is there to control volume, not to hide breakage.',
+        tag: 'channels · levels · DEBUG',
+    },
     compiler: {
         name: 'compiler',
         title: 'compiler',
@@ -162,6 +171,7 @@ export const ORDER: SuiteName[] = [
     'server',
     'hydrate',
     'transport',
+    'logging',
     'compiler',
 ]
 

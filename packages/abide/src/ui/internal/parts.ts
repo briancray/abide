@@ -26,7 +26,12 @@ import { type Node, rerun, untrackCall, watchNode } from '$shared/internal/graph
 import { CLOSE_FORM, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
+import { abideLog } from '$shared/log.ts'
 import { type Prepared, type PreparedPart, prepare } from './prepare.ts'
+
+// A `warning`, so the DEBUG gate never swallows it: a page that silently rebuilt half of what the
+// server sent looks exactly like a page that adopted it.
+const hydrateLog = abideLog.channel('hydrate')
 
 // A sentinel distinct from every value an operand could be, `undefined` included — `{#await}` over a
 // cell that has not loaded yet awaits `undefined`, and that is a real operand, not the absence of one.
@@ -55,7 +60,8 @@ interface Walk {
 class Mismatch extends Error {}
 
 function mismatch(what: string): never {
-    throw new Mismatch(`abide: hydration mismatch — ${what}`)
+    // No `abide:` prefix: the message reaches a console through `abide:hydrate`, which already says so.
+    throw new Mismatch(`hydration mismatch — ${what}`)
 }
 
 function describe(node: ChildNode | null): string {
@@ -154,7 +160,7 @@ export class ChildPart {
                 if (!(error instanceof Mismatch)) throw error
                 // Recover here rather than failing the page: drop what the server wrote for this one
                 // slot and fall through to the ordinary build. The rest of the tree keeps its markup.
-                console.warn(`${error.message} — building this slot instead of adopting it`)
+                hydrateLog.warning(`${error.message} — building this slot instead of adopting it`)
                 for (const node of claimed) node.remove()
                 this.dropOpened()
             }

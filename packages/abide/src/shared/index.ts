@@ -35,6 +35,12 @@ export {
 // Per-caller storage. A client never needs it — there is one caller, forever — but the same import
 // works there, and it is what a test uses to prove two callers do not share a memo's cache.
 export { isolate } from './internal/scopes.ts'
+// The console, on both sides. The DEFAULT channel is the app's own output and always writes; a NAMED
+// channel is off unless `DEBUG` names it — except `warning` and `error`, which the gate never
+// swallows, because the gate is there to control volume rather than to hide breakage. `abideLog` and
+// `useAppNameSource` are deliberately absent: the first is the framework's own channel and the second
+// is how `abide/server` installs the package.json fallback under `ABIDE_APP_NAME`.
+export { type Level, type Logger, log } from './log.ts'
 export {
     // Tags name DATA, not the thing holding it, so these are module-level verbs: they reach every
     // slot carrying the tag without the caller knowing which memo that is.

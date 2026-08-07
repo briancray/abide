@@ -42,6 +42,10 @@ import {
     type RenderContext,
     type RenderOptions,
 } from './internal/emit.ts'
+// Side effect only: installs the package.json fallback under `ABIDE_APP_NAME`, which is what names
+// `log`'s default channel. Importing `abide/server` at all is the signal that there is a filesystem to
+// ask — nothing in it is public, so there is nothing to re-export.
+import './app.ts'
 
 /** Everything the walk knows how to write. */
 export type Renderable =

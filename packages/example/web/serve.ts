@@ -9,6 +9,7 @@ import channel from './channel.html'
 import client from './client.html'
 import compiler from './compiler.html'
 import hydrate from './hydrate.html'
+import logging from './logging.html'
 import memo from './memo.html'
 import overview from './overview.html'
 import routing from './routing.html'
@@ -54,6 +55,7 @@ const running = Bun.serve({
         '/server': server,
         '/hydrate': hydrate,
         '/transport': transport,
+        '/logging': logging,
         '/compiler': compiler,
         '/bench': bench,
     },

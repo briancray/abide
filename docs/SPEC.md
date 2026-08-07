@@ -15,7 +15,7 @@ either.
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, and the client half of both transports (`remote`, `remoteSocket`) |
+| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, and the client half of both transports (`remote`, `remoteSocket`) |
 | `abide/ui` | the DOM substrate — `mount`, `hydrate` |
 | `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`) |
 | `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
@@ -38,17 +38,17 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | --- | --- |
 | transport | `opts.schemas` / `opts.schema` and `opts.clients` — declaring a shape and which surfaces may reach a handler. Everything else in both laws is built |
 | ambients | `identity()`, `trace()`, `health()`, `online()`, `appDataDir()` |
-| lifecycle | `onStart`/`onHealth` and the config table's env vars, except the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) |
+| lifecycle | `onStart`/`onHealth`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) and the five logging reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`) |
 | `<style>` | the subtree-scoped (nested) form — a compile error naming what is missing |
-| logging | `log` and its channels, and therefore the `DEBUG` gating below |
+| logging | the remote log feed only — `GET /__abide/logs`, `ABIDE_LOGS` and `ABIDE_LOG_BUFFER`. It exists to be tailed by `./app logs`, so it lands with the CLI. `log` itself and the `DEBUG` gating are built |
 | the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it |
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
 `request`, `bag`, `cookies`, `isServing`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
 `outlet`, and `pages(dir)` for a pages directory), both transports and the seam that addresses them, the
-template tag and its runtime, both render substrates, hydration, the `.abide` compiler, and the test
-kit.
+template tag and its runtime, both render substrates, hydration, `log` and its channels, the `.abide`
+compiler, and the test kit.
 
 ## Terms
 
@@ -322,7 +322,35 @@ is no honest answer, so each throws rather than guessing.
 | `log.warning(string)` | Warn level log |
 | `log.error(string)` | Error level log |
 | `log.trace(string)` | Trace level log |
-| `log.channel(string)` | Named channel. Prefixed with `<app name>:`. Abide's default is `abide:`. Channel has same log levels. Gated by `DEBUG` in debug-npm grammar (`abide:*`, `docs:cards,docs:db`, `*`) |
+| `log.channel(string)` | Named channel. Prefixed with `<app name>:`. Abide's default is `abide:`. Channel has same log levels, and `.channel()` again appends another segment. The same name hands back the same logger. Gated by `DEBUG` in debug-npm grammar (`abide:*`, `docs:cards,docs:db`, `*`, `*,-abide:*`) — read from the environment on a server and from `localStorage.debug` in a browser |
+
+Two rules decide whether a line is written at all. The DEFAULT channel always writes — it is the app
+talking to whoever started it, and an app whose own output needs an env var to appear is an app
+nobody reads. A NAMED channel writes only when `DEBUG` names it, because that is what a channel is
+FOR. The exception runs in both directions: `warning` and `error` always write, on every channel. The
+gate is there to control VOLUME, not to hide breakage, and a failure a missing env var can swallow is
+a failure nobody sees — which is also what keeps abide's own `abide:*` channels silent by default
+while a hydration mismatch still reaches the console.
+
+A message is one line, and one line is one record: `log(string)` takes a string and nothing else, so
+the four fields a machine reads — time, level, channel, message — are the whole shape in every
+format, and a tab or a newline inside a message is escaped rather than emitted.
+
+| Shape | When |
+| --- | --- |
+| readable | `<channel> <level> <message> +<n>ms`, coloured at a TTY. The delta is since the last line on THAT channel. A browser console is neither a terminal nor a pipe, so it is always this, and never with ANSI in it |
+| `tsv` | four tab-separated fields — what a pipe gets unless something says otherwise |
+| `json` | the same four, named |
+
+`ABIDE_LOG_FORMAT` declares one outright. Unset, the shape follows the TTY, with `NO_COLOR` forcing
+`tsv` and `FORCE_COLOR` forcing the readable form off one. `error` and `warning` go to stderr in
+every format: that is the one routing decision a pipe cannot make for itself.
+
+A closed channel costs the gate read and a compare — it rebuilds no channel name and recompiles no
+pattern. On a server that read is a property on an ordinary object and is live. In a browser it is
+`localStorage.debug`, which is an order of magnitude dearer, so it is held for the rest of the
+synchronous run and dropped on the next microtask: a suppressed channel in a loop pays for one read,
+and a change made from a console or a click is a later turn and is seen on it.
 
 ## Reads and writes inside a `.abide` file
 
@@ -574,7 +602,7 @@ A route is committed only once its page has arrived, which is the whole of what 
 | `PORT` | Listen port (default `3000`). `--port` overrides. `abide dev` hops to the next open port if taken; `abide start` binds directly and fails hard on `EADDRINUSE`. |
 | `APP_URL` | Public URL / mount base, and the expected origin both origin gates compare against (WS CSWSH gate, CSRF gate). A `abide dev` port hop carries it to the port actually bound. |
 | `NODE_ENV` | Production vs development. Gates `Strict-Transport-Security`, the identity-secret requirement, and other prod-only behaviour. |
-| `ABIDE_APP_NAME` | The app's own name (falls back to package.json `name`, then `abide`). |
+| `ABIDE_APP_NAME` | The app's own name, and therefore `log`'s default channel. Falls back to the nearest package.json `name` above the working directory — which needs a filesystem, so `abide/server` installs that half — then to `abide`. |
 | `ABIDE_DATA_DIR` | Override the per-user data dir backing `appDataDir()`. |
 | `ABIDE_IDENTITY_SECRET` | Seals the `abide-identity` cookie + tokens. Required in production for authenticated `identity.set()`. |
 | `ABIDE_IDENTITY_TTL` | Identity cookie/token TTL in ms (default 30d, rolling). |
@@ -588,7 +616,7 @@ A route is committed only once its page has arrived, which is the whole of what 
 | `ABIDE_LOGS` | Opt IN to the remote log feed (`GET /__abide/logs`, what `./app logs` tails). Default closed → 404. |
 | `ABIDE_LOG_BUFFER` | Ring size in records for that log feed (default `500`). |
 | `ABIDE_LOG_FORMAT` (`tsv` \| `json`) | Machine log format. Unset, the shape follows the TTY: pretty at a terminal, `tsv` through a pipe. |
-| `DEBUG` | Server-side log-channel gating (browser equivalent: `localStorage.debug`). |
+| `DEBUG` | Log-channel gating, in debug-npm grammar. Read here on a server and from `localStorage.debug` in a browser; where both exist — a DOM emulator under a test runner — the environment is asked first. |
 | `NO_COLOR` | Disable colour everywhere (log lines, CLI banner, REPL banner + ghost text); forces `tsv` log output. |
 | `FORCE_COLOR` | Force colour/pretty output even when not a TTY. |
 

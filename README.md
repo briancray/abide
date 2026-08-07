@@ -23,6 +23,8 @@ packages/abide/src/
     transport.ts        294   remote / remoteSocket — the client half of both laws: a keyed memo
                               with a fetch for a body, a channel with a websocket for one
     internal/wire.ts     87   what goes over the wire: one value, a stream of them, or a failure
+    log.ts              193   log — channels, levels, the DEBUG gate, and the three shapes a line
+                              takes: readable, tsv, json
     reactive.ts + index.ts          44   the public faces
   ui/                   the DOM renderer — parse-once templates, per-slot effects, keyed lists
     internal/parts.ts   686   child parts, keyed lists, instances
@@ -35,6 +37,7 @@ packages/abide/src/
     rpc.ts              245   GET…DELETE and socket — the DECLARING half: middleware, timeout,
                               retention, the cross-origin gate, and one call as a Response
     registry.ts         204   dispatch — id -> handler, and the websocket half of the mount point
+    app.ts               22   the one thing naming a channel needs a filesystem for: package.json
 packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, so a template
                           expression is the same language as the rest of the file
     internal/lex.ts        the one tokenizer: where an embedded expression ENDS
@@ -360,6 +363,46 @@ load probes are the cold answer, and its stream has no end, so it is always `str
 ordinary channel, the way `m(args)` hands back a slot — and `{ maxAge }` makes a message current
 only while it is young, waking readers when it stops being.
 
+### Logging
+
+`log` is isomorphic like everything else here — same import, same call, both sides — and the two
+lanes differ only in where the gate is read from and what a line is allowed to look like.
+
+```ts
+import { log } from 'abide'
+
+log('the app started')            // the app's own channel. Always writes.
+const cards = log.channel('cards')  // `<app name>:cards`. DEBUG=docs:cards, or docs:*, or *
+cards('rendered 12 rows')           // silent until somebody asks for it
+cards.warning('one row had no id')  // not silent. Ever.
+```
+
+Two rules, and the exception is the interesting one:
+
+- **The default channel always writes.** It is the app talking to whoever started it, and an app
+  whose own output needs an env var to appear is an app nobody reads.
+- **A named channel writes only when `DEBUG` names it**, in the debug-npm spelling everyone already
+  knows — `docs:cards,docs:db`, `docs:*`, `*`, `*,-abide:*`. On a server that is the environment; in
+  a browser it is `localStorage.debug`.
+- **Except `warning` and `error`, which are never gated, on any channel.** The gate exists to control
+  volume, not to hide breakage. That is what lets abide keep its own `abide:*` channels silent by
+  default while a hydration mismatch still reaches the console — and the framework's root stays
+  `abide` however the embedding app is named, so the two namespaces cannot be confused.
+
+A message is a string and a line is one record, so the four fields a machine reads — time, level,
+channel, message — are the whole shape in every format. `ABIDE_LOG_FORMAT` declares one; unset, the
+shape follows the terminal: readable with `+12ms` deltas and colour at a TTY, `tsv` through a pipe. A
+browser console is neither, so it is always the readable form and never carries ANSI. `error` and
+`warning` go to stderr in every format — the one routing decision a pipe cannot make for itself.
+
+A channel nobody turned on costs the gate read and a compare, which is what makes one safe to leave
+in the code. On a server that read is a property on an ordinary object. In a browser it is
+`localStorage.debug` — 225 ns against 15 ns for an ordinary property, measured in Safari, and the
+whole of what a suppressed call costs there — so it is held for the rest of the synchronous run and
+dropped on the next microtask. A loop pays for one read; a change typed into a console is a later
+turn and is still seen on it. Reading once at import, which is what debug-npm does, would be faster
+again and would mean reloading the page to change anything.
+
 ## Sync or async is not a different spelling
 
 A cell holds a **settled value**. Handing one a promise starts a *load* instead of storing the
@@ -521,6 +564,7 @@ separate unit-test suite to drift from the pages, and `bun test` is the pages be
 | `/server` | streaming SSR, and a live frame you can watch an out-of-order patch land in |
 | `/hydrate` | the client adopting that markup, with the **DOM calls counted** — the number is one |
 | `/transport` | `rpc` and `socket`, against a `dispatch` called in-process: **three readers, one request** |
+| `/logging` | `log`, with a card that turns a channel on by typing a `DEBUG` spelling into it |
 | `/bench` | every capability against a hand-written equivalent, one table row per arm |
 
 The bench runs four kinds of case, because the framework makes four kinds of claim: **time**, as a
