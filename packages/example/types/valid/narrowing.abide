@@ -1,0 +1,34 @@
+<script module>
+import { memo, state } from 'abide'
+import type { Book } from '../models.ts'
+import { assertType, type Exact } from '../exact.ts'
+
+export const session = state(new Promise<Book>((resolve) => resolve({ title: 'a', pages: 1, author: { name: 'b' } })))
+export const shelf = state('fiction')
+export const details = memo(async ({ title }: { title: string }) => ({ pages: title.length }))
+export const mode = state<'compact' | 'full'>('compact')
+
+// A cell read is `T | undefined` and NOT `any`. Everything below is only a claim about narrowing
+// because of this line: narrowing something already `any` narrows nothing and would still compile.
+assertType<Exact<ReturnType<typeof session>, Book | undefined>>()
+assertType<Exact<ReturnType<typeof shelf>, string>>()
+assertType<Exact<ReturnType<typeof mode>, 'compact' | 'full'>>()
+</script>
+
+<div>
+    <!-- The read is a CALL, and TypeScript narrows a const but never a call — so a condition takes
+         its read into a local and the branch narrows off that. `.name` needs no `?.` here, and the
+         invalid fixture beside this one proves the branch type is real rather than `any`. -->
+    {#if session}<p>{session.title} by {session.author.name}</p>{:else}<p>anonymous</p>{/if}
+
+    <!-- The same for a keyed memo, where the CALL is the cell rather than the name. -->
+    {#if details({ title: shelf })}<p>{details({ title: shelf }).pages} pages</p>{/if}
+
+    <!-- A switch narrows its arms the same way, including down to a literal member of a union. The
+         arm narrows the SWITCHED cell and nothing else, which is why `session` still needs its own
+         condition below rather than borrowing this one. -->
+    {#switch mode}{:case 'compact'}<em>short</em>{:default}<b>{mode.length}</b>{/switch}
+
+    <!-- An `{:else if}` chain narrows each arm off its own condition. -->
+    {#if session}<span>{session.pages}</span>{:else if shelf}<span>{shelf.length}</span>{/if}
+</div>

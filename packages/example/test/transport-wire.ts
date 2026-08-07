@@ -75,6 +75,21 @@ const rename = remote<{ id: number; name: string }, { name: string }>('users/ren
 await rename({ id: 2, name: 'ada' })
 const renamed = await remote<{ id: number }, { name: string }>('users/getUser', { base })({ id: 2 })
 
+// A FILE, over a real multipart body. The client sent it that way because the args held something
+// JSON cannot carry; nothing about the declaration says "upload".
+const setAvatar = remote<{ id: number; avatar: File }, { id: number; name: string; bytes: number }>(
+    'users/setAvatar',
+    { base, method: 'POST' },
+)
+const uploaded = await setAvatar({ id: 4, avatar: new File(['hello bytes'], 'a.png', { type: 'image/png' }) })
+
+// The published contract, over the wire that serves it.
+const catalogue = (await (await fetch(new URL('/__abide/schema', base))).json()) as {
+    id: string
+    input?: { properties?: Record<string, unknown> }
+    output?: unknown
+}[]
+
 // A handler asking which server it is running under, having been handed nothing: `dispatch` latched
 // what `fetch` gave it, and `server()` is where the handler reads it back.
 const listening = await remote<Record<string, never>, { origin: string }>('users/listening', { base })({})
@@ -129,6 +144,11 @@ const result = {
     streamed,
     streamedChunks: countdown({ from: 3 }).chunks(),
     renamed: renamed.name,
+    uploaded,
+    avatarShape: catalogue.find((one) => one.id === 'users/setAvatar')?.input?.properties ?? null,
+    // Derived from `User` in `db.ts` — a file the compiler opened because a handler's type named it.
+    userShape: (catalogue.find((one) => one.id === 'users/getUser') as { output?: unknown })?.output ?? null,
+    catalogueIds: catalogue.map((one) => one.id),
     handlerOrigin: listening.origin,
     servingOrigin: base,
     missingError,

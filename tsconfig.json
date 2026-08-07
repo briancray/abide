@@ -43,5 +43,9 @@
         "packages/abide/tests/**/*.ts",
         "packages/abide/compiler/**/*.ts",
         "packages/example/**/*.ts"
-    ]
+    ],
+    // The type fixtures under `types/invalid` are SUPPOSED to fail. They are checked deliberately by
+    // `packages/example/test/types.test.ts`, through their own config, and a repo whose own typecheck
+    // is red says nothing at all — so they are not part of it.
+    "exclude": ["packages/example/types/invalid"]
 }

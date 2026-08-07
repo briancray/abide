@@ -42,6 +42,9 @@ test('the browser bundle carries the address and not the module', async () => {
         // ELISION rather than something tree-shaking would have done anyway.
         expect(code).not.toContain('ABIDE_EXAMPLE_SERVER_ONLY_SECRET')
         expect(code).not.toContain('findUser')
+        // An option is server-side text, and a declared shape is one: `rename` has an input schema
+        // and none of it crosses. What crosses is the consequence — here, a 422 the caller reads.
+        expect(code).not.toContain('name must not be blank')
     } finally {
         await Bun.file(entry).delete()
     }
@@ -72,8 +75,10 @@ test('both laws meet over a real wire', async () => {
         'users/getUser',
         'users/slowUser',
         'users/countdown',
+        'users/add',
         'users/rename',
         'users/listening',
+        'users/setAvatar',
         'admin/audit/recent',
     ])
     expect(result.registeredSockets).toEqual(['feed/ticks', 'feed/rooms'])
@@ -99,6 +104,32 @@ test('both laws meet over a real wire', async () => {
 
     // A mutation ran and the read that follows it sees what it wrote.
     expect(result.renamed).toBe('ada')
+
+    // A FILE is an argument. Nothing in the declaration says "upload": the client noticed the args
+    // held something JSON cannot carry, sent multipart, and the handler was given the same one args
+    // object with the file back where the caller put it.
+    expect(result.uploaded).toEqual({ id: 4, name: 'a.png', bytes: 11 })
+
+    // And the contract for that call is published — derived from `avatar: File` and nothing else,
+    // which is what an MCP tool definition and an OpenAPI operation both read.
+    expect(result.avatarShape).toEqual({
+        id: { type: 'number' },
+        avatar: { type: 'string', format: 'binary' },
+    })
+    expect(result.catalogueIds).toContain('feed/ticks')
+
+    // A shape declared in ANOTHER file. `getUser` answers `User`, which lives in `db.ts` beside the
+    // data — the ordinary place for it, and a file the compiler opened only because a handler's type
+    // named it. Nothing about the endpoint restates the shape.
+    expect(result.userShape).toEqual({
+        type: 'object',
+        properties: {
+            id: { type: 'number' },
+            name: { type: 'string' },
+            connections: { type: 'number' },
+        },
+        required: ['id', 'name', 'connections'],
+    })
 
     // A handler reached the server it is running under with nothing threaded to it: Bun hands the
     // instance to `fetch(request, self)`, `dispatch` latched it there, and `server()` read it back

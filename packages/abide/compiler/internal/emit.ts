@@ -20,10 +20,11 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { scopeCss, scopeName } from './css.ts'
 import { CLOSERS, desugar, OPENERS, REACTIVE_CONSTRUCTORS, REACTIVE_TYPES } from './desugar.ts'
-import { Lexer, type Token } from './lex.ts'
+import { Lexer, type Token, tokensOf } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
 import { ParseError } from './parse.ts'
+import { TypeReader } from './shape.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 export interface EmitOptions {
@@ -1205,9 +1206,12 @@ export function emit(
     // true for diagnostics; what they leave behind is leading and trailing whitespace in the markup,
     // which would otherwise become real text nodes.
     const markup = children(blocks.template, context).replace(/^\s+/, '\n').replace(/\s+$/, '\n')
-    const args = /\btype\s+Args\b/.test(blocks.setup?.body ?? '')
-        ? 'args: Args'
-        : 'args: Record<string, unknown>'
+    // The props type is LIFTED out of the setup body, because the signature that uses it is written
+    // outside that body: inlined, `Args` was out of scope in the one place it is needed and every
+    // component that declared one failed to compile with `Cannot find name 'Args'`. A type alias has
+    // no runtime and no per-instance meaning, so module scope is where it always belonged.
+    const lifted = liftArgs(setup.rest)
+    const args = lifted.declaration === '' ? 'args: Record<string, unknown>' : 'args: Args'
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
@@ -1220,10 +1224,11 @@ export function emit(
     let adopted = ''
     for (const statement of context.sheets.values()) adopted += statement
 
-    const setupBody = indent(desugarBody(blocks.setup, setup.rest, reactive))
+    const setupBody = indent(desugarBody(blocks.setup, lifted.body, reactive))
     const assembled =
         mergeImports([header, ...moduleImports.imports, ...setup.imports]) +
         `${desugarBody(blocks.module, moduleImports.rest, reactive)}\n${adopted}` +
+        (lifted.declaration === '' ? '' : `${lifted.declaration}\n\n`) +
         `export default function ${name}(${args}): TemplateResult {\n` +
         `${setupBody}${defines}` +
         `    return html\`${markup}\`\n` +
@@ -1232,6 +1237,38 @@ export function emit(
     // One pass over the finished string lifts every marker back out, which is why nothing upstream
     // had to carry a generated position around.
     return extract(assembled, source)
+}
+
+/**
+ * `type Args = …` taken out of the setup body, so the signature can name it.
+ *
+ * Where the type ENDS is asked of the same reader the desugar asks, because there is one grammar for
+ * it: a character scan that stopped at the first newline outside a bracket cut a wrapped union in
+ * half — `type Args =` on its own line lifted the `=` and left the alternatives behind in the body,
+ * which is not parseable in either lane. Brackets alone cannot answer it, and neither can a regex.
+ */
+function liftArgs(rest: string): { declaration: string; body: string } {
+    let tokens: Token[]
+    try {
+        tokens = tokensOf(rest)
+    } catch {
+        // An unlexable body is one the desugar is about to fail on with a position of its own.
+        return { declaration: '', body: rest }
+    }
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
+        // Top-level only: `type Args` inside a block is somebody else's local.
+        if (token.depth !== 0 || token.text !== 'type') continue
+        if (tokens[i + 1]?.text !== 'Args') continue
+        if (tokens[i + 2]?.kind !== SyntaxKind.EqualsToken) continue
+        const end = tokens[new TypeReader(tokens).extent(i + 3) - 1]?.end
+        if (end === undefined) break
+        return {
+            declaration: rest.slice(token.start, end),
+            body: rest.slice(0, token.start) + rest.slice(end),
+        }
+    }
+    return { declaration: '', body: rest }
 }
 
 /**

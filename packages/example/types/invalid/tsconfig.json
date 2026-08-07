@@ -1,0 +1,10 @@
+{
+    // The fixtures here are SUPPOSED to fail, so they are checked by `test/types.test.ts` through
+    // this config and excluded from the root one — a repo whose own typecheck is red says nothing.
+    //
+    // `exclude` is reset because it is INHERITED and resolved against this directory, so the root's
+    // own "skip types/invalid" would otherwise skip everything this config exists to include.
+    "extends": "../../../../tsconfig.json",
+    "include": ["./**/*.ts"],
+    "exclude": []
+}

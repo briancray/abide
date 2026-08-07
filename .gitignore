@@ -8,3 +8,7 @@ dist/
 # The map inlines the whole `.abide` via `sourcesContent`, so a tracked one is a second copy of the
 # source that drifts from it on every edit.
 *.abide.ts.map
+
+# What the checker derived, written by `bun run shapes`. A BUILD artifact: it only ever upgrades a
+# shape the compiler already derived, so a checkout without it is a checkout that publishes less.
+.abide/

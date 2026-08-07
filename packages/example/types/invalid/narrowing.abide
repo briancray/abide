@@ -1,0 +1,10 @@
+<script module>
+import { state } from 'abide'
+import type { Book } from '../models.ts'
+
+export const session = state(new Promise<Book>((resolve) => resolve({ title: 'a', pages: 1, author: { name: 'b' } })))
+</script>
+
+<div>
+    <p>{session.nmae}</p>
+</div>

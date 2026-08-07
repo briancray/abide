@@ -4,6 +4,8 @@
 // point of the file: comparing pattern fields with `===` would silently never match an object-valued
 // field, since the pattern's copy is a different object however equal it looks.
 
+import { hasFile, isFile } from './probes.ts'
+
 /**
  * A stable key for an args object; sorted so {a,b} and {b,a} address one slot.
  *
@@ -49,10 +51,39 @@ export function keyOf(args: unknown): string {
     return out
 }
 
+/**
+ * A file has no JSON form — `JSON.stringify` writes `{}` for one — so two calls carrying different
+ * files would address ONE slot, and the second upload would be answered with the first's result.
+ *
+ * Identity is the only honest key for a stream of bytes: two files with the same name and length are
+ * not the same file, and reading them to find out is not something building a cache key may do. So
+ * each one is tagged once and remembered, weakly, for as long as the caller holds it.
+ */
+const FILE_KEYS = new WeakMap<object, string>()
+let files = 0
+
+function tagged(_key: string, value: unknown): unknown {
+    if (!isFile(value)) return value
+    let held = FILE_KEYS.get(value)
+    if (held === undefined) {
+        held = `file#${files++}`
+        FILE_KEYS.set(value, held)
+    }
+    return held
+}
+
 function sortedKey(args: Record<string, unknown>, keys: string[]): string {
     const entries: [string, unknown][] = []
-    for (const name of keys.sort()) entries.push([name, args[name]])
-    return JSON.stringify(entries)
+    // The walk the entries need anyway also answers whether the replacer is wanted. A keyed memo
+    // asks for this key on every HIT, and a replacer costs a callback per key in the whole graph to
+    // find the file that a call which declared none does not have.
+    let carries = false
+    for (const name of keys.sort()) {
+        const value = args[name]
+        entries.push([name, value])
+        if (!carries && hasFile(value)) carries = true
+    }
+    return carries ? JSON.stringify(entries, tagged) : JSON.stringify(entries)
 }
 
 /**

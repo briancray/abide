@@ -9,15 +9,27 @@
 
 import type { Server, ServerWebSocket } from 'bun'
 import type { Channel, RoomChannel } from '$shared/channel.ts'
-import { ABIDE_PREFIX, ARGS_PARAM, LOGS_PATH, RPC_PREFIX, SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
+import {
+    ABIDE_PREFIX,
+    ARGS_PARAM,
+    LOGS_PATH,
+    RPC_PREFIX,
+    SCHEMA_PATH,
+    SOCKET_PREFIX,
+} from '$shared/internal/PATHS.ts'
 import { isThenable } from '$shared/internal/probes.ts'
-import { decodeArgs } from '$shared/internal/wire.ts'
+import type { EndpointShape, Shapes } from '$shared/internal/shapes.ts'
+import { decodeArgs, decodeForm, isMultipart } from '$shared/internal/wire.ts'
+import { abideLog } from '$shared/log.ts'
 import type { Kind, Rpc } from '$shared/transport.ts'
 import { logs } from './logs.ts'
-import { headersFor } from './responses.ts'
+import { headersFor, json } from './responses.ts'
 import {
     authorize,
+    describeRpc,
+    describeSocket,
     nameRpc,
+    nameSocket,
     policyOf,
     refuse,
     respond,
@@ -42,14 +54,24 @@ export function register(
     kind: Kind,
     entries: [id: string, name: string][],
     module: Record<string, unknown>,
+    /**
+     * What the compiler read off each declaration's TYPE, by export name.
+     *
+     * Absent when the module's types said nothing this could read, and absent entirely from a
+     * hand-written `register` — so a shape is something an endpoint gains, never something it needs.
+     */
+    shapes?: Record<string, Shapes>,
 ): void {
     for (const [id, name] of entries) {
         const declared = module[name]
         if (declared === undefined) continue
         if (kind === 'rpc') {
             nameRpc(declared as object, id)
+            describeRpc(declared as object, shapes?.[name])
             RPCS.set(id, declared as AnyRpc)
         } else {
+            nameSocket(declared as object, id)
+            describeSocket(declared as object, shapes?.[name])
             SOCKETS.set(id, declared as AnySocket)
         }
     }
@@ -58,6 +80,56 @@ export function register(
 /** Every address a lane has registered. What a test asks to prove the seam wired itself. */
 export function registered(kind: Kind): string[] {
     return [...(kind === 'rpc' ? RPCS : SOCKETS).keys()]
+}
+
+/**
+ * Every endpoint, as the document a machine reads BEFORE it calls one.
+ *
+ * This is what the whole shape story is for. An MCP tool definition is `{ name: id, description,
+ * inputSchema: input }` and an OpenAPI operation is the same three facts under different names, so
+ * neither needs a generator of its own in here — what they needed was for the shape to exist in a
+ * form other than a validator, which is why JSON Schema is what a declaration MEANS rather than
+ * something abide converts to on the way out.
+ *
+ * Sorted by address, so two runs of the same app produce the same document and a diff of one is a
+ * diff of the API.
+ */
+export function endpoints(): EndpointShape[] {
+    const all: EndpointShape[] = []
+    for (const [id, rpc] of RPCS) {
+        const policy = policyOf(rpc)
+        all.push({
+            id,
+            kind: 'rpc',
+            method: rpc.method,
+            ...(rpc.description === undefined ? {} : { description: rpc.description }),
+            ...(policy?.streams === true ? { streams: true } : {}),
+            ...(policy?.input == null ? {} : { input: policy.input }),
+            ...(policy?.output == null ? {} : { output: policy.output }),
+        })
+    }
+    for (const [id, stream] of SOCKETS) {
+        const policy = socketPolicyOf(stream)
+        all.push({
+            id,
+            kind: 'socket',
+            // A socket never ends, so it is the one endpoint whose `streams` is not worth saying: it
+            // is true by construction, and a flag that is always true tells a reader nothing.
+            ...(policy?.message == null ? {} : { input: policy.message }),
+        })
+    }
+    all.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    return all
+}
+
+/**
+ * The catalogue as a response. Open, unlike the log feed: every address in it is already in the
+ * client bundle, and the shape beside it is the CONTRACT for calling that address — a caller that
+ * cannot read it is a caller that gets it wrong and is refused by the same declaration anyway.
+ */
+function schema(request: Request): Response {
+    if (request.method !== 'GET') return refuse('the schema is a GET', 405)
+    return json(endpoints())
 }
 
 // --- the cross-origin gate ---------------------------------------------------
@@ -133,6 +205,7 @@ function served(
 ): Response | Promise<Response | undefined> {
     if (path.startsWith(SOCKET_PREFIX)) return upgrade(request, url, path, server)
     if (path === LOGS_PATH) return logs(request)
+    if (path === SCHEMA_PATH) return schema(request)
     if (!path.startsWith(RPC_PREFIX)) return refuse(`nothing is served at ${path}`, 404)
     return call(request, url, path)
 }
@@ -172,12 +245,14 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
 
     let args: unknown
     try {
-        args =
-            request.method === 'GET'
-                ? decodeArgs(url.searchParams.get(ARGS_PARAM))
-                : decodeArgs(await request.text())
+        // Three doors, one args object. A read carries them in the query; a body carries them as
+        // JSON, or as multipart when one of them is a FILE — and a read arrives that way too, since
+        // a file has no text form to put in a URL.
+        if (request.method === 'GET') args = decodeArgs(url.searchParams.get(ARGS_PARAM))
+        else if (isMultipart(request)) args = decodeForm(await request.formData())
+        else args = decodeArgs(await request.text())
     } catch {
-        return refuse(`${id} was called with arguments that are not JSON`, 400, headers)
+        return refuse(`${id} was called with arguments it could not decode`, 400, headers)
     }
 
     return respond(rpc, args, headers)
@@ -273,30 +348,70 @@ export const websocket = {
         let message: unknown
         try {
             message = JSON.parse(String(raw)) as unknown
-        } catch {
-            return
+        } catch (bad) {
+            return dropped(connection, bad)
         }
-        const room = connection.data.room
-        if (policy === undefined) return accept(message, room)
-        const event: SocketEvent<unknown, unknown> = {
-            kind: 'publish',
-            room,
-            message,
-            request: connection.data.request,
-        }
-        // Guarded rather than awaited, both of them: the ordinary socket has no middleware and a
-        // synchronous `clientPublish`, and this runs once per inbound message.
-        let ran: void | Promise<void>
+        const declared = policy?.checkMessage ?? null
+        if (declared === null) return published(connection, accept, message)
+        // Guarded like every other step on this path: a schema over a plain object refuses or passes
+        // in the call, and this runs once per inbound message.
+        let gated: unknown
         try {
-            ran = authorize(policy, event)
-        } catch {
-            return
+            gated = declared(message)
+        } catch (refusal) {
+            return dropped(connection, refusal)
         }
-        if (!isThenable(ran)) return accept(message, room)
-        return ran.then(
-            () => accept(message, room),
-            // A refusal is a silent drop, the same as one thrown synchronously above.
-            () => undefined,
+        if (!isThenable(gated)) return published(connection, accept, gated)
+        return (gated as Promise<unknown>).then(
+            (checked) => published(connection, accept, checked),
+            (refusal: unknown) => dropped(connection, refusal),
         )
     },
+}
+
+const socketLog = abideLog.channel('socket')
+
+/**
+ * A refused inbound message, on abide's own channel.
+ *
+ * A DROP rather than a close or a reply: a socket frame has no response to carry a refusal in, and
+ * a client that may not publish must not learn the difference between "not allowed" and "not
+ * listening". Silent to an operator too was the part that was wrong — the gate is there to control
+ * volume, not to hide breakage — so it says so where `DEBUG=abide:*` can see it, and nowhere else.
+ */
+function dropped(connection: ServerWebSocket<SocketData>, why: unknown): void {
+    socketLog.debug(
+        `${connection.data.id} dropped a client publish: ${String((why as Error)?.message ?? why)}`,
+    )
+}
+
+/** Past every gate: the chain runs, and what it lets through is what the app said to do with it. */
+function published(
+    connection: ServerWebSocket<SocketData>,
+    accept: (message: unknown, room: unknown) => void | Promise<void>,
+    message: unknown,
+): void | Promise<void> {
+    const policy = connection.data.policy
+    const room = connection.data.room
+    if (policy === undefined) return accept(message, room)
+    const event: SocketEvent<unknown, unknown> = {
+        kind: 'publish',
+        room,
+        message,
+        request: connection.data.request,
+    }
+    // Guarded rather than awaited: the ordinary socket has no middleware and a synchronous
+    // `clientPublish`, and this runs once per inbound message.
+    let ran: void | Promise<void>
+    try {
+        ran = authorize(policy, event)
+    } catch (refusal) {
+        return dropped(connection, refusal)
+    }
+    if (!isThenable(ran)) return accept(message, room)
+    return ran.then(
+        () => accept(message, room),
+        // A refusal is a drop, the same as one thrown synchronously above.
+        (refusal: unknown) => dropped(connection, refusal),
+    )
 }

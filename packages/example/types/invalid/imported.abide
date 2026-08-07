@@ -1,0 +1,8 @@
+<script module>
+import { state } from 'abide'
+import { FIRST, type Book } from '../models.ts'
+
+export const current = state<Book>(FIRST)
+</script>
+
+<p>{current.author.nmae}</p>

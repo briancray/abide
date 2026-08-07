@@ -14,17 +14,20 @@ packages/abide/src/
   shared/               the isomorphic half — same import, same call, both sides
     internal/graph.ts   574   the reactive engine: state / derive / watch / untrack / scope, and
                               the three shapes a value arrives in — value, load, stream
-    memo.ts             302   memo(load) — args-keyed cache, coalescing, probes, ttl, pacing
+    memo.ts             304   memo(load) — args-keyed cache, coalescing, probes, ttl, pacing
     channel.ts          191   channel — pub/sub with a reactive read surface, rooms, maxAge, tail
     router.ts           324   route/url/navigate/routes/outlet — the route as four cells, per caller
     internal/patterns.ts 162  a pattern: parse it, order it, run a path through it
     html.ts             147   the template tag + THE one slot classifier
     internal/{slots,tags,keys}.ts  101   the slot cache, the tag registry, the args key
-    transport.ts        332   remote / remoteSocket — the client half of both laws: a keyed memo
+    transport.ts        341   remote / remoteSocket — the client half of both laws: a keyed memo
                               with a fetch for a body, a channel with a websocket for one
     internal/trace.ts    12   where the isomorphic half asks about the current trace: the id for a
                               log line, the headers for an outbound call. null on a client
-    internal/wire.ts     87   what goes over the wire: one value, a stream of them, or a failure
+    internal/wire.ts    175   what goes over the wire: one value, a stream of them, a failure — and
+                              a FILE, which travels beside the args with a reference where it sat
+    internal/shapes.ts   39   JsonSchema — the one shape language, so the compiler and the runtime
+                              cannot disagree about what a declaration means
     log.ts              222   log — channels, levels, the DEBUG gate, and the three shapes a line
                               takes: readable, tsv, json
     online.ts            10   online() — the second reactive ambient, off the platform's own events
@@ -37,10 +40,14 @@ packages/abide/src/
     index.ts            392   the walk
     pages.ts             54   a pages directory as a route table — routing's one non-isomorphic half
     internal/emit.ts     26   attributes, the patch script
-    rpc.ts              256   GET…DELETE and socket — the DECLARING half: middleware, timeout,
-                              retention, the cross-origin gate, and one call as a Response
-    registry.ts         217   dispatch — id -> handler, the request scope every lane is served in,
-                              and the websocket half of the mount point
+    rpc.ts              337   GET…DELETE and socket — the DECLARING half: middleware, timeout,
+                              retention, the cross-origin gate, the declared shapes, and one call
+                              as a Response
+    schema.ts           325   the three forms a shape is declared in, and the validator for the
+                              native one — JSON Schema, which is what a declaration MEANS
+    registry.ts         288   dispatch — id -> handler, the request scope every lane is served in,
+                              the websocket half of the mount point, and endpoints(): the whole API
+                              as the document a machine reads before calling one
     running.ts           20   server() — the Bun server that is listening, latched where Bun hands
                               it over, so nothing under the entry point has to be threaded it
     logs.ts              21   GET /__abide/logs — the remote feed, which is one channel and its tail
@@ -57,8 +64,18 @@ packages/abide/compiler/  the `.abide` compiler — TypeScript 7's own scanner, 
     internal/emit.ts       the node tree -> the `html` template you would have written
     internal/css.ts        scoped <style>: one attribute, selectors rewritten
     internal/elide.ts      a transport module -> the stub, or the module plus its own address
+    internal/shape.ts      a handler's TYPE -> JSON Schema, so a declaration says its shape once
+    internal/types.ts      which tokens ARE a type, so the desugar rewrites expressions and nothing
+                           else — same grammar as shape.ts, because two would disagree
+    shapes.ts              the second speed: the real checker over a whole project, for the types
+                           tokens cannot read. Optional, and only ever an upgrade
+    internal/checked.ts    its Node half — Type -> JSON Schema, knowing nothing about abide
+    internal/assemble.ts   the one place a schema is ASSEMBLED, so the two derivations above cannot
+                           answer the same type two ways
     index.ts               compile() + elide() — pure, no I/O
 packages/abide/tests/   the test kit (abide/tests): the Case shape, assertions, DOM counters, bench timing
+packages/example/types/ the typing contract: `valid/` asserts EXACT types, `invalid/` is code that
+                        must be REJECTED — checked by real tsc in `test/types.test.ts`
 ```
 
 ## `.abide`
@@ -771,11 +788,44 @@ a test:
   looks right either way.
 - **A pending cell renders blank on the server**, because a server render is a snapshot with nothing
   to wake later. `suspend(cell, (v) => …)` — cells are thenable — is how a load reaches SSR.
+- **A type error inside a `<script>` is reported on the GENERATED line**, not the `.abide` one. A
+  template expression is emitted behind a marker and lifted into the source map; a `<script>` body has
+  its imports hoisted and merged, so it no longer lines up with the file. `remap` marks those
+  `[generated]` rather than moving them somewhere it cannot justify, and `test/types.test.ts` asserts
+  which diagnostics land where — so the gap cannot widen quietly, and the day it is closed that table
+  says which rows to promote.
 - **A transport's OPTIONS do not cross the wire**, and cannot: `GET(fn, { middleware: [auth] })` is
   server-side text, and an option may reference a server-only import, so there is nothing a stub
   could copy. What crosses is the consequence — a `ttl` arrives as an `abide-ttl` response header and
   the client's slot goes cold on the server's schedule. Tags do not cross, so `invalidate({ tags })`
-  reaches one side at a time. `opts.schemas` and `opts.clients` are spec'd and unbuilt.
+  reaches one side at a time. A declared shape is the same rule seen from the other end: `schemas`
+  never leaves the server, and what a caller sees is a 422 for an input that does not match. Only
+  `opts.clients` is spec'd and unbuilt.
+- **JSON Schema is what a declaration MEANS**, not something abide converts to on the way out. That
+  order is forced: Standard Schema is validate-only, so a shape declared through zod or valibot
+  cannot become a tool definition or an OpenAPI operation — a shape abide can only run is a shape
+  abide cannot publish. A plain function and a Standard Schema are alternative VALIDATORS over the
+  same call; the published shape comes from the JSON Schema, or from the type.
+- **The shape is derived from the type when nobody declares one**, syntactically, in the same
+  compiler pass that writes the browser stub. A derived shape may know less than the type does,
+  because under-constraining refuses nothing the handler would have accepted — but it may not be
+  wrong about which members EXIST: a published shape missing a required argument is one a machine
+  reading it builds a broken call from.
+- **An imported type is a filesystem question, not a type-checker one.** `elide` takes a `resolve`
+  that hands over another module's text rather than reading one itself, so the compiler stays a pure
+  function and a demo can still run it in a browser card. The Bun plugin supplies the real one,
+  lazily and cached; the browser lane never gets it, because the stub carries no shapes.
+- **A computed type needs the checker, so there is a second speed.** `Omit`, `Pick`, conditional and
+  mapped types, `enum`, a generic alias — no amount of text resolves those. `bun run shapes` runs the
+  real checker over the project and writes `.abide/shapes.json`, which the plugin reads. It only ever
+  UPGRADES: an endpoint it says nothing about keeps what the tokens said, so a stale file publishes
+  less rather than something wrong. It runs under NODE, because TS 7's checker is the native `tsgo`
+  binary behind a sync RPC channel reading a Node-internal fd that Bun does not expose.
+- **A `File` in the args is an argument**, not an upload endpoint: the client sends multipart because
+  the args held something JSON cannot carry, the JSON keeps a reference where the file sat, and the
+  handler gets the same one args object. A read takes that door too — what has no text form cannot
+  travel in a URL. Files are keyed by IDENTITY in the memo slot, because two files with the same name
+  and length are not the same file and reading them to find out is not something a cache key may do.
 - **A handler streams iff it is written `function*`.** The browser lane builds its stub from a file
   it never loads, so the syntax is the whole answer; a generator assembled elsewhere and passed in is
   not seen as one. Same rule `.abide` lives by, same reason.

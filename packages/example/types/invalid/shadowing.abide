@@ -1,0 +1,9 @@
+<script module>
+import { state } from 'abide'
+
+export const n = state(0)
+const held: typeof n = n
+export const later: number = n + 1
+</script>
+
+<p>{n}</p>

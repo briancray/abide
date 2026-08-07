@@ -24,6 +24,7 @@ import {
     isChunked,
     JSON_TYPE,
     MAX_GET_URL,
+    multipartBody,
     payloadOf,
     TTL_HEADER,
     wireError,
@@ -250,12 +251,14 @@ export function remote<Args, T>(id: string, options: RemoteOptions = {}): Rpc<Ar
     const address = options.base === undefined ? path : new URL(path, options.base).href
 
     // A read is an HTTP GET so the address says what it is and an intermediary may cache it; a
-    // mutation is its own method with a body. The one branch is the ceiling every proxy puts on a
-    // URL — over it, a read's args travel in a body, which the server accepts for exactly this.
+    // mutation is its own method with a body. Two things send a read to a body instead, and they are
+    // the same thing twice: the args do not fit in a URL. One is the ceiling every proxy puts on
+    // length; the other is a FILE, which has no text form at all. The server accepts a body for a
+    // read for exactly this reason, so neither is a second endpoint.
     function ask(args: Args, init?: RequestInit): Promise<Response> {
         const encoded = encodeArgs(args)
-        if (method === 'GET') {
-            const url = address + argsQuery(encoded)
+        if (method === 'GET' && encoded.files === null) {
+            const url = address + argsQuery(encoded.text)
             if (url.length <= MAX_GET_URL) {
                 const headers = continued(init?.headers as Record<string, string> | undefined)
                 // The key is omitted rather than set to `undefined`: a read with no headers at all is
@@ -265,11 +268,21 @@ export function remote<Args, T>(id: string, options: RemoteOptions = {}): Rpc<Ar
                     : send(url, { method: 'GET', ...init, headers })
             }
         }
+        const sending = method === 'GET' ? 'POST' : method
+        if (encoded.files !== null) {
+            // No `content-type` of our own: `fetch` writes one naming the boundary it chose, and a
+            // header saying otherwise is a body nothing on the other side can parse.
+            const headers = continued(init?.headers as Record<string, string> | undefined)
+            const body = multipartBody(encoded)
+            return headers === undefined
+                ? send(address, { ...init, method: sending, body })
+                : send(address, { ...init, method: sending, headers, body })
+        }
         return send(address, {
             ...init,
-            method: method === 'GET' ? 'POST' : method,
+            method: sending,
             headers: continued({ 'content-type': JSON_TYPE, ...(init?.headers as Record<string, string>) }),
-            body: encoded,
+            body: encoded.text,
         })
     }
 
@@ -433,7 +446,7 @@ export function remoteSocket<T, Args = void>(
 function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Connection<T> {
     const received = channel<T>(options.channel)
     const path = SOCKET_PREFIX + id
-    const relative = args === undefined ? path : path + argsQuery(encodeArgs(args))
+    const relative = args === undefined ? path : path + argsQuery(encodeArgs(args).text)
     const base = options.base ?? (globalThis as { location?: { href: string } }).location?.href
     const address = base === undefined ? relative : new URL(relative, base).href
     const url = address.replace(/^http/, 'ws')

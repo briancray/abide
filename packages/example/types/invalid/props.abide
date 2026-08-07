@@ -1,0 +1,14 @@
+<script>
+import type { Book } from '../models.ts'
+
+type Args = {
+    book: Book
+    pages: number
+}
+</script>
+
+<article>
+    <h3>{args.book.title}</h3>
+    <p>{args.pages.toFixed(0)}</p>
+    <small>{args.missing}</small>
+</article>

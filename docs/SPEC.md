@@ -17,9 +17,11 @@ either.
 | --- | --- |
 | `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, `online()`, and the client half of both transports (`remote`, `remoteSocket`) |
 | `abide/ui` | the DOM substrate — `mount`, `hydrate` |
-| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`), `appDataDir()`, `server()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`) |
+| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`), `appDataDir()`, `server()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`, `Schema`) |
 | `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
 | `abide/compiler` | `compile()`, `elide()` and their diagnostics. Pure: text in, text out, no filesystem |
+| `abide/compiler/check` | the check lane: `emitFor` writes the module, its declaration and its map beside a `.abide`, and `remap` moves a `tsc` diagnostic back onto the `.abide` line |
+| `abide/compiler/shapes` | the second speed: `deriveShapes` runs the real checker over a project and answers with the shapes tokens cannot read |
 | `abide/compiler/plugin` | the Bun plugin: compiles `.abide` on import, and elides a transport module to the stub or the registration its lane needs |
 
 A handler is DECLARED through `abide/server` and CALLED through the module it lives in, so an app
@@ -36,7 +38,7 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 
 | Area | Absent |
 | --- | --- |
-| transport | `opts.schemas` / `opts.schema` and `opts.clients` — declaring a shape and which surfaces may reach a handler. Everything else in both laws is built |
+| transport | `opts.clients` — which surfaces may reach a handler, which says nothing until there is a surface other than the UI to name. Everything else in both laws is built |
 | ambients | `identity()` — a principal needs a resolver, which is a policy decision rather than plumbing — and `health()`, which is `onHealth` merged over a baseline and lands with the lifecycle hooks |
 | lifecycle | `onStart`/`onHealth`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) and the seven the logging half reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`, `ABIDE_LOGS`, `ABIDE_LOG_BUFFER`) |
 | the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it. `./app logs` is the one command whose ENDPOINT exists ahead of it: `GET /__abide/logs` is served, and what is missing is a client for it |
@@ -153,9 +155,10 @@ ownership rule, and the failure mode is a leak nobody sees.
 | `fn(args)` | SELECTS the slot and hands back its cell, exactly as a keyed `memo` does — an rpc IS one. Reading it is what reaches the handler, wherever the caller happens to be running. |
 | `fn(args, { signal })` | The same call, abandoned when the signal aborts, without affecting anyone else waiting on it. |
 | `fn.raw(args, init?)` | The same call, handed back as the raw response instead of a decoded value. |
+| a `File` in `args` | Travels as multipart, with the JSON keeping a REFERENCE where the file sat — the same one args object, so nothing about the declaration or the call says "upload". |
 | `for await (const c of fn(args))` | Consumes a handler that yields chunks, replaying what already happened before following what comes next. A handler yields iff it is declared `function*`, which is how the browser lane knows without a type-checker. |
 | `opts.description` | The human description carried onto every generated surface. |
-| `opts.schemas` *(not built)* | The declared shape of the input, output and files, enforced at every door the call can arrive through. |
+| `opts.schemas` | The declared shape of the input and the output, enforced at every door the call can arrive through. Derived from the handler's TYPE when nothing is declared, so an endpoint publishes what it takes without anyone writing the same fact twice. A `File` is a member like any other — `{ type: 'string', format: 'binary' }` — so there is no files option and no upload endpoint. |
 | `opts.clients` *(not built)* | Which surfaces — UI, MCP, CLI — can reach this handler at all. |
 | `opts.middleware` | The chain that authorizes and observes every read, from every caller, including in-process ones. |
 | `opts.memo` | `memo` options; What the call retains, how long, and under which tags. |
@@ -172,7 +175,7 @@ ownership rule, and the failure mode is a leak nobody sees.
 | `sock.publish(msg)` | Sends one message to every subscriber, fire-and-forget. |
 | `opts.channel` | `channel` options; The underlying stream's own memory: how many messages it keeps and how long one stays current. |
 | `opts.clientPublish` | Whether clients may publish at all, and if so what happens to what they send. `false` by default — a socket is a broadcast until an app says otherwise. |
-| `opts.schema` *(not built)* | The declared shape of a message. |
+| `opts.schema` | The declared shape of a message a CLIENT sends — the wire is the only door one arrives through from outside the process. |
 | `opts.clients` *(not built)* | Which surfaces can reach it. |
 | `opts.middleware` | The chain that authorizes each subscribe and each publish, per room. |
 
@@ -224,6 +227,138 @@ milliseconds, and the client's slot goes cold on the server's schedule. Tags do 
 A failure crosses as `{ name, message }` and is rebuilt with its name, which is what makes
 `isError(e, name)` answer over a wire — the NAME rather than the class, because `instanceof` on a
 deserialised error is false however faithfully it was written out.
+
+A declared shape is checked in the memo's BODY, which is the one place every door leads to: the wire
+call, the in-process call and a handler another handler reaches all run it, so there is no door that
+could be added later and forget to. A schema RETURNS what it accepts, so it normalises as well as
+refuses — and the slot stays keyed by what the CALLER asked with, because the key is the question,
+and two spellings of one question are two slots holding one answer. An input that does not match is
+the caller's fault and answers 422; an output that does not is ours and answers 500, checked per
+CHUNK on a handler that yields, since a shape checked only at the end is one nothing on the other
+side was reading by then. Both travel under the name `AbideSchemaError`, so `isError` asks about
+them the way it asks about anything else that crossed.
+
+JSON Schema is what a declaration MEANS, and the other two forms are alternative validators over the
+same call. That order is forced rather than chosen: Standard Schema — the interop spec zod, valibot
+and arktype all answer to — is validate-only, so a shape declared through one cannot become a tool
+definition, an OpenAPI operation, or anything else a machine reads BEFORE it calls. A shape abide can
+only run is a shape abide cannot publish. So a shape is one of three things: a **JSON Schema**, the
+native one; a **plain function**, which returns what it accepts and THROWS what it refuses, and is
+synchronous by that contract because there is nowhere in a throw to put a promise; or a **Standard
+Schema**, whose `validate` may return a promise. abide declares the Standard Schema interface itself
+and imports none of the libraries that implement it.
+
+A socket's `schema` is the WIRE's door and only the wire's, because the server half is `channel()`
+unchanged — an app publishing into its own stream is publishing a value it already holds rather than
+sending one, and a client message that does not match is dropped like every other refusal on that
+path.
+
+### The shape nobody wrote
+
+`GET(({ id }: { id: number }) => …)` already says what the call takes. Restating that in a schema is
+writing one fact twice and keeping the two in step by hand, so the compiler reads it off the
+annotation and appends it to the `register(...)` it already writes. A declared schema OVERRIDES the
+derivation; a derived one is what fills the gap, and it is enforced as well as published — a shape
+that only appeared in a document would be a claim nothing checks.
+
+| Read from | What it says |
+| --- | --- |
+| `GET<Args, T>(…)` | Both directions, explicitly. Wins, because an author who wrote the type arguments wrote them to be read. On a socket the first argument is the MESSAGE and the second is the room, which addresses a subscriber rather than travelling in one |
+| the first parameter's annotation | the input |
+| the return type's annotation | the output — and on a handler that yields, `AsyncGenerator<T>`'s argument, because a transcript is not one value |
+| a `type`/`interface` in the same file | resolved, including one that names another |
+| a type IMPORTED from another file | resolved, aliased or not, transitively, with a cycle guard — when the caller supplies a resolver |
+
+An imported type is a FILESYSTEM question rather than a type-checker one — an interface in another
+module is a plain interface, and the only thing one file's tokens lack is the other file's text. So
+`elide` takes a `resolve` rather than reaching for one: it still does no I/O, which is what keeps a
+demo case able to assert an elided module in a browser card, and `abide/compiler/plugin` is where the
+reading lives. It is consulted LAZILY, cached per module, and withheld from the browser lane
+entirely — the stub carries no shapes, so the lane that throws the module away also does none of the
+reads. Relative specifiers resolve beside the importer and anything else goes through Bun's resolver,
+so a `paths` alias misses; a specifier that does not resolve costs a shape rather than a build.
+
+SYNTACTICALLY, with the same scanner and for the same reason as everything else in the emit path:
+this runs in the browser lane too, on a file it is about to throw away. What that costs is reach, and
+the rule for every gap is the same — a derived shape may know LESS than the type does, because
+under-constraining refuses nothing the handler would have accepted, while over-constraining refuses a
+call that was correct at a door the author never wrote. So an unreadable member is the empty schema,
+which matches everything, and a type that is entirely unreadable publishes nothing at all.
+
+| Not derived | Why |
+| --- | --- |
+| an imported type with no resolver supplied | one file's tokens cannot reach another file's text, and the pure form of `compile`/`elide` is what a caller may rely on |
+| a generic alias, or a reference with type arguments | its body mentions a parameter nothing here can bind. The utility types that ARE understood are the ones whose meaning is structural: `Array`, `ReadonlyArray`, `Record`, `Partial`, `Readonly`, `NonNullable`, `Promise`/`Awaited`, and the async-iterable family |
+| `Pick` / `Omit` / `Required` / `Exclude` / `ReturnType` … | the same rule: a utility that has to compute over a type is one a checker computes |
+| `keyof`, `typeof`, conditional, mapped and template-literal types | readable by a checker, not by a scanner |
+| a TypeScript `enum` | a value declaration, not a type this reads |
+| a qualified name (`NS.Args`) | no part of it resolves from here |
+| a handler passed by NAME rather than written at the call site | the same limit `streams` has, for the same reason |
+| a `Map` or a `Set` | neither survives `JSON.stringify` — both come out `{}` — so a shape saying "object" or "array" would publish that breakage as a contract |
+| an intersection with a non-object side | only object literals merge |
+
+Three things it derives LOOSELY rather than not at all. A **tuple** becomes an array of whatever its
+positions hold, losing order and length. A **recursive** member stops at the cycle. And an object is
+left OPEN — `additionalProperties` is never `false` — because TypeScript's excess-property check is a
+rule about literals, not about values, and a caller passing one more field is not making a mistake
+the wire should refuse.
+
+An **output** is derived only from an explicit type argument or an annotated return type, and most
+handlers annotate neither — so `input` is the common case and `output` is the deliberate one.
+
+Where a value is one thing on the wire and another in the process, the PUBLISHED shape is the wire
+form, because that is what a machine reading the document is about to send: a `File` is
+`string`/`binary`, a `Date` and a `URL` are the strings their own `toJSON` makes of them. The gate
+accepts the local form beside it, since an in-process caller never encoded one.
+
+The shape reaches the SERVER lane only. The browser has the types already, and a schema in the stub
+would be bytes that answer nothing.
+
+### The second speed
+
+The token pass stops where a type has to be COMPUTED — `Omit<User, 'id'>`, a conditional, a mapped
+type, an `enum`, a generic alias. Unlike an import, that is not a filesystem problem: no amount of
+text resolves them, because resolving them is what a checker IS. So `abide/compiler/shapes` runs the
+real one over the whole project and writes what it found to `.abide/shapes.json`, which the Bun plugin
+reads and hands to `elide`.
+
+| | |
+| --- | --- |
+| what it adds | the computed types, and an OUTPUT for every endpoint — a declaration IS an `Rpc<Args, T>`, so both directions are on it whether or not a handler annotated a return |
+| how it joins | by `endpointId`, the same address the registration uses |
+| staleness | it only ever UPGRADES. An endpoint it says nothing about keeps what the tokens said, so a missing or old file costs detail in a published document and nothing else — which is the direction a derived shape is already allowed to be wrong in |
+| why a process | TypeScript 7's checker is the native `tsgo` binary behind a synchronous RPC channel that reads a Node-internal file descriptor. It cannot run under Bun, so the Node half holds the converter and knows nothing about abide; this half owns the address scheme |
+
+`bun run shapes` writes the file. Nothing requires it: without one, everything still compiles, serves
+and validates — it publishes less.
+
+### One answer, two derivations
+
+There are two passes that turn a type into a shape and there have to be: one reads TOKENS, one reads
+a checker's `Type`, from different inputs in different processes. What they must never differ about
+is the ANSWER — a shape whose spelling depends on whether a build step ran is a document nobody can
+diff, and "the second speed only upgrades" stops being true the moment they disagree.
+
+They did disagree, so every decision that turns parts into a schema is made in ONE place
+(`compiler/internal/assemble.ts`) and each derivation only supplies the parts: the empty-schema
+sentinel, the named formats, the union spelling, how an object and an array are built. A union's
+`type` list is SORTED, deliberately — source order reads better to a person and a checker cannot
+reproduce it, so the one order both halves can agree on is the one neither of them chose.
+
+`packages/example/test/shapes.test.ts` is what keeps it true: a fixture of types BOTH passes can read,
+asserted equal. The server's validator is the one list that cannot be shared — it may import neither
+half — so the formats the compiler publishes are asserted to be ones the validator accepts.
+
+### The projection
+
+| Form | Behavior |
+| --- | --- |
+| `endpoints()` *(`abide/server`)* | Every registered endpoint as `{ id, kind, method, description, streams, input, output }`, sorted by address so two runs of one app produce the same document. |
+| `GET /__abide/schema` | The same document over the wire. Open, unlike the log feed: every address in it is already in the client bundle, and the shape beside it is the contract for calling that address. |
+
+An MCP tool is `{ name: id, description, inputSchema: input }` and an OpenAPI operation is the same
+three facts under other names, so neither needs a generator in here. What they needed was for the
+shape to exist in a form other than a validator.
 
 `dispatch(request, server?)` is the whole server side: it returns `undefined` synchronously for a
 path outside `/__abide/`, so an app mounts it in front of its own routes and never thinks about it
@@ -543,12 +678,36 @@ and neither has any compiling of its own.
 | `locate(source, position)` | That position as one-based line and column, so an error names a place in the file. |
 | `describe(source, filename, error)` | A thrown compile failure as one `file:line:col message` string. Anything else stringifies unchanged. |
 | `ParseError` / `ElisionError` | The two classes, so a caller can tell a compile failure from any other throw. A lexer error deliberately is not exported — the shells only format it. |
-| `elide(source, { filename, browser })` | A transport module for one lane: `{ code, kind, endpoints }`, or `null` for a file under neither transport directory. One pass over one text produces BOTH lanes, so the browser's stub and the server's registration cannot disagree about an address. |
+| `elide(source, { filename, browser, resolve? })` | A transport module for one lane: `{ code, kind, endpoints }`, or `null` for a file under neither transport directory. One pass over one text produces BOTH lanes, so the browser's stub and the server's registration cannot disagree about an address. `resolve` hands over the text of a module a TYPE is imported from — the one thing a single file's tokens cannot supply, and still not I/O this function does. |
 | `endpointId(path, name)` / `kindOf(path)` | The address, and which law a module declares. Both are facts about the path. |
 | `abide/compiler/plugin` | The Bun plugin: compiles `.abide` on import and elides a transport module, in both lanes, off the same two pure functions. |
 
 Type errors inside a template are reported by the real checker, on the `.abide` line — that is what
-`segments` is for, and it is why the compiler owns a mapping rather than only emitting one.
+`segments` is for, and it is why the compiler owns a mapping rather than only emitting one. Inside a
+`<script>` they are reported on the line of the GENERATED module: its imports are hoisted and merged,
+so the body no longer lines up with the file and there is nothing to map it by. `remap` marks those
+`[generated]` rather than moving them somewhere it cannot justify.
+
+### Typing behaves the way the same TypeScript would
+
+A `<script>` is TypeScript and every position in it is checked as one. What the desugar rewrites is
+EXPRESSIONS: a type carries none, so a cell named inside a type is left exactly as the author wrote
+it — a `type` alias, an `interface` body, an annotation, `as`/`satisfies`, a type-parameter list and a
+type-argument list alike. The `<` ambiguity is resolved the way TypeScript resolves it, by
+speculative parse, using the same type grammar that reads a handler's arguments into a schema.
+
+| Form | Checked as |
+| --- | --- |
+| narrowing | a `{#if}`/`{#switch}` condition reads once into a `const`, so the branch narrows off a real type — and only the switched cell narrows |
+| imported types | resolved by the checker across the module boundary, exactly as in a `.ts` |
+| generics | a type argument reaches the read; a type-argument list in an expression is a type |
+| component props | `type Args` in a `<script>` types them, and is lifted to module scope so the signature can name it. Without one the signature is `Record<string, unknown>`, which checks a caller against nothing |
+| writes | `count = v` keeps the cell's type through the `set` it desugars to |
+
+A green typecheck cannot prove any of that on its own: `any` is assignable to everything, so a
+desugar that lost a type would still compile. `packages/example/types` is what closes it — the valid
+half asserts EXACT types through an identity check `any` cannot pass, and the invalid half is code
+that must be REJECTED, with the code and the `.abide` position asserted against real `tsc` output.
 
 ## The test kit — `abide/tests`
 

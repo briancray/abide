@@ -18,5 +18,11 @@ export const SOCKET_PREFIX = `${ABIDE_PREFIX}socket/`
  */
 export const LOGS_PATH = `${ABIDE_PREFIX}logs`
 
+/**
+ * Every endpoint's declared shape, as one document. Not a prefix either: it addresses the whole
+ * catalogue, and a per-endpoint address under it would be a second way to ask the same question.
+ */
+export const SCHEMA_PATH = `${ABIDE_PREFIX}schema`
+
 /** The query parameter carrying JSON args: a read's arguments, and a socket's room. */
 export const ARGS_PARAM = 'a'

@@ -575,7 +575,7 @@ export { pages } from './pages.ts'
 // The transport seam: what a handler is DECLARED as, and the one entry point that serves it. Here
 // rather than on the isomorphic surface because a handler's body must not reach a browser — the
 // compiler elides the whole module, and `abide` carries the stub's half.
-export { dispatch, register, registered, websocket } from './registry.ts'
+export { dispatch, endpoints, register, registered, websocket } from './registry.ts'
 // What an app's own route answers with. Server-side because a `Response` is: the browser lane reads
 // one, it never builds one.
 export {
@@ -597,6 +597,7 @@ export {
     PUT,
     type RpcMiddleware,
     type RpcOptions,
+    type RpcSchemas,
     type SocketEvent,
     type SocketMiddleware,
     type SocketOptions,
@@ -606,5 +607,17 @@ export {
 // `appDataDir` above it — Bun hands the instance to `fetch(request, self)` and nowhere else, and this
 // is what stops that being threaded through every layer under it.
 export { type RunningServer, server } from './running.ts'
+// The declared shape of what crosses a transport. Server-side because an option cannot cross the
+// wire: a schema is checked where the handler is, and the browser lane gets the address alone.
+export {
+    type EndpointShape,
+    type JsonSchema,
+    type JsonType,
+    SCHEMA_ERROR,
+    type Schema,
+    type Shapes,
+    type StandardSchemaV1,
+    validateJson,
+} from './schema.ts'
 // The caller scope and its ambients. `serve` is what makes every module-level `memo` per-request.
 export { bag, cookies, isServing, request, serve, type Trace, trace } from './scopes.ts'

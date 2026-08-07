@@ -10,6 +10,7 @@
 
 import { type Channel, type ChannelOptions, channel, type RoomChannel } from '$shared/channel.ts'
 import { isThenable } from '$shared/internal/probes.ts'
+import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { arm } from '$shared/internal/timers.ts'
 import {
     chunkedBody,
@@ -23,6 +24,7 @@ import { envNumber } from '$shared/log.ts'
 import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
 import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { headersFor } from './responses.ts'
+import { type Gate, gate, publishable, type Schema } from './schema.ts'
 
 /**
  * The chain that authorizes and observes every call, INCLUDING an in-process one.
@@ -37,11 +39,32 @@ export type RpcMiddleware<Args, T> = (
     args: Args,
 ) => T | Promise<T> | AsyncIterable<T>
 
+/**
+ * The declared shape of a call, in each direction.
+ *
+ * Checked in the memo's BODY, which is the one place every door leads to: a wire call, an
+ * in-process call and a handler another handler reaches all run it, so there is no door that could
+ * be added later and forget to. A schema RETURNS what it accepts, so a normaliser is one too — the
+ * handler is handed what the input schema produced, and a caller is answered what the output one
+ * did.
+ *
+ * The slot is still keyed by what the CALLER asked with, not by what the schema made of it: the key
+ * is the question, and two spellings of one question are two slots holding the same answer.
+ */
+export interface RpcSchemas<Args, T> {
+    /** What a caller may send. A shape that does not match is the caller's fault, so it answers 422. */
+    input?: Schema<Args>
+    /** What the handler may answer with — per CHUNK on one that yields. This fault is ours: 500. */
+    output?: Schema<T>
+}
+
 export interface RpcOptions<Args = unknown, T = unknown> {
     /** The human description carried onto every generated surface. */
     description?: string
     /** What the call retains, how long, and under which tags. */
     memo?: MemoOptions<Args>
+    /** The declared shape of the input and the output, enforced at every door the call arrives through. */
+    schemas?: RpcSchemas<Args, T>
     middleware?: RpcMiddleware<Args, T>[]
     /** ms the call may go without progress before it fails. Per chunk on a handler that yields. */
     timeout?: number
@@ -62,6 +85,24 @@ export interface RpcPolicy {
     maxBodySize: number
     /** How long the client may serve what it loads, in ms. `Infinity` says nothing on the wire. */
     ttl: number
+    /** The handler yields, so the answer arrives as chunks. Published, because a caller plans for it. */
+    streams: boolean
+    /**
+     * The PUBLISHED shape in each direction — what a tool definition or an OpenAPI document reads.
+     *
+     * A declared JSON Schema, or what the compiler derived from the type when the declaration was a
+     * validator that can only answer "does this match". Both may be present at once, and they are
+     * not the same question: one is checked, the other is published.
+     */
+    input: JsonSchema | null
+    output: JsonSchema | null
+    /**
+     * The gates. Built at the declaration when a schema was declared, and when the module registers
+     * otherwise — which is before anything can call, because the registration is appended to the
+     * module that declares it. `null` on both means nothing to check and nothing to pay for it.
+     */
+    checkInput: Gate<unknown> | null
+    checkOutput: Gate<unknown> | null
 }
 
 const RPC_POLICY = new WeakMap<object, RpcPolicy>()
@@ -74,6 +115,28 @@ export function policyOf(rpc: object): RpcPolicy | undefined {
 export function nameRpc(rpc: object, address: string): void {
     const policy = RPC_POLICY.get(rpc)
     if (policy !== undefined) policy.address = address
+}
+
+/**
+ * The shapes the compiler derived from the declaration's TYPE, handed over when the module registers.
+ *
+ * They FILL IN rather than override: a declared schema is an author saying something the type does
+ * not, so the derivation loses. What it still supplies in that case is the published shape, because
+ * a validator and a library schema both answer "does this match" and neither answers "what is it".
+ */
+export function describeRpc(rpc: object, shapes: Shapes | undefined): void {
+    const policy = RPC_POLICY.get(rpc)
+    if (policy === undefined || shapes === undefined) return
+    const input = shapes.input
+    if (input !== undefined) {
+        policy.input ??= input
+        policy.checkInput ??= gate(input, 'input', 422, policy) as Gate<unknown>
+    }
+    const output = shapes.output
+    if (output !== undefined) {
+        policy.output ??= output
+        policy.checkOutput ??= gate(output, 'output', 500, policy) as Gate<unknown>
+    }
 }
 
 const NO_TIMEOUT = Infinity
@@ -146,34 +209,63 @@ function declare<Args, T>(
 
     // A read retains what it loaded; a mutation retains nothing, which is `ttl: 0` — the slot still
     // coalesces the callers waiting on one in-flight call, and the next read runs the body again.
-    const declared = options.memo
-    const ttl = declared?.ttl ?? (method === 'GET' ? Infinity : 0)
+    const retention = options.memo
+    const ttl = retention?.ttl ?? (method === 'GET' ? Infinity : 0)
+    const declared = options.schemas
     const policy: RpcPolicy = {
         address: method,
         crossOrigin: options.crossOrigin ?? null,
         maxBodySize: options.maxBodySize ?? envNumber('ABIDE_MAX_REQUEST_BODY_SIZE', Infinity),
         ttl,
+        streams,
+        input: publishable(declared?.input),
+        output: publishable(declared?.output),
+        checkInput: null,
+        checkOutput: null,
     }
+    // Built once, at the declaration, and `null` when no shape was declared — which is the whole
+    // cost of a schema to an endpoint that has none. The gates take the policy rather than its
+    // address, because the address is not known until the module registers, and they live ON it
+    // because a shape the compiler derived arrives at that same moment.
+    policy.checkInput = gate(declared?.input, 'input', 422, policy) as Gate<unknown> | null
+    // A handler that answered the wrong shape is OUR fault, not the caller's, so it is not a 422.
+    policy.checkOutput = gate(declared?.output, 'output', 500, policy) as Gate<unknown> | null
 
     // A stream is re-wrapped as a generator RETURNED SYNCHRONOUSLY, so a middleware that awaits
     // cannot turn the whole transcript into one value: the cell decides between a load and a stream
-    // by what it is handed in the call, and a promise of a generator is a load.
+    // by what it is handed in the call, and a promise of a generator is a load. The input gate is
+    // therefore INSIDE the generator rather than in `load` below, for the same reason.
     async function* streamed(args: Args): AsyncGenerator<T> {
-        const produced = run(args)
+        const input = policy.checkInput
+        const output = policy.checkOutput
+        let checked = args
+        if (input !== null) {
+            const gated = input(args)
+            checked = (isThenable(gated) ? await gated : gated) as Args
+        }
+        const produced = run(checked)
         const source = (isThenable(produced) ? await produced : produced) as AsyncIterable<T>
-        if (limit === NO_TIMEOUT) {
+        if (limit === NO_TIMEOUT && output === null) {
             yield* source
             return
         }
         const iterator = source[Symbol.asyncIterator]()
         // Built ONCE for the stream, not once per chunk: constructing an `Error` captures a stack,
         // and the timeout is the exception this arms for, never the value it hands back.
-        const failure = timeoutError(policy.address, 'stopped producing', limit)
+        const failure = limit === NO_TIMEOUT ? null : timeoutError(policy.address, 'stopped producing', limit)
         try {
             for (;;) {
-                const step = await race(iterator.next(), limit, failure)
+                const stepping = iterator.next()
+                const step = failure === null ? await stepping : await race(stepping, limit, failure)
                 if (step.done === true) return
-                yield step.value
+                if (output === null) {
+                    yield step.value
+                    continue
+                }
+                // Per CHUNK: a transcript is not one value, and a shape checked only at the end is a
+                // shape nothing on the other side was reading by then.
+                const gated = output(step.value)
+                yield (isThenable(gated) ? await gated : gated) as T
             }
         } finally {
             await iterator.return?.()
@@ -182,15 +274,33 @@ function declare<Args, T>(
 
     function load(args: Args): Produced<T> {
         if (streams) return streamed(args)
-        const produced = run(args)
-        // Guarded, never awaited: a synchronous handler must settle IN THE CALL, with no promise
-        // wrap and no microtask before the first read sees it.
-        if (limit === NO_TIMEOUT || !isThenable(produced)) return produced
-        const failure = timeoutError(policy.address, 'did not settle', limit)
-        return race(produced as PromiseLike<T>, limit, failure)
+        const input = policy.checkInput
+        if (input === null) return produce(args)
+        // Guarded: a schema that settles in the call — every hand-written one, and every library one
+        // over a plain object — must leave a synchronous handler settling in the call too.
+        const gated = input(args)
+        if (!isThenable(gated)) return produce(gated as Args)
+        return (gated as Promise<Args>).then(produce) as Produced<T>
     }
 
-    const cache: MemoOptions<Args> = { ...declared, ttl }
+    function produce(args: Args): Produced<T> {
+        const produced = run(args)
+        const output = policy.checkOutput
+        // Guarded, never awaited: a synchronous handler must settle IN THE CALL, with no promise
+        // wrap and no microtask before the first read sees it.
+        if (!isThenable(produced)) return output === null ? produced : (output(produced) as Produced<T>)
+        const settling: Promise<T> =
+            limit === NO_TIMEOUT
+                ? (produced as Promise<T>)
+                : race(
+                      produced as PromiseLike<T>,
+                      limit,
+                      timeoutError(policy.address, 'did not settle', limit),
+                  )
+        return output === null ? settling : (settling.then(output) as Promise<T>)
+    }
+
+    const cache: MemoOptions<Args> = { ...retention, ttl }
     const call = memo(load as (args: Args) => T, cache) as KeyedMemo<Args, T>
 
     const rpc: Rpc<Args, T> = asRpc(call, {
@@ -350,12 +460,26 @@ export interface SocketOptions<T = unknown, Args = unknown> {
      * publish into a room is a client that can write to every subscriber of it.
      */
     clientPublish?: false | ((message: T, room: Args | undefined) => void | Promise<void>)
+    /**
+     * The declared shape of a message a CLIENT sends.
+     *
+     * The wire is the only door a message arrives through from outside the process, and it is the
+     * only place this is checked: the server half of a socket is `channel()` unchanged, so an app
+     * publishing into its own stream is publishing a value it already holds, not sending one.
+     */
+    schema?: Schema<T>
     middleware?: SocketMiddleware<T, Args>[]
     crossOrigin?: string[]
 }
 
 export interface SocketPolicy {
+    /** What a diagnostic calls it. The kind until the module registers, like an rpc's. */
+    address: string
     clientPublish: false | ((message: unknown, room: unknown) => void | Promise<void>)
+    /** The PUBLISHED message shape — declared, or derived from the socket's first type argument. */
+    message: JsonSchema | null
+    /** The gate over an inbound one, or `null` when there is nothing to check. */
+    checkMessage: Gate<unknown> | null
     middleware: SocketMiddleware<unknown, unknown>[]
     crossOrigin: string[] | null
 }
@@ -364,6 +488,20 @@ const SOCKET_POLICY = new WeakMap<object, SocketPolicy>()
 
 export function socketPolicyOf(stream: object): SocketPolicy | undefined {
     return SOCKET_POLICY.get(stream)
+}
+
+/** The socket half of `nameRpc`, called by the registry once it knows where the declaration lives. */
+export function nameSocket(stream: object, address: string): void {
+    const policy = SOCKET_POLICY.get(stream)
+    if (policy !== undefined) policy.address = address
+}
+
+/** The socket half of `describeRpc`. A socket's `input` is its MESSAGE; it answers nothing. */
+export function describeSocket(stream: object, shapes: Shapes | undefined): void {
+    const policy = SOCKET_POLICY.get(stream)
+    if (policy === undefined || shapes?.input === undefined) return
+    policy.message ??= shapes.input
+    policy.checkMessage ??= gate(shapes.input, 'message', 422, policy) as Gate<unknown>
 }
 
 /**
@@ -377,11 +515,18 @@ export function socket<T>(options?: SocketOptions<T, void>): Channel<T>
 export function socket<T, Args>(options?: SocketOptions<T, Args>): RoomChannel<Args, T>
 export function socket<T, Args>(options: SocketOptions<T, Args> = {}): Channel<T> & RoomChannel<Args, T> {
     const stream = channel<T, Args>(options.channel) as Channel<T> & RoomChannel<Args, T>
-    SOCKET_POLICY.set(stream, {
+    const policy: SocketPolicy = {
+        address: 'socket',
         clientPublish: (options.clientPublish ?? false) as SocketPolicy['clientPublish'],
+        message: publishable(options.schema as Schema<unknown> | undefined),
+        checkMessage: null,
         middleware: (options.middleware ?? []) as SocketMiddleware<unknown, unknown>[],
         crossOrigin: options.crossOrigin ?? null,
-    })
+    }
+    // After the policy exists, because the gate reads the address off it at the throw — it is the
+    // same object `nameSocket` writes to when the module registers.
+    policy.checkMessage = gate(options.schema as Schema<unknown> | undefined, 'message', 422, policy)
+    SOCKET_POLICY.set(stream, policy)
     return stream
 }
 

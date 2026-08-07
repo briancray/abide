@@ -4,9 +4,18 @@
 // and through `[serve.static] plugins` for the browser bundle, so the SAME compiler output runs in
 // every lane — there is no build step whose result could differ from what the tests loaded.
 
+import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { BunPlugin } from 'bun'
-import { compile, describe, elide, TRANSPORT_MODULE } from './index.ts'
+import {
+    compile,
+    describe,
+    type ElideOptions,
+    elide,
+    type ImportedModule,
+    SHAPES_FILE,
+    TRANSPORT_MODULE,
+} from './index.ts'
 
 // `import source from './x.abide?source'` — the file's own TEXT, as a module.
 //
@@ -28,6 +37,73 @@ import { compile, describe, elide, TRANSPORT_MODULE } from './index.ts'
 const SOURCE_QUERY = '?source'
 const SOURCE_NAMESPACE = 'abide-source'
 
+/**
+ * The text of a module a transport file imports a TYPE from.
+ *
+ * Injected into `elide`, which does no I/O of its own — so this is where the filesystem lives and
+ * the compiler stays a pure function of text. Read SYNCHRONOUSLY because the derivation is.
+ *
+ * TWO caches, because the two halves depend on different things: what a specifier resolves to
+ * depends on the importer, and what a path holds does not. Keying the read by importer as well made
+ * a models module every handler's args come from one `readFileSync` PER TRANSPORT FILE.
+ *
+ * Relative specifiers resolve beside the importer; anything else goes through Bun's own resolver, so
+ * a workspace package works and a tsconfig `paths` alias does not — which costs a shape rather than a
+ * build, because a name that does not resolve is one the derivation already knows how to answer.
+ */
+const RESOLVED = new Map<string, string | null>()
+const TEXTS = new Map<string, ImportedModule | null>()
+
+/**
+ * What the checker derived, if a build ever ran it.
+ *
+ * Read ONCE and never required: `abide/compiler/shapes` is a build step, and an app that has not run
+ * one gets exactly the shapes the tokens said. It only ever upgrades, so a file that is missing, old,
+ * or unreadable costs detail in a published document and nothing else — which is why this swallows
+ * every way of failing rather than reporting any of them.
+ */
+type Checked = NonNullable<ElideOptions['shapes']>
+
+let CHECKED: Checked | null = null
+
+function checked(): Checked {
+    if (CHECKED !== null) return CHECKED
+    try {
+        CHECKED = JSON.parse(readFileSync(resolve(process.cwd(), SHAPES_FILE), 'utf8')) as Checked
+    } catch {
+        CHECKED = {}
+    }
+    return CHECKED
+}
+
+function moduleFor(specifier: string, importer: string): ImportedModule | null {
+    const key = `${importer}\u0000${specifier}`
+    // A module that does not resolve or does not read is one with no shape to offer. The build is
+    // not this function's to fail: every caller already treats a missing type as unknown.
+    let path = RESOLVED.get(key)
+    if (path === undefined) {
+        try {
+            const from = dirname(importer)
+            path = specifier.startsWith('.') ? resolve(from, specifier) : Bun.resolveSync(specifier, from)
+        } catch {
+            path = null
+        }
+        RESOLVED.set(key, path)
+    }
+    if (path === null) return null
+
+    const held = TEXTS.get(path)
+    if (held !== undefined) return held
+    let found: ImportedModule | null = null
+    try {
+        found = { path, text: readFileSync(path, 'utf8') }
+    } catch {
+        found = null
+    }
+    TEXTS.set(path, found)
+    return found
+}
+
 export const abidePlugin: BunPlugin = {
     name: 'abide',
     setup(build): void {
@@ -44,7 +120,12 @@ export const abidePlugin: BunPlugin = {
         build.onLoad({ filter: TRANSPORT_MODULE }, async (args) => {
             const source = await Bun.file(args.path).text()
             try {
-                const elided = elide(source, { filename: args.path, browser })
+                const elided = elide(source, {
+                    filename: args.path,
+                    browser,
+                    resolve: moduleFor,
+                    shapes: checked(),
+                })
                 if (elided === null) return undefined
                 return { loader: 'ts', contents: elided.code }
             } catch (error) {

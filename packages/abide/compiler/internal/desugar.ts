@@ -29,6 +29,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { Lexer, SyntaxError_, type Token } from './lex.ts'
+import { inObjectLiteral, typeRegions } from './types.ts'
 
 /**
  * The verbs every source carries (SPEC, "The shared surface"). Reserved: `x.set` is the verb, and
@@ -168,9 +169,12 @@ function tokenize(source: string, from: number, to: number): Cursor {
  * The token indices a binding pattern introduces. An identifier followed by `:` is an object-pattern
  * KEY, not a binding — `{ a: b }` binds `b`. An identifier after `.` is a property.
  */
-function boundNames(cursor: Cursor, from: number, to: number): number[] {
+function boundNames(cursor: Cursor, from: number, to: number, inType?: Uint8Array): number[] {
     const indices: number[] = []
     for (let i = from; i < to; i++) {
+        // `const a: typeof n = n` names `a` and mentions `n`. Without this the annotation's `n` was
+        // collected as a binding, which shadowed the cell for the rest of the block.
+        if (inType?.[i] === 1) continue
         const token = cursor.tokens[i] as Token
         if (token.kind !== SyntaxKind.Identifier) continue
         const previous = cursor.tokens[i - 1]
@@ -250,6 +254,11 @@ export function desugar(
 
     const cursor = tokenize(source, from, to)
     const { tokens, nesting } = cursor
+    // A type carries no expressions, so nothing in one is a read, a write, or a binding. Computed
+    // ONCE for the region and consulted by both passes: pass one would otherwise collect the `n` in
+    // `const a: typeof n = n` as a bound name and shadow the cell for the rest of the block, and
+    // pass two would rewrite `type A = typeof n` into a call.
+    const inType = typeRegions(source, tokens, nesting, expression)
     const edits: Edit[] = []
 
     // Pass one collects the bindings, because a parameter is written BEFORE the scope it opens:
@@ -283,7 +292,7 @@ export function desugar(
             let indices: number[] = []
             if (previous?.kind === SyntaxKind.CloseParenToken) {
                 const open = matchBackwards(cursor, i - 1)
-                if (open >= 0) indices = boundNames(cursor, open + 1, i - 1)
+                if (open >= 0) indices = boundNames(cursor, open + 1, i - 1, inType)
             } else if (previous?.kind === SyntaxKind.Identifier) {
                 indices = [i - 1]
             }
@@ -310,7 +319,7 @@ export function desugar(
                 }
                 end++
             }
-            const names = boundNames(cursor, i + 1, end)
+            const names = boundNames(cursor, i + 1, end, inType)
 
             // `const count = state(0)` DECLARES the cell rather than hiding one, so it must not
             // shadow: treating it like any other binding makes the name reactive everywhere except
@@ -342,7 +351,7 @@ export function desugar(
             let open = i + 1
             while (open < tokens.length && (tokens[open] as Token).kind !== SyntaxKind.OpenParenToken) open++
             const close = open < tokens.length ? matchForwards(cursor, open) : -1
-            bind(boundNames(cursor, i + 1, close < 0 ? open : close), i, level, false)
+            bind(boundNames(cursor, i + 1, close < 0 ? open : close, inType), i, level, false)
         }
     }
 
@@ -370,7 +379,7 @@ export function desugar(
         const opened = opens.get(i)
         if (opened !== undefined) frames.push(opened)
 
-        if (token.kind !== SyntaxKind.Identifier || binding.has(i)) continue
+        if (token.kind !== SyntaxKind.Identifier || binding.has(i) || inType[i] === 1) continue
         const name = token.text
         const previous = tokens[i - 1]
         const next = tokens[i + 1]
@@ -490,7 +499,7 @@ export function desugar(
         const shorthand =
             (previous?.kind === SyntaxKind.OpenBraceToken || previous?.kind === SyntaxKind.CommaToken) &&
             (next?.kind === SyntaxKind.CommaToken || next?.kind === SyntaxKind.CloseBraceToken) &&
-            inObjectLiteral(cursor, i, expression)
+            inObjectLiteral(cursor.tokens, cursor.nesting, i, expression)
         reads.push({ key: name, start: token.start, end: token.end, keyed: false })
         const local = hoisted.get(name)
         const read = local ?? `${name}()`
@@ -541,30 +550,6 @@ function assignmentEnd(
     }
     const last = cursor.tokens[i - 1] as Token
     return { start: first.start, end: last.end }
-}
-
-/** Is the brace enclosing token `i` an object literal rather than a block? */
-function inObjectLiteral(cursor: Cursor, i: number, expression: boolean): boolean {
-    const level = cursor.nesting[i] as number
-    for (let back = i - 1; back >= 0; back--) {
-        if ((cursor.nesting[back] as number) !== level) continue
-        const token = cursor.tokens[back] as Token
-        if (token.kind !== SyntaxKind.OpenBraceToken) continue
-        // A `{` that follows `=>`, `)`, `;` or nothing opens a BLOCK; after `(`, `,`, `=`, `:` or
-        // `return` it opens an object literal. With nothing before it, the region's own kind
-        // decides: a template expression is an expression, a `<script>` body is statements.
-        const before = cursor.tokens[back - 1]
-        if (before === undefined) return expression
-        return (
-            before.kind === SyntaxKind.OpenParenToken ||
-            before.kind === SyntaxKind.CommaToken ||
-            before.kind === SyntaxKind.EqualsToken ||
-            before.kind === SyntaxKind.ColonToken ||
-            before.kind === SyntaxKind.OpenBracketToken ||
-            before.kind === SyntaxKind.ReturnKeyword
-        )
-    }
-    return false
 }
 
 // Edits are produced in token order, but a write emits its closing `)` at a position the walk has

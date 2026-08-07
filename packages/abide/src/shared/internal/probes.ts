@@ -1,4 +1,4 @@
-// The two "what kind of thing is this?" probes both lanes ask of every value they handle.
+// The "what kind of thing is this?" probes both lanes ask of every value they handle.
 //
 // A leaf on purpose: it imports nothing, so the server's emit path and the reactive graph can both
 // have it without the emit path pulling in reactivity. One implementation because the two lanes have
@@ -21,6 +21,40 @@ export function isAsyncIterable(value: unknown): value is AsyncIterable<unknown>
     const type = typeof value
     if (type !== 'object' && type !== 'function') return false
     return typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
+}
+
+const HAS_BLOB = typeof Blob !== 'undefined'
+
+/**
+ * `Blob`, which `File` extends — the one value in a call that is not JSON.
+ *
+ * One implementation because three paths decide the SAME thing about it and have to agree: the
+ * encoder pulls it out into multipart, the memo key tags it by identity rather than by its (empty)
+ * JSON form, and the validator answers `format: 'binary'` with it. One of them learning a new
+ * spelling the others do not is a value that is multiparted but not tagged, or tagged but refused.
+ */
+export function isFile(value: unknown): value is Blob {
+    return HAS_BLOB && value instanceof Blob
+}
+
+/**
+ * Does anything in this graph need the slow encode?
+ *
+ * A `JSON.stringify` replacer takes the engine OFF its native serializer and calls back once per
+ * key, and the calls that carry a file are the rare ones — so the question is asked first and the
+ * replacer is passed only when the answer is yes. `for…in` is a superset of what `stringify` walks,
+ * so this can over-answer (which costs the general path) and never under-answer.
+ */
+export function hasFile(value: unknown): boolean {
+    if (value === null || typeof value !== 'object') return false
+    if (isFile(value)) return true
+    if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) if (hasFile(value[i])) return true
+        return false
+    }
+    const held = value as Record<string, unknown>
+    for (const name in held) if (hasFile(held[name])) return true
+    return false
 }
 
 // How deep a `cause` chain is followed. A cap rather than a seen-set: a cycle is the only thing an

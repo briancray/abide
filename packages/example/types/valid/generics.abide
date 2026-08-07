@@ -1,0 +1,38 @@
+<script module>
+import { memo, state } from 'abide'
+import type { Book, Paged } from '../models.ts'
+import { shelve } from '../models.ts'
+import { assertType, type Exact } from '../exact.ts'
+
+// A generic declared in the file and one imported from beside it. Neither is a shape the compiler
+// can derive, and both are types the CHECKER resolves exactly as it would in any `.ts` file —
+// which is the distinction the whole lane exists to hold apart.
+type Pair<A, B> = { left: A; right: B }
+
+function first<T>(items: T[]): T | undefined {
+    return items[0]
+}
+
+export const books = state<Book[]>([])
+export const page = memo((): Paged<Book> => shelve(books()))
+export const pair = state<Pair<string, number>>({ left: 'a', right: 1 })
+
+// The generic's argument reaches the read. Widened to `Book[]` or collapsed to `any`, these fail.
+assertType<Exact<ReturnType<typeof books>, Book[]>>()
+// A DERIVED memo computes on the read, so it is never empty — unlike a loaded one.
+assertType<Exact<ReturnType<typeof page>, Paged<Book>>>()
+assertType<Exact<ReturnType<typeof pair>, Pair<string, number>>>()
+assertType<Exact<ReturnType<typeof first<Book>>, Book | undefined>>()
+
+// A type ARGUMENT list in an expression, which the desugar has to leave alone while still reading
+// the cell that follows it.
+export const held = new Map<string, typeof books>([['books', books]])
+assertType<Exact<typeof held, Map<string, typeof books>>>()
+</script>
+
+<ul>
+    {#for book, i of page().items by book.title}
+        <li>{i + 1}. {book.title} — {book.author.name}</li>
+    {/for}
+    <li>{pair.left} / {pair.right}</li>
+</ul>

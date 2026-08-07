@@ -6,7 +6,7 @@
 // is false however faithfully it was serialised.
 
 import { ARGS_PARAM } from './PATHS.ts'
-import { isThenable } from './probes.ts'
+import { hasFile, isFile, isThenable } from './probes.ts'
 
 /** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */
 export const NDJSON_TYPE = 'application/x-ndjson'
@@ -31,20 +31,77 @@ export const TTL_HEADER = 'abide-ttl'
  */
 export const MAX_GET_URL = 2000
 
+/** The one door a value that is not JSON arrives through. */
+export const MULTIPART_TYPE = 'multipart/form-data'
+
 /**
- * A call's args as the JSON that carries them.
+ * Where a file SAT in the args, written into the JSON in its place.
+ *
+ * A file travels beside the args rather than in them, and this is the hole it came out of — so a
+ * call carrying one is the SAME call, with the same one args object, rather than a second calling
+ * convention an author has to learn. Position rather than name, so a file nested in an array or an
+ * object is put back exactly where the caller had it.
+ */
+const FILE_REF = '__abide_file'
+
+/** A call's args, encoded once: the JSON that carries them, and the files that JSON points at. */
+export interface Encoded {
+    text: string
+    /** `null` when the args are plain JSON, which is the whole of the ordinary path. */
+    files: [name: string, file: Blob][] | null
+}
+
+// Filled by `carry` during ONE synchronous `JSON.stringify` and read back on the next line. Module
+// scope rather than a closure per call, because `JSON.stringify` cannot yield: there is no second
+// encode that could interleave with this one, and a call that carries no file allocates nothing.
+let carried: [name: string, file: Blob][] | null = null
+
+function carry(_key: string, value: unknown): unknown {
+    if (!isFile(value)) return value
+    if (carried === null) carried = []
+    const at = `f${carried.length}`
+    carried.push([at, value])
+    return { [FILE_REF]: at }
+}
+
+/**
+ * A call's args as the JSON that carries them, and whatever in them was not JSON.
  *
  * `?? null` because `undefined` is not JSON: an argless call has to travel as SOMETHING, and `null`
  * is what `decodeArgs` maps back — otherwise an in-process call and a wire call would hand the
  * handler different args.
  */
-export function encodeArgs(args: unknown): string {
-    return JSON.stringify(args ?? null)
+export function encodeArgs(args: unknown): Encoded {
+    // Asked before encoding rather than answered during it: a replacer takes `JSON.stringify` off
+    // its native serializer for every key in the graph, and a call carrying a file is the exception.
+    if (!hasFile(args)) return { text: JSON.stringify(args ?? null) ?? 'null', files: null }
+    carried = null
+    const text = JSON.stringify(args, carry) ?? 'null'
+    const files = carried
+    carried = null
+    return { text, files }
 }
 
 /** The same args as the query a read and a socket upgrade carry them in. */
-export function argsQuery(encoded: string): string {
-    return `?${ARGS_PARAM}=${encodeURIComponent(encoded)}`
+export function argsQuery(text: string): string {
+    return `?${ARGS_PARAM}=${encodeURIComponent(text)}`
+}
+
+/**
+ * The multipart body, when the args held something JSON cannot carry.
+ *
+ * The content-type is deliberately NOT set anywhere: only `fetch` knows the boundary it is about to
+ * write, and a header naming one it did not choose is a body no server can read.
+ */
+export function multipartBody(encoded: Encoded): FormData {
+    const form = new FormData()
+    form.set(ARGS_PARAM, encoded.text)
+    for (const [name, file] of encoded.files as [string, Blob][]) form.set(name, file)
+    return form
+}
+
+export function isMultipart(request: Request): boolean {
+    return (request.headers.get('content-type') ?? '').includes(MULTIPART_TYPE)
 }
 
 /** The other half of `encodeArgs`. Absent and empty both mean an argless call. */
@@ -52,6 +109,30 @@ export function decodeArgs(text: string | null): unknown {
     if (text === null || text === '') return undefined
     const parsed = JSON.parse(text) as unknown
     return parsed === null ? undefined : parsed
+}
+
+/** The other half of `multipartBody`: the args, with each file put back where it was taken from. */
+export function decodeForm(form: FormData): unknown {
+    const text = form.get(ARGS_PARAM)
+    const args = decodeArgs(typeof text === 'string' ? text : null)
+    return restored(args, form)
+}
+
+// The walk is over what the SENDER wrote, so it visits a reference exactly where one was made and
+// nowhere else — a caller cannot smuggle a `__abide_file` key past it, because a key it invented
+// names a part that is not in the form and comes back `null`, which is then a value its declared
+// shape has to accept.
+function restored(value: unknown, form: FormData): unknown {
+    if (value === null || typeof value !== 'object') return value
+    if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) value[i] = restored(value[i], form)
+        return value
+    }
+    const held = value as Record<string, unknown>
+    const reference = held[FILE_REF]
+    if (typeof reference === 'string') return form.get(reference)
+    for (const name in held) held[name] = restored(held[name], form)
+    return held
 }
 
 export interface WireError {

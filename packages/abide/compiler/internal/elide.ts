@@ -22,14 +22,30 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 // Type-only, so nothing about the runtime reaches the compiler: the emitted `__register("rpc", …)`
 // IS the contract between the two, and a `Kind` declared twice is a rename that compiles on both
 // sides and fails on the wire.
+import type { Shapes } from '$shared/internal/shapes.ts'
 import type { Kind } from '$shared/transport.ts'
-import { Lexer, SyntaxError_ } from './lex.ts'
+import { SyntaxError_, type Token, tokensOf } from './lex.ts'
+import { crossing, type Declared, shapesAt, TypeReader, type TypeSource } from './shape.ts'
 
 export const RPC_DIRECTORY = '/server/rpc/'
 export const SOCKET_DIRECTORY = '/server/sockets/'
 
 /** Every `.ts` a transport directory holds. The plugin's filter, and nothing else matches it. */
 export const TRANSPORT_MODULE = /\/server\/(rpc|sockets)\/[^?]+\.ts$/
+
+/**
+ * The same rule as a glob, per kind — what a build SCANS with.
+ *
+ * Derived from the directories above rather than written out again, because a scanner that misses a
+ * renamed directory finds nothing and reports nothing: the checker pass would simply publish no
+ * upgrades, which is indistinguishable from having none to publish.
+ *
+ * Strings rather than `Bun.Glob`, because this module loads in the browser lane too.
+ */
+export const TRANSPORT_GLOBS: Record<Kind, string> = {
+    rpc: `**${RPC_DIRECTORY}**/*.ts`,
+    socket: `**${SOCKET_DIRECTORY}**/*.ts`,
+}
 
 export const RPC_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 export const SOCKET_METHODS = ['socket'] as const
@@ -40,18 +56,16 @@ export type { Kind }
 const LEGAL: Record<Kind, readonly string[]> = { rpc: RPC_METHODS, socket: SOCKET_METHODS }
 const DIRECTORIES: Record<Kind, string> = { rpc: RPC_DIRECTORY, socket: SOCKET_DIRECTORY }
 
-export interface Endpoint {
+/**
+ * One endpoint, as its own declaration describes it.
+ *
+ * `streams`, `input` and `output` all come from `shapesAt`, which reads them off the same tokens in
+ * one pass — so they are carried in the type it returns rather than restated here. `input` is the
+ * MESSAGE shape on a socket, and `output` is per CHUNK on a handler that yields.
+ */
+export interface Endpoint extends Declared {
     name: string
     method: Method
-    /**
-     * The handler YIELDS, so the value arrives as chunks rather than at once.
-     *
-     * Read off the tokens — `function*` — for the same reason the export itself is: the browser lane
-     * has to build a stub that streams from a file it never loads, and an arrow function cannot be a
-     * generator, so the syntax is the whole answer. A handler assembled somewhere else and passed in
-     * is not seen as one, which is the documented cost of not running a type-checker here.
-     */
-    streams: boolean
 }
 
 /** A positioned compile failure, like every other one — so `describe` places it with no new branch. */
@@ -96,36 +110,29 @@ export function endpointId(modulePath: string, exportName: string): string {
 }
 
 /**
- * Does the declaration's first argument yield?
+ * Every endpoint a transport module declares, in source order.
  *
- * Called with the lexer sitting on the method name. Everything up to the opening parenthesis is
- * skipped, which is how an explicit type argument list — `GET<Args, User>(…)` — passes through.
+ * `resolve` is what lets a type declared in ANOTHER file still be published. Optional, and absent in
+ * the browser lane by construction: the stub carries no shapes, so the lane that throws the module
+ * away also does none of the reads.
  */
-function yields(lexer: Lexer): boolean {
-    let token = lexer.next()
-    while (token !== null && token.kind !== SyntaxKind.OpenParenToken) token = lexer.next()
-    if (token === null) return false
-    let at = lexer.next()
-    if (at !== null && at.text === 'async') at = lexer.next()
-    if (at === null || at.kind !== SyntaxKind.FunctionKeyword) return false
-    return lexer.next()?.kind === SyntaxKind.AsteriskToken
-}
-
-/** Every endpoint a transport module declares, in source order. */
-export function endpointsOf(source: string, filename: string, kind: Kind): Endpoint[] {
+export function endpointsOf(source: string, filename: string, kind: Kind, resolve?: TypeSource): Endpoint[] {
     const legal = LEGAL[kind]
-    const lexer = new Lexer(source, 0)
+    const tokens = tokensOf(source)
+    // Built once per module and reused by every declaration in it, because a local `type`/`interface`
+    // two handlers both name is one type and should be read once — and because a module it imports
+    // from is opened once for the whole file rather than once per declaration.
+    const types = new TypeReader(tokens, filename, resolve === undefined ? null : crossing(resolve))
     const endpoints: Endpoint[] = []
 
-    for (;;) {
-        const token = lexer.next()
-        if (token === null) break
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
         // Only a TOP-LEVEL export is an export. `depth` is the count after the token, so an `export`
         // inside a block — which is not legal anyway — is simply not seen here.
         if (token.depth !== 0 || token.kind !== SyntaxKind.ExportKeyword) continue
 
-        const what = lexer.next()
-        if (what === null) break
+        const what = tokens[i + 1]
+        if (what === undefined) break
         // Erased before anything runs, so neither lane has to account for it.
         if (what.text === 'type' || what.text === 'interface') continue
 
@@ -136,18 +143,25 @@ export function endpointsOf(source: string, filename: string, kind: Kind): Endpo
             )
         }
 
-        const name = lexer.next()
-        if (name === null) break
-        let equals = lexer.next()
-        // A type annotation is SKIPPED rather than read: nothing here needs the type, and an
-        // endpoint naming its own — `export const rooms: RoomChannel<…> = socket(…)` — is ordinary
-        // authoring, forced whenever a declaration's options mention the declaration.
-        if (equals !== null && equals.kind === SyntaxKind.ColonToken) {
-            while (equals !== null && equals.kind !== SyntaxKind.EqualsToken) equals = lexer.next()
+        const name = tokens[i + 2]
+        if (name === undefined) break
+        let equals = i + 3
+        // A type annotation is SKIPPED rather than read: an endpoint naming its own —
+        // `export const rooms: RoomChannel<…> = socket(…)` — is ordinary authoring, forced whenever
+        // a declaration's options mention the declaration, and the DECLARATION is what says the
+        // shape. The type arguments on `socket<…>` below are the same fact where it can be read.
+        if ((tokens[equals] as Token | undefined)?.kind === SyntaxKind.ColonToken) {
+            // Through the type reader rather than by scanning for the first `=`: a generic default
+            // in the annotation — `RoomChannel<Args, T = Tick>` — puts an `=` inside the type, and a
+            // scan that stopped there would read the method off a type token.
+            equals = types.extent(equals + 1)
         }
-        const method = equals === null ? null : lexer.next()
-        if (equals === null || method === null) break
-        if (name.kind !== SyntaxKind.Identifier || equals.kind !== SyntaxKind.EqualsToken) {
+        const method = tokens[equals + 1]
+        if (equals >= tokens.length || method === undefined) break
+        if (
+            name.kind !== SyntaxKind.Identifier ||
+            (tokens[equals] as Token).kind !== SyntaxKind.EqualsToken
+        ) {
             throw new ElisionError(
                 `abide: ${filename} exports \`${name.text}\`, which is not an endpoint — expected \`export const ${name.text} = ${legal[0]}(…)\``,
                 name.start,
@@ -159,11 +173,13 @@ export function endpointsOf(source: string, filename: string, kind: Kind): Endpo
                 method.start,
             )
         }
+        const at = equals + 1
         endpoints.push({
             name: name.text,
             method: method.text as Method,
-            streams: kind === 'rpc' ? yields(lexer) : false,
+            ...shapesAt(types, at, kind === 'rpc'),
         })
+        i = at
     }
     return endpoints
 }
@@ -198,13 +214,24 @@ export function registration(modulePath: string, kind: Kind, endpoints: Endpoint
     if (endpoints.length === 0) return ''
     const address = moduleAddress(modulePath, kind)
     const pairs: [string, string][] = []
+    const shapes: Record<string, Shapes> = {}
     let names = ''
+    let derived = false
     for (const endpoint of endpoints) {
         pairs.push([joinId(address, endpoint.name), endpoint.name])
         names += names === '' ? endpoint.name : `, ${endpoint.name}`
+        if (endpoint.input === undefined && endpoint.output === undefined) continue
+        derived = true
+        shapes[endpoint.name] = {
+            ...(endpoint.input === undefined ? {} : { input: endpoint.input }),
+            ...(endpoint.output === undefined ? {} : { output: endpoint.output }),
+        }
     }
+    // Omitted entirely when nothing was derivable, so a module whose types this cannot read emits
+    // exactly the text it emitted before there was a derivation at all.
+    const carried = derived ? `, ${JSON.stringify(shapes)}` : ''
     return (
         `\nimport { register as __register } from "abide/server"\n` +
-        `__register(${JSON.stringify(kind)}, ${JSON.stringify(pairs)}, { ${names} })\n`
+        `__register(${JSON.stringify(kind)}, ${JSON.stringify(pairs)}, { ${names} }${carried})\n`
     )
 }

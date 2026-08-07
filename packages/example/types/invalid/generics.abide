@@ -1,0 +1,10 @@
+<script module>
+import { state } from 'abide'
+import type { Book, Paged } from '../models.ts'
+import { shelve } from '../models.ts'
+
+export const books = state<Book[]>([])
+export const wrong: Paged<string> = shelve(books())
+</script>
+
+<p>{books.length}</p>

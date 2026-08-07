@@ -1,0 +1,7 @@
+<script module>
+import { state } from 'abide'
+
+export const count = state(0)
+</script>
+
+<button onclick={() => count = 'not a number'}>go</button>

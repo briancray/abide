@@ -15,6 +15,7 @@
 // body", and moving it to another page to save a page nobody profiles would be hiding it.
 
 import {
+    type Channel,
     type RemoteOptions,
     type RemoteSocket,
     type RemoteSocketOptions,
@@ -23,9 +24,10 @@ import {
     remote,
     remoteSocket,
 } from 'abide'
-import { ElisionError, elide, endpointId, kindOf } from 'abide/compiler'
+import { ElisionError, elide, endpointId, type ImportedModule, kindOf } from 'abide/compiler'
 import {
     DELETE,
+    endpoints,
     error,
     GET,
     type HttpError,
@@ -35,8 +37,10 @@ import {
     page,
     redirect,
     register,
+    type Schema,
     socket,
     sse,
+    validateJson,
 } from 'abide/server'
 import { loopback, reader, sleep, suite, until } from 'abide/tests'
 import { button, el, field, row, stage } from './dom.ts'
@@ -529,6 +533,587 @@ export default suite({
         },
 
         {
+            title: 'a declared shape is enforced at every door the call arrives through',
+            note: 'A schema is checked in the memo BODY, which is the one place a wire call, an in-process call and a handler another handler reaches all end at — so there is no door that could be added later and forget to. Three forms and no dependency: JSON Schema is the NATIVE one, a plain function returns what it accepts and THROWS what it refuses, and a Standard Schema is what zod, valibot and arktype all hand over. Each RETURNS the value, so a normaliser is one too. An input that does not match is the CALLER’s fault and answers 422; an output that does not is ours and answers 500. The gate is built once, at the declaration, so declaring the shape costs what writing the same check at the top of the handler costs.',
+            async run({ is, rejects }) {
+                // The zero-dependency door. This is what a hand-written parse already looks like:
+                // return the value you accept, throw what you refuse.
+                const anId = (value: unknown): { id: number } => {
+                    const id = Number((value as { id?: unknown }).id)
+                    if (!Number.isInteger(id) || id <= 0) throw new Error('id must be a positive integer')
+                    return { id }
+                }
+
+                // The other form, and the reason it is the one: Standard Schema is a SPEC, so abide
+                // declares the interface and imports none of the libraries that implement it.
+                const aName: Schema<{ name: string }> = {
+                    '~standard': {
+                        version: 1,
+                        vendor: 'demo',
+                        validate: (value: unknown) => {
+                            const name = (value as { name?: unknown }).name
+                            if (typeof name === 'string' && name !== '') return { value: { name } }
+                            return { issues: [{ message: 'expected a non-empty string', path: ['name'] }] }
+                        },
+                    },
+                }
+
+                const getUser = GET(({ id }: { id: number }) => find(id), { schemas: { input: anId } })
+                const rename = POST(({ name }: { name: string }) => ({ name }), {
+                    schemas: { input: aName },
+                })
+                const wrong = GET<void, { name: string }>(
+                    () => ({ nope: true }) as unknown as { name: string },
+                    { schemas: { output: aName } },
+                )
+                const pair = GET<void, { name: string }>(
+                    async function* () {
+                        yield { name: 'ada' }
+                        yield { name: '' }
+                    },
+                    { schemas: { output: aName } },
+                )
+                register(
+                    'rpc',
+                    [
+                        ['demo/shape/getUser', 'getUser'],
+                        ['demo/shape/rename', 'rename'],
+                        ['demo/shape/wrong', 'wrong'],
+                        ['demo/shape/pair', 'pair'],
+                    ],
+                    { getUser, rename, wrong, pair },
+                )
+                const remoteUser = client<{ id: number }, { id: number; name: string }>('demo/shape/getUser')
+                const remoteRename = client<{ name: string }, { name: string }>('demo/shape/rename', {
+                    method: 'POST',
+                })
+                const remoteWrong = client<void, unknown>('demo/shape/wrong')
+                const remotePair = client<void, { name: string }>('demo/shape/pair', { stream: true })
+
+                is('a call that matches is an ordinary call', await remoteUser({ id: 7 }), find(7))
+                // A schema hands the handler what it returned, so declaring one is also how a call is
+                // normalised — `'3'` reaches the handler as `3`.
+                is(
+                    '…and the handler got what the schema returned',
+                    await remoteUser({ id: '3' as never }),
+                    find(3),
+                )
+
+                await rejects(
+                    'over the wire, a shape that does not match',
+                    remoteUser({ id: -1 }),
+                    /positive integer/,
+                )
+                is('…and it is the caller’s fault', (await remoteUser.raw({ id: -1 })).status, 422)
+
+                // The whole claim. This caller never touched the transport, and the same declaration
+                // refuses it — because the gate is in the body both of them end at.
+                await rejects('in-process, the same refusal', getUser({ id: 0 }), /positive integer/)
+
+                let caught: unknown
+                try {
+                    remoteUser({ id: -1 })()
+                } catch (failure) {
+                    caught = failure
+                }
+                is(
+                    'the name crossed the wire with it',
+                    remoteUser({ id: -1 }).isError(caught, 'AbideSchemaError'),
+                    true,
+                )
+
+                is('a Standard Schema is the other door', await remoteRename({ name: 'ada' }), {
+                    name: 'ada',
+                })
+                await rejects(
+                    '…and it refuses with every issue it found',
+                    remoteRename({ name: '' }),
+                    /name: expected a non-empty string/,
+                )
+
+                // A handler that answered the wrong shape is not something a caller can fix by
+                // calling differently, so it is not a 422.
+                await rejects('an output that does not match', remoteWrong(), /output does not match/)
+                is('…is OUR fault, not the caller’s', (await remoteWrong.raw()).status, 500)
+
+                // Per CHUNK on a handler that yields: a transcript is not one value, and a shape
+                // checked only at the end is one nothing on the other side was reading by then.
+                const streamed: { name: string }[] = []
+                let stopped: unknown
+                try {
+                    for await (const one of remotePair()) streamed.push(one)
+                } catch (failure) {
+                    stopped = failure
+                }
+                is('a stream is checked per chunk — the good one arrived', streamed, [{ name: 'ada' }])
+                is(
+                    '…and the bad one stopped it',
+                    String((stopped as Error).message).includes('non-empty string'),
+                    true,
+                )
+
+                // A socket's `schema` is the WIRE's door and only the wire's: the server half is
+                // `channel()` unchanged, so an app publishing into its own stream is publishing a
+                // value it already holds rather than sending one.
+                const chat: Channel<{ name: string }> = socket<{ name: string }>({
+                    channel: { tail: 4 },
+                    schema: aName,
+                    clientPublish: (message) => chat.publish(message),
+                })
+                register('socket', [['demo/shape/chat', 'chat']], { chat })
+                const remoteChat = sock<{ name: string }>('demo/shape/chat', { channel: { tail: 4 } })
+                const upgraded = wire.connected
+                remoteChat.chunks()
+                await until(() => wire.connected > upgraded)
+
+                remoteChat.publish({ name: 'ada' })
+                await until(() => remoteChat.chunks().length === 1)
+                is('a client publish that matches reaches the room', remoteChat.chunks(), [{ name: 'ada' }])
+
+                remoteChat.publish({ name: '' })
+                await sleep(10)
+                is('…and one that does not is dropped at the wire', remoteChat.chunks(), [{ name: 'ada' }])
+
+                chat.publish({ nope: true } as never)
+                await until(() => remoteChat.chunks().length === 2)
+                is(
+                    'a SERVER publish is the channel’s own, and goes through',
+                    remoteChat.chunks()[1] as unknown,
+                    { nope: true },
+                )
+                remoteChat.close()
+            },
+            bench: {
+                kind: 'time',
+                arms: (() => {
+                    // In-process on both arms, so what is measured is the GATE and not a round trip.
+                    // The claim is that there is nothing to measure: the gate is one closure built at
+                    // the declaration, so it costs what the same check costs written by hand.
+                    const check = (value: unknown): { id: number } => {
+                        const id = (value as { id?: unknown }).id
+                        if (typeof id !== 'number' || !Number.isInteger(id)) {
+                            throw new Error('id must be an integer')
+                        }
+                        return { id }
+                    }
+                    const declared = GET(({ id }: { id: number }) => find(id), {
+                        schemas: { input: check },
+                    })
+                    const byHand = GET((args: { id: number }) => find(check(args).id))
+                    return [
+                        {
+                            label: 'abide — the shape declared',
+                            run: () => {
+                                declared.invalidate()
+                                return declared({ id: 1 })()
+                            },
+                        },
+                        {
+                            label: 'vanilla — the same check at the top of the handler',
+                            run: () => {
+                                byHand.invalidate()
+                                return byHand({ id: 1 })()
+                            },
+                        },
+                    ]
+                })(),
+            },
+        },
+
+        {
+            title: 'the shape IS the type, so nobody writes it twice',
+            note: '`GET(({ id }: { id: number }) => …)` already says what the call takes. An author who then has to restate that in a schema is writing one fact twice and keeping the two in step by hand — so the compiler reads it off the annotation, SYNTACTICALLY, in the same pass that writes the browser stub. What that costs is reach: an IMPORTED type cannot be resolved from one file’s tokens, and it derives to nothing rather than to a guess. The whole file leans that way — a derived shape may know LESS than the type does, because under-constraining refuses nothing the handler would have accepted, while over-constraining refuses a call that was correct at a door the author never wrote.',
+            run({ is }) {
+                const derive = (source: string, file = USERS): unknown =>
+                    elide(source, { filename: file })?.endpoints?.[0]
+
+                is(
+                    'an inline object literal is the whole declaration',
+                    derive(`export const a = GET(({ id }: { id: number }) => 1)\n`),
+                    {
+                        name: 'a',
+                        method: 'GET',
+                        streams: false,
+                        input: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+                    },
+                )
+
+                // `?` and `| undefined` are the same statement about a member, and JSON Schema makes
+                // it by leaving the name out of `required` rather than by a keyword of its own.
+                is(
+                    'optional members are optional, and `| null` is a type union',
+                    (
+                        derive(
+                            `export const a = GET(({ id, tag }: { id: number; tag?: string | null }) => 1)\n`,
+                        ) as { input?: unknown } | undefined
+                    )?.input,
+                    {
+                        type: 'object',
+                        // SORTED, and deliberately: source order reads better but a checker cannot
+                        // reproduce it, so the one order both derivations can agree on is the one
+                        // neither of them chose.
+                        properties: { id: { type: 'number' }, tag: { type: ['null', 'string'] } },
+                        required: ['id'],
+                    },
+                )
+
+                // A union of literals is a closed SET, which is the one form a tool definition can
+                // offer as a choice rather than as prose.
+                is(
+                    'a union of literals is an enum',
+                    (
+                        derive(`export const a = GET(({ by }: { by: 'name' | 'id' }) => 1)\n`) as {
+                            input?: { properties?: Record<string, unknown> }
+                        }
+                    )?.input?.properties?.by,
+                    { type: 'string', enum: ['name', 'id'] },
+                )
+
+                is(
+                    'a File is the one value in a call that is not JSON',
+                    (
+                        derive(`export const a = POST(({ avatar }: { avatar: File }) => 1)\n`) as {
+                            input?: { properties?: Record<string, unknown> }
+                        }
+                    )?.input?.properties?.avatar,
+                    { type: 'string', format: 'binary' },
+                )
+
+                // The published shape is the WIRE form, because that is what a machine reading the
+                // document is about to send. The gate accepts the local form beside it: an in-process
+                // caller never encoded one, and refusing a call the wire would have carried is the
+                // one direction a derived shape may not err in.
+                const when = { type: 'string', format: 'date-time' } as const
+                is(
+                    'a Date publishes as the string it becomes',
+                    (
+                        derive(`export const a = GET(({ w }: { w: Date }) => 1)\n`) as {
+                            input?: { properties?: Record<string, unknown> }
+                        }
+                    )?.input?.properties?.w,
+                    when,
+                )
+                is('…and the gate takes the encoded form', validateJson(when, '2026-08-07T00:00:00Z'), null)
+                is('…and the real one an in-process caller has', validateJson(when, new Date()), null)
+                is(
+                    '…but not just any object',
+                    validateJson(when, { nope: 1 })?.[0]?.message,
+                    'expected string, got object',
+                )
+
+                // A local declaration is resolvable from the same file's tokens, and nesting one
+                // inside another is still one file.
+                is(
+                    'an interface this file declares resolves',
+                    (
+                        derive(
+                            `interface Args { id: number; who: Inner }\ninterface Inner { ok: boolean }\nexport const a = GET((args: Args) => 1)\n`,
+                        ) as { input?: { properties?: Record<string, unknown> } }
+                    )?.input?.properties?.who,
+                    { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+                )
+
+                // A type OPERATOR has an operand, and consuming it is the whole point: read as a bare
+                // name it left the operand looking like the next MEMBER, which then failed to be one
+                // and took every member after it down with it. Under-constrained, so it refused no
+                // correct call — but a published shape missing a required argument is one a machine
+                // reading it generates a broken call from, which is the cost that is not safe.
+                is(
+                    'a type operator does not truncate the members after it',
+                    (
+                        derive(`export const a = GET(({ k, id }: { k: keyof Book; id: number }) => 1)\n`) as {
+                            input?: { required?: string[] }
+                        }
+                    )?.input?.required,
+                    ['k', 'id'],
+                )
+                is(
+                    '…and `readonly` is the array it qualifies',
+                    (
+                        derive(`export const a = GET(({ tags }: { tags: readonly string[] }) => 1)\n`) as {
+                            input?: { properties?: Record<string, unknown> }
+                        }
+                    )?.input?.properties?.tags,
+                    { type: 'array', items: { type: 'string' } },
+                )
+
+                is(
+                    'an interface INHERITS what it extends',
+                    (
+                        derive(
+                            `interface Base { base: string }\ninterface Args extends Base { id: number }\nexport const a = GET((x: Args) => 1)\n`,
+                        ) as { input?: { required?: string[] } }
+                    )?.input?.required,
+                    ['base', 'id'],
+                )
+
+                // An imported type is a FILESYSTEM question, not a type-checker one — `Book` below is
+                // a plain interface, and the only thing missing from one file's tokens is the other
+                // file's text. So `elide` takes a resolver instead of reaching for one: it still does
+                // no I/O, which is what keeps this case runnable in a browser card, and the Bun plugin
+                // is where the reading lives. Shapes reach the SERVER lane only, so the browser build
+                // does none of the reads.
+                const MODULES: Record<string, string> = {
+                    '/app/server/models.ts':
+                        `import type { Author } from './people.ts'\n` +
+                        `export interface Book { title: string; author: Author }\n`,
+                    '/app/server/people.ts': `export interface Author { name: string }\n`,
+                }
+                const resolve = (specifier: string, importer: string): ImportedModule | null => {
+                    const parts = importer.slice(0, importer.lastIndexOf('/')).split('/').filter(Boolean)
+                    for (const step of specifier.split('/')) {
+                        if (step === '' || step === '.') continue
+                        if (step === '..') parts.pop()
+                        else parts.push(step)
+                    }
+                    const path = `/${parts.join('/')}`
+                    const text = MODULES[path]
+                    return text === undefined ? null : { path, text }
+                }
+                const crossing = `import type { Book } from '../models.ts'\nexport const a = GET((v: Book) => 1)\n`
+
+                is(
+                    'an imported type resolves, and so does the one IT imports',
+                    (elide(crossing, { filename: USERS, resolve })?.endpoints?.[0] as { input?: unknown })
+                        ?.input,
+                    {
+                        type: 'object',
+                        properties: {
+                            title: { type: 'string' },
+                            author: {
+                                type: 'object',
+                                properties: { name: { type: 'string' } },
+                                required: ['name'],
+                            },
+                        },
+                        required: ['title', 'author'],
+                    },
+                )
+                is(
+                    '…and with no resolver the same file derives nothing rather than a guess',
+                    derive(crossing),
+                    { name: 'a', method: 'GET', streams: false },
+                )
+                is(
+                    'a type from a module that does not resolve is the same answer',
+                    (
+                        elide(`import type { X } from '../nope.ts'\nexport const a = GET((v: X) => 1)\n`, {
+                            filename: USERS,
+                            resolve,
+                        })?.endpoints?.[0] as { input?: unknown }
+                    )?.input,
+                    undefined,
+                )
+                // A `Map` and a `Set` do not survive `JSON.stringify` — both come out `{}` — so a
+                // shape saying "object" or "array" would publish that breakage as a contract AND
+                // refuse the in-process caller who passed the real thing. Nothing known is honest.
+                is(
+                    'a type that cannot cross derives nothing either',
+                    (
+                        derive(`export const a = GET(({ t }: { t: Set<string> }) => 1)\n`) as {
+                            input?: { properties?: Record<string, unknown> }
+                        }
+                    )?.input?.properties?.t,
+                    {},
+                )
+                is(
+                    '…and so does a handler with no annotation at all',
+                    derive(`export const a = GET((args) => 1)\n`),
+                    { name: 'a', method: 'GET', streams: false },
+                )
+
+                // The two places a declaration can say BOTH directions.
+                is(
+                    'explicit type arguments say input and output',
+                    derive(`export const a = GET<{ id: number }, { name: string }>(() => 1)\n`),
+                    {
+                        name: 'a',
+                        method: 'GET',
+                        streams: false,
+                        input: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+                        output: {
+                            type: 'object',
+                            properties: { name: { type: 'string' } },
+                            required: ['name'],
+                        },
+                    },
+                )
+                // A stream's type argument is its CHUNK, which is exactly what an output schema
+                // checks — a transcript is not one value, and neither is the shape of one.
+                is(
+                    'a handler that yields publishes its CHUNK',
+                    (
+                        derive(
+                            `export const a = GET(async function* ({ n }: { n: number }): AsyncGenerator<number> { yield n })\n`,
+                        ) as { output?: unknown; streams?: boolean }
+                    )?.output,
+                    { type: 'number' },
+                )
+                // `>>` is one token to a scanner, and the extra close belongs to the list above.
+                is(
+                    'a nested generic closes correctly',
+                    (
+                        derive(`export const a = GET(({ rows }: { rows: Array<Array<number>> }) => 1)\n`) as {
+                            input?: { properties?: Record<string, unknown> }
+                        }
+                    )?.input?.properties?.rows,
+                    { type: 'array', items: { type: 'array', items: { type: 'number' } } },
+                )
+
+                // The server lane is what CARRIES it: the browser gets the address and its own types
+                // already, so a schema in the stub would be bytes that answer nothing.
+                const both = `export const getUser = GET(({ id }: { id: number }) => 1)\n`
+                is(
+                    'the server registration carries the shape',
+                    elide(both, { filename: USERS })?.code.includes('"input":{"type":"object"'),
+                    true,
+                )
+                is(
+                    '…and the browser stub does not',
+                    elide(both, { filename: USERS, browser: true })?.code.includes('input'),
+                    false,
+                )
+            },
+        },
+
+        {
+            title: 'a file is an argument, not a second calling convention',
+            note: 'A `File` in the args is the whole declaration. There is no upload endpoint, no separate body type and no second vocabulary: the client notices the args hold something JSON cannot carry and sends multipart, with the JSON keeping a REFERENCE where the file sat — so the handler is handed the same one args object, with the file back in the place the caller put it. A READ takes that door too, for the same reason an over-long read already does: what has no text form cannot travel in a URL. And a file is keyed by IDENTITY, because two files with the same name and length are not the same file and reading them to find out is not something building a cache key may do.',
+            async run({ is }) {
+                const upload = POST(async ({ id, avatar }: { id: number; avatar: File }) => ({
+                    id,
+                    name: avatar.name,
+                    type: avatar.type,
+                    text: await avatar.text(),
+                }))
+                // A READ that carries files, and more than one of them — the reference is written
+                // where the file SAT, so an array of them comes back as an array.
+                const gallery = GET(async ({ shots }: { shots: File[] }) => ({
+                    count: shots.length,
+                    texts: await Promise.all(shots.map((shot) => shot.text())),
+                }))
+                register(
+                    'rpc',
+                    [
+                        ['demo/files/upload', 'upload'],
+                        ['demo/files/gallery', 'gallery'],
+                    ],
+                    { upload, gallery },
+                )
+                const remoteUpload = client<{ id: number; avatar: File }, Record<string, unknown>>(
+                    'demo/files/upload',
+                    { method: 'POST' },
+                )
+                const remoteGallery = client<{ shots: File[] }, Record<string, unknown>>('demo/files/gallery')
+
+                const avatar = new File(['hello bytes'], 'a.txt', { type: 'text/plain' })
+                is('a mutation carries the file', await remoteUpload({ id: 1, avatar }), {
+                    id: 1,
+                    name: 'a.txt',
+                    type: 'text/plain',
+                    text: 'hello bytes',
+                })
+
+                is(
+                    'a READ carries files too, in a body it could not have put in a URL',
+                    await remoteGallery({ shots: [new File(['one'], '1.txt'), new File(['two'], '2.txt')] }),
+                    { count: 2, texts: ['one', 'two'] },
+                )
+
+                // Same key by VALUE, different by identity. Without that the second upload is
+                // answered with the first one's result, which is the whole hazard.
+                const first = await remoteUpload({ id: 2, avatar: new File(['AAA'], 'x.txt') })
+                const second = await remoteUpload({ id: 2, avatar: new File(['BBB'], 'x.txt') })
+                is('two different files are two slots', [first.text, second.text], ['AAA', 'BBB'])
+
+                // The handler never learns which door the call arrived through.
+                is('in-process, the same call with no wire at all', await upload({ id: 3, avatar }), {
+                    id: 3,
+                    name: 'a.txt',
+                    type: 'text/plain',
+                    text: 'hello bytes',
+                })
+            },
+        },
+
+        {
+            title: 'every endpoint publishes the shape a machine reads before calling it',
+            note: 'This is what the shape story is FOR. Standard Schema is validate-only — it hands over a `validate` function and nothing that says what the shape IS — so a schema declared through one cannot become a tool definition or an OpenAPI operation. That is why JSON Schema is what a declaration MEANS rather than something abide converts to on the way out: an MCP tool is `{ name: id, description, inputSchema: input }` and an OpenAPI operation is the same three facts under other names, so neither needs a generator in here. `endpoints()` answers in-process and `GET /__abide/schema` answers over the wire — open, because every address in it is already in the client bundle and the shape beside it is the contract for calling one.',
+            async run({ is }) {
+                const search = GET(({ q, page }: { q: string; page?: number }) => ({ q, page: page ?? 1 }), {
+                    description: 'Search the catalogue',
+                })
+                register(
+                    'rpc',
+                    [['demo/catalogue/search', 'search']],
+                    { search },
+                    {
+                        // What the compiler appends for a real module. Written out here because a demo
+                        // registers a declaration it built itself — the seam is the same either way.
+                        search: {
+                            input: {
+                                type: 'object',
+                                properties: { q: { type: 'string' }, page: { type: 'number' } },
+                                required: ['q'],
+                            },
+                        },
+                    },
+                )
+
+                const published = endpoints().filter((one) => one.id.startsWith('demo/catalogue/'))
+                is('the catalogue carries the address, the method and the shape', published, [
+                    {
+                        id: 'demo/catalogue/search',
+                        kind: 'rpc',
+                        method: 'GET',
+                        description: 'Search the catalogue',
+                        input: {
+                            type: 'object',
+                            properties: { q: { type: 'string' }, page: { type: 'number' } },
+                            required: ['q'],
+                        },
+                    },
+                ])
+
+                // An MCP tool list is this map and nothing else, which is the claim.
+                const tools = published.map((one) => ({
+                    name: one.id,
+                    description: one.description,
+                    inputSchema: one.input,
+                }))
+                is('an MCP tool definition is one map away', tools[0]?.name, 'demo/catalogue/search')
+                is('…with the input schema as its inputSchema', tools[0]?.inputSchema, published[0]?.input)
+
+                // And it is enforced, because the derivation is not decoration: a shape nobody wrote
+                // still refuses the call that does not match it.
+                is('the derived shape is the one that is checked', await search({ q: 'ok' }), {
+                    q: 'ok',
+                    page: 1,
+                })
+                let refused: unknown
+                try {
+                    search({ q: 7 as never })()
+                } catch (failure) {
+                    refused = failure
+                }
+                is(
+                    'a call that does not match it is refused',
+                    /q: expected string/.test(String((refused as Error)?.message)),
+                    true,
+                )
+
+                const served = await wire.fetch('/__abide/schema', {})
+                const document = (await served.json()) as { id: string }[]
+                is('the same document over the wire', served.status, 200)
+                is(
+                    '…listing the same endpoint',
+                    document.some((one) => one.id === 'demo/catalogue/search'),
+                    true,
+                )
+            },
+        },
+
+        {
             title: 'the browser lane gets the address, and none of the body',
             note: "The DIRECTORY is the kind, so the lane knows which stub to write before it reads the file, and the module's own path is the address — there is no hash, because two endpoints can only collide if two files do. An endpoint is recognised SYNTACTICALLY, the same rule `.abide` lives by: the emit path must not need a type-checker, because the browser produces the stub from a file it is about to throw away.",
             async run({ is, throws }) {
@@ -575,7 +1160,9 @@ export default suite({
                 is(
                     '…and it is fine where it belongs',
                     elide(`export const ticks = socket<number>()\n`, { filename: FEED })?.endpoints,
-                    [{ name: 'ticks', method: 'socket', streams: false }],
+                    // The socket's first type argument is its MESSAGE, which is the one place a
+                    // channel can say what it carries — so the shape comes along with the address.
+                    [{ name: 'ticks', method: 'socket', streams: false, input: { type: 'number' } }],
                 )
                 is(
                     'the error is one a shell can place in the file',

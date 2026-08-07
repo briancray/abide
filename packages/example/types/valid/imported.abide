@@ -1,0 +1,24 @@
+<script module>
+import { memo, state } from 'abide'
+// A type, a generic type, a union and a value — each crossing a module boundary the compiler's own
+// scanner cannot see across, and each resolved by the checker exactly as it would be in a `.ts`.
+import { FIRST, type Book, type Paged, type Shelf, shelve } from '../models.ts'
+import { assertType, type Exact } from '../exact.ts'
+
+export const current = state<Book>(FIRST)
+export const shelf = state<Shelf>('fiction')
+export const shelved = memo(({ of }: { of: Shelf }): Paged<Book> => shelve(of === 'fiction' ? [FIRST] : []))
+
+assertType<Exact<ReturnType<typeof current>, Book>>()
+assertType<Exact<ReturnType<typeof shelf>, Shelf>>()
+// An imported member is reached through the read, not around it.
+assertType<Exact<(typeof FIRST)['author']['name'], string>>()
+</script>
+
+<section>
+    <h2>{current.title}</h2>
+    <p>{current.author.name} · {current.pages}</p>
+    <!-- The union narrows to one of its imported members, and `.length` is only on the string. -->
+    {#if shelf}<p>{shelf.length} letters</p>{/if}
+    {#if shelved({ of: shelf })}<p>{shelved({ of: shelf }).total} shelved</p>{/if}
+</section>

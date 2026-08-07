@@ -9,6 +9,9 @@
         "./server": "./src/server/index.ts",
         "./tests": "./tests/index.ts",
         "./compiler": "./compiler/index.ts",
+        "./compiler/check": "./compiler/check.ts",
+        "./compiler/shapes": "./compiler/shapes.ts",
+        "./compiler/assemble": "./compiler/internal/assemble.ts",
         "./compiler/plugin": "./compiler/plugin.ts"
     },
     "scripts": {

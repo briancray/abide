@@ -121,6 +121,24 @@ export class Lexer {
 }
 
 /**
+ * Every token in a source, once.
+ *
+ * For the consumer that has to look BACKWARD as well as forward — a type annotation is read after
+ * the endpoint that owns it is recognised, and a local `interface` it names may be declared further
+ * down the file. Streaming cannot answer either without a second pass, and a transport module is a
+ * handful of declarations.
+ */
+export function tokensOf(source: string): Token[] {
+    const lexer = new Lexer(source, 0)
+    const tokens: Token[] = []
+    for (;;) {
+        const token = lexer.next()
+        if (token === null) return tokens
+        tokens.push(token)
+    }
+}
+
+/**
  * Read the expression that opened at `start` (the offset of its `{`), returning the text between the
  * braces and the offset of the closing `}`.
  */

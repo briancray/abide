@@ -11,11 +11,21 @@
 // `.abide` source. `ParseError` is exported so a caller can tell a compile failure from any other
 // throw — `SyntaxError_` deliberately is not, because a lexer error is one the shells only format.
 
-import { type Endpoint, endpointsOf, type Kind, kindOf, registration, stub } from './internal/elide.ts'
+import type { Shapes } from '$shared/internal/shapes.ts'
+import {
+    type Endpoint,
+    endpointId,
+    endpointsOf,
+    type Kind,
+    kindOf,
+    registration,
+    stub,
+} from './internal/elide.ts'
 import { emit } from './internal/emit.ts'
 import { SyntaxError_ } from './internal/lex.ts'
 import { positionAt, type Segment, sourceMap, startsOf } from './internal/map.ts'
 import { ParseError, parse } from './internal/parse.ts'
+import type { TypeSource } from './internal/shape.ts'
 
 // `Method` deliberately stays internal: the compiler's is a DECLARATION keyword — it includes
 // `socket` — and `abide` already exports a `Method` that is the HTTP verb a call travels as.
@@ -27,8 +37,16 @@ export {
     kindOf,
     TRANSPORT_MODULE,
 } from './internal/elide.ts'
+/**
+ * Where a build leaves what the checker derived, and where the plugin looks for it.
+ *
+ * Relative to the working directory, so it is one path to ignore and one to point a build at.
+ */
+export const SHAPES_FILE = '.abide/shapes.json'
+
 export { original as originalPosition, type Segment } from './internal/map.ts'
 export { ParseError } from './internal/parse.ts'
+export type { ImportedModule, TypeSource } from './internal/shape.ts'
 
 export interface CompileOptions {
     /** Names the default export and every diagnostic. */
@@ -73,6 +91,23 @@ export interface ElideOptions {
     filename: string
     /** The browser lane, which gets the stub instead of the module. */
     browser?: boolean
+    /**
+     * The text of a module this one imports a TYPE from, so a shape declared elsewhere is still
+     * published. Injected rather than reached for: this function does no I/O, which is what lets a
+     * demo case assert an elided module the same way it asserts a rendered one — and what lets one
+     * run in a browser, where the resolver is a map in memory.
+     *
+     * Consulted lazily and only in the server lane, because only the registration carries shapes.
+     */
+    resolve?: TypeSource
+    /**
+     * Shapes the real CHECKER derived, by endpoint address — `abide/compiler/shapes`.
+     *
+     * They only ever UPGRADE: an endpoint absent here keeps what the tokens said, which is the whole
+     * of the staleness story. A shape this pass is behind on is one that knows LESS, and knowing less
+     * is the direction a derived shape is already allowed to be wrong in.
+     */
+    shapes?: Record<string, Shapes>
 }
 
 export interface Elided {
@@ -92,7 +127,25 @@ export interface Elided {
 export function elide(source: string, options: ElideOptions): Elided | null {
     const kind = kindOf(options.filename)
     if (kind === null) return null
-    const endpoints = endpointsOf(source, options.filename, kind)
+    // The resolver is withheld from the browser lane rather than merely unused there: the stub
+    // carries no shapes, so the lane that throws the module away must also do none of the reads.
+    const endpoints = endpointsOf(
+        source,
+        options.filename,
+        kind,
+        options.browser === true ? undefined : options.resolve,
+    )
+    // Applied here rather than inside `endpointsOf`, so the one place that knows an endpoint's
+    // ADDRESS is the one place that matches a checker's answer to it.
+    const better = options.shapes
+    if (better !== undefined && options.browser !== true) {
+        for (const endpoint of endpoints) {
+            const known = better[endpointId(options.filename, endpoint.name)]
+            if (known === undefined) continue
+            if (known.input !== undefined) endpoint.input = known.input
+            if (known.output !== undefined) endpoint.output = known.output
+        }
+    }
     const code =
         options.browser === true
             ? stub(options.filename, kind, endpoints)

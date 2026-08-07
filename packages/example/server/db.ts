@@ -12,7 +12,20 @@ const NAMES = new Map<number, string>()
 // reaches one — nothing here opens a second, and the value exists to be read back over the wire.
 const connections = 1
 
-export function findUser(id: number): { id: number; name: string; connections: number } {
+/**
+ * The shape a handler answers with, declared where the data is rather than beside the endpoint.
+ *
+ * This is the ordinary place for it, and it is why the compiler follows an import to derive a shape:
+ * an app of any size keeps its types next to its data, and an endpoint that could only publish what
+ * was spelled inline would publish almost nothing.
+ */
+export interface User {
+    id: number
+    name: string
+    connections: number
+}
+
+export function findUser(id: number): User {
     return { id, name: NAMES.get(id) ?? `user ${id}`, connections }
 }
 
