@@ -983,7 +983,12 @@ export default suite({
                 const upload = POST(async ({ id, avatar }: { id: number; avatar: File }) => ({
                     id,
                     name: avatar.name,
-                    type: avatar.type,
+                    // The essence, not the whole header: Bun's multipart PARSER discards the part's
+                    // declared `Content-Type` and re-infers from the filename, so what comes back is
+                    // `text/plain;charset=utf-8` for a `.txt` whatever was sent. The claim a
+                    // multipart round trip can still make is that a File arrived with its name and
+                    // its bytes; the declared type does not survive the decode.
+                    type: avatar.type.split(';')[0],
                     text: await avatar.text(),
                 }))
                 // A READ that carries files, and more than one of them — the reference is written

@@ -3,9 +3,11 @@
 // `remoteSocket`.
 //
 // A separate PROCESS rather than a test body, because `bunfig.toml` preloads happy-dom for every
-// `bun test` file and happy-dom replaces `Response` and `URL` with its own — which `Bun.serve`
-// cannot serialise. The UI suites need the emulator and a transport needs it gone, so they cannot be
-// the same lane. `transport.test.ts` spawns this and asserts on the JSON it prints.
+// `bun test` file and happy-dom replaces `URL` — and `AbortController`, `Event` and `WebSocket` —
+// with its own, which `Bun.serve` cannot serialise. (`Response` and the rest of the data layer are
+// put back by the preload; see `abide/tests`' `happydom.ts` for where that line is drawn and why.)
+// The UI suites need the emulator and a transport needs it gone, so they cannot be the same lane.
+// `transport.test.ts` spawns this and asserts on the JSON it prints.
 //
 // Run it directly to watch it: `bun packages/example/test/transport-wire.ts`.
 

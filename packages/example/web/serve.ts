@@ -10,6 +10,7 @@ import client from './client.html'
 import compiler from './compiler.html'
 import health from './health.html'
 import hydrate from './hydrate.html'
+import identity from './identity.html'
 import logging from './logging.html'
 import memo from './memo.html'
 import overview from './overview.html'
@@ -58,6 +59,7 @@ const running = Bun.serve({
         '/transport': transport,
         '/logging': logging,
         '/health': health,
+        '/identity': identity,
         '/compiler': compiler,
         '/bench': bench,
     },

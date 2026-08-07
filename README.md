@@ -33,6 +33,8 @@ packages/abide/src/
     online.ts            10   online() — the second reactive ambient, off the platform's own events
     health.ts            40   health() — the app's own account: composed in the process that serves
                               it, fetched anywhere else, which is what `reachable` reports
+    identity.ts          84   identity() — the principal, composed where the caller is served and
+                              fetched anywhere else. Never null, and the two writers are the server's
     reactive.ts + index.ts          44   the public faces
   ui/                   the DOM renderer — parse-once templates, per-slot effects, keyed lists
     internal/parts.ts   686   child parts, keyed lists, instances
@@ -55,8 +57,11 @@ packages/abide/src/
     logs.ts              21   GET /__abide/logs — the remote feed, which is one channel and its tail
     health.ts            66   onHealth + GET /__abide/health — a baseline abide fills in, the app's
                               own fields over it, and a reporter's throw as an account rather than one
-    scopes.ts           164   serve — the async-local caller scope, request/cookies/bag, and the
-                              whole W3C trace context: id, our span, flags, tracestate, both headers
+    identity.ts         182   onIdentity + GET /__abide/identity — the HMAC-sealed cookie, the
+                              resolver over it, and a rolling refresh that fails CLOSED on a throw
+    scopes.ts           189   serve — the async-local caller scope, request/cookies/bag, the cookies
+                              a response writes back, and the whole W3C trace context: id, our span,
+                              flags, tracestate, both headers
     responses.ts         78   page · json · jsonl · sse · redirect · error — and the one header
                               helper that puts traceresponse on every response abide builds
     app.ts               54   the two things that need a filesystem: package.json (name and the
@@ -641,6 +646,7 @@ separate unit-test suite to drift from the pages, and `bun test` is the pages be
 | `/transport` | `rpc` and `socket`, against a `dispatch` called in-process: **three readers, one request** |
 | `/logging` | `log`, with a card that turns a channel on by typing a `DEBUG` spelling into it |
 | `/health` | `health()` and `onHealth`, with a card that reports a field — or a failure — and asks again |
+| `/identity` | `identity()`, with a card that asks — and watches the two writers refuse, because a client may not decide who it is |
 | `/bench` | every capability against a hand-written equivalent, one table row per arm |
 
 The bench runs four kinds of case, because the framework makes four kinds of claim: **time**, as a
@@ -744,8 +750,11 @@ a test:
   `pages(dir)` reads that directory off the filesystem, which is a server. A client is handed the
   same table by whatever built its bundle — and there is no CLI yet, so today that means writing it
   down. The table's SHAPE is the same either way, which is the part that had to be settled.
-- **`identity()` does not exist.** The caller scope carries `request()`, `bag()`, `cookies()` and
-  `trace()`; a principal needs a resolver hook, which is a policy decision, not plumbing.
+- **`identity()` seals a cookie and nothing else.** There is no token, no revocation list and no
+  refresh pair: rotating `ABIDE_IDENTITY_SECRET` signs everybody out, which is the whole of what
+  revocation means here. The seal is an HMAC, so a browser can READ its own claims — that is a
+  session cookie's actual contract, not a gap — but an app putting something in there that a user
+  may not see wants a row id and a resolver, which is what `onIdentity` is for.
 - **A websocket upgrade carries no `traceparent`.** A browser cannot set headers on one, so a socket
   subscription is correlated by nothing. The rpc lane is unaffected — that is a `fetch`.
 - **The example dev server runs with `development: { hmr: false }`**, and it is a workaround rather
@@ -845,11 +854,13 @@ a test:
 ## Roadmap
 
 1. **A CLI**, which is what turns `pages()` into a table a browser bundle also has, and what would
-   read the environment table the spec describes.
-2. **`identity()`** — the one ambient left. A principal needs a resolver hook, which is a policy
-   decision rather than plumbing, and it is the half of a request an rpc's middleware currently has
-   to carry itself. `health()` landed: `onHealth` merged over a baseline, served at
-   `GET /__abide/health`, and registered as a call until there is a binary to read an app's export.
+   read the environment table the spec describes. It is what is left: `identity()` landed, and with
+   it the last of the ambients — a principal sealed into a cookie, `onIdentity` over the claims it
+   carried, served at `GET /__abide/identity`, and registered as a call for the same reason
+   `onHealth` is, until there is a binary to read an app's export.
+2. **The app-level exports** the CLI would read — `middleware`, `onStart`, `onStop`, `onError`.
+   `onError` and `middleware` have a seam already: `dispatch` opens one request scope every lane is
+   served in. `onStart` is the one that genuinely needs the binary, because it WRAPS the socket bind.
 
 ## Provenance
 

@@ -152,6 +152,15 @@ export const META = {
             'reporter that throws is an account of not working rather than a route falling over.',
         tag: 'the app’s own account',
     },
+    identity: {
+        name: 'identity',
+        title: 'identity',
+        blurb:
+            'Who the server decided this caller is, asked with the same call on both sides. A principal ' +
+            'is never null — anonymous is an answer — and never guessed by the client: the two writers ' +
+            'are the server’s, and a browser calling one gets a message rather than a different answer.',
+        tag: 'the sealed principal',
+    },
     compiler: {
         name: 'compiler',
         title: 'compiler',
@@ -182,6 +191,7 @@ export const ORDER: SuiteName[] = [
     'transport',
     'logging',
     'health',
+    'identity',
     'compiler',
 ]
 

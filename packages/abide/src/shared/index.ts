@@ -36,6 +36,11 @@ export {
     streamed,
     type TemplateResult,
 } from './html.ts'
+// Who the server decided this caller is, asked the same way on both sides. `useIdentitySource` is
+// absent for the reason `useHealthSource` is, and the two WRITERS on `identity` throw in a browser
+// rather than being missing from it: a client that could set its own principal is a client that
+// guesses one, and one call shape on both sides is what makes that a message rather than a mystery.
+export { type Identify, type Identity, identity } from './identity.ts'
 // Per-caller storage. A client never needs it — there is one caller, forever — but the same import
 // works there, and it is what a test uses to prove two callers do not share a memo's cache.
 export { isolate } from './internal/scopes.ts'

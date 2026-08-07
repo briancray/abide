@@ -15,9 +15,9 @@ either.
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, `online()`, `health()`, and the client half of both transports (`remote`, `remoteSocket`) |
+| `abide` | the isomorphic surface — the three primitives, `watch`, the template tag and its runtime, the caller scope, `log`, `online()`, `health()`, `identity()`, and the client half of both transports (`remote`, `remoteSocket`) |
 | `abide/ui` | the DOM substrate — `mount`, `hydrate` |
-| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`), `appDataDir()`, `server()`, `onHealth()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`, `Schema`) |
+| `abide/server` | the SSR substrate — the render walk, `suspend`, the request scope and the ambients on it (`request`, `cookies`, `bag`, `trace`, `identity`), `appDataDir()`, `server()`, `onHealth()`, `onIdentity()`, `pages()`, and the DECLARING half of both transports (`GET`…`DELETE`, `socket`, `dispatch`, `Schema`) |
 | `abide/tests` | the test kit — the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
 | `abide/compiler` | `compile()`, `elide()` and their diagnostics. Pure: text in, text out, no filesystem |
 | `abide/compiler/check` | the check lane: `emitFor` writes the module, its declaration and its map beside a `.abide`, and `remap` moves a `tsc` diagnostic back onto the `.abide` line |
@@ -39,13 +39,13 @@ Everything below is spec'd and **absent**. Rows describing them are marked *(not
 | Area | Absent |
 | --- | --- |
 | transport | `opts.clients` — which surfaces may reach a handler, which says nothing until there is a surface other than the UI to name. Everything else in both laws is built |
-| ambients | `identity()` — a principal needs a resolver, which is a policy decision rather than plumbing |
-| lifecycle | `onStart`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`) and the seven the logging half reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`, `ABIDE_LOGS`, `ABIDE_LOG_BUFFER`) |
+| lifecycle | `onStart`, and the config table's env vars other than the two an rpc reads (`ABIDE_RPC_TIMEOUT`, `ABIDE_MAX_REQUEST_BODY_SIZE`), the seven the logging half reads (`ABIDE_APP_NAME`, `DEBUG`, `ABIDE_LOG_FORMAT`, `NO_COLOR`, `FORCE_COLOR`, `ABIDE_LOGS`, `ABIDE_LOG_BUFFER`) and the three identity reads (`NODE_ENV`, `ABIDE_IDENTITY_SECRET`, `ABIDE_IDENTITY_TTL`) |
 | the CLI | every `abide <command>`, the app-level exports (`middleware`, `onStart`, `onStop`, `onError`), and the rest of the environment table — there is no binary yet, so nothing reads any of it. `./app logs` is the one command whose ENDPOINT exists ahead of it: `GET /__abide/logs` is served, and what is missing is a client for it |
 
 What IS built is `state` / `memo` / `channel` / `watch` and the escape hatches around them
 (`untrack`, `scope`, `isolate`), the WHOLE shared source surface, the request scope (`serve`,
-`request`, `bag`, `cookies`, `trace`, `isServing`) and the four ambients that answer outside one
+`request`, `bag`, `cookies`, `trace`, `identity` with `onIdentity` under it, `isServing`) and the four
+ambients that answer outside one
 (`online`, `health` with `onHealth` under it, `appDataDir`, `server`), routing (`routes`, `route`, `url`, `navigate`, `ready`,
 `outlet`, and `pages(dir)` for a pages directory), both transports and the seam that addresses them, the
 template tag and its runtime, both render substrates, hydration, `<style>` in both its component and
@@ -446,7 +446,12 @@ request-scoped one, so each of those throws rather than guessing.
 | --- | --- |
 | `route()` | The route being served — its name, kind, parameters, URL, and whether a navigation is in flight. REACTIVE, because a client moves without a new caller arriving. |
 | `online()` | Whether the caller currently has connectivity. The second REACTIVE one, for the same reason: connectivity changes without a new caller arriving, so an answer only given on the next ask would leave a banner up after the network came back. A server is always online in the only sense the question has — it is not asking whether the process can reach the internet, it is asking whether the caller can reach the thing it is talking to, and a server IS that thing. |
-| `identity()` *(not built)* | The principal the server resolved for this caller, never null and never guessed by the client. |
+| `identity()` | The principal the server resolved for this caller, never null and never guessed by the client. Always a promise, on both sides, like `health()` — and composed where the caller is being SERVED, fetched anywhere else. |
+| `identity({ base, fetch })` | The same `WireOptions` `health()` and `remote` take, and read the same way: an option names a WIRE, a wire is another app, so it is asked over that wire even in a process that could have answered about its own caller. The FIELDS name it rather than the argument. A named wire is asked every time — it is not this page's session, so the client-side cache does not answer for it. |
+| `identity.set(claims)` | Authenticate this caller: `claims` are sealed into the `abide-identity` cookie and every response this request builds carries it. Returns a promise — the seal itself is synchronous, but the shape is the same on both sides and it is the room a seal backed by a session store would need. A misconfigured process REJECTS; calling it in a browser throws synchronously, because that is a mistake in the code rather than an outcome of the call. |
+| `identity.clear()` | Sign this caller out, for the rest of THIS request as well as the next one. |
+| `identity.invalidate()` | Forget what was resolved so the next ask does it again — what a browser calls after the rpc that signed it in. The one verb of the three that is not the server's. |
+| `onIdentity(fn)` *(`abide/server`)* | The app's resolver: what the claims that arrived MEAN. Returns the way off again. |
 | `trace()` | The identifier tying this work to the operation it belongs to: the inbound `traceparent`'s trace-id, or a fresh one when there is none. W3C Trace Context, because an id abide invented instead would tie this work to nothing. **Nothing to do with `log.debug`**, which is a level — `trace` in this codebase means the W3C context and only that. |
 | `trace.span()` | THIS hop's span id, minted per request. What an outbound call and the response name as their parent, and the reason the trace is unbroken across a boundary. abide mints exactly ONE span per hop and models no span tree: a tree is a tracing SDK's job, and the value of Trace Context is that this hands off to a real one cleanly rather than growing a worse one here. |
 | `trace.sampled()` | The caller's sampling decision, carried through. abide is not a sampler and never votes — the flags byte propagates verbatim. A trace that STARTS here is `03`: sampled, and flagged random-trace-id, because we did generate it randomly. |
@@ -491,6 +496,66 @@ merge — a number, an array — is warned about on the same channel and the bas
 `onHealth` is spelled as a REGISTRATION rather than read off an app's exports because there is no CLI
 to read them yet; when there is, it hands the export to this. Its return is the way back off, since a
 hook that cannot be removed is one nothing can register twice.
+
+### The principal
+
+A principal is the one ambient abide cannot answer on its own — `trace()` reads a header a standard
+defines and `request()` hands back what Bun gave it, but who a caller IS is an app's decision. So the
+framework half is deliberately the smaller one: a sealed cookie, and a hook that says what the seal
+meant.
+
+| Form | Behavior |
+| --- | --- |
+| `identity()` | The document. Never null: an anonymous visitor is `{ authenticated: false }`, so a reader asks one question rather than writing the null check half of them forget. |
+| the two writers | `set` and `clear` are the SERVER's. They are on the type in both lanes and throw in a browser, because a client that could write its own principal is one that decides who it is — and one call shape with a message beats a property that is missing on one side. |
+| `GET /__abide/identity` | The same document over the wire, which is how the browser half asks. Open, and for a stronger reason than the health document: the whole answer is composed from the cookie the caller sent, so a caller can only ever learn about ITSELF and there is nothing to enumerate. `no-store`, because a response that is per-caller by construction must not be cached between here and the browser. |
+
+| Baseline field | What it says |
+| --- | --- |
+| `authenticated` | Whether this caller presented something the server accepted. The only field a caller that presented nothing carries. |
+| `expiresAt` | When the seal lapses, ISO-8601. Absent on an anonymous caller — there is nothing to lapse. |
+| `error` | The app's resolver failing. Unlike `health`'s, a document carrying one is never authenticated. |
+
+The seal is an HMAC over the claims and their expiry, and it is not encryption and does not pretend
+to be: a browser can READ what it was given — a user seeing their own id is not a leak — and cannot
+produce a different one the server accepts. That is what a session cookie actually needs, and it is
+why there is no key management beyond one environment variable. The cookie is `HttpOnly` because
+nothing in the browser half reads it — it asks the endpoint, which is what the endpoint is for —
+`SameSite=Lax` so a cross-site POST cannot ride the session while an ordinary link in still arrives
+signed in, and `Secure` in production only, or a development server on `http://localhost` would set a
+cookie the browser discards.
+
+A bad signature, a lapsed seal and a malformed cookie are ONE answer — this caller is anonymous.
+Telling them apart at the door is how a verifier ends up saying which half of a forgery was right.
+
+Without `onIdentity` the sealed claims ARE the principal, which is the whole of what a small app
+needs: `identity.set({ id, name })` and `identity()` hands both back. A resolver is what an app
+reaches for when the cookie should carry an id and the principal should carry a row. Its fields win
+every collision including `authenticated`, the same rule `onHealth` merges by — a resolver that
+authenticates off a bearer header knows something a cookie cannot, and a reserved field would force
+that app to publish its answer under a name nothing reads.
+
+A resolver that THROWS is where this parts company with `onHealth`, and deliberately. A reporter that
+throws is an app saying it is not working and the health document says so; a resolver that throws is
+an app that could not decide who this is, and the only safe reading of that is nobody. It fails
+CLOSED: anonymous, with the failure under `error`, and a warning on `abide:identity`.
+
+Resolved at most once per request. What is held is whatever the resolve handed back — the document
+when nothing had to wait, the promise when an app's resolver did — so two asks share the one resolve
+rather than racing two of them, which for a resolver that hits a database is the whole difference.
+The seal is `Bun.CryptoHasher`, which is synchronous, so an app with no resolver answers `identity()`
+without a promise in the path at all. Both writers latch what they decided for the REST of the
+request: re-reading would answer
+with the seal still on the inbound request, which is how a handler that signs somebody in and then
+renders shows the previous visitor.
+
+Rolling means a session in use is extended, not that every response carries a `Set-Cookie` — that
+costs bytes on all of them and makes each unique to a proxy. The refresh waits until the seal is half
+spent, which extends what is in use and leaves an idle session to lapse on schedule.
+
+The cookie reaches a response through `headersFor`, the same funnel `traceresponse` rides, because
+the call that decides a login is deep inside a handler and the call that builds the response is
+somewhere else entirely.
 
 ## Logging
 
@@ -823,11 +888,11 @@ A route is committed only once its page has arrived, which is the whole of what 
 | --- | --- |
 | `PORT` | Listen port (default `3000`). `--port` overrides. `abide dev` hops to the next open port if taken; `abide start` binds directly and fails hard on `EADDRINUSE`. |
 | `APP_URL` | Public URL / mount base, and the expected origin both origin gates compare against (WS CSWSH gate, CSRF gate). A `abide dev` port hop carries it to the port actually bound. |
-| `NODE_ENV` | Production vs development. Gates `Strict-Transport-Security`, the identity-secret requirement, and other prod-only behaviour. |
+| `NODE_ENV` | Production vs development. Gates the identity-secret requirement and `Secure` on the identity cookie — both built — plus `Strict-Transport-Security` and other prod-only behaviour that is not. |
 | `ABIDE_APP_NAME` | The app's own name, and therefore `log`'s default channel. Falls back to the nearest package.json `name` above the working directory — which needs a filesystem, so `abide/server` installs that half — then to `abide`. |
 | `ABIDE_DATA_DIR` | Override the per-user data dir backing `appDataDir()`. |
-| `ABIDE_IDENTITY_SECRET` | Seals the `abide-identity` cookie + tokens. Required in production for authenticated `identity.set()`. |
-| `ABIDE_IDENTITY_TTL` | Identity cookie/token TTL in ms (default 30d, rolling). |
+| `ABIDE_IDENTITY_SECRET` | Seals the `abide-identity` cookie. Required in production for `identity.set()` — a development process with nothing declared mints a random key and says so on `abide:identity`, so sessions do not survive a restart, which is exactly what an undeclared secret means. |
+| `ABIDE_IDENTITY_TTL` | Identity cookie TTL in ms (default 30d, rolling — re-sealed on the first resolve past half its life). |
 | `ABIDE_APP_TOKEN` | Bearer token for the remote CLI & desktop bundle. |
 | `ABIDE_APP_URL` | App URL for the remote CLI & desktop bundle (also marks a cross-origin proxy, which then declines to volunteer `traceparent`). |
 | `ABIDE_RPC_TIMEOUT` | Default RPC run deadline in ms (default `300000` = 5 min) — a fallback ceiling; per-RPC `timeout` is the real knob. On a handler that yields it is the longest gap BETWEEN chunks. |
@@ -849,6 +914,7 @@ A route is committed only once its page has arrived, which is the whole of what 
 | `onStop` | `(stop: () => Promise<void>) => void \| Promise<void>` | Mirrors `onStart` for teardown: drain, then `await stop()`. Backstopped, so teardown still happens if the hook skips it. Runs on SIGINT/SIGTERM/crash. Awaited |
 | `onError` | `(error: unknown) => unknown` | Request-scoped; runs when a request throws an UNEXPECTED error. A DELIBERATE outcome never reaches it |
 | `onHealth` | `() => unknown \| Promise<unknown>` | Returns fields merged OVER the framework baseline `{ reachable, version, startedAt, uptime }`. It is what `health()` composes into its document on EVERY server-side call. BUILT, and reached as `onHealth(fn)` from `abide/server` until there is a binary to read the export |
+| `onIdentity` | `(claims: unknown) => unknown \| Promise<unknown>` | Turns what a caller presented into a principal, merged OVER `{ authenticated, expiresAt }`. Receives `null` for a caller with no valid seal, which is what lets one authenticate off something other than the cookie. Fails CLOSED. BUILT, and reached as `onIdentity(fn)` for the same reason `onHealth` is |
 
 # abide cli
 

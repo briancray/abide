@@ -10,7 +10,7 @@
 // treats what follows a call as unreachable and narrows the value the caller was guarding.
 
 import { framedBody, JSON_TYPE, jsonLine } from '$shared/internal/wire.ts'
-import { traceResponse } from './scopes.ts'
+import { pendingCookies, traceResponse } from './scopes.ts'
 
 /** One JSON value per line. JSON has no unescaped newline, so the delimiter needs no length prefix. */
 const JSONL_TYPE = 'application/jsonl'
@@ -41,6 +41,13 @@ export function headersFor(carried: HeadersInit | undefined, defaults: Record<st
     if (!headers.has('traceresponse')) {
         const parent = traceResponse()
         if (parent !== null) headers.set('traceresponse', parent)
+    }
+    // A login is a call deep inside a handler and the response is built somewhere else entirely, so
+    // the cookie rides the same funnel. `append`, not `set`: `Set-Cookie` is the one header that may
+    // legitimately appear more than once, and a caller that wrote its own keeps it.
+    const cookies = pendingCookies()
+    if (cookies !== null) {
+        for (let i = 0; i < cookies.length; i++) headers.append('set-cookie', cookies[i] as string)
     }
     return headers
 }

@@ -31,5 +31,12 @@ export const SCHEMA_PATH = `${ABIDE_PREFIX}schema`
  */
 export const HEALTH_PATH = `${ABIDE_PREFIX}health`
 
+/**
+ * Who the server resolved this caller to be. Here for the same reason `HEALTH_PATH` is: the CLIENT
+ * half of `identity()` is what asks for it, and an address only one side knows is an address the two
+ * can spell differently.
+ */
+export const IDENTITY_PATH = `${ABIDE_PREFIX}identity`
+
 /** The query parameter carrying JSON args: a read's arguments, and a socket's room. */
 export const ARGS_PARAM = 'a'

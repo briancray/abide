@@ -560,6 +560,11 @@ export async function* renderDocument(
     yield `</body></html>`
 }
 
+// The principal, and the half only the server can supply. `identity` itself is on the isomorphic
+// surface — asking is the same call anywhere — and it is re-exported here, straight from the module
+// that defines it, because the handler writing a login is already importing `request()` and
+// `cookies()` from this entry point.
+export { type Identity, identity } from '$shared/identity.ts'
 // The shape one line takes on the remote feed. The endpoint itself is `dispatch`'s — an app mounts
 // that and gets `/__abide/logs` with it — but a reader of the feed needs the record to decode into.
 export type { LogRecord } from '$shared/log.ts'
@@ -569,6 +574,7 @@ export { appDataDir } from './app.ts'
 // The app's own account of whether it is working. `health()` itself is on the isomorphic surface —
 // asking is the same call anywhere — and this is the half only the app being asked about can supply.
 export { type HealthReporter, onHealth } from './health.ts'
+export { type IdentityResolver, onIdentity } from './identity.ts'
 // What every renderer here takes. `RenderContext` stays internal: it is the walk's own state, and
 // its `document` field is typed by a `DocumentContext` no caller can name.
 export type { RenderOptions } from './internal/emit.ts'

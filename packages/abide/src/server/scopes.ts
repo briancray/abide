@@ -10,6 +10,7 @@
 // later, so a `request()` that could change would be answering a question nobody can re-ask.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import type { Identity } from '$shared/identity.ts'
 import {
     dropScope,
     newScope,
@@ -28,6 +29,13 @@ interface Serving {
     bag: Map<string, unknown> | null
     cookies: Map<string, string> | null
     trace: Tracing | null
+    /**
+     * The principal, resolved at most once per request — the document when nothing had to wait, the
+     * promise when an app's resolver did, so two asks share the one resolve rather than racing two.
+     */
+    identity: Identity | Promise<Identity> | null
+    /** `Set-Cookie` lines this request has decided to write. Only `identity` writes one so far. */
+    cookiesOut: string[] | null
 }
 
 // Built on the first `serve`, never at import.
@@ -72,7 +80,15 @@ function serving(verb: string): Serving {
  * a handler that forgets to think about it still cannot serve the previous caller's data.
  */
 export function serve<T>(request: Request, fn: () => T): T {
-    const held: Serving = { scope: newScope(), request, bag: null, cookies: null, trace: null }
+    const held: Serving = {
+        scope: newScope(),
+        request,
+        bag: null,
+        cookies: null,
+        trace: null,
+        identity: null,
+        cookiesOut: null,
+    }
     return storage().run(held, () => settling(fn, () => dropScope(held.scope)))
 }
 
@@ -297,6 +313,45 @@ export function cookies(): Map<string, string> {
     if (held.cookies !== null) return held.cookies
     held.cookies = pairs(held.request.headers.get('cookie'), ';', decodeURIComponent)
     return held.cookies
+}
+
+// --- what a response has to carry back ---------------------------------------
+
+/**
+ * Write one `Set-Cookie` on every response this request builds.
+ *
+ * Held on the scope rather than handed back for the caller to attach, because the call that decides
+ * a cookie — a login, deep inside a handler — is not the call that builds the response. `headersFor`
+ * is the one funnel every response abide makes goes through, which is exactly the property
+ * `traceresponse` already relies on.
+ */
+export function writeCookie(line: string): void {
+    const held = serving('writeCookie')
+    if (held.cookiesOut === null) held.cookiesOut = [line]
+    else held.cookiesOut.push(line)
+}
+
+/**
+ * The lines to write, or `null` when there are none — which is every request that did not log
+ * anybody in, so the common response allocates nothing to find that out.
+ */
+export function pendingCookies(): string[] | null {
+    return STORAGE?.getStore()?.cookiesOut ?? null
+}
+
+// --- the principal -----------------------------------------------------------
+//
+// The slot lives here with the other per-request state; `identity.ts` owns what goes in it. Reached
+// through two functions rather than by exporting `Serving`, so the scope record stays this file's.
+
+/** The resolve in flight or already done for this request, if one was asked for. */
+export function heldIdentity(): Identity | Promise<Identity> | null {
+    return serving('identity').identity
+}
+
+/** Remember the resolve, or forget it — `null` is what `identity.invalidate()` puts back. */
+export function holdIdentity(resolving: Identity | Promise<Identity> | null): void {
+    serving('identity').identity = resolving
 }
 
 /**
