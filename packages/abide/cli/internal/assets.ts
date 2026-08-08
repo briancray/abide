@@ -12,10 +12,16 @@
 // already said, and the one thing that changes on a rebuild is the name.
 //
 // Not part of `dispatch`, which serves ENDPOINTS. This is a directory, it exists only where a build
-// ran, and `abide dev` will serve the same route out of a bundler's memory rather than off a disk —
-// so it is mounted in front of the request pipeline rather than inside it.
+// ran, and `abide dev` serves the same route out of a bundler's memory rather than off a disk — so
+// it is mounted in front of the request pipeline rather than inside it.
+//
+// Which is why a form holds a `Blob` rather than a path: a `BunFile` IS one, and so is a build
+// artifact that was never written down. The two lanes differ in where the bytes came from and in one
+// header, and in nothing a request can see.
 
+import { basename } from 'node:path'
 import {
+    assetOf,
     CLIENT_DIR,
     CLIENT_ROUTE,
     type ClientAsset,
@@ -29,10 +35,11 @@ import {
  *
  * The handle rather than the path. A `BunFile` is a lazy reference and every `Response` built from
  * one reads independently, so there is nothing per-request about it — and the name carries a content
- * hash, which means the bytes at this path cannot change for the life of the process.
+ * hash, which means the bytes at this path cannot change for the life of the process. A dev build's
+ * bytes are a `Blob` over the same seam, held rather than re-read.
  */
 interface Form {
-    file: Bun.BunFile
+    file: Blob
     headers: Record<string, string>
     /** `null` on the identity bytes; what an `Accept-Encoding` is matched against on the rest. */
     encoding: Encoding | null
@@ -119,6 +126,61 @@ export async function clientAssets(root: string): Promise<LoadedClient | null> {
 
     return { assets: new ClientAssets(held), manifest }
 }
+
+/**
+ * A build that was never written down — what `abide dev` serves.
+ *
+ * The artifacts come straight off `Bun.build`, so the whole of the difference from the lane above is
+ * where the bytes live and what the `cache-control` says. There are no sidecars: compression is the
+ * expensive half of `abide build` and it buys nothing over a loopback, so a dev asset has the one
+ * form and `chosen` hands it back without reading an `Accept-Encoding` at all.
+ *
+ * The bytes are taken ONCE here rather than left on the artifact. A `BuildArtifact` is a `Blob` and
+ * would serve directly, but the whole build stays reachable through it — and this holds the map for
+ * the life of the process.
+ */
+export async function heldClient(
+    outputs: Bun.BuildArtifact[],
+    entries: Record<string, string>,
+): Promise<LoadedClient> {
+    // Every artifact at once. The bytes are already in memory, so this is a promise tick per artifact
+    // rather than a read — and one artifact waiting on the one before it is a tick per chunk charged
+    // to every save.
+    const pending: Promise<ArrayBuffer>[] = []
+    for (const artifact of outputs) pending.push(artifact.arrayBuffer())
+    const drained = await Promise.all(pending)
+
+    const held = new Map<string, Held>()
+    const assets: Record<string, ClientAsset> = {}
+    for (let at = 0; at < outputs.length; at++) {
+        const artifact = outputs[at] as Bun.BuildArtifact
+        const bytes = drained[at] as ArrayBuffer
+        const name = basename(artifact.path)
+        assets[name] = assetOf(artifact, bytes.byteLength, [])
+        held.set(name, {
+            identity: {
+                file: new Blob([bytes], { type: artifact.type }),
+                headers: { 'content-type': artifact.type, 'cache-control': NEVER },
+                encoding: null,
+            },
+            encoded: NO_FORMS,
+        })
+    }
+    return { assets: new ClientAssets(held), manifest: { entries, assets } }
+}
+
+/**
+ * A dev asset is never kept.
+ *
+ * The opposite of `FOREVER` below, and for the same reason: a name is only cacheable when it can
+ * mean one set of bytes, and a dev entry keeps its SOURCE name across rebuilds so that a breakpoint
+ * and a stack frame survive one. Something has to give, and it is the cache — a stale chunk behind a
+ * hash-free address is a bug hunt that ends in a hard refresh.
+ */
+const NEVER = 'no-store'
+
+/** Shared because it is never written to: every dev asset has exactly the identity form. */
+const NO_FORMS: Form[] = []
 
 /**
  * A year, and `immutable` on top of it.

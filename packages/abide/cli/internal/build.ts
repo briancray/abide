@@ -9,28 +9,41 @@
 // means. What this file adds is the four decisions Bun does not make — which lane, where the output
 // goes, what gets compressed, and what the manifest says.
 //
-// The LANE is the one that matters, and it is one option: `target: 'browser'` is what
-// `abide/compiler/plugin` reads to decide that a `server/rpc/**` module elides to its address rather
-// than loading its body. So a client entry importing `getUser` gets a `remote("users/getUser")` and
-// the database driver behind it never enters the graph — which is a claim about bytes on a wire, so
-// `test/build.test.ts` asserts it against the built text rather than trusting the option.
+// The lane itself is `lane.ts`, shared with `abide dev`: what the bundle CONTAINS is the same
+// question for both commands, and this one answers only the three below.
 
 import { rm } from 'node:fs/promises'
-import { basename, relative as relativeTo, resolve as resolvePath } from 'node:path'
+import { basename } from 'node:path'
 import { promisify } from 'node:util'
 import { brotliCompress, constants as ZLIB } from 'node:zlib'
-import { abidePlugin } from '$compiler/plugin.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import {
+    assetOf,
     CLIENT_DIR,
     CLIENT_ENTRIES,
     type ClientAsset,
     type ClientManifest,
+    entryNames,
     firstPresent,
     MANIFEST_FILE,
     type Sidecar,
 } from '../CLIENT_BUILD.ts'
+import { clientBuild, type Lane } from './lane.ts'
 import { BOLD, colored, DIM, paint, plural } from './paint.ts'
+
+/**
+ * What a build that is going to be DEPLOYED asks for, where `abide dev` reverses all three.
+ *
+ * The hash is in the NAME rather than in a query, so a chunk is immutable at its address and an
+ * operator caches the directory forever. `[name]` stays in front of it because an address legible in
+ * a network panel is worth the eight bytes — the same trade the transport lane makes by keeping the
+ * module path in an endpoint's URL instead of hashing it.
+ */
+const SHIPPED: Lane = {
+    minify: true,
+    naming: { entry: '[name]-[hash].[ext]', chunk: '[name]-[hash].[ext]', asset: '[name]-[hash].[ext]' },
+    sourcemap: 'none',
+}
 
 export async function build(argv: string[]): Promise<number> {
     // Entries, not flags — the command IS the build, and a knob here would be a second place the
@@ -58,29 +71,7 @@ export async function build(argv: string[]): Promise<number> {
         return CLI_EXIT_CODES.usage
     }
 
-    const built = await Bun.build({
-        entrypoints: entries,
-        target: 'browser',
-        // The `code-split` half of the row. Every `import()` in a route table is a split point, so a
-        // page's module is absent until somebody navigates to it — which is the whole reason a route
-        // is reached through a loader rather than an import.
-        splitting: true,
-        minify: true,
-        // The hash is in the NAME rather than in a query, so a chunk is immutable at its address and
-        // an operator caches the directory forever. `[name]` stays in front of it because an address
-        // legible in a network panel is worth the eight bytes — the same trade the transport lane
-        // makes by keeping the module path in an endpoint's URL instead of hashing it.
-        naming: { entry: '[name]-[hash].[ext]', chunk: '[name]-[hash].[ext]', asset: '[name]-[hash].[ext]' },
-        // The operator's environment is not the browser's. Bun will inline `process.env.X` on
-        // request, and this is the one build where doing so publishes `ABIDE_IDENTITY_SECRET` to
-        // everybody who loads the page — a client asks `GET /__abide/identity` for what it may know.
-        env: 'disable',
-        plugins: [abidePlugin],
-        // The logs are this command's output and the exit code is what says it failed, which is the
-        // rule `abide check` already follows. A throw here would put a stack trace in front of a
-        // diagnostic somebody is trying to read.
-        throw: false,
-    })
+    const built = await clientBuild(entries, SHIPPED)
 
     if (!built.success) {
         for (const message of built.logs) console.error(String(message))
@@ -109,18 +100,7 @@ export async function build(argv: string[]): Promise<number> {
     const assets: Record<string, ClientAsset> = {}
     for (let at = 0; at < names.length; at++) assets[names[at] as string] = settled[at] as ClientAsset
 
-    // Bun hands entry points back in the order they were given, so the two lists zip. Matching on the
-    // filename instead would need this to reproduce `[name]-[hash]`, which is the bundler's rule and
-    // not ours to restate.
-    const produced: Record<string, string> = {}
-    let at = 0
-    for (const artifact of built.outputs) {
-        if (artifact.kind !== 'entry-point') continue
-        const entry = entries[at++]
-        if (entry !== undefined) produced[relative(root, entry)] = basename(artifact.path)
-    }
-
-    const manifest: ClientManifest = { entries: produced, assets }
+    const manifest: ClientManifest = { entries: entryNames(root, entries, built.outputs), assets }
     await Bun.write(`${root}/${MANIFEST_FILE}`, `${JSON.stringify(manifest, null, 4)}\n`)
 
     report(manifest)
@@ -131,12 +111,7 @@ export async function build(argv: string[]): Promise<number> {
 async function written(out: string, name: string, artifact: Bun.BuildArtifact): Promise<ClientAsset> {
     const bytes = new Uint8Array(await artifact.arrayBuffer())
     await Bun.write(`${out}/${name}`, bytes)
-    return {
-        kind: artifact.kind === 'entry-point' ? 'entry' : artifact.kind === 'chunk' ? 'chunk' : 'asset',
-        size: bytes.byteLength,
-        type: artifact.type,
-        encodings: await compress(out, name, bytes),
-    }
+    return assetOf(artifact, bytes.byteLength, await compress(out, name, bytes))
 }
 
 // Brotli through `node:zlib` because `Bun.*` has no brotli — it has gzip, deflate and zstd. The one
@@ -230,15 +205,4 @@ function report(manifest: ClientManifest): void {
 
 function bytes(count: number): string {
     return count < 1024 ? `${count} B` : `${(count / 1024).toFixed(1)} kB`
-}
-
-/**
- * A path as the manifest records it: relative to the root, so a build means the same in a container.
- *
- * Through `node:path` rather than a string slice, because the KEY has to be what the file is and not
- * how somebody typed it — `abide build ./client.ts` and `abide build client.ts` name one entry, and a
- * manifest that recorded them as two would hand a server a name it cannot look up.
- */
-function relative(root: string, path: string): string {
-    return relativeTo(root, resolvePath(root, path))
 }

@@ -14,32 +14,16 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { CLIENT_ROUTE, type ClientManifest, MANIFEST_FILE } from 'abide/cli'
-import { abide, BINARY, ended, type Reading, EXAMPLE_ROOT as ROOT, reading, spawn } from './spawned.ts'
-
-/** The app, plus the one thing a case needs that a live child does not carry: where it is listening. */
-interface Running extends Reading {
-    base: string
-}
+import { abide, BINARY, ended, EXAMPLE_ROOT as ROOT, type Running, spawn, started } from './spawned.ts'
 
 let app: Running
 let manifest: ClientManifest
 /** What `client.ts` compiled to, which is the only name that is not a guess. */
 let entry: string
 
-/**
- * Port `0` — the kernel's own spelling of "whatever is free", and what the printed URL then reports.
- *
- * A fixed port would make this file a test of what else is running on this machine. The one case that
- * NEEDS a fixed port is the one about a port being taken, and it takes one it holds itself.
- */
-async function started(argv: string[], cwd = ROOT): Promise<Running> {
-    const app = reading(['bun', BINARY, ...argv], { cwd })
-    // The app's own `log()` lines come first — `onStart` runs before the socket exists — and the
-    // report has a second line under the address, so every claim here is about a line that ARRIVES
-    // rather than about a line number.
-    const listening = await app.until('listening ')
-    return { ...app, base: listening.slice('listening '.length).trim() }
-}
+// Port `0` throughout — the kernel's own spelling of "whatever is free". A fixed port would make this
+// file a test of what else is running on this machine. The one case that NEEDS a fixed port is the one
+// about a port being taken, and it takes one it holds itself.
 
 beforeAll(async () => {
     const built = await abide(['build'], { cwd: ROOT })

@@ -181,7 +181,7 @@ Probes never throw and never start work.
 | directory is the kind | `server/rpc/**` is rpc; `server/sockets/**` is a socket |
 | syntactic recognition | `export const NAME = GET(…)`. Any other export in those directories is a compile error naming the export |
 | reserved prefix | Everything abide serves is under `/__abide/`; `dispatch` returns `undefined` for anything outside it |
-| who imports it | The BOOT does. A handler is reachable once its module has been imported, and `abide start` scans `server/rpc/**` and `server/sockets/**` from the project root and imports each — anchored there, so a transport directory nested elsewhere in the tree is not this app's. An app importing one for its side effect is a list kept in step by hand |
+| who imports it | The BOOT does. A handler is reachable once its module has been imported, and `abide start` / `abide dev` scan `server/rpc/**` and `server/sockets/**` from the project root and import each — anchored there, so a transport directory nested elsewhere in the tree is not this app's. An app importing one for its side effect is a list kept in step by hand |
 | no hash | The module's path IS the address, so it is legible in a stack trace and a network panel |
 
 | File | Export | Served at |
@@ -780,8 +780,8 @@ that runs on both sides of the thing it wraps.
 
 Four conventions in the project root, and no wiring. Nothing in them imports a server, calls
 `Bun.serve`, mounts `dispatch`, opens a request scope, installs a signal handler, matches a route or
-builds a document — every one of those is the same code in every app, so `abide start` is where it
-lives.
+builds a document — every one of those is the same code in every app, so the booting binary is where
+it lives, once, for both `abide start` and `abide dev`.
 
 | Convention | What it is |
 | --- | --- |
@@ -839,7 +839,7 @@ failure in a line.
 | `abide repl` | A prompt with the isomorphic surface in scope and the `.abide` loader registered. A bare expression prints its value, and a source prints what it HOLDS — read through `peek`. Piped input is the same evaluation without the terminal. |
 | `abide run <file> [args…]` | Run a script under the abide runtime. Everything after `<file>` belongs to the SCRIPT, so it is SPAWNED: it reads its own `argv` and keeps its own exit code. |
 | `abide check [dir…]` | Type-check `.abide` script bodies, reporting every diagnostic on the `.abide` line. The list is stdout; the exit code says it failed. |
-| `abide dev [--port <n>]` | The `build` pipeline plus watch and full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken, carrying `APP_URL` with it so neither origin gate goes stale. |
+| `abide dev [--port <n>]` | Watch the project and keep the app up: the client bundled into MEMORY, the server restarted on every change, and full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken, then PINS what it bound so no restart moves the app. `PORT` and `APP_URL` are written back from the socket and `config()` invalidated, so what the document reports is where it is actually listening and `abide logs` resolves an app a hop moved. |
 | `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the `client.ts` beside your `app.ts`. |
 | `abide start [--port <n>]` | Boot `app.ts` and serve its `pages/` in its `app.html`, with the bundle in front and `/__abide/**` behind that. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
 | `abide logs` | Tail `GET /__abide/logs`: the ring replayed, then every line as written. Printed by the rules THIS process's stdout answers to, with `+Nms` rebuilt from the record times. |
@@ -858,6 +858,35 @@ failure in a line.
 
 Exit codes (`CLI_EXIT_CODES`, shared verbatim with the compiled binary): `0` ok · `1`
 failed/unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx.
+
+`abide start` and `abide dev` assemble the same four layers from the same code, and differ in three
+decisions: where the bundle came from, what a taken port means, and whether Bun's `development` is on.
+`abide dev` is ONE process: the main thread watches and owns the lifecycle, and a WORKER holds the
+app. Replacing that worker is the reload. What has to be thrown away is a module graph, not an
+operating system process — a graph is cached by resolved path and cannot be evicted, so re-importing
+`app.ts` behind a cache-busting query would reload that one file while every module it imports stayed
+as it was, leaving the app half of two versions with nothing saying so. An isolate is the smallest
+thing that contains a whole graph, so terminating one is the reload. There is no dependency graph
+deciding that a css edit "only" needs the client rebuilt.
+
+Everything a child process would have cost is therefore absent rather than handled: no stdout to
+relay and no colour lost to relaying it, no IPC to carry the port back, no exit code to forward, no
+signal to pass down, and no way to leave a server running that outlived its supervisor — killing the
+pid takes the socket with it, because it is the same pid. The one thing a worker does not get is
+SIGNALS: `boot` installs its handlers in there and they never fire, so the main thread asks the worker
+to `stop` and the app's `onStop` runs because of that message.
+
+The dev bundle is `Bun.build` into memory: unminified, and entry-named by its SOURCE (`client.js`, not
+`client-<hash>.js`) so a breakpoint and a stack frame survive a rebuild — which is what `no-store` on
+every dev asset pays for. Nothing is written to `.abide/client`, so `abide dev` cannot leave a
+half-built directory for `abide start` to serve. A client build that FAILS is not a process that
+refuses: the pages still render, and the reload client is inline rather than bundled precisely so the
+page can reconnect once the build is fixed. Reload is that socket and no message on it — a "reload
+now" frame could only be written by a process that is about to stop being the one serving the page, so
+the CONNECTION is the signal. The watcher ignores dotted directories — which is what tells `.abide/`
+apart from `counter.abide` — plus `node_modules/` and the generated `.abide.ts` sidecars, and the
+worker force-closes its socket before draining, since a socket
+never ends and `shutdown()`'s graceful close would otherwise wait out every open tab on every restart.
 
 `abide logs` asks `ABIDE_APP_URL`, then `APP_URL`, then `config().PORT` on localhost, and sends `ABIDE_APP_TOKEN`
 as a bearer for whatever is in front of the app; the feed's own gate is `ABIDE_LOGS`, and a closed one

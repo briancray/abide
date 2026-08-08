@@ -9,6 +9,11 @@
 // `.abide/` is already this project's build directory: `abide/compiler/shapes` writes `shapes.json`
 // beside this, and the whole of it is gitignored. One directory rather than two means one line in a
 // `.dockerignore` and one thing to delete.
+//
+// `node:path` is the only weight here, and it is a builtin: the rule is that reading a manifest must
+// not load a BUNDLER, not that this file may not resolve a path.
+
+import { basename, relative, resolve } from 'node:path'
 
 /**
  * Where `abide start` serves the bundle FROM — the address side of the same fact.
@@ -56,6 +61,37 @@ export async function firstPresent(root: string, names: string[]): Promise<strin
 }
 
 /**
+ * Which file each entry produced, keyed as the manifest keys it.
+ *
+ * Here rather than in either builder because BOTH lanes produce a manifest — `abide build` writes one
+ * to disk and `abide dev` holds one in memory — and the entry keys are what an `app.html`'s
+ * `src="./client.ts"` is looked up by. Two copies of this is one lane rewriting a document and the
+ * other quietly not.
+ *
+ * Bun hands entry points back in the order they were given, so the two lists zip. Matching on the
+ * filename instead would need this to reproduce `[name]-[hash]`, which is the bundler's rule and not
+ * ours to restate.
+ *
+ * The key is what the file IS rather than how somebody typed it: `abide build ./client.ts` and
+ * `abide build client.ts` name one entry, and a manifest recording them as two would hand a server a
+ * name it cannot look up.
+ */
+export function entryNames(
+    root: string,
+    entries: string[],
+    outputs: readonly { kind: string; path: string }[],
+): Record<string, string> {
+    const produced: Record<string, string> = {}
+    let at = 0
+    for (const artifact of outputs) {
+        if (artifact.kind !== 'entry-point') continue
+        const entry = entries[at++]
+        if (entry !== undefined) produced[relative(root, resolve(root, entry))] = basename(artifact.path)
+    }
+    return produced
+}
+
+/**
  * A `Content-Encoding` token, which is also what an `Accept-Encoding` is matched against.
  *
  * `br` and `gzip` and not the third thing Bun can do: `zstd` is compressed natively by `Bun.*` where
@@ -89,6 +125,27 @@ export interface ClientAsset {
      * accepts, so "best available" costs no comparison at request time.
      */
     encodings: Sidecar[]
+}
+
+/**
+ * One artifact as the manifest records it, without the bytes.
+ *
+ * Beside `entryNames` and for the reason that one is here: BOTH lanes produce a manifest, and the
+ * `kind` vocabulary decided twice is a Bun artifact classified one way on a disk and another in
+ * memory, with `test/build.test.ts` asserting only one of them. The size and the sidecars are the
+ * caller's, because only it knows where the bytes went.
+ */
+export function assetOf(
+    artifact: { kind: string; type: string },
+    size: number,
+    encodings: Sidecar[],
+): ClientAsset {
+    return {
+        kind: artifact.kind === 'entry-point' ? 'entry' : artifact.kind === 'chunk' ? 'chunk' : 'asset',
+        size,
+        type: artifact.type,
+        encodings,
+    }
 }
 
 /**

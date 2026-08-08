@@ -1,0 +1,278 @@
+// The worker `abide dev` runs the app in.
+//
+// A WORKER rather than a child process, and rather than nothing at all. The constraint that rules out
+// "nothing at all" is that a module graph is cached by resolved path and cannot be evicted:
+// re-importing `app.ts` behind a cache-busting query reloads that one file while every module it
+// imports stays the version already in memory, so the app becomes half of two versions with nothing
+// saying so. Something has to be thrown away whole.
+//
+// A worker is the smallest thing that can be. Each one is its own isolate with its own module
+// registry, so a fresh worker re-reads the whole graph — the leaf three imports down included — and
+// terminating the old one is what makes that true rather than hopeful. It costs a few milliseconds,
+// where a process costs a Bun startup on every save, and it keeps `abide dev` a single process: one
+// pid to watch, one to profile, one to kill, and no way to leave a server behind that outlived
+// whatever was supervising it.
+//
+// What that buys is paid for in one place: signals are NOT delivered to a worker. `boot` installs
+// handlers here and they never fire, so the main thread owns the lifecycle and says `stop` over a
+// message. Everything else about the app is exactly what `abide start` boots.
+//
+// Three things differ from `abide start`, and they are the three a developer is actually asking for:
+//
+//   the bundle    built HERE, into memory, unminified and uncompressed. Nothing is written to
+//                 `.abide/client`, so `abide dev` cannot leave a half-built directory behind for the
+//                 next `abide start` to serve
+//   the port      HOPS. A developer wants the thing to come up; a deploy wants to fail loudly, which
+//                 is why `abide start` refuses the same case
+//   the shell     carries a reload client, which is a socket through the ordinary mux and not a
+//                 second server on a second port
+//
+// The reload is a full page load rather than a module swap. A restart already threw away every piece
+// of server state, so there is nothing on the client worth preserving against it — and "the browser
+// shows what the files say" is a claim a full load can actually make.
+
+import { config } from '$server/config.ts'
+import { boot, shutdown } from '$server/lifecycle.ts'
+import { register, websocket } from '$server/registry.ts'
+import { socket } from '$server/rpc.ts'
+import { SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
+import { messageOf } from '$shared/internal/probes.ts'
+import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
+import { CLIENT_ENTRIES, entryNames, firstPresent } from '../CLIENT_BUILD.ts'
+import { heldClient, type LoadedClient } from './assets.ts'
+import { clientBuild, type Lane } from './lane.ts'
+import { type Answer, assemble, portFrom, report } from './layers.ts'
+
+/**
+ * The worker's own global surface, named rather than assumed.
+ *
+ * `self` is only typed where the DOM's worker lib is, and this package's `lib` is the runtime's. The
+ * two members this needs are the whole protocol, so writing them down is cheaper than a lib that
+ * would also hand every other file a `window`.
+ */
+const scope = globalThis as unknown as {
+    postMessage: (message: unknown) => void
+    onmessage: ((event: { data: unknown }) => void) | null
+}
+
+/** Main → here. `argv` starts the app; `stop` drains it. */
+export interface Asked {
+    argv?: string[]
+    /** The port the LAST worker bound, or `null` on the first. See `dev.ts`. */
+    bind?: number | null
+    stop?: boolean
+}
+
+/** Here → main: it is up on `port`, or it refused with `refused` as the exit code. */
+export interface Said {
+    ready?: boolean
+    port?: number
+    refused?: number
+    stopped?: boolean
+}
+
+/**
+ * Where a browser waits to be told the app came back.
+ *
+ * Under the reserved prefix and through the ordinary socket mux, so a dev server claims no address
+ * an operator does not already proxy with one pattern — and so the reload path is the same transport
+ * every other socket in the app uses rather than a private one that only works in development.
+ *
+ * Namespaced under `abide/` because the id space is the app's: a project with its own
+ * `server/sockets/reload.ts` registers `reload`, and two declarations at one address is one of them
+ * silently winning.
+ */
+const RELOAD_ID = 'abide/reload'
+
+/**
+ * Nothing is ever published on it, and that is the design.
+ *
+ * The signal is the CONNECTION, not a message: this worker being torn down is what closes every
+ * subscriber's socket, and the next one accepting a connection is what says the app is back. A
+ * message would need a live server to send it, which is exactly what a restart does not have — a
+ * "reload now" frame can only be written by a process that is about to stop being the one serving
+ * the page.
+ */
+const reload = socket<never>()
+register('socket', [[RELOAD_ID, 'reload']], { reload })
+
+/**
+ * The reload client, appended to the end of the shell's head.
+ *
+ * Inline and hand-written, because it must not depend on the bundle: a client build that is BROKEN
+ * is exactly when a developer needs the page to still reconnect and reload itself once the build is
+ * fixed. Reconnecting is the whole of it — the first open is this page's own, and any open after
+ * that is a server that was not there when the page loaded.
+ *
+ * The backoff exists so a page left open after Ctrl-C is not a socket attempt every 100ms forever.
+ */
+const RELOAD_CLIENT =
+    '<script>(()=>{' +
+    `const at=(location.protocol==='https:'?'wss://':'ws://')+location.host+${JSON.stringify(SOCKET_PREFIX + RELOAD_ID)};` +
+    'let seen=false,wait=100;' +
+    'const open=()=>{const live=new WebSocket(at);' +
+    'live.onopen=()=>{if(seen)location.reload();seen=true;wait=100};' +
+    'live.onclose=()=>setTimeout(open,wait=Math.min(wait*2,1000))};' +
+    'open()})()</script>'
+
+/** How far `--port` will walk before giving up. A range, so a busy machine fails rather than spins. */
+const HOPS = 64
+
+/** The socket this worker bound, so `stop` can reach it. Null until it is up. */
+let bound: ReturnType<typeof Bun.serve> | null = null
+
+scope.onmessage = (event): void => {
+    const asked = event.data as Asked
+    if (asked.stop === true) void halt()
+    else if (asked.argv !== undefined) void run(asked.argv, asked.bind ?? null)
+}
+// Last, so main is never told this is listening before there is an `onmessage` to hear the reply.
+scope.postMessage({ ready: true } satisfies Said)
+
+async function run(argv: string[], pin: number | null): Promise<void> {
+    const asked = portFrom(argv)
+    if (typeof asked === 'string') {
+        console.error(`abide dev: ${asked}`)
+        console.error('       usage: abide dev [--port <n>]')
+        return scope.postMessage({ refused: CLI_EXIT_CODES.usage } satisfies Said)
+    }
+    // The same rule `abide start` states: the flag is spelled as the VARIABLE, so `config().PORT` is
+    // the one answer to what this process was asked to listen on rather than a second number beside
+    // it.
+    if (asked !== null) process.env.PORT = String(asked)
+    // And the pin beats the flag, for the reason the flag beats an app's own default: it is the more
+    // specific statement about where this SESSION lives. It is the port a previous worker actually
+    // bound, so honouring it is what keeps a restart invisible to a page that is already open.
+    if (pin !== null) process.env.PORT = String(pin)
+
+    const root = process.cwd()
+    // Unawaited. The bundle and the app's own module graph read nothing of each other, and `assemble`
+    // does not look at the bundle until it cuts the shell — so on every save the build runs beside the
+    // handler scan and the `app.ts` import rather than in front of them.
+    const building = bundle(root)
+
+    const assembled = await assemble({ root, label: 'abide dev', client: building, head: RELOAD_CLIENT })
+    if (typeof assembled === 'number') return scope.postMessage({ refused: assembled } satisfies Said)
+
+    const first = config().PORT
+    let running: Awaited<ReturnType<typeof boot<ReturnType<typeof Bun.serve>>>>
+    try {
+        running = await boot(() => {
+            bound = listening(first, assembled.answer)
+            return bound
+        })
+    } catch (failure) {
+        console.error(`abide dev: ${messageOf(failure)}`)
+        return scope.postMessage({ refused: CLI_EXIT_CODES.failed } satisfies Said)
+    }
+    // `boot` says so on `abide:lifecycle` — an `onStart` that returned without calling `start()` is
+    // the app deciding this process should not serve, so it is an outcome rather than a failure.
+    if (running === null) return scope.postMessage({ refused: CLI_EXIT_CODES.ok } satisfies Said)
+
+    // A `Server`'s own `port` is optional because a unix socket has none, and this one always bound a
+    // TCP port — the fallback is the number it was asked for, which is also the only case where the
+    // two agree.
+    const landed = running.port ?? first
+
+    // The socket is the truth about this process now, so the document is corrected to match it.
+    // `APP_URL` in particular: it is what `abide logs` in another terminal resolves the app by, and a
+    // hop that left it naming the port somebody ASKED for would point every reader at whatever else
+    // is on it. `invalidate` rather than a second answer beside `config()`, which is the whole reason
+    // that verb exists.
+    process.env.PORT = String(landed)
+    process.env.APP_URL = running.url.origin
+    config.invalidate()
+
+    const hopped = first !== 0 && landed !== first ? `hopped from ${first}` : undefined
+    report(running.url.href, assembled, hopped)
+    scope.postMessage({ port: landed } satisfies Said)
+}
+
+/**
+ * Drain this worker so the next one can have the port.
+ *
+ * The socket is closed FORCIBLY and first, then the app drains around it. A socket never ends — that
+ * is what a socket is — so the graceful close inside `shutdown()` waits for the connections the
+ * server is holding, and one browser tab on the reload channel makes that wait unbounded. Closing
+ * first means the app's `onStop` still runs, on every restart, rather than being the thing that hangs.
+ */
+async function halt(): Promise<void> {
+    bound?.stop(true)
+    bound = null
+    try {
+        await shutdown()
+    } catch (failure) {
+        console.error(`abide dev: the app did not drain cleanly — ${messageOf(failure)}`)
+    }
+    scope.postMessage({ stopped: true } satisfies Said)
+}
+
+/**
+ * The socket, walking up from `first` until one binds.
+ *
+ * Port `0` is the kernel's own spelling of "whatever is free", so there is nothing to hop TO and a
+ * failure there is a real one. Anything that is not `EADDRINUSE` is real too — a permission error
+ * walking up the range would try 64 ports and report the last one, which describes nothing.
+ */
+function listening(first: number, answer: Answer): ReturnType<typeof Bun.serve> {
+    let port = first
+    for (;;) {
+        try {
+            return Bun.serve({
+                port,
+                // On, where `abide start` has it off. The reason production keeps it off — Bun answers
+                // an uncaught throw with a page describing the stack — is the reason development wants
+                // it: there is no operator to leak to, and the stack is the point.
+                development: true,
+                fetch: answer,
+                websocket,
+            })
+        } catch (failure) {
+            const spent = first === 0 || port - first >= HOPS || port >= 65535
+            if (spent || (failure as { code?: string }).code !== 'EADDRINUSE') throw failure
+            port++
+        }
+    }
+}
+
+/**
+ * The three `abide build` decisions this command reverses.
+ *
+ * Minifying costs wall time on every save and buys nothing over a loopback; the names stay SOURCE
+ * names so a breakpoint and a stack frame survive a rebuild — which is what `no-store` on every dev
+ * asset pays for. A chunk keeps its hash because nothing points a human at one by name.
+ */
+const HELD: Lane = {
+    minify: false,
+    naming: { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]', asset: '[name].[ext]' },
+    sourcemap: 'linked',
+}
+
+/**
+ * The client lane, bundled into memory — or `null` for an app that has no client lane at all.
+ *
+ * A build that FAILS is not a process that refuses, and neither is a lane this cannot even read.
+ * The pages still render, the endpoints still answer, and the reload client is inline rather than
+ * bundled, so the page that comes up can still reconnect and reload itself the moment the build is
+ * fixed — which is the whole loop a developer is in when a build is broken. `abide start` makes the
+ * opposite call about the same state, and both are right: one is being asked to serve, and this one
+ * is being asked to help.
+ *
+ * So this NEVER rejects, which is also what lets `run` leave it in flight: a refusal from `assemble`
+ * returns without ever looking at it, and a promise nobody awaited is an unhandled rejection that
+ * would take the worker down instead of the message that explains it.
+ */
+async function bundle(root: string): Promise<LoadedClient | null> {
+    try {
+        const found = await firstPresent(root, CLIENT_ENTRIES)
+        if (found === null) return null
+
+        const built = await clientBuild([found], HELD)
+        if (built.success) return await heldClient(built.outputs, entryNames(root, [found], built.outputs))
+        for (const message of built.logs) console.error(String(message))
+    } catch (failure) {
+        console.error(`abide dev: ${messageOf(failure)}`)
+    }
+    console.error('abide dev: the client did not build — serving without a bundle')
+    return null
+}

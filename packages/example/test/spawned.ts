@@ -151,6 +151,35 @@ export function reading(command: string[], options?: SpawnOptions): Reading {
 }
 
 /**
+ * What `report` prints the address under — one line, written once in `layers.ts` and printed by every
+ * command that binds a socket. Named here so a case parses it rather than re-spelling the prefix.
+ */
+export const LISTENING = 'listening '
+
+/** The address off a `listening …` line. */
+export function addressOf(line: string): string {
+    return line.slice(LISTENING.length).trim()
+}
+
+/** A live child, plus the one thing it says that a case cannot guess: where it is listening. */
+export interface Running extends Reading {
+    base: string
+}
+
+/**
+ * Start the binary and wait for the address it printed.
+ *
+ * The app's own `log()` lines come first — `onStart` runs before the socket exists — and the report
+ * has a second line under the address, so this waits for a line that ARRIVES rather than counting to
+ * a line number. `abide start` and `abide dev` print the same one, which is why this is here rather
+ * than in whichever file needed it first.
+ */
+export async function started(argv: string[], cwd = EXAMPLE_ROOT): Promise<Running> {
+    const app = reading(['bun', BINARY, ...argv], { cwd })
+    return { ...app, base: addressOf(await app.until(LISTENING)) }
+}
+
+/**
  * Lines off a live process until one carries `text` — `''` for simply the next one, since every
  * string contains the empty one.
  *

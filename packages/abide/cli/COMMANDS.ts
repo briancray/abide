@@ -7,7 +7,7 @@
 //
 // What is NOT here does not exist. A row for a command that answers "not implemented" would be a
 // help screen advertising something, so an unwritten command is one this binary does not know:
-// `abide dev` exits `2` like any other word it was not given.
+// `abide deploy` exits `2` like any other word it was not given.
 
 import { BOLD, colored, DIM, paint } from './internal/paint.ts'
 
@@ -31,7 +31,7 @@ export interface Command {
     load: () => Promise<CommandBody>
 }
 
-/** Ordered as somebody meets them: poke at it, run something, check it, ship it, watch it. */
+/** Ordered as somebody meets them: poke at it, run something, check it, work on it, ship it, watch it. */
 export const COMMANDS: Command[] = [
     {
         name: 'repl',
@@ -50,6 +50,12 @@ export const COMMANDS: Command[] = [
         args: '[dir…]',
         blurb: 'Type-check `.abide` script bodies, reporting on the `.abide` line.',
         load: async () => (await import('./internal/check.ts')).check,
+    },
+    {
+        name: 'dev',
+        args: '[--port <n>]',
+        blurb: 'Serve the app and restart it on every change. --port HOPS to the next free one if taken.',
+        load: async () => (await import('./internal/dev.ts')).dev,
     },
     {
         name: 'build',
