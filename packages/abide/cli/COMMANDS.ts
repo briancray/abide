@@ -5,12 +5,11 @@
 // normal failure of a hand-written usage string, and it is not a failure this can have: `abide
 // --help` prints these rows, and `abide <name>` dispatches on these names.
 //
-// What is NOT here does not exist yet. A row for a command that answers "not implemented" would be a
-// help screen advertising something, and the honest place for what is still absent is docs/SPEC.md's
-// own not-built table, which names the rest of this: `scaffold`, `dev`, `build`, `start`, `compile`,
-// `bundle`, `lsp`.
+// What is NOT here does not exist. A row for a command that answers "not implemented" would be a
+// help screen advertising something, so an unwritten command is one this binary does not know:
+// `abide dev` exits `2` like any other word it was not given.
 
-import { BOLD, coloured, DIM, paint } from './internal/paint.ts'
+import { BOLD, colored, DIM, paint } from './internal/paint.ts'
 
 /** What a command does with the arguments after its own name. The number it answers is the exit code. */
 export type CommandBody = (argv: string[]) => Promise<number>
@@ -32,7 +31,7 @@ export interface Command {
     load: () => Promise<CommandBody>
 }
 
-/** Ordered as somebody meets them: poke at it, run something, check it, watch it. */
+/** Ordered as somebody meets them: poke at it, run something, check it, ship it, watch it. */
 export const COMMANDS: Command[] = [
     {
         name: 'repl',
@@ -51,6 +50,12 @@ export const COMMANDS: Command[] = [
         args: '[dir…]',
         blurb: 'Type-check `.abide` script bodies, reporting on the `.abide` line.',
         load: async () => (await import('./internal/check.ts')).check,
+    },
+    {
+        name: 'build',
+        args: '[entry…]',
+        blurb: 'Bundle the client into .abide/client: split, hashed, minified, precompressed.',
+        load: async () => (await import('./internal/build.ts')).build,
     },
     {
         name: 'logs',
@@ -73,7 +78,7 @@ export function commandNamed(name: string): Command | undefined {
  * hand-written screen always gets wrong first.
  */
 export function usage(): string {
-    const on = coloured()
+    const on = colored()
     const bold = (text: string) => paint(text, BOLD, on)
     const dim = (text: string) => paint(text, DIM, on)
 

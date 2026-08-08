@@ -1,0 +1,71 @@
+// The example's CLIENT entry — what `abide build` is pointed at. `ssr.ts` beside it is the other lane.
+//
+// Two things happen here that cannot happen anywhere else, and they are the two claims the build is
+// asserted against:
+//
+// The route table is written by HAND, with a static `import()` per page. That is the known limit the
+// README names — `pages(dir)` reads a directory and a browser has none — and it is also exactly what
+// makes the bundle splittable: an `import()` the bundler can SEE is a chunk, so `/users/[id]`'s page
+// is absent from the first load and arrives when somebody navigates. A table built by scanning at
+// runtime would ship every page in the entry.
+//
+// And it imports an endpoint from `server/rpc/users.ts` by the same name the server does. In this
+// lane that module elides to `remote("users/getUser")`, so `server/db.ts` — a driver with a
+// module-level side effect a bundler may not drop — never enters the graph at all. The build test
+// asserts its marker is absent from every byte written, because "the server half does not ship" is a
+// claim about the output rather than about the option that produced it.
+
+import { navigate, outlet, route, routes } from 'abide'
+import { hydrate } from 'abide/ui'
+import { getUser } from './server/rpc/users.ts'
+
+routes([
+    {
+        path: '/',
+        page: () => import('./pages/page.abide'),
+        layouts: [() => import('./pages/layout.abide')],
+    },
+    {
+        path: '/users/[id]',
+        page: () => import('./pages/users/[id]/page.abide'),
+        layouts: [() => import('./pages/layout.abide'), () => import('./pages/users/layout.abide')],
+    },
+    {
+        path: '/files/[...path]',
+        page: () => import('./pages/files/[...path]/page.abide'),
+    },
+])
+
+const root = document.querySelector('#app')
+if (root !== null) hydrate(root, outlet)
+
+// An ordinary link, intercepted: the page it names is a chunk that is not here yet, and `navigate`
+// does not commit the route until it has arrived — which is the whole of what `route().navigating`
+// reports.
+document.addEventListener('click', (event) => {
+    const link = (event.target as Element | null)?.closest?.('a[href^="/"]')
+    if (link === null || link === undefined) return
+    event.preventDefault()
+    void navigate(link.getAttribute('href') as string)
+})
+
+// The endpoint, called from the browser: this is the stub's address and nothing else, and reading the
+// slot is what reaches over the wire.
+//
+// The refusal is narrowed here, in the lane that has none of the declaration in it. `getUser` returns
+// its `NoSuchUser` failure rather than throwing it, so the name and the shape are in the handler's
+// TYPE — and the type is all that crosses: the schema that checks the data is server-side text this
+// bundle never sees, and `caught.data.id` still has a number in it on this side.
+export async function nameOf(id: number): Promise<string> {
+    const slot = getUser({ id })
+    try {
+        return (await slot).name
+    } catch (caught) {
+        // The message deliberately does not spell the word the `/users/[id]` page renders: the build
+        // test probes the entry for that text to prove the page is a chunk of its own.
+        if (slot.isError(caught, 'NoSuchUser')) return `nobody with id ${caught.data.id}`
+        throw caught
+    }
+}
+
+export { route }

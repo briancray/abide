@@ -9,21 +9,22 @@
 // the browser lane, so nothing about this file — or anything it imports — reaches a browser.
 
 import { type Channel, type ChannelOptions, channel, type RoomChannel } from '$shared/channel.ts'
-import { envNumber } from '$shared/internal/env.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
 import {
+    type Answer,
     chunkedBody,
-    errorFrame,
     errorPayload,
     JSON_TYPE,
     NDJSON_TYPE,
+    type Refusals,
     TTL_HEADER,
 } from '$shared/internal/wire.ts'
 import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
 import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
-import { headersFor } from './responses.ts'
+import { knobOf } from './config.ts'
+import { failed, headersFor } from './responses.ts'
 import { type Gate, gate, publishable, type Schema } from './schema.ts'
 
 /**
@@ -82,7 +83,8 @@ export interface RpcPolicy {
      */
     address: string
     crossOrigin: string[] | null
-    maxBodySize: number
+    /** What the declaration named, or `null` for "ask the process" — see `bodyCeiling`. */
+    maxBodySize: number | null
     /** How long the client may serve what it loads, in ms. `Infinity` says nothing on the wire. */
     ttl: number
     /** The handler yields, so the answer arrives as chunks. Published, because a caller plans for it. */
@@ -109,6 +111,17 @@ const RPC_POLICY = new WeakMap<object, RpcPolicy>()
 
 export function policyOf(rpc: object): RpcPolicy | undefined {
     return RPC_POLICY.get(rpc)
+}
+
+/**
+ * The largest body this endpoint accepts: what it declared, else what the process is configured with.
+ *
+ * Resolved at the DOOR rather than at the declaration, because a declaration runs at import and an
+ * `onConfig` default registered after it would otherwise never be seen. Here rather than in
+ * `registry.ts` so the variable and its floor are spelled once, beside the other knob this file owns.
+ */
+export function bodyCeiling(policy: RpcPolicy | undefined): number {
+    return policy?.maxBodySize ?? knobOf('ABIDE_MAX_REQUEST_BODY_SIZE')
 }
 
 /** What the registry calls once it knows where a declaration lives, so a failure names the endpoint. */
@@ -148,11 +161,16 @@ function isGenerator(body: unknown): boolean {
 type Produced<T> = T | Promise<T> | AsyncIterable<T>
 
 /**
- * The onion every chain in abide is, written once.
+ * The onion a chain WITH A PAYLOAD is, written once.
  *
  * `next()` takes no arguments; what the chain is ABOUT is the second parameter, so an authorization
  * that cannot see what was asked for is not the only kind anyone can write. Both callers below hand
  * it a different payload and a different innermost run, and nothing else about them differs.
+ *
+ * `lifecycle.ts` has the third onion and deliberately does not come through here: a request rung has
+ * no payload to see (it holds the `Request` itself), and it carries a called-next()-twice guard that
+ * costs a closure and a flag per rung — which a declaration's chain, run per call, should not pay
+ * for a mistake only an onion over a whole request can make.
  */
 function through<Payload, R>(
     chain: ((next: () => R, payload: Payload) => R)[],
@@ -174,13 +192,29 @@ function chained<Args, T>(
     return (args: Args): Produced<T> => through(middleware, args, () => body(args))
 }
 
+/**
+ * The declaration's type, split in two: what the call ANSWERS with, and what it REFUSES with.
+ *
+ * A handler that `return`s an `error.typed` failure has it in its own return type, and both halves
+ * have a reader. The value half is what a caller's cell holds and what the compiler publishes as the
+ * output shape — a refusal left in it would be a schema saying the answer might be an error object.
+ * The refusal half is what `fn(args).isError(e, name)` narrows against, and it is a third type
+ * parameter rather than a second reading of the first so that neither reader has to strip the other.
+ */
+type Declared<Args, T> = Rpc<Args, Answer<T>, Refusals<T>>
+
 function declare<Args, T>(
     method: Method,
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T>,
-): Rpc<Args, T> {
+): Declared<Args, T> {
     const streams = isGenerator(body)
-    const limit = options.timeout ?? envNumber('ABIDE_RPC_TIMEOUT', 300_000)
+    // NOT read here. A declaration runs at IMPORT, which is before `onConfig` could have registered,
+    // so a timeout captured now could never see an app's default — the one ordering that made this
+    // knob unreachable. `config()` is memoised, so asking per call is a null check and a property
+    // load, and it is what makes `config.invalidate()` honest for an endpoint declared long before.
+    const declaredTimeout = options.timeout
+    const limitOf = (): number => declaredTimeout ?? knobOf('ABIDE_RPC_TIMEOUT')
     const run = chained(body, options.middleware)
 
     // A read retains what it loaded; a mutation retains nothing, which is `ttl: 0` — the slot still
@@ -191,7 +225,9 @@ function declare<Args, T>(
     const policy: RpcPolicy = {
         address: method,
         crossOrigin: options.crossOrigin ?? null,
-        maxBodySize: options.maxBodySize ?? envNumber('ABIDE_MAX_REQUEST_BODY_SIZE', Infinity),
+        // `null` is "ask the process" — resolved by `bodyCeiling` at the door, for the reason
+        // above: a declaration cannot see a config that is registered after it.
+        maxBodySize: options.maxBodySize ?? null,
         ttl,
         streams,
         input: publishable(declared?.input),
@@ -221,6 +257,7 @@ function declare<Args, T>(
         }
         const produced = run(checked)
         const source = (isThenable(produced) ? await produced : produced) as AsyncIterable<T>
+        const limit = limitOf()
         if (limit === NO_LIMIT && output === null) {
             yield* source
             return
@@ -265,6 +302,9 @@ function declare<Args, T>(
         // Guarded, never awaited: a synchronous handler must settle IN THE CALL, with no promise
         // wrap and no microtask before the first read sees it.
         if (!isThenable(produced)) return output === null ? produced : (output(produced) as Produced<T>)
+        // Below the guard: a timeout is only meaningful for something that has not settled, so the
+        // synchronous path must not pay the lookup.
+        const limit = limitOf()
         const settling: Promise<T> =
             limit === NO_LIMIT
                 ? (produced as Promise<T>)
@@ -285,7 +325,9 @@ function declare<Args, T>(
         raw: (args) => Promise.resolve(respond(rpc, args)),
     })
     RPC_POLICY.set(rpc, policy)
-    return rpc
+    // The split is a claim about the TYPE and about nothing at runtime: a declared failure is thrown,
+    // so the value a slot ever holds is already the answer half.
+    return rpc as Declared<Args, T>
 }
 
 // --- the response ------------------------------------------------------------
@@ -300,25 +342,6 @@ function statusOf(error: unknown): number {
 function wireHeaders(ttl: number, type: string, extra: Record<string, string> | undefined): Headers {
     if (ttl === Infinity) return headersFor(extra, { 'content-type': type })
     return headersFor(extra, { 'content-type': type, [TTL_HEADER]: String(ttl) })
-}
-
-/**
- * A failure as a response, in the one shape a caller decodes.
- *
- * Takes the NAME and the message rather than an `Error`, because the gate in `registry.ts` refuses
- * with neither in hand — building one there only to read two fields back off it captures a stack per
- * 404, and `errorPayload` throws the rest away.
- */
-export function failed(
-    name: string,
-    message: string,
-    status: number,
-    extra?: Record<string, string>,
-): Response {
-    return new Response(JSON.stringify(errorFrame(name, message)), {
-        status,
-        headers: wireHeaders(Infinity, JSON_TYPE, extra),
-    })
 }
 
 /**
@@ -360,7 +383,7 @@ export function respond<Args, T>(
         (settled) => value(settled, ttl, extra),
         (error: unknown) => {
             const carried = errorPayload(error).error
-            return failed(carried.name, carried.message, statusOf(error), extra)
+            return failed(carried.name, carried.message, statusOf(error), extra, carried.data)
         },
     )
 }
@@ -378,35 +401,35 @@ function value(held: unknown, ttl: number, extra: Record<string, string> | undef
 export function GET<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
-): Rpc<Args, T> {
+): Declared<Args, T> {
     return declare('GET', body, options)
 }
 
 export function POST<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
-): Rpc<Args, T> {
+): Declared<Args, T> {
     return declare('POST', body, options)
 }
 
 export function PUT<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
-): Rpc<Args, T> {
+): Declared<Args, T> {
     return declare('PUT', body, options)
 }
 
 export function PATCH<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
-): Rpc<Args, T> {
+): Declared<Args, T> {
     return declare('PATCH', body, options)
 }
 
 export function DELETE<Args, T>(
     body: (args: Args) => Produced<T>,
     options: RpcOptions<Args, T> = {},
-): Rpc<Args, T> {
+): Declared<Args, T> {
     return declare('DELETE', body, options)
 }
 

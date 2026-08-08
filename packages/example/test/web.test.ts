@@ -29,14 +29,14 @@ describe('web pages', () => {
         })
     }
 
-    // The colourer's failure mode is silent: a scanner that mis-reads a regex or a nested `${}` drops
-    // or repeats characters, and the card then shows code nobody wrote. Colour is a matter of taste;
+    // The colorer's failure mode is silent: a scanner that mis-reads a regex or a nested `${}` drops
+    // or repeats characters, and the card then shows code nobody wrote. Color is a matter of taste;
     // every other character surviving in order is not.
     //
     // Leading whitespace is the one thing the pane rewrites — see `outdent` — so it is the one thing
     // this cannot compare. Line COUNT still has to match: an outdent that ate a newline would pass a
     // per-character check and ruin the pane.
-    test('colouring a case body loses nothing but leading whitespace', () => {
+    test('coloring a case body loses nothing but leading whitespace', () => {
         const bare = (text: string): string => text.replace(/^[ \t]+/gm, '')
         let bodies = 0
         for (const suite of SUITES) {

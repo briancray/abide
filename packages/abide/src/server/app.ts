@@ -1,7 +1,7 @@
 // Where the app's name comes from when nobody declared one, and where its version comes from at all.
 //
-// `ABIDE_APP_NAME` is the answer everywhere it is set, and `$shared/log.ts` reads it on its own. This
-// file is only the fallback under it — package.json's `name`, and the `version` beside it that the
+// `ABIDE_APP_NAME` is the answer everywhere it is set, and `$shared/log.ts` asks the document for it.
+// This file is only the fallback under it — package.json's `name`, and the `version` beside it that the
 // health document publishes — and it lives here because finding one means walking a filesystem, which
 // is a server. Installed as a source rather than called, so `$shared` keeps its node-free import
 // graph and a browser bundle never carries a `fs` shim it would only ever find empty. Installed at
@@ -13,6 +13,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { env } from '$shared/internal/env.ts'
 import { appName, useAppNameSource } from '$shared/log.ts'
+import { knobOf } from './config.ts'
 
 /** What the climb below is looking for: the two facts an app is identified by. */
 interface Manifest {
@@ -91,8 +92,10 @@ export function appVersion(): string {
  * nor changes inside one.
  */
 export function appDataDir(): string {
-    const declared = env('ABIDE_DATA_DIR')
-    if (declared !== undefined) return declared
+    // Through the document, like every other knob abide reads: `onConfig(() => ({ ABIDE_DATA_DIR }))`
+    // is a default that has to reach the path, or `config()` publishes a directory nothing writes to.
+    const declared = knobOf('ABIDE_DATA_DIR')
+    if (declared !== null) return declared
     return join(userDataRoot(), appName())
 }
 

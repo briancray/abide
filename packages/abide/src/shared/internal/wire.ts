@@ -146,7 +146,72 @@ function restored(value: unknown, form: FormData): unknown {
 export interface WireError {
     name: string
     message: string
+    /** What the failure was DECLARED to carry. Absent on one that declared nothing. */
+    data?: unknown
 }
+
+/**
+ * What a failure is built with, on either side. `data` is the part a declaration puts there.
+ *
+ * `ErrorOptions` rather than a bag of abide's own, so `cause` keeps meaning what the language means
+ * by it — `isError` walks a cause chain, and a wrapped failure is still the failure it wrapped.
+ */
+export interface FailureOptions extends ErrorOptions {
+    /** JSON, because it crosses a wire. */
+    data?: unknown
+}
+
+/**
+ * A failure with a status on it, which is what `respond` reads to answer with something other than
+ * a 500 — and what the client rebuilds a refusal as, so the two lanes hand a caller the same object.
+ *
+ * The kind is also assigned to `name`, and that is the copy that matters: `name` is what crosses the
+ * wire, what `isError` matches, and what prefixes a stack line — a typed failure that left `name` as
+ * `'HttpError'` would be anonymous everywhere it travelled. `kind` is the local spelling, for a
+ * reader holding the real error rather than the plain object a wire delivers.
+ *
+ * Here rather than beside `error` because a browser builds one too: `wireError` rebuilds a refusal
+ * from what came back, and a second class with the same four fields is how the two lanes come to
+ * disagree about what a caught failure has on it.
+ */
+export class HttpError extends Error {
+    readonly status: number
+    readonly kind: string
+    /** What the declaration carried, or `undefined`. Always assigned, so the shape stays one shape. */
+    readonly data: unknown
+
+    constructor(kind: string, message: string, status: number, options?: FailureOptions) {
+        super(message, options)
+        this.kind = kind
+        this.status = status
+        this.data = options?.data
+        this.name = kind
+    }
+}
+
+/**
+ * A DECLARED failure, as it is CAUGHT — the same four members on either side of a wire.
+ *
+ * This is the type `error.typed(...)` hands back from a call and therefore the one that rides a
+ * handler's RETURN type: `return notFound({ id })` is what puts the name and the data where the
+ * caller's checker can see them, and `fn(args).isError(e, 'NotFound')` is what reads them back off.
+ *
+ * Structural rather than a class, and deliberately unbranded: what a caller catches over a wire is a
+ * rebuilt `HttpError` and what it catches in-process is the handler's own, and neither is the phantom
+ * this describes. The four members ARE the shape — nothing else in an app answers to all of them,
+ * which is what makes `Exclude<T, Failed>` the value a call answers with.
+ */
+export interface Failed<Name extends string = string, Data = unknown> extends Error {
+    readonly name: Name
+    readonly status: number
+    readonly data: Data
+}
+
+/** What a call ANSWERS with: its return type, with the failures it declared taken out. */
+export type Answer<T> = Exclude<T, Failed>
+
+/** What it REFUSES with: the same union, with nothing but them left. */
+export type Refusals<T> = Extract<T, Failed>
 
 /**
  * How a failure is told once the status line is already out.
@@ -157,23 +222,39 @@ export interface WireError {
 const FAILED = '__abide_failed'
 
 /**
- * A failure as it travels, from the two strings that survive the trip.
+ * A failure as it travels: the two strings that survive the trip, and whatever the declaration said
+ * it carries.
  *
  * Takes them rather than an `Error`, because the gate in `registry.ts` refuses with neither in hand —
  * building one there only to read two fields back off it captures a stack per 404.
+ *
+ * The key is left OUT when there is nothing to carry rather than written as `undefined`. This object
+ * is READ by callers — a health document's `error` field is one of them, compared field by field —
+ * and a member for a payload that is not there is one every reader has to know about.
  */
-export function errorFrame(name: string, message: string): { error: WireError } {
-    return { error: { name, message } }
+export function errorFrame(name: string, message: string, data?: unknown): { error: WireError } {
+    if (data === undefined) return { error: { name, message } }
+    return { error: { name, message, data } }
 }
 
-/** A failure, reduced to what survives `JSON.stringify` and still answers `isError`. */
+/**
+ * A failure, reduced to what survives `JSON.stringify` and still answers `isError`.
+ *
+ * The data is taken from an `HttpError` and from nothing else, and the narrowness is the point: a
+ * payload crosses because a DECLARATION said it may. Reading `.data` off whatever was thrown would
+ * publish the internals of any library error that happens to have a field by that name, to a client
+ * that asked for none of it — and one holding something circular would throw in the `stringify` that
+ * writes the refusal.
+ */
 export function errorPayload(error: unknown): { error: WireError } {
+    if (error instanceof HttpError) return errorFrame(error.name, error.message, error.data)
     if (error instanceof Error) return errorFrame(error.name, error.message)
     return errorFrame('Error', String(error))
 }
 
 /**
- * The failure a caller sees, rebuilt with the name the server gave it.
+ * The failure a caller sees, rebuilt with the name the server gave it — and with the status and the
+ * data, which is what makes an in-process catch and a catch over a wire the same object.
  *
  * The address is prepended to the message rather than replacing it: a stack trace in a browser names
  * the stub, so the endpoint has to be in the text or nothing says which call failed.
@@ -181,13 +262,15 @@ export function errorPayload(error: unknown): { error: WireError } {
 export function wireError(id: string, status: number, payload: unknown): Error {
     const carried = (payload as { error?: WireError } | null)?.error
     if (carried === undefined || carried === null) {
-        const plain = new Error(`abide: ${id} failed with ${status}${text(payload)}`)
-        plain.name = 'AbideTransportError'
-        return plain
+        return new HttpError(
+            'AbideTransportError',
+            `abide: ${id} failed with ${status}${text(payload)}`,
+            status,
+        )
     }
-    const rebuilt = new Error(`abide: ${id} — ${carried.message}`)
-    rebuilt.name = carried.name
-    return rebuilt
+    return new HttpError(carried.name, `abide: ${id} — ${carried.message}`, status, {
+        data: carried.data,
+    })
 }
 
 function text(payload: unknown): string {

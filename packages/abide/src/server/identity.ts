@@ -25,10 +25,11 @@
 // correct outcome for a lane that may not decide who a caller is.
 
 import { anonymous, type Identity, type IdentitySource, useIdentitySource } from '$shared/identity.ts'
-import { env, envNumber } from '$shared/internal/env.ts'
+import { isProduction } from '$shared/internal/env.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { errorPayload } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
+import { knobOf } from './config.ts'
 import { json } from './responses.ts'
 import { refuse } from './rpc.ts'
 import { cookies, heldIdentity, holdIdentity, isServing, writeCookie } from './scopes.ts'
@@ -37,9 +38,6 @@ const identityLog = abideLog.channel('identity')
 
 /** One name, reserved like every other address abide owns. */
 const COOKIE = 'abide-identity'
-
-/** Thirty days, rolling. Long because it is a SESSION, and short sessions are solved by revocation. */
-const DEFAULT_TTL = 30 * 24 * 60 * 60 * 1000
 
 /**
  * Past this much of its life, a seal is re-issued on the next resolve.
@@ -75,13 +73,9 @@ const SETTLED = Promise.resolve()
  */
 let minted: string | null = null
 
-function isProduction(): boolean {
-    return env('NODE_ENV') === 'production'
-}
-
 function secret(): string {
-    const declared = env('ABIDE_IDENTITY_SECRET')
-    if (declared !== undefined) return declared
+    const declared = knobOf('ABIDE_IDENTITY_SECRET')
+    if (declared !== null) return declared
     if (isProduction()) {
         throw new Error(
             'abide: ABIDE_IDENTITY_SECRET is required in production — without one, every restart would invalidate every session, and a default baked in here would be a signing key published with the framework.',
@@ -172,7 +166,7 @@ function sameSeal(given: string, expected: string): boolean {
 // --- the cookie --------------------------------------------------------------
 
 function ttl(): number {
-    return Math.floor(envNumber('ABIDE_IDENTITY_TTL', DEFAULT_TTL))
+    return Math.floor(knobOf('ABIDE_IDENTITY_TTL'))
 }
 
 /**

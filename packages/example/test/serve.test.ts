@@ -40,6 +40,7 @@ import {
     trace,
 } from 'abide/server'
 import { sleep } from 'abide/tests'
+import { withEnv, writeEnv } from '../demos/env.ts'
 
 test('two requests interleaving across their awaits do not share a cache', async () => {
     let bodyRuns = 0
@@ -312,32 +313,6 @@ test('appDataDir() is the platform convention under the app name, and ABIDE_DATA
         '/tmp/abide-data-dir-test',
     )
 })
-
-/**
- * A few env vars set for one call and put back, so a failure cannot leak into the next test.
- *
- * `undefined` is how a call says "with this one ABSENT", which is what a check for a required
- * variable needs — and it is awaited, because a body that reads the environment asynchronously would
- * otherwise have it put back before it looked.
- */
-async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => T | Promise<T>): Promise<T> {
-    const held: Record<string, string | undefined> = {}
-    for (const name in vars) {
-        held[name] = Bun.env[name]
-        const value = vars[name]
-        if (value === undefined) delete Bun.env[name]
-        else Bun.env[name] = value
-    }
-    try {
-        return await fn()
-    } finally {
-        for (const name in vars) {
-            const was = held[name]
-            if (was === undefined) delete Bun.env[name]
-            else Bun.env[name] = was
-        }
-    }
-}
 
 test('a span of our own is minted per request, and the response says so', async () => {
     const carried = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
@@ -763,7 +738,9 @@ test('a log line carries the operation it belongs to', async () => {
     const held = console.log
     console.log = (...args: unknown[]) => void written.push(args.map(String).join(' '))
     const format = Bun.env.ABIDE_LOG_FORMAT
-    Bun.env.ABIDE_LOG_FORMAT = 'json'
+    // The shape is answered from the configured document, which is memoised for the process — so a
+    // variable set after something already asked is one nothing would read. `writeEnv` drops it.
+    writeEnv('ABIDE_LOG_FORMAT', 'json')
     try {
         log('outside a request')
         const id = await serve(new Request('https://x.test/'), () => {
@@ -780,7 +757,6 @@ test('a log line carries the operation it belongs to', async () => {
         ])
     } finally {
         console.log = held
-        if (format === undefined) delete Bun.env.ABIDE_LOG_FORMAT
-        else Bun.env.ABIDE_LOG_FORMAT = format
+        writeEnv('ABIDE_LOG_FORMAT', format)
     }
 })

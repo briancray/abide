@@ -27,7 +27,7 @@ import { isThenable } from '$shared/internal/probes.ts'
 import { isSource } from '$shared/internal/slots.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { LineEditor, suggest } from './editor.ts'
-import { BOLD, coloured, DIM, paint, RED } from './paint.ts'
+import { BOLD, colored, DIM, paint, RED } from './paint.ts'
 
 /** Both are the same width, so a continued line sits under the one that started it. */
 const PROMPT = 'abide> '
@@ -132,7 +132,7 @@ class Session {
     // `declared` can only grow, when `take()` evaluates something.
     private candidates: string[] | null = null
 
-    constructor(private readonly colours: boolean) {}
+    constructor(private readonly colors: boolean) {}
 
     /** Every name a completion may offer. Rebuilt after a line runs: a global may have arrived on it. */
     names(): string[] {
@@ -206,7 +206,7 @@ class Session {
             // Otherwise: guarded, not awaited. A value that is already settled should not cost a tick
             // to learn that.
             const settled = isSource(value) || !isThenable(value) ? value : await value
-            if (settled !== undefined) process.stdout.write(`${show(settled, this.colours)}\n`)
+            if (settled !== undefined) process.stdout.write(`${show(settled, this.colors)}\n`)
         } catch (failure) {
             this.reportFailure(failure)
         }
@@ -277,7 +277,7 @@ class Session {
     /** stderr, so a piped session's results stay separable from what went wrong producing them. */
     private report(message: string): void {
         this.threw = true
-        process.stderr.write(`${paint(message, RED, this.colours)}\n`)
+        process.stderr.write(`${paint(message, RED, this.colors)}\n`)
     }
 }
 
@@ -292,11 +292,11 @@ export async function repl(argv: string[]): Promise<number> {
     plugin(abidePlugin)
     Object.assign(globalThis, SURFACE, { abide: SURFACE })
 
-    const colours = coloured()
-    const session = new Session(colours)
+    const colors = colored()
+    const session = new Session(colors)
     const interactive = process.stdin.isTTY === true
     if (!interactive) return await piped(session)
-    return await prompted(session, colours)
+    return await prompted(session, colors)
 }
 
 /**
@@ -316,8 +316,8 @@ async function piped(session: Session): Promise<number> {
     return session.threw ? CLI_EXIT_CODES.failed : CLI_EXIT_CODES.ok
 }
 
-async function prompted(session: Session, colours: boolean): Promise<number> {
-    process.stdout.write(banner(colours))
+async function prompted(session: Session, colors: boolean): Promise<number> {
+    process.stdout.write(banner(colors))
 
     let leaving = false
     const lines: string[] = []
@@ -333,7 +333,7 @@ async function prompted(session: Session, colours: boolean): Promise<number> {
                 leaving = true
             },
         },
-        colours,
+        colors,
     )
     editor.prompt = PROMPT
     editor.refresh()
@@ -361,12 +361,12 @@ async function prompted(session: Session, colours: boolean): Promise<number> {
     return CLI_EXIT_CODES.ok
 }
 
-function banner(colours: boolean): string {
-    const title = paint('abide repl', BOLD, colours)
+function banner(colors: boolean): string {
+    const title = paint('abide repl', BOLD, colors)
     const said = paint(
         `bun ${Bun.version} · state · memo · channel · watch and the rest of \`abide\` are in scope · ctrl-d to leave`,
         DIM,
-        colours,
+        colors,
     )
     return `${title}\n${said}\n`
 }
@@ -395,8 +395,8 @@ interface Source {
  * for the reason `peek` exists: printing a result must not subscribe anything or start a load, so a
  * prompt showing a cell cannot be what made it fetch.
  */
-function show(value: unknown, colours: boolean): string {
-    if (!isSource(value)) return Bun.inspect(value, { colors: colours })
+function show(value: unknown, colors: boolean): string {
+    if (!isSource(value)) return Bun.inspect(value, { colors })
 
     const source = value as unknown as Source
     const kind =
@@ -408,16 +408,16 @@ function show(value: unknown, colours: boolean): string {
     const failed = source.error()
     if (failed !== undefined) {
         const said = failed instanceof Error ? `${failed.name}: ${failed.message}` : Bun.inspect(failed)
-        return paint(`${kind} ✗ ${said}`, RED, colours)
+        return paint(`${kind} ✗ ${said}`, RED, colors)
     }
-    if (source.pending()) return paint(`${kind} (pending)`, DIM, colours)
+    if (source.pending()) return paint(`${kind} (pending)`, DIM, colors)
     // A source that has not settled holds NOTHING, and `undefined` is a value it could legitimately be
     // holding — so the two are said differently. Selecting a slot starts no work, which is exactly why
     // a memo can be printed while still cold.
     if (!source.settled()) {
-        return paint(`${kind} ${kind === 'channel' ? '(nothing yet)' : '(cold)'}`, DIM, colours)
+        return paint(`${kind} ${kind === 'channel' ? '(nothing yet)' : '(cold)'}`, DIM, colors)
     }
-    return `${paint(kind, DIM, colours)} ${Bun.inspect(source.peek(), { colors: colours })}`
+    return `${paint(kind, DIM, colors)} ${Bun.inspect(source.peek(), { colors })}`
 }
 
 /** The transpiler reports one failure as a message and several as an aggregate; both say the same thing first. */

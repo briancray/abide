@@ -14,21 +14,19 @@
 
 import type { Channel } from '$shared/channel.ts'
 import { channel } from '$shared/channel.ts'
-import { env, envNumber } from '$shared/internal/env.ts'
 import { type LogRecord, useLogSink } from '$shared/log.ts'
+import { knobOf } from './config.ts'
 import { jsonl } from './responses.ts'
 import { refuse } from './rpc.ts'
 
-/** Records, not bytes: a ring sized in lines is one an operator can reason about without measuring. */
-const DEFAULT_BUFFER = 500
-
 // Built on the first line recorded rather than at import, so an app that never opts in never
-// allocates the ring — and so `ABIDE_LOG_BUFFER` is read after an app has had a chance to set it.
+// allocates the ring — and so the size is read after an app has had a chance to declare one.
 let feed: Channel<LogRecord> | null = null
 
 function ring(): Channel<LogRecord> {
     if (feed !== null) return feed
-    feed = channel<LogRecord>({ tail: Math.floor(envNumber('ABIDE_LOG_BUFFER', DEFAULT_BUFFER)) })
+    const tail = knobOf('ABIDE_LOG_BUFFER')
+    feed = channel<LogRecord>({ tail: Math.floor(tail) })
     return feed
 }
 
@@ -39,7 +37,7 @@ function ring(): Channel<LogRecord> {
  * it is what lets a test — or an app deciding late — turn the feed on without reloading the module.
  */
 function isOpen(): boolean {
-    return env('ABIDE_LOGS') !== undefined
+    return knobOf('ABIDE_LOGS')
 }
 
 // The gate is the SINK's, not the callback's: a closed feed is the default, and a record built for

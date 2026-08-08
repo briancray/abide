@@ -96,7 +96,7 @@ export default suite({
                     return
                 }
 
-                await withEnv(CACHE, '250', async () => {
+                await withEnv({ [CACHE]: '250' }, async () => {
                     rows({ id: 'a' })()
                     rows({ id: 'b' })()
                     is('two 100-byte rows fit under 250', runs, 2)
@@ -137,7 +137,7 @@ export default suite({
                     return
                 }
 
-                await withEnv(CACHE, '250', async () => {
+                await withEnv({ [CACHE]: '250' }, async () => {
                     rows({ id: 'a' })()
                     rows({ id: 'b' })()
                     rows({ id: 'c' })()
@@ -158,7 +158,7 @@ export default suite({
             title: 'a per-caller cache is not the ceiling’s business',
             note: 'It bounds the GLOBAL and default-context cache and nothing else — the map a `{ global }` memo uses, and the one every caller shares where there is no caller scope. Those are the two that outlive whoever filled them. A per-caller cache is already bounded by the request that owns it, so evicting from one would be answering a memory question nobody asked with a cache miss inside a live request.',
             async run({ is }) {
-                await withEnv(CACHE, '250', async () => {
+                await withEnv({ [CACHE]: '250' }, async () => {
                     await isolate(async () => {
                         let runs = 0
                         const rows = memo(({ id }: { id: string }) => {
@@ -196,7 +196,7 @@ export default suite({
                     { global: true },
                 )
 
-                await withEnv(CACHE, '1000000', async () => {
+                await withEnv({ [CACHE]: '1000000' }, async () => {
                     rows({ id: 'a' })()
                     for (let i = 0; i < 20; i++) rows({ id: 'a' })()
                     if (!DECLARABLE) {
@@ -214,7 +214,7 @@ export default suite({
             title: 'a transcript that overflows drops the REPLAY, not the stream',
             note: 'What a cap on a transcript protects is a REPLAY, and half a replay is worse than none: a transcript missing its middle is a hole no reader can see, where an empty one says plainly there is nothing to replay. So the whole thing is dropped on the chunk that passed the cap, the version moves once so a reader wakes for the drop and then sleeps, and the stream itself carries on — the cell still holds every chunk that arrives and still finishes. It is also said once on `abide:stream`, as a warning: the `DEBUG` gate controls volume, not breakage, and a transcript that silently went empty reads as a stream that produced nothing.',
             async run({ is }) {
-                await withEnv(TRANSCRIPT, '250', async () => {
+                await withEnv({ [TRANSCRIPT]: '250' }, async () => {
                     const feed = state('')
                     feed.set(lines(5, 100))
                     await feed
@@ -245,7 +245,7 @@ export default suite({
                     }
                 }
 
-                await withEnv(TRANSCRIPT, '4096', async () => {
+                await withEnv({ [TRANSCRIPT]: '4096' }, async () => {
                     const feed = state(records(300))
                     await feed
                     is('nothing looked inside a chunk', looks, 0)
@@ -304,7 +304,7 @@ export default suite({
                     return
                 }
 
-                await withEnv(BUDGET, '50', async () => {
+                await withEnv({ [BUDGET]: '50' }, async () => {
                     const written: string[] = []
                     let failure: unknown
                     try {
@@ -337,7 +337,7 @@ export default suite({
                     return
                 }
 
-                await withEnv(BUDGET, '50', async () => {
+                await withEnv({ [BUDGET]: '50' }, async () => {
                     const written: string[] = []
                     let failure: unknown
                     try {
@@ -389,10 +389,10 @@ export default suite({
                         row(
                             button('add a 100-byte row', () => {
                                 loaded.push(next)
-                                void withEnv(CACHE, '250', () => rows({ id: next++ })()).then(report)
+                                void withEnv({ [CACHE]: '250' }, () => rows({ id: next++ })()).then(report)
                             }),
                             button('re-read every row asked for', () => {
-                                void withEnv(CACHE, '250', () => {
+                                void withEnv({ [CACHE]: '250' }, () => {
                                     for (const id of loaded) rows({ id })()
                                 }).then(report)
                             }),

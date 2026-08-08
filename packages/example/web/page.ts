@@ -79,7 +79,7 @@ function shell(title: string, blurb: string, here: string, width = 'max-w-5xl'):
 
 // --- one card ---------------------------------------------------------------
 
-const LINE_COLOUR: Record<LogLine['kind'], string> = {
+const LINE_COLOR: Record<LogLine['kind'], string> = {
     note: 'text-emerald-300',
     pass: 'text-emerald-400',
     fail: 'text-rose-400',
@@ -155,7 +155,7 @@ function renderLine(line: LogLine): HTMLElement {
     const node = el('div', 'flex gap-3')
     node.append(el('span', 'text-slate-500 shrink-0 w-56 truncate', line.label === '' ? ' ' : line.label))
     if (line.value !== '') {
-        node.append(el('span', `${LINE_COLOUR[line.kind]} whitespace-pre-wrap break-all`, line.value))
+        node.append(el('span', `${LINE_COLOR[line.kind]} whitespace-pre-wrap break-all`, line.value))
     }
     return node
 }
@@ -190,7 +190,7 @@ function dedent(source_: string): string {
     return lines.join('\n')
 }
 
-// --- syntax colouring -------------------------------------------------------
+// --- syntax coloring -------------------------------------------------------
 //
 // A hand-written scanner, for the same reason `demos/dom.ts` is hand-written: the page that shows
 // abide off carries no machinery of its own, and the grammar it has to cover is the subset a demo
@@ -199,7 +199,7 @@ function dedent(source_: string): string {
 // `outdent`.
 //
 // Template literals get a stack rather than a flag: `html` bodies nest one inside another's `${}`,
-// and a flag colours everything after the inner backtick as string.
+// and a flag colors everything after the inner backtick as string.
 
 // Written as split lists rather than array literals so a word costs a word rather than a line.
 const KEYWORDS = new Set(
@@ -220,7 +220,7 @@ const BEFORE_REGEX = new Set(
 // `)` and `]` are the ones deliberately absent: `(a + b) / 2` and `xs[i] / 2` are divides.
 const PUNCT_BEFORE_REGEX = new Set('(,=:[!&|?{};+-*%<>~^'.split(''))
 
-const CODE_COLOUR = {
+const CODE_COLOR = {
     comment: 'text-slate-600 italic',
     string: 'text-emerald-300',
     regex: 'text-orange-300',
@@ -245,9 +245,9 @@ function isWord(ch: string): boolean {
 
 function highlight(code: string): DocumentFragment {
     const out = document.createDocumentFragment()
-    const push = (colour: string, text: string): void => {
+    const push = (color: string, text: string): void => {
         if (text === '') return
-        out.append(colour === '' ? document.createTextNode(text) : el('span', colour, text))
+        out.append(color === '' ? document.createTextNode(text) : el('span', color, text))
     }
 
     // One record per open template.
@@ -312,20 +312,20 @@ function highlight(code: string): DocumentFragment {
                 j++
             }
             if (j < n && code[j] === '`') {
-                push(CODE_COLOUR.string, outdent(code.slice(i, j + 1), template))
+                push(CODE_COLOR.string, outdent(code.slice(i, j + 1), template))
                 open.pop()
                 inTemplateText = false
                 previous = '`'
                 i = j + 1
             } else if (j < n) {
-                push(CODE_COLOUR.string, outdent(code.slice(i, j), template))
-                push(CODE_COLOUR.punct, '${')
+                push(CODE_COLOR.string, outdent(code.slice(i, j), template))
+                push(CODE_COLOR.punct, '${')
                 braceDepth++
                 inTemplateText = false
                 previous = '{'
                 i = j + 2
             } else {
-                push(CODE_COLOUR.string, outdent(code.slice(i), template))
+                push(CODE_COLOR.string, outdent(code.slice(i), template))
                 i = n
             }
             continue
@@ -342,7 +342,7 @@ function highlight(code: string): DocumentFragment {
         if (ch === '/' && code[i + 1] === '/') {
             let j = i + 2
             while (j < n && code[j] !== '\n') j++
-            push(CODE_COLOUR.comment, code.slice(i, j))
+            push(CODE_COLOR.comment, code.slice(i, j))
             i = j
             continue
         }
@@ -350,7 +350,7 @@ function highlight(code: string): DocumentFragment {
         if (ch === '/' && code[i + 1] === '*') {
             const end = code.indexOf('*/', i + 2)
             const j = end === -1 ? n : end + 2
-            push(CODE_COLOUR.comment, code.slice(i, j))
+            push(CODE_COLOR.comment, code.slice(i, j))
             i = j
             continue
         }
@@ -359,7 +359,7 @@ function highlight(code: string): DocumentFragment {
             let j = i + 1
             while (j < n && code[j] !== ch) j += code[j] === '\\' ? 2 : 1
             j = j < n ? j + 1 : n
-            push(CODE_COLOUR.string, code.slice(i, j))
+            push(CODE_COLOR.string, code.slice(i, j))
             previous = '"'
             i = j
             continue
@@ -372,7 +372,7 @@ function highlight(code: string): DocumentFragment {
                 openIndent++
             }
             open.push({ brace: braceDepth, indent: openIndent, shift: -1 })
-            push(CODE_COLOUR.string, '`')
+            push(CODE_COLOR.string, '`')
             inTemplateText = true
             i++
             continue
@@ -401,7 +401,7 @@ function highlight(code: string): DocumentFragment {
             if (j < n && code[j] === '/') {
                 j++
                 while (j < n && isWord(code[j] as string)) j++
-                push(CODE_COLOUR.regex, code.slice(i, j))
+                push(CODE_COLOR.regex, code.slice(i, j))
                 previous = '/re/'
                 i = j
                 continue
@@ -411,7 +411,7 @@ function highlight(code: string): DocumentFragment {
         if (ch >= '0' && ch <= '9') {
             let j = i + 1
             while (j < n && (isWord(code[j] as string) || code[j] === '.')) j++
-            push(CODE_COLOUR.number, code.slice(i, j))
+            push(CODE_COLOR.number, code.slice(i, j))
             previous = '0'
             i = j
             continue
@@ -423,11 +423,11 @@ function highlight(code: string): DocumentFragment {
             const word = code.slice(i, j)
             let after = j
             while (after < n && isSpace(code[after] as string)) after++
-            let colour = ''
-            if (KEYWORDS.has(word) && previous !== '.') colour = CODE_COLOUR.keyword
-            else if (LITERALS.has(word) && previous !== '.') colour = CODE_COLOUR.literal
-            else if (code[after] === '(') colour = CODE_COLOUR.call
-            push(colour, word)
+            let color = ''
+            if (KEYWORDS.has(word) && previous !== '.') color = CODE_COLOR.keyword
+            else if (LITERALS.has(word) && previous !== '.') color = CODE_COLOR.literal
+            else if (code[after] === '(') color = CODE_COLOR.call
+            push(color, word)
             previous = word
             i = j
             continue
@@ -437,14 +437,14 @@ function highlight(code: string): DocumentFragment {
         else if (ch === '}') {
             braceDepth--
             if (open.length > 0 && (open[open.length - 1] as Open).brace === braceDepth) {
-                push(CODE_COLOUR.punct, '}')
+                push(CODE_COLOR.punct, '}')
                 inTemplateText = true
                 previous = '}'
                 i++
                 continue
             }
         }
-        push(CODE_COLOUR.punct, ch)
+        push(CODE_COLOR.punct, ch)
         previous = ch
         i++
     }

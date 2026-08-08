@@ -3,10 +3,34 @@
 //
 // It is an endpoint because of WHERE IT IS, and it is addressed by the same fact: `users/getUser`.
 
-import { GET, POST, server } from 'abide/server'
+import { error, GET, POST, server } from 'abide/server'
 import { findUser, renameUser, type User } from '../db.ts'
 
-export const getUser = GET(({ id }: { id: number }): User => findUser(id))
+/**
+ * A failure declared ONCE, with a shape on it — the same declaration both sides read.
+ *
+ * The schema is the zero-ceremony form again (return what you accept, throw what you refuse), and it
+ * is what types the data: `noSuchUser({ id })` is checked here, and a caller that asks
+ * `getUser({ id }).isError(caught, 'NoSuchUser')` gets `caught.data.id` back with a type on it. Like
+ * every other option in this file it is SERVER-SIDE TEXT — the browser lane gets the address alone.
+ */
+const noSuchUser = error.typed('NoSuchUser', 404, 'no user with that id', {
+    schema: (value: unknown) => {
+        const { id } = value as { id?: unknown }
+        if (typeof id !== 'number') throw new Error('id must be a number')
+        return { id }
+    },
+})
+
+/**
+ * `return`, not `throw`, and that is the whole of what a caller gains: a thrown failure is erased
+ * from this function's type, and a returned one is in it — so `Rpc` carries `NoSuchUser` alongside
+ * `User` and the browser narrows to the shape without either side restating it.
+ */
+export const getUser = GET(({ id }: { id: number }) => {
+    if (id <= 0) return noSuchUser({ id }, `no user ${id}`)
+    return findUser(id)
+})
 
 export const slowUser = GET(async ({ id }: { id: number }) => {
     await Bun.sleep(1)

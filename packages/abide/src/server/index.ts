@@ -655,9 +655,25 @@ export { type Identity, identity } from '$shared/identity.ts'
 // The shape one line takes on the remote feed. The endpoint itself is `dispatch`'s — an app mounts
 // that and gets `/__abide/logs` with it — but a reader of the feed needs the record to decode into.
 export type { LogRecord } from '$shared/log.ts'
+// The other two facts DERIVED from the environment rather than named by it. They are not `config()`
+// fields — a field there is a variable, and these are conclusions: `ABIDE_APP_NAME` is the variable,
+// and this is it resolved against the nearest package.json and then against `abide`.
+export { appName } from '$shared/log.ts'
 // Where this app may write, which is a question about the PROCESS rather than about a caller — so it
 // needs no `serve`, and it lives with the other thing that needs a filesystem to answer.
-export { appDataDir } from './app.ts'
+export { appDataDir, appVersion } from './app.ts'
+// What the process was TOLD: the typed environment, with the app's own defaults under it. The one
+// ambient with no wire face — half the document is a signing key — so unlike `health()` and
+// `identity()` there is no isomorphic half and no endpoint to make one out of.
+export {
+    type Config,
+    type ConfigDefaults,
+    type ConfigOptions,
+    type Configured,
+    config,
+    type Env,
+    onConfig,
+} from './config.ts'
 // The app's own account of whether it is working. `health()` itself is on the isomorphic surface —
 // asking is the same call anywhere — and this is the half only the app being asked about can supply.
 export { type HealthReporter, onHealth } from './health.ts'
@@ -665,6 +681,23 @@ export { type IdentityResolver, onIdentity } from './identity.ts'
 // What every renderer here takes. `RenderContext` stays internal: it is the walk's own state, and
 // its `document` field is typed by a `DocumentContext` no caller can name.
 export type { RenderOptions } from './internal/emit.ts'
+// The process's own lifecycle, and the request pipeline the four hooks hang off. Registrations for
+// the same reason `onHealth` is one — the binary that will read these off an app's exports is the
+// half of the CLI that boots, and it hands each export to the function of the same name.
+export {
+    boot,
+    type ErrorHook,
+    handle,
+    type Middleware,
+    middleware,
+    onError,
+    onStart,
+    onStop,
+    type Route,
+    type StartHook,
+    type StopHook,
+    shutdown,
+} from './lifecycle.ts'
 // The one part of routing that is NOT isomorphic, because a filesystem is not. What it hands back is
 // an ordinary route table, and `routes()` takes the same one on either side.
 export { pages } from './pages.ts'
@@ -675,8 +708,11 @@ export { dispatch, endpoints, register, registered, websocket } from './registry
 // What an app's own route answers with. Server-side because a `Response` is: the browser lane reads
 // one, it never builds one.
 export {
+    type DataFailure,
     error,
+    type Failed,
     type Failure,
+    type FailureOptions,
     HttpError,
     json,
     jsonl,

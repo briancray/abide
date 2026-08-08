@@ -21,6 +21,7 @@ import {
     argsQuery,
     chunksOf,
     encodeArgs,
+    type Failed,
     isChunked,
     JSON_TYPE,
     MAX_GET_URL,
@@ -45,11 +46,22 @@ export interface CallOptions {
     signal?: AbortSignal
 }
 
-/** A slot's cell, plus the loop a handler that yields is consumed by. */
-export interface RpcHandle<T> extends MemoHandle<T>, AsyncIterable<T> {}
+/**
+ * A slot's cell, plus the loop a handler that yields is consumed by — and the refusals it declared.
+ *
+ * `F` is what makes a caught failure more than a name. A handler that `return`s an `error.typed`
+ * failure puts it in its own return type, `GET` splits that union into the value and the refusals,
+ * and the first `isError` below reads the DATA back off the one whose name matched. It defaults to
+ * `never`, which is a handler that declared none: the name overload is then the only one that
+ * resolves, and asking is the boolean it always was.
+ */
+export interface RpcHandle<T, F extends Failed = never> extends MemoHandle<T>, AsyncIterable<T> {
+    isError<Name extends F['name']>(failure: unknown, name: Name): failure is Extract<F, Failed<Name>>
+    isError(failure: unknown, name: string): boolean
+}
 
-export interface Rpc<Args, T> extends KeyedMemo<Args, T> {
-    (args: Args, options?: CallOptions): RpcHandle<T>
+export interface Rpc<Args, T, F extends Failed = never> extends KeyedMemo<Args, T> {
+    (args: Args, options?: CallOptions): RpcHandle<T, F>
     /** The same call, handed back as the raw response instead of a decoded value. */
     raw(args: Args, init?: RequestInit): Promise<Response>
     readonly method: Method
@@ -252,7 +264,10 @@ function continued(carried: Record<string, string> | undefined): Record<string, 
     return { ...traced, ...carried }
 }
 
-export function remote<Args, T>(id: string, options: RemoteOptions = {}): Rpc<Args, T> {
+export function remote<Args, T, F extends Failed = never>(
+    id: string,
+    options: RemoteOptions = {},
+): Rpc<Args, T, F> {
     const method = options.method ?? 'GET'
     const streams = options.stream === true
     const send = options.fetch ?? ((input: string, init: RequestInit) => fetch(input, init))
@@ -346,11 +361,14 @@ export function remote<Args, T>(id: string, options: RemoteOptions = {}): Rpc<Ar
         : (args: Args): Promise<T> => value(args)
     const call = memo(load) as unknown as KeyedMemo<Args, T>
 
+    // The refusals are a claim about the TYPE and nothing else — a stub written by hand says what
+    // the endpoint it addresses refuses with, the same way it says what it answers with. A stub the
+    // compiler writes says neither: the caller's checker reads the handler's own declaration.
     return asRpc(call, {
         method,
         description: undefined,
         raw: (args, init) => ask(args, init),
-    })
+    }) as Rpc<Args, T, F>
 }
 
 // --- socket, the browser lane ------------------------------------------------

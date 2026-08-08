@@ -44,6 +44,10 @@ export { type Identify, type Identity, identity } from './identity.ts'
 // Per-caller storage. A client never needs it — there is one caller, forever — but the same import
 // works there, and it is what a test uses to prove two callers do not share a memo's cache.
 export { isolate } from './internal/scopes.ts'
+// A DECLARED failure, as it is caught — the type `fn(args).isError(e, name)` narrows to, and the one
+// a hand-written stub names to say what an endpoint refuses with. Isomorphic because a failure is:
+// the DECLARING half is `error.typed` in `abide/server`, and this is what crosses.
+export type { Failed } from './internal/wire.ts'
 // The console, on both sides. The DEFAULT channel is the app's own output and always writes; a NAMED
 // channel is off unless `DEBUG` names it — except `warning` and `error`, which the gate never
 // swallows, because the gate is there to control volume rather than to hide breakage. `abideLog` and

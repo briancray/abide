@@ -6,7 +6,8 @@
 // way it is. The one rule worth restating at the code: `warning` and `error` are never gated, on any
 // channel, because the gate exists to control volume rather than to hide breakage.
 
-import { colourAllowed, env, stdoutIsTTY } from './internal/env.ts'
+import { colorAllowed, stdoutIsTTY } from './internal/env.ts'
+import { textKnob } from './internal/knobs.ts'
 import { traceId } from './internal/trace.ts'
 
 // --- the app's own name ------------------------------------------------------
@@ -30,10 +31,16 @@ export function useAppNameSource(source: () => string | null): void {
  * The log channel's root, and the one `abide/server` names a data directory after — asked here by
  * both, so the two cannot name different things and the filesystem climb behind the source is
  * cached once rather than once per reader.
+ *
+ * `ABIDE_APP_NAME` through the DOCUMENT, the same seam the gate and the line shape ask across, so an
+ * `onConfig` that defaults the variable moves what this resolves. Read off the environment it was a
+ * field `config()` published and nothing honoured, which is the one disagreement an operator has no
+ * way to catch. What stays a conclusion is this FUNCTION: the accessor is not a field, and the climb
+ * under it is not a knob.
  */
 export function appName(): string {
-    const declared = env('ABIDE_APP_NAME')
-    if (declared !== undefined) return declared
+    const declared = textKnob('ABIDE_APP_NAME')
+    if (declared !== null) return declared
     if (resolvedAppName === null) resolvedAppName = appNameSource?.() ?? 'abide'
     return resolvedAppName
 }
@@ -90,8 +97,11 @@ function fromStorage(): string | undefined {
  * no `localStorage` and a browser has no environment, so neither lane ever sees the other's answer.
  */
 function currentSpec(): string | undefined {
-    const declared = env('DEBUG')
-    if (declared !== undefined) return declared
+    // The DECLARED half through the configured document, so an app may default its own gate; the
+    // `localStorage` fallback stays here because it is a lane's answer rather than a knob, and
+    // `config()` has no business knowing a browser exists.
+    const declared = textKnob('DEBUG')
+    if (declared !== null) return declared
     return fromStorage()
 }
 
@@ -130,17 +140,17 @@ function enabledIn(spec: string, channel: string): boolean {
  * another — `abide logs` renders a record the feed handed it, and it renders it by the rules the
  * console was already following.
  */
-export type LogShape = 'colour' | 'plain' | 'tsv' | 'json'
+export type LogShape = 'color' | 'plain' | 'tsv' | 'json'
 
 // A browser is decided by having a document and no terminal behind it: ANSI would arrive as literal
 // junk in the console, and a tab is not a field separator anybody there can use.
 const IN_BROWSER = typeof document !== 'undefined' && !stdoutIsTTY()
 
 /**
- * One decision, not two. Whether a line is machine-readable and whether it carries colour are the
+ * One decision, not two. Whether a line is machine-readable and whether it carries color are the
  * same question asked of the same variables, and answering them separately meant keeping the
  * `NO_COLOR` / `FORCE_COLOR` / `isTTY` ordering consistent in two places by hand — so that ordering
- * is `colourAllowed`'s, which the CLI's usage screen asks too.
+ * is `colorAllowed`'s, which the CLI's usage screen asks too.
  *
  * Exported for the tail: a CLI printing somebody else's records answers the same question about its
  * OWN stdout.
@@ -148,24 +158,24 @@ const IN_BROWSER = typeof document !== 'undefined' && !stdoutIsTTY()
 export function logShape(): LogShape {
     // Declared beats inferred everywhere, which is also what makes the machine formats testable from a
     // demo that runs in both lanes.
-    const declared = env('ABIDE_LOG_FORMAT')
+    const declared = textKnob('ABIDE_LOG_FORMAT')
     if (declared === 'json') return 'json'
     if (declared === 'tsv') return 'tsv'
     if (IN_BROWSER) return 'plain'
-    return colourAllowed() ? 'colour' : 'tsv'
+    return colorAllowed() ? 'color' : 'tsv'
 }
 
 // Six that stay legible on both a light and a dark terminal, picked by hashing the channel so one
-// channel keeps its colour for the life of the process without anything remembering the assignment.
-const CHANNEL_COLOURS = [36, 35, 34, 33, 32, 31]
+// channel keeps its color for the life of the process without anything remembering the assignment.
+const CHANNEL_COLORS = [36, 35, 34, 33, 32, 31]
 
-function channelColour(channel: string): number {
+function channelColor(channel: string): number {
     let hash = 0
     for (let i = 0; i < channel.length; i++) hash = (hash * 31 + channel.charCodeAt(i)) | 0
-    return CHANNEL_COLOURS[Math.abs(hash) % CHANNEL_COLOURS.length] as number
+    return CHANNEL_COLORS[Math.abs(hash) % CHANNEL_COLORS.length] as number
 }
 
-const LEVEL_COLOURS: Record<Level, number> = {
+const LEVEL_COLORS: Record<Level, number> = {
     log: 90,
     info: 90,
     warning: 33,
@@ -374,10 +384,10 @@ export function formatLogLine(
     // Short, and trailing with the delta rather than leading: both are metadata about the line, and
     // the message is what someone reading a terminal is scanning for.
     const short = traced === null ? '' : ` ${traced.slice(0, READABLE_TRACE)}`
-    if (form !== 'colour') return `${channel}${suffix} ${message}${short} ${delta}`
+    if (form !== 'color') return `${channel}${suffix} ${message}${short} ${delta}`
     return (
-        `\x1b[${channelColour(channel)}m${channel}\x1b[0m` +
-        (suffix === '' ? '' : `\x1b[${LEVEL_COLOURS[level]}m${suffix}\x1b[0m`) +
+        `\x1b[${channelColor(channel)}m${channel}\x1b[0m` +
+        (suffix === '' ? '' : `\x1b[${LEVEL_COLORS[level]}m${suffix}\x1b[0m`) +
         ` ${message}\x1b[90m${short} ${delta}\x1b[0m`
     )
 }

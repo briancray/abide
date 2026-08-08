@@ -8,6 +8,14 @@ export const SERVER_ONLY_MARKER = 'ABIDE_EXAMPLE_SERVER_ONLY_SECRET'
 // pure export.
 const NAMES = new Map<number, string>()
 
+// The marker put somewhere REACHABLE, on a line whose only purpose is that a bundler may not remove
+// it. An exported constant nothing reads is exactly what tree-shaking is allowed to drop, so a
+// browser bundle that did not contain it would prove nothing about elision — `test/build.test.ts`
+// asserts its absence from every byte written, and the assertion is only worth making if the same
+// build with the server lane's answer WOULD contain it. `-1` is not an id any handler accepts, so
+// nothing reads this back.
+NAMES.set(-1, SERVER_ONLY_MARKER)
+
 // One "connection", opened when this module loaded. A constant rather than a counter that only ever
 // reaches one — nothing here opens a second, and the value exists to be read back over the wire.
 const connections = 1

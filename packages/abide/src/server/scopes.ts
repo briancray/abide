@@ -101,6 +101,11 @@ export function serve<T>(request: Request, fn: () => T): T {
  * forever there, so a memo's cache belongs to it by definition.
  */
 export function serveIfScoped<T>(request: Request, fn: () => T): T {
+    // Already inside one — `handle` opened it, or an app hand-wired the `serve(request, () =>
+    // dispatch(request, server))` shape the throw above teaches. A second `serve` would hand ONE
+    // request a second memo cache and a second `bag` halfway through, so what an outer scope put
+    // there is invisible to everything under this and the two caches load the same row twice.
+    if (isServing()) return fn()
     return canServe() ? serve(request, fn) : fn()
 }
 

@@ -44,7 +44,7 @@ export class LineEditor {
     private parked = ''
 
     /**
-     * `ghosts` is off wherever colour is: an undimmed suggestion is indistinguishable from what you
+     * `ghosts` is off wherever color is: an undimmed suggestion is indistinguishable from what you
      * typed, and a line editor that lies about which characters are yours is worse than one with no
      * suggestions at all.
      */

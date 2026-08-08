@@ -161,6 +161,24 @@ export const META = {
             'are the server’s, and a browser calling one gets a message rather than a different answer.',
         tag: 'the sealed principal',
     },
+    config: {
+        name: 'config',
+        title: 'config',
+        blurb:
+            'What the process was TOLD, typed, with the app’s own defaults under it. Three layers — ' +
+            'abide’s floor, the app’s defaults, what the operator declared — and the app’s layer losing ' +
+            'to the environment is what makes it a default rather than a knob that does nothing.',
+        tag: 'the typed environment',
+    },
+    lifecycle: {
+        name: 'lifecycle',
+        title: 'lifecycle',
+        blurb:
+            'What a process does before it serves, around every request, and on its way out. Three of ' +
+            'the four hooks are onions rather than pairs of before/after hooks — the socket binds INSIDE ' +
+            '`onStart`, so an app cannot answer a request against setup that has not finished.',
+        tag: 'boot · middleware · teardown',
+    },
     ceilings: {
         name: 'ceilings',
         title: 'ceilings',
@@ -201,6 +219,8 @@ export const ORDER: SuiteName[] = [
     'logging',
     'health',
     'identity',
+    'config',
+    'lifecycle',
     'ceilings',
     'compiler',
 ]

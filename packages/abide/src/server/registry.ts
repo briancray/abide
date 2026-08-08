@@ -30,6 +30,7 @@ import { logs } from './logs.ts'
 import { headersFor, json } from './responses.ts'
 import {
     authorize,
+    bodyCeiling,
     describeRpc,
     describeSocket,
     nameRpc,
@@ -241,7 +242,7 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
 
     // The header is read only when there is a ceiling to compare it against: `maxBodySize` defaults
     // to `Infinity`, and nothing declared is over that.
-    const ceiling = policy?.maxBodySize ?? Infinity
+    const ceiling = bodyCeiling(policy)
     if (ceiling !== Infinity) {
         const declared = Number(request.headers.get('content-length') ?? 0)
         if (Number.isFinite(declared) && declared > ceiling) {

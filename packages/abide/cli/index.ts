@@ -17,6 +17,16 @@ import { COMMANDS, commandNamed, usage } from './COMMANDS.ts'
 // from — a test asserting the two agree, and one day an `abide compile` putting the same commands
 // behind an app's own name.
 export { CLI_EXIT_CODES, type CliExitCode, exitForStatus } from './CLI_EXIT_CODES.ts'
+// What `abide build` wrote, as a shape — so a server serving the bundle reads the manifest without
+// importing the bundler that produced it. No imports of its own, for the same reason as above.
+export {
+    CLIENT_DIR,
+    type ClientAsset,
+    type ClientManifest,
+    type Encoding,
+    MANIFEST_FILE,
+    type Sidecar,
+} from './CLIENT_BUILD.ts'
 export { COMMANDS, type Command, commandNamed, usage } from './COMMANDS.ts'
 // The REPL's line editor, which takes its terminal as HOOKS — so the one part of this binary that
 // cannot be driven by spawning a process (a keystroke needs a tty) is driven by feeding it a string.

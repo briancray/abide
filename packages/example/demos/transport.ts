@@ -16,6 +16,7 @@
 
 import {
     type Channel,
+    type Failed,
     type RemoteOptions,
     type RemoteSocket,
     type RemoteSocketOptions,
@@ -43,6 +44,7 @@ import {
     validateJson,
 } from 'abide/server'
 import { loopback, reader, sleep, suite, until } from 'abide/tests'
+import { assertType, type Exact } from '../types/exact.ts'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -57,8 +59,11 @@ const wire = loopback()
 // A stub the compiler wrote takes its transport from the lane it is loaded in; a case has to say.
 // Said ONCE here, so what a case shows is the claim and not the wiring — these two are exactly what
 // the browser's own `remote(id)` / `remoteSocket(id)` are, with the fetch pointed in-process.
-function client<Args, T>(id: string, extra?: Omit<RemoteOptions, 'base' | 'fetch'>): Rpc<Args, T> {
-    return remote<Args, T>(id, { base: wire.base, fetch: wire.fetch, ...extra })
+function client<Args, T, F extends Failed = never>(
+    id: string,
+    extra?: Omit<RemoteOptions, 'base' | 'fetch'>,
+): Rpc<Args, T, F> {
+    return remote<Args, T, F>(id, { base: wire.base, fetch: wire.fetch, ...extra })
 }
 
 function sock<T, Args = void>(
@@ -68,7 +73,12 @@ function sock<T, Args = void>(
     return remoteSocket<T, Args>(id, { base: wire.base, open: wire.open, ...extra })
 }
 
-function find(id: number): { id: number; name: string } {
+interface User {
+    id: number
+    name: string
+}
+
+function find(id: number): User {
     return { id, name: `user ${id}` }
 }
 
@@ -312,6 +322,84 @@ export default suite({
         },
 
         {
+            title: 'a declared failure carries DATA, and the caller narrows to it',
+            note: 'A name tells a caller WHICH refusal; the data tells it what to do about one. `error.typed(name, status?, message?, { schema })` declares both at once — the schema types the payload and checks it, and the message moves to the declaration because the first argument is the data now. The half that makes it reach the other side is `return myError(data)` rather than `throw`: a throw is erased from a handler’s type and a return is in it, so the declaration lands in `Rpc<Args, User, Failed<…>>` and `isError` narrows off it. The value the slot holds is the other half of that split, which is why `.data` never shows up where a caller expected a `User`.',
+            async run({ is, rejects }) {
+                // The zero-ceremony schema form — return what you accept, throw what you refuse —
+                // which is also what gives `Data` a type without anything being written twice.
+                const anAttempt = (value: unknown): { id: number; tried: number } => {
+                    const { id, tried } = value as { id?: unknown; tried?: unknown }
+                    if (typeof id !== 'number' || typeof tried !== 'number') {
+                        throw new Error('an attempt is an id and a count')
+                    }
+                    return { id, tried }
+                }
+                const gone = error.typed('Gone', 410, 'that user was deleted', { schema: anAttempt })
+
+                is('the status is declared once', gone.status, 410)
+                is('…and so is the phrase a bare throw uses', gone.message, 'that user was deleted')
+
+                // RETURNED, so the failure is in the handler's own type. It throws all the same.
+                const getUser = GET(({ id }: { id: number }) => {
+                    if (id < 0) return gone({ id, tried: 2 })
+                    return find(id)
+                })
+                register('rpc', [['demo/data/getUser', 'getUser']], { getUser })
+
+                // The type-level half of the claim, asserted rather than described: the value a
+                // caller reads is the ANSWER with the refusals taken out, and `any` would pass an
+                // assignability check where this identity one fails.
+                assertType<Exact<ReturnType<ReturnType<typeof getUser>>, User | undefined>>()
+
+                let local: unknown
+                try {
+                    getUser({ id: -1 })()
+                } catch (failure) {
+                    local = failure
+                }
+                is('the name answers in-process', getUser({ id: -1 }).isError(local, 'Gone'), true)
+                if (getUser({ id: -1 }).isError(local, 'Gone')) {
+                    // Inside the narrowing, `local` IS the failure — this line is the whole feature.
+                    assertType<Exact<typeof local.data, { id: number; tried: number }>>()
+                    is('…and the data is the handler’s own object', local.data, { id: -1, tried: 2 })
+                    is('with the name it was declared under', local.name, 'Gone')
+                    is('and the declared status on it', local.status, 410)
+                }
+
+                // A stub written by hand says what it refuses with, the same way it says what it
+                // answers with. One the compiler writes says neither — the caller's checker reads
+                // the handler's own declaration, which is `getUser` above.
+                const remoteUser = client<
+                    { id: number },
+                    User,
+                    Failed<'Gone', { id: number; tried: number }>
+                >('demo/data/getUser')
+
+                await rejects('the read rejects with the declared phrase', remoteUser({ id: -1 }), /deleted/)
+                is('and answers the declared status', (await remoteUser.raw({ id: -1 })).status, 410)
+                let carried: unknown
+                try {
+                    remoteUser({ id: -1 })()
+                } catch (failure) {
+                    carried = failure
+                }
+                is('the name survived the wire', remoteUser({ id: -1 }).isError(carried, 'Gone'), true)
+                if (remoteUser({ id: -1 }).isError(carried, 'Gone')) {
+                    assertType<Exact<typeof carried.data, { id: number; tried: number }>>()
+                    is('…and so did the data', carried.data, { id: -1, tried: 2 })
+                    is('and the status, which a plain rebuilt Error had nowhere to put', carried.status, 410)
+                }
+
+                // A name the endpoint never declared is still an ordinary question, answered `false`
+                // rather than refused — the boolean `isError` has always been.
+                is('a name it does not declare', remoteUser({ id: -1 }).isError(carried, 'Missing'), false)
+
+                // The value half is untouched: nothing about declaring a refusal reaches the answer.
+                is('and the call that succeeds answers a user', await remoteUser({ id: 3 }), find(3))
+            },
+        },
+
+        {
             title: 'an app’s own route answers with a Response',
             note: 'abide serves `/__abide/**` and hands back nothing at all for anything else — so an app’s own routes are ordinary `Bun.serve` routes, and these are the shapes they answer with. Every one of them IS a `Response`, so a route that outgrows them drops to `new Response(...)` and loses nothing. `error` is the odd one out and throws, because an rpc handler’s return type is its VALUE: a failure has nowhere to go but out.',
             async run({ is, rejects }) {
@@ -370,12 +458,37 @@ export default suite({
 
                 let caught: unknown
                 try {
-                    error('that is not a number', 422)
+                    error(422, 'that is not a number')
                 } catch (failure) {
                     caught = failure
                 }
                 is('error throws its status', (caught as HttpError).status, 422)
                 is('…and a typed one throws its name', error.typed('Forbidden', 403).kind, 'Forbidden')
+
+                // The STATUS is the argument there is no answering without, and the message is the
+                // part it may already have said — so a bare `error(404)` is a whole refusal rather
+                // than one with an empty body where a reader expected a reason.
+                let bare: unknown
+                try {
+                    error(404)
+                } catch (failure) {
+                    bare = failure
+                }
+                // The registry's wording verbatim, not abide's: a caller reading this off a wire is
+                // reading what the number has meant since HTTP/1.0.
+                is('an unsaid message is the status’ own phrase', (bare as HttpError).message, 'Not Found')
+
+                // A typed failure resolves its phrase at the DECLARATION, so the status is named once
+                // and a bare throw of it is whole too.
+                const gone = error.typed('Gone', 410)
+                let expired: unknown
+                try {
+                    gone()
+                } catch (failure) {
+                    expired = failure
+                }
+                is('…and a typed one keeps its own name over it', (expired as HttpError).name, 'Gone')
+                is('with the phrase its status declared', (expired as HttpError).message, 'Gone')
             },
         },
 

@@ -12,14 +12,12 @@
 // the rules were always asking about, and it is the reason a record crosses the wire rather than a
 // rendered line.
 
+import { DEFAULT_PORT } from '$server/internal/DEFAULTS.ts'
 import { env, envNumber } from '$shared/internal/env.ts'
 import { LOGS_PATH } from '$shared/internal/PATHS.ts'
 import { JSONL_TYPE, payloadOf } from '$shared/internal/wire.ts'
 import { formatLogLine, type LogRecord, logShape, writeLogLine } from '$shared/log.ts'
 import { CLI_EXIT_CODES, exitForStatus } from '../CLI_EXIT_CODES.ts'
-
-/** What `PORT` means when nobody set it — the same default the server half serves on. */
-const DEFAULT_PORT = 3000
 
 /**
  * Which app this is about.
@@ -78,7 +76,7 @@ export async function logs(argv: string[]): Promise<number> {
     // Kept only for the shapes that PRINT it. `tsv` is what a pipe gets and `json` what a collector
     // does, and neither carries a delta — so a tail being piped somewhere, which is the loud case,
     // does not pay a parse and a map write per record for a field nothing reads.
-    const readable = form === 'colour' || form === 'plain'
+    const readable = form === 'color' || form === 'plain'
     const lastAt = new Map<string, number>()
 
     await readLines(answered, (line) => {

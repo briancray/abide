@@ -31,6 +31,8 @@ const LOADERS: Record<SuiteName, () => Promise<{ default: Suite }>> = {
     logging: () => import('./logging.ts'),
     health: () => import('./health.ts'),
     identity: () => import('./identity.ts'),
+    config: () => import('./config.ts'),
+    lifecycle: () => import('./lifecycle.ts'),
     ceilings: () => import('./ceilings.ts'),
     compiler: () => import('./compiler.ts'),
 }

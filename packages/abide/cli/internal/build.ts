@@ -1,0 +1,255 @@
+// `abide build` — the client, code-split, hashed, minified and precompressed.
+//
+// The one command with no runtime half: everything else this binary does is a process you can watch,
+// and this writes files and stops. What it produces is `.abide/client/` — content-hashed chunks, a
+// `manifest.json` naming them, and a `.br`/`.gz` beside anything that compressed smaller.
+//
+// The whole of the transformation is Bun's, and deliberately: `Bun.build` splits, hashes, minifies
+// and tree-shakes, and a second bundler wired in here would be a second answer to what a module
+// means. What this file adds is the four decisions Bun does not make — which lane, where the output
+// goes, what gets compressed, and what the manifest says.
+//
+// The LANE is the one that matters, and it is one option: `target: 'browser'` is what
+// `abide/compiler/plugin` reads to decide that a `server/rpc/**` module elides to its address rather
+// than loading its body. So a client entry importing `getUser` gets a `remote("users/getUser")` and
+// the database driver behind it never enters the graph — which is a claim about bytes on a wire, so
+// `test/build.test.ts` asserts it against the built text rather than trusting the option.
+
+import { rm } from 'node:fs/promises'
+import { basename, relative as relativeTo, resolve as resolvePath } from 'node:path'
+import { promisify } from 'node:util'
+import { brotliCompress, constants as ZLIB } from 'node:zlib'
+import { abidePlugin } from '$compiler/plugin.ts'
+import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
+import {
+    CLIENT_DIR,
+    type ClientAsset,
+    type ClientManifest,
+    MANIFEST_FILE,
+    type Sidecar,
+} from '../CLIENT_BUILD.ts'
+import { BOLD, colored, DIM, paint } from './paint.ts'
+
+/**
+ * What the command is pointed at when nothing is named, in the order it is looked for.
+ *
+ * `client` beside `ssr`, which is what an app already calls the other half — the two entry points of
+ * an isomorphic app are the two lanes it has, and naming them after the lanes is why neither needs a
+ * config file to be found. The first one that EXISTS wins rather than every one that does: two client
+ * entries in a root is a mistake, and building both would hide it.
+ */
+const CONVENTIONAL = ['client.ts', 'client.tsx', 'client.abide', 'client.js']
+
+export async function build(argv: string[]): Promise<number> {
+    // Entries, not flags — the command IS the build, and a knob here would be a second place the
+    // output shape is decided from. Anything starting with `-` is refused rather than ignored,
+    // because a `--minify` somebody typed and this quietly dropped is a build that did not do what
+    // they asked and said nothing.
+    for (const argument of argv) {
+        if (argument.startsWith('-')) {
+            console.error(`abide build: unknown option \`${argument}\``)
+            console.error('       usage: abide build [entry…]')
+            return CLI_EXIT_CODES.usage
+        }
+    }
+
+    const root = process.cwd()
+    const entries = argv.length > 0 ? argv : await conventional(root)
+    if (entries.length === 0) {
+        console.error(`abide build: nothing to build — no ${CONVENTIONAL.join(', ')} here`)
+        console.error('       name one: abide build <entry…>')
+        return CLI_EXIT_CODES.usage
+    }
+
+    const built = await Bun.build({
+        entrypoints: entries,
+        target: 'browser',
+        // The `code-split` half of the row. Every `import()` in a route table is a split point, so a
+        // page's module is absent until somebody navigates to it — which is the whole reason a route
+        // is reached through a loader rather than an import.
+        splitting: true,
+        minify: true,
+        // The hash is in the NAME rather than in a query, so a chunk is immutable at its address and
+        // an operator caches the directory forever. `[name]` stays in front of it because an address
+        // legible in a network panel is worth the eight bytes — the same trade the transport lane
+        // makes by keeping the module path in an endpoint's URL instead of hashing it.
+        naming: { entry: '[name]-[hash].[ext]', chunk: '[name]-[hash].[ext]', asset: '[name]-[hash].[ext]' },
+        // The operator's environment is not the browser's. Bun will inline `process.env.X` on
+        // request, and this is the one build where doing so publishes `ABIDE_IDENTITY_SECRET` to
+        // everybody who loads the page — a client asks `GET /__abide/identity` for what it may know.
+        env: 'disable',
+        plugins: [abidePlugin],
+        // The logs are this command's output and the exit code is what says it failed, which is the
+        // rule `abide check` already follows. A throw here would put a stack trace in front of a
+        // diagnostic somebody is trying to read.
+        throw: false,
+    })
+
+    if (!built.success) {
+        for (const message of built.logs) console.error(String(message))
+        return CLI_EXIT_CODES.failed
+    }
+
+    // Cleaned rather than merged. A hash makes a chunk immutable at its address, which also means a
+    // build never overwrites the last one's output — so merging would leave every chunk every
+    // previous build produced sitting there, served by nothing and shipped in the image.
+    const out = `${root}/${CLIENT_DIR}`
+    await rm(out, { recursive: true, force: true })
+
+    // Every artifact at once. Compression is the whole cost of this command past the bundle, and the
+    // artifacts are independent — one waiting on another's brotli is wall time spent on nothing. The
+    // names are collected FIRST so the manifest's key order is the bundler's rather than whichever
+    // chunk finished compressing first, which is what makes a rebuild produce the same document.
+    const names: string[] = []
+    const pending: Promise<ClientAsset>[] = []
+    for (const artifact of built.outputs) {
+        const name = basename(artifact.path)
+        names.push(name)
+        pending.push(written(out, name, artifact))
+    }
+    const settled = await Promise.all(pending)
+
+    const assets: Record<string, ClientAsset> = {}
+    for (let at = 0; at < names.length; at++) assets[names[at] as string] = settled[at] as ClientAsset
+
+    // Bun hands entry points back in the order they were given, so the two lists zip. Matching on the
+    // filename instead would need this to reproduce `[name]-[hash]`, which is the bundler's rule and
+    // not ours to restate.
+    const produced: Record<string, string> = {}
+    let at = 0
+    for (const artifact of built.outputs) {
+        if (artifact.kind !== 'entry-point') continue
+        const entry = entries[at++]
+        if (entry !== undefined) produced[relative(root, entry)] = basename(artifact.path)
+    }
+
+    const manifest: ClientManifest = { entries: produced, assets }
+    await Bun.write(`${root}/${MANIFEST_FILE}`, `${JSON.stringify(manifest, null, 4)}\n`)
+
+    report(manifest)
+    return CLI_EXIT_CODES.ok
+}
+
+/** The first conventional entry that is actually there. Empty when the root holds none of them. */
+async function conventional(root: string): Promise<string[]> {
+    for (const name of CONVENTIONAL) {
+        if (await Bun.file(`${root}/${name}`).exists()) return [`${root}/${name}`]
+    }
+    return []
+}
+
+/** One artifact on disk, with its sidecars, as the manifest records it. */
+async function written(out: string, name: string, artifact: Bun.BuildArtifact): Promise<ClientAsset> {
+    const bytes = new Uint8Array(await artifact.arrayBuffer())
+    await Bun.write(`${out}/${name}`, bytes)
+    return {
+        kind: artifact.kind === 'entry-point' ? 'entry' : artifact.kind === 'chunk' ? 'chunk' : 'asset',
+        size: bytes.byteLength,
+        type: artifact.type,
+        encodings: await compress(out, name, bytes),
+    }
+}
+
+// Brotli through `node:zlib` because `Bun.*` has no brotli — it has gzip, deflate and zstd. The one
+// place in this file a Node API is reached for, and it is reached for because the alternative is not
+// writing the encoding every browser has sent for a decade. The ASYNC form: the sync one is a
+// max-quality compress that holds the thread, which is what stopped the artifacts overlapping.
+const brotliOf = promisify(brotliCompress)
+
+/**
+ * The `.br` and `.gz` beside one asset, smallest first.
+ *
+ * Written only when the sidecar is SMALLER than the bytes it stands in for. That is not a rounding
+ * error on a bundle of chunks — a 90-byte chunk gzips to about 110 — and a server that served the
+ * larger form would be spending a decompress on the client to send more bytes. The manifest lists
+ * what exists rather than what was attempted, which is why `encodings` is a list and not two flags.
+ *
+ * Both are asked at their MAXIMUM setting rather than their default: a build trades wall time for
+ * bytes on every request afterwards, and the wall time is bought back by compressing the artifacts
+ * concurrently rather than by asking either of them for less.
+ */
+async function compress(
+    out: string,
+    name: string,
+    // `<ArrayBuffer>` rather than the default `<ArrayBufferLike>`: `Bun.gzipSync` will not take a view
+    // that might be over a `SharedArrayBuffer`, and an artifact's bytes never are.
+    bytes: Uint8Array<ArrayBuffer>,
+): Promise<Sidecar[]> {
+    const sidecars: Sidecar[] = []
+
+    const brotli = await brotliOf(bytes, {
+        params: {
+            [ZLIB.BROTLI_PARAM_QUALITY]: ZLIB.BROTLI_MAX_QUALITY,
+            // The window and the size hint together are what let it beat gzip on a bundle rather than
+            // tie with it; both are free to declare and neither is guessed — the size is known here.
+            [ZLIB.BROTLI_PARAM_LGWIN]: ZLIB.BROTLI_MAX_WINDOW_BITS,
+            [ZLIB.BROTLI_PARAM_SIZE_HINT]: bytes.byteLength,
+        },
+    })
+    if (brotli.byteLength < bytes.byteLength) {
+        await Bun.write(`${out}/${name}.br`, brotli)
+        sidecars.push({ encoding: 'br', file: `${name}.br`, size: brotli.byteLength })
+    }
+
+    const gzip = Bun.gzipSync(bytes, { level: 9 })
+    if (gzip.byteLength < bytes.byteLength) {
+        await Bun.write(`${out}/${name}.gz`, gzip)
+        sidecars.push({ encoding: 'gzip', file: `${name}.gz`, size: gzip.byteLength })
+    }
+
+    // Smallest first, so a server negotiating `Accept-Encoding` takes the first match rather than
+    // comparing sizes per request. Brotli beats gzip on essentially every bundle, but the order is
+    // MEASURED here rather than assumed, because the one asset where it does not is exactly the one
+    // a hardcoded preference would get wrong.
+    sidecars.sort((a, b) => a.size - b.size)
+    return sidecars
+}
+
+/**
+ * What the build was, on stdout.
+ *
+ * Sorted by name and not by size: two builds of one tree should produce the same report, and a size
+ * ordering shuffles the whole list when one chunk grows by a byte.
+ */
+function report(manifest: ClientManifest): void {
+    const on = colored()
+    const names = Object.keys(manifest.assets).sort()
+
+    let width = 0
+    for (const name of names) if (name.length > width) width = name.length
+
+    console.log(paint(CLIENT_DIR, BOLD, on))
+    let identity = 0
+    let best = 0
+    for (const name of names) {
+        const asset = manifest.assets[name] as ClientAsset
+        identity += asset.size
+        const smallest = asset.encodings[0]
+        best += smallest === undefined ? asset.size : smallest.size
+        const shrunk =
+            smallest === undefined ? 'no smaller compressed' : `${smallest.encoding} ${bytes(smallest.size)}`
+        console.log(`  ${name.padEnd(width)}  ${bytes(asset.size).padStart(9)}  ${paint(shrunk, DIM, on)}`)
+    }
+    console.log(
+        paint(
+            `  ${names.length} file${names.length === 1 ? '' : 's'} · ${bytes(identity)} · ${bytes(best)} over the wire`,
+            DIM,
+            on,
+        ),
+    )
+}
+
+function bytes(count: number): string {
+    return count < 1024 ? `${count} B` : `${(count / 1024).toFixed(1)} kB`
+}
+
+/**
+ * A path as the manifest records it: relative to the root, so a build means the same in a container.
+ *
+ * Through `node:path` rather than a string slice, because the KEY has to be what the file is and not
+ * how somebody typed it — `abide build ./client.ts` and `abide build client.ts` name one entry, and a
+ * manifest that recorded them as two would hand a server a name it cannot look up.
+ */
+function relative(root: string, path: string): string {
+    return relativeTo(root, resolvePath(root, path))
+}

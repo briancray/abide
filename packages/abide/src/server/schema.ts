@@ -21,7 +21,7 @@
 
 import { isFile, isThenable } from '$shared/internal/probes.ts'
 import type { JsonSchema, JsonType } from '$shared/internal/shapes.ts'
-import { HttpError } from './responses.ts'
+import { HttpError } from '$shared/internal/wire.ts'
 
 export type { EndpointShape, JsonSchema, JsonType, Shapes } from '$shared/internal/shapes.ts'
 

@@ -9,9 +9,11 @@ import ceilings from './ceilings.html'
 import channel from './channel.html'
 import client from './client.html'
 import compiler from './compiler.html'
+import config from './config.html'
 import health from './health.html'
 import hydrate from './hydrate.html'
 import identity from './identity.html'
+import lifecycle from './lifecycle.html'
 import logging from './logging.html'
 import memo from './memo.html'
 import overview from './overview.html'
@@ -61,6 +63,8 @@ const running = Bun.serve({
         '/logging': logging,
         '/health': health,
         '/identity': identity,
+        '/config': config,
+        '/lifecycle': lifecycle,
         '/ceilings': ceilings,
         '/compiler': compiler,
         '/bench': bench,

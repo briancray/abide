@@ -12,6 +12,7 @@
         "abide": "bun packages/abide/compiler/check.ts packages/example",
         "typecheck": "bun packages/abide/cli/index.ts check packages/example",
         "shapes": "bun packages/abide/compiler/shapes.ts packages/example --out .abide/shapes.json --pretty",
+        "build": "bun run --filter example build",
         "web": "bun run --filter example web",
         "example": "bun run --filter example ssr",
         "check": "biome check .",

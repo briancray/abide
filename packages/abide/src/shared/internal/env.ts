@@ -1,7 +1,7 @@
 // What the process was told, and the two things every reader asks it.
 //
 // Its own file rather than the top of `log.ts` because the answers are wanted by things that have no
-// business loading a logger: `abide --help` decides whether to colour a usage screen, and dragging
+// business loading a logger: `abide --help` decides whether to color a usage screen, and dragging
 // `log.ts` in for a four-line read cost the binary ~6ms of the ~7ms its eager graph takes at all.
 
 // Where the environment is, if there is one. The OBJECT is captured, not its values: `Bun.env` is a
@@ -32,6 +32,18 @@ export function envNumber(name: string, fallback: number): number {
 }
 
 /**
+ * `NODE_ENV === 'production'`.
+ *
+ * Here rather than beside either reader, because the two who ask are the cookie (`Secure`, and the
+ * hard requirement for a signing key) and `config()`, which PUBLISHES the answer — and a document
+ * saying `production: false` while the cookie was sealed as though it were true is the one lie an
+ * operator has no way to catch.
+ */
+export function isProduction(): boolean {
+    return env('NODE_ENV') === 'production'
+}
+
+/**
  * Whether there is a terminal on the other end. A browser has no `process` and answers `false`.
  *
  * Reached per call rather than captured at load, and that is not a style choice: bun BUILDS
@@ -50,7 +62,7 @@ export function stdoutIsTTY(): boolean {
  * says how a machine reads records and has nothing to say about a help screen a person asked for),
  * and this is the one part of them that is the same question.
  */
-export function colourAllowed(): boolean {
+export function colorAllowed(): boolean {
     if (env('NO_COLOR') !== undefined) return false
     if (env('FORCE_COLOR') !== undefined) return true
     return stdoutIsTTY()

@@ -10,35 +10,9 @@
 
 import { expect, test } from 'bun:test'
 import { COMMANDS, LineEditor, suggest } from 'abide/cli'
+import { abide, BINARY, type Ended, ended, firstLine, linesUntil, spawn } from './spawned.ts'
 
-const BINARY = Bun.resolveSync('abide/cli', import.meta.dir)
 const LOGS_APP = `${import.meta.dir}/cli-logs-app.ts`
-
-interface Ended {
-    code: number
-    out: string
-    err: string
-}
-
-async function abide(
-    argv: string[],
-    options?: { env?: Record<string, string>; cwd?: string },
-): Promise<Ended> {
-    const child = Bun.spawn(['bun', BINARY, ...argv], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-        ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
-        // The parent's environment plus whatever the case declares, so a knob a case does not name is
-        // the one the developer's shell has — which is what the command would see in their hands.
-        env: options?.env === undefined ? Bun.env : { ...Bun.env, ...options.env },
-    })
-    const [out, err] = await Promise.all([
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-    ])
-    await child.exited
-    return { code: child.exitCode ?? -1, out, err }
-}
 
 test('the usage screen is the command table, and asking for it is a success', async () => {
     const asked = await abide(['--help'])
@@ -110,21 +84,16 @@ test('`check` reports a `.abide` type error on the `.abide` line', async () => {
 })
 
 test('`logs` tails the feed the app is serving, replay first and live after', async () => {
-    const app = Bun.spawn(['bun', LOGS_APP], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-        // Named, and the name is the assertion below: the CHANNEL crosses the wire on the record. A
-        // tail that rebuilt it would answer with its own process's app name, which is not the app.
-        env: { ...Bun.env, ABIDE_LOGS: '1', ABIDE_LOG_FORMAT: 'tsv', ABIDE_APP_NAME: 'tailed' },
+    // Named, and the name is the assertion below: the CHANNEL crosses the wire on the record. A tail
+    // that rebuilt it would answer with its own process's app name, which is not the app.
+    const app = spawn(['bun', LOGS_APP], {
+        env: { ABIDE_LOGS: '1', ABIDE_LOG_FORMAT: 'tsv', ABIDE_APP_NAME: 'tailed' },
     })
     const port = await firstLine(app.stdout)
 
     try {
-        const tail = Bun.spawn(['bun', BINARY, 'logs'], {
-            stdout: 'pipe',
-            stderr: 'pipe',
+        const tail = spawn(['bun', BINARY, 'logs'], {
             env: {
-                ...Bun.env,
                 ABIDE_APP_URL: `http://localhost:${(JSON.parse(port) as { port: number }).port}`,
                 // Not a terminal, so the shape would be `tsv` anyway — declared so the assertion below
                 // is about the five fields rather than about what the CI runner's stdout happens to be.
@@ -157,7 +126,7 @@ test('`logs` tails the feed the app is serving, replay first and live after', as
 
 test('a closed feed and an app that is not there are different answers', async () => {
     // No `ABIDE_LOGS`, so the endpoint is not there rather than refusing — a 404, and `5`.
-    const app = Bun.spawn(['bun', LOGS_APP], { stdout: 'pipe', stderr: 'pipe', env: { ...Bun.env } })
+    const app = spawn(['bun', LOGS_APP])
     const port = (JSON.parse(await firstLine(app.stdout)) as { port: number }).port
     try {
         const closed = await abide(['logs'], { env: { ABIDE_APP_URL: `http://localhost:${port}` } })
@@ -317,7 +286,7 @@ test('a ghost is only drawn where it can be told apart from what was typed', () 
     expect(suggest('zz', ['state'])).toBe('')
 
     const painted: string[] = []
-    // Without colour there is no ghost at all: an undimmed suggestion is indistinguishable from what
+    // Without color there is no ghost at all: an undimmed suggestion is indistinguishable from what
     // you typed, and a line editor that lies about which characters are yours is worse than one
     // making no suggestions.
     const plain = new LineEditor(
@@ -335,51 +304,16 @@ test('a ghost is only drawn where it can be told apart from what was typed', () 
 })
 
 /** A repl session fed lines the way a heredoc would, which is the one lane a test can drive. */
-async function replies(lines: string[], cwd?: string): Promise<Ended> {
-    const child = Bun.spawn(['bun', BINARY, 'repl'], {
-        stdin: new TextEncoder().encode(`${lines.join('\n')}\n`),
-        stdout: 'pipe',
-        stderr: 'pipe',
-        ...(cwd === undefined ? {} : { cwd }),
-        env: { ...Bun.env, NO_COLOR: '1' },
-    })
-    const [out, err] = await Promise.all([
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-    ])
-    await child.exited
-    return { code: child.exitCode ?? -1, out, err }
-}
-
-/** The first line a process prints, without waiting for the rest of a stream that never ends. */
-async function firstLine(stream: ReadableStream<Uint8Array>): Promise<string> {
-    const lines = await linesUntil(stream, 1)
-    return lines[0] as string
-}
-
-/**
- * The first `count` lines of a stream that is still being written to.
- *
- * `Response(stream).text()` cannot be used for any of this: both processes here are long-running by
- * design, and reading to the end would be waiting for something that has no end.
- */
-async function linesUntil(stream: ReadableStream<Uint8Array>, count: number): Promise<string[]> {
-    const reader = stream.getReader()
-    const decoder = new TextDecoder()
-    const lines: string[] = []
-    let held = ''
-    while (lines.length < count) {
-        const step = await reader.read()
-        if (step.done === true) break
-        held += decoder.decode(step.value, { stream: true })
-        for (;;) {
-            const at = held.indexOf('\n')
-            if (at < 0) break
-            const line = held.slice(0, at)
-            held = held.slice(at + 1)
-            if (line !== '') lines.push(line)
-        }
-    }
-    reader.releaseLock()
-    return lines
+function replies(lines: string[], cwd?: string): Promise<Ended> {
+    // Its own spawn rather than the shared one, for the one thing that helper does not model: a repl
+    // is driven by what is fed to its STDIN, which is the only lane a test has on a line editor.
+    return ended(
+        Bun.spawn(['bun', BINARY, 'repl'], {
+            stdin: new TextEncoder().encode(`${lines.join('\n')}\n`),
+            stdout: 'pipe',
+            stderr: 'pipe',
+            ...(cwd === undefined ? {} : { cwd }),
+            env: { ...Bun.env, NO_COLOR: '1' },
+        }),
+    )
 }

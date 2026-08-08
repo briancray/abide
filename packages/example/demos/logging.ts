@@ -162,7 +162,7 @@ export default suite({
                     return
                 }
 
-                await withEnv('ABIDE_APP_NAME', 'docs', async () => {
+                await withEnv({ ABIDE_APP_NAME: 'docs' }, async () => {
                     const cards = log.channel('cards')
                     is('the app names the default channel', defaultChannel(), 'docs')
                     is(
@@ -215,7 +215,9 @@ export default suite({
                     return
                 }
 
-                const tsv = await withEnv('ABIDE_LOG_FORMAT', 'tsv', () => capture(() => log('a piped line')))
+                const tsv = await withEnv({ ABIDE_LOG_FORMAT: 'tsv' }, () =>
+                    capture(() => log('a piped line')),
+                )
                 const fields = (tsv[0]?.text ?? '').split('\t')
                 // Five columns ALWAYS, empty where there is no id: a row whose column count depends
                 // on whether a request was in flight is one no `cut -f` can read.
@@ -225,7 +227,7 @@ export default suite({
                 is('message', fields[3], 'a piped line')
                 is('and the trace column, empty outside a request', fields[4], '')
 
-                const json = await withEnv('ABIDE_LOG_FORMAT', 'json', () =>
+                const json = await withEnv({ ABIDE_LOG_FORMAT: 'json' }, () =>
                     capture(() => log.error('a collected line')),
                 )
                 const record = JSON.parse(json[0]?.text ?? '{}') as Record<string, string>
@@ -239,7 +241,7 @@ export default suite({
                 is('level', record.level, 'error')
                 is('channel', record.channel, defaultChannel())
 
-                const split = await withEnv('ABIDE_LOG_FORMAT', 'tsv', () =>
+                const split = await withEnv({ ABIDE_LOG_FORMAT: 'tsv' }, () =>
                     capture(() => log('one\ttwo\nthree')),
                 )
                 is('one message is one record', split.length, 1)
@@ -269,59 +271,54 @@ export default suite({
                 // while it is open is a record this case would then have to account for.
                 const base = defaultChannel()
 
-                await withEnv('ABIDE_LOG_BUFFER', '2', () =>
-                    withEnv('ABIDE_LOGS', '1', async () => {
-                        capture(() => {
-                            log('one')
-                            log('two')
-                            log('three')
-                        })
+                await withEnv({ ABIDE_LOG_BUFFER: '2', ABIDE_LOGS: '1' }, async () => {
+                    capture(() => {
+                        log('one')
+                        log('two')
+                        log('three')
+                    })
 
-                        const feed = await wire.fetch(LOGS, { method: 'GET' })
-                        is('opened', feed.status, 200)
-                        is('one JSON value per line', feed.headers.get('content-type'), 'application/jsonl')
+                    const feed = await wire.fetch(LOGS, { method: 'GET' })
+                    is('opened', feed.status, 200)
+                    is('one JSON value per line', feed.headers.get('content-type'), 'application/jsonl')
 
-                        const reader = lines(feed)
-                        const replayed = [await reader.next(), await reader.next()]
-                        is('the ring is capped at ABIDE_LOG_BUFFER', replayed.map(messageOf), [
-                            'two',
-                            'three',
-                        ])
-                        is('and a record is the five fields', Object.keys(replayed[0] as LogRecord), [
-                            'time',
-                            'level',
-                            'channel',
-                            'message',
-                            'trace',
-                        ])
-                        // Nothing served these lines, so there is no operation to belong to — and a
-                        // feed that invented one would be asserting a relationship it cannot see.
-                        is('with no trace outside a request', replayed[0]?.trace, null)
-                        is('on the app’s own channel', replayed[0]?.channel, base)
+                    const reader = lines(feed)
+                    const replayed = [await reader.next(), await reader.next()]
+                    is('the ring is capped at ABIDE_LOG_BUFFER', replayed.map(messageOf), ['two', 'three'])
+                    is('and a record is the five fields', Object.keys(replayed[0] as LogRecord), [
+                        'time',
+                        'level',
+                        'channel',
+                        'message',
+                        'trace',
+                    ])
+                    // Nothing served these lines, so there is no operation to belong to — and a
+                    // feed that invented one would be asserting a relationship it cannot see.
+                    is('with no trace outside a request', replayed[0]?.trace, null)
+                    is('on the app’s own channel', replayed[0]?.channel, base)
 
-                        // Published while the tail is open: the same channel, now reaching a
-                        // subscriber rather than the ring.
-                        const cards = log.channel('never-turned-on')
-                        capture(() => {
-                            cards('a gated line the console never saw')
-                            cards.warning('never gated, on any channel')
-                        })
+                    // Published while the tail is open: the same channel, now reaching a
+                    // subscriber rather than the ring.
+                    const cards = log.channel('never-turned-on')
+                    capture(() => {
+                        cards('a gated line the console never saw')
+                        cards.warning('never gated, on any channel')
+                    })
 
-                        // The NEXT record is the warning, not the gated line before it — which is the
-                        // only way to assert a skip on a stream: the one that was suppressed has no
-                        // record to look for.
-                        const followed = await reader.next()
-                        is(
-                            'the gated line never reached the feed',
-                            followed?.message,
-                            'never gated, on any channel',
-                        )
-                        is('…and the one that did carries its level', followed?.level, 'warning')
-                        is('on the named channel', followed?.channel, `${base}:never-turned-on`)
+                    // The NEXT record is the warning, not the gated line before it — which is the
+                    // only way to assert a skip on a stream: the one that was suppressed has no
+                    // record to look for.
+                    const followed = await reader.next()
+                    is(
+                        'the gated line never reached the feed',
+                        followed?.message,
+                        'never gated, on any channel',
+                    )
+                    is('…and the one that did carries its level', followed?.level, 'warning')
+                    is('on the named channel', followed?.channel, `${base}:never-turned-on`)
 
-                        await reader.stop()
-                    }),
-                )
+                    await reader.stop()
+                })
 
                 // The ring is built once, on the first record, so what it holds outlives the opt-in.
                 // Closing the feed is what makes it unreachable — which is the whole contract.
@@ -520,7 +517,7 @@ function levels(written: Written[]): string[] {
  * rather than a literal the app's own name would break.
  */
 function channelOf(line: Written | undefined): string {
-    // ANSI comes off first: the readable form is coloured at a TTY, so without this every claim below
+    // ANSI comes off first: the readable form is colored at a TTY, so without this every claim below
     // would hold under `bun test | cat` and fail for whoever ran the suite in their own terminal.
     const text = (line?.text ?? '').replace(ANSI, '')
     if (text.startsWith('{')) return (JSON.parse(text) as { channel: string }).channel

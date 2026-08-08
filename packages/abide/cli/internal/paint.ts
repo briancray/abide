@@ -1,12 +1,12 @@
 // The four codes this binary writes with, and where the ANSI question is answered.
 //
 // One answer for the usage screen, the REPL banner and the REPL's ghost text, because `NO_COLOR` is
-// one promise rather than three — and it is `colourAllowed`'s answer, the same one the log line's
+// one promise rather than three — and it is `colorAllowed`'s answer, the same one the log line's
 // shape is decided by. Only the ORDERING is shared: `ABIDE_LOG_FORMAT=json` says how a MACHINE reads
-// log records and has nothing to say about whether a help screen a person asked for is coloured, so
+// log records and has nothing to say about whether a help screen a person asked for is colored, so
 // `logShape` is deliberately not asked here.
 
-export { colourAllowed as coloured } from '$shared/internal/env.ts'
+export { colorAllowed as colored } from '$shared/internal/env.ts'
 
 export const DIM = '\x1b[90m'
 export const BOLD = '\x1b[1m'

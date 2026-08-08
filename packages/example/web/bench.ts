@@ -54,13 +54,13 @@ const main = shell(
 // --- the one column template every row is laid on ----------------------------
 
 const ROW = 'grid grid-cols-[minmax(0,1fr)_6.5rem_7rem_9.5rem] items-center gap-x-4 px-3'
-// Every small-caps label on the page is this ramp plus a colour, so the ramp is written once.
+// Every small-caps label on the page is this ramp plus a color, so the ramp is written once.
 const HEAD = `${LABEL} text-slate-600`
 const HEAD_RIGHT = `${HEAD} text-right`
 const GROUP = `px-3 py-2 ${LABEL} text-slate-400 bg-slate-900/40`
 const NUMBER = 'font-mono text-xs tabular-nums text-right'
 
-// The kind is a chip rather than a column: it says how to read the rest of the row, and four colours
+// The kind is a chip rather than a column: it says how to read the rest of the row, and four colors
 // are quicker to skip past than four words in the same grey.
 const KIND: Record<Bench['kind'], string> = {
     time: `${LABEL} text-slate-500 shrink-0`,
@@ -71,7 +71,7 @@ const KIND: Record<Bench['kind'], string> = {
 
 const TAIL = 'text-xs text-right'
 
-const COLOUR: Record<ReturnType<typeof verdict>, string> = {
+const COLOR: Record<ReturnType<typeof verdict>, string> = {
     faster: `text-emerald-400 ${TAIL}`,
     same: `text-emerald-400 ${TAIL}`,
     slower: `text-amber-400 ${TAIL}`,
@@ -233,7 +233,7 @@ async function runTime(bench: TimeBench, arms: Arm[], rows: TimeRow[], footnote:
             : i === 0
               ? 'baseline'
               : ratioText(abide.nsPerOp, timing.nsPerOp)
-        row.tail.className = floor || i === 0 ? QUIET : COLOUR[verdict(abide.nsPerOp, timing.nsPerOp)]
+        row.tail.className = floor || i === 0 ? QUIET : COLOR[verdict(abide.nsPerOp, timing.nsPerOp)]
         if (timing.spread > NOISY_SPREAD) noisy = true
     }
 
