@@ -38,5 +38,16 @@ export const HEALTH_PATH = `${ABIDE_PREFIX}health`
  */
 export const IDENTITY_PATH = `${ABIDE_PREFIX}identity`
 
+/**
+ * Where a built client bundle is served FROM. A prefix, because a directory of hashed files is what
+ * is under it.
+ *
+ * Here rather than beside the build that writes the directory, for the reason `HEALTH_PATH` is here:
+ * this is the table of what abide has CLAIMED, and a segment claimed in some other file is one
+ * `dispatch` cannot know is taken. Not `dispatch`'s to answer either — it is files on a disk rather
+ * than an endpoint, so whatever mounts it does so in FRONT of the request pipeline.
+ */
+export const CLIENT_ROUTE = `${ABIDE_PREFIX}client/`
+
 /** The query parameter carrying JSON args: a read's arguments, and a socket's room. */
 export const ARGS_PARAM = 'a'

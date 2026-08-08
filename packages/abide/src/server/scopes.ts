@@ -36,6 +36,11 @@ interface Serving {
     identity: Identity | Promise<Identity> | null
     /** `Set-Cookie` lines this request has decided to write. Only `identity` writes one so far. */
     cookiesOut: string[] | null
+    /**
+     * What is still using this scope. The handler is one; a response BODY still being written is
+     * another, and the teardown belongs to whichever finishes last.
+     */
+    holds: number
 }
 
 // Built on the first `serve`, never at import.
@@ -88,8 +93,170 @@ export function serve<T>(request: Request, fn: () => T): T {
         trace: null,
         identity: null,
         cookiesOut: null,
+        holds: 1,
     }
-    return storage().run(held, () => settling(fn, () => dropScope(held.scope)))
+    return storage().run(held, () => settling(fn, () => release(held)))
+}
+
+/**
+ * Keep this caller's scope alive past the handler's return, and answer with the release.
+ *
+ * A handler that answers with a STREAM has returned long before its body is written. The ambients
+ * ride the async context and survive that on their own — an `await` carries them — but the SCOPE is
+ * torn down by `settling` on the way out, so a `memo` read by the render's third chunk would find a
+ * cache that was cleared under it and quietly build a second time. Right answer, twice the work, and
+ * nothing says so. So a body takes a hold of its own.
+ *
+ * `null` outside a request: there is nothing to hold, and a caller then has nothing to release.
+ */
+export function holdScope(): (() => void) | null {
+    const held = STORAGE?.getStore()
+    if (held === undefined) return null
+    held.holds++
+    let released = false
+    // Idempotent, because a stream has three ways to end and two of them can both fire.
+    return () => {
+        if (released) return
+        released = true
+        release(held)
+    }
+}
+
+function release(held: Serving): void {
+    held.holds--
+    if (held.holds === 0) dropScope(held.scope)
+}
+
+/**
+ * Streams that already hold their caller's scope.
+ *
+ * Weak, because the entry is worth exactly as long as the stream is: a response body is per-request
+ * and there are as many of these as there are requests in flight, so a `Set` here would be a leak
+ * with a name.
+ */
+const HELD = new WeakSet<ReadableStream<unknown>>()
+
+/**
+ * Say a stream already holds its caller — for a producer that took the hold itself.
+ *
+ * The alternative was a rule about WHICH layer may hold: the producers do and the response helpers
+ * do not, or the reverse. Either way every new helper has to know the rule, and the one that gets it
+ * wrong either double-wraps or drops the guarantee silently. Marking the STREAM makes "held" a fact
+ * about the body rather than a convention between layers, so any seam may ask and the answer composes.
+ */
+export function markHeld<T>(body: ReadableStream<T>): ReadableStream<T> {
+    HELD.add(body)
+    return body
+}
+
+/** Stateless, so one for the process rather than one per response. */
+const ENCODER = new TextEncoder()
+
+/** One chunk, however its producer spells one — a generator's step and a reader's agree here. */
+interface Step {
+    done?: boolean | undefined
+    value?: string | Uint8Array | undefined
+}
+
+/**
+ * The hold, the bind, and the three ways a body ends — once, over whatever produces the next chunk.
+ *
+ * A held body comes in two shapes: `heldStream` pumps a stream somebody else built, and `bytes` in
+ * `index.ts` pumps a render walk. What differs is where a chunk comes from; what must not differ is
+ * the RELEASE, which has three exits — the close, the throw and the cancel — and a scope leaks
+ * silently when any one of them is missed. So the source is the argument and the protocol is here,
+ * rather than the protocol being written once per producer.
+ *
+ * A text chunk is encoded on the way out because a body is bytes: one `typeof` per chunk, against
+ * the second `ReadableStream` and its queue that sharing this by WRAPPING would cost per row.
+ *
+ * `release` is nullable for a producer that builds its stream either way — a page renders outside a
+ * request too, and there is then nothing to hold and no branch to pay for it.
+ */
+export function heldPump(
+    read: () => Promise<Step>,
+    end: (reason: unknown) => void,
+    release: (() => void) | null,
+): ReadableStream<Uint8Array> {
+    return markHeld(
+        new ReadableStream<Uint8Array>({
+            pull: bound(async (controller: ReadableStreamDefaultController<Uint8Array>) => {
+                try {
+                    const step = await read()
+                    if (step.done !== true) {
+                        const chunk = step.value as string | Uint8Array
+                        return void controller.enqueue(
+                            typeof chunk === 'string' ? ENCODER.encode(chunk) : chunk,
+                        )
+                    }
+                } catch (failure) {
+                    release?.()
+                    throw failure
+                }
+                controller.close()
+                release?.()
+            }),
+            // Bound too: a source's own cleanup is the app's, and it should see the caller it was opened
+            // for rather than whoever cancelled.
+            cancel: bound((reason: unknown) => {
+                release?.()
+                end(reason)
+            }),
+        }),
+    )
+}
+
+/**
+ * A response body that is still this caller's for every byte of it.
+ *
+ * The one shape every streaming response needs, and the reason it is here rather than repeated at
+ * each funnel: a handler answering with a stream RETURNS before a byte is written, so `settling` has
+ * already dropped the scope by the time the first `pull` runs. A `memo` the handler read and the body
+ * reads again is then built twice — the right answer, with nothing to say it cost double.
+ *
+ * The HOLD is what keeps the cache alive; the BIND is for where the reading starts, because a `pull`
+ * is called by the runtime from its own context. Outside a request there is nothing to hold, and the
+ * stream is handed straight back — so nothing pays for scoping that is not happening.
+ *
+ * IDEMPOTENT: a body that already holds is returned untouched, so `page(toStream(view))` is one
+ * wrapper rather than two and an app may call this on anything it is about to answer with.
+ */
+export function heldStream(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+    if (HELD.has(body)) return body
+    const release = holdScope()
+    if (release === null) return body
+    const reader = body.getReader()
+    return heldPump(
+        () => reader.read(),
+        (reason) => void reader.cancel(reason),
+        release,
+    )
+}
+
+/**
+ * `fn`, re-entered in the caller scope open NOW.
+ *
+ * For work a RUNTIME starts rather than the handler. An `await` carries the scope on its own, so a
+ * walk that was already running when the handler returned needs nothing — but an async GENERATOR does
+ * not run a line of its body until the first `next()`, and for a streamed response that `next()` is a
+ * `pull` the runtime calls from its own context. The generator then begins outside the request that
+ * asked for it: `route()` answers nothing and a page renders an empty slot.
+ *
+ * It takes a real socket to see it. Driven by `Response.text()` in-process the generator resumes in
+ * the context it was created in and the ambients answer without this — so the case that falsifies it
+ * is `start.test.ts`, which spawns the binary, and not anything under `serve.test.ts`.
+ *
+ * The function itself outside a request, so nothing pays for scoping that is not happening.
+ *
+ * ONE argument, because that is what every caller has: the wrapper runs per CHUNK, and a rest
+ * parameter would allocate an array and a closure there to carry a `pull`'s single controller.
+ */
+export function bound<A, R>(fn: (arg: A) => R): (arg: A) => R {
+    const store = STORAGE
+    if (store === null) return fn
+    const held = store.getStore()
+    if (held === undefined) return fn
+    return (arg: A): R => store.run(held, fn, arg)
 }
 
 /**

@@ -12,8 +12,8 @@
 // the rules were always asking about, and it is the reason a record crosses the wire rather than a
 // rendered line.
 
-import { DEFAULT_PORT } from '$server/internal/DEFAULTS.ts'
-import { env, envNumber } from '$shared/internal/env.ts'
+import { config } from '$server/config.ts'
+import { env } from '$shared/internal/env.ts'
 import { LOGS_PATH } from '$shared/internal/PATHS.ts'
 import { JSONL_TYPE, payloadOf } from '$shared/internal/wire.ts'
 import { formatLogLine, type LogRecord, logShape, writeLogLine } from '$shared/log.ts'
@@ -26,13 +26,15 @@ import { CLI_EXIT_CODES, exitForStatus } from '../CLI_EXIT_CODES.ts'
  * app's own public URL and is what a process that is serving already has set. Falling back to a local
  * port last is what makes `abide logs` work in the window where somebody just ran the thing in
  * another terminal, which is the case this command exists for.
+ *
+ * The port comes off `config()` rather than off `PORT` directly, which is the same rule this file's
+ * header states about a log LINE: a second reader is a second answer, and a tail pointed at a port
+ * the app it is about never bound to is a command that says nothing arrived. No app module is loaded
+ * here, so the document is the floor under what the environment named — which is exactly what the
+ * process being tailed resolved it from.
  */
 export function appTarget(): string {
-    return (
-        env('ABIDE_APP_URL') ??
-        env('APP_URL') ??
-        `http://localhost:${Math.floor(envNumber('PORT', DEFAULT_PORT))}`
-    )
+    return env('ABIDE_APP_URL') ?? env('APP_URL') ?? `http://localhost:${config().PORT}`
 }
 
 export async function logs(argv: string[]): Promise<number> {

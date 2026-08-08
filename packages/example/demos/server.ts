@@ -7,7 +7,7 @@
 // substrate split.
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
-import { render, renderDocument, renderToString, suspend, toStream } from 'abide/server'
+import { render, renderDocument, renderToString, shell, suspend, toStream } from 'abide/server'
 import { floorTicks, keep, microtasks, sleep, suite } from 'abide/tests'
 import { button, el, output, row } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -408,7 +408,62 @@ export default suite({
                 const joined = chunks.join('')
                 is('in order', joined.indexOf('<p>a</p>') < joined.indexOf('<p>b</p>'), true)
                 is('starts with the doctype', joined.startsWith('<!doctype html>'), true)
+                // A `lang` and a charset, because a document without them is wrong in the way a
+                // browser papers over — it guesses the encoding, and the guess holds until the first
+                // non-ASCII byte. The same opening an app with no `app.html` is served in, so there
+                // is one answer to what abide's own document is.
+                is(
+                    'with a lang and a charset',
+                    joined.includes('<html lang="en"><head><meta charset="utf-8">'),
+                    true,
+                )
                 is('and closes the document', joined.endsWith('</body></html>'), true)
+            },
+        },
+
+        {
+            title: 'a page is served in the APP’s document, not abide’s',
+            note: '`shell(html)` cuts an app’s own `app.html` at the `<slot></slot>` where a page goes, and `renderDocument` takes that instead of a `<head>` string. So the document is an ordinary html file — its `lang`, its meta tags, its analytics snippet — and abide adds two things to it: the scoped styles at the end of the head, and the page inside the slot. `abide start` reads the file; this is the same function it hands the text to.',
+            async run({ is }) {
+                const written =
+                    '<!doctype html><html lang="en"><head><title>mine</title></head>' +
+                    '<body><header>chrome</header><slot>loading…</slot></body></html>'
+
+                const out: string[] = []
+                for await (const chunk of renderDocument(shell(written), () => html`<p>the page</p>`)) {
+                    out.push(chunk)
+                }
+                const joined = out.join('')
+
+                is('the app’s own document', joined.startsWith('<!doctype html><html lang="en">'), true)
+                is('its head, and its chrome', joined.includes('<header>chrome</header>'), true)
+                is('the page renders inside the slot', joined.includes('<slot><p>the page</p></slot>'), true)
+                // The tags stay and the placeholder goes: what a hydrating client adopts is the slot,
+                // and what a person opening the file sees is the placeholder.
+                is('the placeholder is replaced', joined.includes('loading…'), false)
+                is('and nothing is left after it', joined.endsWith('</body></html>'), true)
+                // The patch script rides out with the FIRST patch rather than in the shell, so a page
+                // that suspends nothing ships neither it nor a `<script>` node inside the slot — where
+                // an element the hydrating client did not render is a mismatch and a rebuilt subtree.
+                is('a page that suspends nothing ships no script', joined.includes('<script'), false)
+
+                // A document that EXPLAINS its own slot in a comment is the first document anybody
+                // writes. Acting on the sentence renders the page inside the paragraph describing
+                // where pages render.
+                const documented = shell(
+                    '<html><head></head><body><!-- <slot></slot> is where a page goes --><main><slot></slot></main></body></html>',
+                )
+                is('a comment about the slot is not the slot', documented.open.includes('<main>'), true)
+
+                // No hole is a refusal rather than a guess: appending to `<body>` would be abide
+                // deciding where somebody else’s document puts its content.
+                let refused = ''
+                try {
+                    shell('<html><body><main></main></body></html>')
+                } catch (failure) {
+                    refused = (failure as Error).message
+                }
+                is('a shell with nowhere to render is refused', refused.includes('<slot></slot>'), true)
             },
         },
 

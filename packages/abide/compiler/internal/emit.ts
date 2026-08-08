@@ -1,6 +1,6 @@
 // The node tree becomes the file a careful author would have written by hand.
 //
-// Not a pre-scanned `TemplateResult`: an `html` tagged template, the shape `packages/example/app.ts`
+// Not a pre-scanned `TemplateResult`: an `html` tagged template, the shape `packages/example/counter.ts`
 // already is. `slotsOf` and `prepare` are keyed on the `strings` identity a tagged template gives
 // for free, so the scan and the parse happen once per call site whatever the compiler does — and
 // what pre-scanning would buy is one scan per call site per process, against a stack trace that no

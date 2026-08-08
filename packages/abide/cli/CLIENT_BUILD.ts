@@ -1,6 +1,6 @@
 // What `abide build` writes, as a shape rather than as a convention.
 //
-// Its own file, with NO imports, for the same reason `CLI_EXIT_CODES` is its own file: `abide --help`
+// Its own file, with one import, for the same reason `CLI_EXIT_CODES` is its own file: `abide --help`
 // is the most common thing this binary is asked for, and `cli/index.ts` re-exports these so an app
 // can read a manifest without the command that wrote one dragging the compiler in behind it. The
 // paths are here rather than in `internal/build.ts` for the same reason — a server that serves the
@@ -10,11 +10,50 @@
 // beside this, and the whole of it is gitignored. One directory rather than two means one line in a
 // `.dockerignore` and one thing to delete.
 
+/**
+ * Where `abide start` serves the bundle FROM — the address side of the same fact.
+ *
+ * Re-exported rather than declared, because it belongs in the table of everything abide has claimed
+ * under the reserved prefix: an operator proxies, caches or excludes `/__abide/**` with one pattern,
+ * and a segment claimed away from that table is one nothing else can know is taken.
+ */
+export { CLIENT_ROUTE } from '$shared/internal/PATHS.ts'
+
 /** Where the client bundle is written, relative to the project root. */
 export const CLIENT_DIR = '.abide/client'
 
 /** The manifest, relative to the project root. Every path INSIDE it is relative to `CLIENT_DIR`. */
 export const MANIFEST_FILE = `${CLIENT_DIR}/manifest.json`
+
+/**
+ * What the build is pointed at when nothing is named, in the order it is looked for.
+ *
+ * `client` beside `app`, which is what an app already calls the other half — the two entry points of
+ * an isomorphic app are the two lanes it has, and naming them after the lanes is why neither needs a
+ * config file to be found. The first one that EXISTS wins rather than every one that does: two
+ * client entries in a root is a mistake, and building both would hide it.
+ *
+ * Here rather than in the builder because `abide start` reads it too: a lane that is written with no
+ * bundle beside it is the one shape that is unambiguously a mistake, and a second copy of this list
+ * is how that refusal silently stops firing for an extension somebody added to only one of them.
+ */
+export const CLIENT_ENTRIES = ['client.ts', 'client.tsx', 'client.abide', 'client.js']
+
+/**
+ * The first of `names` that is actually under `root`, or `null` for none of them.
+ *
+ * Beside the list rather than beside either caller, for the reason the list itself is here: `abide
+ * build` and `abide start` have to agree about where a lane IS, and a probe written once per command
+ * is how one learns about an extension the other does not. `Bun.file` and nothing else, so this file
+ * stays what its header says it is.
+ */
+export async function firstPresent(root: string, names: string[]): Promise<string | null> {
+    for (const name of names) {
+        const path = `${root}/${name}`
+        if (await Bun.file(path).exists()) return path
+    }
+    return null
+}
 
 /**
  * A `Content-Encoding` token, which is also what an `Accept-Encoding` is matched against.

@@ -3,7 +3,7 @@
 // Every case here compiles a source string with the SAME `compile` the Bun loader calls, so what is
 // asserted is the emitted text — and then, where the claim is about behaviour rather than shape, the
 // emitted component is rendered through both substrates. The headline case is the parity one:
-// `app.abide` and `app.ts` are the same component written twice, and the compiler's whole claim is
+// `counter.abide` and `counter.ts` are the same component written twice, and the compiler's whole claim is
 // that the two are indistinguishable at the output AND at the cost.
 
 import { adopt, styleTags } from 'abide'
@@ -16,8 +16,8 @@ import Compiled, {
     filter as compiledFilter,
     search as compiledSearch,
     session as compiledSession,
-} from '../app.abide'
-import { count, filter, search as handSearch, App as handWritten, session } from '../app.ts'
+} from '../counter.abide'
+import { count, filter, search as handSearch, App as handWritten, session } from '../counter.ts'
 import { button, row, stage } from './dom.ts'
 import Card from './fixtures/card.abide'
 import Library, { details, query, shelf, summary } from './fixtures/library.abide'
@@ -339,8 +339,8 @@ export default suite({
         },
 
         {
-            title: 'app.abide and app.ts render identically, on both substrates',
-            note: 'The parity claim, and the whole point: `app.ts` is the hand-written arm — the file someone would actually write — and `app.abide` is the same component in the sugared spelling. Same markup from the server, same DOM from the client. A difference here means the compiler is not emitting what a person would.',
+            title: 'counter.abide and counter.ts render identically, on both substrates',
+            note: 'The parity claim, and the whole point: `counter.ts` is the hand-written arm — the file someone would actually write — and `counter.abide` is the same component in the sugared spelling. Same markup from the server, same DOM from the client. A difference here means the compiler is not emitting what a person would.',
             async run({ is }) {
                 count.set(0)
                 filter.set('')
@@ -384,7 +384,7 @@ export default suite({
                         run: () => compiledCount.set(compiledCount.peek() + 1),
                     },
                     {
-                        label: 'vanilla — the hand-written app.ts, one count write',
+                        label: 'vanilla — the hand-written counter.ts, one count write',
                         prepare: () => {
                             const host = container()
                             mount(host, () => handWritten())

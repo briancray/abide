@@ -1,7 +1,7 @@
 <script module>
 import { memo, state } from 'abide'
 
-// The same component as `app.ts`, written in the `.abide` spelling — and the two are asserted to
+// The same component as `counter.ts`, written in the `.abide` spelling — and the two are asserted to
 // render identically in the `compiler` demo suite. Everything lives in `<script module>` for the
 // same reason it lives at module scope there: these cells outlive any one render.
 //

@@ -321,7 +321,7 @@ function resolve(): Config {
     const assembled = { ...FLOOR, ...declared } as Config
     RESOLVING_DOCUMENT = assembled
     const registered = REGISTERED
-    if (registered === null) return assembled
+    if (registered === null) return checked(assembled, null)
     // `undefined` from a registration that only declared a shape fails the object test below, which
     // is what folds the no-hook case into this one path.
     const defaults = registered.defaults?.(assembled)
@@ -361,6 +361,45 @@ function overridden(document: Config, defaults: Record<string, unknown>): void {
     }
 }
 
+/**
+ * What a port IS — the one predicate a variable and a `--port` flag are both read against.
+ *
+ * Exported because the two READ it in different places and must not disagree about it: `abide start`
+ * refuses a flag that is not a port, and this file floors a variable that is not one. A range written
+ * twice is a number an operator can pass on the command line and then have silently replaced.
+ */
+export function isPort(value: number): boolean {
+    return Number.isInteger(value) && value >= 0 && value <= 65535
+}
+
+/**
+ * The fields whose spelling is not their floor's type, enumerated rather than inferred.
+ *
+ * A ROW here rather than a `field === …` test inside the walk below, and rather than a correction
+ * after it: the walk is driven off `FLOOR` precisely so no field is named in it, and both of the
+ * shapes that need one are the same fact — this variable is not read the way its floor's type is.
+ * `undefined` back means the spelling is not an answer, so the field stays UNDECLARED and the floor
+ * stands.
+ *
+ * PORT is the one field where zero is an answer. `envNumber` takes a positive number because every
+ * other number in this table is a size, a ring or a deadline, and zero there would disable the thing
+ * it was meant to size — where `0` is the kernel's own spelling of "whatever is free", which is what
+ * a container with a port mapped in front of it, a test that must not collide, and `abide start
+ * --port 0` all ask for. Checked as a PORT rather than as a number for the same reason: `PORT=70000`
+ * is a typo, and the floor is a better answer than a bind failing at a number nothing in the
+ * document admits to.
+ *
+ * ABIDE_LOG_FORMAT is the one enum, and a spelling that is neither leaves the floor's `null` — so
+ * the shape follows the lane rather than being fixed to a word nobody wrote.
+ */
+const READERS: Partial<Record<keyof Env, (raw: string) => unknown>> = {
+    PORT: (raw) => {
+        const parsed = Number(raw)
+        return isPort(parsed) ? parsed : FLOOR.PORT
+    },
+    ABIDE_LOG_FORMAT: (raw) => (raw === 'tsv' || raw === 'json' ? raw : undefined),
+}
+
 /** `''` is not a spelling of false — `env` already reads an empty variable as unset. */
 const FALSE_SPELLINGS = new Set(['0', 'false', 'no', 'off'])
 
@@ -374,16 +413,24 @@ function coerced(raw: string, exemplar: unknown): unknown {
 }
 
 /**
- * The declared shape over the assembled document — the last thing that happens, because a shape that
- * ran before the merge would be checking a layer rather than the answer.
+ * The last pass over the assembled document — abide's own range, then the declared shape. Every path
+ * out of `resolve` comes through here, which is what makes "by construction" a true word below.
  *
- * A Standard Schema may validate ASYNCHRONOUSLY, and this is the one place in abide that cannot wait
- * for one: `config()` is synchronous so that reading a field is never a read somebody has to await.
- * Refused by name rather than by silently taking the promise as a value, and the pending validation
- * is caught so an app that shipped one does not also get an unhandled rejection on top of the message
- * telling it what to do instead.
+ * The RANGE is `PORT`, and it is checked on the assembled document rather than only on the variable
+ * because an operator is not the only one who can name a number: `declaredEnv` speaks for `PORT=…`,
+ * and an app's own `onConfig` default is the other way one arrives. A port that is not one is the
+ * floor — the same answer the variable gets, so the rule is stated once and `config().PORT` is a port
+ * for every reader, with nothing downstream flooring it a third way.
+ *
+ * The SHAPE goes last, because one that ran before the merge would be checking a layer rather than
+ * the answer. A Standard Schema may validate ASYNCHRONOUSLY, and this is the one place in abide that
+ * cannot wait for one: `config()` is synchronous so that reading a field is never a read somebody has
+ * to await. Refused by name rather than by silently taking the promise as a value, and the pending
+ * validation is caught so an app that shipped one does not also get an unhandled rejection on top of
+ * the message telling it what to do instead.
  */
 function checked(document: Config, gated: Gate<unknown> | null): Config {
+    if (!isPort(document.PORT)) document.PORT = FLOOR.PORT
     if (gated === null) return document
     const answered = gated(document)
     if (!isThenable(answered)) return answered as Config
@@ -432,21 +479,22 @@ function declaredEnv(): Partial<Env> {
     for (const field in FLOOR) {
         const raw = env(field)
         if (raw === undefined) continue
+        const reader = READERS[field as keyof Env]
+        if (reader !== undefined) {
+            const read = reader(raw)
+            if (read !== undefined) declared[field] = read
+            continue
+        }
         const floor = FLOOR[field as keyof Env]
         // Read as the type of the floor — the same rule `overridden` applies to an app's own fields,
         // where the default is the only thing that says what a field IS. `envNumber` rather than
-        // `coerced` because every number abide owns is positive, so `PORT=nonsense` keeps 3000 rather
-        // than becoming `NaN` or inventing a knob nobody has.
+        // `coerced` because every number this walk reads is a size, a ring or a deadline and so is
+        // positive: `ABIDE_LOG_BUFFER=nonsense` keeps 500 rather than becoming `NaN`.
         if (typeof floor === 'number') declared[field] = envNumber(field, floor)
         // Presence IS the declaration. `env` already reads an empty variable as unset, which is the
         // whole of how the one flag here is turned off.
         else if (typeof floor === 'boolean') declared[field] = true
         else declared[field] = raw
     }
-    // The one enum, checked after the walk rather than by a type that has to exclude it from the text
-    // case: a spelling that is neither leaves the field UNDECLARED, so the floor's `null` stands and
-    // the shape follows the lane.
-    const format = declared.ABIDE_LOG_FORMAT
-    if (format !== 'tsv' && format !== 'json') delete declared.ABIDE_LOG_FORMAT
     return declared as Partial<Env>
 }

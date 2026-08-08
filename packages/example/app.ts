@@ -1,43 +1,47 @@
-// One component, both substrates. Nothing in here is server-only or client-only: the same `html`
-// and the same primitives render to a string on the server and to live DOM in the browser.
+// The example, as an app: what `abide start` boots.
+//
+// This is the whole of it. There is no `Bun.serve`, no `dispatch` to mount, no request scope, no
+// signal handler, no route matching, no document, and not one `import './server/rpc/…'` for its side
+// effect — `pages/` is what this app serves, `server/rpc` and `server/sockets` are what it answers,
+// `app.html` is what it is served in, and `client.ts` is the lane the browser gets. Each of those is
+// decided by where a file SITS, so the boot finds them. What is left here is the part that is
+// genuinely this app's: what wraps a request, what happens around the boot, and what it says about
+// its own health.
+//
+// Every export below is optional. An app that wants none of them is an empty file, and an app that
+// wants a route of its own adds `export default` beside these — it is asked first, and `undefined` is
+// how it hands a path back to the pages.
 
-import { html, memo, state, type TemplateResult } from 'abide'
+import { log } from 'abide'
+import type { Middleware } from 'abide/server'
 
-export const count = state(0)
-export const filter = state('')
+/**
+ * One rung, and what a rung is for: it sees the request going down and the response coming back.
+ *
+ * An array because a chain is plural — `abide start` hands the whole of it to `middleware(...)`, in
+ * this order, outermost first.
+ */
+export const middleware: Middleware[] = [
+    async (next) => {
+        const answered = await next()
+        answered.headers.set('x-example', 'served')
+        return answered
+    },
+]
 
-// The load form: args are the cache key, so one slot per query.
-export const search = memo(async ({ q }: { q: string }) => {
-    await new Promise((resolve) => setTimeout(resolve, 30))
-    return ['alpha', 'beta', 'gamma'].filter((word) => word.includes(q))
-})
-
-// The derive form: no args, so dependencies come from the body.
-const doubled = memo(() => count() * 2)
-
-// A promise handed to `state` is a LOAD, not a value: `session()` reads the settled thing, and the
-// read below is the same call it would be if this had been `state({ name: 'guest' })`.
-export const session = state(
-    new Promise<{ name: string }>((resolve) => setTimeout(() => resolve({ name: 'ada' }), 20)),
-)
-
-export function App(): TemplateResult {
-    return html`
-        <main>
-            <h1>abide</h1>
-            <p>${() => (session.pending() ? 'loading…' : `hello ${session()?.name}`)}</p>
-            <p class=${() => (count() > 2 ? 'high' : 'low')}>
-                count ${() => count()} · doubled ${() => doubled()}
-            </p>
-            <button @click=${() => count.set(count.peek() + 1)}>increment</button>
-            <input .value=${() => filter()} @input=${onInput} />
-            <ul>
-                ${() => (search({ q: filter() })() ?? []).map((word) => html`<li>${word}</li>`)}
-            </ul>
-        </main>
-    `
+/** WRAPS the bind: everything before `start()` happens before the socket exists. */
+export async function onStart(start: () => Promise<void>): Promise<void> {
+    log('warming')
+    await start()
 }
 
-function onInput(event: Event): void {
-    filter.set((event.target as HTMLInputElement).value)
+/** And mirrors it on the way out. `stop()` is the socket closing. */
+export async function onStop(stop: () => Promise<void>): Promise<void> {
+    log('draining')
+    await stop()
+}
+
+/** Fields merged OVER the baseline `{ reachable, version, startedAt, uptime }`. */
+export function onHealth(): unknown {
+    return { example: { serving: true } }
 }

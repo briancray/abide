@@ -129,3 +129,47 @@ export async function linesUntil(stream: ReadableStream<Uint8Array>, count: numb
 export async function firstLine(stream: ReadableStream<Uint8Array>): Promise<string> {
     return (await linesUntil(stream, 1))[0] as string
 }
+
+/** A live child and the one question every case asks it: what did it say next. */
+export interface Reading {
+    child: Bun.Subprocess<'ignore', 'pipe', 'pipe'>
+    /** Lines until one carries `text` — `''` for simply the next one. */
+    until: (text: string) => Promise<string>
+}
+
+/**
+ * Start something and read its stdout a line at a time.
+ *
+ * The triple every case that watches a LIVE process needs — the child, the line reader over its
+ * stdout, and a waiter that carries stderr so a process which died says why instead of hanging until
+ * the runner's timeout. Written once here for the same reason `readLines` is.
+ */
+export function reading(command: string[], options?: SpawnOptions): Reading {
+    const child = spawn(command, options)
+    const lines = readLines(child.stdout)
+    return { child, until: (text) => lineWith(lines, text, child.stderr) }
+}
+
+/**
+ * Lines off a live process until one carries `text` — `''` for simply the next one, since every
+ * string contains the empty one.
+ *
+ * A process says more than one thing and only one of them is the claim, so a case waits for a line
+ * that ARRIVES rather than counting to a line number. A stream that ENDS first is the interesting
+ * failure: `errors` is drained into the message so the case names why the process died instead of
+ * hanging until the runner's timeout.
+ */
+export async function lineWith(
+    lines: AsyncGenerator<string>,
+    text: string,
+    errors?: ReadableStream<Uint8Array>,
+): Promise<string> {
+    for (;;) {
+        const step = await lines.next()
+        if (step.done === true) {
+            const said = errors === undefined ? '' : `: ${await new Response(errors).text()}`
+            throw new Error(`the process ended before it said "${text}"${said}`)
+        }
+        if (step.value.includes(text)) return step.value
+    }
+}

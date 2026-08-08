@@ -26,6 +26,7 @@ import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { knobOf } from './config.ts'
 import { failed, headersFor } from './responses.ts'
 import { type Gate, gate, publishable, type Schema } from './schema.ts'
+import { heldStream } from './scopes.ts'
 
 /**
  * The chain that authorizes and observes every call, INCLUDING an in-process one.
@@ -373,7 +374,9 @@ export function respond<Args, T>(
         // A retained failure. Asked about below, where it becomes a status rather than a throw.
     }
     if (handle.streaming() || handle.chunks().length > 0) {
-        return new Response(chunkedBody(handle), { headers: wireHeaders(ttl, NDJSON_TYPE, extra) })
+        return new Response(heldStream(chunkedBody(handle)), {
+            headers: wireHeaders(ttl, NDJSON_TYPE, extra),
+        })
     }
     // Always through `then`, even for a handler that settled in the call above. Answering a settled
     // slot synchronously was tried and reverted: it removes two microtask ticks from the round trip,

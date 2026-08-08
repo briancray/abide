@@ -181,6 +181,7 @@ Probes never throw and never start work.
 | directory is the kind | `server/rpc/**` is rpc; `server/sockets/**` is a socket |
 | syntactic recognition | `export const NAME = GET(…)`. Any other export in those directories is a compile error naming the export |
 | reserved prefix | Everything abide serves is under `/__abide/`; `dispatch` returns `undefined` for anything outside it |
+| who imports it | The BOOT does. A handler is reachable once its module has been imported, and `abide start` scans `server/rpc/**` and `server/sockets/**` from the project root and imports each — anchored there, so a transport directory nested elsewhere in the tree is not this app's. An app importing one for its side effect is a list kept in step by hand |
 | no hash | The module's path IS the address, so it is legible in a stack trace and a network panel |
 
 | File | Export | Served at |
@@ -288,9 +289,23 @@ three facts under other names.
 | `isolate` | `<T>(fn: () => T) => T` | Runs `fn` with its own caches and ambients, dropped when it settles. One variable set and put back, so a second while an async one is in flight THROWS. |
 | `serve` | `<T>(request: Request, fn: () => T) => T` | The same for one request, and what makes the ambients answerable. Async-local, so it has no such limit. |
 | `isServing` | `() => boolean` | Whether there is a request scope to ask at all, so a shared path can branch instead of catching a throw. |
+| `heldStream` | `(body: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>` | A body that keeps its caller's scope alive until its last chunk. Idempotent, and a no-op outside a request. |
 
 Per-caller is the default; `{ global }` is how something belonging to the process says so. On a
 client there is one caller forever, so neither is needed.
+
+The scope lasts as long as the RESPONSE, not as long as the handler. A handler answering with a
+stream returns before a byte of the body is written, so every streaming body abide builds — `toStream`
+and `documentToStream`, `jsonl` and `sse`, and a streaming rpc — holds the scope until its last chunk.
+Otherwise a `memo` the handler read and the body reads again finds a cache torn down under it and
+builds the same answer a second time: the right value, twice the work, and nothing to say so. The
+ambients need no such help: they ride the async context an `await` already carries.
+
+`heldStream` is that hold on its own, for a body abide did not build. `page`, `jsonl`, `sse` and a
+streaming rpc all call it, so a body answered through any of them is held whoever wrote it; a
+hand-written `new Response(stream)` calls it itself, because nothing abide owns sits between that
+stream and the socket. It is IDEMPOTENT — a body that already holds comes back untouched — so it is
+a fact about the stream rather than a rule about which layer is allowed to ask.
 
 ## Ambient values
 
@@ -520,11 +535,18 @@ that way and keeps the explicit spelling.
 | `renderToString` | `(node: Renderable, options?: RenderOptions) => Promise<string>` | The whole render as one string. Synchronous internally: a tree with nothing to await produces the document without a promise. |
 | `render` | `(node: Renderable, options?: RenderOptions) => AsyncGenerator<string>` | The same walk as an async iterable of chunks. |
 | `toStream` | `(node: Renderable, options?: RenderOptions) => ReadableStream<Uint8Array>` | The same walk as a `ReadableStream`, so the response back-pressures. |
-| `renderDocument` | `(head: string, body: () => Renderable, options?) => AsyncGenerator<string>` | A whole document: shell, body in order, then out-of-order patches as they resolve. |
+| `renderDocument` | `(document: string \| Shell, body: () => Renderable, options?) => AsyncGenerator<string>` | A whole document: shell, body in order, then out-of-order patches as they resolve. A `string` is the `<head>`, wrapped in abide's own document. |
+| `documentToStream` | `(document: string \| Shell, body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same document as a `ReadableStream`. What `abide start` answers a page with. |
+| `shell` | `(html: string) => Shell` | An app's own html as a document with a hole in it. THROWS when it has no `<slot></slot>`. |
+| `Shell` | `{ head: string; open: string; close: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close`. Cut once, because a document cannot change under a running process. |
 | `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => Renderable, fallback?: Renderable) => Renderable` | Emit a placeholder now and the real subtree when the value lands. Inside a `renderDocument` this defers rather than holding the walk. |
 | `options.hydratable` | `boolean` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
 | `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`. |
 | `hydrate` | `(container: Element, view: () => TemplateResult) => Mounted` | The same over markup a hydratable render wrote — every part adopts its range. A divergence rebuilds that subtree and warns. |
+
+The two-line patch script goes out with the FIRST deferred subtree rather than in the shell: a page
+that suspends nothing ships neither the script nor a `<script>` node inside the slot a hydrating
+client adopts.
 
 Only a CHILD slot carries markers: an opening comment before its value and the anchor after it. Other
 slot kinds are found positionally and a list row delimits itself. A chunk boundary is a SUSPENSION,
@@ -666,11 +688,11 @@ JS allocations per template node is deliberately absent — no engine this runs 
 | `url` | `(path: string, params?, query?) => string` | Build an in-app href. A missing required segment, or a param the pattern has no segment for, THROWS. |
 | `navigate` | `(target: string, options?: { replace?, keepScroll? }) => Promise<void>` | Move to one. A same-route param/query nav is a pure `route()` republish — no DOM swap, no re-hydrate. |
 | `outlet` | `() => TemplateResult` | The current route's page wrapped in its layouts. Reads the route's NAME and nothing else. |
-| `ready` | `() => Promise<void>` | Resolve the current route's modules, so the render that follows is a snapshot. What a server render calls before `renderToString`; `navigate` awaits it for you. |
+| `ready` | `() => Promise<void>` | Resolve the current route's modules, so the render that follows is a snapshot. What a server render calls before `renderToString` and what a client awaits before `hydrate` — a page adopted before its chunk arrives is a tree the server did not write. `navigate` awaits it for you. |
 
 | Pattern | Meaning |
 | --- | --- |
-| `<dir>/**/page.abide` | A route, under the directory handed to `pages(dir)` |
+| `<dir>/**/page.abide` | A route, under the directory handed to `pages(dir)` — `abide start` hands it `pages/` itself |
 | `<dir>/**/layout.abide` | A layout; renders its child page through `<slot/>` |
 | `[name]` | Required dynamic segment → `route().params.name` |
 | `[[name]]` | Optional segment (absent → param omitted) |
@@ -710,7 +732,7 @@ and the app's own `onConfig` defaults beneath that. An app's own fields join on 
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `PORT` | `number` | Listen port (default `3000`). `--port` on a command overrides it. |
+| `PORT` | `number` | Listen port (default `3000`). `--port` on a command overrides it by DECLARING it, so `config().PORT` is the port. Resolved as an integer `0`–`65535` whether a variable or an `onConfig` default named it — anything else is the floor, so no reader checks the range again. `0` is the kernel's "whatever is free" and is the one number here that may be zero. |
 | `APP_URL` | `string \| null` | The app's public URL / mount base, and the origin both gates compare against (WS CSWSH, CSRF). |
 | `NODE_ENV` | `string \| null` | Verbatim. `isProduction()` is the conclusion drawn from it, and is not a field. |
 | `ABIDE_APP_NAME` | `string \| null` | The app's name, and therefore `log`'s default channel. Falls back to the nearest package.json `name`, then `abide`. |
@@ -754,17 +776,34 @@ that runs on both sides of the thing it wraps.
 | an `HttpError` | A deliberate outcome, so it answers with what it says and never reaches `onError`. Either way the failure is written to `abide:lifecycle` |
 | `onStart` vs `onStop` | A hook that skips `start()` has SAID something and is believed. A hook that skips `stop()` has said nothing, so the close happens anyway — including when it throws mid-drain |
 
+### What an app IS
+
+Four conventions in the project root, and no wiring. Nothing in them imports a server, calls
+`Bun.serve`, mounts `dispatch`, opens a request scope, installs a signal handler, matches a route or
+builds a document — every one of those is the same code in every app, so `abide start` is where it
+lives.
+
+| Convention | What it is |
+| --- | --- |
+| `app.ts` | What this app IS: the hooks below, and a route only if it wants one. `app.tsx` / `app.js` alike |
+| `app.html` | The document its pages are served in. `<slot></slot>` is where the page renders; a `src`/`href` naming a build ENTRY is rewritten to what the build wrote, and the css the client graph imported is linked from the build. Absent → abide's own minimal shell |
+| `pages/` | What it serves. The directory IS the route table, installed for you — `pages(dir)` + `routes(...)`, and `route()` already answers off the request |
+| `server/rpc/**` · `server/sockets/**` | What it answers. Imported by the boot before a line of `app.ts` runs, so nothing imports a handler for its side effect |
+| `client.ts` | The lane the browser gets, and what `abide build` is pointed at |
+
 ### What a booting binary reads
 
-Each is a registration reached as the function of the same name.
+Every export below is optional, and each registration is reached as the function of the same name; an
+export of the wrong SHAPE is a refusal naming it, before anything binds.
 
 | Export | Signature | Purpose |
 | --- | --- | --- |
+| `default` | `(request, server) => Response \| undefined \| Promise<…>`, or `{ fetch }` | A route of the app's own, asked FIRST. `undefined` hands the path to the pages, and then to `handle`'s 404. Absent is the ordinary case: pages need no route written for them |
 | `middleware` | `Array<(next: () => Promise<Response>) => Response \| Promise<Response>>` | The per-REQUEST auth/observability rung. Short-circuited by a throw or a `Response`. Auth is middleware |
 | `onStart` | `(start: () => Promise<void>) => void \| Promise<void>` | WRAPS the real boot: do setup, then `await start()`. Awaited |
 | `onStop` | `(stop: () => Promise<void>) => void \| Promise<void>` | Mirrors it for teardown: drain, then `await stop()`. Runs on SIGINT/SIGTERM/crash. Awaited |
 | `onError` | `(error: unknown) => unknown` | Request-scoped; runs when a request throws an UNEXPECTED error |
-| `onConfig` | `(env: Env) => unknown`, plus `{ schema }` | The app's config DEFAULTS, merged UNDER the environment. Called once, synchronous, and the only one that fails hard |
+| `onConfig` | `(env: Env) => unknown`, plus `{ schema }` | The app's config DEFAULTS, merged UNDER the environment. Called once, synchronous, and the only one that fails hard. The schema rides on the hook as `onConfig.schema`, since an export is one thing and this takes two |
 | `onHealth` | `() => unknown \| Promise<unknown>` | Fields merged OVER `{ reachable, version, startedAt, uptime }`, on every server-side `health()` |
 | `onIdentity` | `(claims: unknown) => unknown \| Promise<unknown>` | Turns what a caller presented into a principal, merged OVER `{ authenticated, expiresAt }`. Receives `null` for no valid seal. Fails CLOSED |
 
@@ -801,8 +840,8 @@ failure in a line.
 | `abide run <file> [args…]` | Run a script under the abide runtime. Everything after `<file>` belongs to the SCRIPT, so it is SPAWNED: it reads its own `argv` and keeps its own exit code. |
 | `abide check [dir…]` | Type-check `.abide` script bodies, reporting every diagnostic on the `.abide` line. The list is stdout; the exit code says it failed. |
 | `abide dev [--port <n>]` | The `build` pipeline plus watch and full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken, carrying `APP_URL` with it so neither origin gate goes stale. |
-| `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the `client.ts` beside your `ssr.ts`. |
-| `abide start [--port <n>]` | Serve against what `abide build` wrote. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
+| `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the `client.ts` beside your `app.ts`. |
+| `abide start [--port <n>]` | Boot `app.ts` and serve its `pages/` in its `app.html`, with the bundle in front and `/__abide/**` behind that. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
 | `abide logs` | Tail `GET /__abide/logs`: the ring replayed, then every line as written. Printed by the rules THIS process's stdout answers to, with `+Nms` rebuilt from the record times. |
 | `abide compile [--target] [--out] [--platforms]` | ONE standalone executable, via `bun build --compile`. `--platforms` cross-compiles a release set for the price of one client build, and makes `--out` name a DIRECTORY. |
 | `abide bundle` | A desktop launcher for the host platform: embedded assets and a first-run setup screen. Native windowing is best-effort — a system webview binary, or the default browser. |
@@ -820,7 +859,7 @@ failure in a line.
 Exit codes (`CLI_EXIT_CODES`, shared verbatim with the compiled binary): `0` ok · `1`
 failed/unreachable · `2` usage · `3` 422 · `4` 401/403 · `5` 404 · `6` 504 · `7` 5xx · `8` other 4xx.
 
-`abide logs` asks `ABIDE_APP_URL`, then `APP_URL`, then a local `PORT`, and sends `ABIDE_APP_TOKEN`
+`abide logs` asks `ABIDE_APP_URL`, then `APP_URL`, then `config().PORT` on localhost, and sends `ABIDE_APP_TOKEN`
 as a bearer for whatever is in front of the app; the feed's own gate is `ABIDE_LOGS`, and a closed one
 answers 404 → exit `5`. Nothing answering at all has no status to map → exit `1`.
 
@@ -838,10 +877,11 @@ line editor takes its terminal as HOOKS, so a test drives it with a string of ke
 | --- | --- | --- |
 | `CLIENT_DIR` | `'.abide/client'` | Where `abide build` writes. CLEANED rather than merged, since a content hash means a build never overwrites the last one's files. |
 | `MANIFEST_FILE` | `'.abide/client/manifest.json'` | The one file in there without a hash, because it is what tells you the others'. |
+| `CLIENT_ROUTE` | `'/__abide/client/'` | Where `abide start` serves that directory FROM — under the reserved prefix, so an operator proxies or caches the bundle with the one pattern they already have. What a page's `<script src>` is built from. |
 | `ClientManifest` | `{ entries: Record<string, string>; assets: Record<string, ClientAsset> }` | Entry source path → the file it produced, and every file written keyed by its path relative to `CLIENT_DIR`. |
 | `ClientAsset` | `{ kind: 'entry' \| 'chunk' \| 'asset'; size: number; type: string; encodings: Sidecar[] }` | The identity form's size and content type, plus what was written beside it. |
 | `Sidecar` | `{ encoding: 'br' \| 'gzip'; file: string; size: number }` | A precompressed form written BESIDE the identity bytes, never instead. Listed SMALLEST first, so "best available" costs no comparison at request time. |
-| entry | — | The files named on the command line, or the first of `client.ts` / `client.tsx` / `client.abide` / `client.js` in the root. Named after the LANE, beside the `ssr.ts` that is the other one. |
+| entry | — | The files named on the command line, or the first of `client.ts` / `client.tsx` / `client.abide` / `client.js` in the root. Named after the LANE, beside the `app.ts` that says what the app is. |
 | naming | `[name]-[hash].[ext]` | The hash is in the name rather than a query, so a chunk is immutable at its address and the directory is cacheable forever. |
 
 | Rule | Detail |
@@ -849,4 +889,8 @@ line editor takes its terminal as HOOKS, so a test drives it with a string of ke
 | the lane | `target: 'browser'`, which is what `abide/compiler/plugin` reads to elide a `server/rpc/**` module to its address. A client entry importing `getUser` gets `remote("users/getUser")` and none of the driver |
 | splitting | Every `import()` the bundler can SEE is a chunk, which is what makes a route reached through a loader absent from the first load |
 | a sidecar | Written only when SMALLER than the bytes it stands in for, at maximum compression. `zstd` is absent: no browser sends `Accept-Encoding: zstd` unasked |
+| a stylesheet | `import './app.css'` from a `.abide` `<script module>` or a `.ts` — an ordinary import in both lanes, a no-op on the server and an asset here. It is linked into the shell from what was BUILT, so a document names no stylesheet and a renamed one cannot go stale |
 | the environment | NOT inlined. A browser asks `GET /__abide/identity` for what it may know, and there is no `GET /__abide/config` |
+| what is served | The manifest is the ALLOWLIST: a name is served because the build recorded it, so there is no path to normalise and `..` is simply a name nothing has. A name it does not carry is 404, and a method that is not `GET`/`HEAD` is 405 |
+| how it is served | `immutable` for a year, the identity form's content type on every encoding, and the first `Sidecar` the caller accepts — `br;q=0` is a refusal, and `*` is not read as an invitation. `Vary: accept-encoding` on every form, the plain one included |
+| where it sits | In FRONT of the request pipeline: outside the app's middleware, so a page never waits on an auth rung for its own JavaScript, and outside the request scope, because a file has no caller to be about |

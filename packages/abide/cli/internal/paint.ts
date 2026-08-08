@@ -17,3 +17,8 @@ export const OFF = '\x1b[0m'
 export function paint(text: string, code: string, on: boolean): string {
     return on ? `${code}${text}${OFF}` : text
 }
+
+/** `1 page`, `2 pages`. Here beside `paint` because every command's report line counts something. */
+export function plural(count: number, word: string): string {
+    return `${count} ${word}${count === 1 ? '' : 's'}`
+}

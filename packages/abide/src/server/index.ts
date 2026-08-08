@@ -48,6 +48,8 @@ import {
 // under `ABIDE_APP_NAME`, which is what names `log`'s default channel. Importing `abide/server` at
 // all is the signal that there is a filesystem to ask.
 import './app.ts'
+import { heldPump, holdScope } from './scopes.ts'
+import { type Shell, shellAround } from './shell.ts'
 
 /** Everything the walk knows how to write. */
 export type Renderable =
@@ -579,26 +581,51 @@ export async function renderToString(node: Renderable, options?: RenderOptions):
 }
 
 export function toStream(node: Renderable, options?: RenderOptions): ReadableStream<Uint8Array> {
-    const encoder = new TextEncoder()
-    const chunks = stream(node, contextFor(options), null)
-    return new ReadableStream({
-        async pull(controller) {
-            const step = await chunks.next()
-            if (step.done) controller.close()
-            else controller.enqueue(encoder.encode(step.value))
-        },
-        cancel: (reason) => void chunks.return?.(reason as never),
-    })
+    return bytes(stream(node, contextFor(options), null))
 }
 
-// A whole document: shell, body streamed in order, then out-of-order patches as they resolve.
+/**
+ * A walk's chunks as a byte stream, in the caller scope and holding it until the body is done.
+ *
+ * Both halves are the whole reason this is not four lines at each call site, and they answer
+ * different failures. A handler answering with a stream RETURNS before a byte is written, so `serve`
+ * tears the scope down on the way out and a `memo` read by the third chunk finds a cache cleared
+ * under it — the right answer, built a second time, with nothing to say so. That is the HOLD.
+ *
+ * The BIND is for where the walk starts. `stream` is already running by the time it gets here, and an
+ * `await` carries the scope through it — but `renderDocument` is an async generator, so its body does
+ * not run until the first `next()`, which is a `pull` the runtime calls from its own context. Over a
+ * real socket that walk then begins outside the request and `outlet()` renders an empty slot.
+ *
+ * Pumped rather than handed to `heldStream` on the way out: the walk IS the source, so this is ONE
+ * stream where wrapping would be two — and a page is the hottest body abide writes. `heldPump` marks
+ * what it builds, so `page()` can still ask any body it is handed whether it already holds.
+ */
+function bytes(chunks: AsyncGenerator<string>): ReadableStream<Uint8Array> {
+    return heldPump(
+        () => chunks.next(),
+        // A generator's `finally` is the app's own cleanup, and `heldPump` calls this bound — so it
+        // sees the caller the walk was opened for rather than whoever cancelled.
+        (reason) => void chunks.return?.(reason as never),
+        holdScope(),
+    )
+}
+
+/**
+ * A whole document: shell, body streamed in order, then out-of-order patches as they resolve.
+ *
+ * The first argument is either the app's own document — `shell(html)`, cut at the `<slot></slot>`
+ * where the page goes — or just its `<head>`, which is abide's own document wrapped around it. The
+ * two are one path: a head string IS a shell, and `shellAround` is where it becomes one.
+ */
 export async function* renderDocument(
-    head: string,
+    document: string | Shell,
     body: () => Renderable,
     options?: RenderOptions,
 ): AsyncGenerator<string> {
-    const document = { nextId: 0, deferred: [] as Deferred[] }
-    const context: RenderContext = { hydratable: options?.hydratable === true, document }
+    const parts = typeof document === 'string' ? shellAround(document) : document
+    const deferrals = { nextId: 0, deferred: [] as Deferred[] }
+    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals }
     // ONE clock for the whole document. `suspend` under a document does not hold the walk — it
     // defers into the drain below — so a budget that only reached the walk would miss the very case
     // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
@@ -611,8 +638,7 @@ export async function* renderDocument(
         // component that was imported has already declared its rules — which is why the whole sheet
         // can go out in the shell without tracking what this particular render reached. Each block
         // carries its scope name, which stops the client appending a second copy of every one.
-        yield `<!doctype html><html><head>${head}${styleTags()}</head><body>`
-        yield PATCH_SCRIPT
+        yield `${parts.head}${styleTags()}${parts.open}`
         yield* stream(body(), context, clock)
 
         // `deferred` is append-only and one cursor says what has been armed. Re-scanning it instead
@@ -622,8 +648,8 @@ export async function* renderDocument(
         const inFlight = new Map<number, Promise<{ id: number; text: string }>>()
         let cursor = 0
         const take = (): void => {
-            for (; cursor < document.deferred.length; cursor++) {
-                const d = document.deferred[cursor] as Deferred
+            for (; cursor < deferrals.deferred.length; cursor++) {
+                const d = deferrals.deferred[cursor] as Deferred
                 inFlight.set(
                     d.id,
                     d.html.then((text) => ({ id: d.id, text })),
@@ -631,6 +657,12 @@ export async function* renderDocument(
             }
         }
         take()
+        // The two-line patch script goes out ahead of the FIRST patch rather than in the shell, and
+        // the guard is the whole point: a page that suspends nothing ships neither the script nor a
+        // `<script>` node inside the slot a hydrating client adopts — where an unexpected element is
+        // a mismatch and a rebuilt subtree. Nothing calls `$p` before a patch exists, so a yield here
+        // is early enough, and the loop below then has no state to carry between turns.
+        if (inFlight.size > 0) yield PATCH_SCRIPT
         while (inFlight.size > 0) {
             const settling = Promise.race(inFlight.values())
             // Nothing to abandon here, unlike the walk: a deferred subtree is an independent async
@@ -641,10 +673,26 @@ export async function* renderDocument(
             yield `<template id="t${ready.id}">${ready.text}</template><script>$p(${ready.id})</script>`
             take() // a patch may itself have registered more
         }
-        yield `</body></html>`
+        yield parts.close
     } finally {
         clock?.close()
     }
+}
+
+/**
+ * The same document as a `ReadableStream`, so the response back-pressures.
+ *
+ * What `toStream` is to `render`, this is to `renderDocument` — one walk, three ways to consume it,
+ * and the stream is the one a served page wants: a browser gets the head and starts fetching the
+ * bundle while the body is still being written, and a slow consumer stops the walk rather than
+ * filling a buffer with a document nobody is reading yet.
+ */
+export function documentToStream(
+    document: string | Shell,
+    body: () => Renderable,
+    options?: RenderOptions,
+): ReadableStream<Uint8Array> {
+    return bytes(renderDocument(document, body, options))
 }
 
 // The principal, and the half only the server can supply. `identity` itself is on the isomorphic
@@ -752,4 +800,10 @@ export {
     validateJson,
 } from './schema.ts'
 // The caller scope and its ambients. `serve` is what makes every module-level `memo` per-request.
-export { bag, cookies, isServing, request, serve, type Trace, trace } from './scopes.ts'
+// `heldStream` is the one piece of it an app reaches for directly: abide holds what abide builds, and
+// a body written by hand takes its own hold with the same call the helpers make.
+export { bag, cookies, heldStream, isServing, request, serve, type Trace, trace } from './scopes.ts'
+// The document an app's pages are served IN. Here rather than in the CLI that reads `app.html`,
+// because what a shell IS belongs to the renderer that fills it — and an app rendering its own
+// document takes the same `Shell` `abide start` does.
+export { type Shell, shell } from './shell.ts'

@@ -18,9 +18,11 @@ import { COMMANDS, commandNamed, usage } from './COMMANDS.ts'
 // behind an app's own name.
 export { CLI_EXIT_CODES, type CliExitCode, exitForStatus } from './CLI_EXIT_CODES.ts'
 // What `abide build` wrote, as a shape — so a server serving the bundle reads the manifest without
-// importing the bundler that produced it. No imports of its own, for the same reason as above.
+// importing the bundler that produced it. Nothing heavy behind it, for the same reason as above: its
+// one import is the table of reserved addresses, which is constants and no code.
 export {
     CLIENT_DIR,
+    CLIENT_ROUTE,
     type ClientAsset,
     type ClientManifest,
     type Encoding,

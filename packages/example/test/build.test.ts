@@ -12,7 +12,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { rm } from 'node:fs/promises'
 import { brotliDecompressSync } from 'node:zlib'
-import { CLIENT_DIR, type ClientManifest, MANIFEST_FILE } from 'abide/cli'
+import { CLIENT_DIR, type ClientAsset, type ClientManifest, MANIFEST_FILE } from 'abide/cli'
 import { SERVER_ONLY_MARKER } from '../server/db.ts'
 import { type Ended, EXAMPLE_ROOT as ROOT, abide as spawnAbide } from './spawned.ts'
 
@@ -52,8 +52,17 @@ test('the build succeeds, and the manifest names exactly what is on disk', async
         // The size in the document is the size on disk. A manifest a server sets `Content-Length`
         // from is a manifest that has to be right about this rather than approximately right.
         expect(file.size).toBe(asset.size)
-        expect(asset.type).toContain('javascript')
+        // JavaScript, and the one stylesheet the client graph imported: `pages/layout.abide` writes
+        // `import '../app.css'`, so the css is an asset of this lane rather than a file the document
+        // had to name. Nothing else has a kind here.
+        expect(asset.type).toMatch(/javascript|css/)
     }
+
+    // The css came through the module graph, which is the claim: no entry named it, no html linked
+    // it, and it is content-hashed and compressed like every other file in here.
+    const styles = Object.values(manifest.assets).filter((asset) => asset.type.includes('css'))
+    expect(styles.length).toBe(1)
+    expect((styles[0] as ClientAsset).encodings.length).toBeGreaterThan(0)
 
     // The report is stdout — it is what somebody reads, and the exit code is what says it failed.
     expect(built.out).toContain(CLIENT_DIR)
@@ -65,7 +74,7 @@ test('every name carries a content hash, and the same tree builds the same names
         // `[name]-[hash].[ext]`: the address is immutable, which is what lets an operator cache the
         // whole directory forever, and the name is still in front of the hash so a network panel
         // says which page a chunk is.
-        expect(name).toMatch(/^[\w[\]. -]+-[a-z0-9]{8}\.js$/)
+        expect(name).toMatch(/^[\w[\]. -]+-[a-z0-9]{8}\.(js|css)$/)
     }
 
     // Deterministic, which is the property the caching claim actually rests on: a rebuild that

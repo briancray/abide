@@ -1,4 +1,5 @@
-// The "what kind of thing is this?" probes both lanes ask of every value they handle.
+// The "what kind of thing is this?" probes both lanes ask of every value they handle — and, for the
+// same reason and at the same cost, the one that asks what a thrown value SAID.
 //
 // A leaf on purpose: it imports nothing, so the server's emit path and the reactive graph can both
 // have it without the emit path pulling in reactivity. One implementation because the two lanes have
@@ -8,6 +9,24 @@
 // boxes it and walks a wrapper prototype: 31 ns on a number in JSC against 1 ns once the guard
 // short-circuits. Every write, every slot value and every "is this settled?" probe runs this, so on
 // `state.set` alone it is the difference between 44 ns and 14 ns — a hand-written store's 15 ns.
+
+/**
+ * What a thrown value SAID, with Bun's aggregate unwrapped.
+ *
+ * A transpile or a resolution failure out of `import()` arrives as `{ errors: [{ message }] }`, and
+ * the wrapper's own message is a generic sentence about a module having failed. The first inner
+ * message is the diagnostic — the line and the reason — so reading the wrapper is the difference
+ * between "app.ts did not load" and being told which token was unexpected.
+ */
+export function messageOf(failure: unknown): string {
+    // Guarded, because `throw null` is legal and a property read off it is a second failure thrown
+    // from the code reporting the first.
+    if (failure !== null && typeof failure === 'object') {
+        const first = (failure as { errors?: { message?: unknown }[] }).errors?.[0]?.message
+        if (typeof first === 'string') return first
+    }
+    return failure instanceof Error ? failure.message : String(failure)
+}
 
 export function isThenable(value: unknown): value is PromiseLike<unknown> {
     if (value === null) return false

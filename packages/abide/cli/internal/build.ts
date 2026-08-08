@@ -23,22 +23,14 @@ import { abidePlugin } from '$compiler/plugin.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import {
     CLIENT_DIR,
+    CLIENT_ENTRIES,
     type ClientAsset,
     type ClientManifest,
+    firstPresent,
     MANIFEST_FILE,
     type Sidecar,
 } from '../CLIENT_BUILD.ts'
-import { BOLD, colored, DIM, paint } from './paint.ts'
-
-/**
- * What the command is pointed at when nothing is named, in the order it is looked for.
- *
- * `client` beside `ssr`, which is what an app already calls the other half — the two entry points of
- * an isomorphic app are the two lanes it has, and naming them after the lanes is why neither needs a
- * config file to be found. The first one that EXISTS wins rather than every one that does: two client
- * entries in a root is a mistake, and building both would hide it.
- */
-const CONVENTIONAL = ['client.ts', 'client.tsx', 'client.abide', 'client.js']
+import { BOLD, colored, DIM, paint, plural } from './paint.ts'
 
 export async function build(argv: string[]): Promise<number> {
     // Entries, not flags — the command IS the build, and a knob here would be a second place the
@@ -54,9 +46,14 @@ export async function build(argv: string[]): Promise<number> {
     }
 
     const root = process.cwd()
-    const entries = argv.length > 0 ? argv : await conventional(root)
+    let entries = argv
     if (entries.length === 0) {
-        console.error(`abide build: nothing to build — no ${CONVENTIONAL.join(', ')} here`)
+        // The conventional lane when nothing was named — one entry, because the first that EXISTS wins.
+        const found = await firstPresent(root, CLIENT_ENTRIES)
+        entries = found === null ? [] : [found]
+    }
+    if (entries.length === 0) {
+        console.error(`abide build: nothing to build — no ${CLIENT_ENTRIES.join(', ')} here`)
         console.error('       name one: abide build <entry…>')
         return CLI_EXIT_CODES.usage
     }
@@ -128,14 +125,6 @@ export async function build(argv: string[]): Promise<number> {
 
     report(manifest)
     return CLI_EXIT_CODES.ok
-}
-
-/** The first conventional entry that is actually there. Empty when the root holds none of them. */
-async function conventional(root: string): Promise<string[]> {
-    for (const name of CONVENTIONAL) {
-        if (await Bun.file(`${root}/${name}`).exists()) return [`${root}/${name}`]
-    }
-    return []
 }
 
 /** One artifact on disk, with its sidecars, as the manifest records it. */
@@ -232,7 +221,7 @@ function report(manifest: ClientManifest): void {
     }
     console.log(
         paint(
-            `  ${names.length} file${names.length === 1 ? '' : 's'} · ${bytes(identity)} · ${bytes(best)} over the wire`,
+            `  ${plural(names.length, 'file')} · ${bytes(identity)} · ${bytes(best)} over the wire`,
             DIM,
             on,
         ),

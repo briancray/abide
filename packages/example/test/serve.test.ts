@@ -29,18 +29,156 @@ import {
     bag,
     cookies,
     dispatch,
+    documentToStream,
+    heldStream,
     isServing,
     json,
+    jsonl,
     onIdentity,
     page,
     redirect,
     renderToString,
     request,
     serve,
+    shell,
+    toStream,
     trace,
 } from 'abide/server'
 import { sleep } from 'abide/tests'
 import { withEnv, writeEnv } from '../demos/env.ts'
+
+test('a streamed response is written after the handler returned, and it is still the caller’s', async () => {
+    let builds = 0
+    const seat = memo(() => {
+        builds++
+        return cookies().get('seat') ?? 'no seat'
+    })
+
+    const asked = new Request('https://x.test/orders/7', { headers: { cookie: 'seat=12a' } })
+    // The handler answers with a STREAM, so it returns before a byte of the body is written: every
+    // chunk past the first is produced by a `pull` the runtime calls once the handler is long gone.
+    const answered = serve(asked, () => {
+        seat()
+        const view = html`<p>${sleep(5).then(() => 'waited')}</p><span>${() => seat()}</span>`
+        return page(toStream(view))
+    })
+
+    const markup = await answered.text()
+    expect(markup).toBe('<p>waited</p><span>12a</span>')
+    // The ambients ride the async context an `await` already carries, so the VALUE is right either
+    // way — which is exactly why the value cannot be the assertion. The claim is the WORK: `serve`
+    // tears the scope down when the handler returns, and without a hold on it the read below the
+    // await finds a cleared cache and builds the same answer a second time.
+    expect(builds).toBe(1)
+})
+
+test('a line-delimited body is the caller’s for every line, not just the first', async () => {
+    let builds = 0
+    const seat = memo(() => {
+        builds++
+        return cookies().get('seat') ?? 'no seat'
+    })
+
+    // The same claim as the render above, in the lane that streams DATA: `jsonl`, `sse` and every
+    // streaming rpc share one body machine, and a handler answering with one returns before a line is
+    // written.
+    async function* rows(): AsyncGenerator<unknown> {
+        yield { row: 1, seat: seat() }
+        await sleep(5)
+        yield { row: 2, seat: seat() }
+    }
+
+    const asked = new Request('https://x.test/orders', { headers: { cookie: 'seat=12a' } })
+    // The handler READS it first — an auth rung, a tenant lookup — and that is what makes this case
+    // able to fail: the teardown on the way out discards what the handler built, so the body's own
+    // read finds an empty cache. A body that is the first reader would repopulate the scope and cache
+    // correctly for the rest of the response, and prove nothing.
+    const answered = serve(asked, () => {
+        seat()
+        return jsonl(rows())
+    })
+
+    const body = await answered.text()
+    const lines = body
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line) as { seat: string })
+    expect(lines.map((line) => line.seat)).toEqual(['12a', '12a'])
+    // The WORK, not the value: the ambients ride the async context either way, so what a missing hold
+    // costs is the cache — the handler's build thrown away and done again for the body.
+    expect(builds).toBe(1)
+})
+
+test('page() holds a body the app wrote itself, and holds it only once', async () => {
+    let builds = 0
+    const seat = memo(() => {
+        builds++
+        return cookies().get('seat') ?? 'no seat'
+    })
+
+    // Not a render — an app streaming its own HTML. `page()` asks every body it is handed, so this
+    // gets the guarantee without knowing there was one to ask for.
+    function own(): ReadableStream<Uint8Array> {
+        const encoder = new TextEncoder()
+        let sent = 0
+        return new ReadableStream<Uint8Array>({
+            async pull(controller) {
+                if (sent === 2) return controller.close()
+                sent++
+                await sleep(3)
+                controller.enqueue(encoder.encode(`<p>${seat()}</p>`))
+            },
+        })
+    }
+
+    const asked = new Request('https://x.test/own', { headers: { cookie: 'seat=12a' } })
+    const answered = serve(asked, () => {
+        seat()
+        return page(own())
+    })
+    expect(await answered.text()).toBe('<p>12a</p><p>12a</p>')
+    expect(builds).toBe(1)
+
+    // IDEMPOTENT: a body that already holds comes back untouched rather than wrapped again, which is
+    // what lets `page()` ask unconditionally while `toStream` keeps taking its own hold. The identity
+    // IS the assertion — a second wrapper would be a different object, and two live holds on one
+    // scope.
+    serve(new Request('https://x.test/twice'), () => {
+        const once = heldStream(own())
+        expect(heldStream(once)).toBe(once)
+        return page('')
+    })
+})
+
+test('a document streamed into its shell holds the scope for the whole walk', async () => {
+    let builds = 0
+    const who = memo(() => {
+        builds++
+        return new URL(request().url).pathname
+    })
+
+    const parts = shell('<html><head></head><body><slot></slot></body></html>')
+    const answered = serve(new Request('https://x.test/orders/9?deep'), () => {
+        who()
+        return page(
+            documentToStream(
+                parts,
+                () =>
+                    html`<p>${sleep(5).then(() => 'late')}</p><b>${() => (isServing() ? new URL(request().url).search : 'NO CALLER')}</b><i>${() => who()}</i>`,
+            ),
+        )
+    })
+
+    const markup = await answered.text()
+    expect(markup).toContain('<p>late</p><b>?deep</b><i>/orders/9</i>')
+    expect(builds).toBe(1)
+
+    // The HOLD is what this case can falsify — drop it and `builds` is 2. The BIND in `bytes` is not
+    // observable from here and this case must not be read as covering it: driven by `Response.text()`
+    // the async generator resumes in the context it was created in, so the ambients answer either
+    // way. It takes a real socket to lose them, which is why the bind's guard is `start.test.ts` —
+    // without it that suite serves an empty `<slot>`.
+})
 
 test('two requests interleaving across their awaits do not share a cache', async () => {
     let bodyRuns = 0

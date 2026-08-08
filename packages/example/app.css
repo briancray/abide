@@ -1,0 +1,22 @@
+/* The app's stylesheet, reached the way a component reaches anything else it needs: an import.
+
+   `pages/layout.abide` imports this in its `<script module>`, so it is in the CLIENT graph and the
+   bundler writes it beside the chunks — which is what lets `app.html` name no stylesheet at all. A
+   scoped `<style>` in a component is the other half: this is the app's, that is the component's. */
+
+:root {
+    color-scheme: light dark;
+    --ink: #1a1a1a;
+}
+
+body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    color: var(--ink);
+}
+
+nav {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
+    font-size: 0.875rem;
+}

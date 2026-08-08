@@ -9,41 +9,24 @@
 // `bun test` would take Ctrl-C away from the runner.
 
 import { expect, test } from 'bun:test'
-import { EXAMPLE_ROOT, readLines, spawn } from './spawned.ts'
+import { EXAMPLE_ROOT, type Reading, reading } from './spawned.ts'
 
 const APP = `${import.meta.dir}/lifecycle-app.ts`
 
-interface Started {
-    child: Bun.Subprocess<'ignore', 'pipe', 'pipe'>
-    lines: AsyncGenerator<string>
-    /** The next line, or a failure naming what was seen instead of hanging until the test times out. */
-    next: () => Promise<string>
-}
-
-function start(mode?: string, declared?: Record<string, string | undefined>): Started {
-    const child = spawn(['bun', APP, ...(mode === undefined ? [] : [mode])], {
+function start(mode?: string, declared?: Record<string, string | undefined>): Reading {
+    return reading(['bun', APP, ...(mode === undefined ? [] : [mode])], {
         // The example package rather than the repo root, because `name` is the NEAREST package.json
         // above the working directory — from the root it would be the workspace's, which is a
         // different app with the same files under it.
         cwd: EXAMPLE_ROOT,
         env: declared,
     })
-    const lines = readLines(child.stdout)
-    return {
-        child,
-        lines,
-        next: async () => {
-            const step = await lines.next()
-            if (step.done === true) throw new Error('the app ended before it said anything more')
-            return step.value
-        },
-    }
 }
 
 test('boot binds inside onStart, serves through handle, and drains on SIGTERM', async () => {
     const app = start()
 
-    const listening = await app.next()
+    const listening = await app.until('')
     expect(listening).toStartWith('listening http://')
     const url = listening.slice('listening '.length)
 
@@ -61,8 +44,8 @@ test('boot binds inside onStart, serves through handle, and drains on SIGTERM', 
     expect(((await health.json()) as { reachable: boolean }).reachable).toBe(true)
 
     app.child.kill('SIGTERM')
-    expect(await app.next()).toBe('draining')
-    expect(await app.next()).toBe('drained')
+    expect(await app.until('')).toBe('draining')
+    expect(await app.until('')).toBe('drained')
 
     // The exit is abide's: adding a handler is what stops SIGTERM from terminating, so a process
     // that only drained would sit there ignoring its own signal.
@@ -73,19 +56,19 @@ test('boot binds inside onStart, serves through handle, and drains on SIGTERM', 
 test('a hook that skips stop() still leaves a closed socket behind', async () => {
     const app = start('backstop')
 
-    expect(await app.next()).toStartWith('listening http://')
-    expect(await app.next()).toBe('drained')
+    expect(await app.until('')).toStartWith('listening http://')
+    expect(await app.until('')).toBe('drained')
     // The claim, and the reason this is a spawned process: the hook never called `stop()`, and the
     // app's own port no longer answers. A backstop that only ran the hook would print the other one.
-    expect(await app.next()).toBe('after shutdown: closed')
+    expect(await app.until('')).toBe('after shutdown: closed')
     expect(await app.child.exited).toBe(0)
 })
 
 test('a breakout never binds, and boot says so', async () => {
     const app = start('breakout')
 
-    expect(await app.next()).toBe('refusing to start')
-    expect(await app.next()).toBe('boot answered null')
+    expect(await app.until('')).toBe('refusing to start')
+    expect(await app.until('')).toBe('boot answered null')
     expect(await app.child.exited).toBe(0)
 
     // Said once, and never gated: the `DEBUG` gate controls volume rather than breakage, and a
@@ -97,13 +80,13 @@ test('config layers a real environment over the app’s defaults over abide’s 
     // Nothing declared: the app's own default stands, and it was computed off the environment it was
     // handed — `name` came from the package.json climb, which is a fact no default may overrule.
     const defaulted = start('config', { PORT: undefined })
-    expect(JSON.parse(await defaulted.next()) as unknown).toEqual({ port: 8080, tag: 'example-tag' })
+    expect(JSON.parse(await defaulted.until('')) as unknown).toEqual({ port: 8080, tag: 'example-tag' })
     expect(await defaulted.child.exited).toBe(0)
 
     // Declared: the operator wins, which is the whole of what makes the app's layer a DEFAULT rather
     // than a knob that does nothing.
     const declared = start('config', { PORT: '9123' })
-    expect(JSON.parse(await declared.next()) as unknown).toEqual({ port: 9123, tag: 'example-tag' })
+    expect(JSON.parse(await declared.until('')) as unknown).toEqual({ port: 9123, tag: 'example-tag' })
     expect(await declared.child.exited).toBe(0)
 })
 
@@ -112,10 +95,10 @@ test('a config the declared shape refuses is a process that never listens', asyn
     // resolves the config first, so this is an exit code rather than a 500 on whichever request
     // happened to need `stripeKey`.
     const missing = start('requires', { STRIPE_KEY: undefined })
-    expect(await missing.next()).toBe('refused AbideSchemaError: listening=false')
+    expect(await missing.until('')).toBe('refused AbideSchemaError: listening=false')
     expect(await missing.child.exited).toBe(1)
 
     const declared = start('requires', { STRIPE_KEY: 'sk_test_1' })
-    expect(await declared.next()).toBe('booted')
+    expect(await declared.until('')).toBe('booted')
     expect(await declared.child.exited).toBe(0)
 })

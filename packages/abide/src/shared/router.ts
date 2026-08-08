@@ -225,15 +225,28 @@ function loadFor(held: Installed): Promise<void> | null {
 }
 
 /**
+ * The same load as `null` for NOTHING TO WAIT FOR — the form `loadFor` already answers in.
+ *
+ * Not on `abide` and not re-exported by `$shared/index.ts`: an app writes `await ready()` once, in
+ * its client entry, and a nullable promise there would be ceremony for a call that happens on boot.
+ * The caller this exists for is the page RENDERER, which asks per request — and after the first view
+ * of a route the modules are already resolved, so `ready()`'s `?? SETTLED` is a promise wrap and a
+ * microtask tick charged to every page a process serves for nothing.
+ */
+export function readying(): Promise<void> | null {
+    const name = cellsFor().name.peek()
+    const held = name === '' ? undefined : BY_NAME.get(name)
+    if (held === undefined) return null
+    return loadFor(held)
+}
+
+/**
  * Load whatever the current route needs, so the render that follows is a snapshot with nothing left
  * to wait for. This is how a server render reaches a page — `renderToString` walks a tree, and a
  * module that has not arrived is not a tree — and it is what `navigate` awaits on the client.
  */
 export function ready(): Promise<void> {
-    const name = cellsFor().name.peek()
-    const held = name === '' ? undefined : BY_NAME.get(name)
-    if (held === undefined) return SETTLED
-    return loadFor(held) ?? SETTLED
+    return readying() ?? SETTLED
 }
 
 /**

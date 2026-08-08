@@ -33,6 +33,9 @@ export const SOCKET_DIRECTORY = '/server/sockets/'
 /** Every `.ts` a transport directory holds. The plugin's filter, and nothing else matches it. */
 export const TRANSPORT_MODULE = /\/server\/(rpc|sockets)\/[^?]+\.ts$/
 
+/** The leading wildcard that makes a glob match at any depth — what an ANCHORED spelling drops. */
+const ANYWHERE = '**/'
+
 /**
  * The same rule as a glob, per kind — what a build SCANS with.
  *
@@ -43,8 +46,27 @@ export const TRANSPORT_MODULE = /\/server\/(rpc|sockets)\/[^?]+\.ts$/
  * Strings rather than `Bun.Glob`, because this module loads in the browser lane too.
  */
 export const TRANSPORT_GLOBS: Record<Kind, string> = {
-    rpc: `**${RPC_DIRECTORY}**/*.ts`,
-    socket: `**${SOCKET_DIRECTORY}**/*.ts`,
+    // `RPC_DIRECTORY` opens with the same slash `ANYWHERE` closes on, so it is sliced off here.
+    rpc: `${ANYWHERE}${RPC_DIRECTORY.slice(1)}**/*.ts`,
+    socket: `${ANYWHERE}${SOCKET_DIRECTORY.slice(1)}**/*.ts`,
+}
+
+/**
+ * The same rule ANCHORED at a project root — what a BOOT scans with.
+ *
+ * The difference is what the scan is FOR. A pass that only reads may match a transport directory
+ * anywhere under the tree: a fixture under `types/checker/server/rpc/` is a module whose shapes are
+ * worth deriving, and deriving one nobody serves costs nothing. A boot IMPORTS what it finds, and
+ * that fixture is not an endpoint of the app — its module body would run, its declarations would
+ * register, and its address would collide with the real `server/rpc/` file of the same name, because
+ * an id is cut at the LAST transport directory in a path.
+ */
+export const TRANSPORT_ROOTS: Record<Kind, string> = {
+    // The same string with its `**/` prefix cut, rather than the tail written a second time: a
+    // scanner whose suffix drifts from the one above finds nothing, and "no endpoints" is what an
+    // app made only of pages looks like too.
+    rpc: TRANSPORT_GLOBS.rpc.slice(ANYWHERE.length),
+    socket: TRANSPORT_GLOBS.socket.slice(ANYWHERE.length),
 }
 
 export const RPC_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const

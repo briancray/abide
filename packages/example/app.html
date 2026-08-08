@@ -1,0 +1,18 @@
+<!doctype html>
+<!--
+    The app's own document, and an ordinary html file: `<slot></slot>` is where a page renders — the
+    same word a `.abide` file uses for the same relationship — and `src="./client.ts"` names the
+    SOURCE, which `abide start` maps to what the build wrote. The css `pages/layout.abide` imports is
+    linked from the build too, so this file names no stylesheet.
+-->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>abide example</title>
+        <script type="module" src="./client.ts"></script>
+    </head>
+    <body>
+        <slot>loading…</slot>
+    </body>
+</html>

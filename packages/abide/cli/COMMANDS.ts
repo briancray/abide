@@ -58,6 +58,12 @@ export const COMMANDS: Command[] = [
         load: async () => (await import('./internal/build.ts')).build,
     },
     {
+        name: 'start',
+        args: '[--port <n>]',
+        blurb: 'Serve the app against what `abide build` wrote. --port binds, and fails if it is taken.',
+        load: async () => (await import('./internal/start.ts')).start,
+    },
+    {
         name: 'logs',
         args: '',
         blurb: "Tail a running app's log feed. ABIDE_APP_URL names it; ABIDE_APP_TOKEN is its bearer.",

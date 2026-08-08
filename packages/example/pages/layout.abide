@@ -1,5 +1,12 @@
 <!-- The root layout. Every page under this directory renders through the <slot/> below, so the
      chrome is written once and a page never has to remember to include it. -->
+<script module>
+// The app's stylesheet, imported by the thing that needs it rather than named in the document. It is
+// in the CLIENT graph, so the bundler writes it beside the chunks and `abide start` links what was
+// BUILT — a `.css` import is an ordinary import in both lanes, and on the server it is a no-op.
+import '../app.css'
+</script>
+
 <script>
 import { route } from 'abide'
 </script>

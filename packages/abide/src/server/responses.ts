@@ -28,7 +28,7 @@ import {
     jsonLine,
 } from '$shared/internal/wire.ts'
 import { gate, type Schema } from './schema.ts'
-import { pendingCookies, traceResponse } from './scopes.ts'
+import { heldStream, pendingCookies, traceResponse } from './scopes.ts'
 
 export type { Failed, FailureOptions } from '$shared/internal/wire.ts'
 // The class itself lives on the wire seam, because the browser lane builds one too: `wireError`
@@ -88,7 +88,7 @@ export function json(data: unknown, init?: ResponseInit): Response {
 
 /** A sequence as one JSON value per line, written as the consumer asks for it. */
 export function jsonl<T>(values: Values<T>, init?: ResponseInit): Response {
-    return new Response(framedBody(values, jsonLine), {
+    return new Response(heldStream(framedBody(values, jsonLine)), {
         ...init,
         headers: headersFor(init?.headers, { 'content-type': JSONL_TYPE }),
     })
@@ -103,7 +103,7 @@ export function jsonl<T>(values: Values<T>, init?: ResponseInit): Response {
  * stream that arrives all at once at the end is not a stream.
  */
 export function sse<T>(values: Values<T>, init?: ResponseInit): Response {
-    return new Response(framedBody(values, sseFrame), {
+    return new Response(heldStream(framedBody(values, sseFrame)), {
         ...init,
         headers: headersFor(init?.headers, {
             'content-type': SSE_TYPE,
@@ -130,7 +130,10 @@ function sseFrame(value: unknown): string {
  * complaining about.
  */
 export function page(body: string | ReadableStream<Uint8Array>, init?: ResponseInit): Response {
-    return new Response(body, {
+    // Asked of every body, answered once: a render's stream already holds and comes straight back,
+    // and an app streaming its own HTML through here gets the same guarantee without knowing there
+    // was one to ask for. A string has no body to outlive the handler.
+    return new Response(typeof body === 'string' ? body : heldStream(body), {
         ...init,
         headers: headersFor(init?.headers, { 'content-type': HTML_TYPE }),
     })

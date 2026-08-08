@@ -92,6 +92,25 @@ export default suite({
                     await withEnv({ PORT: '9123' }, () => {
                         is('what the operator declared wins', config<Extra>().PORT, 9123)
                     })
+                    // `PORT` is the one field where ZERO is an answer, enumerated rather than
+                    // inferred: every other number abide reads is a size, a ring or a deadline, and
+                    // zero there would disable the thing it was meant to size. `0` is the kernel's
+                    // own spelling of "whatever is free", which is what `abide start --port 0` asks
+                    // for and what a container with a port mapped in front of it means.
+                    await withEnv({ PORT: '0' }, () => {
+                        is('zero is a port, not nonsense', config<Extra>().PORT, 0)
+                    })
+                    // And checked as a PORT rather than as a number: `70000` is a typo, and abide's
+                    // floor is a better answer than a bind failing at a number nothing in the
+                    // document admits to. The FLOOR rather than the app's 8080, because the variable
+                    // WAS declared — that is the same rule every number abide owns follows, and it
+                    // is why `PORT=nonsense` is 3000 rather than `NaN`.
+                    await withEnv({ PORT: '70000' }, () => {
+                        is('a number that is not a port falls to the floor', config<Extra>().PORT, 3000)
+                    })
+                    await withEnv({ PORT: '3000.5' }, () => {
+                        is('and neither is a fraction', config<Extra>().PORT, 3000)
+                    })
                     // The APP's own field, overridden by a variable of the SAME NAME — the half that
                     // has no entry in abide's table and would otherwise be the app's last word.
                     await withEnv({ CHECKOUT_URL: 'https://pay.test/go' }, () => {
@@ -113,6 +132,14 @@ export default suite({
 
                 off()
                 is('off again is the floor', config().PORT, 3000)
+
+                // The RANGE is the document's, not the variable's. An operator is not the only one
+                // who can name a number, so a default an app wrote out of range gets the same answer
+                // `PORT=70000` does — which is what makes `config().PORT` a port for every reader,
+                // rather than a number each of them floors its own way on the way to a socket.
+                const wrong = onConfig(() => ({ PORT: 70000 }))
+                is('an app’s own default is checked as a port too', config().PORT, 3000)
+                wrong()
             },
         },
 

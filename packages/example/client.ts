@@ -1,4 +1,4 @@
-// The example's CLIENT entry — what `abide build` is pointed at. `ssr.ts` beside it is the other lane.
+// The example's CLIENT entry — what `abide build` is pointed at. `app.ts` beside it is the other lane.
 //
 // Two things happen here that cannot happen anywhere else, and they are the two claims the build is
 // asserted against:
@@ -15,7 +15,7 @@
 // asserts its marker is absent from every byte written, because "the server half does not ship" is a
 // claim about the output rather than about the option that produced it.
 
-import { navigate, outlet, route, routes } from 'abide'
+import { navigate, outlet, ready, route, routes } from 'abide'
 import { hydrate } from 'abide/ui'
 import { getUser } from './server/rpc/users.ts'
 
@@ -36,7 +36,16 @@ routes([
     },
 ])
 
-const root = document.querySelector('#app')
+// The page's own module, BEFORE adopting anything. The server rendered this route with its page in
+// it, and a page here is a chunk that has not arrived yet — so hydrating first would adopt against a
+// tree with a hole where the server wrote content, warn about the mismatch, and rebuild the subtree
+// it was supposed to be taking over. `ready()` is the same call the server makes before it renders,
+// and it is what makes the two snapshots the same one.
+await ready()
+
+// The `<slot>` in `app.html` — the same element the server rendered the page INTO, so what hydrates
+// is what was written. It is `display: contents`, so adopting it costs the page no box.
+const root = document.querySelector('slot')
 if (root !== null) hydrate(root, outlet)
 
 // An ordinary link, intercepted: the page it names is a chunk that is not here yet, and `navigate`

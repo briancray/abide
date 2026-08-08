@@ -23,7 +23,7 @@ import vm from 'node:vm'
 import { plugin } from 'bun'
 import { abidePlugin } from '$compiler/plugin.ts'
 import * as SURFACE from '$shared'
-import { isThenable } from '$shared/internal/probes.ts'
+import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { isSource } from '$shared/internal/slots.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { LineEditor, suggest } from './editor.ts'
@@ -418,12 +418,4 @@ function show(value: unknown, colors: boolean): string {
         return paint(`${kind} ${kind === 'channel' ? '(nothing yet)' : '(cold)'}`, DIM, colors)
     }
     return `${paint(kind, DIM, colors)} ${Bun.inspect(source.peek(), { colors })}`
-}
-
-/** The transpiler reports one failure as a message and several as an aggregate; both say the same thing first. */
-function messageOf(failure: unknown): string {
-    const inner = (failure as { errors?: { message?: unknown }[] }).errors
-    const first = inner?.[0]?.message
-    if (typeof first === 'string') return first
-    return failure instanceof Error ? failure.message : String(failure)
 }
