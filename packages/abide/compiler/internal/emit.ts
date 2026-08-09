@@ -69,22 +69,40 @@ interface Context {
 // function, so there is no runtime helper behind it to import.
 type Runtime = 'html' | 'raw' | 'keyed' | 'classes' | 'styles' | 'awaited' | 'boundary' | 'streamed' | 'adopt'
 
-/** A keyword that is a deliberate error in a region, reported at the token that spelled it. */
-function forbidKeyword(source: string, from: number, to: number, kind: SyntaxKind, message: string): void {
+/** The absent region — a file with no `<script module>`, or no `<script>`. Shared, never written. */
+const NO_TOKENS: Token[] = []
+
+/**
+ * One `<script>` region, scanned ONCE.
+ *
+ * Everything below that used to take `(source, from, to)` takes these instead. A region was being
+ * put through the TypeScript scanner three times per compile — the export check, the import split
+ * and the reactive-binding walk each opened their own `Lexer` over the same span — and a scanner
+ * pass is the expensive half of emitting a file. Same reason `setupTokens` is reused for `replaced`
+ * when no `props()` was spliced.
+ */
+function regionTokens(source: string, from: number, to: number): Token[] {
     const lexer = new Lexer(source, from)
+    const tokens: Token[] = []
     for (;;) {
         const token = lexer.next()
-        if (token === null || token.start >= to) return
+        if (token === null || token.start >= to) return tokens
+        tokens.push(token)
+    }
+}
+
+/** A keyword that is a deliberate error in a region, reported at the token that spelled it. */
+function forbidKeyword(tokens: Token[], kind: SyntaxKind, message: string): void {
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
         if (token.kind === kind) throw new ParseError(message, token.start)
     }
 }
 
 /** Statement-position `export` inside a `<script>`, which SPEC makes a deliberate error. */
-function checkNoExport(source: string, from: number, to: number, filename: string): void {
+function checkNoExport(tokens: Token[], filename: string): void {
     forbidKeyword(
-        source,
-        from,
-        to,
+        tokens,
         SyntaxKind.ExportKeyword,
         `abide: \`export\` in a <script> is not allowed (${filename}) — a <script> body is inlined ` +
             `into the component setup, so the export has nowhere to go. Move it to <script module>.`,
@@ -111,15 +129,7 @@ interface Reactive {
     keyed: Set<string>
 }
 
-function reactiveBindings(source: string, from: number, to: number, into: Reactive): void {
-    const lexer = new Lexer(source, from)
-    const tokens: Token[] = []
-    for (;;) {
-        const token = lexer.next()
-        if (token === null || token.start >= to) break
-        tokens.push(token)
-    }
-
+function reactiveBindings(tokens: Token[], into: Reactive): void {
     for (let i = 1; i < tokens.length; i++) {
         // `NAME = state(` — or `NAME = state<T>(`, whose type argument list sits between the two.
         if ((tokens[i] as Token).kind !== SyntaxKind.OpenParenToken) continue
@@ -251,8 +261,7 @@ interface Props {
  * closes two lists in one `>>` token, and the extent of a type is a question this file already has one
  * answer to.
  */
-function propsCall(body: string, tokens: Token[]): Props | null {
-    const types = new TypeReader(tokens)
+function propsCall(body: string, tokens: Token[], types: TypeReader): Props | null {
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i] as Token
         if (token.kind !== SyntaxKind.Identifier || token.text !== 'props') continue
@@ -345,10 +354,10 @@ function tokensOfBody(rest: string): Token[] {
  * and the consequence is only that its cell props stay plain values — the same degradation an imported
  * type has always had, and the reason the explicit `x()` spelling never stops compiling.
  */
-function membersOf(type: string, rest: string, tokens: Token[]): string {
+function membersOf(type: string, rest: string, tokens: Token[], types: TypeReader): string {
     if (type.startsWith('{')) return type
     if (!IDENTIFIER.test(type)) return ''
-    for (const found of declaredTypes(tokens)) {
+    for (const found of declaredTypes(tokens, types)) {
         if (found.name === type) return rest.slice(found.start, found.end)
     }
     return ''
@@ -516,14 +525,17 @@ function mergeImports(statements: string[], erased: ReadonlySet<string>): string
 }
 
 /** Lift `import` statements to module scope — a `<script>` body is inlined into a function. */
-function splitImports(source: string, from: number, to: number): { imports: string[]; rest: string } {
-    const lexer = new Lexer(source, from)
+function splitImports(
+    source: string,
+    from: number,
+    to: number,
+    tokens: Token[],
+): { imports: string[]; rest: string } {
     const spans: { start: number; end: number }[] = []
     let pending: number | null = null
     let sawFrom = false
-    for (;;) {
-        const token = lexer.next()
-        if (token === null || token.start >= to) break
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
         if (pending === null) {
             // `import(` is a dynamic import — an expression, which stays where it is.
             if (token.kind === SyntaxKind.ImportKeyword) {
@@ -849,10 +861,9 @@ function scoped(nodes: Node[], context: Context): Scoped {
 
     const from = leading.start
     const to = from + leading.body.length
+    const tokens = regionTokens(context.source, from, to)
     forbidKeyword(
-        context.source,
-        from,
-        to,
+        tokens,
         SyntaxKind.ImportKeyword,
         'abide: a branch-local <script> carries no `import` — it reuses the component’s',
     )
@@ -864,14 +875,14 @@ function scoped(nodes: Node[], context: Context): Scoped {
     // set already holds a name answers the wrong question: `const rate = …` shadowing an outer
     // `rate` source would look like a name that is already reactive, and the shadow would be dropped.
     const own: Reactive = { cells: new Set(), keyed: new Set() }
-    reactiveBindings(context.source, from, to, own)
+    reactiveBindings(tokens, own)
 
     const reactive: Reactive = {
         cells: new Set(context.reactive.cells),
         keyed: new Set(context.reactive.keyed),
     }
     const shadow = new Set(context.shadow)
-    for (const name of declaredNames(context.source, from, to)) {
+    for (const name of declaredNames(tokens)) {
         if (own.cells.has(name)) {
             reactive.cells.add(name)
             shadow.delete(name)
@@ -899,13 +910,11 @@ function scoped(nodes: Node[], context: Context): Scoped {
 }
 
 /** Names a `<script>` declares at any depth, which is what has to shadow an outer source. */
-function declaredNames(source: string, from: number, to: number): string[] {
+function declaredNames(tokens: Token[]): string[] {
     const names: string[] = []
-    const lexer = new Lexer(source, from)
     let expecting = false
-    for (;;) {
-        const token = lexer.next()
-        if (token === null || token.start >= to) return names
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
         if (
             token.kind === SyntaxKind.ConstKeyword ||
             token.kind === SyntaxKind.LetKeyword ||
@@ -924,6 +933,7 @@ function declaredNames(source: string, from: number, to: number): string[] {
             }
         }
     }
+    return names
 }
 
 // --- elements --------------------------------------------------------------
@@ -1338,26 +1348,38 @@ export function emit(
 ): { code: string; segments: Segment[] } {
     const name = componentName(options.filename)
 
+    // Each region through the scanner ONCE, here, and the tokens handed to everything that asks
+    // something of it — the export check, the import split and the reactive walk were three passes
+    // over the same span.
     const moduleBody = blocks.module === null ? '' : blocks.module.body
+    const moduleTo = blocks.module === null ? 0 : blocks.module.start + moduleBody.length
+    const moduleTokens =
+        blocks.module === null ? NO_TOKENS : regionTokens(source, blocks.module.start, moduleTo)
     const moduleImports =
         blocks.module === null
             ? { imports: [], rest: '' }
-            : splitImports(source, blocks.module.start, blocks.module.start + moduleBody.length)
+            : splitImports(source, blocks.module.start, moduleTo, moduleTokens)
 
     checkNoProps(blocks.module, options.filename)
 
     let setup: { imports: string[]; rest: string } = { imports: [], rest: '' }
+    let setupRegion: Token[] = NO_TOKENS
     if (blocks.setup !== null) {
         const from = blocks.setup.start
         const to = from + blocks.setup.body.length
-        checkNoExport(source, from, to, options.filename)
-        setup = splitImports(source, from, to)
+        setupRegion = regionTokens(source, from, to)
+        checkNoExport(setupRegion, options.filename)
+        setup = splitImports(source, from, to, setupRegion)
     }
 
     // The props call is read off the import-lifted body, which is the text that becomes the function:
     // an import cannot hold a call, and the offsets have to line up with the splice below.
     const setupTokens = tokensOfBody(setup.rest)
-    const declared = propsCall(setup.rest, setupTokens)
+    // One reader per token ARRAY: its constructor walks every token to collect the file's own type
+    // declarations, and `propsCall` and `declaredTypes` were each building their own over the same
+    // one. Same array, same answer.
+    const setupTypes = new TypeReader(setupTokens)
+    const declared = propsCall(setup.rest, setupTokens, setupTypes)
     if (declared !== null) {
         checkPropsImported(setup.imports, blocks.setup?.start ?? 0, options.filename)
     }
@@ -1370,17 +1392,17 @@ export function emit(
     // splice never happened, so the text is the text `setupTokens` was scanned from and re-lexing it
     // is a full TypeScript scanner pass per compile for a string that did not change.
     const replacedTokens = declared === null ? setupTokens : tokensOfBody(replaced)
+    const replacedTypes = declared === null ? setupTypes : new TypeReader(replacedTokens)
 
     const reactive: Reactive = { cells: new Set(), keyed: new Set() }
-    if (blocks.module !== null) {
-        reactiveBindings(source, blocks.module.start, blocks.module.start + moduleBody.length, reactive)
-    }
-    if (blocks.setup !== null) {
-        const from = blocks.setup.start
-        reactiveBindings(source, from, from + blocks.setup.body.length, reactive)
-    }
+    reactiveBindings(moduleTokens, reactive)
+    reactiveBindings(setupRegion, reactive)
     if (declared !== null && declared.type !== null) {
-        reactiveProps(declared.bound, membersOf(declared.type, setup.rest, setupTokens), reactive)
+        reactiveProps(
+            declared.bound,
+            membersOf(declared.type, setup.rest, setupTokens, setupTypes),
+            reactive,
+        )
     }
 
     const context: Context = {
@@ -1418,7 +1440,7 @@ export function emit(
     // true for diagnostics; what they leave behind is leading and trailing whitespace in the markup,
     // which would otherwise become real text nodes.
     const markup = children(blocks.template, context).replace(/^\s+/, '\n').replace(/\s+$/, '\n')
-    const lifted = liftTypes(replaced, declaredTypes(replacedTokens))
+    const lifted = liftTypes(replaced, declaredTypes(replacedTokens, replacedTypes))
     const args = `args: ${signature(declared)}`
 
     // `html` and the return type are always needed; everything else is imported only if the file
@@ -1462,9 +1484,8 @@ interface Declared {
  * `type Props =` on its own line lifted the `=` and left the alternatives behind in the body, which is
  * not parseable in either lane. Brackets alone cannot answer it, and neither can a regex.
  */
-function declaredTypes(tokens: Token[]): Declared[] {
+function declaredTypes(tokens: Token[], types: TypeReader): Declared[] {
     const found: Declared[] = []
-    const types = new TypeReader(tokens)
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i] as Token
         // Top-level only: a type inside a block is somebody else's local.
