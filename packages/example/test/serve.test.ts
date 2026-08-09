@@ -30,6 +30,7 @@ import {
     cookies,
     dispatch,
     documentToStream,
+    GET,
     heldStream,
     isServing,
     json,
@@ -37,6 +38,7 @@ import {
     onIdentity,
     page,
     redirect,
+    register,
     renderToString,
     request,
     serve,
@@ -798,12 +800,50 @@ test('every response abide builds carries traceresponse, failures included', asy
 
     const expected = `00-${answered.id}-${answered.span}-03`
     expect([answered.json, answered.page, answered.redirected]).toEqual([expected, expected, expected])
+})
 
-    // A dispatch refusal too: a 404 is the response you most want to correlate.
-    const refused = await serve(new Request('https://x.test/__abide/rpc/nope'), () =>
-        dispatch(new Request('https://x.test/__abide/rpc/nope')),
-    )
-    expect((refused as Response).headers.get('traceresponse')).toMatch(/^00-[\da-f]{32}-[\da-f]{16}-\d\d$/)
+test('dispatch opens the scope itself, so an answer and both refusals are correlated', async () => {
+    // No `serve` around any of these: the claim is that an app which mounted `dispatch` and nothing
+    // else has this already. Not a demo case for the reason this whole file is not one — a card
+    // dispatching to itself has no `AsyncLocalStorage` to open a scope in, so it would be asserting
+    // the header is absent.
+    const parent = /^00-([\da-f]{32})-([\da-f]{16})-[\da-f]{2}$/
+
+    const getUser = GET(({ id }: { id: number }) => ({ id, name: `user ${id}` }))
+    register('rpc', [['test/traced/getUser', 'getUser']], { getUser })
+
+    const answered = (await dispatch(
+        new Request('https://x.test/__abide/rpc/test/traced/getUser?id=1'),
+    )) as Response
+    expect(await answered.json()).toEqual({ id: 1, name: 'user 1' })
+    expect(answered.headers.get('traceresponse')).toMatch(parent)
+
+    // The refusals are the whole claim: each returns from a DIFFERENT point in `dispatch` — the
+    // registry's gate and the prefix that claims no lane — and a header applied per-lane would have
+    // been missed by at least one.
+    const missing = (await dispatch(new Request('https://x.test/__abide/rpc/nobody/registered/this'))) as Response
+    expect(missing.status).toBe(404)
+    expect(missing.headers.get('traceresponse')).toMatch(parent)
+
+    const nowhere = (await dispatch(new Request('https://x.test/__abide/not-a-lane'))) as Response
+    expect(nowhere.status).toBe(404)
+    expect(nowhere.headers.get('traceresponse')).toMatch(parent)
+
+    // The id is the CALLER's when there is one; the span is ours, so the caller stitches its own to
+    // the entry point we answered at.
+    const continued = (await dispatch(
+        new Request('https://x.test/__abide/rpc/nobody/registered/this', {
+            headers: { traceparent: '00-1234567890abcdef1234567890abcdef-abcdef1234567890-01' },
+        }),
+    )) as Response
+    const matched = parent.exec(continued.headers.get('traceresponse') ?? '')
+    expect(matched?.[1]).toBe('1234567890abcdef1234567890abcdef')
+    expect(matched?.[2]).not.toBe('abcdef1234567890')
+
+    // Two requests are two operations. The ids differing is what makes correlating by one mean
+    // anything at all.
+    const second = (await dispatch(new Request('https://x.test/__abide/rpc/nobody/registered/this'))) as Response
+    expect(second.headers.get('traceresponse')).not.toBe(missing.headers.get('traceresponse'))
 })
 
 test('outside a request nothing is invented', () => {

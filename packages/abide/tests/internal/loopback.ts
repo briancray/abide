@@ -39,6 +39,30 @@ export interface Loopback {
     close(): void
 }
 
+/**
+ * The request a case asked for, with the headers it named still on it.
+ *
+ * A browser's `Request` constructor is guarded and silently drops the forbidden header names —
+ * `origin` among them — so the case that asserts the origin gate would hand `dispatch` a request
+ * carrying no origin at all, and every refusal it expects would come back 200 as same-origin. A
+ * standalone `Headers` has no guard, so the dropped ones go back on through an own property that
+ * shadows the instance's getter. Nothing is dropped headless, where the whole set is already there
+ * and this allocates nothing — and the constructor's own additions (a multipart boundary for a
+ * `FormData` body) are kept, which is why this adds to its headers rather than replacing them.
+ */
+function requestKeepingHeaders(url: string, init: RequestInit): Request {
+    const built = new Request(url, init)
+    if (init.headers === undefined) return built
+    let kept: Headers | null = null
+    for (const [name, value] of new Headers(init.headers)) {
+        if (built.headers.has(name)) continue
+        if (kept === null) kept = new Headers(built.headers)
+        kept.append(name, value)
+    }
+    if (kept !== null) Object.defineProperty(built, 'headers', { value: kept })
+    return built
+}
+
 export function loopback(base = 'http://abide.test'): Loopback {
     const connections: Connection[] = []
 
@@ -52,7 +76,7 @@ export function loopback(base = 'http://abide.test'): Loopback {
         },
         async fetch(input, init) {
             self.requests++
-            const answered = await dispatch(new Request(new URL(input, base).href, init))
+            const answered = await dispatch(requestKeepingHeaders(new URL(input, base).href, init))
             // Outside the reserved prefix is the APP's, and `dispatch` says so by handing back
             // nothing at all — which is what an app mounting it in front of its own routes relies on.
             return answered ?? new Response('an app route', { status: 404 })

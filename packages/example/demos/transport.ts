@@ -10,6 +10,11 @@
 // reconnect, and a handler's body actually absent from a bundle — is in
 // `packages/example/test/transport.test.ts`, which spawns a lane with no DOM emulator in it.
 //
+// Nor can it show what rides the REQUEST SCOPE — `traceresponse` on what dispatch answers, and the
+// ambients beside it. Bun bundles `node:async_hooks` for a browser as an empty object, so a card
+// dispatching to itself is serving with no scope open at all: those claims are in `test/serve.test.ts`
+// for the same reason a claim that needs a click is in `interact`.
+//
 // This page imports `abide/compiler` for the elision case, and therefore ships TypeScript's scanner.
 // That is deliberate: the claim a reader comes here for is "the browser gets the address and not the
 // body", and moving it to another page to save a page nobody profiles would be hiding it.
@@ -648,50 +653,6 @@ export default suite({
                 }
                 is('…and a typed one keeps its own name over it', (expired as HttpError).name, 'Gone')
                 is('with the phrase its status declared', (expired as HttpError).message, 'Gone')
-            },
-        },
-
-        {
-            title: 'every response abide builds names the operation that answered it',
-            note: '`traceresponse` is the W3C header a caller stitches its own span to, and it goes on through one funnel — so an answer, a refusal and the 404 for an address nobody registered all carry it. A failure is the response you most want to correlate, which is why the refusals are the point rather than the exception. The scope it is read from is opened by `dispatch` itself, so an app that mounted `dispatch` and nothing else has this already.',
-            async run({ is }) {
-                const parent = /^00-([\da-f]{32})-([\da-f]{16})-[\da-f]{2}$/
-
-                const getUser = GET(({ id }: { id: number }) => find(id))
-                register('rpc', [['demo/traced/getUser', 'getUser']], { getUser })
-
-                const answered = await wire.fetch('/__abide/rpc/demo/traced/getUser?id=1', {})
-                is('a call that answered', await answered.json(), { id: 1, name: 'user 1' })
-                is('…carries it', parent.test(answered.headers.get('traceresponse') ?? ''), true)
-
-                // The refusals are the whole claim: each of these returns from a DIFFERENT point in
-                // `dispatch`, and a header applied per-lane would have been missed by at least one.
-                const missing = await wire.fetch('/__abide/rpc/nobody/registered/this', {})
-                is('a 404 for an unregistered id', missing.status, 404)
-                is('…carries it too', parent.test(missing.headers.get('traceresponse') ?? ''), true)
-
-                const nowhere = await wire.fetch('/__abide/not-a-lane', {})
-                is('so does the refusal for a path no lane claims', nowhere.status, 404)
-                is('…with an id of its own', parent.test(nowhere.headers.get('traceresponse') ?? ''), true)
-
-                // The whole value of Trace Context is that the id is the CALLER's when there is one:
-                // the span is ours, so the caller stitches its own to the entry point we answered at.
-                const carried = '00-1234567890abcdef1234567890abcdef-abcdef1234567890-01'
-                const continued = await wire.fetch('/__abide/rpc/nobody/registered/this', {
-                    headers: { traceparent: carried },
-                })
-                const matched = parent.exec(continued.headers.get('traceresponse') ?? '')
-                is('an inbound traceparent is CONTINUED', matched?.[1], '1234567890abcdef1234567890abcdef')
-                is('…with a span of ours, not the caller’s', matched?.[2] !== 'abcdef1234567890', true)
-
-                // Two requests are two operations. The ids differing is what makes correlating by one
-                // mean anything at all.
-                const second = await wire.fetch('/__abide/rpc/nobody/registered/this', {})
-                is(
-                    'two requests are two operations',
-                    missing.headers.get('traceresponse') !== second.headers.get('traceresponse'),
-                    true,
-                )
             },
         },
 
