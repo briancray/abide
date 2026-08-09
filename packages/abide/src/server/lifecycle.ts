@@ -1,10 +1,10 @@
 // The app's lifecycle: the four hooks a process has, and the two functions that run them.
 //
-// `onHealth` and `onIdentity` are registrations because there is no binary reading an app's exports
-// yet. These four are the exports that binary is FOR — `abide dev` and `abide start` import an app's
-// module and hand `middleware`, `onStart`, `onStop` and `onError` to the functions below — so they
-// are spelled the same way, and a hand-written entry point registers them itself. Nothing here waits
-// for a bundler: a boot is a socket and four hooks, and only one of those needs a build.
+// A REGISTRATION is the primitive and the module export is sugar over it: `abide dev` and `abide
+// start` import an app's module and hand each export to the function of the same name — the `HOOKS`
+// table in `cli/internal/layers.ts`, which covers `onHealth` and `onIdentity` too. So an app run by
+// the binary and a hand-written entry point that registers them itself mean the same thing, and
+// nothing here waits for a bundler: a boot is a socket and four hooks, and only one needs a build.
 //
 // Three of the four are onions, and each is an onion for the same reason: the interesting hook is
 // the one that does something on BOTH sides of the thing it wraps. `onStart` binds the socket inside
@@ -13,8 +13,7 @@
 // of before/after hooks cannot express any of that without a variable held between them.
 
 import type { Server } from 'bun'
-import { isThenable } from '$shared/internal/probes.ts'
-import { errorPayload } from '$shared/internal/wire.ts'
+import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { abideLog } from '$shared/log.ts'
 import { config } from './config.ts'
 import { dispatch } from './registry.ts'
@@ -257,10 +256,10 @@ function failing(failure: unknown): Response {
             // The hook is where an app says what a failure MEANS, so one that fails itself has
             // nowhere else to be reported — and swallowing it would leave two failures behind one
             // 500. Never gated: the `DEBUG` gate controls volume, not breakage.
-            lifecycleLog.error(`onError threw: ${message(inside)}`)
+            lifecycleLog.error(`onError threw: ${messageOf(inside)}`)
         }
     }
-    const said = message(failure)
+    const said = messageOf(failure)
     // Said on abide's own channel whether or not the app took the hook, because a 500 whose cause
     // appears nowhere is the one failure an operator cannot act on.
     lifecycleLog.error(said)
@@ -271,11 +270,6 @@ function failing(failure: unknown): Response {
 // is already being BUILT, and the URL costs a fraction of the Response and the JSON body beside it.
 function notFound(request: Request): Response {
     return failed('AbideRouteError', `nothing is served at ${new URL(request.url).pathname}`, 404)
-}
-
-/** The same reduction `health()` and every rpc refusal already make of a failure. */
-function message(failure: unknown): string {
-    return errorPayload(failure).error.message
 }
 
 // --- the process -------------------------------------------------------------
@@ -398,7 +392,7 @@ async function tearDown(): Promise<void> {
         } catch (failure) {
             // A drain that failed is still a process on its way out, so the socket closes either way
             // — that is what the backstop below is, and a throw must not be what skips it.
-            lifecycleLog.error(`onStop threw: ${message(failure)}`)
+            lifecycleLog.error(`onStop threw: ${messageOf(failure)}`)
         }
     }
     // The backstop, and the ordinary close for an app with no hook at all: `stop` is idempotent, so
@@ -435,7 +429,7 @@ function listen(): void {
     const crashed = (failure: unknown): void => {
         // Not `onError`'s: that hook is request-scoped, and what reaches here escaped every request
         // there was. This is the process ending, and the line is what says why.
-        lifecycleLog.error(`unhandled: ${message(failure)}`)
+        lifecycleLog.error(`unhandled: ${messageOf(failure)}`)
         void shutdown().then(() => process.exit?.(1))
     }
     process.on('uncaughtException', crashed)

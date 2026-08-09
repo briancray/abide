@@ -14,8 +14,7 @@
 
 import { HEALTH_PATH } from './internal/PATHS.ts'
 import { isThenable } from './internal/probes.ts'
-import { traceHeaders } from './internal/trace.ts'
-import { payloadOf, type WireError } from './internal/wire.ts'
+import { askWire, type WireError } from './internal/wire.ts'
 import type { WireOptions } from './transport.ts'
 
 /**
@@ -45,7 +44,7 @@ export interface Health {
 }
 
 /** Where a server answers from. Installed by `abide/server`; there is nothing else to install one. */
-export type HealthSource = () => Health | Promise<Health>
+type HealthSource = () => Health | Promise<Health>
 
 let source: HealthSource | null = null
 
@@ -73,29 +72,13 @@ export function health(options?: WireOptions): Promise<Health> {
         const composed = source()
         return isThenable(composed) ? composed : Promise.resolve(composed)
     }
-    return fetched(options)
+    // A refusal still carries the account — an app reporting that it is broken answers 503 with the
+    // document saying so — so the body is what is read, not the status, which is `askWire`'s rule
+    // already. Unreachable is the floor: a client that filled in a version for a server it could not
+    // reach would be inventing the one thing it was asked about.
+    return askWire(HEALTH_PATH, options, { method: 'GET' }, unreachable)
 }
 
-async function fetched(options: WireOptions | undefined): Promise<Health> {
-    const send = options?.fetch ?? ((input: string, init: RequestInit) => fetch(input, init))
-    const address = options?.base === undefined ? HEALTH_PATH : new URL(HEALTH_PATH, options.base).href
-    try {
-        // A refusal still carries the account — an app reporting that it is broken answers 503 with
-        // the document saying so — so the body is what is read, not the status. `payloadOf` is the
-        // one rule for reading an abide body: a proxy's HTML error page comes back as text rather
-        // than as a throw, which is a different thing from nothing answering at all.
-        // Traced like every other outbound call abide builds, so asking a downstream app about itself
-        // CONTINUES the operation that asked. A monitor polling from outside a request has no trace
-        // to carry, so `traceHeaders` is one null compare and the init stays unallocated.
-        const traced = traceHeaders()
-        const answered = await send(
-            address,
-            traced === null ? { method: 'GET' } : { method: 'GET', headers: traced },
-        )
-        const document = await payloadOf(answered)
-        if (document !== null && typeof document === 'object') return document as Health
-    } catch {
-        // Nothing answered. Fall through to the one thing this caller knows.
-    }
+function unreachable(): Health {
     return { reachable: false }
 }

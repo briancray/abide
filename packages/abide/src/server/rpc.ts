@@ -78,7 +78,7 @@ export interface RpcOptions<Args = unknown, T = unknown> {
 }
 
 /** What `dispatch` needs to know about a declaration and a caller cannot ask it for. */
-export interface RpcPolicy {
+interface RpcPolicy {
     /**
      * What a diagnostic calls it. The method until the module registers, because the address is a
      * fact about the FILE and a declaration does not know which file it is in.

@@ -611,6 +611,15 @@ The two-line patch script goes out with the FIRST deferred subtree rather than i
 that suspends nothing ships neither the script nor a `<script>` node inside the slot a hydrating
 client adopts.
 
+### Known limits
+
+Two things a server render cannot hand across, both because the markup is the only channel:
+
+- **A `.prop` slot emits nothing.** A DOM property has no serialisation, so an SSR walk skips it and
+  the client sets it on mount. Use an attribute slot when the value must survive the render.
+- **A hydrated `{#for await}` re-streams from the top.** The markup does not say how far the server
+  got, so the rows are rebuilt rather than adopted. Every other part adopts its range.
+
 A SETTLED operand is not suspended at all. `suspend` takes a plain value as well as a promise, and
 there is nothing to defer about one already in hand: both substrates render the body in place, so
 there is no placeholder, no fallback and no patch. The two have to agree here — a placeholder the

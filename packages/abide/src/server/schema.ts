@@ -19,7 +19,7 @@
 // published with the shape the compiler derived from its type instead. That asymmetry is the whole
 // reason JSON Schema is the native form rather than a projection of something else.
 
-import { isFile, isThenable } from '$shared/internal/probes.ts'
+import { isFile, isThenable, messageOf } from '$shared/internal/probes.ts'
 import type { JsonSchema, JsonType } from '$shared/internal/shapes.ts'
 import { HttpError } from '$shared/internal/wire.ts'
 
@@ -469,10 +469,6 @@ function pathText(path: StandardIssue['path']): string {
         text += i === 0 ? String(key) : `.${String(key)}`
     }
     return text
-}
-
-function messageOf(cause: unknown): string {
-    return cause instanceof Error ? cause.message : String(cause)
 }
 
 /**

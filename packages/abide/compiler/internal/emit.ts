@@ -642,11 +642,6 @@ function withHoists(context: Context, scope: Map<string, string>): Context {
     return { ...context, hoisted: scope }
 }
 
-/** A child slot: the enclosing condition's hoisted value if there is one, else the cell. */
-function slotted(expr: Expr, context: Context): string {
-    return code(expr, context, 'slot')
-}
-
 /** The positions that need the cell itself: `bind:`, `&ref`, a component prop. */
 function held(expr: Expr, context: Context): string {
     return code(expr, context, 'cell')
@@ -761,7 +756,7 @@ function child(node: Node, context: Context): string {
         case 'text':
             return literal(node.value)
         case 'expression': {
-            const text = slotted(node.value, context)
+            const text = code(node.value, context, 'slot')
             // `{html(...)}` is SPEC's raw escape hatch; the runtime spells it `raw(...)`.
             const value = node.raw
                 ? `${need(context, 'raw')}(${text.replace(/^html\s*\(/, '').replace(/\)$/, '')})`

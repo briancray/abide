@@ -136,11 +136,11 @@ function enabledIn(spec: string, channel: string): boolean {
 // --- what a line looks like --------------------------------------------------
 
 /**
- * The four forms one line takes. Exported because a line is written in one process and READ in
- * another — `abide logs` renders a record the feed handed it, and it renders it by the rules the
- * console was already following.
+ * The four forms one line takes. `abide logs` renders a record the feed handed it, and it renders it
+ * by the rules the console was already following — so the decision is `logShape()`'s, not a caller's,
+ * and nothing outside this file names the type.
  */
-export type LogShape = 'color' | 'plain' | 'tsv' | 'json'
+type LogShape = 'color' | 'plain' | 'tsv' | 'json'
 
 // A browser is decided by having a document and no terminal behind it: ANSI would arrive as literal
 // junk in the console, and a tab is not a field separator anybody there can use.

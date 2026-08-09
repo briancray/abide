@@ -668,14 +668,7 @@ const CLOSES = new Set<SyntaxKind>([
     SyntaxKind.CloseBraceToken,
 ])
 
-/**
- * What one declaration says about its own shapes, from the two places it can say it.
- *
- * `GET<Args, T>(…)` is the explicit one and wins, because an author who wrote the type arguments
- * wrote them to be read. Otherwise the handler's own annotations answer: the first parameter is the
- * input, the return type is the output — and on a handler that yields, the return type's argument is
- * the CHUNK, which is exactly what an output schema checks.
- */
+/** The read and cycle state one resolution shares, built once per `endpointsOf` call. */
 export function crossing(resolve: TypeSource): Crossing {
     return { resolve, readers: new Map(), active: new Set(), depth: 0 }
 }
@@ -696,6 +689,14 @@ export interface Declared extends Shapes {
     streams: boolean
 }
 
+/**
+ * What one declaration says about its own shapes, from the two places it can say it.
+ *
+ * `GET<Args, T>(…)` is the explicit one and wins, because an author who wrote the type arguments
+ * wrote them to be read. Otherwise the handler's own annotations answer: the first parameter is the
+ * input, the return type is the output — and on a handler that yields, the return type's argument is
+ * the CHUNK, which is exactly what an output schema checks.
+ */
 export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): Declared {
     const tokens = reader.tokens
     let input: JsonSchema | undefined

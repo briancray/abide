@@ -139,7 +139,6 @@ interface Frame {
 }
 
 const NO_END = Number.MAX_SAFE_INTEGER
-const EMPTY: ReadonlySet<string> = new Set()
 const NO_HOIST: ReadonlyMap<string, string> = new Map()
 
 interface Cursor {
@@ -223,7 +222,7 @@ export interface DesugarOptions {
      * and hands back its handle, so `m(args).pages` is a read of the handle exactly the way `x.pages`
      * is a read of `x`.
      */
-    keyed?: ReadonlySet<string>
+    keyed: ReadonlySet<string>
     /**
      * Leave the outermost read alone when it is the WHOLE region, so the cell itself is handed over.
      * The caller decides: a child slot and a prop hold, a class toggle reads.
@@ -242,10 +241,10 @@ export function desugar(
     from: number,
     to: number,
     reactive: ReadonlySet<string>,
-    options: DesugarOptions = {},
+    options: DesugarOptions,
 ): { text: string; reads: Read[] } {
     const expression = options.expression ?? true
-    const keyedNames = options.keyed ?? EMPTY
+    const keyedNames = options.keyed
     const hoisted = options.hoisted ?? NO_HOIST
     const reads: Read[] = []
     if (reactive.size === 0 && keyedNames.size === 0) {

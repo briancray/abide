@@ -88,8 +88,10 @@ class DocumentNavigation implements NavigationSink {
     /**
      * Read until one piece has been applied, or the stream ends.
      *
-     * `first` says whether the piece STANDS in the range or replaces a placeholder in it, which is
-     * the only thing that differs between the opening piece and every patch behind it.
+     * `first` says whether the piece STANDS in the range or replaces a placeholder in it, and it is
+     * also what stops the read: the opening call returns as soon as one piece has landed, handing
+     * back the unread remainder, while a patch read runs to the end of the stream and reports
+     * whether it got there.
      */
     private async pieces(
         reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -125,13 +127,13 @@ class DocumentNavigation implements NavigationSink {
 
         // `carried` is the tail of the piece the opening call stopped inside, and it may hold whole
         // pieces of its own — it is flat and small, so it is searched from 0 exactly like before.
+        // Only `rest` ever hands one over, so this loop is the patch lane and applies as one.
         let rest = carried
         for (;;) {
             const cut = rest.indexOf(PIECE_END)
             if (cut === -1) break
-            this.apply(held, rest.slice(0, cut), first)
+            this.apply(held, rest.slice(0, cut), false)
             rest = rest.slice(cut + PIECE_END.length)
-            if (first) return { ok: true, buffer: rest }
         }
         if (rest !== '') keep(rest)
 

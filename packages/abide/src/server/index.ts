@@ -246,7 +246,7 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                 // No listeners in a string. The client attaches it on mount.
                 break
             case 'property':
-                // A DOM property has no serialisation. Deliberately emits nothing — see README
+                // A DOM property has no serialisation. Deliberately emits nothing — see SPEC's
                 // "Known limits"; use an attribute slot when the value must survive SSR.
                 break
             case 'ref':
@@ -837,8 +837,8 @@ export { type IdentityResolver, onIdentity } from './identity.ts'
 // its `document` field is typed by a `DocumentContext` no caller can name.
 export type { RenderOptions } from './internal/emit.ts'
 // The process's own lifecycle, and the request pipeline the four hooks hang off. Registrations for
-// the same reason `onHealth` is one — the binary that will read these off an app's exports is the
-// half of the CLI that boots, and it hands each export to the function of the same name.
+// the same reason `onHealth` is one — the half of the CLI that boots reads these off an app's
+// exports and hands each to the function of the same name.
 export {
     boot,
     type ErrorHook,

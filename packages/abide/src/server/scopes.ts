@@ -252,7 +252,7 @@ export function heldStream(body: ReadableStream<Uint8Array>): ReadableStream<Uin
  * ONE argument, because that is what every caller has: the wrapper runs per CHUNK, and a rest
  * parameter would allocate an array and a closure there to carry a `pull`'s single controller.
  */
-export function bound<A, R>(fn: (arg: A) => R): (arg: A) => R {
+function bound<A, R>(fn: (arg: A) => R): (arg: A) => R {
     const store = STORAGE
     if (store === null) return fn
     const held = store.getStore()

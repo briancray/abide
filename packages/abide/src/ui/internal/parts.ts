@@ -210,8 +210,8 @@ export class ChildPart {
             const operand = value.value
             // The same cutoff `{#await}` and `{#for await}` already have: an unchanged operand is
             // not restarted, so a re-run of the enclosing effect for some OTHER reason does not
-            // throw a settled panel back to its fallback and rebuild it. `take` has always recorded
-            // the operand for this; until now nothing read it back.
+            // throw a settled panel back to its fallback and rebuild it. `take` records the operand
+            // and this is what reads it back.
             if (this.holding === operand) return
             this.holding = NOTHING
             this.generation++
@@ -348,7 +348,7 @@ export class ChildPart {
 
         if (value instanceof Streamed) {
             // The server drained the stream; this side re-streams from the top and cannot know how
-            // far the server got, so the rows are rebuilt. See README "Known limits".
+            // far the server got, so the rows are rebuilt. See SPEC's "Known limits".
             for (const node of claimed) node.remove()
             this.dropOpened()
             this.stream_(value)
@@ -422,7 +422,7 @@ export class ChildPart {
      * `branches` null is a bare promise in a slot: what it resolves to IS what renders, and a
      * rejection has nowhere to go but the microtask queue. With branches it is `{#await}`, so the
      * settled arm renders and `holding` is put back — `set` clears it, and this block still owns the
-     * slot. Both callers bump the generation before handing it over rather than having this do it:
+     * slot. Every caller bumps the generation before handing it over rather than having this do it:
      * `{#await}` stamps once for the whole block, including the arm it paints synchronously.
      *
      * `body` is what `suspend` adds over a bare promise: the settled value renders THROUGH it rather
@@ -888,9 +888,8 @@ class Instance {
         const single = plan.root
         const clone = (single === null ? plan.element.content : single).cloneNode(true)
 
-        // Walk straight to each slot down its recorded path. The alternative — a `TreeWalker` that
-        // materialises every element and comment in the clone — costs more to CONSTRUCT than a row
-        // costs to build: 1825 ns against 660 ns here and 500 ns for the clone alone.
+        // Walk straight to each slot down its recorded path — see `prepare.ts` for why not a
+        // `TreeWalker`, which is where the path is recorded and the measurement lives.
         //
         // Consecutive parts on one element share a nodeIndex (five attribute slots on one tag), and
         // `parts` is in ascending order, so the walk is done once and reused for the run.

@@ -145,8 +145,8 @@ export function sourceMap(segments: Segment[], sourceName: string, source: strin
  * The LINE is exact. The column is exact at the start of an expression and drifts within one by
  * however much the desugar inserted before that point (`x` -> `x()` is two characters), so it points
  * into the offending expression rather than precisely at the offending token. Making it exact means a
- * mapping per rewrite rather than per expression; `desugar` already returns the edits that would
- * carry it.
+ * mapping per rewrite rather than per expression — the `Edit` list `apply` consumes would carry it,
+ * if `desugar` returned it rather than the reads.
  */
 export function original(
     segments: Segment[],

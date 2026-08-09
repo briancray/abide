@@ -69,11 +69,6 @@ export class Node {
         return this.value
     }
 
-    peek(): unknown {
-        if (this.fn !== null) this.pull()
-        return this.value
-    }
-
     write(next: unknown): void {
         if (this.value === next) return
         this.value = next

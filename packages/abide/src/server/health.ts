@@ -32,8 +32,9 @@ let reporter: HealthReporter | null = null
 /**
  * The app's own account of whether it is working.
  *
- * Returns the way back. There is no CLI reading an app's exports yet, so this is how the hook is
- * installed — and a hook that cannot be taken off again is one a test cannot register twice.
+ * Returns the way back. The registration is the primitive: an app that exports `onHealth` has that
+ * export handed here by the CLI's `HOOKS` table, and calling this directly is the same thing said at
+ * module scope — while a hook that cannot be taken off again is one a test cannot register twice.
  */
 export function onHealth(report: HealthReporter): () => void {
     reporter = report

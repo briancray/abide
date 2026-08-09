@@ -16,8 +16,7 @@
 
 import { IDENTITY_PATH } from './internal/PATHS.ts'
 import { isThenable } from './internal/probes.ts'
-import { traceHeaders } from './internal/trace.ts'
-import { payloadOf, type WireError } from './internal/wire.ts'
+import { askWire, type WireError } from './internal/wire.ts'
 import type { WireOptions } from './transport.ts'
 
 /**
@@ -96,25 +95,14 @@ function ask(options?: WireOptions): Promise<Identity> {
     return asked
 }
 
-async function fetched(options: WireOptions | undefined): Promise<Identity> {
-    const send = options?.fetch ?? ((input: string, init: RequestInit) => fetch(input, init))
-    const address = options?.base === undefined ? IDENTITY_PATH : new URL(IDENTITY_PATH, options.base).href
-    try {
-        // Traced like every other outbound call abide builds. Same-origin and credentialed, because
-        // the whole question is about a cookie the browser holds and `omit` would ask it anonymously.
-        const traced = traceHeaders()
-        const answered = await send(address, {
-            method: 'GET',
-            credentials: 'same-origin',
-            ...(traced === null ? {} : { headers: traced }),
-        })
-        const document = await payloadOf(answered)
-        if (document !== null && typeof document === 'object') return document as Identity
-    } catch {
-        // Nothing answered. Anonymous is the honest reading of that: a client that decided it was
-        // signed in because it could not reach the server would be guessing the one thing it may not.
-    }
-    return anonymous()
+// Credentialed and same-origin, because the whole question is about a cookie the browser holds and
+// `omit` would ask it anonymously. The only thing this ask does that `health()`'s does not.
+const ASK_INIT: RequestInit = { method: 'GET', credentials: 'same-origin' }
+
+function fetched(options: WireOptions | undefined): Promise<Identity> {
+    // Anonymous is the honest reading of nothing answering: a client that decided it was signed in
+    // because it could not reach the server would be guessing the one thing it may not.
+    return askWire(IDENTITY_PATH, options, ASK_INIT, anonymous)
 }
 
 /**

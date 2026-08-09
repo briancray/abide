@@ -453,7 +453,7 @@ export function remoteSocket<T, Args = void>(
     // an app imported and never read must not open a connection. A READ builds it; a probe answers
     // the channel's own cold value instead, which is what keeps probes questions rather than causes.
     //
-    // A TABLE typed by `keyof Channel`, not thirteen assignments — the same reason `memo.ts` builds
+    // A TABLE typed by `keyof Channel`, not one assignment per member — the same reason `memo.ts` builds
     // its facade this way: a member added to the channel surface is a type error HERE, rather than a
     // member left silently `undefined` on every remote socket, in the one lane with a wire in it.
     // `invalidate` is out of it because a room pattern is the one thing this shape means differently.

@@ -7,8 +7,8 @@
 //
 // `derive` (the argless memo) is not here: `memo` in `$shared/memo.ts` is its one public spelling,
 // and there is deliberately no second name for "async memo". Everything else the engine exposes —
-// `Node`, `internals`, `isThenable` — is reachable only through `$shared/internal/graph.ts`, which
-// is the seam `memo` sits on and nothing outside abide imports.
+// `Node`, `internals` — is reachable only through `$shared/internal/graph.ts`, which is the seam
+// `memo` sits on and nothing outside abide imports.
 
 export {
     type Cell,

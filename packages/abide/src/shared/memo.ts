@@ -26,7 +26,7 @@ import { admit, Bounded, release, touch } from './internal/ceilings.ts'
 import { derive, internals, type Memo, type State, untrack } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
-import { currentScope, disposeWith, storeFor } from './internal/scopes.ts'
+import { disposeWith, storeFor } from './internal/scopes.ts'
 import { byTag, joinTags } from './internal/tags.ts'
 import { arm } from './internal/timers.ts'
 
@@ -403,7 +403,7 @@ function buildArgless<T>(
     if (options.tags !== undefined) {
         const names = typeof options.tags === 'function' ? options.tags(undefined) : options.tags
         const leave = joinTags(names, { owner: cell, target: cell })
-        if (options.global !== true && currentScope() !== null) disposeWith(leave)
+        if (options.global !== true) disposeWith(leave)
     }
     return cell
 }
@@ -432,7 +432,7 @@ function scopedArgless<T>(fallback: Memo<T>, build: () => Memo<T>): Memo<T> {
     // CLOSURE CALL, not the depth. There is nothing to buy back short of not having a facade.
     const facade = markSource((() => pick()()) as Memo<T>)
 
-    // A TABLE typed by `keyof Memo`, not eleven assignments: a member added to the cell surface is
+    // A TABLE typed by `keyof Memo`, not one assignment per member: a member added to the cell surface is
     // then a type error HERE, rather than a member that is silently `undefined` on every scoped memo
     // — and only where a caller scope exists, so never in a client test.
     //

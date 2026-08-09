@@ -174,7 +174,6 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             clearTimeout(expiry)
             expiry = null
         }
-        if (maxAge === Infinity) return
         // `stamps[head]`, not `stamps[0]`: the oldest SURVIVING message, which is what the cursor
         // makes cheap to name. Everything before `head` was evicted and is waiting to be compacted.
         const oldest = head < stamps.length ? (stamps[head] as number) : got.peek() ? at : 0

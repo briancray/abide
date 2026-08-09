@@ -87,8 +87,9 @@ function median(values: number[]): number {
 /**
  * Time every arm of one bench, interleaved.
  *
- * `settle` is handed in rather than imported so this file stays free of the DOM: the page yields a
- * frame, a headless smoke run yields nothing.
+ * `settle` is handed in rather than defaulted so the CALLER picks the yield: the browser card waits
+ * for a frame, a headless smoke run yields nothing. `frame` lives below and reads the DOM, so this
+ * is a choice the caller makes rather than a constraint on the file.
  */
 export async function timeArms(arms: Arm[], settle: () => Promise<void>): Promise<Timing[]> {
     const state = await measureArms(arms, settle, PASSES)
@@ -219,13 +220,12 @@ export function ratioText(abide: number, arm: number): string {
 // left in a background tab would crawl for minutes — waiting to paint something nobody is looking
 // at. Hidden, the yield is a `MessageChannel` task instead: it drains the event loop without being
 // clamped, and there is no paint to wait for anyway.
-const yielder = typeof MessageChannel === 'function' ? new MessageChannel() : null
+const yielder = new MessageChannel()
 const waiting: (() => void)[] = []
-if (yielder !== null) yielder.port1.onmessage = (): void => waiting.shift()?.()
+yielder.port1.onmessage = (): void => waiting.shift()?.()
 
 export function frame(): Promise<void> {
     if (typeof requestAnimationFrame !== 'function' || document.visibilityState === 'hidden') {
-        if (yielder === null) return Promise.resolve()
         return new Promise((resolve) => {
             waiting.push(resolve)
             yielder.port2.postMessage(0)
@@ -284,7 +284,7 @@ export async function quiesce(): Promise<void> {
  * back a promise for a chunk it already has, so walking a thousand-row table through one costs about
  * seven thousand turns to produce a string it already has in a buffer.
  *
- * `FLOOR_TICKS` is what an empty async function costs, so a case can say what it OWES rather than
+ * `floorTicks()` is what an empty async function costs, so a case can say what it OWES rather than
  * what it was charged.
  */
 export async function microtasks(work: () => Promise<unknown>): Promise<number> {

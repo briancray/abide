@@ -5,9 +5,11 @@
 // the constructor — an error that crossed a wire arrives as a plain object, and `instanceof` on it
 // is false however faithfully it was serialised.
 
+import type { WireOptions } from '../transport.ts'
 import { ARGS_PARAM } from './PATHS.ts'
 import { hasFile, isFile, isThenable } from './probes.ts'
 import type { JsonSchema } from './shapes.ts'
+import { traceHeaders } from './trace.ts'
 
 /** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */
 export const NDJSON_TYPE = 'application/x-ndjson'
@@ -436,6 +438,42 @@ export async function payloadOf(response: Response): Promise<unknown> {
     } catch {
         return body
     }
+}
+
+/**
+ * One GET at a named wire, read by the rules above and floored when nothing answers.
+ *
+ * `health()` and `identity()` ask the same question of a different path, and three rules are what
+ * they share: the address is the option's `base` or a relative path, the body is read through
+ * `payloadOf` (so a proxy's HTML error page arrives as text rather than as a throw, which is a
+ * different thing from nothing answering at all), and an answer that is not an object falls to the
+ * caller's floor. Spelled once, so a fourth rule — a timeout, a `Vary`, a retry — lands in both
+ * instead of in whichever the next reader opened.
+ *
+ * Traced like every other outbound call abide builds, so asking a downstream app about itself
+ * CONTINUES the operation that asked. A monitor polling from outside a request has no trace to
+ * carry, so `traceHeaders` is one null compare and the init stays unallocated.
+ *
+ * `floor` is a thunk, not a value: an anonymous identity is a fresh document per caller, and a
+ * shared one would let any reader edit every other caller's answer.
+ */
+export async function askWire<T>(
+    path: string,
+    options: WireOptions | undefined,
+    init: RequestInit,
+    floor: () => T,
+): Promise<T> {
+    const send = options?.fetch ?? ((input: string, request: RequestInit) => fetch(input, request))
+    const address = options?.base === undefined ? path : new URL(path, options.base).href
+    try {
+        const traced = traceHeaders()
+        const answered = await send(address, traced === null ? init : { ...init, headers: traced })
+        const document = await payloadOf(answered)
+        if (document !== null && typeof document === 'object') return document as T
+    } catch {
+        // Nothing answered. Fall through to the one thing the caller knows.
+    }
+    return floor()
 }
 
 /** Is the response a stream of chunks rather than one value? */
