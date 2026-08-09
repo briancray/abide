@@ -94,7 +94,8 @@ export {
     type View,
     type ViewModule,
 } from './router.ts'
-// Where a compiled `<style>` block lands. `styles()` is what a server render puts in <head>.
+// Where a compiled `<style>` block lands. `styleTags()` is what a server render puts in <head> —
+// not `styles()` five lines up, which is the `style:` toggle builder and a different thing entirely.
 export { adopt, styleTags } from './styles.ts'
 // The client half of the two transport laws — what a generated stub imports, and what a hand-written
 // one would. The DECLARING half is in `abide/server`, because a handler's body must not ship to a
