@@ -12,6 +12,8 @@
 // The lane itself is `lane.ts`, shared with `abide dev`: what the bundle CONTAINS is the same
 // question for both commands, and this one answers only the three below.
 
+// `Bun.write` builds a tree but never removes one, and `node:path` stands in for nothing — Bun
+// ships no path api. `node:util`/`node:zlib` are the brotli lane; see `brotliOf` below for why.
 import { rm } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { promisify } from 'node:util'

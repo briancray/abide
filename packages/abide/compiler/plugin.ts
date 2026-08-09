@@ -4,6 +4,8 @@
 // and through `[serve.static] plugins` for the browser bundle, so the SAME compiler output runs in
 // every lane — there is no build step whose result could differ from what the tests loaded.
 
+// `readFileSync` because a Bun plugin's `load` runs SYNCHRONOUSLY and `Bun.file().text()` is a
+// promise; `node:path` stands in for nothing, since Bun ships no path api.
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { BunPlugin } from 'bun'

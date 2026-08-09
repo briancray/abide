@@ -21,6 +21,7 @@
 // `portFrom` that refuses `abide start --port nope`, in the code that would have bound the socket —
 // so there is one answer to what a port is, and this thread reports the code it was handed.
 
+// `node:fs` for the watcher only: Bun has no file-watch api, and `Bun.file` cannot be subscribed to.
 import { watch } from 'node:fs'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { colored, DIM, paint } from './paint.ts'

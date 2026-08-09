@@ -243,8 +243,6 @@ export function frame(): Promise<void> {
     })
 }
 
-let ballast: unknown
-
 /**
  * Let the engine go quiet between two measured batches.
  *
@@ -263,7 +261,9 @@ export async function quiesce(): Promise<void> {
         const started = performance.now()
         let sum = 0
         for (let i = 0; i < 100_000; i++) sum += i % 7
-        ballast = sum
+        // The sum is CONSUMED, by a test that cannot pass: an engine that can prove the loop's result
+        // unobserved can delete the loop, and the reference batch would then time nothing.
+        if (sum < 0) throw new Error('unreachable')
         const elapsed = performance.now() - started
         // Two samples at minimum: the first has nothing to be within a fifth OF.
         if (samples > 0 && elapsed <= best * 1.2) return
@@ -272,10 +272,6 @@ export async function quiesce(): Promise<void> {
         if (performance.now() >= deadline) return
         await frame()
     }
-}
-
-export function ballastValue(): unknown {
-    return ballast
 }
 
 /**

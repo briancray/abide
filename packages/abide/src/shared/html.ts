@@ -7,7 +7,7 @@
 // ACTION they take per kind. The cached form and the two recognisers the substrates share live in
 // `$shared/internal/slots.ts`.
 //
-export const TEMPLATE_BRAND = Symbol.for('abide.template')
+const TEMPLATE_BRAND = Symbol.for('abide.template')
 
 export interface TemplateResult {
     readonly [TEMPLATE_BRAND]: true

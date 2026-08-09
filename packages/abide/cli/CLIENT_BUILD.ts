@@ -13,6 +13,7 @@
 // `node:path` is the only weight here, and it is a builtin: the rule is that reading a manifest must
 // not load a BUNDLER, not that this file may not resolve a path.
 
+// `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename, relative, resolve } from 'node:path'
 
 /**

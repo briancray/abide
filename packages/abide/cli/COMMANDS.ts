@@ -12,7 +12,7 @@
 import { BOLD, colored, DIM, paint } from './internal/paint.ts'
 
 /** What a command does with the arguments after its own name. The number it answers is the exit code. */
-export type CommandBody = (argv: string[]) => Promise<number>
+type CommandBody = (argv: string[]) => Promise<number>
 
 export interface Command {
     name: string

@@ -30,6 +30,7 @@
 // Three generated files per source, in a tree the author never opens, is also three fewer things
 // every scan in this repo has to learn to skip.
 
+// `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { dirname, relative, resolve } from 'node:path'
 import { compile, describe, originalPosition, type Segment } from './index.ts'
 

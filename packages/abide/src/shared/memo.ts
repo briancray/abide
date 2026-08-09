@@ -30,7 +30,7 @@ import { currentScope, disposeWith, storeFor } from './internal/scopes.ts'
 import { byTag, joinTags } from './internal/tags.ts'
 import { arm } from './internal/timers.ts'
 
-export type { Memo, State }
+export type { Memo }
 
 // The handle a keyed call hands back: the slot's own cell, plus the two verbs that need a body to
 // re-run. Everything else — `()`, `peek`, `set`, the probes, `await` — is the ordinary cell surface,

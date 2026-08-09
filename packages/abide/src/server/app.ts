@@ -8,6 +8,8 @@
 // IMPORT rather than lazily inside `serve()` the way the scope and href sources are: a line can be
 // written long before anything serves a request.
 
+// `readFileSync` because the walk below runs at IMPORT and `Bun.file().text()` is a promise; Bun
+// ships no home-directory api and no path api, so `node:os`/`node:path` stand in for nothing.
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'

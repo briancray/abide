@@ -41,7 +41,7 @@ export const TTL_HEADER = 'abide-ttl'
 export const MAX_GET_URL = 2000
 
 /** The one door a value that is not JSON arrives through. */
-export const MULTIPART_TYPE = 'multipart/form-data'
+const MULTIPART_TYPE = 'multipart/form-data'
 
 /**
  * Where a file SAT in the args, written into the JSON in its place.

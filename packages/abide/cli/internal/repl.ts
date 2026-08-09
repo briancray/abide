@@ -19,6 +19,7 @@
 // run yet — so the retry through an async wrapper is exact rather than a guess, and it is reached by
 // the engine's own answer instead of by a regex deciding what "top level" means.
 
+// `node:vm` for the persistent context: Bun has no api that evaluates in a reusable global scope.
 import vm from 'node:vm'
 import { plugin } from 'bun'
 import { abidePlugin } from '$compiler/plugin.ts'

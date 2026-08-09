@@ -604,18 +604,20 @@ export default suite({
                             doc.open()
                             const started = performance.now()
                             for await (const chunk of renderDocument(
-                                '<title>streamed</title><style>body{font:14px system-ui;padding:12px}</style>',
+                                // The iframe is its own document, so it carries its own stylesheet — the page's
+                                // Tailwind is not in scope inside it, and these three classes are what stands in.
+                                '<title>streamed</title><style>body{font:14px system-ui;padding:12px}.slow{color:#0a7}.fast{color:#07a}.waiting{color:#999}</style>',
                                 () => html`
                                     <h3>shell — painted immediately</h3>
                                     ${suspend(
                                         slow(1200, 'the slow subtree, 1200ms'),
-                                        (t) => html`<p style="color:#0a7">${t}</p>`,
-                                        html`<p style="color:#999">loading slow…</p>`,
+                                        (t) => html`<p class="slow">${t}</p>`,
+                                        html`<p class="waiting">loading slow…</p>`,
                                     )}
                                     ${suspend(
                                         slow(400, 'the fast subtree, 400ms'),
-                                        (t) => html`<p style="color:#07a">${t}</p>`,
-                                        html`<p style="color:#999">loading fast…</p>`,
+                                        (t) => html`<p class="fast">${t}</p>`,
+                                        html`<p class="waiting">loading fast…</p>`,
                                     )}
                                 `,
                             )) {

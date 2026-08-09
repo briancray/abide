@@ -211,7 +211,7 @@ export function release(entry: Bounded): void {
  * two budgets are what differ — a slot the cache is going to hold until something evicts it is worth
  * one stringify to size, and a chunk arriving in a loop is not.
  */
-export function valueCharge(value: unknown): number {
+function valueCharge(value: unknown): number {
     switch (typeof value) {
         case 'undefined':
             return 0

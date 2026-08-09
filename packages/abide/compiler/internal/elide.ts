@@ -27,8 +27,8 @@ import type { Kind } from '$shared/transport.ts'
 import { SyntaxError_, type Token, tokensOf } from './lex.ts'
 import { crossing, type Declared, shapesAt, TypeReader, type TypeSource } from './shape.ts'
 
-export const RPC_DIRECTORY = '/server/rpc/'
-export const SOCKET_DIRECTORY = '/server/sockets/'
+const RPC_DIRECTORY = '/server/rpc/'
+const SOCKET_DIRECTORY = '/server/sockets/'
 
 /** Every `.ts` a transport directory holds. The plugin's filter, and nothing else matches it. */
 export const TRANSPORT_MODULE = /\/server\/(rpc|sockets)\/[^?]+\.ts$/
@@ -69,10 +69,10 @@ export const TRANSPORT_ROOTS: Record<Kind, string> = {
     socket: TRANSPORT_GLOBS.socket.slice(ANYWHERE.length),
 }
 
-export const RPC_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
-export const SOCKET_METHODS = ['socket'] as const
+const RPC_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+const SOCKET_METHODS = ['socket'] as const
 
-export type Method = (typeof RPC_METHODS)[number] | (typeof SOCKET_METHODS)[number]
+type Method = (typeof RPC_METHODS)[number] | (typeof SOCKET_METHODS)[number]
 export type { Kind }
 
 const LEGAL: Record<Kind, readonly string[]> = { rpc: RPC_METHODS, socket: SOCKET_METHODS }

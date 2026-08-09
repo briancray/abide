@@ -9,15 +9,15 @@
 // The four segment kinds are ordered by SPECIFICITY, so precedence is `kind - kind` and the sort is
 // the ordering the spec states: literal > required > optional > rest.
 
-export const LITERAL = 0
-export const REQUIRED = 1
-export const OPTIONAL = 2
-export const REST = 3
+const LITERAL = 0
+const REQUIRED = 1
+const OPTIONAL = 2
+const REST = 3
 // Past the end of a pattern. More specific than any segment, so `/a` outranks `/a/[[b]]` — the
 // pattern that stops is the one that claimed the shorter path deliberately.
 const END = -1
 
-export interface Segment {
+interface Segment {
     kind: number
     /** The literal text, or the parameter's name. */
     text: string

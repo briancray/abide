@@ -30,7 +30,7 @@
 // dev` builds into memory, injects its reload client into the shell and HOPS. Everything above that
 // seam is one assembly, so a layer that changes shape cannot change shape in only one of them.
 
-import { stat } from 'node:fs/promises'
+// `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename } from 'node:path'
 // The `.abide` loader, registered by importing the module that owns the registration — the same one
 // `abide run` preloads and `abide repl` makes. An app importing a page compiles it on the way in.
@@ -194,7 +194,7 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
 // --- the pages, and the document they are served in --------------------------
 
 /** The pages and the document they render in. One value, because neither is read without the other. */
-export interface Paged {
+interface Paged {
     table: RouteEntry[]
     shell: AppShell
 }
@@ -213,7 +213,7 @@ async function pageLayer(
 ): Promise<Paged | null> {
     const directory = `${root}/${PAGES}`
     try {
-        if (!(await stat(directory)).isDirectory()) return null
+        if (!(await Bun.file(directory).stat()).isDirectory()) return null
     } catch {
         return null
     }

@@ -19,6 +19,7 @@
 // artifact that was never written down. The two lanes differ in where the bytes came from and in one
 // header, and in nothing a request can see.
 
+// `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename } from 'node:path'
 import {
     assetOf,

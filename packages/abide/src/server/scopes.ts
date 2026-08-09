@@ -9,6 +9,7 @@
 // The ambients are plain reads, not cells. A server render is a snapshot: there is nothing to wake
 // later, so a `request()` that could change would be answering a question nobody can re-ask.
 
+// `AsyncLocalStorage` has no `Bun.*` spelling — Bun implements the node module and nothing else.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Identity } from '$shared/identity.ts'
 import {
@@ -144,7 +145,7 @@ const HELD = new WeakSet<ReadableStream<unknown>>()
  * wrong either double-wraps or drops the guarantee silently. Marking the STREAM makes "held" a fact
  * about the body rather than a convention between layers, so any seam may ask and the answer composes.
  */
-export function markHeld<T>(body: ReadableStream<T>): ReadableStream<T> {
+function markHeld<T>(body: ReadableStream<T>): ReadableStream<T> {
     HELD.add(body)
     return body
 }
