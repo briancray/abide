@@ -2,7 +2,7 @@
 // template both ways — to a string with `renderToString`, and to live DOM with `mount` — so the
 // difference between the lanes is visible where there is one, and asserted where there is not.
 
-import { classifySlots, escape, html, isTemplate, keyed, raw, state, type TemplateResult, watch } from 'abide'
+import { classifySlots, escape, html, isKeyed, isTemplate, keyed, raw, state, type TemplateResult, watch } from 'abide'
 import { renderToString } from 'abide/server'
 import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
@@ -727,6 +727,16 @@ export default suite({
                 const view = mount(host, () => html`<ul>${() => items()}</ul>`)
                 try {
                     is('one row to begin with', host.querySelectorAll('li').length, 1)
+
+                    // The brand the list reconciles by, and the pair it sits in: `isKeyed` and
+                    // `isTemplate` are how both substrates tell the three child-slot shapes apart
+                    // without a type-checker. A keyed row is NOT a template — it wraps one — which
+                    // is exactly the distinction the reconcile above depends on.
+                    const row = keyed('k', li('x'))
+                    is('a keyed row carries the brand', isKeyed(row), true)
+                    is('…and is not itself a template', isTemplate(row), false)
+                    is('a plain template is the other way round', isKeyed(li('x')), false)
+                    is('…and is one', isTemplate(li('x')), true)
 
                     // The unkeyed item lands at index 0, where the keyed row already is, and the
                     // keyed one asks for that same row by key. Same template, so both would match it.
