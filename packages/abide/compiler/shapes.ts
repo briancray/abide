@@ -22,9 +22,6 @@ import type { Kind } from '$shared/transport.ts'
 import { endpointId, SHAPES_FILE } from './index.ts'
 import { endpointsOf, TRANSPORT_GLOBS } from './internal/elide.ts'
 
-export type { Shapes }
-export { SHAPES_FILE }
-
 export interface DeriveOptions {
     /** Directories to scan for transport modules. */
     roots: string[]
@@ -99,8 +96,9 @@ async function wanted(roots: string[]): Promise<Wanted[]> {
 /**
  * The shapes the checker can see, by endpoint address.
  *
- * Empty when there is nothing to ask about, when Node is not available, or when the checker fails —
- * every one of those is "no upgrade", and none of them is a reason for a build to stop.
+ * Empty when there is nothing to ask about, which is "no upgrade" and not a reason for a build to
+ * stop. A checker that FAILS throws, and so does a missing `node` — this pass is optional to run and
+ * not optional to complete, so a caller that would rather degrade than fail catches it.
  */
 export async function deriveShapes(options: DeriveOptions): Promise<Record<string, Shapes>> {
     const endpoints = await wanted(options.roots)

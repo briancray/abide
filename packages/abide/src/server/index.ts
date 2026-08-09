@@ -882,6 +882,7 @@ export {
     type RedirectStatus,
     redirect,
     sse,
+    type TypedOptions,
 } from './responses.ts'
 export {
     DELETE,
@@ -905,6 +906,7 @@ export { type RunningServer, server } from './running.ts'
 // wire: a schema is checked where the handler is, and the browser lane gets the address alone.
 export {
     type EndpointShape,
+    type Issue,
     type JsonSchema,
     type JsonType,
     SCHEMA_ERROR,

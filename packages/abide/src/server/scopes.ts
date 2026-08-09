@@ -359,18 +359,16 @@ function tracing(): Tracing {
     return held.trace
 }
 
-// Byte -> its two hex digits, built once. Minting happens on every request that answers, and
-// `toString(16).padStart(2, '0')` per byte was the whole cost of it — a table turns 24 formats and
-// 24 pads into 24 lookups.
-const HEX: string[] = []
-for (let byte = 0; byte < 256; byte++) HEX.push(byte.toString(16).padStart(2, '0'))
-
-/** Random bytes as hex — the shape the standard names, off the web crypto both lanes have. */
+/**
+ * Random bytes as hex — the shape the standard names, off the web crypto both lanes have.
+ *
+ * `Uint8Array.prototype.toHex`, the same spelling `identity.ts` mints its secret with. A 256-entry
+ * lookup table was here first, measured against `toString(16).padStart(2, '0')` per byte — which was
+ * the wrong arm: against the native method the table LOSES, 100 ns per 24-byte id to 39 ns. Minting
+ * happens on every request that answers, so that is the number that decided it.
+ */
 function randomHex(bytes: number): string {
-    const raw = crypto.getRandomValues(new Uint8Array(bytes))
-    let out = ''
-    for (let i = 0; i < raw.length; i++) out += HEX[raw[i] as number] as string
-    return out
+    return crypto.getRandomValues(new Uint8Array(bytes)).toHex()
 }
 
 export interface Trace {

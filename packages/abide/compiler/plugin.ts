@@ -161,4 +161,3 @@ export const abidePlugin: BunPlugin = {
     },
 }
 
-export default abidePlugin

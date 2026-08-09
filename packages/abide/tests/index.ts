@@ -334,6 +334,13 @@ export function keep(value: unknown): void {
     kept = value
 }
 
+/**
+ * The other half of that proof, and DELIBERATELY uncalled.
+ *
+ * Nothing calls this and nothing should: it is exported so the engine cannot see that `kept` is
+ * write-only and delete the store `keep` exists to make. A reader that has to run would defeat the
+ * point — so the usual "who still calls this" question has no answer here, by design.
+ */
 export function keptValue(): unknown {
     return kept
 }
