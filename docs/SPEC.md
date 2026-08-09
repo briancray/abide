@@ -611,6 +611,21 @@ The two-line patch script goes out with the FIRST deferred subtree rather than i
 that suspends nothing ships neither the script nor a `<script>` node inside the slot a hydrating
 client adopts.
 
+A SETTLED operand is not suspended at all. `suspend` takes a plain value as well as a promise, and
+there is nothing to defer about one already in hand: both substrates render the body in place, so
+there is no placeholder, no fallback and no patch. The two have to agree here — a placeholder the
+client never expects to adopt is a hydration mismatch.
+
+An operand that has not MOVED does not restart. The client keeps the operand a block is showing and
+compares it, so a re-run of the enclosing effect for some other reason leaves a settled panel alone
+rather than throwing it back to its fallback and rebuilding it — the same cutoff `{#await}` and
+`{#for await}` have. A body closure that captured newer state is not re-rendered until the operand
+itself changes.
+
+A `suspend` NESTED inside a deferred subtree awaits inline rather than deferring again: the subtree
+is rendered with nowhere to patch, so the inner one delays its parent's patch instead of registering
+a patch of its own. Deferral is one level deep by construction.
+
 Only a CHILD slot carries markers: an opening comment before its value and the anchor after it. Other
 slot kinds are found positionally and a list row delimits itself. A chunk boundary is a SUSPENSION,
 not a string segment — everything written so far goes out before the walk waits, and a long

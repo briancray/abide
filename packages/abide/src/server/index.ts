@@ -738,22 +738,22 @@ async function* drain(
     // `d.html` cannot reject: `emitSuspend` builds it around a `try`, and a failed subtree settles as
     // a comment. So there is no rejection path to route through the queue.
     const landed: { id: number; text: string }[] = []
-    let pending = 0
     let wake: (() => void) | null = null
-    let cursor = 0
-    const take = (): void => {
-        for (; cursor < deferrals.deferred.length; cursor++) {
-            const d = deferrals.deferred[cursor] as Deferred
-            pending++
-            void d.html.then((text) => {
-                landed.push({ id: d.id, text })
-                const resume = wake
-                wake = null
-                resume?.()
-            })
-        }
+    // The list is CLOSED before this is entered, so it is walked once and there is no cursor to
+    // keep: the only `deferred.push` is `emitSuspend`'s, it happens only when `context.document` is
+    // set, and a deferred subtree is rendered by `renderToString`, whose context always carries
+    // `document: null`. A `suspend` nested inside a suspended subtree therefore awaits INLINE — it
+    // delays its parent's patch rather than registering a patch of its own — and the walk this
+    // drains has finished before the first yield here.
+    let pending = deferrals.deferred.length
+    for (const d of deferrals.deferred) {
+        void d.html.then((text) => {
+            landed.push({ id: d.id, text })
+            const resume = wake
+            wake = null
+            resume?.()
+        })
     }
-    take()
     // The two-line patch script goes out ahead of the FIRST patch rather than in the shell, and
     // the guard is the whole point: a page that suspends nothing ships neither the script nor a
     // `<script>` node inside the slot a hydrating client adopts — where an unexpected element is
@@ -777,7 +777,6 @@ async function* drain(
         const patch = `<template id="${patchId(ready.id)}">${ready.text}</template>`
         // A framed patch carries no script: the client is parsing this itself and would not run one.
         yield framed ? `${patch}${PIECE_END}` : `${patch}<script>$p(${ready.id})</script>`
-        take() // a patch may itself have registered more
     }
 }
 
