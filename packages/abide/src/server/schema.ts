@@ -57,7 +57,7 @@ export type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T> | JsonSche
  * What a refusal names. Read at the THROW rather than captured, because the address is a fact about
  * the file and a declaration does not know which file it is in until its module registers.
  */
-export interface Named {
+interface Named {
     readonly address: string
 }
 

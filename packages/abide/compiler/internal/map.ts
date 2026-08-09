@@ -162,8 +162,8 @@ export function original(
     if (best === null) return null
     return {
         line: best.originalLine + 1,
-        // Keep the offset INTO the expression, so a diagnostic lands on the right token and not
-        // merely on the right expression.
+        // The offset from the expression's START, uncorrected for what the desugar inserted before
+        // this point — which is the drift the docblock above describes.
         column: best.originalColumn + (generatedColumn - best.generatedColumn) + 1,
     }
 }

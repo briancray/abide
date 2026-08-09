@@ -84,6 +84,10 @@ export function channel<T, Args>(options?: ChannelOptions): KeyedChannel<Args, T
 export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & KeyedChannel<Args, T> {
     const tail = options.tail ?? 0
     const maxAge = options.maxAge ?? Infinity
+    // Only `schedule`/`expire` ask how old a message is, and nothing reaches them without this. So
+    // the clock read and the parallel array are maintained only where they are read: a channel with
+    // no `maxAge` — the default — pays neither per publish.
+    const ages = maxAge !== Infinity
     const listeners = new Set<(message: T) => void>()
 
     // --- what is held, and what WAKES for it -------------------------------
@@ -106,7 +110,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     // The payload the cells above are the signal FOR. Plain fields: nothing subscribes to them, and
     // a reader that woke on a version reads them on the way past.
     let latest: T | undefined
-    /** When `latest` arrived. Only consulted under `maxAge`. */
+    /** When `latest` arrived. Written and consulted only under `maxAge`. */
     let at = 0
     /**
      * Messages oldest-first, PUSHED into rather than rebuilt per publish. Live from `head` on.
@@ -115,7 +119,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
      * at `tail: 500` against 8 ns here.
      */
     let buffer: T[] = NO_MESSAGES
-    /** Arrival times, parallel to `buffer`. Only consulted under `maxAge`. */
+    /** Arrival times, parallel to `buffer`. Built and consulted only under `maxAge`. */
     let stamps: number[] = NO_MESSAGES
     /**
      * Where the live window STARTS. Dropping the oldest message is `head++`, never a splice, so the
@@ -211,25 +215,26 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
      * per publish — which is what keeps a bigger retention from being a dearer one.
      */
     function compact(): void {
-        if (head > tail && head > 0) {
+        // `tail` is never negative, so `head > tail` already says `head > 0`.
+        if (head > tail) {
             buffer.splice(0, head)
-            stamps.splice(0, head)
+            if (ages) stamps.splice(0, head)
             head = 0
         }
     }
 
     self.publish = (message: T): void => {
         latest = message
-        at = Date.now()
+        if (ages) at = Date.now()
         if (tail > 0) {
             // The empty transcript is SHARED. The first publish takes one of its own rather than
             // pushing into the constant every channel starts from.
             if (buffer === (NO_MESSAGES as unknown as T[])) {
                 buffer = []
-                stamps = []
+                if (ages) stamps = []
             }
             buffer.push(message)
-            stamps.push(at)
+            if (ages) stamps.push(at)
             // Eviction is a cursor step, so the cost of dropping the oldest message does not grow
             // with how many are kept. `compact` is what pays for it, once per `tail` of these.
             if (buffer.length - head > tail) head++
@@ -242,7 +247,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         // empty array it already has.
         got.set(true)
         messages.set(messages.peek() + 1)
-        if (maxAge !== Infinity) schedule()
+        if (ages) schedule()
         // Delivery is against a SNAPSHOT: a listener that subscribes while this message is going out
         // must not receive it, and one that unsubscribes must still finish this round. The copy is
         // how that is spelled, and it costs an array per publish (32 ns against 18 ns) — so the two

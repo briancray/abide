@@ -80,7 +80,16 @@ function isClose(node: ChildNode): boolean {
     return node.nodeType === 8 && CLOSE_FORM.test((node as Comment).data)
 }
 
-/** What a plain value renders as. Nullish and BOTH booleans are nothing, not their spelling. */
+/**
+ * What a plain value renders as. Nullish and BOTH booleans are nothing, not their spelling.
+ *
+ * The CHILD-position twin of `$shared`'s `attributeText`, and the same hydration mismatch is what the
+ * two lanes must agree about — `take` compares this against the text the server wrote, so a
+ * disagreement rewrites markup the server already got right and nothing else catches it. Spelled
+ * twice rather than shared: the server's half is the `typeof` switch at the top of `$server`'s
+ * `emit`, which exists so a thousand-row table's strings and numbers never reach a prototype probe,
+ * and a shared call would be the thing that walk is written to avoid. Change one, change the other.
+ */
 function textOf(value: unknown): string {
     return value === null || value === undefined || value === false || value === true ? '' : String(value)
 }
@@ -479,6 +488,9 @@ export class ChildPart {
      */
     private await_(block: Awaited): void {
         if (this.holding === block.value) return
+        // Claimed BEFORE the author's `pending()` runs, and again after `set` clears it: the callback
+        // is arbitrary code that can reach this part, and the guard above is what stops a re-entrant
+        // call from restarting the block it is already inside.
         this.holding = block.value
         const branches = block.branches
         const operand = block.value
@@ -590,21 +602,11 @@ export class ChildPart {
      * rewrites the very list `claimed` would have held.
      */
     reclaiming(): Reclaiming {
-        // Before the teardown, so a load still in flight cannot settle into the range being replaced.
-        this.generation++
-        this.holding = NOTHING
-        // The same salvage `dispose` makes, and for the same reason: a part reclaimed before its
-        // first update still owns server nodes nobody else will remove, and dropping the reference
-        // leaves them in the document for the incoming range to be inserted after. Normally a no-op —
-        // `claimed` is consumed by the first `set` — it is the overlapping navigation that reaches it.
-        if (this.claimed !== null) {
-            this.owned = this.claimed
-            this.claimed = null
-        }
-        // Through `clearExcept`, because a nested instance still owns live slot effects and `take`
-        // overwrites `nested` without disposing it — a part reclaimed without this leaves one live
-        // effect per reactive slot per navigation, each writing into nodes no longer in the document.
-        this.clearExcept(null)
+        // Exactly `dispose`'s teardown, and it must run BEFORE the range is captured: a load still in
+        // flight cannot be allowed to settle into a range that is being replaced. Spelled as the call
+        // rather than repeated — the two drifted once already, which is how `reclaiming` came to drop
+        // what `dispose` salvaged.
+        this.dispose()
         // Where the range begins, captured before anything is inserted. `null` means "the start of
         // the parent" — a part whose anchor is the first thing in its container, which is what the
         // root part is after the teardown above.
@@ -646,11 +648,17 @@ export class ChildPart {
     dispose(): void {
         this.generation++ // a load still in flight must not paint into a disposed part
         this.holding = NOTHING
-        // A part disposed before its first update still owns server nodes nobody else will remove.
+        // A part torn down before its first update still owns server nodes nobody else will remove,
+        // and dropping the reference leaves them in the document — for `reclaiming`, in front of the
+        // incoming range. Normally a no-op, since `claimed` is consumed by the first `set`; it is the
+        // overlapping navigation that reaches it.
         if (this.claimed !== null) {
             this.owned = this.claimed
             this.claimed = null
         }
+        // Through `clearExcept`, because a nested instance still owns live slot effects and `take`
+        // overwrites `nested` without disposing it — a part torn down without this leaves one live
+        // effect per reactive slot per navigation, each writing into nodes no longer in the document.
         this.clearExcept(null)
     }
 }
@@ -1145,6 +1153,10 @@ class Instance {
         // so anything reactive takes the full path below and re-subscribes. What this skips is
         // exactly the case where a fresh envelope holds the values already on screen.
         const last = this.lastValues
+        // The length test cannot fail today — every caller with a non-null `lastValues` has already
+        // matched `strings` by identity, and a template's slot count is fixed by its strings. It
+        // stays because it is what makes the indexed read below safe without that argument, which is
+        // two call sites away rather than here.
         if (last !== null && last.length === values.length) {
             let moved = false
             for (let i = 0; i < values.length; i++) {
@@ -1157,14 +1169,12 @@ class Instance {
         }
         this.lastValues = values
 
-        // Every thunk slot creates an effect, so an update that did not first tear down the previous
-        // run's would leave one live effect PER update, each closing over the superseded values and each
-        // still writing to the same binder. Invisible while templates are hand-written — a keyed row of
-        // static text has nothing reactive to wake it — but this is the path a compiled template takes
-        // on every patch, both here and from `ChildPart.set`.
-        // Indexed, and only entered when there is something to tear down. A `for…of` over an array
-        // allocates an iterator whether or not the array holds anything, and this array is EMPTY on
-        // every row of a list of static text — a thousand iterators per update to run nothing.
+        // One effect per thunk slot, kept for the life of the slot and RE-RUN rather than rebuilt: the
+        // body reads `lastValues[slot]`, assigned just above, so a new thunk is picked up without a
+        // new node or a new closure. Building one per update would instead leave one live effect per
+        // update, each closing over superseded values and each still writing to the same binder.
+        // `slotEffects` is null — not an empty array — until a slot is actually a thunk, so a row of
+        // static text allocates nothing here on any patch.
         const takesRawFunction = this.plan.takesRawFunction
         let effects = this.slotEffects
         for (let i = 0; i < values.length; i++) {

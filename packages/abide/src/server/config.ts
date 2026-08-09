@@ -268,7 +268,7 @@ config.invalidate = (): void => {
 }
 
 /**
- * One knob as the path that USES it reads it — the `$server` half of `$shared`'s `knob()`, and what
+ * One knob as the path that USES it reads it — the `$server` half of `$shared`'s `knobs.ts`, and what
  * that seam is registered with below.
  *
  * NOT a shorthand for `config()[field]`, and the three differences are the reason it exists.

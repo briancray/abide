@@ -230,8 +230,10 @@ function resetChunks(track: Async): void {
  * unable to go cold.
  */
 function transformed(node: Node, value: unknown): unknown {
-    const fn = node.transform
-    if (fn === null) return value
+    // A non-null `transform` is the caller's precondition. Each of the five tests it before calling,
+    // which is what keeps a cell WITHOUT one from paying a call at all — so re-testing here would be
+    // a second guard on every settle, every chunk and every sync write of the cells that do have one.
+    const fn = node.transform as (value: unknown) => unknown
     const previous = current
     current = null
     try {

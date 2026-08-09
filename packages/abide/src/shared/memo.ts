@@ -388,7 +388,9 @@ function buildArgless<T>(
 
     // The pacing is the keyed form's, one cell instead of one slot: it wraps the EXPLICIT verb, so a
     // ttl expiring on a read still recomputes in the call and only `refresh` waits for a window.
-    if (options.throttle !== undefined || options.debounce !== undefined) {
+    // The same predicate the keyed form spells as `paced`: a window of zero is not a window, so
+    // `{ throttle: 0 }` builds no pacer here either.
+    if ((options.throttle ?? 0) > 0 || (options.debounce ?? 0) > 0) {
         const window = pacer(options.throttle ?? 0, options.debounce ?? 0)
         const run = cell.refresh
         cell.refresh = () => window.fire(loadedAt !== 0, run)

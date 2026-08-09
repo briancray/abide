@@ -30,6 +30,7 @@ import { isThenable } from '$shared/internal/probes.ts'
 import { errorPayload } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import { knobOf } from './config.ts'
+import { merged } from './internal/merge.ts'
 import { json } from './responses.ts'
 import { refuse } from './rpc.ts'
 import { cookies, heldIdentity, holdIdentity, isServing, writeCookie } from './scopes.ts'
@@ -231,8 +232,16 @@ function principal(opened: Sealed | null): Identity | Promise<Identity> {
     if (opened !== null) document.expiresAt = new Date(opened.expiry).toISOString()
     const claims = opened === null ? null : opened.claims
 
+    // The app's fields win over abide's, including `authenticated`. It reads as the dangerous one and
+    // it is the honest one: a resolver that authenticates off a bearer header or a mutual-TLS name
+    // knows something a cookie cannot, and a framework that reserved the field would force that app
+    // to publish its answer under a name nothing reads.
+    //
+    // The string names which of the two sources this was, because an app with no resolver reaches
+    // here with its own `set()` argument and a warning about `onIdentity` would name a hook it never
+    // registered.
     const hook = resolver
-    if (hook === null) return merged(document, claims, 'what the seal carried')
+    if (hook === null) return merged(document, claims, identityLog, 'what the seal carried')
 
     let reported: unknown
     try {
@@ -240,9 +249,10 @@ function principal(opened: Sealed | null): Identity | Promise<Identity> {
     } catch (failure) {
         return failing(failure)
     }
-    if (!isThenable(reported)) return merged(document, reported, 'what onIdentity returned')
+    const said = 'what onIdentity returned'
+    if (!isThenable(reported)) return merged(document, reported, identityLog, said)
     return (reported as Promise<unknown>).then(
-        (value) => merged(document, value, 'what onIdentity returned'),
+        (value) => merged(document, value, identityLog, said),
         failing,
     )
 }
@@ -262,26 +272,6 @@ function failing(failure: unknown): Identity {
     const document = anonymous()
     document.error = error
     return document
-}
-
-/**
- * The app's fields over abide's, including `authenticated` — the same rule `health()` merges by.
- *
- * It reads as the dangerous one and it is the honest one: a resolver that authenticates off a bearer
- * header or a mutual-TLS name knows something a cookie cannot, and a framework that reserved the
- * field would force that app to publish its answer under a name nothing reads. What abide fills in
- * is a FLOOR here exactly as it is there.
- *
- * `from` names which of the two sources this was, because an app with no resolver reaches here with
- * its own `set()` argument and a warning about `onIdentity` would name a hook it never registered.
- */
-function merged(document: Identity, reported: unknown, from: string): Identity {
-    if (reported === null || reported === undefined) return document
-    if (typeof reported !== 'object' || Array.isArray(reported)) {
-        identityLog.warning(`${from} is a ${typeof reported}, which has no claims to merge`)
-        return document
-    }
-    return Object.assign(document, reported)
 }
 
 /**

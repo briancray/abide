@@ -16,6 +16,7 @@ import { isThenable } from '$shared/internal/probes.ts'
 import { errorPayload } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import { appVersion } from './app.ts'
+import { merged } from './internal/merge.ts'
 import { json } from './responses.ts'
 import { refuse } from './rpc.ts'
 
@@ -82,23 +83,16 @@ function compose(): Health | Promise<Health> {
     } catch (failure) {
         return failing(failure)
     }
-    if (!isThenable(reported)) return merged(reported)
-    return (reported as Promise<unknown>).then(merged, failing)
+    if (!isThenable(reported)) return over(reported)
+    return (reported as Promise<unknown>).then(over, failing)
 }
 
-function merged(reported: unknown): Health {
-    const document = baseline()
-    if (reported === null || reported === undefined) return document
-    if (typeof reported !== 'object' || Array.isArray(reported)) {
-        // Nothing to merge, and silently dropping it would leave an app believing it reported
-        // something. A warning rather than a throw: the fields are lost either way, and losing the
-        // baseline with them helps nobody reading this.
-        healthLog.warning(`onHealth returned ${typeof reported}, which has no fields to merge`)
-        return document
-    }
-    // The app's fields win, including the four above: an app that knows its own version — a build
-    // stamp rather than a manifest — is telling us something the climb cannot.
-    return Object.assign(document, reported)
+/**
+ * The app's fields over the baseline, including the four abide fills in: an app that knows its own
+ * version — a build stamp rather than a manifest — is telling us something the climb cannot.
+ */
+function over(reported: unknown): Health {
+    return merged(baseline(), reported, healthLog, 'what onHealth returned')
 }
 
 function failing(failure: unknown): Health {

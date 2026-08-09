@@ -41,6 +41,12 @@ interface Wanted {
     kind: 'rpc' | 'socket'
 }
 
+/** The directory rule, compiled once — and what a matched path's kind is read back off. */
+const GLOBS: [Kind, Bun.Glob][] = [
+    ['rpc', new Bun.Glob(TRANSPORT_GLOBS.rpc)],
+    ['socket', new Bun.Glob(TRANSPORT_GLOBS.socket)],
+]
+
 /**
  * Every transport module under `roots`, and the endpoints each declares.
  *
@@ -48,11 +54,6 @@ interface Wanted {
  * not compile is skipped rather than fatal: this is an enrichment pass, and the lane that must fail
  * on a broken transport module is the one that loads it.
  */
-const GLOBS: [Kind, Bun.Glob][] = [
-    ['rpc', new Bun.Glob(TRANSPORT_GLOBS.rpc)],
-    ['socket', new Bun.Glob(TRANSPORT_GLOBS.socket)],
-]
-
 async function wanted(roots: string[]): Promise<Wanted[]> {
     // Every path first, then every read AT ONCE. Awaiting each `text()` inside the scan put N file
     // opens end to end with nothing else in flight, and the scan itself is metadata — the reads are

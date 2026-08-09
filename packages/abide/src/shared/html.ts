@@ -246,7 +246,7 @@ export type SlotKind =
 
 // Attribute slots are recognised from the tail of the static string that precedes them:
 //   `<a href=${url}>`      -> attr href
-//   `<button onclick=${f}>`-> event click
+//   `<button @click=${f}>` -> event click
 //   `<input .value=${v}>`  -> property value   (a DOM property, never an attribute)
 //   `<div &ref=${node}>`   -> ref             (the NODE itself, so client-only)
 //   `<div ...=${props}>`   -> spread          (names not known until the value arrives)

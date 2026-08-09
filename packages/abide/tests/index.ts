@@ -70,7 +70,7 @@ export interface Log {
 }
 
 export interface Ctx {
-    /** The live area. A detached element headless; the card's body in the browser. */
+    /** The live area. A div in the document headless, removed when the case ends; the card's body in the browser. */
     host: HTMLElement
     log: Log
     /** Assert structural equality. Records the line either way; throws on a mismatch. */

@@ -161,7 +161,11 @@ export function clockResolution(): number {
         let spin = 0
         for (let j = 0; j < 32; j++) spin += j
         const elapsed = performance.now() - started
-        if (elapsed > 0 && elapsed < smallest && spin > 0) smallest = elapsed
+        // `spin` is CONSUMED, the same way `quiesce`'s sum is and for the same reason: an engine that
+        // can prove the loop's result unobserved can delete the loop, and there would then be nothing
+        // between the two clock reads. Never false — it is a fence, not a condition.
+        if (spin < 0) throw new Error('unreachable')
+        if (elapsed > 0 && elapsed < smallest) smallest = elapsed
     }
     return Number.isFinite(smallest) ? smallest : 0
 }

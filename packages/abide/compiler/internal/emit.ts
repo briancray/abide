@@ -79,7 +79,7 @@ function forbidKeyword(source: string, from: number, to: number, kind: SyntaxKin
     }
 }
 
-/** Statement-position `export` inside a `<script>`, which CLAUDE.md makes a deliberate error. */
+/** Statement-position `export` inside a `<script>`, which SPEC makes a deliberate error. */
 function checkNoExport(source: string, from: number, to: number, filename: string): void {
     forbidKeyword(
         source,

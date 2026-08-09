@@ -16,7 +16,6 @@ import type { Wire } from '$shared/transport.ts'
 interface Connection {
     data: unknown
     send(frame: string): void
-    close(): void
 }
 
 export interface Loopback {
@@ -97,7 +96,6 @@ export function loopback(base = 'http://abide.test'): Loopback {
                 const connection: Connection = {
                     data,
                     send: (frame) => wire.onmessage?.({ data: frame }),
-                    close: () => wire.close(),
                 }
                 connected = connection
                 connections.push(connection)

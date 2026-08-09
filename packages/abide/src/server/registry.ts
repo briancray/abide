@@ -169,7 +169,6 @@ interface SocketData {
     /** The room itself, resolved once at upgrade: what `open` subscribes to and what a publish goes into. */
     channel: Channel<unknown>
     request: Request
-    stream: AnySocket
     policy: SocketPolicy | undefined
     unsubscribe: (() => void) | null
 }
@@ -327,7 +326,6 @@ async function authorized(
         room,
         channel: roomFor(stream, room),
         request,
-        stream,
         policy,
         unsubscribe: null,
     }

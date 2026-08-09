@@ -99,8 +99,6 @@ interface Out {
     text: string
     /** Hand the buffer over. Resolves once the consumer is ready for more, so it IS the back-pressure. */
     flush: (() => Promise<void>) | null
-    /** Flush once the buffer passes this many characters, so a long SYNC run stays bounded. */
-    mark: number
 }
 
 /** `null` means the node is fully written; a promise means the rest of it will be. */
@@ -116,9 +114,15 @@ function then_(waiting: Promise<void>, rest: () => Rest): Promise<void> {
     })
 }
 
-/** Over the mark? Then the buffer goes out and the walk waits for the consumer. */
+/**
+ * Over the mark? Then the buffer goes out and the walk waits for the consumer.
+ *
+ * `HIGH_WATER` directly rather than a field on `Out`: only a streaming walk has a `flush`, and every
+ * streaming walk buffers to the same mark — a per-`Out` number would be a knob with one live value,
+ * read here per child slot and per array element.
+ */
 function paused(out: Out): Promise<void> | null {
-    if (out.flush === null || out.text.length === 0 || out.text.length < out.mark) return null
+    if (out.flush === null || out.text.length < HIGH_WATER) return null
     return out.flush()
 }
 
@@ -141,6 +145,10 @@ function handOver(out: Out): Promise<void> | null {
 function emit(node: Renderable, context: RenderContext, out: Out): Rest {
     // The typeof switch FIRST. A thousand-row table's slot values are strings and numbers, and the
     // brand checks below are seven prototype probes each of them would otherwise pay to get here.
+    //
+    // Which is why what a plain value renders as is spelled here rather than called: this is the
+    // child-position half of the rule `$ui`'s `textOf` states, and the two lanes have to agree or a
+    // hydration mismatch follows. Nullish and BOTH booleans are nothing; everything else is `String`.
     switch (typeof node) {
         case 'string':
             out.text += escape(node)
@@ -474,8 +482,8 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
     let failed = false
 
     // Field order matches the `Out` declaration, and `renderToString`'s. A document render has both
-    // alive at once — this walk, plus a string `Out` per deferred boundary — and `emit` reads all
-    // three per node, so two orders here would be two hidden classes under every one of those reads.
+    // alive at once — this walk, plus a string `Out` per deferred boundary — and `emit` reads both
+    // per node, so two orders here would be two hidden classes under every one of those reads.
     const out: Out = {
         text: '',
         flush(): Promise<void> {
@@ -492,7 +500,6 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
                 rejectWalk = reject
             })
         },
-        mark: HIGH_WATER,
     }
 
     // Taken through a function with a DECLARED return type: `flush` is the only writer and it is a
@@ -603,7 +610,7 @@ function contextFor(options: RenderOptions | undefined): RenderContext {
 export async function renderToString(node: Renderable, options?: RenderOptions): Promise<string> {
     // No `flush`, so nothing in the walk can pause: a tree with no promises in it produces the whole
     // document without a single microtask, which is the entire reason `emit` is shaped this way.
-    const out: Out = { text: '', flush: null, mark: Infinity }
+    const out: Out = { text: '', flush: null }
     const waiting = emit(node, contextFor(options), out)
     if (waiting !== null) await waiting
     return out.text

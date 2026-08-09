@@ -125,16 +125,26 @@ class DocumentNavigation implements NavigationSink {
             tail = text.length > OVERLAP ? text.slice(text.length - OVERLAP) : text
         }
 
+        /**
+         * Apply every whole piece in a FLAT remainder, and hand back what is left over.
+         *
+         * Both callers are past the point where `first` could still be true — the opening call
+         * returns at its first piece — so a piece drained here is always a patch, and the text is
+         * already one string, so there is no rope to re-flatten per search.
+         */
+        const drain = (text: string): string => {
+            let left = text
+            for (;;) {
+                const cut = left.indexOf(PIECE_END)
+                if (cut === -1) return left
+                this.apply(held, left.slice(0, cut), false)
+                left = left.slice(cut + PIECE_END.length)
+            }
+        }
+
         // `carried` is the tail of the piece the opening call stopped inside, and it may hold whole
         // pieces of its own — it is flat and small, so it is searched from 0 exactly like before.
-        // Only `rest` ever hands one over, so this loop is the patch lane and applies as one.
-        let rest = carried
-        for (;;) {
-            const cut = rest.indexOf(PIECE_END)
-            if (cut === -1) break
-            this.apply(held, rest.slice(0, cut), false)
-            rest = rest.slice(cut + PIECE_END.length)
-        }
+        const rest = drain(carried)
         if (rest !== '') keep(rest)
 
         for (;;) {
@@ -163,16 +173,9 @@ class DocumentNavigation implements NavigationSink {
             const text = whole(chunk)
             const from = text.length - hay.length + at
             this.apply(held, text.slice(0, from), first)
-            let after = text.slice(from + PIECE_END.length)
-            if (first) return { ok: true, buffer: after }
-            // The remainder is flat, so any further sentinels already in it are searched directly —
-            // a per-piece cost, and there is no rope left to re-flatten.
-            for (;;) {
-                const next = after.indexOf(PIECE_END)
-                if (next === -1) break
-                this.apply(held, after.slice(0, next), first)
-                after = after.slice(next + PIECE_END.length)
-            }
+            const remainder = text.slice(from + PIECE_END.length)
+            if (first) return { ok: true, buffer: remainder }
+            const after = drain(remainder)
             tail = ''
             if (after !== '') keep(after)
         }

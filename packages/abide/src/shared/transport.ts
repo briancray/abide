@@ -529,8 +529,10 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     const read = received as unknown as () => T | undefined
     const chunks = received.chunks
     const subscribe = received.subscribe
-    const iterator = received[Symbol.asyncIterator].bind(received)
-    const tail = received.tail.bind(received)
+    // Unbound like the two above: every `Channel` member is an arrow assigned as an own property, so
+    // none of them reads `this` and a bound wrapper per connection would buy nothing.
+    const iterator = received[Symbol.asyncIterator]
+    const tail = received.tail
 
     // Reads may start work; probes may not. `peek` and the probes therefore never open a connection,
     // which is what keeps them questions rather than causes.

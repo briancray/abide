@@ -23,6 +23,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { ANYTHING, arrayOf, formatOf, INTRINSICS, isAnything, NOTHING, objectOf, union } from './assemble.ts'
 import { type Token, tokensOf } from './lex.ts'
+import { IDENTIFIER } from './parse.ts'
 
 /** One type expression, and where reading it stopped. */
 interface Read {
@@ -657,6 +658,10 @@ function balancedFrom(tokens: Token[], at: number, open: SyntaxKind, close: Synt
     return -1
 }
 
+// `desugar.ts`'s `OPENERS`/`CLOSERS` minus `TemplateHead`/`TemplateTail`, and deliberately not
+// imported from it — that direction cycles (shape -> desugar -> types -> shape). The narrower set is
+// what this walk wants: `firstAnnotation` steps over a DECLARATION looking for the `:` that starts a
+// type, and a template literal there is a value's, not a nesting this walk has to balance.
 const OPENS = new Set<SyntaxKind>([
     SyntaxKind.OpenParenToken,
     SyntaxKind.OpenBracketToken,
@@ -803,7 +808,9 @@ export function closes(token: Token): number {
 }
 
 function isTypeWord(token: Token): boolean {
-    return /^[A-Za-z_$][\w$]*$/.test(token.text)
+    // `parse.ts`'s grammar, not a second one: one rule for what a name is, so a shape derived here
+    // and a name written into the output cannot disagree about it.
+    return IDENTIFIER.test(token.text)
 }
 
 function memberName(token: Token): string | null {
