@@ -25,7 +25,7 @@ import {
 } from '$shared/html.ts'
 import { type Node, rerun, untrackCall, watchNode } from '$shared/internal/graph.ts'
 import { CLOSE_FORM, PLACEHOLDER_TAG, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
-import { isThenable } from '$shared/internal/probes.ts'
+import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
 import { abideLog } from '$shared/log.ts'
 import { type Prepared, type PreparedPart, prepare } from './prepare.ts'
@@ -473,19 +473,29 @@ export class ChildPart {
         // write bumps the generation itself. A fixed stamp would make the stream supersede itself
         // after the first row — which looks exactly like a stream that only ever yielded one.
         let generation = this.generation
-        const rows: unknown[] = []
         void (async () => {
             try {
                 let index = 0
-                for await (const item of source as AsyncIterable<never>) {
-                    if (generation !== this.generation) return
-                    rows.push(block.row(item, index++))
-                    // The SAME array every time. `ListPart.set` compares against its own `Row[]` and
-                    // reads `items` only within the call, so a copy per row would be n allocations
-                    // and n²/2 element copies to stream a list that only ever appends.
-                    this.set(rows)
+                // One closure for the whole stream rather than a second copy of the body, so the two
+                // arms below differ in how they STEP and in nothing else.
+                const took = (item: never): boolean => {
+                    if (generation !== this.generation) return false
+                    // APPENDED, not re-set. A growing array handed to `set` made the list rebuild
+                    // itself once per row; there is no accumulator here at all now, so streaming n
+                    // rows costs n rows of work rather than n²/2.
+                    this.appendRow(block.row(item, index++))
                     this.holding = source
                     generation = this.generation
+                    return true
+                }
+                // `streamed()` takes `AsyncIterable<T> | Iterable<T>`, and a sync source has nothing
+                // to wait on: `for await` over one wraps every item in a promise and pays a tick per
+                // ROW to learn that. The probe is the same fork every other sync/async junction here
+                // takes.
+                if (isAsyncIterable(source)) {
+                    for await (const item of source as AsyncIterable<never>) if (!took(item)) return
+                } else {
+                    for (const item of source as Iterable<never>) if (!took(item)) return
                 }
             } catch (error) {
                 if (generation !== this.generation) return
@@ -509,6 +519,13 @@ export class ChildPart {
         if (this.opened === null) return
         this.opened.remove()
         this.opened = null
+    }
+
+    /** One more row on the end of the list this part is showing — `{#for await}`'s only write. */
+    private appendRow(item: unknown): void {
+        this.clearExcept('list')
+        if (this.list === null) this.list = new ListPart(this.anchor)
+        this.list.append(item)
     }
 
     private clearExcept(keep: 'text' | 'nested' | 'list' | null): void {
@@ -633,6 +650,31 @@ class ListPart {
             })
         }
         this.rows = rows
+    }
+
+    /**
+     * One more row on the END, with nothing already on screen reconsidered.
+     *
+     * `set` compares the whole list against the previous one, which is the only right answer when
+     * any row may have changed — and the wrong one n times over for a stream that only ever appends.
+     * Handing it a growing array cost a fresh `Row[]` per row plus a re-probe and an `update` of
+     * every row already placed: n allocations and n²/2 element visits to stream n rows, which is
+     * exactly what `stream_` builds one shared array to avoid one layer up.
+     *
+     * A separate entry point rather than a fast path inside `set`, because the caller is what knows
+     * this: `{#for await}` appends and never reorders, and `set` would have to infer that from an
+     * array identity it has no reason to trust.
+     */
+    append(item: unknown): void {
+        const keyed = isKeyed(item)
+        const template = keyed ? item.template : (item as TemplateResult)
+        if (keyed) this.keyed = true
+        const instance = instantiate(template)
+        this.rows.push({ key: keyed ? item[KEY] : undefined, instance, usedAt: this.pass })
+        // The anchor is what every row sits BEFORE, so appending there is the end of the list. No
+        // placement walk: nothing below this row moved, because there is nothing below it.
+        const parent = this.anchor.parentNode as ParentNode
+        for (const node of instance.nodes) parent.insertBefore(node, this.anchor)
     }
 
     set(items: unknown[]): void {

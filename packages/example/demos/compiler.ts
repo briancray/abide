@@ -6,10 +6,10 @@
 // `counter.abide` and `counter.ts` are the same component written twice, and the compiler's whole claim is
 // that the two are indistinguishable at the output AND at the cost.
 
-import { adopt, styleTags } from 'abide'
+import { adopt, html, streamed, styleTags } from 'abide'
 import { compile, originalPosition } from 'abide/compiler'
 import { renderToString } from 'abide/server'
-import { container, install, keep, measureFlush, nonZero, sleep, suite, tick, until } from 'abide/tests'
+import { container, duration, install, keep, measureFlush, nonZero, sleep, suite, tick, until } from 'abide/tests'
 import { mount } from 'abide/ui'
 import Compiled, {
     count as compiledCount,
@@ -814,6 +814,57 @@ export default suite({
                 await until(() => rows()[0] === 'Error: stream failed', 'the {:catch} row', STREAM_BUDGET_MS)
                 is('and {:catch} takes a source that threw', rows(), ['Error: stream failed'])
                 host.remove()
+            },
+        },
+
+        {
+            title: 'a streamed row costs one row, however many are already there',
+            note: 'The case above proves rows ARRIVE; three of them cannot tell an append from a rebuild, because both put the same text on screen. This one streams two sizes and compares the per-row cost. A stream used to hand its whole accumulated array to `ListPart.set`, which reconciles the LIST — so row 400 re-probed and re-updated the 399 already placed, and the quadratic was invisible because every one of those updates correctly wrote nothing.',
+            async run({ is, log }) {
+                // A ratio between two sizes of the same structure, which is the one timing claim
+                // that stays honest across substrates: an absolute number here would describe the
+                // machine and the DOM emulator, not the reconcile.
+                const streamRows = async (count: number): Promise<number> => {
+                    const host = container()
+                    // The source SIGNALS its own end, and nothing here polls. `until` sleeps 2 ms a
+                    // turn, which is a floor the small arm spends most of its time under — with it
+                    // in the loop this case reported ~1x for the rebuild it was written to catch.
+                    let done!: () => void
+                    const finished = new Promise<void>((resolve) => {
+                        done = resolve
+                    })
+                    // No timer in the source either: what is measured is the per-row work, and a
+                    // yield interval would swamp it. The rows are placed synchronously inside the
+                    // consuming loop, so everything is on screen by the time this resolves.
+                    const source = async function* (): AsyncGenerator<number> {
+                        for (let i = 0; i < count; i++) yield i
+                        done()
+                    }
+                    const started = performance.now()
+                    mount(
+                        host,
+                        () => html`<ul>${() => streamed(source(), (n) => html`<li>${n}</li>`)}</ul>`,
+                    )
+                    await finished
+                    const perRow = (performance.now() - started) / count
+                    is(`${count} rows landed`, host.querySelectorAll('li').length, count)
+                    host.remove()
+                    return perRow
+                }
+
+                // Warmed first, and the warmup is what makes this case DISTINGUISH at all: measured
+                // cold, the small arm carries the JIT and reads as slow, which flattered the
+                // rebuild to ~1.2x and let it pass. Warm, the two arms separate 4x.
+                await streamRows(64)
+                const few = await streamRows(64)
+                const many = await streamRows(2048)
+                const ratio = many / few
+                log('per row', `64 rows — ${duration(few)}, 2048 rows — ${duration(many)}`)
+                // 32x the rows. Appending, the per-row cost does not grow with the list and this
+                // measures ~0.4x; rebuilding, it does, and the same case measures ~1.55x. The bound
+                // sits between them with 3x of room on each side, because a clock in a browser card
+                // is loose — what it has to separate is a flat cost from a growing one.
+                is(`32x the rows costs no more per row (${ratio.toFixed(2)}x)`, ratio < 1.2, true)
             },
         },
 

@@ -309,11 +309,23 @@ async function emitStreamed(node: Streamed, context: RenderContext, out: Out): P
     if (handed !== null) await handed
     try {
         let index = 0
-        for await (const item of node.source as AsyncIterable<never>) {
-            const more = emit(node.row(item, index++) as Renderable, context, out)
-            if (more !== null) await more
-            const handed = handOver(out)
-            if (handed !== null) await handed
+        // `streamed()` takes `AsyncIterable<T> | Iterable<T>`, and a sync source has nothing to wait
+        // on: `for await` over one wraps every item in a promise and pays a tick per ROW to learn
+        // that. The browser half of this walk forks the same way, on the same probe.
+        if (isAsyncIterable(node.source)) {
+            for await (const item of node.source as AsyncIterable<never>) {
+                const more = emit(node.row(item, index++) as Renderable, context, out)
+                if (more !== null) await more
+                const handed = handOver(out)
+                if (handed !== null) await handed
+            }
+        } else {
+            for (const item of node.source as Iterable<never>) {
+                const more = emit(node.row(item, index++) as Renderable, context, out)
+                if (more !== null) await more
+                const handed = handOver(out)
+                if (handed !== null) await handed
+            }
         }
     } catch (error) {
         if (node.failure === undefined) throw error
