@@ -140,7 +140,8 @@ export const META = {
         blurb:
             'The app’s own channel always writes; a named one is off until `DEBUG` names it, in the ' +
             'debug-npm spelling every operator already knows. `warning` and `error` are never gated — ' +
-            'the gate is there to control volume, not to hide breakage.',
+            'the gate is there to control volume, not to hide breakage. `DEBUG=abide:*` is the request, ' +
+            'the call and the frame, each on its own channel and each carrying the trace it belongs to.',
         tag: 'channels · levels · DEBUG',
     },
     health: {

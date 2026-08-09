@@ -258,6 +258,16 @@ export interface Logger {
      * otherwise — except `warning` and `error`, which the gate never swallows.
      */
     channel(name: string): Logger
+    /**
+     * Whether a gated line on this channel would be written.
+     *
+     * For the call sites whose MESSAGE is the expensive part. An argument is evaluated before the
+     * gate is ever asked, so a line interpolating a method, a path and a duration allocates that
+     * string per request with `DEBUG` unset — which is the whole reason a per-request line could not
+     * be left in the code before this existed. `warning` and `error` are never gated, so nothing
+     * writing one has a reason to ask, and the app's own channel answers `true`.
+     */
+    enabled(): boolean
 }
 
 /**
@@ -288,13 +298,16 @@ function make(root: string | null, path: string): Logger {
         return built
     }
 
+    // Assumes `gated` — both callers test it first, and the root channel has no gate to ask about.
+    // The gate is asked BEFORE the channel name is built: a suppressed channel is the case that has
+    // to be cheap, and a spelling nobody set answers it without touching the name at all.
+    const open = (): boolean => {
+        const spec = currentSpec()
+        return spec !== undefined && enabledIn(spec, channelOf())
+    }
+
     const write = (level: Level, message: string): void => {
-        // The gate is asked BEFORE the channel name is built. A suppressed channel is the case that
-        // has to be cheap, and a spelling nobody set answers it without touching the name at all.
-        if (gated && level !== 'warning' && level !== 'error') {
-            const spec = currentSpec()
-            if (spec === undefined || !enabledIn(spec, channelOf())) return
-        }
+        if (gated && level !== 'warning' && level !== 'error' && !open()) return
         const now = Date.now()
         const since = lastAt === 0 ? 0 : now - lastAt
         lastAt = now
@@ -317,6 +330,7 @@ function make(root: string | null, path: string): Logger {
     logger.debug = (message) => {
         write('debug', message)
     }
+    logger.enabled = () => !gated || open()
     logger.channel = (name) => {
         if (name === '') throw new Error('abide: log.channel() needs a name')
         if (children === null) children = new Map()

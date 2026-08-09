@@ -433,6 +433,7 @@ operator declared — so the environment wins, which is what makes the app's lay
 | `log` | `(message: string) => void` | A message on the default channel, `<app name>`. Always writes — an app's own output needs no env var. |
 | `log.info` / `log.warning` / `log.error` / `log.debug` | `(message: string) => void` | The four levels. `warning` and `error` always write on every channel, and go to stderr in every format. |
 | `log.channel` | `(name: string) => Logger` | A named channel, prefixed `<app name>:`. Calling it again appends another segment; the same name hands back the same logger. |
+| `log.enabled` | `() => boolean` | Whether a gated line on this channel would be written. For a call site whose MESSAGE costs something — an argument is built before the gate can refuse it. The app's own channel answers `true`. |
 | `DEBUG` | `string` | Gates named channels in debug-npm grammar (`abide:*`, `docs:cards,docs:db`, `*`, `*,-abide:*`). Read from the environment on a server and `localStorage.debug` in a browser. |
 
 A message is one line and one line is one record: the five fields — time, level, channel, message,
@@ -447,6 +448,29 @@ operation the line was written in, `null` on a client and outside a request, and
 
 `ABIDE_LOG_FORMAT` declares one outright. Unset, the shape follows the TTY, with `NO_COLOR` forcing
 `tsv` and `FORCE_COLOR` forcing the readable form off one.
+
+### abide's own channels
+
+Rooted at `abide` however the app is named, so `DEBUG=abide:*` turns on the framework and nothing
+else. The first three are the operation lines — one per request, one per call, one per accepted
+frame — and each is written inside the request scope, so the line carries the `trace` the work
+belongs to and an rpc line and its request line correlate by id.
+
+| Channel | Level | What it says |
+| --- | --- | --- |
+| `abide:request` | `debug` | `<method> <path> <status> <n>ms`, once per request through `handle`. A socket upgrade says `upgraded` — Bun answers the handshake itself, so there is no status. An app that mounted `dispatch` by hand is outside this funnel |
+| `abide:rpc` | `debug` | `<address> <outcome> <n>ms`, once per call through `respond` — wire and `fn.raw` alike. The outcome is `ok`, `streaming`, or the error's own name and status. A stream is timed to the FIRST response, not the last chunk |
+| `abide:socket` | `debug` | An inbound frame accepted, and one dropped. A socket that declared no `clientPublish` returns before either — the frame was never a publish |
+| `abide:lifecycle` | `debug` `warning` `error` | The stopping signal; a hook that returned without binding; a route or an `onError` that threw |
+| `abide:identity` | `debug` `warning` | A cookie that did not verify or could not be rolled; an `onIdentity` that threw or answered a non-object |
+| `abide:health` | `warning` | An `onHealth` that threw or answered a non-object |
+| `abide:config` | `warning` | A second `onConfig` replacing the first |
+| `abide:stream` | `warning` | A transcript dropped for passing `ABIDE_MAX_STREAM_BUFFER_SIZE` |
+| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane: a mismatched slot rebuilt, a fragment that did not arrive |
+
+The three operation channels ask the gate before doing any work of their own: closed, none of them
+reads the clock, parses a URL or builds a message. That is what `enabled()` is for, and it is asserted
+as WORK in the logging suite rather than as output — a request answers the same status either way.
 
 ### The remote feed
 

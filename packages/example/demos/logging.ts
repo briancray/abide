@@ -12,8 +12,8 @@
 // suffix" is true in both, and it is also the claim — the absolute name is the app's business.
 
 import { log } from 'abide'
-import type { LogRecord } from 'abide/server'
-import { loopback, suite } from 'abide/tests'
+import { GET, type LogRecord, error, handle, json, register, socket } from 'abide/server'
+import { loopback, sleep, suite, until } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv, writeEnv } from './env.ts'
 import { META } from './SUITES.ts'
@@ -327,6 +327,183 @@ export default suite({
         },
 
         {
+            title: 'abide:request — one line per request, and the trace it belongs to',
+            note:
+                'The framework’s own channels are the reason the gate exists. `handle` is the one funnel every request ' +
+                'goes through, so this reports an app’s own routes and everything under `/__abide/` alike, and it reports ' +
+                'them from INSIDE the request scope — which is what puts the trace id on the line. A socket upgrade has no ' +
+                'response at all (Bun answers the handshake itself), so it says `upgraded` rather than inventing a 101.',
+            async run({ is }) {
+                await setDebug('abide:request')
+                const serving = handle((asked) =>
+                    new URL(asked.url).pathname === '/user' ? json({ id: 1 }) : undefined,
+                )
+
+                const written = await capture(async () => {
+                    await serving(new Request(`${ORIGIN}/user`), NO_SERVER)
+                    await serving(new Request(`${ORIGIN}/nowhere`), NO_SERVER)
+                })
+
+                is('one line per request', written.length, 2)
+                is('on abide’s own channel, not the app’s', channelOf(written[0]), 'abide:request')
+                is('the method, the path and the status', textOf(written[0]).includes('GET /user 200'), true)
+                is(
+                    'a route that answered nothing is the 404 it became',
+                    textOf(written[1]).includes('GET /nowhere 404'),
+                    true,
+                )
+                is('and how long it took', /\d+\.\d+ms/.test(textOf(written[0])), true)
+
+                await setDebug(undefined)
+                const off = await capture(async () => {
+                    await serving(new Request(`${ORIGIN}/user`), NO_SERVER)
+                })
+                is('and nothing at all with the channel off', off.length, 0)
+            },
+        },
+
+        {
+            title: 'abide:rpc — one line per call, over the wire and in-process alike',
+            note:
+                '`respond` is what both doors go through, so an `fn.raw` that never touched a socket is reported the same ' +
+                'way a request-borne call is. The ADDRESS rather than a path, because an in-process call has no path. The ' +
+                'outcome is the third field: `ok`, the error’s own name and status, or `streaming` — a streaming call is ' +
+                'reported when it becomes a stream rather than when the last chunk lands, because a duration covering work ' +
+                'that has not happened yet is a number that means nothing.',
+            async run({ is }) {
+                const notFound = error.typed('NoUser', 404)
+                const getUser = GET(({ id }: { id: number }) => ({ id, name: `user ${id}` }))
+                const missing = GET(({ id }: { id: number }) => notFound(`no user ${id}`))
+                async function* down({ from }: { from: number }): AsyncGenerator<number> {
+                    for (let n = from; n > 0; n--) yield n
+                }
+                const countdown = GET(down)
+                register(
+                    'rpc',
+                    [
+                        ['demo/log/getUser', 'getUser'],
+                        ['demo/log/missing', 'missing'],
+                        ['demo/log/countdown', 'countdown'],
+                    ],
+                    { getUser, missing, countdown },
+                )
+
+                await setDebug('abide:rpc')
+                const wire = loopback()
+                const written = await capture(async () => {
+                    await wire.fetch('/__abide/rpc/demo/log/getUser?id=7', { method: 'GET' })
+                    await wire.fetch('/__abide/rpc/demo/log/missing?id=9', { method: 'GET' })
+                    await wire.fetch('/__abide/rpc/demo/log/countdown?from=3', { method: 'GET' })
+                    await getUser.raw({ id: 7 })
+                })
+
+                is('four calls, four lines', written.length, 4)
+                is('on abide’s own channel', channelOf(written[0]), 'abide:rpc')
+                is('the address and the outcome', textOf(written[0]).includes('demo/log/getUser ok'), true)
+                is(
+                    'a failure carries the name and the status it answered with',
+                    textOf(written[1]).includes('demo/log/missing NoUser 404'),
+                    true,
+                )
+                is(
+                    'a stream is reported as one',
+                    textOf(written[2]).includes('demo/log/countdown streaming'),
+                    true,
+                )
+                is(
+                    'and the in-process call is the same line',
+                    textOf(written[3]).includes('demo/log/getUser ok'),
+                    true,
+                )
+
+                await setDebug(undefined)
+            },
+        },
+
+        {
+            title: 'abide:socket — the accepted publish, not only the dropped one',
+            note:
+                'What was missing was the other half of a pair. An operator reading this channel to find out why nothing ' +
+                'arrives cannot tell "every frame was refused" from "no frame was sent" when only the refusals are said. ' +
+                'The line goes out BEFORE the handler runs, so a publish whose handler throws is still accounted for — what ' +
+                'it reports is that the frame got past every gate, which is the question this channel answers.',
+            async run({ is }) {
+                const open = socket<string>({
+                    clientPublish: (message, _room, into) => void into.publish(message),
+                })
+                const shut = socket<string>({})
+                register(
+                    'socket',
+                    [
+                        ['demo/log/open', 'open'],
+                        ['demo/log/shut', 'shut'],
+                    ],
+                    { open, shut },
+                )
+
+                await setDebug('abide:socket')
+                const wire = loopback()
+                const allowed = wire.open(`ws://abide.test/__abide/socket/demo/log/open`)
+                const refused = wire.open(`ws://abide.test/__abide/socket/demo/log/shut`)
+                await until(() => wire.connected >= 2)
+
+                const written = await capture(async () => {
+                    allowed.send(JSON.stringify('hello'))
+                    refused.send(JSON.stringify('let me in'))
+                    await sleep(5)
+                })
+
+                is('the accepted one is said', textOf(written[0]).includes('demo/log/open accepted'), true)
+                is('on abide’s own channel', channelOf(written[0]), 'abide:socket')
+                // A socket that declared no `clientPublish` returns before the drop is reached: the
+                // frame was never refused, it was never a publish at all. That is the one case the
+                // pair still does not cover, and saying so here is cheaper than a line per frame on
+                // every broadcast socket in the process.
+                is('a socket that allows no publish at all says nothing', written.length, 1)
+
+                await setDebug(undefined)
+                wire.close()
+            },
+        },
+
+        {
+            title: 'what the framework’s own channels cost when nobody turned them on',
+            note:
+                'A correctness test cannot guard this: the request answers the same 200 whether or not the line timed it. ' +
+                'So the claim is asserted as WORK — the gate is read before the CLOCK, so a closed channel never calls ' +
+                '`performance.now()`, never parses the URL and never attaches the `.then` that observes the answer. Two ' +
+                'reads per request when it is on, one at each end, and zero when it is off. That budget is the whole reason ' +
+                '`log.channel(…).enabled()` exists: a message is built before the gate can refuse it, so a line ' +
+                'interpolating a method, a path and a duration would allocate that string on every request in production.',
+            async run({ is }) {
+                const serving = handle(() => json({ ok: true }))
+                const one = async (): Promise<void> => {
+                    await serving(new Request(`${ORIGIN}/user`), NO_SERVER)
+                }
+
+                await setDebug(undefined)
+                is('a closed channel never starts a stopwatch', await clockReads(one), 0)
+
+                await setDebug('abide:request')
+                is('an open one reads it twice — once at each end', await clockReads(one), 2)
+
+                // The predicate and the write agree, which is the invariant that keeps the guard
+                // honest: a call site that asks and then writes must not be able to get two answers.
+                const channel = log.channel('cards')
+                await setDebug(undefined)
+                is('the predicate answers for the gate', channel.enabled(), false)
+                is('…and the write agrees', capture(() => channel('x')).length, 0)
+                await setDebug('*')
+                is('open', channel.enabled(), true)
+                is('…and agrees again', capture(() => channel('x')).length, 1)
+                is('the app’s own channel is never gated, so it always answers true', log.enabled(), true)
+
+                await setDebug(undefined)
+                is('…including with nothing set at all', log.enabled(), true)
+            },
+        },
+
+        {
             title: 'interact — turn a channel on and watch it appear',
             interact({ host, log: line }) {
                 const cards = log.channel('cards')
@@ -488,21 +665,71 @@ const METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const
  * one — and swapping the five methods is exactly what a collector does, which is why the demo can do
  * it honestly rather than reaching inside.
  */
-function capture(fn: () => void): Written[] {
+function capture(fn: () => void): Written[]
+function capture(fn: () => Promise<unknown>): Promise<Written[]>
+function capture(fn: () => unknown): Written[] | Promise<Written[]> {
     const written: Written[] = []
     const held = METHODS.map((name) => console[name])
+    const restore = (): void => {
+        for (let i = 0; i < METHODS.length; i++)
+            console[METHODS[i] as (typeof METHODS)[number]] = held[i] as never
+    }
     for (const name of METHODS) {
         console[name] = (...args: unknown[]): void => {
             written.push({ level: name, text: args.map(String).join(' ') })
         }
     }
+    // A request is answered over at least one await, so the swap has to outlive the call rather than
+    // be put back by a `finally` that runs first. Widened here rather than copied into a second
+    // helper: what a case asserts is the same lines either way, and two of these would be two places
+    // to remember the restore in.
+    let ran: unknown
     try {
-        fn()
-    } finally {
-        for (let i = 0; i < METHODS.length; i++)
-            console[METHODS[i] as (typeof METHODS)[number]] = held[i] as never
+        ran = fn()
+    } catch (failure) {
+        restore()
+        throw failure
     }
-    return written
+    if (typeof (ran as Promise<unknown> | undefined)?.then !== 'function') {
+        restore()
+        return written
+    }
+    return (ran as Promise<unknown>).then(
+        () => {
+            restore()
+            return written
+        },
+        (failure: unknown) => {
+            restore()
+            throw failure
+        },
+    )
+}
+
+/**
+ * How many times the region read the CLOCK.
+ *
+ * The one thing a correctness test cannot see: a request answers the same 200 whether or not the
+ * per-request line timed it, so "the gate is asked before the stopwatch" has to be asserted as work.
+ * Swapping `performance.now` is the trick `capture` plays on the console — the observable substrate,
+ * rather than a counter reached in through a back door.
+ *
+ * Through `capture` too, and discarding what it collected: the open arm of this claim writes real
+ * lines, and a work assertion has no interest in them beyond keeping them off the runner's output.
+ */
+async function clockReads(fn: () => Promise<void>): Promise<number> {
+    const held = performance.now.bind(performance)
+    let reads = 0
+    performance.now = (): number => {
+        reads++
+        return held()
+    }
+    try {
+        await capture(fn)
+    } finally {
+        performance.now = held
+    }
+    return reads
 }
 
 function levels(written: Written[]): string[] {
@@ -517,12 +744,22 @@ function levels(written: Written[]): string[] {
  * rather than a literal the app's own name would break.
  */
 function channelOf(line: Written | undefined): string {
-    // ANSI comes off first: the readable form is colored at a TTY, so without this every claim below
-    // would hold under `bun test | cat` and fail for whoever ran the suite in their own terminal.
-    const text = (line?.text ?? '').replace(ANSI, '')
+    const text = textOf(line)
     if (text.startsWith('{')) return (JSON.parse(text) as { channel: string }).channel
     if (text.includes('\t')) return text.split('\t')[2] ?? ''
     return text.split(' ')[0] ?? ''
+}
+
+/**
+ * A captured line with the color taken off.
+ *
+ * ANSI comes off first in every reader: the readable form is colored at a TTY, so without this every
+ * claim above would hold under `bun test | cat` and fail for whoever ran the suite in their own
+ * terminal. What is left is the same text in all three formats, which is what lets a case assert a
+ * message with `includes` rather than parsing the shape it happened to come out in.
+ */
+function textOf(line: Written | undefined): string {
+    return (line?.text ?? '').replace(ANSI, '')
 }
 
 /** The app's own channel, asked rather than assumed — it is `ABIDE_APP_NAME`, a package.json, or `abide`. */
@@ -531,6 +768,10 @@ function defaultChannel(): string {
 }
 
 const LOGS = '/__abide/logs'
+
+/** Nothing is upgrading through `handle` here, so nothing needs the Bun server — and one would latch. */
+const NO_SERVER = undefined as never
+const ORIGIN = 'https://app.test'
 
 /**
  * A jsonl body, read one record at a time.

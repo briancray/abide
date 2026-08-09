@@ -410,12 +410,10 @@ function published(
     message: unknown,
 ): void | Promise<void> {
     const policy = connection.data.policy
-    const room = connection.data.room
-    const into = connection.data.channel
-    if (policy === undefined) return accept(message, room, into)
+    if (policy === undefined) return accepted(connection, accept, message)
     const event: SocketEvent<unknown, unknown> = {
         kind: 'publish',
-        room,
+        room: connection.data.room,
         message,
         request: connection.data.request,
     }
@@ -427,10 +425,30 @@ function published(
     } catch (refusal) {
         return dropped(connection, refusal)
     }
-    if (!isThenable(ran)) return accept(message, room, into)
+    if (!isThenable(ran)) return accepted(connection, accept, message)
     return ran.then(
-        () => accept(message, room, into),
+        () => accepted(connection, accept, message),
         // A refusal is a drop, the same as one thrown synchronously above.
         (refusal: unknown) => dropped(connection, refusal),
     )
+}
+
+/**
+ * The handler runs, and the operator hears about it.
+ *
+ * The counterpart to `dropped`: an operator reading `abide:socket` to find out why nothing arrives
+ * cannot tell "every frame was refused" from "no frame was sent" when only the refusals are said.
+ * BEFORE the handler rather than after, so a publish whose handler throws is still accounted for —
+ * the line reports that the frame got through the gates, which is what the channel is answering.
+ *
+ * The three call sites in `published` funnel here rather than each reading the room and the channel,
+ * which is also what took two locals out of the path above.
+ */
+function accepted(
+    connection: ServerWebSocket<SocketData>,
+    accept: (message: unknown, room: unknown, into: Channel<unknown>) => void | Promise<void>,
+    message: unknown,
+): void | Promise<void> {
+    if (socketLog.enabled()) socketLog.debug(`${connection.data.id} accepted a client publish`)
+    return accept(message, connection.data.room, connection.data.channel)
 }

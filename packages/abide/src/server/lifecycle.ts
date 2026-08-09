@@ -23,6 +23,10 @@ import { server as running } from './running.ts'
 import { serveIfScoped } from './scopes.ts'
 
 const lifecycleLog = abideLog.channel('lifecycle')
+// One line per request, and the only place in abide that sees every one of them: `handle` is the
+// funnel, so this covers an app's own routes and everything under `/__abide/` alike. An app that
+// mounted `dispatch` by hand instead is outside it, and gets the per-lane lines and no request line.
+const requestLog = abideLog.channel('request')
 
 /**
  * One rung of the per-request onion. `next()` takes no arguments, like every other chain in abide.
@@ -126,7 +130,39 @@ export function handle(route: Route): (request: Request, server: Server<never>) 
         serveIfScoped(request, () => routed(request, server, route))
 }
 
+/**
+ * The request, and the one line that reports it.
+ *
+ * The gate is asked before the CLOCK: a closed channel never reads `performance.now()`, never parses
+ * the URL and never attaches the `.then` that observes the answer, so an app with `DEBUG` unset pays
+ * one spec read per request for this existing. That branch is the whole reason `enabled()` is on the
+ * logger — the message interpolates four values, and an argument is built before the gate can refuse
+ * it.
+ */
 function routed(request: Request, server: Server<never>, route: Route): ReturnType<Route> {
+    if (!requestLog.enabled()) return answering(request, server, route)
+    const started = performance.now()
+    const answered = answering(request, server, route)
+    if (!isThenable(answered)) {
+        said(request, answered, started)
+        return answered
+    }
+    return answered.then((settled) => {
+        said(request, settled, started)
+        return settled
+    })
+}
+
+/** What was asked, what answered, and how long it took — inside the scope, so it carries the trace. */
+function said(request: Request, answered: Response | undefined, started: number): void {
+    // `undefined` is a socket that upgraded: Bun answered the handshake itself, so there is no status
+    // to report and reporting a 101 would be this file inventing one nothing sent.
+    const outcome = answered === undefined ? 'upgraded' : answered.status
+    const elapsed = (performance.now() - started).toFixed(1)
+    requestLog.debug(`${request.method} ${new URL(request.url).pathname} ${outcome} ${elapsed}ms`)
+}
+
+function answering(request: Request, server: Server<never>, route: Route): ReturnType<Route> {
     // Synchronously `undefined` for anything outside `/__abide/`, so an app's own routes pay one
     // string comparison. A PROMISE of `undefined` is a socket that upgraded, and Bun wants that
     // undefined handed straight back — which is why the two are told apart by their shape.

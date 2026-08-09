@@ -21,6 +21,7 @@ import {
     type Refusals,
     TTL_HEADER,
 } from '$shared/internal/wire.ts'
+import { abideLog } from '$shared/log.ts'
 import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
 import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { knobOf } from './config.ts'
@@ -364,7 +365,13 @@ export function respond<Args, T>(
     args: Args,
     extra?: Record<string, string>,
 ): Response | Promise<Response> {
-    const ttl = policyOf(rpc)?.ttl ?? Infinity
+    const policy = policyOf(rpc)
+    const ttl = policy?.ttl ?? Infinity
+    // Asked ONCE for the call rather than at each of the three exits: the answer cannot change
+    // between them, and the two `then` arms already exist as closures so the branch inside them is
+    // free. Closed, this is one spec read and `performance.now()` is never called.
+    const watching = rpcLog.enabled()
+    const started = watching ? performance.now() : 0
     const handle = rpc(args)
     try {
         // The read is what starts the work. A handler that yields hands the cell an async iterable
@@ -374,6 +381,10 @@ export function respond<Args, T>(
         // A retained failure. Asked about below, where it becomes a status rather than a throw.
     }
     if (handle.streaming() || handle.chunks().length > 0) {
+        // Time to the FIRST response rather than to the last chunk: the body is still being produced
+        // when this returns, and a duration covering work that has not happened is a number that
+        // means nothing. What the line reports is that the call became a stream and how fast.
+        if (watching) told(policy, 'streaming', started)
         return new Response(heldStream(chunkedBody(handle)), {
             headers: wireHeaders(ttl, NDJSON_TYPE, extra),
         })
@@ -383,12 +394,31 @@ export function respond<Args, T>(
     // and the client's `ttl: 0` expiry is an ARMED 0ms timer — a mutation answered that fast is
     // re-read from the client's own slot before that timer fires, so the second call never leaves.
     return handle.then(
-        (settled) => value(settled, ttl, extra),
+        (settled) => {
+            if (watching) told(policy, 'ok', started)
+            return value(settled, ttl, extra)
+        },
         (error: unknown) => {
             const carried = errorPayload(error).error
-            return failed(carried.name, carried.message, statusOf(error), extra, carried.data)
+            const status = statusOf(error)
+            if (watching) told(policy, `${carried.name} ${status}`, started)
+            return failed(carried.name, carried.message, status, extra, carried.data)
         },
     )
+}
+
+const rpcLog = abideLog.channel('rpc')
+
+/**
+ * One line per call, wire and in-process alike — `respond` is what both go through, so an `fn.raw`
+ * that never touched a socket is reported the same way a `POST` was.
+ *
+ * The ADDRESS rather than the URL: an in-process call has no path, and the address is what every
+ * other diagnostic in this file already names an endpoint by.
+ */
+function told(policy: RpcPolicy | undefined, outcome: string, started: number): void {
+    const elapsed = (performance.now() - started).toFixed(1)
+    rpcLog.debug(`${policy?.address ?? 'rpc'} ${outcome} ${elapsed}ms`)
 }
 
 function value(held: unknown, ttl: number, extra: Record<string, string> | undefined): Response {
