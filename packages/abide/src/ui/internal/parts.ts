@@ -469,10 +469,10 @@ export class ChildPart {
         const source = block.source
         this.set([])
         this.holding = source
-        // Re-read after every write rather than pinning one stamp: this part writes per ROW, and each
-        // write bumps the generation itself. A fixed stamp would make the stream supersede itself
-        // after the first row — which looks exactly like a stream that only ever yielded one.
-        let generation = this.generation
+        // ONE stamp for the whole stream. Appending a row does not bump the generation — only a `set`
+        // does, and a `set` here is something else taking the range over — so the stamp taken at the
+        // start stays valid, and a re-run for any other reason is exactly what it has to catch.
+        const generation = this.generation
         void (async () => {
             try {
                 let index = 0
@@ -484,8 +484,6 @@ export class ChildPart {
                     // itself once per row; there is no accumulator here at all now, so streaming n
                     // rows costs n rows of work rather than n²/2.
                     this.appendRow(block.row(item, index++))
-                    this.holding = source
-                    generation = this.generation
                     return true
                 }
                 // `streamed()` takes `AsyncIterable<T> | Iterable<T>`, and a sync source has nothing

@@ -97,31 +97,82 @@ class DocumentNavigation implements NavigationSink {
         first: boolean,
         carried = '',
     ): Promise<{ ok: boolean; buffer: string }> {
-        let buffer = carried
-        // Where the last search gave up. Without it every chunk re-scans the whole accumulated
-        // buffer from 0 — and since `+=` builds a rope, re-flattens it too, so a page arriving in
-        // 16 kB chunks costs O(size²) rather than O(size). Only the tail of what was already
-        // searched can hide a straddled sentinel, so that is all this steps back over.
-        let searched = 0
+        // Chunks are kept UNJOINED. `indexOf` needs a flat receiver, so searching an accumulating
+        // `buffer += chunk` re-flattens everything that arrived before it: measured at 23 us per
+        // chunk once 1 MB has landed and 244 us at 16 MB, which is O(size²) over a fragment. A
+        // cursor bounds what is COMPARED but not what is copied, which is why stepping it back was
+        // not enough on its own.
+        //
+        // Only the newest chunk can complete a sentinel, and only the last few characters before it
+        // can have started one — so that pair is all any search looks at, and the join happens once
+        // per PIECE, which is the unit being cut out anyway.
+        const parts: string[] = []
+        let tail = ''
+        const OVERLAP = PIECE_END.length - 1
+
+        /** Everything unsearched, as one string. Only ever called when a cut has actually landed. */
+        const whole = (last: string): string => {
+            parts.push(last)
+            const text = parts.join('')
+            parts.length = 0
+            return text
+        }
+
+        const keep = (text: string): void => {
+            parts.push(text)
+            tail = text.length > OVERLAP ? text.slice(text.length - OVERLAP) : text
+        }
+
+        // `carried` is the tail of the piece the opening call stopped inside, and it may hold whole
+        // pieces of its own — it is flat and small, so it is searched from 0 exactly like before.
+        let rest = carried
         for (;;) {
-            const cut = buffer.indexOf(PIECE_END, searched)
-            if (cut !== -1) {
-                this.apply(held, buffer.slice(0, cut), first)
-                buffer = buffer.slice(cut + PIECE_END.length)
-                searched = 0
-                if (first) return { ok: true, buffer }
-                continue
-            }
-            searched = Math.max(0, buffer.length - PIECE_END.length + 1)
+            const cut = rest.indexOf(PIECE_END)
+            if (cut === -1) break
+            this.apply(held, rest.slice(0, cut), first)
+            rest = rest.slice(cut + PIECE_END.length)
+            if (first) return { ok: true, buffer: rest }
+        }
+        if (rest !== '') keep(rest)
+
+        for (;;) {
             const { done, value } = await reader.read()
             if (done) {
                 // A stream that ended mid-piece: the response was cut off. What is on screen is
                 // whatever pieces did arrive, which is the same partial page a document render would
                 // have left — better than blanking it for a truncation the reader can just reload.
-                if (buffer.trim() !== '') navigateLog.warning('the fragment ended mid-piece')
+                if (parts.join('').trim() !== '') navigateLog.warning('the fragment ended mid-piece')
                 return { ok: !first, buffer: '' }
             }
-            buffer += DECODER.decode(value, { stream: true })
+            const chunk = DECODER.decode(value, { stream: true })
+            // The straddle window: a sentinel split across the seam starts in `tail` and ends here.
+            const hay = tail + chunk
+            const at = hay.indexOf(PIECE_END)
+            if (at === -1) {
+                // The window carries forward from `hay`, not from `chunk`: chunks can be shorter
+                // than the sentinel, and a window rebuilt from the newest one alone would forget
+                // the head of a sentinel that started three chunks ago.
+                parts.push(chunk)
+                tail = hay.length > OVERLAP ? hay.slice(hay.length - OVERLAP) : hay
+                continue
+            }
+            // `hay` is the suffix of the full text of its own length, so a match in one is a match
+            // in the other at that distance from the end.
+            const text = whole(chunk)
+            const from = text.length - hay.length + at
+            this.apply(held, text.slice(0, from), first)
+            let after = text.slice(from + PIECE_END.length)
+            if (first) return { ok: true, buffer: after }
+            // The remainder is flat, so any further sentinels already in it are searched directly —
+            // a per-piece cost, and there is no rope left to re-flatten.
+            for (;;) {
+                const next = after.indexOf(PIECE_END)
+                if (next === -1) break
+                this.apply(held, after.slice(0, next), first)
+                after = after.slice(next + PIECE_END.length)
+            }
+            tail = ''
+            if (after !== '') keep(after)
         }
     }
 

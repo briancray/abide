@@ -308,3 +308,58 @@ test('a response that is not a navigation is the browser’s, and commits nothin
         view.dispose()
     }
 })
+
+/**
+ * The same body, delivered in fixed-size chunks that pay no attention to where the sentinels are.
+ *
+ * `answerWith` cuts exactly AT a piece boundary, which is the one split the reader cannot get wrong.
+ * A real socket splits wherever the network did — so `<!--abide:piece-->` arrives with its head in
+ * one chunk and its tail in the next, and a reader that only searches the newest chunk has to carry
+ * enough of the previous one to still see it.
+ */
+function answerInChunks(pieces: string[], size: number): void {
+    asked = null
+    release = () => undefined
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        asked = {
+            url: String(input),
+            headers: new Headers(init?.headers),
+            credentials: init?.credentials,
+            redirect: init?.redirect,
+        }
+        const whole = pieces.join('')
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                const encoder = new TextEncoder()
+                for (let at = 0; at < whole.length; at += size) {
+                    controller.enqueue(encoder.encode(whole.slice(at, at + size)))
+                }
+                controller.close()
+            },
+        })
+        const headers = new Headers()
+        headers.set(NAVIGATION_HEADER, '1')
+        return new Response(body, { status: 200, headers })
+    }) as typeof fetch
+}
+
+test('a sentinel split across two chunks is still found', async () => {
+    const pieces = await fragmentFor('/users/6', 'the panel')
+    // 7 is coprime with nothing in particular and shorter than the 18-character sentinel, so every
+    // `<!--abide:piece-->` in the body is split across at least two chunks — including the straddle
+    // where the sentinel starts in one chunk and ends three chunks later.
+    answerInChunks(pieces, 7)
+    const into = container()
+    const view = mount(into, outlet)
+    try {
+        await navigate('/users/6')
+        // Both pieces landed: the opening one that stands in the range, and the patch behind it.
+        expect(into.textContent).toContain('user 6')
+        expect(into.textContent).toContain('the panel')
+        expect(into.textContent).not.toContain('loading')
+        // And no sentinel leaked into the document as text.
+        expect(into.textContent).not.toContain('abide:piece')
+    } finally {
+        view.dispose()
+    }
+})

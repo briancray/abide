@@ -384,7 +384,13 @@ function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
 async function emitSuspendInline(node: Suspend, context: RenderContext, out: Out): Promise<void> {
     const handed = handOver(out)
     if (handed !== null) await handed
-    const more = emit(node.body((await node.value) as never) as Renderable, context, out)
+    // `suspend` declares a plain value as legal — `suspend<T>(value: PromiseLike<T> | T, …)` — and the
+    // browser half forks on exactly that in `ChildPart.set`. An unconditional await costs a promise
+    // wrap and a microtask tick to learn the value was there all along, and a `suspend` inside a
+    // `{#for}` pays it per row.
+    const operand = node.value
+    const settled = isThenable(operand) ? await operand : operand
+    const more = emit(node.body(settled as never) as Renderable, context, out)
     if (more !== null) await more
 }
 
