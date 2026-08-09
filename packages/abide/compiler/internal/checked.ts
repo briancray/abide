@@ -36,7 +36,7 @@ const MAX_DEPTH = 12
 
 /**
  * `intrinsicName` lives on `IntrinsicType` alone, and `Type` is the union of every kind — so asking
- * for it means saying so once here rather than narrowing at each of the four places that ask.
+ * for it means saying so once here rather than narrowing at both places that ask.
  */
 function intrinsicNameOf(type: Type): string | undefined {
     return (type as { intrinsicName?: string }).intrinsicName

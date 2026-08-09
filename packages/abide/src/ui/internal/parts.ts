@@ -151,10 +151,10 @@ export class ChildPart {
 
     set(value: unknown): void {
         // Text is what a slot holds nearly every time — every row of every list, every `${count}` —
-        // and it was the LAST branch below, six instanceof tests and an Array.isArray away. The two
-        // fields the general path would have written are written here too: `holding` back to
-        // nothing, because a text value replaces whatever block owned this slot, and the generation
-        // bumped, because a load still in flight must not paint over it.
+        // and it was the LAST branch below, five instanceof tests, two probe calls and an
+        // `Array.isArray` away. The two fields the general path would have written are written here
+        // too: `holding` back to nothing, because a text value replaces whatever block owned this
+        // slot, and the generation bumped, because a load still in flight must not paint over it.
         if (this.claimed === null) {
             const type = typeof value
             if (type === 'string' || type === 'number') {

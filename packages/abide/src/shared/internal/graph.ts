@@ -49,7 +49,7 @@ export class Node {
     // Allocating this lazily — null until something reads the node under tracking, which an effect
     // never is — was tried and reverted. It is a real allocation avoided on most nodes, and it is
     // worth 2.5 ns of the 10.5 ns a node costs to construct: measurable, and not worth a null check
-    // on the five hot paths that iterate it. Reusing the `sources` array across runs instead of
+    // on the four hot paths that iterate it. Reusing the `sources` array across runs instead of
     // replacing it went the same way, at 2 ns of 60.
     observers = new Set<Node>()
     cleanup: (() => void) | null = null

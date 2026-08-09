@@ -455,7 +455,9 @@ function sameParams(left: Params, right: Params): boolean {
     return true
 }
 
-// Write the four cells. Each is identity-deduped by the cell itself, so the only thing this has to
+// Write the three cells a match decides — name, params and url. `navigating` and `adopted` are the
+// other two, and they are written by the callers that know about a navigation rather than here.
+// Each is identity-deduped by the cell itself, so the only thing this has to
 // get right is not handing over a FRESH object for a value that did not change — which is exactly
 // what a match produces, and exactly what would wake every reader of it.
 //
