@@ -13,9 +13,11 @@
     "packages/abide": {
       "name": "abide",
       "version": "0.0.0",
+      "bin": {
+        "abide": "./cli/index.ts",
+      },
       "devDependencies": {
         "@happy-dom/global-registrator": "^20.10.6",
-        "happy-dom": "^20.10.6",
       },
     },
     "packages/example": {

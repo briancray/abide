@@ -769,6 +769,22 @@ JS allocations per template node is deliberately absent — no engine this runs 
 | `nsPerOp` | `(arms: Arm[], settle?) => Promise<number[]>` | ns per op for each arm, calibrated and interleaved — for a `run` that asserts a ratio without a bench card. A fixed loop cannot: a 1 ms clock clamp reads a fast op as 0. |
 | `quiesce` / `settled` / `microtasks` / `frame` / `tick` | `() => Promise<void>` | Waiting primitives, so a bench measures the work rather than the harness. |
 
+The small tools a `run` reaches for. `reader` is the first one to know: it is how a case asserts
+WAKE-UPS rather than values, which is the one thing a correctness test cannot show about a reactive
+system — a reader that woke when nothing it reads changed still reads the right value.
+
+| Name | Type Signature | Description |
+| --- | --- | --- |
+| `reader` | `<T>(read: () => T) => Reader` | Watches `read` and records every re-run in `seen`, so a case asserts HOW MANY times a reader woke. `dispose()` when done. |
+| `until` | `(ready: () => boolean, what?: string, timeoutMs?: number) => Promise<void>` | Wait for a condition rather than a span. Throws naming `what` on timeout, so a hang reads as a claim that failed. |
+| `container` | `() => HTMLElement` | A div in the document for a case to mount into, tracked so the runner takes it down. |
+| `sweepContainers` | `() => void` | Removes every one of them. Called by `runHeadless`; a browser card calls it between runs. |
+| `countCalls` | `<T>(target: T, method: keyof T) => { calls: number; restore(): void }` | Counts calls to one method, so "does less work" is assertable rather than merely timed. |
+| `keep` | `(value: unknown) => void` | Consume a bench arm's result. An arm whose answer is provably unused is one the optimiser may delete. |
+| `floorTicks` | `() => Promise<number>` | What an empty async function costs in microtask turns, so a `budget` case says what it OWES rather than what it was charged. |
+| `show` | `(value: unknown) => string` | How a value is written into a log line, on both lanes — what `is` renders a mismatch with. |
+| `sleep` | `(ms: number) => Promise<void>` | A real span, for the cases that genuinely need one. Prefer `until`. |
+
 ## Pages / routing
 
 | Name | Type Signature | Description |
