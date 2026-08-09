@@ -418,6 +418,12 @@ export class ChildPart {
                 if (generation !== this.generation) return
                 if (branches === null) {
                     this.set(body === undefined ? value : body(value as never))
+                    // `set` cleared it, and a SUSPEND has to have it back: the guard in `set` is what
+                    // keeps an unrelated re-run from throwing this settled panel to its fallback and
+                    // rebuilding it, and until it is restored here that guard only ever held for an
+                    // operand that never suspended. A bare promise in a slot is deliberately not
+                    // recorded — `set` does not put one in `holding` on the way in either.
+                    if (body !== undefined) this.holding = operand
                     return
                 }
                 this.set(settledArms(branches, undefined, value, false))

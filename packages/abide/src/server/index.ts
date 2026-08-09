@@ -323,8 +323,12 @@ async function emitStreamed(node: Streamed, context: RenderContext, out: Out): P
             for (const item of node.source as Iterable<never>) {
                 const more = emit(node.row(item, index++) as Renderable, context, out)
                 if (more !== null) await more
-                const handed = handOver(out)
-                if (handed !== null) await handed
+                // `paused`, not `handOver`: a chunk boundary is a SUSPENSION, and a sync source has
+                // none to mark. `handOver` flushes unconditionally, and its promise only settles when
+                // the consumer comes back for more — so this row loop would cost a full consumer
+                // round trip per ROW, which is what the array walk uses `paused` to avoid.
+                const pause = paused(out)
+                if (pause !== null) await pause
             }
         }
     } catch (error) {

@@ -519,9 +519,10 @@ export default suite({
                 const unrelated = state(0)
                 const settled = { name: 'ada' }
                 const host = container()
-                const view = mount(host, () =>
-                    html`<p>
-                        ${() => unrelated()}
+                const view = mount(host, () => {
+                    // Read in the body that builds the block, for the reason spelled out below.
+                    unrelated()
+                    return html`<p>
                         ${suspend(
                             settled,
                             (user: { name: string }) => {
@@ -530,8 +531,8 @@ export default suite({
                             },
                             'loading…',
                         )}
-                    </p>`,
-                )
+                    </p>`
+                })
                 try {
                     is('the body ran once', bodies, 1)
                     // A write to something else the same slot thunk reads. The operand did not move,
@@ -543,6 +544,47 @@ export default suite({
                 } finally {
                     view.dispose()
                     host.remove()
+                }
+
+                // The same claim for an operand that genuinely SUSPENDS, which is the arm that
+                // settles through `settle` rather than painting in the call. It is the one that
+                // matters and the easier one to leave half-fixed: the panel above never suspends, so
+                // it exercises the path where `holding` was already being kept.
+                let waited = 0
+                const other = state(0)
+                const landing = sleep(5).then(() => ({ name: 'grace' }))
+                const into = container()
+                const mounted = mount(into, () => {
+                    // READ HERE, in the body that builds the block — not in a nested thunk. A thunk
+                    // slot gets its own effect, so a cell read inside one wakes that slot and leaves
+                    // this function alone, and the re-run this case is about would never happen.
+                    other()
+                    return html`<p>
+                        ${suspend(
+                            landing,
+                            (user: { name: string }) => {
+                                waited++
+                                return html`<b>${user.name}</b>`
+                            },
+                            'loading…',
+                        )}
+                    </p>`
+                })
+                try {
+                    is('the fallback, while it waits', into.textContent?.includes('loading'), true)
+                    await landing
+                    await tick()
+                    is('then the body, once', waited, 1)
+                    // The operand has not moved — it is the same promise, now settled — so this must
+                    // not throw the panel back to its fallback and rebuild it.
+                    other.set(1)
+                    await tick()
+                    is('an unrelated re-run does not re-suspend it', waited, 1)
+                    is('and the fallback did not come back', into.textContent?.includes('loading'), false)
+                    is('the panel still holds its value', into.textContent?.includes('grace'), true)
+                } finally {
+                    mounted.dispose()
+                    into.remove()
                 }
             },
         },
