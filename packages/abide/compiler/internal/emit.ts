@@ -129,6 +129,17 @@ interface Reactive {
     keyed: Set<string>
 }
 
+/**
+ * The same grammar `desugar`'s binding walk reads, from the other end.
+ *
+ * Both ask "is the initializer at this `=` a source constructor", and the VOCABULARY is shared —
+ * `REACTIVE_CONSTRUCTORS` is declared once, in `desugar.ts`, so neither can drift about what
+ * constructs a source. What is not shared is the walk, because the two anchor differently: this one
+ * starts at a `(` and steps BACK to find the callee and the name, since it is looking for every
+ * declaration in a region; `desugar`'s starts at the declarer keyword and steps FORWARD, since it
+ * already has a binding in hand and is only asking whether it declares rather than shadows. Merging
+ * them would mean one walk that does both, which is more machinery than the predicate they share.
+ */
 function reactiveBindings(tokens: Token[], into: Reactive): void {
     for (let i = 1; i < tokens.length; i++) {
         // `NAME = state(` — or `NAME = state<T>(`, whose type argument list sits between the two.

@@ -346,6 +346,11 @@ export function desugar(
             // the body it was introduced in, which is every use of it. `state.shared(key, …)` is
             // the same declaration with an address in front of the value.
             //
+            // The same question `emit.ts`'s `reactiveBindings` asks, over the shared
+            // `REACTIVE_CONSTRUCTORS`, but forward from the declarer rather than back from the `(` —
+            // that one is finding every declaration in a region, this one already has the binding and
+            // is only deciding whether it declares or shadows.
+            //
             // The type arguments are STEPPED OVER rather than required to be absent: `state<Kind>('a')`
             // is the same declaration as `state('a')`, and reading it as a binding made every use of
             // the name compile to the cell itself — so `kind !== 'all'` compared a function to a
