@@ -7,7 +7,17 @@
 // substrate split.
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
-import { render, renderDocument, type Renderable, renderToString, shell, suspend, toStream } from 'abide/server'
+import {
+    heldStream,
+    isServing,
+    render,
+    renderDocument,
+    type Renderable,
+    renderToString,
+    shell,
+    suspend,
+    toStream,
+} from 'abide/server'
 import { container, floorTicks, keep, microtasks, settled, sleep, suite, tick } from 'abide/tests'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
@@ -84,6 +94,22 @@ export default suite({
                 is('a bigint drops the suffix', await renderToString(10n), '10')
                 is('nullish and both booleans write nothing', await renderToString([true, false, null, undefined]), '')
                 is('…while zero and empty string are values', await renderToString([0, '']), '0')
+            },
+        },
+
+        {
+            title: '`heldStream` — a body that outlives the handler still answers inside its scope',
+            note: 'A streaming response is built inside a request and CONSUMED after the handler returned, so the caller scope every ambient answers off has to be held open for as long as the body is pumping — otherwise a `memo` read on the third chunk answers from a different caller\'s cache, or from none. Abide holds what abide builds; this is the one piece an app reaches for directly, for a stream it made itself. IDEMPOTENT, so `page(toStream(view))` is one wrapper rather than two and an app may call it on anything it is about to answer with. Outside a request there is nothing to hold and the body is handed straight back — which is what this case is in a position to assert, since a demo runs in a browser card as readily as under `bun test`.',
+            run({ is }) {
+                is('nothing to hold out here', isServing(), false)
+
+                const body = toStream(html`<p>ok</p>`)
+                is('so the body is handed straight back', heldStream(body) === body, true)
+
+                // The idempotence is the claim that lets an app wrap without checking: a second call
+                // returns the first one's result rather than pumping a pump.
+                const once = heldStream(body)
+                is('and wrapping twice is wrapping once', heldStream(once) === once, true)
             },
         },
 
