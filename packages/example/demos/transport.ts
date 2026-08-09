@@ -39,7 +39,9 @@ import {
     redirect,
     register,
     type Schema,
+    SCHEMA_ERROR,
     socket,
+    type StandardSchemaV1,
     sse,
     validateJson,
 } from 'abide/server'
@@ -813,7 +815,11 @@ export default suite({
 
                 // The other form, and the reason it is the one: Standard Schema is a SPEC, so abide
                 // declares the interface and imports none of the libraries that implement it.
-                const aName: Schema<{ name: string }> = {
+                // Typed as `StandardSchemaV1` rather than only as `Schema`: the interop interface is
+                // what abide DECLARES and never imports, so naming it here is what proves a real
+                // library's schema would structurally match — and makes a drift in the declared
+                // shape a failure in the dogfood rather than at somebody's `zod` call site.
+                const aName: StandardSchemaV1<{ name: string }> = {
                     '~standard': {
                         version: 1,
                         vendor: 'demo',
@@ -885,7 +891,9 @@ export default suite({
                 }
                 is(
                     'the name crossed the wire with it',
-                    remoteUser({ id: -1 }).isError(caught, 'AbideSchemaError'),
+                    // `SCHEMA_ERROR` rather than the string: one name for the one thing a refusal
+                    // travels under, so a rename cannot leave this assertion quietly passing.
+                    remoteUser({ id: -1 }).isError(caught, SCHEMA_ERROR),
                     true,
                 )
 

@@ -12,7 +12,7 @@
 // suffix" is true in both, and it is also the claim — the absolute name is the app's business.
 
 import { log } from 'abide'
-import { GET, type LogRecord, error, handle, json, register, socket } from 'abide/server'
+import { GET, type LogRecord, error, handle, json, register, socket, trace } from 'abide/server'
 import { loopback, sleep, suite, until } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv, writeEnv } from './env.ts'
@@ -359,6 +359,94 @@ export default suite({
                     await serving(new Request(`${ORIGIN}/user`), NO_SERVER)
                 })
                 is('and nothing at all with the channel off', off.length, 0)
+            },
+        },
+
+        {
+            title: 'trace — the operation a request belongs to, and what it hands the next hop',
+            note:
+                'W3C Trace Context, read off the caller’s `traceparent` and continued rather than restarted: the id is the ' +
+                'OPERATION and the span is this hop of it. `trace.headers()` is what an outbound call carries — our span ' +
+                'becomes the next hop’s parent, which is the whole of how a trace is joined — and `trace.responseHeaders()` ' +
+                'is the mirror, so the caller can stitch its own span to our entry point. `tracestate` is the vendor ' +
+                'key-value list, parsed on demand and only once. Outside a request there is nothing to belong to.',
+            async run({ is }) {
+                const seen: Record<string, unknown> = {}
+                const serving = handle(() => {
+                    seen.id = trace()
+                    seen.span = trace.span()
+                    seen.sampled = trace.sampled()
+                    seen.state = trace.state()
+                    seen.headers = trace.headers()
+                    seen.response = trace.responseHeaders()
+                    return json({ ok: true })
+                })
+
+                const id = '4bf92f3577b34da6a3ce929d0e0e4736'
+                const answered = await serving(
+                    new Request(`${ORIGIN}/x`, {
+                        headers: {
+                            traceparent: `00-${id}-00f067aa0ba902b7-01`,
+                            tracestate: 'vendor=abc,other=1',
+                        },
+                    }),
+                    NO_SERVER,
+                )
+
+                is('the id is the caller’s — the operation continues', seen.id, id)
+                is('the span is OURS, not the caller’s', seen.span !== '00f067aa0ba902b7', true)
+                is('…and it is a 16-hex span', /^[0-9a-f]{16}$/.test(seen.span as string), true)
+                is('the sampled bit is read off the flags byte', seen.sampled, true)
+                // A Map, not a record: `tracestate` keys are vendor-chosen and a record would put
+                // them on Object.prototype's namespace.
+                is('tracestate is parsed into pairs', [...(seen.state as Map<string, string>)], [
+                    ['vendor', 'abc'],
+                    ['other', '1'],
+                ])
+
+                // What an outbound call carries: same operation, and WE are the parent.
+                const outbound = seen.headers as Record<string, string>
+                is('an outbound traceparent keeps the id', outbound.traceparent?.includes(id), true)
+                is('…and names our span as the parent', outbound.traceparent?.includes(seen.span as string), true)
+                is('carrying the state along', outbound.tracestate, 'vendor=abc,other=1')
+
+                // The mirror, which every abide response already sets through `headersFor`.
+                is(
+                    'the response header is the same four fields',
+                    (seen.response as Record<string, string>).traceresponse,
+                    outbound.traceparent,
+                )
+                is('and every response abide builds carries it', answered?.headers.get('traceresponse'), outbound.traceparent)
+
+                // A caller that named no operation gets one: a trace with a hole in it is not a trace.
+                const fresh: Record<string, unknown> = {}
+                const starting = handle(() => {
+                    fresh.id = trace()
+                    fresh.sampled = trace.sampled()
+                    fresh.state = trace.state()
+                    return json({ ok: true })
+                })
+                await starting(new Request(`${ORIGIN}/x`), NO_SERVER)
+                is('an untraced caller starts one', /^[0-9a-f]{32}$/.test(fresh.id as string), true)
+                // Sampled, and deliberately: WE generated the id, so the flags byte is `03` —
+                // sampled, plus the random-trace-id bit that says the id is not derived from
+                // anything. A caller that sends `-00` is the one asking not to be sampled, and that
+                // answer is respected below.
+                is('a minted trace is sampled — we chose to record it', fresh.sampled, true)
+                is('and no vendor state', [...(fresh.state as Map<string, string>)], [])
+
+                const quiet: Record<string, unknown> = {}
+                const unsampled = handle(() => {
+                    quiet.sampled = trace.sampled()
+                    return json({ ok: true })
+                })
+                await unsampled(
+                    new Request(`${ORIGIN}/x`, {
+                        headers: { traceparent: `00-${id}-00f067aa0ba902b7-00` },
+                    }),
+                    NO_SERVER,
+                )
+                is('…but a caller that cleared the bit is honoured', quiet.sampled, false)
             },
         },
 
