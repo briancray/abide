@@ -24,7 +24,7 @@ import {
 import { emit } from './internal/emit.ts'
 import { SyntaxError_ } from './internal/lex.ts'
 import { positionAt, type Segment, sourceMap, startsOf } from './internal/map.ts'
-import { ParseError, parse } from './internal/parse.ts'
+import { parse } from './internal/parse.ts'
 import type { TypeSource } from './internal/shape.ts'
 
 // `Method` deliberately stays internal: the compiler's is a DECLARATION keyword — it includes
@@ -154,8 +154,9 @@ export function elide(source: string, options: ElideOptions): Elided | null {
 }
 
 export function describe(source: string, filename: string, error: unknown): string {
-    // `ParseError` and `ElisionError` are both `SyntaxError_`, so one guard places all three.
-    if (!(error instanceof SyntaxError_) && !(error instanceof ParseError)) return String(error)
+    // `ParseError` and `ElisionError` are both `SyntaxError_`, so one guard places all three — and
+    // that guard is also what narrows to the `position` below.
+    if (!(error instanceof SyntaxError_)) return String(error)
     const { line, column } = locate(source, error.position)
     return `${filename}:${line}:${column} ${error.message}`
 }

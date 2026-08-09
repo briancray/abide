@@ -13,7 +13,6 @@
 // rendered line.
 
 import { config } from '$server/config.ts'
-import { env } from '$shared/internal/env.ts'
 import { LOGS_PATH } from '$shared/internal/PATHS.ts'
 import { JSONL_TYPE, payloadOf } from '$shared/internal/wire.ts'
 import { formatLogLine, type LogRecord, logShape, writeLogLine } from '$shared/log.ts'
@@ -27,14 +26,15 @@ import { CLI_EXIT_CODES, exitForStatus } from '../CLI_EXIT_CODES.ts'
  * port last is what makes `abide logs` work in the window where somebody just ran the thing in
  * another terminal, which is the case this command exists for.
  *
- * The port comes off `config()` rather than off `PORT` directly, which is the same rule this file's
- * header states about a log LINE: a second reader is a second answer, and a tail pointed at a port
- * the app it is about never bound to is a command that says nothing arrived. No app module is loaded
- * here, so the document is the floor under what the environment named — which is exactly what the
- * process being tailed resolved it from.
+ * All three come off `config()` rather than off the variables directly, which is the same rule this
+ * file's header states about a log LINE: a second reader is a second answer, and a tail pointed at a
+ * port the app it is about never bound to is a command that says nothing arrived. No app module is
+ * loaded here, so the document is the floor under what the environment named — which is exactly what
+ * the process being tailed resolved it from.
  */
 export function appTarget(): string {
-    return env('ABIDE_APP_URL') ?? env('APP_URL') ?? `http://localhost:${config().PORT}`
+    const declared = config()
+    return declared.ABIDE_APP_URL ?? declared.APP_URL ?? `http://localhost:${declared.PORT}`
 }
 
 export async function logs(argv: string[]): Promise<number> {
@@ -45,7 +45,7 @@ export async function logs(argv: string[]): Promise<number> {
 
     const base = appTarget()
     const address = new URL(LOGS_PATH, base).href
-    const token = env('ABIDE_APP_TOKEN')
+    const token = config().ABIDE_APP_TOKEN
     // A bearer if there is one. The feed itself is gated by `ABIDE_LOGS` rather than by a token — the
     // header is here for what an operator put IN FRONT of the app, which is the only thing between a
     // remote CLI and a port that is usually not open.

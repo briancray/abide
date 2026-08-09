@@ -300,15 +300,13 @@ export function outlet(): TemplateResult {
     if (held === undefined) return NOTHING
     // Kicked BEFORE the view is read: a table that hands its modules back in the call resolves here,
     // and the read below then finds it rather than painting nothing and waking a tick later.
-    if (held.view.peek() === null) {
-        const loading = loadFor(held)
-        if (loading !== null) {
-            void loading.catch((error: unknown) => {
-                queueMicrotask(() => {
-                    throw error
-                })
+    const loading = loadFor(held)
+    if (loading !== null) {
+        void loading.catch((error: unknown) => {
+            queueMicrotask(() => {
+                throw error
             })
-        }
+        })
     }
     const view = held.view()
     if (view === null) return NOTHING

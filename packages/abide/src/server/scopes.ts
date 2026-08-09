@@ -450,8 +450,8 @@ trace.responseHeaders = () => ({
  * The `traceresponse` text, or `null` outside a request — the form `headersFor` wants.
  *
  * Every response abide builds asks this, so it is the one place on that path worth spelling without
- * an intermediate object: one store lookup and a string, rather than `isServing()` and then a
- * one-key record allocated to read a single field back off it.
+ * an intermediate object: a string rather than a one-key record allocated to read a single field
+ * back off it.
  */
 export function traceResponse(): string | null {
     return STORAGE?.getStore() === undefined ? null : parentText(tracing())

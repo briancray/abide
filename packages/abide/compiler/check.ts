@@ -59,7 +59,13 @@ const PROJECTS = new Map<string, Promise<string>>()
  * Derived from the FILE rather than taken from the caller, because a `tsconfig` has to name the
  * mirror in `rootDirs` and a config cannot name a directory that moves with the cwd somebody ran
  * `abide check` in. A `package.json` is the same boundary the module resolver stops at, so this is
- * that rule read rather than a second one invented beside it.
+ * that rule read rather than a rule invented for the mirror.
+ *
+ * NOT the same climb as `$server/app.ts`'s, and the difference is deliberate: that one wants the
+ * nearest manifest that NAMES something, so a nameless `{ "private": true }` leaf keeps it climbing
+ * to the workspace root. This wants the nearest package BOUNDARY, whatever it says, because that is
+ * where `rootDirs` and bare-specifier resolution start. Aligning them would break whichever was
+ * changed.
  */
 function projectOf(path: string): Promise<string> {
     const from = dirname(resolve(path))

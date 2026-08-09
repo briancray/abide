@@ -37,6 +37,9 @@ let found: Manifest | null = null
  * the one that named the app would be a version of something else. `ABIDE_APP_NAME` can therefore
  * rename the app without the climb ever happening, and `appVersion()` is what starts it then.
  */
+// Climbs past a manifest with no `name`, which is what separates this from `$compiler/check.ts`'s
+// climb: an app under a nameless `{ "private": true }` leaf is named after its workspace root, while
+// the type mirror roots at the nearest package BOUNDARY whatever it says. Two rules, on purpose.
 function nearestManifest(): Manifest {
     if (found !== null) return found
     found = NAMELESS

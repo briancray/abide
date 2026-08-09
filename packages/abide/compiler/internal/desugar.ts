@@ -257,7 +257,7 @@ export function desugar(
     // ONCE for the region and consulted by both passes: pass one would otherwise collect the `n` in
     // `const a: typeof n = n` as a bound name and shadow the cell for the rest of the block, and
     // pass two would rewrite `type A = typeof n` into a call.
-    const inType = typeRegions(source, tokens, nesting, expression)
+    const inType = typeRegions(tokens, nesting, expression)
     const edits: Edit[] = []
 
     // Pass one collects the bindings, because a parameter is written BEFORE the scope it opens:

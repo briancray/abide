@@ -277,7 +277,7 @@ function notFound(request: Request): Response {
 // What `shutdown` has to stop, and what makes `server()` answerable before the first request rather
 // than from it. Held here rather than read back off `running`, because a teardown must work for an
 // app whose `bind` returned something that is not a Bun server at all.
-let BOUND: { stop: (closeActiveConnections?: boolean) => unknown } | null = null
+let BOUND: { stop: () => unknown } | null = null
 let STOPPED: Promise<void> | null = null
 let SIGNALLED = false
 

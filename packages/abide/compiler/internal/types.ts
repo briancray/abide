@@ -32,7 +32,6 @@ const TYPE_OPERATORS = new Set(['as', 'satisfies', 'implements'])
  * scoping — the ternary rule below needs it, because a `?` and its `:` are only a pair at one level.
  */
 export function typeRegions(
-    source: string,
     tokens: Token[],
     nesting: number[],
     expression: boolean,
@@ -59,7 +58,7 @@ export function typeRegions(
         // `type X = …` and `type X<T> = …`. The name is not a type; everything from `=` is.
         if (
             text === 'type' &&
-            startsStatement(source, tokens, i) &&
+            startsStatement(tokens, i) &&
             tokens[i + 1]?.kind === SyntaxKind.Identifier
         ) {
             let at = i + 2
@@ -71,7 +70,7 @@ export function typeRegions(
         }
 
         // `interface X … { … }` and `declare …` — the whole declaration is types.
-        if (TYPE_STATEMENTS.has(text) && startsStatement(source, tokens, i)) {
+        if (TYPE_STATEMENTS.has(text) && startsStatement(tokens, i)) {
             mark(i + 1, statementEnd(tokens, nesting, i, level))
             continue
         }
@@ -184,10 +183,11 @@ export function inObjectLiteral(tokens: Token[], nesting: number[], i: number, e
  * Does a token begin a statement?
  *
  * A `;`, a brace, `export`/`declare` in front of it — or a NEWLINE between it and whatever came
- * before, which is the common case in a codebase that does not write semicolons. The scanner drops
- * trivia, so the gap is read back out of the source rather than off the token.
+ * before, which is the common case in a codebase that does not write semicolons. That last one is
+ * the scanner's OWN answer, off `startsLine`, rather than a second backward scan for `\n` over a
+ * source whose start may be the whole template above this region.
  */
-function startsStatement(source: string, tokens: Token[], i: number): boolean {
+function startsStatement(tokens: Token[], i: number): boolean {
     const previous = tokens[i - 1]
     if (previous === undefined) return true
     if (
@@ -199,7 +199,7 @@ function startsStatement(source: string, tokens: Token[], i: number): boolean {
     ) {
         return true
     }
-    return source.lastIndexOf('\n', (tokens[i] as Token).start) >= previous.end
+    return (tokens[i] as Token).startsLine
 }
 
 /** `<` directly after the NAME of a function, class or interface — a parameter list, not a compare. */

@@ -37,8 +37,8 @@ import { untrack, watch } from './reactive.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-/** Which law a declaration is. The DIRECTORY it lives in is what says so. */
-export type Kind = 'rpc' | 'socket'
+/** Which law a declaration is. The DIRECTORY it lives in is what says so. Declared on `shapes.ts`. */
+export type { Kind } from './internal/shapes.ts'
 
 export interface CallOptions {
     /**

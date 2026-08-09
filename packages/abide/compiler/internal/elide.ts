@@ -30,8 +30,14 @@ import { crossing, type Declared, shapesAt, TypeReader, type TypeSource } from '
 const RPC_DIRECTORY = '/server/rpc/'
 const SOCKET_DIRECTORY = '/server/sockets/'
 
-/** Every `.ts` a transport directory holds. The plugin's filter, and nothing else matches it. */
-export const TRANSPORT_MODULE = /\/server\/(rpc|sockets)\/[^?]+\.ts$/
+/**
+ * Every `.ts` a transport directory holds. The plugin's filter, and nothing else matches it.
+ *
+ * Derived like the two globs below, and for a sharper version of the same reason: this one is the
+ * `onLoad` filter, so a spelling that drifted from the directories above would silently stop
+ * matching — no elision, and the server module goes into the browser bundle verbatim.
+ */
+export const TRANSPORT_MODULE = new RegExp(`(${RPC_DIRECTORY}|${SOCKET_DIRECTORY})[^?]+\\.ts$`)
 
 /** The leading wildcard that makes a glob match at any depth — what an ANCHORED spelling drops. */
 const ANYWHERE = '**/'

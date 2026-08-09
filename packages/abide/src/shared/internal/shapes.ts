@@ -21,6 +21,15 @@
 // Types only. The compiler imports this type-only, exactly as it imports `Kind`, so nothing about
 // the runtime reaches the emit path.
 
+/**
+ * Which law a declaration is. The DIRECTORY it lives in is what says so.
+ *
+ * Declared on the leaf both lanes and the compiler already read type-only, and re-exported from
+ * `transport.ts` under the name the public surface uses. One declaration because, as `elide.ts` puts
+ * it, a `Kind` declared twice is a rename that compiles on both sides and fails on the wire.
+ */
+export type Kind = 'rpc' | 'socket'
+
 export type JsonType = 'object' | 'array' | 'string' | 'number' | 'integer' | 'boolean' | 'null'
 
 export interface JsonSchema {
@@ -72,7 +81,7 @@ export interface Shapes {
 export interface EndpointShape {
     /** `users/getUser` — the address, and the natural tool name. */
     id: string
-    kind: 'rpc' | 'socket'
+    kind: Kind
     /** The method an rpc travels as. Absent on a socket, which is an upgrade rather than a call. */
     method?: string
     description?: string

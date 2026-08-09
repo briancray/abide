@@ -199,16 +199,15 @@ export function dispatch(
     // what makes `traceresponse` answerable on every response including the refusals, what gives a
     // socket's `authorize` a `request()` and a `trace()` to ask about, and what makes every
     // module-level `memo` a handler touches belong to this caller and go away with it.
-    return serveIfScoped(request, () => served(request, url, path, server))
+    return serveIfScoped(request, () => served(request, url, path))
 }
 
 function served(
     request: Request,
     url: URL,
     path: string,
-    server: Server<SocketData> | undefined,
 ): Response | Promise<Response | undefined> {
-    if (path.startsWith(SOCKET_PREFIX)) return upgrade(request, url, path, server)
+    if (path.startsWith(SOCKET_PREFIX)) return upgrade(request, url, path)
     if (path === LOGS_PATH) return logs(request)
     if (path === SCHEMA_PATH) return schema(request)
     if (path === HEALTH_PATH) return serveHealth(request)
@@ -270,14 +269,13 @@ function upgrade(
     request: Request,
     url: URL,
     path: string,
-    server: Server<SocketData> | undefined,
 ): Response | Promise<Response | undefined> {
     const id = path.slice(SOCKET_PREFIX.length)
     const stream = SOCKETS.get(id)
     if (stream === undefined) return refuse(`no socket at ${id}`, 404)
-    // The argument is the exact answer — it is THIS server, whatever else is listening in this
-    // process — and the latch is what an app that handed it over some other way already set.
-    const target = server ?? running.peek<SocketData>()
+    // `dispatch` latches its `server` argument before the prefix test and nothing awaits in between,
+    // so by here the latch already holds THIS server whenever the caller named one.
+    const target = running.peek<SocketData>()
     if (target === null) {
         return refuse('a socket needs the Bun server — `dispatch(request, server)`', 500)
     }
