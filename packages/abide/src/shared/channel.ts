@@ -298,12 +298,17 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         transcript.set(transcript.peek() + 1)
         messages.set(messages.peek() + 1)
     }
-    self.pending = () => messages.pending()
-    self.refreshing = () => messages.refreshing()
-    self.error = () => messages.error()
-    // A stream with no end: it never finishes, so it is never `done`, and it is always producing in
-    // the only sense a channel has. Constants, and honest ones — the alternative is a reader having
-    // to know which primitive it was handed before it can ask.
+    // All five cold answers spelled as the constants they are. `messages` is only ever handed a
+    // number, so routing the first three through it asked a cell that can never load: the first
+    // probe built it an `Async` tracker — six nodes, each with its own observer Set — and every read
+    // then SUBSCRIBED the calling effect to a node that provably never moves, so a template slot
+    // holding `feed.pending()` accumulated a dead subscription per re-run for an answer fixed at
+    // construction. A stream with no end is likewise never `done` and always producing, in the only
+    // sense a channel has. Constants, and honest ones — the alternative is a reader having to know
+    // which primitive it was handed before it can ask.
+    self.pending = () => false
+    self.refreshing = () => false
+    self.error = () => undefined
     self.streaming = () => true
     self.done = () => false
     self.isError = (error: unknown, name: string) => isNamedError(error, name)

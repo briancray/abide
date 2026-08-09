@@ -42,6 +42,25 @@ export default suite({
                 // …and the read is what pays for it afterwards, wherever there is a body.
                 is('the derivation recomputes on read', derived(), 'b')
                 is('the slot reloads on read', slot(), 'v1')
+
+                // A channel's load probes never wake a reader: they are constants now, and before
+                // that they answered off a cell that can never load. So this holds for both
+                // implementations and does NOT distinguish them — what the constants actually saved
+                // is the `Async` tracker the first probe used to allocate, and nothing here counts
+                // allocations. It is asserted anyway because it is the contract a reader relies on:
+                // a probe in a template must not re-run the slot on every message.
+                const live = channel<string>()
+                const probes = reader(() => `${live.pending()}${live.refreshing()}${String(live.error())}`)
+                const values = reader(() => live())
+                const before = probes.seen.length
+                live.publish('one')
+                await tick()
+                live.publish('two')
+                await tick()
+                is('a value reader wakes per message', values.seen.length, 3)
+                is('a probe reader never wakes at all', probes.seen.length, before)
+                probes.dispose()
+                values.dispose()
             },
         },
 

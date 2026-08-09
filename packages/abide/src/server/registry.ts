@@ -388,8 +388,12 @@ export const websocket = {
         connection.data.unsubscribe = null
     },
     message(connection: ServerWebSocket<SocketData>, raw: string | Buffer): void | Promise<void> {
+        // Narrowed ONCE, here, and handed down: `data.policy` is written at the upgrade and never
+        // again, so re-reading it per frame past this gate was a second load and a branch that
+        // `accept === false` had already made unreachable.
         const policy = connection.data.policy
-        const accept = policy?.clientPublish ?? false
+        if (policy === undefined) return
+        const accept = policy.clientPublish
         // A socket is a broadcast until an app says otherwise: a client that may publish into a room
         // is a client that may write to every subscriber of it.
         if (accept === false) return
@@ -399,8 +403,8 @@ export const websocket = {
         } catch (bad) {
             return dropped(connection, bad)
         }
-        const declared = policy?.checkMessage ?? null
-        if (declared === null) return published(connection, accept, message)
+        const declared = policy.checkMessage ?? null
+        if (declared === null) return published(connection, policy, accept, message)
         // Guarded like every other step on this path: a schema over a plain object refuses or passes
         // in the call, and this runs once per inbound message.
         let gated: unknown
@@ -409,9 +413,9 @@ export const websocket = {
         } catch (refusal) {
             return dropped(connection, refusal)
         }
-        if (!isThenable(gated)) return published(connection, accept, gated)
+        if (!isThenable(gated)) return published(connection, policy, accept, gated)
         return (gated as Promise<unknown>).then(
-            (checked) => published(connection, accept, checked),
+            (checked) => published(connection, policy, accept, checked),
             (refusal: unknown) => dropped(connection, refusal),
         )
     },
@@ -436,11 +440,10 @@ function dropped(connection: ServerWebSocket<SocketData>, why: unknown): void {
 /** Past every gate: the chain runs, and what it lets through is what the app said to do with it. */
 function published(
     connection: ServerWebSocket<SocketData>,
+    policy: SocketPolicy,
     accept: (message: unknown, room: unknown, into: Channel<unknown>) => void | Promise<void>,
     message: unknown,
 ): void | Promise<void> {
-    const policy = connection.data.policy
-    if (policy === undefined) return accepted(connection, accept, message)
     const event: SocketEvent<unknown, unknown> = {
         kind: 'publish',
         room: connection.data.room,

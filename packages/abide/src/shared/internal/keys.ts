@@ -24,7 +24,12 @@ export function keyOf(args: unknown): string {
     if (typeof args !== 'object') return String(args)
     const record = args as Record<string, unknown>
     const keys = Object.keys(record)
-    if (keys.length > 8) return sortedKey(record, keys)
+    // Sorted HERE, because the other caller of `sortedKey` reaches it past the insertion sort below
+    // and would otherwise pay `Array.sort` over an array already in order.
+    if (keys.length > 8) {
+        keys.sort()
+        return sortedKey(record, keys)
+    }
     // Insertion order is not the key's order. An insertion sort over a handful of names beats
     // `Array.sort` and, unlike `Object.entries().sort()`, allocates nothing beyond this array.
     for (let i = 1; i < keys.length; i++) {
@@ -72,13 +77,14 @@ function tagged(_key: string, value: unknown): unknown {
     return held
 }
 
+/** `keys` arrives ALREADY ordered — both callers sort before reaching here, by two different routes. */
 function sortedKey(args: Record<string, unknown>, keys: string[]): string {
     const entries: [string, unknown][] = []
     // The walk the entries need anyway also answers whether the replacer is wanted. A keyed memo
     // asks for this key on every HIT, and a replacer costs a callback per key in the whole graph to
     // find the file that a call which declared none does not have.
     let carries = false
-    for (const name of keys.sort()) {
+    for (const name of keys) {
         const value = args[name]
         entries.push([name, value])
         if (!carries && hasFile(value)) carries = true
