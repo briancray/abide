@@ -8,7 +8,7 @@
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
 import { render, renderDocument, renderToString, shell, suspend, toStream } from 'abide/server'
-import { container, floorTicks, keep, microtasks, settled, sleep, suite } from 'abide/tests'
+import { container, floorTicks, keep, microtasks, settled, sleep, suite, tick } from 'abide/tests'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -488,6 +488,62 @@ export default suite({
                     renderToString(html`<p>${suspend(failing, () => html`never`, '…')}</p>`),
                     'the load failed',
                 )
+            },
+        },
+
+        {
+            title: 'a SETTLED operand is not suspended at all, on either side',
+            note: '`suspend(value, …)` takes a plain value as well as a promise, and there is nothing to defer about one that is already in hand. The server used to spend the whole out-of-order apparatus on it — an id, a placeholder, a fallback, an extra drain turn and a patch — to arrive at markup it could have written straight out; and because the client renders the body IN PLACE for a settled operand, that placeholder was markup no hydration ever expected to adopt. The client half had the matching gap: every re-run of the enclosing effect tore the settled panel down and rebuilt it, which `{#await}` in the same slot has never done.',
+            async run({ is }) {
+                // A document render, which is the lane that HAS somewhere to defer to. Rendered to a
+                // plain string there is nowhere, so that lane could never have shown this.
+                let written = ''
+                for await (const chunk of renderDocument('<title>t</title>', () =>
+                    html`<p>${suspend('already here', (t) => html`<b>${t}</b>`, 'loading…')}</p>`,
+                )) {
+                    written += chunk
+                }
+                is('the body is written in place', written.includes('<b>already here</b>'), true)
+                // The three tells of the deferred path, none of which should be here.
+                // Written down rather than imported: `$shared/internal/MARKERS.ts` owns it and an app
+                // is not entitled to reach in there. Safe in the direction that matters — the markup
+                // comes from `renderDocument`, so a renamed tag makes this assertion vacuous rather
+                // than wrong, and the `<b>` assertion above is what would then fail.
+                is('no placeholder was emitted', written.includes('<slot-s'), false)
+                is('no patch script was emitted', written.includes('$p('), false)
+                is('the fallback never appeared', written.includes('loading'), false)
+
+                // The client half. A correctness test cannot see this one — the panel holds the
+                // right markup either way — so what is counted is how many times the BODY ran.
+                let bodies = 0
+                const unrelated = state(0)
+                const settled = { name: 'ada' }
+                const host = container()
+                const view = mount(host, () =>
+                    html`<p>
+                        ${() => unrelated()}
+                        ${suspend(
+                            settled,
+                            (user: { name: string }) => {
+                                bodies++
+                                return html`<b>${user.name}</b>`
+                            },
+                            'loading…',
+                        )}
+                    </p>`,
+                )
+                try {
+                    is('the body ran once', bodies, 1)
+                    // A write to something else the same slot thunk reads. The operand did not move,
+                    // so the settled panel has no business being rebuilt for it.
+                    unrelated.set(1)
+                    await tick()
+                    is('an unrelated re-run does not restart it', bodies, 1)
+                    is('and the panel still holds its value', host.textContent?.includes('ada'), true)
+                } finally {
+                    view.dispose()
+                    host.remove()
+                }
             },
         },
 

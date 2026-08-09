@@ -202,13 +202,20 @@ export class ChildPart {
             // from an ordinary thenable — the author named what to show while waiting, and a server
             // that deferred this subtree sent that same fallback as the placeholder.
             const operand = value.value
+            // The same cutoff `{#await}` and `{#for await}` already have: an unchanged operand is
+            // not restarted, so a re-run of the enclosing effect for some OTHER reason does not
+            // throw a settled panel back to its fallback and rebuild it. `take` has always recorded
+            // the operand for this; until now nothing read it back.
+            if (this.holding === operand) return
             this.holding = NOTHING
             this.generation++
             if (!isThenable(operand)) {
                 this.set(value.body(operand as never))
+                this.holding = operand // `set` cleared it
                 return
             }
             this.set(value.fallback)
+            this.holding = operand // `set` cleared it
             // Re-read: `set` above bumped the generation itself, and a stamp taken before it would
             // make this settle look superseded by its own fallback. `settle` with no branches is
             // already the policy this wants — no arm to catch a rejection, because `suspend` has a

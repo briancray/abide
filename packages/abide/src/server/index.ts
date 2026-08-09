@@ -352,6 +352,11 @@ async function emitAsyncIterable(
 const PLACEHOLDER_CLOSE = `</${PLACEHOLDER_TAG}>`
 
 function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
+    // Nothing to wait for is nothing to defer. `suspend<T>` declares a plain value as legal, and
+    // `ChildPart.set` renders its body IN PLACE for one — so a placeholder here is markup the client
+    // never expects to adopt, and the whole out-of-order apparatus (an id, a `Deferred`, a fallback,
+    // an extra drain turn and a patch) would be spent arriving at what was already in hand.
+    if (!isThenable(node.value)) return emit(node.body(node.value as never) as Renderable, context, out)
     const document = context.document
     // No document to patch (a component rendered to a string) → await it inline.
     if (document === null) return emitSuspendInline(node, context, out)
@@ -384,13 +389,9 @@ function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
 async function emitSuspendInline(node: Suspend, context: RenderContext, out: Out): Promise<void> {
     const handed = handOver(out)
     if (handed !== null) await handed
-    // `suspend` declares a plain value as legal — `suspend<T>(value: PromiseLike<T> | T, …)` — and the
-    // browser half forks on exactly that in `ChildPart.set`. An unconditional await costs a promise
-    // wrap and a microtask tick to learn the value was there all along, and a `suspend` inside a
-    // `{#for}` pays it per row.
-    const operand = node.value
-    const settled = isThenable(operand) ? await operand : operand
-    const more = emit(node.body(settled as never) as Renderable, context, out)
+    // Reached only for a thenable operand: `emitSuspend` renders a settled one in place before it
+    // gets here, so there is no guard to repeat.
+    const more = emit(node.body((await node.value) as never) as Renderable, context, out)
     if (more !== null) await more
 }
 
