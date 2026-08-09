@@ -739,14 +739,12 @@ async function* drain(
     clock: Budget | null,
     framed: boolean,
 ): AsyncGenerator<string> {
-    // `deferred` is append-only and one cursor says what has been armed. Re-scanning it instead
-    // would re-arm what was already flushed and spin forever.
     // The race carries the settled MARKUP, not the deferred: `ready.html` is settled by
     // definition once it wins, so awaiting it again would buy a microtask tick per subtree.
     // Each subtree subscribes ONCE, when it is taken, and pushes into `landed`. `Promise.race` over
     // the pending set instead attached a fresh reaction to every subtree still in flight on every
     // patch, and nothing detaches those — N deferrals cost N²/2 reaction records retained on the
-    // promises. The other half of this structure is already cursored for the same reason.
+    // promises.
     //
     // `d.html` cannot reject: `emitSuspend` builds it around a `try`, and a failed subtree settles as
     // a comment. So there is no rejection path to route through the queue.

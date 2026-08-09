@@ -40,7 +40,7 @@ export class Node {
     status: number
     isEffect: boolean
     // The SHARED empty, never the node's own: `run` installs a fresh array before it sets `current`,
-    // and line 65's push is the only writer, so nothing can reach this one to push into it. Every
+    // and `read`'s `current.sources.push` is the only writer, so nothing can reach this one. Every
     // `state()`, every cold slot and all six trackers of an `Async` are `fn === null` nodes that
     // never run at all — a keyed memo with 500 settled slots was allocating ~3500 arrays for an
     // iteration that is always empty. Same invariant `NO_CHUNKS` below and `channel`'s `NO_MESSAGES`
