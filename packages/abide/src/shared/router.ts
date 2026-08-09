@@ -283,9 +283,10 @@ export function ready(): Promise<void> {
 }
 
 /**
- * The current route's page, wrapped in its layouts. Reactive, and it reads the route's NAME and
- * nothing else — so a navigation WITHIN one route (a different `[id]`, a different query) does not
- * re-run it at all, and the page patches in place instead of being torn down and rebuilt.
+ * The current route's page, wrapped in its layouts. Reactive, and it reads the route's NAME and the
+ * adoption counter — not the params and not the url, so a navigation WITHIN one route (a different
+ * `[id]`, a different query) that serves no new range does not re-run it, and the page patches in
+ * place instead of being torn down and rebuilt.
  */
 export function outlet(): TemplateResult {
     const cells = cellsFor()

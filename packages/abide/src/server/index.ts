@@ -725,15 +725,27 @@ async function* drain(
     // would re-arm what was already flushed and spin forever.
     // The race carries the settled MARKUP, not the deferred: `ready.html` is settled by
     // definition once it wins, so awaiting it again would buy a microtask tick per subtree.
-    const inFlight = new Map<number, Promise<{ id: number; text: string }>>()
+    // Each subtree subscribes ONCE, when it is taken, and pushes into `landed`. `Promise.race` over
+    // the pending set instead attached a fresh reaction to every subtree still in flight on every
+    // patch, and nothing detaches those — N deferrals cost N²/2 reaction records retained on the
+    // promises. The other half of this structure is already cursored for the same reason.
+    //
+    // `d.html` cannot reject: `emitSuspend` builds it around a `try`, and a failed subtree settles as
+    // a comment. So there is no rejection path to route through the queue.
+    const landed: { id: number; text: string }[] = []
+    let pending = 0
+    let wake: (() => void) | null = null
     let cursor = 0
     const take = (): void => {
         for (; cursor < deferrals.deferred.length; cursor++) {
             const d = deferrals.deferred[cursor] as Deferred
-            inFlight.set(
-                d.id,
-                d.html.then((text) => ({ id: d.id, text })),
-            )
+            pending++
+            void d.html.then((text) => {
+                landed.push({ id: d.id, text })
+                const resume = wake
+                wake = null
+                resume?.()
+            })
         }
     }
     take()
@@ -742,14 +754,21 @@ async function* drain(
     // `<script>` node inside the slot a hydrating client adopts — where an unexpected element is
     // a mismatch and a rebuilt subtree. Nothing calls `$p` before a patch exists, so a yield here
     // is early enough, and the loop below then has no state to carry between turns.
-    if (!framed && inFlight.size > 0) yield PATCH_SCRIPT
-    while (inFlight.size > 0) {
-        const settling = Promise.race(inFlight.values())
-        // Nothing to abandon here, unlike the walk: a deferred subtree is an independent async
-        // function with no handle to unwind, and a consumer breaking out of this loop already
-        // leaves it running. What the budget ends is the RESPONSE.
-        const ready = clock === null ? await settling : await clock.race(settling)
-        inFlight.delete(ready.id)
+    if (!framed && pending > 0) yield PATCH_SCRIPT
+    while (pending > 0) {
+        if (landed.length === 0) {
+            const waiting = new Promise<void>((resolve) => {
+                wake = resolve
+            })
+            // Nothing to abandon here, unlike the walk: a deferred subtree is an independent async
+            // function with no handle to unwind, and a consumer breaking out of this loop already
+            // leaves it running. What the budget ends is the RESPONSE. Raced per WAIT rather than
+            // per patch, so a burst that has already landed is still written out under one check.
+            if (clock === null) await waiting
+            else await clock.race(waiting)
+        }
+        const ready = landed.shift() as { id: number; text: string }
+        pending--
         const patch = `<template id="${patchId(ready.id)}">${ready.text}</template>`
         // A framed patch carries no script: the client is parsing this itself and would not run one.
         yield framed ? `${patch}${PIECE_END}` : `${patch}<script>$p(${ready.id})</script>`
