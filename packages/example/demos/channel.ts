@@ -4,7 +4,7 @@
 
 import { channel, html, memo } from 'abide'
 import { renderToString } from 'abide/server'
-import { container, duration, nsPerOp, reader, sleep, suite, tick, until } from 'abide/tests'
+import { container, duration, nsPerOp, quiesce, reader, sleep, suite, tick, until } from 'abide/tests'
 import { mount } from 'abide/ui'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -194,10 +194,16 @@ export default suite({
                 // eviction path, not the timer.
                 const smallAged = channel<number>({ tail: 8, maxAge: 60_000 })
                 const largeAged = channel<number>({ tail: 512, maxAge: 60_000 })
-                const [cheapAged, dearAged] = (await nsPerOp([
-                    { label: 'tail: 8 + maxAge', run: (i: number) => smallAged.publish(i) },
-                    { label: 'tail: 512 + maxAge', run: (i: number) => largeAged.publish(i) },
-                ])) as [number, number]
+                // `quiesce` rather than the default frame yield, which is what the second argument is
+                // for: these two arms are the ones with a timer armed, so what they want between
+                // passes is a machine that has settled, not a paint that has landed.
+                const [cheapAged, dearAged] = (await nsPerOp(
+                    [
+                        { label: 'tail: 8 + maxAge', run: (i: number) => smallAged.publish(i) },
+                        { label: 'tail: 512 + maxAge', run: (i: number) => largeAged.publish(i) },
+                    ],
+                    quiesce,
+                )) as [number, number]
 
                 const agedRatio = dearAged / cheapAged
                 log('per publish, maxAge', `tail 8 — ${duration(cheapAged)}, tail 512 — ${duration(dearAged)}`)

@@ -1405,6 +1405,12 @@ export default suite({
 
                 const browser = elide(source, { filename: USERS, browser: true })
                 const server = elide(source, { filename: USERS })
+                // The same answer `kindOf` gives, carried on the result: a caller that already
+                // elided a module does not have to ask the path a second time, and the two cannot
+                // disagree because `elide` reads it from `kindOf` on the way in.
+                is('the result carries its kind', server?.kind, 'rpc')
+                is('…the same one on both lanes', browser?.kind, 'rpc')
+                is('and a file under neither elides to nothing at all', elide(source, { filename: '/app/db.ts' }), null)
                 is('the stub carries the address', browser?.code.includes('"users/getUser"'), true)
                 is('…and none of the handler', browser?.code.includes('findUser'), false)
                 is('the server lane keeps the module', server?.code.includes('findUser'), true)

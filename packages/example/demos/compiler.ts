@@ -7,7 +7,7 @@
 // that the two are indistinguishable at the output AND at the cost.
 
 import { adopt, html, streamed, styleTags } from 'abide'
-import { compile, originalPosition } from 'abide/compiler'
+import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
 import { renderToString } from 'abide/server'
 import { container, duration, install, keep, measureFlush, nonZero, sleep, suite, tick, until } from 'abide/tests'
 import { mount } from 'abide/ui'
@@ -997,6 +997,32 @@ export default suite({
                     'and carries no import',
                     () => compile("<ul>{#for x of xs}<script>import { y } from 'z'</script>{/for}</ul>"),
                     'no `import`',
+                )
+
+                // A compile failure is tellable from any other throw BY TYPE, which is the whole
+                // reason `ParseError` is exported rather than kept internal — a build shell has to
+                // know whether to print a place in the file or a stack. `position` is a character
+                // offset, and `locate` is what turns one into the line and column a person reads.
+                const broken = '<p>ok</p>\n<ul>{#for x of xs}<li>a</li><script>const b = 1</script>{/for}</ul>'
+                let caught: unknown
+                try {
+                    compile(broken)
+                } catch (failure) {
+                    caught = failure
+                }
+                is('a compile failure is a ParseError', caught instanceof ParseError, true)
+                const at = locate(broken, (caught as ParseError).position)
+                is('and its position is a place in the file', at.line, 2)
+                is('one-based, so it reads like an editor', at.column > 0, true)
+                is(
+                    'which is what `describe` formats',
+                    describe(broken, 'Broken.abide', caught).startsWith(`Broken.abide:${at.line}:${at.column} `),
+                    true,
+                )
+                is(
+                    'anything else it cannot place comes back as its own text',
+                    describe(broken, 'Broken.abide', new RangeError('not ours')),
+                    'RangeError: not ours',
                 )
             },
         },
