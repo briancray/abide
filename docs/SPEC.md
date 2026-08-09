@@ -863,7 +863,7 @@ and the app's own `onConfig` defaults beneath that. An app's own fields join on 
 | Name | Type | Description |
 | --- | --- | --- |
 | `PORT` | `number` | Listen port (default `3000`). `--port` on a command overrides it by DECLARING it, so `config().PORT` is the port. Resolved as an integer `0`–`65535` whether a variable or an `onConfig` default named it — anything else is the floor, so no reader checks the range again. `0` is the kernel's "whatever is free" and is the one number here that may be zero. |
-| `APP_URL` | `string \| null` | The app's public URL / mount base, and the origin both gates compare against (WS CSWSH, CSRF). |
+| `APP_URL` | `string \| null` | The app's public URL / mount base, and the origin both gates compare against (WS CSWSH, CSRF). Undeclared, they fall back to the REQUEST's own origin — which is the weaker answer, since a caller controls its own `Host`, and the wrong one behind TLS termination, where that origin is the proxy's. |
 | `NODE_ENV` | `string \| null` | Verbatim. `isProduction()` is the conclusion drawn from it, and is not a field. |
 | `ABIDE_APP_NAME` | `string \| null` | The app's name, and therefore `log`'s default channel. Falls back to the nearest package.json `name`, then `abide`. |
 | `ABIDE_DATA_DIR` | `string \| null` | Overrides the per-user directory backing `appDataDir()`. |

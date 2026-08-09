@@ -41,6 +41,7 @@ const SOURCE_SURFACE = new Set([
     'invalidate',
     'refresh',
     'publish',
+    'dispose',
     'chunks',
     'pending',
     'refreshing',

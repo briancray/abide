@@ -24,6 +24,7 @@ import {
     remoteSocket,
 } from 'abide'
 import { ElisionError, elide, endpointId, type ImportedModule, kindOf } from 'abide/compiler'
+import { config } from 'abide/server'
 import {
     DELETE,
     endpoints,
@@ -32,6 +33,7 @@ import {
     type HttpError,
     json,
     jsonl,
+    onConfig,
     POST,
     page,
     redirect,
@@ -343,6 +345,39 @@ export default suite({
                         },
                     ]
                 })(),
+            },
+        },
+
+        {
+            title: 'the origin gate compares against `APP_URL`, not against the caller’s own `Host`',
+            note: 'Closed unless declared: a call carrying no `origin`, or one matching the app’s own, needs no headers; anything else has to be named by the declaration. What "the app’s own" MEANS is the point. `url.origin` comes off the request line and the `Host` header — both the caller’s — so a gate comparing an attacker’s `Origin` against an attacker’s `Host` is comparing two halves of one claim. `APP_URL` is the operator saying what the app is actually served at, which is also the only thing that makes same-origin work behind TLS termination, where `url.origin` is whatever the proxy passed through. Undeclared, it falls back to the request’s own origin, which is the weaker answer and says so.',
+            async run({ is }) {
+                const secret = GET(() => ({ ok: true }), { crossOrigin: ['https://named.example'] })
+                register('rpc', [['demo/origin/secret', 'secret']], { secret })
+                // A second origin, which is what `loopback`'s `base` is for: the app is served at
+                // `https://app.example` and this wire reaches it at the address a proxy would.
+                const proxied = loopback('http://internal.local')
+                const ask = (origin: string): Promise<Response> =>
+                    proxied.fetch('/__abide/rpc/demo/origin/secret', {
+                        method: 'GET',
+                        headers: { origin },
+                    })
+
+                is('undeclared, the request’s own origin is what passes', (await ask('http://internal.local')).status, 200)
+                is('a foreign origin is refused', (await ask('https://evil.example')).status, 403)
+                is('a declared one is allowed', (await ask('https://named.example')).status, 200)
+
+                const off = onConfig(() => ({ APP_URL: 'https://app.example' }))
+                config.invalidate()
+                is('with APP_URL declared, THAT is same-origin', (await ask('https://app.example')).status, 200)
+                is(
+                    'and the origin the caller’s own Host claims no longer is',
+                    (await ask('http://internal.local')).status,
+                    403,
+                )
+                is('a declaration still names its own', (await ask('https://named.example')).status, 200)
+                off()
+                config.invalidate()
             },
         },
 

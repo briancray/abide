@@ -23,6 +23,7 @@ import type { EndpointShape, Shapes } from '$shared/internal/shapes.ts'
 import { decodeArgs, decodeForm, decodeQuery, isMultipart } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import type { Kind, Rpc } from '$shared/transport.ts'
+import { config } from './config.ts'
 import { serveHealth } from './health.ts'
 import { serveIdentity } from './identity.ts'
 import { logs } from './logs.ts'
@@ -145,9 +146,42 @@ const NOT_CROSS_ORIGIN: Record<string, string> = {}
 /** A preflight needs no content-type of its own — it goes through the funnel for the trace alone. */
 const NO_DEFAULTS: Record<string, string> = {}
 
+/**
+ * What "same origin" MEANS to this process: `APP_URL` when an app declared one, else the request's
+ * own origin.
+ *
+ * The declared one is the stronger answer, not merely the more convenient. `url.origin` comes off
+ * the request line and the `Host` header, both of which the caller controls — so a gate comparing an
+ * attacker's `Origin` against an attacker's `Host` is comparing two halves of the same claim.
+ * `APP_URL` is the operator saying what the app is actually served at, which is also what makes
+ * same-origin work behind TLS termination, where `url.origin` is whatever the proxy passed through.
+ *
+ * Cut once per declared value rather than per request: a public URL does not change under a running
+ * process, and both gates ask this per call.
+ */
+let originSource: string | null = null
+let originValue: string | null = null
+
+function ownOrigin(url: URL): string {
+    const declared = config().APP_URL
+    if (declared === null) return url.origin
+    if (declared !== originSource) {
+        originSource = declared
+        try {
+            originValue = new URL(declared).origin
+        } catch {
+            originValue = null
+            abideLog
+                .channel('config')
+                .warning(`APP_URL is not a URL (${declared}) — the origin gates fall back to the request's own`)
+        }
+    }
+    return originValue ?? url.origin
+}
+
 function crossOrigin(request: Request, url: URL, allowed: string[] | null): Record<string, string> | null {
     const origin = request.headers.get('origin')
-    if (origin === null || origin === url.origin) return NOT_CROSS_ORIGIN
+    if (origin === null || origin === ownOrigin(url)) return NOT_CROSS_ORIGIN
     if (allowed === null) return null
     const open = allowed.includes('*')
     if (!open && !allowed.includes(origin)) return null

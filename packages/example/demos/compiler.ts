@@ -80,6 +80,33 @@ export default suite({
                     template('<script>const s = state("ab")</script><p>{s.pending()}</p>'),
                     '<p>${() => s.pending()}</p>',
                 )
+                // Every member SPEC's "shared surface" lists, in one case: a verb, read or probe
+                // missing from the reserved set desugars to a call on the VALUE — `s.dispose()`
+                // became `s().dispose()`, which type-checks on anything with a `dispose` and is
+                // wrong on everything else. One assertion so a member added to SPEC has one place
+                // here to fail.
+                for (const member of [
+                    'set',
+                    'invalidate',
+                    'refresh',
+                    'publish',
+                    'dispose',
+                    'peek',
+                    'chunks',
+                    'pending',
+                    'refreshing',
+                    'settled',
+                    'done',
+                    'streaming',
+                    'error',
+                    'isError',
+                ]) {
+                    is(
+                        `\`${member}\` passes through`,
+                        template(`<script>const s = state("ab")</script><p>{s.${member}()}</p>`),
+                        `<p>\${() => s.${member}()}</p>`,
+                    )
+                }
                 is(
                     'the explicit spelling still compiles',
                     template('<script>const n = state(0)</script><p>{n()}</p>'),
