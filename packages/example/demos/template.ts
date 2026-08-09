@@ -2,7 +2,7 @@
 // template both ways — to a string with `renderToString`, and to live DOM with `mount` — so the
 // difference between the lanes is visible where there is one, and asserted where there is not.
 
-import { classifySlots, escape, html, isTemplate, raw, state, type TemplateResult, watch } from 'abide'
+import { classifySlots, escape, html, isTemplate, keyed, raw, state, type TemplateResult, watch } from 'abide'
 import { renderToString } from 'abide/server'
 import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
@@ -711,6 +711,38 @@ export default suite({
                         },
                     ]
                 })(),
+            },
+        },
+
+        {
+            title: 'a keyed row and an unkeyed one cannot claim the SAME row',
+            note: 'A list reconciles unkeyed items by INDEX and keyed ones by key, and both look in the rows the last pass left. Nothing stopped one row answering both — an unkeyed item taking `previous[i]` while a keyed item took that very row out of the key index — after which the list held one row object at two positions and the placement walk moved its nodes twice, rendering one row where two were asked for.',
+            async run({ is }) {
+                // ONE call site for every row, so they share a `strings` identity — that is what
+                // makes a previous row a candidate for reuse at all, and two literals written out
+                // separately would never have collided.
+                const li = (text: string): TemplateResult => html`<li>${text}</li>`
+                const items = state<unknown[]>([keyed('k', li('first'))])
+                const host = container()
+                const view = mount(host, () => html`<ul>${() => items()}</ul>`)
+                try {
+                    is('one row to begin with', host.querySelectorAll('li').length, 1)
+
+                    // The unkeyed item lands at index 0, where the keyed row already is, and the
+                    // keyed one asks for that same row by key. Same template, so both would match it.
+                    items.set([li('plain'), keyed('k', li('second'))])
+                    await tick()
+
+                    is('both rows are on screen', host.querySelectorAll('li').length, 2)
+                    is(
+                        'and each holds its own value',
+                        Array.from(host.querySelectorAll('li')).map((li) => li.textContent),
+                        ['plain', 'second'],
+                    )
+                } finally {
+                    view.dispose()
+                    host.remove()
+                }
             },
         },
 

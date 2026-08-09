@@ -348,6 +348,40 @@ export default suite({
         },
 
         {
+            title: 'a divergence disposes what it half-adopted',
+            note: 'The adopt walk has to BUILD before it can know the range matches — an instance per nested template, a row per list item, each holding one effect per reactive slot. When the check then fails, the part rebuilds; what it built first has to go with it. It did not: the handle was assigned only after the check, so a failed adoption left effects nothing held and nothing could dispose. Reached from a navigation there is no enclosing scope collecting them either, so they stayed subscribed for the life of the page, re-running on every write and writing into nodes already removed. Only counting the re-runs can see it — the screen is correct either way.',
+            async run({ is }) {
+                const beat = state(0)
+                let reads = 0
+                const view = (): TemplateResult =>
+                    html`<div>${() =>
+                        html`<p>${() => {
+                            reads++
+                            return beat()
+                        }}</p>`}</div>`
+
+                const host = await served(view)
+                // What a divergent server would have written: one more node inside the slot's range
+                // than this template accounts for. The nested instance adopts cleanly and only the
+                // range check that follows it fails — which is exactly the window where the built
+                // instance is live and unreferenced.
+                const paragraph = host.querySelector('p') as Element
+                paragraph.after(document.createElement('i'))
+
+                hydrate(host, view)
+                await tick()
+                const afterAdopt = reads
+
+                // Whatever survived is subscribed to this.
+                beat.set(1)
+                await tick()
+                is('one live reader of the cell, not two', reads - afterAdopt, 1)
+                is('and the rebuilt subtree is correct', host.querySelector('p')?.textContent, '1')
+                host.remove()
+            },
+        },
+
+        {
             title: 'a divergence costs that subtree, not the page',
             note: 'The adopt walk verifies as it goes — tag by tag, marker by marker — and a slot whose range is not what this template writes warns and builds itself instead. Nothing else on the page is touched, so a stale cache or a non-deterministic render degrades to a rebuild rather than a blank screen.',
             async run({ is }) {

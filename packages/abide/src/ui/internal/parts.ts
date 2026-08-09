@@ -177,8 +177,14 @@ export class ChildPart {
                 // Recover here rather than failing the page: drop what the server wrote for this one
                 // slot and fall through to the ordinary build. The rest of the tree keeps its markup.
                 hydrateLog.warning(`${error.message} — building this slot instead of adopting it`)
+                // Through `clearExcept`, not a bare remove loop. `take` has to BUILD before it can
+                // know the range matches, and what it built holds one effect per reactive slot —
+                // `watchNode` registers a disposer only while `collecting` is set, and `collecting`
+                // is set only inside `scope`'s synchronous body, so a `take` reached from a
+                // navigation has nothing collecting it. An effect this part is not holding is one
+                // nothing can ever dispose, and it goes on writing into the nodes removed below.
+                this.clearExcept(null)
                 for (const node of claimed) node.remove()
-                this.dropOpened()
             }
         }
         if (value instanceof Awaited) {
@@ -216,10 +222,16 @@ export class ChildPart {
             }
             this.set(value.fallback)
             this.holding = operand // `set` cleared it
-            // Re-read: `set` above bumped the generation itself, and a stamp taken before it would
-            // make this settle look superseded by its own fallback. `settle` with no branches is
-            // already the policy this wants — no arm to catch a rejection, because `suspend` has a
-            // fallback rather than a `{:catch}`, so the fallback stays up and the error is reported.
+            // A stamp of its OWN, bumped after the fallback is on screen rather than read off it.
+            // A fallback may itself be thenable — a cell is, and a cell is ordinary to pass — in
+            // which case `set` above started a settle of its own and stamped it with the generation
+            // it had just bumped to. Sharing that stamp means whichever lands first discards the
+            // other, and the fallback is usually the settled one, so the body would never run. The
+            // bump also retires that settle: a placeholder has no business painting over the value
+            // it was standing in for. `settle` with no branches is already the policy this wants —
+            // no arm to catch a rejection, because `suspend` has a fallback rather than a
+            // `{:catch}`, so the fallback stays up and the error is reported.
+            this.generation++
             this.settle(operand, null, this.generation, value.body)
             return
         }
@@ -360,13 +372,16 @@ export class ChildPart {
         if (Array.isArray(value)) {
             const cursor: Cursor = { node: claimed[0] ?? this.anchor }
             const list = new ListPart(this.anchor)
+            // Held BEFORE it is filled, and `adopt` pushes per row: a row that mismatches leaves the
+            // rows before it fully built, and the recovery in `set` can only dispose what this part
+            // is holding by then.
+            this.list = list
             list.adopt(value, cursor)
             if (cursor.node !== this.anchor) {
                 mismatch(
                     `a list left ${describe(cursor.node)} over — the server wrote more rows than this one has`,
                 )
             }
-            this.list = list
             this.owned = claimed
             return
         }
@@ -374,10 +389,12 @@ export class ChildPart {
         if (isTemplate(value)) {
             const cursor: Cursor = { node: claimed[0] ?? this.anchor }
             const nested = new Instance(value, cursor)
+            // Held before the range is checked, for the reason the list arm above is: a constructed
+            // instance owns its slot effects, and the recovery cannot reach one this part dropped.
+            this.nested = nested
             if (cursor.node !== this.anchor) {
                 mismatch(`a nested template left ${describe(cursor.node)} over`)
             }
-            this.nested = nested
             this.owned = nested.nodes
             return
         }
@@ -594,6 +611,13 @@ export class ChildPart {
         const before = this.anchor.previousSibling
         return {
             insert: (fragment: DocumentFragment): void => {
+                // Recorded before it is inserted, because inserting empties the fragment. Until
+                // `done()` re-derives the range this is the ONLY reference to what went in, and a
+                // part disposed mid-stream — a route change, a teardown, an abandoned navigation —
+                // would otherwise leave the page it had already painted in the document.
+                for (let node = fragment.firstChild; node !== null; node = node.nextSibling) {
+                    this.owned.push(node as ChildNode)
+                }
                 this.anchor.before(fragment)
             },
             patch: (id: string, fragment: DocumentFragment): boolean => {
@@ -661,18 +685,20 @@ class ListPart {
      * so each row delimits itself and hands the cursor to the next.
      */
     adopt(items: unknown[], cursor: Cursor): void {
-        const rows: Row[] = []
+        // Pushed per row rather than assigned at the end: adopting row `k` can find the server's
+        // markup does not match and throw, and the rows already built by then are only reachable
+        // through here. `dispose` is what the failed adoption's recovery calls.
+        this.rows = []
         for (const item of items) {
             const keyed = isKeyed(item)
             const template = keyed ? item.template : (item as TemplateResult)
             if (keyed) this.keyed = true
-            rows.push({
+            this.rows.push({
                 key: keyed ? item[KEY] : undefined,
                 instance: new Instance(template, cursor),
                 usedAt: 0,
             })
         }
-        this.rows = rows
     }
 
     /**
@@ -735,14 +761,16 @@ class ListPart {
             if (keyed) this.keyed = true
 
             let row = key === undefined ? previous[i] : byKey?.get(key)
+            // Already taken this pass, so it is not available to take again: an unkeyed item claims
+            // `previous[i]` by INDEX while a keyed one can claim that same row out of `byKey`, and
+            // `next` would then hold one `Row` at two indices — the placement walk reads the same
+            // `instance.nodes` for both and renders one row where two were asked for. The second
+            // claimant builds its own instead.
+            if (row !== undefined && row.usedAt === pass) row = undefined
             if (row !== undefined && row.instance.strings === template.strings) {
                 if (key !== undefined) byKey?.delete(key)
-                // Counted only on the FIRST claim, so a mixed list that reaches one row twice cannot
-                // make the survivor count say every previous row was kept.
-                if (row.usedAt !== pass) {
-                    row.usedAt = pass
-                    carried++
-                }
+                row.usedAt = pass
+                carried++
                 row.instance.update(template.values)
             } else {
                 row = { key, instance: instantiate(template), usedAt: pass }

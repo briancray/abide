@@ -625,6 +625,30 @@ export default suite({
         },
 
         {
+            title: 'a THENABLE fallback does not race the body it stands in for',
+            note: 'The fallback is rendered through the ordinary slot path, and a cell is thenable — so one handed over as a fallback starts a settle of its own. It used to be stamped with the same generation the suspend\'s own settle then took, which makes the two mutually exclusive: whichever landed first retired the other. The fallback is normally the settled one, so it won, and the body never ran at all.',
+            async run({ is }) {
+                // A cell, which is the ordinary thing to reach for and is thenable by contract.
+                const placeholder = state('waiting…')
+                const landing = sleep(5).then(() => 'landed')
+                const host = container()
+                const view = mount(
+                    host,
+                    () => html`<p>${suspend(landing, (t: string) => html`<b>${t}</b>`, placeholder)}</p>`,
+                )
+                try {
+                    await landing
+                    await tick()
+                    is('the body ran and is on screen', host.textContent?.includes('landed'), true)
+                    is('the fallback did not outlive it', host.textContent?.includes('waiting'), false)
+                } finally {
+                    view.dispose()
+                    host.remove()
+                }
+            },
+        },
+
+        {
             title: 'suspend is ISOMORPHIC — one marker, three continuations',
             note: 'The same block a server defers is one the client understands: it shows the fallback and swaps when the promise lands, which is what it already does for a promise in a slot. It has to be — a PAGE is the same module on both sides, so a marker only the server knew would render `[object Object]` in the browser and lock every page out of the primitive. Hydration then ADOPTS, because whatever the server sent is already the settled body.',
             async run({ is }) {
