@@ -586,6 +586,41 @@ export default suite({
                     mounted.dispose()
                     into.remove()
                 }
+
+                // And the ADOPTION twin. A hydrated panel is a settled one, so the same cutoff has to
+                // hold for a range that came off the parser rather than out of a render — `set` and
+                // `take` are two doors into the same block and the guard is worth nothing if only one
+                // of them records what it is showing.
+                let adopted = 0
+                const shifting = state(0)
+                const held = { name: 'hopper' }
+                const hydrating = (): TemplateResult => {
+                    shifting()
+                    return html`<p>${suspend(
+                        held,
+                        (user: { name: string }) => {
+                            adopted++
+                            return html`<b>${user.name}</b>`
+                        },
+                        'loading…',
+                    )}</p>`
+                }
+                const server = container()
+                server.innerHTML = await renderToString(hydrating(), { hydratable: true })
+                const element = server.querySelector('b')
+                const live = hydrate(server, hydrating)
+                try {
+                    await tick()
+                    is('the element is the one the parser made', server.querySelector('b'), element)
+                    const afterAdopt = adopted
+                    shifting.set(1)
+                    await tick()
+                    is('an unrelated re-run does not re-enter the body', adopted, afterAdopt)
+                    is('and the element still is', server.querySelector('b'), element)
+                } finally {
+                    live.dispose()
+                    server.remove()
+                }
             },
         },
 

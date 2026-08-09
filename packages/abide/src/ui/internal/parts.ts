@@ -300,6 +300,11 @@ export class ChildPart {
             this.generation++
             if (!isThenable(operand)) {
                 this.take(claimed, value.body(operand as never))
+                // Recorded here as well as in `set`: an adopted panel is a settled one, and without
+                // this the first re-run of the slot finds `holding` still `NOTHING`, re-enters the
+                // body and updates the whole subtree it just adopted for free. `Awaited`'s arm below
+                // is the same line for the same reason.
+                this.holding = operand
                 return
             }
             // Still in flight on THIS side — a fresh operand rather than the one the server settled.

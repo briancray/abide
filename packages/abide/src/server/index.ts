@@ -278,6 +278,12 @@ function emitArray(nodes: Renderable[], context: RenderContext, out: Out, from: 
 
 // The four branches that genuinely wait. Written as `async` functions rather than as more
 // resumption: they are the slow path by definition, so readable beats allocation-free here.
+//
+// One arm no longer always waits — a `streamed()` over a SYNC iterable under `renderToString` has
+// neither a source to await nor a consumer to flush to, so it returns a promise for work already
+// done and each enclosing level pays a `then_` and a tick to resume it. Left `async`: unwinding it
+// means the resumption shape `emitArray` uses, and that is real machinery for the one case where a
+// block declared `{#for await}` was handed something that never awaits.
 
 async function emitAwaited(node: Awaited, context: RenderContext, out: Out): Promise<void> {
     const handed = handOver(out)
