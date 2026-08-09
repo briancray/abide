@@ -136,6 +136,7 @@ async function reported(): Promise<Reported[]> {
     const found: string[] = []
     for await (const path of new Bun.Glob('*.abide').scan({ cwd: HERE, absolute: true })) found.push(path)
     const emitted = await Promise.all(found.map((path) => emitFor(path)))
+    EMITTED = emitted
 
     const byModule = new Map<string, Awaited<ReturnType<typeof emitFor>>>()
     for (const item of emitted) {
@@ -171,7 +172,22 @@ async function reported(): Promise<Reported[]> {
     return all
 }
 
+let EMITTED: Awaited<ReturnType<typeof emitFor>>[] = []
 const REPORTED = await reported()
+
+test('every emit writes the declaration a `.abide` specifier resolves through', async () => {
+    // The THIRD generated file, and the one `allowArbitraryExtensions` actually looks for: a module
+    // beside it is not enough, because tsc resolves `./x.abide` to `x.d.abide.ts`. `emitFor` reports
+    // where it put one and nothing read that back, so a stop in writing them would have surfaced as
+    // an unresolved import in somebody's app rather than as a failure in abide's own tree.
+    expect(EMITTED.length).toBeGreaterThan(0)
+    for (const item of EMITTED) {
+        expect(item.declaration).toMatch(/\.d\.abide\.ts$/)
+        expect(await Bun.file(item.declaration).exists()).toBe(true)
+        // It re-exports the module beside it — which is what makes the pair one resolution.
+        expect(await Bun.file(item.declaration).text()).toContain(item.module.split('/').pop() as string)
+    }
+})
 
 test('every invalid fixture is rejected, and nothing else is', () => {
     // A fixture that stopped being wrong is a test that stopped testing. Counting both directions is

@@ -23,7 +23,7 @@ import {
     remote,
     remoteSocket,
 } from 'abide'
-import { ElisionError, elide, endpointId, type ImportedModule, kindOf } from 'abide/compiler'
+import { ElisionError, elide, endpointId, type ImportedModule, kindOf, type TypeSource } from 'abide/compiler'
 import { config } from 'abide/server'
 import {
     DELETE,
@@ -1126,7 +1126,11 @@ export default suite({
                         `export interface Book { title: string; author: Author }\n`,
                     '/app/server/people.ts': `export interface Author { name: string }\n`,
                 }
-                const resolve = (specifier: string, importer: string): ImportedModule | null => {
+                // Annotated as `TypeSource` rather than left to infer: it is the seam `elide` takes
+                // so a shape declared in ANOTHER file still publishes, and naming the type here is
+                // what makes a change to that signature a failure in the dogfood rather than in
+                // whatever build first passed the old shape.
+                const resolve: TypeSource = (specifier, importer) => {
                     const parts = importer.slice(0, importer.lastIndexOf('/')).split('/').filter(Boolean)
                     for (const step of specifier.split('/')) {
                         if (step === '' || step === '.') continue
@@ -1135,7 +1139,11 @@ export default suite({
                     }
                     const path = `/${parts.join('/')}`
                     const text = MODULES[path]
-                    return text === undefined ? null : { path, text }
+                    if (text === undefined) return null
+                    // The answer named too: `TypeSource` says what the seam IS, `ImportedModule` what
+                    // one hop across it carries, and both are public — so both are spelled here.
+                    const found: ImportedModule = { path, text }
+                    return found
                 }
                 const crossing = `import type { Book } from '../models.ts'\nexport const a = GET((v: Book) => 1)\n`
 
