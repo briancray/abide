@@ -823,12 +823,15 @@ class ListPart {
                 break
             }
         }
+        // Constant across the loop — the anchor is never moved, only inserted before — and the loop
+        // runs once per row from `lastChanged` down, so reading it inside cost a native getter per
+        // MOVED row: 197 of them on the two-row swap this list is benched with.
+        const parent = this.anchor.parentNode as ParentNode
         for (let i = lastChanged; i >= 0; i--) {
             const instance = (next[i] as Row).instance
             const first = instance.nodes[0]
             if (first === undefined) continue
             if (first.nextSibling !== reference || first.parentNode === null) {
-                const parent = this.anchor.parentNode as ParentNode
                 for (const node of instance.nodes) parent.insertBefore(node, reference)
             } else if (i < firstChanged) {
                 break

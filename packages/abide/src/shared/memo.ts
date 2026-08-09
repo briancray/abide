@@ -287,7 +287,9 @@ function keyedMemo<Args, T>(
         // A sync body must never be observable as a load: wrapping it in `Promise.resolve().then()`
         // costs a microtask tick and makes the slot flash `pending` for data already in hand.
         if (!isThenable(produced)) {
-            slot.loadedAt = Date.now()
+            // Not stamped here: `handle.set` is overridden per slot and stamps as its first
+            // statement, so a second `Date.now()` on this line is the same write twice and a second
+            // writer of one field for the next reader to reconcile.
             slot.handle.set(produced)
             return
         }

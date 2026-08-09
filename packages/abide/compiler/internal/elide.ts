@@ -185,7 +185,8 @@ export function endpointsOf(source: string, filename: string, kind: Kind, resolv
             equals = types.extent(equals + 1)
         }
         const method = tokens[equals + 1]
-        if (equals >= tokens.length || method === undefined) break
+        // `method === undefined` alone: past the end, the read above is already undefined.
+        if (method === undefined) break
         if (
             name.kind !== SyntaxKind.Identifier ||
             (tokens[equals] as Token).kind !== SyntaxKind.EqualsToken

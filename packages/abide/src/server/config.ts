@@ -45,7 +45,6 @@ import { useConfigSource } from '$shared/internal/knobs.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { NO_LIMIT } from '$shared/internal/timers.ts'
 import { abideLog } from '$shared/log.ts'
-import { DEFAULT_PORT } from './internal/DEFAULTS.ts'
 import { type Gate, gate, type Schema } from './schema.ts'
 
 /**
@@ -447,7 +446,7 @@ function checked(document: Config, gated: Gate<unknown> | null): Config {
 
 /** What abide means by each variable when nobody declared one. Never mutated — always spread from. */
 const FLOOR: Env = {
-    PORT: DEFAULT_PORT,
+    PORT: 3000,
     NODE_ENV: null,
     DEBUG: null,
     NO_COLOR: null,

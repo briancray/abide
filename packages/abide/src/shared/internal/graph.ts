@@ -26,6 +26,9 @@ const CHECK: number = 1
 const DIRTY: number = 2
 const DEAD: number = 3
 
+/** The empty every node starts and ends on. Only `run`'s own array is ever pushed into — see below. */
+const NO_SOURCES: Node[] = []
+
 let current: Node | null = null
 let queue: Node[] = []
 let scheduled = false
@@ -36,7 +39,13 @@ export class Node {
     fn: (() => unknown) | null
     status: number
     isEffect: boolean
-    sources: Node[] = []
+    // The SHARED empty, never the node's own: `run` installs a fresh array before it sets `current`,
+    // and line 65's push is the only writer, so nothing can reach this one to push into it. Every
+    // `state()`, every cold slot and all six trackers of an `Async` are `fn === null` nodes that
+    // never run at all — a keyed memo with 500 settled slots was allocating ~3500 arrays for an
+    // iteration that is always empty. Same invariant `NO_CHUNKS` below and `channel`'s `NO_MESSAGES`
+    // already rest on.
+    sources: Node[] = NO_SOURCES
     // Allocating this lazily — null until something reads the node under tracking, which an effect
     // never is — was tried and reverted. It is a real allocation avoided on most nodes, and it is
     // worth 2.5 ns of the 10.5 ns a node costs to construct: measurable, and not worth a null check
@@ -172,7 +181,7 @@ export class Node {
             untrack(teardown)
         }
         for (const source of this.sources) source.observers.delete(this)
-        this.sources = []
+        this.sources = NO_SOURCES
         this.observers.clear()
         this.status = DEAD
     }
