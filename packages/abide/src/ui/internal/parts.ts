@@ -576,7 +576,14 @@ export class ChildPart {
         // Before the teardown, so a load still in flight cannot settle into the range being replaced.
         this.generation++
         this.holding = NOTHING
-        this.claimed = null
+        // The same salvage `dispose` makes, and for the same reason: a part reclaimed before its
+        // first update still owns server nodes nobody else will remove, and dropping the reference
+        // leaves them in the document for the incoming range to be inserted after. Normally a no-op —
+        // `claimed` is consumed by the first `set` — it is the overlapping navigation that reaches it.
+        if (this.claimed !== null) {
+            this.owned = this.claimed
+            this.claimed = null
+        }
         // Through `clearExcept`, because a nested instance still owns live slot effects and `take`
         // overwrites `nested` without disposing it — a part reclaimed without this leaves one live
         // effect per reactive slot per navigation, each writing into nodes no longer in the document.
