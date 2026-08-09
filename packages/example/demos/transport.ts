@@ -830,10 +830,14 @@ export default suite({
                         },
                     },
                 }
+                // …and one of the three forms `Schema` accepts, which is the claim the union makes:
+                // a library's own object goes into the same option a plain function or a JsonSchema
+                // does, with no adapter between them.
+                const asOption: Schema<{ name: string }> = aName
 
                 const getUser = GET(({ id }: { id: number }) => find(id), { schemas: { input: anId } })
                 const rename = POST(({ name }: { name: string }) => ({ name }), {
-                    schemas: { input: aName },
+                    schemas: { input: asOption },
                 })
                 const wrong = GET<void, { name: string }>(
                     () => ({ nope: true }) as unknown as { name: string },
