@@ -5,11 +5,12 @@
 // are read from `$shared`, which may not import `$server` — so the server REGISTERS itself here, the
 // same inversion `useLogSink`, `useAppNameSource` and `useIdentitySource` already are.
 //
-// Nothing registered is the honest answer in a browser: there is no config there, `env()` reads an
-// environment that does not exist, and the floor each call site passes is its own. That is also what
-// makes the UI lane cost nothing for a seam it never uses — one null check.
+// Nothing registered is the honest answer in a browser: there is no config there and `env()` reads an
+// environment that does not exist, so every knob answers with its floor. That is also what makes the
+// UI lane cost nothing for a seam it never uses — one null check.
 
 import { env, envNumber } from './env.ts'
+import { NO_LIMIT } from './timers.ts'
 
 /** What the server hands over: one field, and `undefined` when config has nothing to say about it. */
 type Resolver = (field: string) => unknown
@@ -28,11 +29,13 @@ export function useConfigSource(source: Resolver): void {
  * parses anything, and eagerly it was an `env()` read plus a `Number()` parse per log line, per rpc
  * call and per settled memo slot, all of it recomputing what `config()` already merged. The rule is
  * here rather than at each call site because a floor spelled twice is one typo away from a variable
- * that means two different things — the same reason `knobOf` takes no fallback either.
+ * that means two different things — the same reason `knobOf` takes no fallback either, and the reason
+ * this takes none. Every knob it answers is a CEILING, so the floor is the absence of one; a knob
+ * that ever wanted a different floor would be asking a different question and would say so by name.
  */
-export function numberKnob(field: string, floor: number): number {
+export function numberKnob(field: string): number {
     const held = resolver?.(field)
-    return held === undefined ? envNumber(field, floor) : (held as number)
+    return held === undefined ? envNumber(field, NO_LIMIT) : (held as number)
 }
 
 /** One textual knob. `null` is what a variable nobody set means, on both sides of the seam. */

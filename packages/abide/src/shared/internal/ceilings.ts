@@ -38,7 +38,7 @@ const UNSIZED = 64
 
 /** Per-stream transcript cap. Declared once per stream, so nothing per chunk reads the environment. */
 export function streamCeiling(): number {
-    return numberKnob('ABIDE_MAX_STREAM_BUFFER_SIZE', NO_LIMIT)
+    return numberKnob('ABIDE_MAX_STREAM_BUFFER_SIZE')
 }
 
 /**
@@ -90,7 +90,7 @@ export function reportOverflow(charged: number, ceiling: number): void {
  * a render, which is what makes a document's deferred half answer to it too.
  */
 export function renderBudget(): number {
-    return numberKnob('ABIDE_SSR_STREAM_BUDGET', NO_LIMIT)
+    return numberKnob('ABIDE_SSR_STREAM_BUDGET')
 }
 
 // --- the process-wide memo cache --------------------------------------------
@@ -148,7 +148,7 @@ let held = 0
  * nobody is asking for any more.
  */
 export function admit(entry: Bounded, value: unknown): void {
-    const ceiling = numberKnob('ABIDE_MAX_GLOBAL_CACHE_SIZE', NO_LIMIT)
+    const ceiling = numberKnob('ABIDE_MAX_GLOBAL_CACHE_SIZE')
     if (ceiling === NO_LIMIT) {
         if (ORDER.size !== 0) {
             for (const tracked of ORDER) tracked.charged = 0

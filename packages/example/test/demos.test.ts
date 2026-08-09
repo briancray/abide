@@ -8,7 +8,7 @@
 // A browser-only case — one whose whole point needs a click — is reported as skipped rather than
 // silently passing.
 
-import { describe, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { runHeadless } from 'abide/tests'
 import { allSuites } from '../demos/index.ts'
 
@@ -24,7 +24,11 @@ for (const suite of SUITES) {
                 continue
             }
             test(spec.title, async () => {
-                await runHeadless(spec)
+                // The lines are READ, not discarded: `runHeadless` hands back what the case logged,
+                // and a case that recorded nothing at all is one whose assertions never ran — a
+                // `run` that returned early would otherwise pass silently.
+                const logged = await runHeadless(spec)
+                if (spec.run !== undefined) expect(logged.length).toBeGreaterThan(0)
             })
         }
     })

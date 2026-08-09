@@ -17,7 +17,16 @@ import { validateJson } from 'abide/server'
 
 const FIXTURE = new URL('../types/checker/server/rpc/computed.ts', import.meta.url).pathname
 
-const CHECKED = await deriveShapes({ roots: [new URL('../types/checker/', import.meta.url).pathname] })
+// `cwd` and `tsconfig` named EXPLICITLY rather than left to default off `process.cwd()`: they are
+// what lets a caller point the checker at a project it is not being run from, and the fixture tree
+// has a config of its own. Defaulted, this passes only because `bun test` happens to run from the
+// workspace root — which is a property of the runner, not of the pass.
+const CHECKER_ROOT = new URL('../', import.meta.url).pathname
+const CHECKED = await deriveShapes({
+    roots: [new URL('../types/checker/', import.meta.url).pathname],
+    cwd: CHECKER_ROOT,
+    tsconfig: `${CHECKER_ROOT}tsconfig.json`,
+})
 const SYNTAX = elide(await Bun.file(FIXTURE).text(), { filename: FIXTURE })
 
 function syntaxFor(name: string): { input?: unknown; output?: unknown } {
