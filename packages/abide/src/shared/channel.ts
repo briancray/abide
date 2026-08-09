@@ -19,43 +19,9 @@ import { isNamedError } from './internal/probes.ts'
 import { arm } from './internal/timers.ts'
 import { state, watch } from './reactive.ts'
 
-interface Received<T> {
-    latest: T | undefined
-    /** When `latest` arrived. Only consulted under `maxAge`. */
-    at: number
-    /**
-     * Messages oldest-first, PUSHED into rather than rebuilt per publish.
-     *
-     * Carries up to `tail + slack`, of which the LAST `tail` are the ones `chunks()` shows. The
-     * slack is what makes a publish O(1) amortised: rebuilding the transcript per message cost a
-     * copy of the whole retention every time, which is 1242 ns at `tail: 500` against 8 ns here.
-     */
-    buffer: T[]
-    /** Arrival times, parallel to `buffer`. Only consulted under `maxAge`. */
-    stamps: number[]
-    /**
-     * The live window as its own array, built on first ask and held for this version.
-     *
-     * A COPY, because the buffer keeps being pushed into — so `chunks()` still hands back a new
-     * array after every publish and the same one between them, exactly as it did when the copy was
-     * per publish. A channel nobody reads the transcript of now pays for none of them.
-     */
-    view: T[] | null
-    got: boolean
-}
-
 // One shared empty array, so a `chunks()` reader on a channel with no retention sees the same
 // identity every time and never wakes for it.
 const NO_MESSAGES: never[] = []
-
-const EMPTY: Received<never> = {
-    latest: undefined,
-    at: 0,
-    buffer: NO_MESSAGES,
-    stamps: NO_MESSAGES,
-    view: NO_MESSAGES,
-    got: false,
-}
 
 export interface Channel<T> {
     /** Latest message, reactive. Subscribes the caller. */
@@ -118,14 +84,55 @@ export function channel<T, Args>(options?: ChannelOptions): KeyedChannel<Args, T
 export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & KeyedChannel<Args, T> {
     const tail = options.tail ?? 0
     const maxAge = options.maxAge ?? Infinity
-    // How far past `tail` the buffer may run before it compacts — what turns the copy from per
-    // publish into once per `tail` publishes. NONE under `maxAge`: the timer arms for `stamps[0]` as
-    // the oldest surviving message, so a message the tail has already evicted must not still be
-    // sitting at the front claiming to be it.
-    const slack = maxAge === Infinity ? tail : 0
     const listeners = new Set<(message: T) => void>()
-    // One cell holds the whole observable state, so a publish is one wake, not two.
-    const cell = state<Received<T>>(EMPTY as Received<T>)
+
+    // --- what is held, and what WAKES for it -------------------------------
+    //
+    // Three cells rather than one envelope, for the reason `graph.ts` keeps four one-bit nodes
+    // instead of a status record: a record rebuilt per publish is never identity-equal to the one
+    // before it, so every cutoff downstream stops cutting off and every reader wakes for every
+    // message. `settled()` moves once in a channel's life and `chunks()` on a channel with no
+    // retention never moves at all — neither can be spelled through a shared envelope.
+    //
+    // Splitting costs a reader of all three nothing: two writes in one synchronous region mark an
+    // effect DIRTY once, and `Node.mark` will not queue it twice.
+    /** Bumped by every publish — the signal a bare `ch()` reader subscribes to. */
+    const messages = state(0)
+    /** Bumped only when the TRANSCRIPT moves, so `tail: 0` never wakes a `chunks()` reader. */
+    const transcript = state(0)
+    /** Flips once and then holds, so a `settled()` reader wakes once rather than per publish. */
+    const got = state(false)
+
+    // The payload the cells above are the signal FOR. Plain fields: nothing subscribes to them, and
+    // a reader that woke on a version reads them on the way past.
+    let latest: T | undefined
+    /** When `latest` arrived. Only consulted under `maxAge`. */
+    let at = 0
+    /**
+     * Messages oldest-first, PUSHED into rather than rebuilt per publish. Live from `head` on.
+     *
+     * Rebuilding the transcript per message cost a copy of the whole retention every time — 1242 ns
+     * at `tail: 500` against 8 ns here.
+     */
+    let buffer: T[] = NO_MESSAGES
+    /** Arrival times, parallel to `buffer`. Only consulted under `maxAge`. */
+    let stamps: number[] = NO_MESSAGES
+    /**
+     * Where the live window STARTS. Dropping the oldest message is `head++`, never a splice, so the
+     * retention size cannot reach the publish: eviction is O(1) and the one O(tail) compaction below
+     * is paid once per `tail` messages. This is what `maxAge` used to give up — it ran with no slack
+     * so that `stamps[0]` was the oldest surviving message, and paid a memmove per publish for it.
+     * A cursor answers the same question without the trade, because `stamps[head]` IS that message.
+     */
+    let head = 0
+    /**
+     * The live window as its own array, built on first ask and held until the transcript moves.
+     *
+     * A COPY, because the buffer keeps being pushed into — so `chunks()` hands back a new array
+     * after a publish and the same one between them. A channel nobody reads the transcript of pays
+     * for none of them.
+     */
+    let view: T[] | null = NO_MESSAGES
 
     // Rooms are module-global rather than per-caller: a channel is not a cache. A server publishing
     // into a room has to reach subscribers that arrived on other requests, which is the whole point
@@ -145,8 +152,13 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     // A channel is a SOURCE, so a slot reads it rather than rendering it. Without this the two
     // substrates disagreed: the server recurses through any function and printed the message, while
     // the client asks the brand and printed the channel's own source text.
-    const self = markSource(((args?: Args) =>
-        args === undefined ? cell().latest : roomFor(args)) as Channel<T> & KeyedChannel<Args, T>)
+    const self = markSource(((args?: Args) => {
+        if (args !== undefined) return roomFor(args)
+        // The VERSION is what is subscribed to, and the payload is read on the way past: a publish
+        // of the same value twice is two messages, and a reader of `ch()` has to wake for both.
+        messages()
+        return latest
+    }) as Channel<T> & KeyedChannel<Args, T>)
 
     // --- expiry ------------------------------------------------------------
     //
@@ -163,44 +175,53 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             expiry = null
         }
         if (maxAge === Infinity) return
-        const held = cell.peek()
-        const oldest = held.stamps.length > 0 ? (held.stamps[0] as number) : held.got ? held.at : 0
+        // `stamps[head]`, not `stamps[0]`: the oldest SURVIVING message, which is what the cursor
+        // makes cheap to name. Everything before `head` was evicted and is waiting to be compacted.
+        const oldest = head < stamps.length ? (stamps[head] as number) : got.peek() ? at : 0
         if (oldest === 0) return
         expiry = arm(expire, Math.max(0, oldest + maxAge - Date.now()))
     }
 
     function expire(): void {
         expiry = null
-        const held = cell.peek()
         const now = Date.now()
-        let drop = 0
-        while (drop < held.stamps.length && now - (held.stamps[drop] as number) >= maxAge) drop++
-        const staleLatest = held.got && now - held.at >= maxAge
-        if (drop > 0 || staleLatest) {
-            if (drop > 0) {
-                held.buffer.splice(0, drop)
-                held.stamps.splice(0, drop)
-            }
-            cell.set({
-                latest: staleLatest ? undefined : held.latest,
-                at: staleLatest ? 0 : held.at,
-                buffer: held.buffer,
-                stamps: held.stamps,
-                view: drop > 0 ? null : held.view,
-                got: !staleLatest,
-            })
+        let dropped = 0
+        while (head < stamps.length && now - (stamps[head] as number) >= maxAge) {
+            head++
+            dropped++
+        }
+        const staleLatest = got.peek() && now - at >= maxAge
+        if (dropped > 0) {
+            compact()
+            view = null
+            transcript.set(transcript.peek() + 1)
+        }
+        if (staleLatest) {
+            latest = undefined
+            at = 0
+            got.set(false)
+            messages.set(messages.peek() + 1)
         }
         schedule()
     }
 
+    /**
+     * Move the live window back to index 0, once the evicted head has grown to `tail`.
+     *
+     * The one O(tail) copy in the design, and it is paid once per `tail` evictions rather than once
+     * per publish — which is what keeps a bigger retention from being a dearer one.
+     */
+    function compact(): void {
+        if (head > tail && head > 0) {
+            buffer.splice(0, head)
+            stamps.splice(0, head)
+            head = 0
+        }
+    }
+
     self.publish = (message: T): void => {
-        const held = cell.peek()
-        const at = Date.now()
-        let buffer = held.buffer
-        let stamps = held.stamps
-        // No retention means the transcript is never touched, so `chunks()` keeps handing back the
-        // one shared empty array rather than a fresh one per publish.
-        let view = held.view
+        latest = message
+        at = Date.now()
         if (tail > 0) {
             // The empty transcript is SHARED. The first publish takes one of its own rather than
             // pushing into the constant every channel starts from.
@@ -210,13 +231,18 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             }
             buffer.push(message)
             stamps.push(at)
-            if (buffer.length > tail + slack) {
-                buffer.splice(0, buffer.length - tail)
-                stamps.splice(0, stamps.length - tail)
-            }
+            // Eviction is a cursor step, so the cost of dropping the oldest message does not grow
+            // with how many are kept. `compact` is what pays for it, once per `tail` of these.
+            if (buffer.length - head > tail) head++
+            compact()
             view = null
+            transcript.set(transcript.peek() + 1)
         }
-        cell.set({ latest: message, at, buffer, stamps, view, got: true })
+        // No retention means the transcript never moved, so `transcript` was not bumped and a
+        // `chunks()` reader on this channel does not wake — it would only be handed the same shared
+        // empty array it already has.
+        got.set(true)
+        messages.set(messages.peek() + 1)
         if (maxAge !== Infinity) schedule()
         // Delivery is against a SNAPSHOT: a listener that subscribes while this message is going out
         // must not receive it, and one that unsubscribes must still finish this round. The copy is
@@ -234,18 +260,18 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         }
         for (const listener of [...listeners]) listener(message)
     }
-    self.peek = () => cell.peek().latest
-    self.chunks = () => windowOf(cell())
-
-    /** The last `tail` of the buffer, as its own array. Built once per version and held on it. */
-    function windowOf(held: Received<T>): T[] {
-        if (held.view === null) {
-            const from = held.buffer.length - tail
-            held.view = from > 0 ? held.buffer.slice(from) : held.buffer.slice()
-        }
-        return held.view
+    self.peek = () => latest
+    self.chunks = () => {
+        transcript()
+        return windowOf()
     }
-    self.settled = () => cell().got
+
+    /** The live window as its own array. Built on the read that follows a move, and held until the next. */
+    function windowOf(): T[] {
+        if (view === null) view = buffer.slice(head)
+        return view
+    }
+    self.settled = () => got()
     self.invalidate = (pattern?: Partial<Args>): void => {
         if (rooms !== null) {
             const wanted = matcher(pattern)
@@ -258,11 +284,19 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             clearTimeout(expiry)
             expiry = null
         }
-        cell.set(EMPTY as Received<T>)
+        latest = undefined
+        at = 0
+        buffer = NO_MESSAGES
+        stamps = NO_MESSAGES
+        head = 0
+        view = NO_MESSAGES
+        got.set(false)
+        transcript.set(transcript.peek() + 1)
+        messages.set(messages.peek() + 1)
     }
-    self.pending = () => cell.pending()
-    self.refreshing = () => cell.refreshing()
-    self.error = () => cell.error()
+    self.pending = () => messages.pending()
+    self.refreshing = () => messages.refreshing()
+    self.error = () => messages.error()
     // A stream with no end: it never finishes, so it is never `done`, and it is always producing in
     // the only sense a channel has. Constants, and honest ones — the alternative is a reader having
     // to know which primitive it was handed before it can ask.
@@ -279,7 +313,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     // land in the same synchronous run — a message published between them would otherwise be missed
     // by the snapshot and dropped by the not-yet-subscriber.
     async function* follow(replay: boolean): AsyncGenerator<T> {
-        const pending: T[] = replay ? [...windowOf(cell.peek())] : []
+        const pending: T[] = replay ? buffer.slice(head) : []
         let wake: (() => void) | null = null
         const off = self.subscribe((message) => {
             pending.push(message)

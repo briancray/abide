@@ -444,9 +444,11 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
     let failure: unknown = null
     let failed = false
 
+    // Field order matches the `Out` declaration, and `renderToString`'s. A document render has both
+    // alive at once — this walk, plus a string `Out` per deferred boundary — and `emit` reads all
+    // three per node, so two orders here would be two hidden classes under every one of those reads.
     const out: Out = {
         text: '',
-        mark: HIGH_WATER,
         flush(): Promise<void> {
             if (out.text !== '') {
                 queue.push(out.text)
@@ -461,6 +463,7 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
                 rejectWalk = reject
             })
         },
+        mark: HIGH_WATER,
     }
 
     // Taken through a function with a DECLARED return type: `flush` is the only writer and it is a

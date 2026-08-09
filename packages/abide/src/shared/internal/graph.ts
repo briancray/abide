@@ -227,10 +227,12 @@ function resetChunks(track: Async): void {
  * Put a value through the node's `transform` before it is stored, reading nothing under tracking —
  * a transform is UNTRACKED by definition, and `set` is routinely called from inside an effect.
  *
- * Applied at exactly the four places a value becomes the node's own: `state`'s initial, a sync write
- * on a cell with no tracker, a settle, and a derivation's sync result. `resetNode` deliberately is
- * NOT one of them — dropping to `undefined` is un-settling, not a write, and a clamp that turned it
- * back into a number would make `invalidate` unable to go cold.
+ * Applied at exactly the five places a value becomes the node's own: `state`'s initial, a sync write
+ * on a cell with no tracker, a settle, a derivation's sync result, and each CHUNK a stream keeps —
+ * a chunk lands through `hold` rather than through a settle, so it is its own site and not one of
+ * the other four. `resetNode` deliberately is NOT one of them — dropping to `undefined` is
+ * un-settling, not a write, and a clamp that turned it back into a number would make `invalidate`
+ * unable to go cold.
  */
 function transformed(node: Node, value: unknown): unknown {
     const fn = node.transform
@@ -591,6 +593,24 @@ export const internals = {
     /** A derivation whose read runs `beforeRead` first — how an argless memo applies its ttl. */
     derived<T>(fn: () => unknown, beforeRead: () => void, transform?: (value: unknown) => unknown): Memo<T> {
         return makeDerived(fn, beforeRead, transform) as Memo<T>
+    },
+    /**
+     * The LIVE transcript buffer, for a reader that consumes in order.
+     *
+     * `chunks()` materialises a copy per version, which is what a template slot wants: it re-reads
+     * the whole list and must not see it mutate underneath. A cursor reader re-reads nothing, and
+     * copying the transcript for it costs a full slice per chunk — the O(n²) over a stream that the
+     * version counter exists to avoid. Subscribes to the version the same way; hands back the array
+     * itself rather than a snapshot of it.
+     *
+     * The IDENTITY is the signal that the transcript was replaced rather than appended to — an
+     * overflow drop and a reset both swap the array — so a cursor holding an index must compare it
+     * and start over when it moves.
+     */
+    transcript(cell: Cell<unknown>): readonly unknown[] {
+        const track = trackerFor(nodeOf(cell))
+        track.chunks.read()
+        return track.buffer
     },
     loading<T>(cell: Cell<T>): boolean {
         const track = nodeOf(cell as Cell<unknown>).asyncTrack

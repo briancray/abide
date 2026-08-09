@@ -164,7 +164,7 @@ export default suite({
 
         {
             title: 'the retention SIZE never reaches the publish',
-            note: 'A `tail` is a cap on what is REMEMBERED, and it has no business being a cost on every message. Rebuilding the transcript per publish made it one — 94 ns at `tail: 8` against 1314 ns at `tail: 500` — so raising a scrollback silently taxed a hot path nobody was looking at, and the same shape uncapped made a stream O(n²). The buffer is pushed into and compacted once per `tail` messages instead, which is what a ring was always supposed to mean.',
+            note: 'A `tail` is a cap on what is REMEMBERED, and it has no business being a cost on every message. Rebuilding the transcript per publish made it one — 94 ns at `tail: 8` against 1314 ns at `tail: 500` — so raising a scrollback silently taxed a hot path nobody was looking at, and the same shape uncapped made a stream O(n²). The buffer is pushed into and compacted once per `tail` messages instead, which is what a ring was always supposed to mean. Both arms run again under `maxAge`, because that lane used to evict with a memmove per publish and this ratio was the only thing that could have said so.',
             async run({ is, log }) {
                 // A ratio between two abide arms in the same substrate: an absolute number here
                 // would describe the machine, and a correctness test cannot see this at all — the
@@ -186,6 +186,60 @@ export default suite({
                 // 64x the retention. The bound is loose because a clock inside a browser card is;
                 // what it has to separate is ~1x from the ~14x a per-publish rebuild costs.
                 is(`a 64x larger cap costs no more per publish (${ratio.toFixed(1)}x)`, ratio < 4, true)
+
+                // The SAME ratio with expiry on. Eviction under `maxAge` used to run with no slack
+                // at all — every publish past the cap spliced the front of two arrays — so the two
+                // arms above were measuring the one lane that was already right. `maxAge` is far
+                // enough out that nothing expires during the batch: what is being timed is the
+                // eviction path, not the timer.
+                const smallAged = channel<number>({ tail: 8, maxAge: 60_000 })
+                const largeAged = channel<number>({ tail: 512, maxAge: 60_000 })
+                const [cheapAged, dearAged] = (await nsPerOp([
+                    { label: 'tail: 8 + maxAge', run: (i: number) => smallAged.publish(i) },
+                    { label: 'tail: 512 + maxAge', run: (i: number) => largeAged.publish(i) },
+                ])) as [number, number]
+
+                const agedRatio = dearAged / cheapAged
+                log('per publish, maxAge', `tail 8 — ${duration(cheapAged)}, tail 512 — ${duration(dearAged)}`)
+                is(
+                    `and no more per publish under maxAge (${agedRatio.toFixed(1)}x)`,
+                    agedRatio < 4,
+                    true,
+                )
+            },
+        },
+
+        {
+            title: 'a reader wakes for what it READS, not for every publish',
+            note: 'The three questions a channel answers move at three different rates: a message arrives constantly, the transcript moves only when there is retention to move, and `settled()` flips once in a channel\'s life. One envelope rebuilt per publish made all three move together — the identity check downstream never held, so every reader woke for every message and read back exactly what it had before. Three cells is what makes the cutoffs real, and only counting the wake-ups can see it.',
+            async run({ is }) {
+                // A correctness test cannot reach this: the wrong implementation hands every reader
+                // the right value, just after waking it for a change it cannot see.
+                const room = channel<number>()
+
+                const settled = reader(() => room.settled())
+                const chunks = reader(() => room.chunks().length)
+                const messages = reader(() => room())
+
+                // A tick per publish, because the queue coalesces: five writes in one synchronous
+                // region wake an effect once, which would hide the difference this case is about.
+                for (let i = 0; i < 5; i++) {
+                    room.publish(i)
+                    await tick()
+                }
+
+                // `seen` carries one entry per RUN, so its length is the wake count. Five publishes:
+                // `settled()` went false → true on the first and cannot move again, and with no
+                // `tail` the transcript never moved at all.
+                is('settled() woke once, not per publish', settled.seen.length, 2)
+                is('chunks() on a tail-less channel never woke', chunks.seen.length, 1)
+                // The one that genuinely moves five times — a message arriving IS the event, so this
+                // counts publishes and not distinct values.
+                is('the message reader woke for every publish', messages.seen.length, 6)
+
+                settled.dispose()
+                chunks.dispose()
+                messages.dispose()
             },
         },
 

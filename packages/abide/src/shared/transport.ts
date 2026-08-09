@@ -13,6 +13,7 @@
 
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from './channel.ts'
 import { markSource } from './internal/BRANDS.ts'
+import { internals } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
 import { hasFile } from './internal/probes.ts'
@@ -71,6 +72,10 @@ export interface Rpc<Args, T, F extends Failed = never> extends KeyedMemo<Args, 
 
 // --- the loop over a slot ----------------------------------------------------
 
+// The cursor's "no transcript yet" start. A sentinel rather than `[]`, so the first `look()` sees
+// an identity change and adopts the live buffer instead of walking a private empty array forever.
+const NOTHING_YET: readonly never[] = []
+
 /**
  * `for await (const chunk of fn(args))` — everything the slot has already produced, then everything
  * that comes next.
@@ -88,7 +93,10 @@ async function* iterate<T>(handle: RpcHandle<T>): AsyncGenerator<T> {
     // consumer cannot strand it. Over a real socket that is the common case, not the rare one.
     let moved = false
     const stop = watch(() => {
-        handle.chunks()
+        // The version, not the transcript: this body only wants to be WOKEN. `chunks()` here would
+        // materialise a full copy per chunk that nothing in this closure ever looks at, and it would
+        // do it while the consumer is parked at a `yield`.
+        internals.transcript(handle)
         handle.streaming()
         handle.settled()
         handle.error()
@@ -109,15 +117,24 @@ async function* iterate<T>(handle: RpcHandle<T>): AsyncGenerator<T> {
         })
         let at = 0
         let finished = false
-        let produced: T[] = []
+        // The LIVE buffer, walked with a cursor. `chunks()` would hand over a fresh copy of the
+        // whole transcript per chunk — twice, counting the subscribe above — which is a full slice
+        // for a loop that only ever reads the tail it has not reached yet, and O(n²) over a stream.
+        let produced: readonly T[] = NOTHING_YET
         // Closures built ONCE for the whole loop rather than one per probe per turn: this runs per
         // chunk, and a producer faster than its consumer is the common case over a socket.
         const look = (): void => {
             // ASKED BEFORE the transcript is read, and that order is the whole of it: a stream that
-            // ended between the two reads has already written its last chunk, so reading `chunks`
-            // second cannot miss one. The other order drops the final chunk every time.
+            // ended between the two reads has already written its last chunk, so reading the
+            // transcript second cannot miss one. The other order drops the final chunk every time.
             finished = handle.settled() && !handle.streaming()
-            produced = handle.chunks() as T[]
+            const held = internals.transcript(handle) as readonly T[]
+            // A new array means the transcript was REPLACED — dropped on overflow, or reset by a
+            // reload — rather than appended to, and a cursor into the old one indexes nothing.
+            if (held !== produced) {
+                produced = held
+                at = 0
+            }
         }
         // Asked AFTER the transcript is handed over, so a failure that arrived while this was
         // suspended at a `yield` is thrown by the loop that was waiting on it.
