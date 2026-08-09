@@ -151,8 +151,8 @@ function annotates(tokens: Token[], nesting: number[], i: number, expression: bo
 /**
  * Is the brace enclosing token `i` an object literal rather than a block?
  *
- * A `{` that follows `=>`, `)`, `;` or nothing opens a BLOCK; after `(`, `,`, `=`, `:` or `return`
- * it opens an object literal. With nothing before it, the region's own kind decides: a template
+ * A `{` that follows `=>`, `)`, `;` or nothing opens a BLOCK; after `(`, `,`, `=`, `:`, `[` or
+ * `return` it opens an object literal — the same six `annotates` lists above. With nothing before it, the region's own kind decides: a template
  * expression is an expression, a `<script>` body is statements.
  *
  * The desugar asks this to scope a binding and this file asks it to tell an annotation from a member

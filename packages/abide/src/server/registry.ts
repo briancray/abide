@@ -474,8 +474,8 @@ function published(
  * BEFORE the handler rather than after, so a publish whose handler throws is still accounted for —
  * the line reports that the frame got through the gates, which is what the channel is answering.
  *
- * The three call sites in `published` funnel here rather than each reading the room and the channel,
- * which is also what took two locals out of the path above.
+ * Both call sites in `published` — the sync arm and the `then` — funnel here rather than each
+ * reading the room and the channel back off the connection.
  */
 function accepted(
     connection: ServerWebSocket<SocketData>,
