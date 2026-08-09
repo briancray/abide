@@ -7,7 +7,7 @@
 // substrate split.
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
-import { render, renderDocument, renderToString, shell, suspend, toStream } from 'abide/server'
+import { render, renderDocument, type Renderable, renderToString, shell, suspend, toStream } from 'abide/server'
 import { container, floorTicks, keep, microtasks, settled, sleep, suite, tick } from 'abide/tests'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
@@ -50,6 +50,40 @@ export default suite({
                         </ul>
                     </article>
                 `).then((markup) => output(host, markup.trim()))
+            },
+        },
+
+        {
+            title: '`Renderable` is what the walk writes, and an array of them is one too',
+            note: 'The type the whole server surface is declared in terms of — every renderer takes one. Worth naming in a case rather than only inferring it, because it is a UNION and the walk is a switch over exactly its arms: what a plain value renders as is the half a hydrating client has to agree with, so nullish and BOTH booleans are nothing rather than their spelling. `false` printing as "false" is the bug this shape exists to prevent, and it is invisible until markup already went out.',
+            async run({ is }) {
+                // Declared as the union rather than inferred, so a member added to `Renderable` that
+                // the walk cannot write is a type error here rather than an `[object Object]` later.
+                const every: Renderable[] = [
+                    'text',
+                    0,
+                    42,
+                    10n,
+                    true,
+                    false,
+                    null,
+                    undefined,
+                    raw('<i>raw</i>'),
+                    html`<b>tpl</b>`,
+                    () => 'thunk',
+                    Promise.resolve('later'),
+                    ['nested', 1],
+                ]
+                is(
+                    'every arm, in order',
+                    await renderToString(every),
+                    'text04210<i>raw</i><b>tpl</b>thunklaternested1',
+                )
+                // `10n` writes `10`: a bigint is its digits, not its literal spelling, which is the
+                // one arm where the source text and the markup differ by a character.
+                is('a bigint drops the suffix', await renderToString(10n), '10')
+                is('nullish and both booleans write nothing', await renderToString([true, false, null, undefined]), '')
+                is('…while zero and empty string are values', await renderToString([0, '']), '0')
             },
         },
 
