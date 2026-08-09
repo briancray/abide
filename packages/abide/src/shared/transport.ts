@@ -271,8 +271,10 @@ export interface RemoteOptions extends WireOptions {
  * Module scope because it captures nothing from a declaration: one function for the process rather
  * than a closure per declared endpoint.
  */
-// Two signatures because the two call sites genuinely differ: a mutation always has a
-// `content-type` to merge into, so its result is never absent, and only a bare read's can be.
+// Two signatures because what is handed IN decides whether the answer can be absent, and the three
+// call sites split both ways: the JSON body always merges into a `content-type` of its own, so that
+// one is never undefined, while a bare read and a MULTIPART mutation both pass whatever the caller
+// gave — and multipart deliberately names no type, since `fetch` writes the boundary itself.
 function continued(carried: Record<string, string>): Record<string, string>
 function continued(carried: Record<string, string> | undefined): Record<string, string> | undefined
 function continued(carried: Record<string, string> | undefined): Record<string, string> | undefined {

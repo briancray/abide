@@ -317,8 +317,10 @@ export class TypeReader {
         if (named !== null) return { schema: named, optional: false, at: at + 1 }
         if (token.kind === SyntaxKind.Identifier || isTypeWord(token)) return this.reference(at)
 
-        // `keyof`, `typeof`, a template literal type, a mapped type — readable by a checker and not
-        // by this. Skipping to the end of the type is what keeps the members AFTER it derivable.
+        // A template literal type, a mapped type, a conditional — readable by a checker and not by
+        // this. NOT `keyof`/`typeof`: those are `TYPE_OPERATORS` and were consumed above, which is
+        // what the comment there is about. Skipping to the end of the type is what keeps the members
+        // AFTER it derivable.
         return { schema: ANYTHING, optional: false, at: this.skip(at) }
     }
 

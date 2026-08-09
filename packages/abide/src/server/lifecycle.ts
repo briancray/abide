@@ -196,7 +196,8 @@ function answering(request: Request, server: Server<never>, route: Route): Retur
  *
  * The undefined-is-404 rule and nothing else: a throw is left to propagate so that the rung it
  * passes on its way out can be the one that answers it, which is what `next()` returning a promise
- * is for. `routed` attaches `failing` at whichever end of the chain the request actually took.
+ * is for. `answering` attaches `failing` at whichever end of the chain the request actually took —
+ * the `.catch` for a rung that returned a promise, the `try` for one that threw in the call.
  */
 function settle(answered: ReturnType<Route>, request: Request): Response | Promise<Response> {
     if (answered === undefined) return notFound(request)

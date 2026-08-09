@@ -33,8 +33,10 @@ function ring(): Channel<LogRecord> {
 /**
  * Asked per line rather than once at import.
  *
- * The read is a property on `Bun.env`, which is what every other gate on this path already costs, and
- * it is what lets a test — or an app deciding late — turn the feed on without reloading the module.
+ * Through `knobOf`, not off the environment: the document is the one account of what this process is
+ * running on, so an app that declared `ABIDE_LOGS` in `onConfig` opens the actual feed. That also
+ * means a variable changed mid-run is seen on the next `config.invalidate()` rather than instantly —
+ * the resolve is held for the process, which is what makes every other knob answerable synchronously.
  */
 function isOpen(): boolean {
     return knobOf('ABIDE_LOGS')
