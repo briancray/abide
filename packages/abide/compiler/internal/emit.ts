@@ -23,7 +23,7 @@ import { CLOSERS, desugar, OPENERS, REACTIVE_CONSTRUCTORS, REACTIVE_TYPES } from
 import { Lexer, type Token, tokensOf } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
-import { ParseError } from './parse.ts'
+import { IDENTIFIER, ParseError } from './parse.ts'
 import { TypeReader } from './shape.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
@@ -227,22 +227,213 @@ function calleeBefore(tokens: Token[], open: number): number {
 }
 
 /**
- * Props that ARE cells, read off the declared `Args` type. Syntactic: the annotation sits in the
- * same `<script>`, so no checker is needed to see `count: State<number>`.
+ * What `const { … } = props<T>()` declared.
+ *
+ * The whole props surface is this one call: the type argument BECOMES the emitted function's
+ * parameter type, and the destructuring pattern beside it is what brings each prop into scope. There
+ * is no `args` object an author can name, which is the point — every identifier a `<script>` uses was
+ * imported or bound by the person who wrote it.
  */
-function reactiveProps(script: string, into: Reactive): void {
-    const declaration = /\btype\s+Args\s*=\s*\{([\s\S]*?)\n?\}/.exec(script)
-    if (declaration === null) return
-    const body = declaration[1] as string
+interface Props {
+    /** The type argument's text, or `null` for a bare `props()`. */
+    type: string | null
+    /** Prop name → the local it was bound to. `{ class: name }` is `class` → `name`. */
+    bound: Map<string, string>
+    /** The call's extent in the body it was found in, so the emit can splice the parameter in. */
+    start: number
+    end: number
+}
+
+/**
+ * The `props<T>()` call in a setup body, or `null`.
+ *
+ * Recognised by TOKENS rather than by a regex because the type argument is a type: `props<Row<Book>>()`
+ * closes two lists in one `>>` token, and the extent of a type is a question this file already has one
+ * answer to.
+ */
+function propsCall(body: string, tokens: Token[]): Props | null {
+    const types = new TypeReader(tokens)
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i] as Token
+        if (token.kind !== SyntaxKind.Identifier || token.text !== 'props') continue
+        // `state.props` is somebody's property, not this call.
+        if (tokens[i - 1]?.kind === SyntaxKind.DotToken) continue
+
+        let open = i + 1
+        let type: string | null = null
+        const after = types.tryTypeArguments(i + 1)
+        if (after > 0) {
+            // The list's own `<` is one character; its close is the last character of the last token,
+            // which may be the `>>` that also closes a nested list.
+            const last = tokens[after - 1] as Token
+            type = body.slice((tokens[i + 1] as Token).end, last.end - 1).trim()
+            open = after
+        }
+        if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) continue
+        if (tokens[open + 1]?.kind !== SyntaxKind.CloseParenToken) continue
+        return {
+            type: type === '' ? null : type,
+            bound: destructured(tokens, i),
+            start: token.start,
+            end: (tokens[open + 1] as Token).end,
+        }
+    }
+    return null
+}
+
+/**
+ * The pattern to the LEFT of the call, as prop name → local name.
+ *
+ * Only identifier-to-identifier entries are collected, because this exists to decide which locals are
+ * cells and a prop destructured any further is not one. A default, a rest element and a nested pattern
+ * are all left to the emitted TypeScript, which handles them the way it handles any other destructure.
+ */
+function destructured(tokens: Token[], call: number): Map<string, string> {
+    const bound = new Map<string, string>()
+    if (tokens[call - 1]?.kind !== SyntaxKind.EqualsToken) return bound
+    const close = call - 2
+    if (tokens[close]?.kind !== SyntaxKind.CloseBraceToken) return bound
+
+    let open = close
+    let depth = 0
+    for (; open >= 0; open--) {
+        const kind = (tokens[open] as Token).kind
+        if (CLOSERS.has(kind)) depth++
+        else if (OPENERS.has(kind) && --depth === 0) break
+    }
+    if (open < 0) return bound
+
+    // Where each entry STARTS: the token after the brace, and the token after every comma at the
+    // pattern's own depth.
+    const starts = [open + 1]
+    depth = 0
+    for (let i = open + 1; i < close; i++) {
+        const token = tokens[i] as Token
+        if (OPENERS.has(token.kind)) depth++
+        else if (CLOSERS.has(token.kind)) depth--
+        else if (token.kind === SyntaxKind.CommaToken && depth === 0) starts.push(i + 1)
+    }
+
+    for (const at of starts) {
+        const name = tokens[at]
+        if (name === undefined || at >= close || !IDENTIFIER.test(name.text)) continue
+        if (tokens[at + 1]?.kind !== SyntaxKind.ColonToken) {
+            bound.set(name.text, name.text)
+            continue
+        }
+        // `class: className` — a rename, and the only spelling a reserved word has.
+        const local = tokens[at + 2]
+        if (local !== undefined && IDENTIFIER.test(local.text)) bound.set(name.text, local.text)
+    }
+    return bound
+}
+
+/** A body the lexer cannot read is one the desugar is about to fail on with a position of its own. */
+function tokensOfBody(rest: string): Token[] {
+    try {
+        return tokensOf(rest)
+    } catch {
+        return []
+    }
+}
+
+/**
+ * The MEMBERS of the declared props type, as text.
+ *
+ * An inline `props<{ id: string }>()` is already the members. A name is resolved against the setup
+ * body's own declarations and no further: a type imported from another file cannot be read from here,
+ * and the consequence is only that its cell props stay plain values — the same degradation an imported
+ * type has always had, and the reason the explicit `x()` spelling never stops compiling.
+ */
+function membersOf(type: string, rest: string, tokens: Token[]): string {
+    if (type.startsWith('{')) return type
+    if (!IDENTIFIER.test(type)) return ''
+    for (const found of declaredTypes(tokens)) {
+        if (found.name === type) return rest.slice(found.start, found.end)
+    }
+    return ''
+}
+
+/**
+ * The emitted parameter's type.
+ *
+ * A component that never calls `props()` accepts none of its own, and the type says so — which is
+ * what makes a mistyped prop an error at the CALL site, where the mistake is. `children` is there
+ * whatever it declared, because children are what is written BETWEEN the tags rather than a prop
+ * anybody passes, and only a `<slot/>` renders them. Deciding it by whether the file HAS a `<slot/>`
+ * would read better and cost more than it is worth: a page and a layout both arrive as one
+ * `ViewModule`, so the router has one type for the two of them, and a page that accepted strictly
+ * nothing would not be assignable to it.
+ */
+function signature(declared: Props | null): string {
+    if (declared === null) return CHILDREN
+    if (declared.type === null) return 'Record<string, unknown>'
+    return `${declared.type} & ${CHILDREN}`
+}
+
+const CHILDREN = '{ children?: unknown }'
+
+/** `props()` in a `<script module>`: module scope has no instance, so there are no props to bind. */
+function checkNoProps(module: Blocks['module'], filename: string): void {
+    if (module === null) return
+    const at = /\bprops\s*[<(]/.exec(module.body)
+    if (at === null) return
+    throw new ParseError(
+        `abide: props() in a <script module> (${filename}) — module scope is shared by every ` +
+            `instance, so there are no props there. Move it to <script>.`,
+        module.start + at.index,
+    )
+}
+
+/**
+ * Specifiers the emit compiles away, as `mergeImports` takes them: `${module} ${name}`.
+ *
+ * `props` and nothing else so far. `props<T>()` IS the parameter — the call is replaced by `args` and
+ * the type argument becomes its annotation — so a surviving import would name a binding the emitted
+ * module never reaches, and would break the count in the SPEC of what a compiled file may import from
+ * `abide` on its own behalf. Declared beside the check that makes the import mandatory, so the two
+ * halves of one rule sit together rather than one of them living inside the merger.
+ */
+const ERASED_IMPORTS: ReadonlySet<string> = new Set(['abide props'])
+
+/**
+ * `props` reached without being imported.
+ *
+ * The call is erased, so an unimported one would compile clean and quietly work — which is the one
+ * thing this spelling exists to prevent. Named rather than inferred: an author who meant a `props` of
+ * their own gets told which name collided.
+ */
+function checkPropsImported(imports: string[], at: number, filename: string): void {
+    for (const statement of imports) {
+        if (!/from\s*['"]abide['"]/.test(statement)) continue
+        if (/\bprops\b/.test(statement.slice(0, statement.indexOf('from')))) return
+    }
+    throw new ParseError(
+        `abide: props() is not imported (${filename}) — add it to the <script>'s ` +
+            `\`import { … } from 'abide'\`, the way every other name it uses is.`,
+        at,
+    )
+}
+
+/**
+ * Props that ARE cells, decided at the BINDING.
+ *
+ * Two facts meet here: the declared type says which props are sources, and the pattern says what each
+ * one is called here. Reading the type alone was wrong under a rename — `{ note: text }` left `text` a
+ * plain value and made `text.length` the arity of a function, which type-checks and renders `0`.
+ */
+function reactiveProps(bound: Map<string, string>, declared: string, into: Reactive): void {
     const member = /([A-Za-z_$][\w$]*)\s*\??\s*:\s*([A-Za-z_$][\w$]*)\s*</g
     for (;;) {
-        const match = member.exec(body)
+        const match = member.exec(declared)
         if (match === null) return
+        const local = bound.get(match[1] as string)
+        if (local === undefined) continue
         const type = match[2] as string
         // The two types whose CALL is the source: a keyed memo selects a slot, a room channel
         // selects a room. Everything else in the set is read by name.
-        if (type === 'KeyedMemo' || type === 'RoomChannel') into.keyed.add(match[1] as string)
-        else if (REACTIVE_TYPES.has(type)) into.cells.add(match[1] as string)
+        if (type === 'KeyedMemo' || type === 'KeyedChannel') into.keyed.add(local)
+        else if (REACTIVE_TYPES.has(type)) into.cells.add(local)
     }
 }
 
@@ -261,8 +452,12 @@ const IMPORT_FORM = /^import\s+(?:(type)\s+)?([\s\S]*?)\s*from\s*['"]([^'"]+)['"
  * A `<script module>` and a `<script>` may both `import { memo } from 'abide'`, and the compiler adds
  * its own `abide` import on top. Concatenating them redeclares the binding, which is a SyntaxError —
  * so the specifiers are merged rather than the statements stacked.
+ *
+ * `erased` names specifiers the emit has COMPILED AWAY, as `${module} ${name}`. A merger that knew
+ * which ones those were would be a merger that has to be edited every time something new is erased;
+ * the rule belongs to whatever did the erasing, and arrives here as data.
  */
-function mergeImports(statements: string[]): string {
+function mergeImports(statements: string[], erased: ReadonlySet<string>): string {
     const byModule = new Map<string, Import>()
     const order: string[] = []
     let passthrough = ''
@@ -301,6 +496,7 @@ function mergeImports(statements: string[]): string {
                 // `import type { A }` folds into the inline `type A` spelling, which is what lets it
                 // share a statement with a value import under `verbatimModuleSyntax`.
                 const spelled = typeOnly && !name.startsWith('type ') ? `type ${name}` : name
+                if (erased.has(`${module} ${spelled}`)) continue
                 if (!entry.named.includes(spelled)) entry.named.push(spelled)
             }
         }
@@ -392,7 +588,7 @@ const NO_HOIST: ReadonlyMap<string, string> = new Map()
 function code(expr: Expr, context: Context, position: Position = 'read'): string {
     const names = live(context)
     const hoisted = position === 'cell' ? NO_HOIST : context.hoisted
-    if (/^[A-Za-z_$][\w$]*$/.test(expr.source) && names.cells.has(expr.source)) {
+    if (IDENTIFIER.test(expr.source) && names.cells.has(expr.source)) {
         const local = hoisted.get(expr.source)
         if (local !== undefined) return local
         return position === 'read' ? `${expr.source}()` : expr.source
@@ -853,7 +1049,7 @@ function bind(
     const source =
         attribute.value === null
             ? key_
-            : /^[A-Za-z_$][\w$]*$/.test(attribute.value.source)
+            : IDENTIFIER.test(attribute.value.source)
               ? attribute.value.source
               : held(attribute.value, context)
 
@@ -958,7 +1154,7 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
 }
 
 function key(name: string): string {
-    return /^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)
+    return IDENTIFIER.test(name) ? name : JSON.stringify(name)
 }
 
 function define(node: { name: string; parameters: string; body: Node[] }, context: Context): string {
@@ -1153,6 +1349,8 @@ export function emit(
             ? { imports: [], rest: '' }
             : splitImports(source, blocks.module.start, blocks.module.start + moduleBody.length)
 
+    checkNoProps(blocks.module, options.filename)
+
     let setup: { imports: string[]; rest: string } = { imports: [], rest: '' }
     if (blocks.setup !== null) {
         const from = blocks.setup.start
@@ -1161,6 +1359,23 @@ export function emit(
         setup = splitImports(source, from, to)
     }
 
+    // The props call is read off the import-lifted body, which is the text that becomes the function:
+    // an import cannot hold a call, and the offsets have to line up with the splice below.
+    const setupTokens = tokensOfBody(setup.rest)
+    const declared = propsCall(setup.rest, setupTokens)
+    if (declared !== null) {
+        checkPropsImported(setup.imports, blocks.setup?.start ?? 0, options.filename)
+    }
+    // `props<T>()` IS the parameter — the call is erased and the type argument becomes its annotation.
+    const replaced =
+        declared === null
+            ? setup.rest
+            : `${setup.rest.slice(0, declared.start)}args${setup.rest.slice(declared.end)}`
+    // No `props()` is the common shape — most `.abide` files are a page, and a page takes none. The
+    // splice never happened, so the text is the text `setupTokens` was scanned from and re-lexing it
+    // is a full TypeScript scanner pass per compile for a string that did not change.
+    const replacedTokens = declared === null ? setupTokens : tokensOfBody(replaced)
+
     const reactive: Reactive = { cells: new Set(), keyed: new Set() }
     if (blocks.module !== null) {
         reactiveBindings(source, blocks.module.start, blocks.module.start + moduleBody.length, reactive)
@@ -1168,7 +1383,9 @@ export function emit(
     if (blocks.setup !== null) {
         const from = blocks.setup.start
         reactiveBindings(source, from, from + blocks.setup.body.length, reactive)
-        reactiveProps(blocks.setup.body, reactive)
+    }
+    if (declared !== null && declared.type !== null) {
+        reactiveProps(declared.bound, membersOf(declared.type, setup.rest, setupTokens), reactive)
     }
 
     const context: Context = {
@@ -1206,12 +1423,8 @@ export function emit(
     // true for diagnostics; what they leave behind is leading and trailing whitespace in the markup,
     // which would otherwise become real text nodes.
     const markup = children(blocks.template, context).replace(/^\s+/, '\n').replace(/\s+$/, '\n')
-    // The props type is LIFTED out of the setup body, because the signature that uses it is written
-    // outside that body: inlined, `Args` was out of scope in the one place it is needed and every
-    // component that declared one failed to compile with `Cannot find name 'Args'`. A type alias has
-    // no runtime and no per-instance meaning, so module scope is where it always belonged.
-    const lifted = liftArgs(setup.rest)
-    const args = lifted.declaration === '' ? 'args: Record<string, unknown>' : 'args: Args'
+    const lifted = liftTypes(replaced, declaredTypes(replacedTokens))
+    const args = `args: ${signature(declared)}`
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
@@ -1226,9 +1439,9 @@ export function emit(
 
     const setupBody = indent(desugarBody(blocks.setup, lifted.body, reactive))
     const assembled =
-        mergeImports([header, ...moduleImports.imports, ...setup.imports]) +
+        mergeImports([header, ...moduleImports.imports, ...setup.imports], ERASED_IMPORTS) +
         `${desugarBody(blocks.module, moduleImports.rest, reactive)}\n${adopted}` +
-        (lifted.declaration === '' ? '' : `${lifted.declaration}\n\n`) +
+        (lifted.declarations === '' ? '' : `${lifted.declarations}\n`) +
         `export default function ${name}(${args}): TemplateResult {\n` +
         `${setupBody}${defines}` +
         `    return html\`${markup}\`\n` +
@@ -1239,36 +1452,69 @@ export function emit(
     return extract(assembled, source)
 }
 
+/** A type declared at the top level of a setup body: its name, and where it starts and ends. */
+interface Declared {
+    name: string
+    start: number
+    end: number
+}
+
 /**
- * `type Args = …` taken out of the setup body, so the signature can name it.
+ * Every top-level `type X = …` and `interface X { … }` in a setup body.
  *
- * Where the type ENDS is asked of the same reader the desugar asks, because there is one grammar for
- * it: a character scan that stopped at the first newline outside a bracket cut a wrapped union in
- * half — `type Args =` on its own line lifted the `=` and left the alternatives behind in the body,
- * which is not parseable in either lane. Brackets alone cannot answer it, and neither can a regex.
+ * Where a type ENDS is asked of the same reader the desugar asks, because there is one grammar for it:
+ * a character scan that stopped at the first newline outside a bracket cut a wrapped union in half —
+ * `type Props =` on its own line lifted the `=` and left the alternatives behind in the body, which is
+ * not parseable in either lane. Brackets alone cannot answer it, and neither can a regex.
  */
-function liftArgs(rest: string): { declaration: string; body: string } {
-    let tokens: Token[]
-    try {
-        tokens = tokensOf(rest)
-    } catch {
-        // An unlexable body is one the desugar is about to fail on with a position of its own.
-        return { declaration: '', body: rest }
-    }
+function declaredTypes(tokens: Token[]): Declared[] {
+    const found: Declared[] = []
+    const types = new TypeReader(tokens)
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i] as Token
-        // Top-level only: `type Args` inside a block is somebody else's local.
-        if (token.depth !== 0 || token.text !== 'type') continue
-        if (tokens[i + 1]?.text !== 'Args') continue
-        if (tokens[i + 2]?.kind !== SyntaxKind.EqualsToken) continue
-        const end = tokens[new TypeReader(tokens).extent(i + 3) - 1]?.end
-        if (end === undefined) break
-        return {
-            declaration: rest.slice(token.start, end),
-            body: rest.slice(0, token.start) + rest.slice(end),
+        // Top-level only: a type inside a block is somebody else's local.
+        if (token.depth !== 0) continue
+        const name = tokens[i + 1]
+        if (name === undefined || !IDENTIFIER.test(name.text)) continue
+
+        if (token.text === 'type' && tokens[i + 2]?.kind === SyntaxKind.EqualsToken) {
+            const end = tokens[types.extent(i + 3) - 1]?.end
+            if (end === undefined) continue
+            found.push({ name: name.text, start: token.start, end })
+            continue
+        }
+        if (token.kind !== SyntaxKind.InterfaceKeyword) continue
+        // An interface body is a brace block, and the lexer already counted the depth of every one.
+        for (let at = i + 2; at < tokens.length; at++) {
+            const inside = tokens[at] as Token
+            if (inside.kind !== SyntaxKind.CloseBraceToken || inside.depth !== 0) continue
+            found.push({ name: name.text, start: token.start, end: inside.end })
+            break
         }
     }
-    return { declaration: '', body: rest }
+    return found
+}
+
+/**
+ * The declarations taken OUT of the setup body, so the signature can name one.
+ *
+ * The signature that uses the props type is written outside the body it was declared in: inlined, the
+ * name is out of scope in the one place it is needed and every component that declared one fails to
+ * compile with `Cannot find name`. All of them move rather than the one that is named, because a type
+ * alias has no runtime and no per-instance meaning — module scope is where they always belonged, and
+ * a rule that lifted only the type the signature happens to reference would strand the ones it is
+ * written in terms of.
+ */
+function liftTypes(rest: string, found: Declared[]): { declarations: string; body: string } {
+    let declarations = ''
+    let body = ''
+    let at = 0
+    for (const type of found) {
+        declarations += `${rest.slice(type.start, type.end)}\n`
+        body += rest.slice(at, type.start)
+        at = type.end
+    }
+    return { declarations, body: body + rest.slice(at) }
 }
 
 /**

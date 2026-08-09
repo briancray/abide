@@ -38,8 +38,9 @@ import { socket } from '$server/rpc.ts'
 import { SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
 import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
-import { CLIENT_ENTRIES, entryNames, firstPresent } from '../CLIENT_BUILD.ts'
+import { CLIENT_KEY, clientGraph, entryNames } from '../CLIENT_BUILD.ts'
 import { heldClient, type LoadedClient } from './assets.ts'
+import { clientLane } from './entry.ts'
 import { clientBuild, type Lane } from './lane.ts'
 import { type Answer, assemble, portFrom, report } from './layers.ts'
 
@@ -264,11 +265,20 @@ const HELD: Lane = {
  */
 async function bundle(root: string): Promise<LoadedClient | null> {
     try {
-        const found = await firstPresent(root, CLIENT_ENTRIES)
-        if (found === null) return null
+        // Regenerated per rebuild rather than once at startup, because a page ADDED is a row the
+        // table has to grow — and `.abide/` is what the watcher already ignores, so writing here is
+        // not a save that triggers the rebuild that writes it.
+        const lane = await clientLane(root)
+        if (lane === null) return null
 
-        const built = await clientBuild([found], HELD)
-        if (built.success) return await heldClient(built.outputs, entryNames(root, [found], built.outputs))
+        const built = await clientBuild([lane.path], HELD, root)
+        if (built.success) {
+            return await heldClient(
+                built.outputs,
+                entryNames(root, [lane.path], built.outputs, [CLIENT_KEY]),
+                clientGraph(built.metafile, root),
+            )
+        }
         for (const message of built.logs) console.error(String(message))
     } catch (failure) {
         console.error(`abide dev: ${messageOf(failure)}`)

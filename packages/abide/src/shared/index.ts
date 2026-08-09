@@ -10,7 +10,7 @@
 // What a compiled `class:`/`style:` toggle lands on. Authoring vocabulary too — nothing stops a
 // hand-written template from calling them.
 export { classes, styles } from './attrs.ts'
-export { type Channel, type ChannelOptions, channel, type RoomChannel } from './channel.ts'
+export { type Channel, type ChannelOptions, channel, type KeyedChannel } from './channel.ts'
 // The app's own account of whether it is working, asked the same way on both sides. `useHealthSource`
 // is deliberately absent: it is how `abide/server` installs the LOCAL answer — the same shape as the
 // app-name source under `log` — and a caller installing one would be answering for an app it is not.
@@ -29,11 +29,14 @@ export {
     KEY,
     type Keyed,
     keyed,
+    props,
     Raw,
     raw,
     type SlotKind,
     Streamed,
+    Suspend,
     streamed,
+    suspend,
     type TemplateResult,
 } from './html.ts'
 // Who the server decided this caller is, asked the same way on both sides. `useIdentitySource` is
@@ -71,9 +74,10 @@ export {
 export { online } from './online.ts'
 export { type Cell, type Memo, type State, scope, state, untrack, watch } from './reactive.ts'
 // Routing. `route()` is an ambient like `request()`, but a reactive one — a client moves without a
-// new caller arriving. `useHrefSource` and `useHistorySink` are deliberately absent: they are how the
-// two lanes install their own edge of it — `abide/server` the request's URL, the same way it installs
-// the scope source, and `abide/ui` the document's address bar — and nothing else may reach either.
+// new caller arriving. `useHrefSource`, `useHistorySink` and `useNavigationSink` are deliberately
+// absent: they are how the two lanes install their own edge of it — `abide/server` the request's URL,
+// the same way it installs the scope source, and `abide/ui` the document's address bar and the part a
+// served navigation repaints — and nothing else may reach any of them.
 export {
     type Loader,
     type NavigateOptions,

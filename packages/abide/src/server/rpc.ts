@@ -8,7 +8,7 @@
 // A handler lives under `server/rpc/**` or `server/sockets/**` and the compiler elides the module in
 // the browser lane, so nothing about this file — or anything it imports — reaches a browser.
 
-import { type Channel, type ChannelOptions, channel, type RoomChannel } from '$shared/channel.ts'
+import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '$shared/channel.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
@@ -460,8 +460,13 @@ export interface SocketOptions<T = unknown, Args = unknown> {
      * Whether clients may publish at all, and if so what happens to what they send. `false` — the
      * default — drops it: a socket is a broadcast until an app says otherwise, and a client that can
      * publish into a room is a client that can write to every subscriber of it.
+     *
+     * `into` is the room the sender is on, already resolved — the connection is subscribed to it, so
+     * the handler is handed the same channel rather than re-selecting it. Without it the echoing
+     * policy has to name the declaration it is inside, which forces an annotation on the declaration
+     * to give the self-reference a type to stand on.
      */
-    clientPublish?: false | ((message: T, room: Args | undefined) => void | Promise<void>)
+    clientPublish?: false | ((message: T, room: Args | undefined, into: Channel<T>) => void | Promise<void>)
     /**
      * The declared shape of a message a CLIENT sends.
      *
@@ -477,7 +482,7 @@ export interface SocketOptions<T = unknown, Args = unknown> {
 export interface SocketPolicy {
     /** What a diagnostic calls it. The kind until the module registers, like an rpc's. */
     address: string
-    clientPublish: false | ((message: unknown, room: unknown) => void | Promise<void>)
+    clientPublish: false | ((message: unknown, room: unknown, into: Channel<unknown>) => void | Promise<void>)
     /** The PUBLISHED message shape — declared, or derived from the socket's first type argument. */
     message: JsonSchema | null
     /** The gate over an inbound one, or `null` when there is nothing to check. */
@@ -514,9 +519,9 @@ export function describeSocket(stream: object, shapes: Shapes | undefined): void
  * the policy the wire needs and a local publisher does not.
  */
 export function socket<T>(options?: SocketOptions<T, void>): Channel<T>
-export function socket<T, Args>(options?: SocketOptions<T, Args>): RoomChannel<Args, T>
-export function socket<T, Args>(options: SocketOptions<T, Args> = {}): Channel<T> & RoomChannel<Args, T> {
-    const stream = channel<T, Args>(options.channel) as Channel<T> & RoomChannel<Args, T>
+export function socket<T, Args>(options?: SocketOptions<T, Args>): KeyedChannel<Args, T>
+export function socket<T, Args>(options: SocketOptions<T, Args> = {}): Channel<T> & KeyedChannel<Args, T> {
+    const stream = channel<T, Args>(options.channel) as Channel<T> & KeyedChannel<Args, T>
     const policy: SocketPolicy = {
         address: 'socket',
         clientPublish: (options.clientPublish ?? false) as SocketPolicy['clientPublish'],

@@ -26,12 +26,20 @@ import {
     type Keyed,
     Raw,
     Streamed,
+    Suspend,
     settledArms,
     settledBoundary,
     type TemplateResult,
 } from '$shared/html.ts'
 import { renderBudget } from '$shared/internal/ceilings.ts'
-import { closeMarker, OPEN_MARKER } from '$shared/internal/MARKERS.ts'
+import {
+    closeMarker,
+    OPEN_MARKER,
+    PIECE_END,
+    PLACEHOLDER_TAG,
+    patchId,
+    placeholderId,
+} from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { slotsOf, unwrap } from '$shared/internal/slots.ts'
 import { arm, NO_LIMIT, timeoutError } from '$shared/internal/timers.ts'
@@ -39,6 +47,7 @@ import { styleTags } from '$shared/styles.ts'
 import {
     attribute,
     type Deferred,
+    type DocumentContext,
     PATCH_SCRIPT,
     PLAIN,
     type RenderContext,
@@ -71,25 +80,11 @@ export type Renderable =
     | AsyncIterable<Renderable>
     | (() => Renderable)
 
-// A subtree the author asked to be streamed out of order. A plain marker in the node tree — the
-// walker gives it an id when it reaches it, so nothing ambient correlates placeholder with patch.
-export class Suspend {
-    constructor(
-        readonly value: unknown,
-        readonly body: (value: never) => Renderable,
-        readonly fallback: Renderable,
-    ) {}
-}
-
-// `PromiseLike` rather than `Promise` so a cell can be suspended directly: `state`/`memo` are
-// thenable, and `suspend(user, …)` is how a load reaches SSR, where there is nothing to wake later.
-export function suspend<T>(
-    value: PromiseLike<T> | T,
-    body: (value: T) => Renderable,
-    fallback: Renderable = null,
-): Renderable {
-    return new Suspend(value, body as (v: never) => Renderable, fallback)
-}
+export type { Suspend } from '$shared/html.ts'
+// `suspend` is ISOMORPHIC and lives in `$shared/html.ts` with the other three markers — a page is the
+// same module on both sides, so a block only this substrate understood was one no page could use.
+// Re-exported here because this is the entry point a server render is already importing from.
+export { suspend } from '$shared/html.ts'
 
 // --- where the markup goes ---------------------------------------------------
 
@@ -342,6 +337,8 @@ async function emitAsyncIterable(
     }
 }
 
+const PLACEHOLDER_CLOSE = `</${PLACEHOLDER_TAG}>`
+
 function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
     const document = context.document
     // No document to patch (a component rendered to a string) → await it inline.
@@ -352,7 +349,7 @@ function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
         id,
         html: (async () => {
             try {
-                return await renderToString(node.body((await node.value) as never), {
+                return await renderToString(node.body((await node.value) as never) as Renderable, {
                     hydratable: context.hydratable,
                 })
             } catch (error) {
@@ -360,22 +357,22 @@ function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
             }
         })(),
     })
-    out.text += `<slot-s id="s${id}">`
-    const waiting = emit(node.fallback, PLAIN, out) // a placeholder must not itself defer
+    out.text += `<${PLACEHOLDER_TAG} id="${placeholderId(id)}">`
+    const waiting = emit(node.fallback as Renderable, PLAIN, out) // a placeholder must not itself defer
     if (waiting !== null) {
         return then_(waiting, () => {
-            out.text += '</slot-s>'
+            out.text += PLACEHOLDER_CLOSE
             return null
         })
     }
-    out.text += '</slot-s>'
+    out.text += PLACEHOLDER_CLOSE
     return null
 }
 
 async function emitSuspendInline(node: Suspend, context: RenderContext, out: Out): Promise<void> {
     const handed = handOver(out)
     if (handed !== null) await handed
-    const more = emit(node.body((await node.value) as never), context, out)
+    const more = emit(node.body((await node.value) as never) as Renderable, context, out)
     if (more !== null) await more
 }
 
@@ -640,42 +637,102 @@ export async function* renderDocument(
         // carries its scope name, which stops the client appending a second copy of every one.
         yield `${parts.head}${styleTags()}${parts.open}`
         yield* stream(body(), context, clock)
-
-        // `deferred` is append-only and one cursor says what has been armed. Re-scanning it instead
-        // would re-arm what was already flushed and spin forever.
-        // The race carries the settled MARKUP, not the deferred: `ready.html` is settled by
-        // definition once it wins, so awaiting it again would buy a microtask tick per subtree.
-        const inFlight = new Map<number, Promise<{ id: number; text: string }>>()
-        let cursor = 0
-        const take = (): void => {
-            for (; cursor < deferrals.deferred.length; cursor++) {
-                const d = deferrals.deferred[cursor] as Deferred
-                inFlight.set(
-                    d.id,
-                    d.html.then((text) => ({ id: d.id, text })),
-                )
-            }
-        }
-        take()
-        // The two-line patch script goes out ahead of the FIRST patch rather than in the shell, and
-        // the guard is the whole point: a page that suspends nothing ships neither the script nor a
-        // `<script>` node inside the slot a hydrating client adopts — where an unexpected element is
-        // a mismatch and a rebuilt subtree. Nothing calls `$p` before a patch exists, so a yield here
-        // is early enough, and the loop below then has no state to carry between turns.
-        if (inFlight.size > 0) yield PATCH_SCRIPT
-        while (inFlight.size > 0) {
-            const settling = Promise.race(inFlight.values())
-            // Nothing to abandon here, unlike the walk: a deferred subtree is an independent async
-            // function with no handle to unwind, and a consumer breaking out of this loop already
-            // leaves it running. What the budget ends is the RESPONSE.
-            const ready = clock === null ? await settling : await clock.race(settling)
-            inFlight.delete(ready.id)
-            yield `<template id="t${ready.id}">${ready.text}</template><script>$p(${ready.id})</script>`
-            take() // a patch may itself have registered more
-        }
+        yield* drain(deferrals, clock, false)
         yield parts.close
     } finally {
         clock?.close()
+    }
+}
+
+/**
+ * A page WITHOUT its document — the outlet alone, streamed the same way, for a client that is already
+ * looking at the shell.
+ *
+ * The same walk and the same deferral as `renderDocument`, and that is the point: a navigation gets
+ * out-of-order streaming rather than a second-class render that awaits everything inline. Without
+ * this, `suspend` under a fragment falls to `emitSuspendInline`, which awaits IN DOCUMENT ORDER — so
+ * a fast panel below a slow one waits for the slow one, and so does every static byte beneath it,
+ * neither of which was ever waiting on data of its own.
+ *
+ * Two things differ from the document form, and both are forced by who does the parsing. There is no
+ * `PATCH_SCRIPT` and no `<script>` per patch, because a script the client injects does not execute;
+ * the client swaps the placeholder itself. And every piece is followed by `PIECE_END`, because HTML
+ * cannot be parsed halfway — the sentinel is what tells a reader that what it holds is a complete
+ * tree it may parse now rather than a prefix of one.
+ */
+export async function* renderFragment(
+    body: () => Renderable,
+    options?: RenderOptions,
+): AsyncGenerator<string> {
+    const deferrals = { nextId: 0, deferred: [] as Deferred[] }
+    const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals }
+    const limit = renderBudget()
+    const clock = limit === NO_LIMIT ? null : new Budget(limit)
+    try {
+        yield* stream(body(), context, clock)
+        // The in-order pass is a complete tree the moment it ends, and it ends without waiting for a
+        // single load — every `suspend` in it deferred. So this sentinel is the whole latency win:
+        // the client may paint everything above, below and between the panels right here.
+        yield PIECE_END
+        yield* drain(deferrals, clock, true)
+    } finally {
+        clock?.close()
+    }
+}
+
+/** The same fragment as a `ReadableStream`, which is what a navigation is answered with. */
+export function fragmentToStream(
+    body: () => Renderable,
+    options?: RenderOptions,
+): ReadableStream<Uint8Array> {
+    return bytes(renderFragment(body, options))
+}
+
+/**
+ * Every deferred subtree, in the order they SETTLE rather than the order they were declared.
+ *
+ * Shared by the two forms above because the racing is the same problem — what differs is only how a
+ * patch is delivered, which is the `framed` flag. Two copies of this loop would be a document that
+ * streams out of order and a fragment that quietly stopped.
+ */
+async function* drain(
+    deferrals: DocumentContext,
+    clock: Budget | null,
+    framed: boolean,
+): AsyncGenerator<string> {
+    // `deferred` is append-only and one cursor says what has been armed. Re-scanning it instead
+    // would re-arm what was already flushed and spin forever.
+    // The race carries the settled MARKUP, not the deferred: `ready.html` is settled by
+    // definition once it wins, so awaiting it again would buy a microtask tick per subtree.
+    const inFlight = new Map<number, Promise<{ id: number; text: string }>>()
+    let cursor = 0
+    const take = (): void => {
+        for (; cursor < deferrals.deferred.length; cursor++) {
+            const d = deferrals.deferred[cursor] as Deferred
+            inFlight.set(
+                d.id,
+                d.html.then((text) => ({ id: d.id, text })),
+            )
+        }
+    }
+    take()
+    // The two-line patch script goes out ahead of the FIRST patch rather than in the shell, and
+    // the guard is the whole point: a page that suspends nothing ships neither the script nor a
+    // `<script>` node inside the slot a hydrating client adopts — where an unexpected element is
+    // a mismatch and a rebuilt subtree. Nothing calls `$p` before a patch exists, so a yield here
+    // is early enough, and the loop below then has no state to carry between turns.
+    if (!framed && inFlight.size > 0) yield PATCH_SCRIPT
+    while (inFlight.size > 0) {
+        const settling = Promise.race(inFlight.values())
+        // Nothing to abandon here, unlike the walk: a deferred subtree is an independent async
+        // function with no handle to unwind, and a consumer breaking out of this loop already
+        // leaves it running. What the budget ends is the RESPONSE.
+        const ready = clock === null ? await settling : await clock.race(settling)
+        inFlight.delete(ready.id)
+        const patch = `<template id="${patchId(ready.id)}">${ready.text}</template>`
+        // A framed patch carries no script: the client is parsing this itself and would not run one.
+        yield framed ? `${patch}${PIECE_END}` : `${patch}<script>$p(${ready.id})</script>`
+        take() // a patch may itself have registered more
     }
 }
 

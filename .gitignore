@@ -2,13 +2,7 @@ node_modules/
 dist/
 .DS_Store
 
-# Generated beside every `.abide` file so the real type-checker can see it. The `.abide` is the source.
-*.abide.ts
-*.d.abide.ts
-# The map inlines the whole `.abide` via `sourcesContent`, so a tracked one is a second copy of the
-# source that drifts from it on every edit.
-*.abide.ts.map
-
-# What the checker derived, written by `bun run shapes`. A BUILD artifact: it only ever upgrades a
-# shape the compiler already derived, so a checkout without it is a checkout that publishes less.
+# Everything generated, in one directory: the client bundle, the shapes the checker derived, and
+# `.abide/types/` — what every `.abide` compiles to so the real type-checker can see it. One line
+# here is also one line in a `.dockerignore` and one thing to delete. The `.abide` is the source.
 .abide/

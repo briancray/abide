@@ -26,11 +26,22 @@ export interface Token {
     depth: number
     /** The token's own source text. Identifiers are compared by it, so it is never recomputed. */
     text: string
+    /**
+     * A line break sits between this token and the one before it.
+     *
+     * The scanner's own answer rather than a second scan for `\n`: this is what ASI is decided on,
+     * and in a codebase written without semicolons it is the only thing that says where a statement
+     * ended. See `assignmentEnd` in `desugar.ts`, which is the consumer.
+     */
+    startsLine: boolean
 }
 
 // A `/` directly after one of these is division; after anything else it opens a regex. Keywords are
 // listed by kind rather than by text because the scanner has already classified them.
-const ENDS_EXPRESSION = new Set<SyntaxKind>([
+//
+// Exported because it answers a second question with the same shape — "could an expression have
+// ENDED here" — which is half of what decides where a statement written without a semicolon does.
+export const ENDS_EXPRESSION = new Set<SyntaxKind>([
     SyntaxKind.Identifier,
     SyntaxKind.PrivateIdentifier,
     SyntaxKind.NumericLiteral,
@@ -116,7 +127,14 @@ export class Lexer {
         this.previous = kind
         const start = this.scanner.getTokenStart()
         const end = this.scanner.getTokenEnd()
-        return { kind, start, end, depth: this.depth, text: this.source.slice(start, end) }
+        return {
+            kind,
+            start,
+            end,
+            depth: this.depth,
+            text: this.source.slice(start, end),
+            startsLine: this.scanner.hasPrecedingLineBreak(),
+        }
     }
 }
 

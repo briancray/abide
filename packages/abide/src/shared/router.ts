@@ -33,8 +33,14 @@ import { type State, state } from './reactive.ts'
 
 export type { Params } from './internal/patterns.ts'
 
-/** What a page or a layout IS: the same callable a `.abide` file compiles to. */
-export type View = (args: Record<string, unknown>) => TemplateResult
+/**
+ * What a page or a layout IS: the same callable a `.abide` file compiles to.
+ *
+ * `children` and nothing else, because that is the whole of what this calls one with — a page gets
+ * none and a layout gets the page it wraps. A compiled component declares its OWN props through
+ * `props<T>()`, and one that declared any is not a page: nothing here would have a value to pass.
+ */
+export type View = (args: { children?: unknown }) => TemplateResult
 
 /** A module holding one. The DEFAULT export, because that is what a compiled `.abide` file has. */
 export interface ViewModule {
@@ -55,6 +61,17 @@ export interface RouteEntry {
     page: Loader
     /** The layouts wrapping it, OUTERMOST first. Each receives the level below as its children. */
     layouts?: Loader[]
+    /**
+     * The FILES this entry was read out of, relative to the pages directory. Optional because only a
+     * scanner knows them — a table written by hand is loaders and nothing else, and routing itself
+     * never reads this.
+     *
+     * It is here rather than beside the table because there is nowhere else that survives the trip:
+     * `pages()` walks a directory and the shell builder wants `modulepreload` links for what a route
+     * will import, and a second array zipped to this one by index is a mis-zip away from preloading
+     * the wrong page's chunks — silently, since a preload that never matches is only a wasted fetch.
+     */
+    source?: { page: string; layouts: string[] }
 }
 
 export type RouteKind = 'page' | 'missing'
@@ -117,7 +134,14 @@ interface Match {
 let TABLE: Installed[] = []
 const BY_NAME = new Map<string, Installed>()
 
-const NO_ARGS: Record<string, unknown> = Object.freeze({})
+// The entries the current table was installed FROM, so `routes()` can hand them back. The ENTRIES,
+// not the `Installed` records built from them: what a borrower gives back has to be something
+// `routes` accepts, and an install is a rebuild — a view resolved into one record does not carry
+// over into the next.
+const NO_ENTRIES: RouteEntry[] = []
+let ENTRIES: RouteEntry[] = NO_ENTRIES
+
+const NO_ARGS: { children?: unknown } = Object.freeze({})
 const NO_WRAPS: View[] = []
 const NO_LAYOUTS: Loader[] = []
 // Renders nothing: no route matched, or its module has not arrived. ONE call site, so the identity a
@@ -125,10 +149,18 @@ const NO_LAYOUTS: Loader[] = []
 const NOTHING = html``
 
 /**
- * Install the app's routes. Sorted ONCE, by precedence — literal > required > optional > rest — so a
- * match is a walk that stops at the first hit rather than a score kept over every route.
+ * Install the app's routes, or — with nothing to install — hand back the ones that are installed.
+ *
+ * Sorted ONCE, by precedence — literal > required > optional > rest — so a match is a walk that stops
+ * at the first hit rather than a score kept over every route.
+ *
+ * The reading form is what makes a table BORROWABLE: a test driving its own routes has to give the
+ * app its own back, and there is no other way to ask what they were.
  */
-export function routes(table: RouteEntry[]): void {
+export function routes(): RouteEntry[]
+export function routes(table: RouteEntry[]): void
+export function routes(table?: RouteEntry[]): RouteEntry[] | undefined {
+    if (table === undefined) return ENTRIES
     const installed: Installed[] = []
     for (const entry of table) {
         installed.push({
@@ -141,6 +173,7 @@ export function routes(table: RouteEntry[]): void {
         })
     }
     installed.sort((left, right) => comparePatterns(left.pattern, right.pattern))
+    ENTRIES = table
     TABLE = installed
     BY_NAME.clear()
     for (const held of installed) BY_NAME.set(held.pattern.path, held)
@@ -255,7 +288,12 @@ export function ready(): Promise<void> {
  * re-run it at all, and the page patches in place instead of being torn down and rebuilt.
  */
 export function outlet(): TemplateResult {
-    const name = cellsFor().name()
+    const cells = cellsFor()
+    // Both, and in this order, because they are two different facts: the route changed, or a range
+    // arrived for the route already showing. They are written in one commit, so a navigation that
+    // moved both still costs this ONE run.
+    cells.adopted()
+    const name = cells.name()
     if (name === '') return NOTHING
     const held = BY_NAME.get(name)
     if (held === undefined) return NOTHING
@@ -285,6 +323,16 @@ interface Cells {
     params: State<Params>
     url: State<URL>
     navigating: State<boolean>
+    /**
+     * How many ranges the outlet has been handed off the wire. Read for its EDGE, never its value.
+     *
+     * A served navigation fills the outlet's range from the server and then needs the view to CLAIM
+     * it — and the route it lands on may be the one already showing, a different `[id]` under the
+     * same pattern. The name would not move for that, so the streamed nodes would sit on screen with
+     * nothing claiming them and no reactivity in them. This is the write that says "a new range is
+     * standing there", which is a different fact from "the route changed".
+     */
+    adopted: State<number>
 }
 
 interface Here {
@@ -339,6 +387,39 @@ export function useHistorySink(sink: HistorySink): void {
     sink.listen((href) => void navigate(href, { replace: true, keepScroll: true }))
 }
 
+/**
+ * What one entry left behind — the two facts the caller cannot see for itself.
+ *
+ * `complete` is the rest of the answer, after the piece that resolved `enter`. It is a promise rather
+ * than a callback because the route is committed against it: the range is whole only when it settles.
+ */
+export interface Entered {
+    /** The browser is taking this URL. Nothing may be committed against a document that is going. */
+    left: boolean
+    /** Every piece after the first, applied. Never settles for a navigation that left. */
+    complete: Promise<void>
+}
+
+/**
+ * How a lane with a DOCUMENT moves between routes: it asks the SERVER for the page and puts the
+ * answer on the screen as it arrives. `abide/ui` installs this from the part that is showing the
+ * outlet, which is the only part a navigation repaints.
+ *
+ * The policy stays here and the fetching stays there, the same seam `HistorySink` draws: what a
+ * navigation IS — when the server is worth asking, and when the answer is allowed to become the
+ * route — is routing's, and it must not need a document to be decided.
+ */
+export interface NavigationSink {
+    /** Resolves when the FIRST piece is on screen, not when the page is whole. */
+    enter(url: URL): Promise<Entered>
+}
+
+let NAVIGATION_SINK: NavigationSink | null = null
+
+export function useNavigationSink(sink: NavigationSink): void {
+    NAVIGATION_SINK = sink
+}
+
 function hrefOf(fallback?: string): string {
     const served = HREF_SOURCE === null ? null : HREF_SOURCE()
     if (served !== null) return served
@@ -360,6 +441,7 @@ function cellsFor(fallback?: string): Cells {
         params: state(found === null ? NO_PARAMS : found.params),
         url: state(url),
         navigating: state(false),
+        adopted: state(0),
     }
     here.cells = made
     return made
@@ -480,19 +562,69 @@ export function url(path: string, params?: Record<string, unknown>, query?: Reco
 
 // --- moving --------------------------------------------------------------------
 
-function land(cells: Cells, url: URL, options: NavigateOptions | undefined, found: Match | null): void {
+/**
+ * The address bar's half of landing, on its own because a served navigation does the two halves at
+ * different moments: the URL moves when the first piece is on screen, and the route is committed when
+ * the range behind it is whole.
+ */
+function place(cells: Cells, url: URL, options: NavigateOptions | undefined): void {
     const moved = cells.url.peek().pathname !== url.pathname
     // A caller SCOPE is what separates the two worlds: a request being served, or a test driving a
     // route on the side, must not write to an address bar. A browser app has no scope — one caller,
     // forever — and is the only thing that drives the document.
     const sink = currentScope() === null ? HISTORY_SINK : null
-    if (sink !== null) {
-        sink.push(url.href, options?.replace === true)
-        // A same-path navigation is a republish — a tab, a filter, a page number — and scrolling to
-        // the top for one of those throws away the reader's place for nothing.
-        if (moved && options?.keepScroll !== true) sink.toTop()
-    }
+    if (sink === null) return
+    sink.push(url.href, options?.replace === true)
+    // A same-path navigation is a republish — a tab, a filter, a page number — and scrolling to the
+    // top for one of those throws away the reader's place for nothing.
+    if (moved && options?.keepScroll !== true) sink.toTop()
+}
+
+function land(cells: Cells, url: URL, options: NavigateOptions | undefined, found: Match | null): void {
+    place(cells, url, options)
     commit(cells, url, found)
+}
+
+/**
+ * A navigation the SERVER answers: the page arrives as markup, and the client's copy of its module is
+ * what CLAIMS that markup rather than what draws it.
+ *
+ * The two are asked for together, and the route is committed only when both have landed. That
+ * ordering is the whole of this function. The commit is what wakes `outlet`, and an outlet woken
+ * while the range is still being filled would build over it — `reclaiming` snapshots what to adopt at
+ * `done`, and not before, because a patch replacing a top-level placeholder rewrites the very list
+ * that snapshot holds. So a page with a slow suspended panel is VISIBLE from its first piece and
+ * interactive when the last one lands, which is the trade this makes on purpose: the module is what
+ * makes a page interactive, not what makes it appear.
+ */
+async function enter(
+    cells: Cells,
+    url: URL,
+    options: NavigateOptions | undefined,
+    found: Match | null,
+    sink: NavigationSink,
+): Promise<void> {
+    const loading = found === null ? null : loadFor(found.held)
+    cells.navigating.set(true)
+    try {
+        const entered = await sink.enter(url)
+        // The browser is taking this URL and its own load answers everything below, so this side
+        // commits NOTHING — not the address it answers about, not the route, not the range. Resolving
+        // rather than waiting on `complete`, which is a promise nothing settles: the caller asked to
+        // move and the move is happening, just not here.
+        if (entered.left) return
+        // The first piece is on screen, so the address bar is now behind what the reader is looking
+        // at. This is the half that cannot wait for the range to be whole.
+        place(cells, url, options)
+        await entered.complete
+        if (loading !== null) await loading
+        commit(cells, url, found)
+        // In the same synchronous region as the commit, so the renderer takes both in ONE flush and
+        // the page's view runs once for the navigation however many cells moved.
+        cells.adopted.set(cells.adopted.peek() + 1)
+    } finally {
+        cells.navigating.set(false)
+    }
 }
 
 /**
@@ -501,6 +633,8 @@ function land(cells: Cells, url: URL, options: NavigateOptions | undefined, foun
  * The route is committed only after its modules arrive, so nothing ever renders a page that is not
  * there yet: that is the whole of what `navigating` reports, and a navigation to a route already
  * loaded has no in-flight window and never sets it.
+ *
+ * Where there is a document, the page is the SERVER's to render and this waits on that — see `enter`.
  */
 export function navigate(target: string, options?: NavigateOptions): Promise<void> {
     const here = hereFor()
@@ -512,6 +646,18 @@ export function navigate(target: string, options?: NavigateOptions): Promise<voi
     const cells = here.cells ?? cellsFor(new URL('/', new URL(target, NOWHERE)).href)
     const url = new URL(target, cells.url.peek().href)
     const found = lookup(url.pathname)
+
+    // Where there is a document showing the outlet, a navigation is the SERVER's to answer — every
+    // navigation, including one that stays on the route it is on. A page is rendered by the app's own
+    // middleware onion once, at the URL being asked for, and this side claims what comes back; a
+    // second rendering path for "the pattern did not change" would be the same page assembled two
+    // ways, which is the one thing this arrangement exists to not have.
+    //
+    // The scope test is `place`'s, for `place`'s reason: only the ambient caller has a document. A
+    // request being served and a test driving a route on the side each render locally.
+    const sink = currentScope() === null ? NAVIGATION_SINK : null
+    if (sink !== null) return enter(cells, url, options, found, sink)
+
     const loading = found === null ? null : loadFor(found.held)
     if (loading === null) {
         land(cells, url, options, found)

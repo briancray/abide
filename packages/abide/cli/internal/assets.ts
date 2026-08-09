@@ -25,6 +25,7 @@ import {
     CLIENT_DIR,
     CLIENT_ROUTE,
     type ClientAsset,
+    type ClientGraph,
     type ClientManifest,
     type Encoding,
     MANIFEST_FILE,
@@ -142,6 +143,7 @@ export async function clientAssets(root: string): Promise<LoadedClient | null> {
 export async function heldClient(
     outputs: Bun.BuildArtifact[],
     entries: Record<string, string>,
+    graph: ClientGraph | undefined,
 ): Promise<LoadedClient> {
     // Every artifact at once. The bytes are already in memory, so this is a promise tick per artifact
     // rather than a read — and one artifact waiting on the one before it is a tick per chunk charged
@@ -166,7 +168,7 @@ export async function heldClient(
             encoded: NO_FORMS,
         })
     }
-    return { assets: new ClientAssets(held), manifest: { entries, assets } }
+    return { assets: new ClientAssets(held), manifest: { entries, assets, graph } }
 }
 
 /**

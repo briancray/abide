@@ -9,8 +9,16 @@
 //
 // Every case drives the router inside an `isolate`, for two reasons: it is what proves the route is
 // per-caller — a server serves two visitors at two URLs at once — and it is what keeps `bun test`
-// and the browser card from writing to a real address bar. The interactive card at the bottom is the
-// opposite on purpose: no isolate, so it drives the document, and `/routing/*` is served for it.
+// and the browser card from writing to a real address bar.
+//
+// The TABLE is the other half, and it is not per-caller: a table is process-wide, because a server
+// installs one at boot and serves every request from it. This page is served by an abide app whose
+// table is that one, so a case installing its own is speaking for the app that is rendering it —
+// which is what `withTable` is for. Inside the isolate, so the install commits nothing against the
+// app's own caller; restored on the way out, so the page a reader is looking at still has its routes.
+//
+// The interactive card at the bottom installs nothing at all. It drives the app's OWN router, which
+// is the thing this page is now inside — see the note there.
 
 import {
     html,
@@ -27,7 +35,7 @@ import {
 } from 'abide'
 import { reader, settled, suite } from 'abide/tests'
 import { mount } from 'abide/ui'
-import { button, el, row, stage } from './dom.ts'
+import { button, el, row } from './dom.ts'
 import { META } from './SUITES.ts'
 import { hrefFor, routerRecord } from './vanilla.ts'
 
@@ -61,6 +69,36 @@ const TABLE: RouteEntry[] = [
 /** The same table plus a catch-all, so "the last resort is still a resort" has something to catch. */
 const CATCH_ALL: RouteEntry[] = [...TABLE, { path: '/[...rest]', page: load(Missed) }]
 
+/**
+ * Install `table`, and hand back the call that gives the app its own back.
+ *
+ * The install happens as a caller of its OWN — a synchronous `isolate`, over before it returns — so
+ * it commits nothing against the caller this page is being rendered to. `routes()` re-answers the
+ * current caller's route, and re-answering it with a table this app's own pages are not in would
+ * leave the page with nothing to render.
+ *
+ * The restore is deliberately NOT isolated, for the mirror of that reason: re-committing the app's
+ * caller against its own table is how a page that navigated while a case was running lands where it
+ * was going.
+ */
+function borrowTable(table: RouteEntry[]): () => void {
+    const held = routes()
+    isolate(() => {
+        routes(table)
+    })
+    return () => routes(held)
+}
+
+/** The borrow, for the usual case: one table, one caller, for the length of one body. */
+async function withTable<T>(table: RouteEntry[], body: () => Promise<T>): Promise<T> {
+    const restore = borrowTable(table)
+    try {
+        return await isolate(body)
+    } finally {
+        restore()
+    }
+}
+
 export default suite({
     ...META.routing,
     cases: [
@@ -68,8 +106,7 @@ export default suite({
             title: 'a URL names a route, and its segments name the params',
             note: 'The route’s NAME is the pattern that matched, so it is stable across every URL that matches it — which is what makes it the thing to key a page on.',
             async run({ is }) {
-                routes(TABLE)
-                await isolate(async () => {
+                await withTable(TABLE, async () => {
                     await navigate('/users/42')
                     is('the name is the PATTERN, not the path', route().name, '/users/[id]')
                     is('a required segment', route().params, { id: '42' })
@@ -96,8 +133,7 @@ export default suite({
             title: 'precedence — literal > required > optional > rest',
             note: 'The table is sorted ONCE, at install, so a match is a walk that stops at the first hit. Scoring every route on every navigation is the other way to spell this, and it visits the whole table every time.',
             async run({ is }) {
-                routes(CATCH_ALL)
-                await isolate(async () => {
+                await withTable(CATCH_ALL, async () => {
                     await navigate('/users/new')
                     is('a literal beats a required segment', route().name, '/users/new')
                     await navigate('/users/42')
@@ -115,8 +151,7 @@ export default suite({
             title: 'nothing matched is a route too',
             note: 'A URL nobody claimed still has a URL, so `route()` still answers — `kind` is how a page says 404 rather than the framework guessing on its behalf.',
             async run({ is, host }) {
-                routes(TABLE)
-                await isolate(async () => {
+                await withTable(TABLE, async () => {
                     await navigate('/nope')
                     is('kind', route().kind, 'missing')
                     is('the name is empty', route().name, '')
@@ -132,8 +167,7 @@ export default suite({
             title: 'a layout wraps its page, outermost first',
             note: 'A layout is an ordinary component and its child arrives through `<slot/>` — so there is no second component protocol, and a layout is testable by being called.',
             async run({ is, host }) {
-                routes(TABLE)
-                await isolate(async () => {
+                await withTable(TABLE, async () => {
                     await navigate('/users/7')
                     const view = mount(host, () => outlet())
                     is('the layout is outside the page', host.textContent, 'shell(user 7)')
@@ -154,8 +188,7 @@ export default suite({
             title: 'a same-route navigation is a REPUBLISH, not a remount',
             note: 'The reads re-fire in place: `params` moved, so its reader woke, and the route’s name did not, so the outlet — which reads the name and nothing else — never ran again. This is the case a status record cannot pass.',
             async run({ is }) {
-                routes(TABLE)
-                await isolate(async () => {
+                await withTable(TABLE, async () => {
                     await navigate('/users/1')
                     const name = reader(() => route().name)
                     const params = reader(() => route().params.id)
@@ -175,8 +208,7 @@ export default suite({
             title: 'a query-only navigation moves the URL and nothing else',
             note: 'Four cells, not one record: `?tab=b` writes `url`, and the params object handed back is the one already held — so a reader comparing identities is right to stay asleep.',
             async run({ is }) {
-                routes(TABLE)
-                await isolate(async () => {
+                await withTable(TABLE, async () => {
                     await navigate('/users/1?tab=a')
                     const params = reader(() => route().params.id)
                     const tab = reader(() => route().url.searchParams.get('tab'))
@@ -196,17 +228,23 @@ export default suite({
             title: 'the route is per-caller — two visitors, two URLs, at once',
             note: 'The same storage a memo’s cache uses. On a client this is one caller forever and costs a null check; on a server it is what stops one request answering about another’s URL.',
             async run({ is }) {
-                routes(TABLE)
-                const first = await isolate(async () => {
-                    await navigate('/users/1')
-                    return route().params.id
-                })
-                const second = await isolate(async () => {
-                    await navigate('/users/2')
-                    return route().params.id
-                })
-                is('first caller', first, '1')
-                is('second caller', second, '2')
+                // Borrowed rather than `withTable`, because this is the one case that needs two
+                // callers: one table for the process, and a route each.
+                const restore = borrowTable(TABLE)
+                try {
+                    const first = await isolate(async () => {
+                        await navigate('/users/1')
+                        return route().params.id
+                    })
+                    const second = await isolate(async () => {
+                        await navigate('/users/2')
+                        return route().params.id
+                    })
+                    is('first caller', first, '1')
+                    is('second caller', second, '2')
+                } finally {
+                    restore()
+                }
             },
         },
 
@@ -218,7 +256,7 @@ export default suite({
                 const gate = new Promise<void>((resolve) => {
                     release = resolve
                 })
-                routes([
+                const SLOW: RouteEntry[] = [
                     { path: '/', page: load(Home) },
                     {
                         path: '/slow',
@@ -227,8 +265,8 @@ export default suite({
                             return { default: Fresh }
                         },
                     },
-                ])
-                await isolate(async () => {
+                ]
+                await withTable(SLOW, async () => {
                     await navigate('/')
                     const spin = reader(() => route().navigating)
 
@@ -252,8 +290,7 @@ export default suite({
             title: 'a navigation with nothing to load never wakes `navigating`',
             note: 'Setting it true and false inside one tick would wake every reader of it for a navigation nobody waited on — so the resolve path stays synchronous when there is nothing to resolve.',
             async run({ is }) {
-                routes(TABLE)
-                await isolate(async () => {
+                await withTable(TABLE, async () => {
                     await navigate('/users/1')
                     const spin = reader(() => route().navigating)
                     await navigate('/users/2')
@@ -292,19 +329,9 @@ export default suite({
         },
 
         {
-            title: 'interact — a router driving the address bar',
-            note: 'No `isolate` here, so this is the client’s one caller: the buttons push real history entries, back and forward work, and `/routing/*` is served so a reload lands on the same page.',
+            title: 'interact — the app’s own router, driving the address bar',
+            note: 'No table and no `isolate`: the router these buttons drive is the one serving this page. `/routing/**` is ONE route — `[suite]/[...rest]` — so the address bar and the params move while the page they are on is never remounted, which is the republish claim above with the whole app behind it.',
             interact({ host, log }) {
-                routes(LIVE)
-                // Take the document's URL as the starting point, explicitly. In a browser this is
-                // what `route()` would have worked out for itself; it is written down because it also
-                // works where `location` is not a PLACE — a DOM emulator reports `about:blank`, and
-                // an ambient that refuses to guess is right to refuse that one.
-                void navigate(location.pathname + location.search, { replace: true, keepScroll: true })
-
-                const live = stage(host, 'the outlet')
-                mount(live, () => outlet())
-
                 const links = row(
                     button('/routing', () => void navigate('/routing')),
                     button('/routing/users/1', () => void navigate('/routing/users/1')),
@@ -334,9 +361,8 @@ export default suite({
                     {
                         label: 'abide — reader of route().name across a param navigation',
                         run: async () => {
-                            routes(TABLE)
                             let woke = -1
-                            await isolate(async () => {
+                            await withTable(TABLE, async () => {
                                 await navigate('/users/1')
                                 const held = reader(() => {
                                     woke++
@@ -392,20 +418,3 @@ export default suite({
         },
     ],
 })
-
-// --- the interactive table ----------------------------------------------------
-//
-// Under `/routing/**` on purpose: `web/serve.ts` serves that subtree with this same page, so a
-// pushState the card makes is an address a reload can land on. A demo that puts the browser somewhere
-// the server does not serve is a demo that breaks the moment anyone refreshes.
-
-const Chrome: View = (args) =>
-    html`<div class="space-y-2"><div class="text-xs uppercase tracking-widest text-slate-600">layout</div>${args.children}</div>`
-
-const CHROME: Loader[] = [load(Chrome)]
-
-const LIVE: RouteEntry[] = [
-    { path: '/routing', page: load(Home), layouts: CHROME },
-    { path: '/routing/users/[id]', page: load(User), layouts: CHROME },
-    { path: '/routing/files/[...path]', page: load(Files), layouts: CHROME },
-]

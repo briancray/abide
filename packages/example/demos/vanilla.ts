@@ -245,14 +245,17 @@ export function remoteByHand<Args, T>(path: string, handler: (args: Args) => T):
     const serve = (request: Request): Response | undefined => {
         const url = new URL(request.url)
         if (url.pathname !== path) return undefined
-        const args = JSON.parse(url.searchParams.get('a') ?? 'null') as Args
+        // One parameter per argument, the way anyone writes a query — and the coercion by hand,
+        // per endpoint, because a query is strings and this route is the only thing that knows the
+        // id is a number. That is the third declaration doing what it always does.
+        const args = { id: Number(url.searchParams.get('id')) } as Args
         return new Response(JSON.stringify(handler(args)), {
             headers: { 'content-type': 'application/json' },
         })
     }
     return async function call(args: Args): Promise<T> {
-        const query = encodeURIComponent(JSON.stringify(args))
-        const response = serve(new Request(`${origin}${path}?a=${query}`))
+        const query = new URLSearchParams(args as Record<string, string>).toString()
+        const response = serve(new Request(`${origin}${path}?${query}`))
         if (response === undefined) throw new Error(`no route at ${path}`)
         return JSON.parse(await response.text()) as T
     }

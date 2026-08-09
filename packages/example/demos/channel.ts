@@ -4,7 +4,7 @@
 
 import { channel, html, memo } from 'abide'
 import { renderToString } from 'abide/server'
-import { container, reader, sleep, suite, tick, until } from 'abide/tests'
+import { container, duration, nsPerOp, reader, sleep, suite, tick, until } from 'abide/tests'
 import { mount } from 'abide/ui'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -165,23 +165,24 @@ export default suite({
         {
             title: 'the retention SIZE never reaches the publish',
             note: 'A `tail` is a cap on what is REMEMBERED, and it has no business being a cost on every message. Rebuilding the transcript per publish made it one — 94 ns at `tail: 8` against 1314 ns at `tail: 500` — so raising a scrollback silently taxed a hot path nobody was looking at, and the same shape uncapped made a stream O(n²). The buffer is pushed into and compacted once per `tail` messages instead, which is what a ring was always supposed to mean.',
-            async run({ is }) {
+            async run({ is, log }) {
                 // A ratio between two abide arms in the same substrate: an absolute number here
                 // would describe the machine, and a correctness test cannot see this at all — the
                 // wrong implementation retains exactly the right messages, just slowly.
-                const perPublish = (tail: number): number => {
-                    const feed = channel<number>({ tail })
-                    for (let i = 0; i < 20_000; i++) feed.publish(i) // warm, and fill past the cap
-                    let best = Infinity
-                    for (let round = 0; round < 5; round++) {
-                        const at = performance.now()
-                        for (let i = 0; i < 20_000; i++) feed.publish(i)
-                        best = Math.min(best, performance.now() - at)
-                    }
-                    return best
-                }
+                //
+                // `nsPerOp` sizes the batch rather than fixing it, because a publish is tens of
+                // nanoseconds and a fixed 20k of them reads as 0 ms under Safari's 1 ms clamp — two
+                // arms that both read 0 make the ratio NaN, which fails for a reason that is about
+                // the clock rather than the ring.
+                const small = channel<number>({ tail: 8 })
+                const large = channel<number>({ tail: 512 })
+                const [cheap, dear] = (await nsPerOp([
+                    { label: 'tail: 8', run: (i: number) => small.publish(i) },
+                    { label: 'tail: 512', run: (i: number) => large.publish(i) },
+                ])) as [number, number]
 
-                const ratio = perPublish(512) / perPublish(8)
+                const ratio = dear / cheap
+                log('per publish', `tail 8 — ${duration(cheap)}, tail 512 — ${duration(dear)}`)
                 // 64x the retention. The bound is loose because a clock inside a browser card is;
                 // what it has to separate is ~1x from the ~14x a per-publish rebuild costs.
                 is(`a 64x larger cap costs no more per publish (${ratio.toFixed(1)}x)`, ratio < 4, true)

@@ -23,7 +23,7 @@ import {
     total,
 } from 'abide/tests'
 import { hydrate, keyed, mount } from 'abide/ui'
-import { button, output, row, stage } from './dom.ts'
+import { button, lazy, output, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -60,23 +60,33 @@ const listView = (rows: () => Item[]) => (): TemplateResult =>
 // Detached, and the markup is rendered ONCE at module scope: an arm that re-renders the string on
 // every iteration is timing the server, not the adoption.
 
-const detached = document.createElement('div')
 const ROWS_200 = build(200)
 const rowsCell = state(ROWS_200)
 const BENCH_VIEW = listView(() => rowsCell())
 
-// Warm the call site so no arm pays the parse, and render the markup both arms start from.
-{
-    const warm = document.createElement('div')
-    mount(warm, BENCH_VIEW).dispose()
-}
+// The markup both arms start from. Rendering it is the SERVER's half of this suite and touches no
+// document, so it stays where it is: at module scope, once.
 const SERVED_MARKUP = await renderToString(BENCH_VIEW(), { hydratable: true })
 const VANILLA_MARKUP = vanilla.rowsToString(ROWS_200)
+
+/**
+ * Where the arms' hosts hang, made on FIRST USE rather than at import.
+ *
+ * Lazy for the reason `lazy` exists — a suite module is imported on the server too. The warm-up rides
+ * along because a call site is PARSED once, and the first arm must not be the one that pays for it.
+ * Every arm reaches its host through `benchHost`, so warming here is still warming before anything is
+ * measured.
+ */
+const detached = lazy((): HTMLElement => {
+    const warm = document.createElement('div')
+    mount(warm, BENCH_VIEW).dispose()
+    return document.createElement('div')
+})
 
 function benchHost(markup: string): HTMLElement {
     const host = document.createElement('div')
     host.innerHTML = markup
-    detached.append(host)
+    detached().append(host)
     return host
 }
 

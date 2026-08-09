@@ -20,7 +20,7 @@ import {
     tick,
 } from 'abide/tests'
 import { keyed, mount } from 'abide/ui'
-import { button, field, row, stage } from './dom.ts'
+import { button, field, lazy, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -56,51 +56,20 @@ const keyedList = (rows: () => Item[]): TemplateResult =>
 
 // --- bench fixtures ---------------------------------------------------------
 //
-// Detached: the benches must not be measuring layout and paint of a visible list. Built once at
-// module scope so an arm is timed on a WARM list rather than on its own first render.
+// Detached: the benches must not be measuring layout and paint of a visible list. Built once, so an
+// arm is timed on a WARM list rather than on its own first render.
+//
+// The DATA is built at module scope and the DOM is not, and the split is not tidiness: a suite module
+// is imported on the SERVER too — the cards' titles and notes are server-rendered — and there is no
+// document there to build a list in. So the elements come on first use, which is inside an arm, which
+// only ever runs in a browser.
 
-const detached = document.createElement('div')
 const ROWS_1000 = build(1000)
 const ROWS_200 = build(200)
-// Ten thousand ROWS, but no ten-thousand-row list standing at module scope: the array is cheap and
-// the DOM is not, so the build arms make theirs and tear it down again.
+// Ten thousand ROWS, but no ten-thousand-row list standing anywhere: the array is cheap and the DOM
+// is not, so the build arms make theirs and tear it down again.
 const ROWS_10000 = build(10000)
-
-const listHost = document.createElement('ul')
-detached.append(listHost)
-
-const bigListHost = document.createElement('ul')
-detached.append(bigListHost)
-
-// One persistent abide list, kept in sync with a cell — the "update one row of a thousand" arm.
-const liveRows = state(ROWS_1000)
-const liveHost = document.createElement('ul')
-detached.append(liveHost)
-mount(liveHost, () => list(liveRows))
-
-// …and the keyed equivalent, for the reorder cases.
-const keyedRows = state(ROWS_200)
-const keyedHost = document.createElement('ul')
-detached.append(keyedHost)
-mount(keyedHost, () => keyedList(keyedRows))
-
-// …and an UNKEYED one over the same data, which is the arm a keyed swap has to beat.
-const unkeyedRows = state(ROWS_200)
-const unkeyedHost = document.createElement('ul')
-detached.append(unkeyedHost)
-mount(unkeyedHost, () => list(unkeyedRows))
-
-const vanillaHost = document.createElement('ul')
-detached.append(vanillaHost)
-vanilla.buildRows(vanillaHost, ROWS_200)
-
-const vanillaBigHost = document.createElement('ul')
-detached.append(vanillaBigHost)
-vanilla.buildRows(vanillaBigHost, ROWS_1000)
-
-const innerHost = document.createElement('ul')
-detached.append(innerHost)
-vanilla.buildRowsInnerHTML(innerHost, ROWS_1000)
+const ROWS_1010 = build(1010)
 
 // The two reorders, precomputed. A timed reorder arm ALTERNATES between two orders rather than
 // preparing once: a list already in the order it is being set to moves nothing, so an arm that
@@ -108,28 +77,94 @@ vanilla.buildRowsInnerHTML(innerHost, ROWS_1000)
 const SWAP_ADJACENT = swapped(ROWS_200, 1, 2)
 const SWAP_DISTANT = swapped(ROWS_200, 1, 198)
 
+// The cells the persistent lists track. Reactive state, not DOM — they belong out here with the rows.
+const liveRows = state(ROWS_1000)
+const keyedRows = state(ROWS_200)
+const unkeyedRows = state(ROWS_200)
 const adjacentRows = state(ROWS_200)
-const adjacentHost = document.createElement('ul')
-detached.append(adjacentHost)
-mount(adjacentHost, () => keyedList(adjacentRows))
-
 const distantRows = state(ROWS_200)
-const distantHost = document.createElement('ul')
-detached.append(distantHost)
-mount(distantHost, () => keyedList(distantRows))
-
-// Growth: a thousand rows with ten more on the end, alternating. This is what a feed does on every
-// poll, and it is the mutation the whole-array benches above cannot show — a reconcile that is right
-// for an edit can still rebuild the tail.
-const ROWS_1010 = build(1010)
 const growRows = state(ROWS_1000)
-const growHost = document.createElement('ul')
-detached.append(growHost)
-mount(growHost, () => list(growRows))
 
-const growVanillaHost = document.createElement('ul')
-detached.append(growVanillaHost)
-vanilla.buildRows(growVanillaHost, ROWS_1000)
+/** One record, so the whole set is one shape the JIT sees the same way at every arm's call site. */
+interface Fixtures {
+    detached: HTMLElement
+    listHost: HTMLElement
+    bigListHost: HTMLElement
+    liveHost: HTMLElement
+    keyedHost: HTMLElement
+    unkeyedHost: HTMLElement
+    vanillaHost: HTMLElement
+    vanillaBigHost: HTMLElement
+    innerHost: HTMLElement
+    adjacentHost: HTMLElement
+    distantHost: HTMLElement
+    growHost: HTMLElement
+    growVanillaHost: HTMLElement
+}
+
+const fixtures = lazy((): Fixtures => {
+    const detached = document.createElement('div')
+    const ul = (): HTMLElement => {
+        const host = document.createElement('ul')
+        detached.append(host)
+        return host
+    }
+
+    const listHost = ul()
+    const bigListHost = ul()
+
+    // One persistent abide list, kept in sync with a cell — the "update one row of a thousand" arm.
+    const liveHost = ul()
+    mount(liveHost, () => list(liveRows))
+
+    // …and the keyed equivalent, for the reorder cases.
+    const keyedHost = ul()
+    mount(keyedHost, () => keyedList(keyedRows))
+
+    // …and an UNKEYED one over the same data, which is the arm a keyed swap has to beat.
+    const unkeyedHost = ul()
+    mount(unkeyedHost, () => list(unkeyedRows))
+
+    const vanillaHost = ul()
+    vanilla.buildRows(vanillaHost, ROWS_200)
+
+    const vanillaBigHost = ul()
+    vanilla.buildRows(vanillaBigHost, ROWS_1000)
+
+    const innerHost = ul()
+    vanilla.buildRowsInnerHTML(innerHost, ROWS_1000)
+
+    const adjacentHost = ul()
+    mount(adjacentHost, () => keyedList(adjacentRows))
+
+    const distantHost = ul()
+    mount(distantHost, () => keyedList(distantRows))
+
+    // Growth: a thousand rows with ten more on the end, alternating. This is what a feed does on
+    // every poll, and it is the mutation the whole-array benches above cannot show — a reconcile that
+    // is right for an edit can still rebuild the tail.
+    const growHost = ul()
+    mount(growHost, () => list(growRows))
+
+    const growVanillaHost = ul()
+    vanilla.buildRows(growVanillaHost, ROWS_1000)
+
+    return {
+        detached,
+        listHost,
+        bigListHost,
+        liveHost,
+        keyedHost,
+        unkeyedHost,
+        vanillaHost,
+        vanillaBigHost,
+        innerHost,
+        adjacentHost,
+        distantHost,
+        growHost,
+        growVanillaHost,
+    }
+})
 
 export default suite({
     ...META.client,
@@ -325,7 +360,8 @@ export default suite({
                     },
                     {
                         label: 'vanilla — surgical textContent',
-                        run: (i: number) => vanilla.updateRow(vanillaBigHost, 500, `row 500 · ${i}`),
+                        run: (i: number) =>
+                            vanilla.updateRow(fixtures().vanillaBigHost, 500, `row 500 · ${i}`),
                     },
                     {
                         // Neither abide nor a rebuild: the slice and the thousand `html` tags the
@@ -345,7 +381,7 @@ export default suite({
                         run: (i: number) => {
                             const next = ROWS_1000.slice()
                             next[500] = { id: 500, label: `row 500 · ${i}` }
-                            vanilla.buildRowsInnerHTML(innerHost, next)
+                            vanilla.buildRowsInnerHTML(fixtures().innerHost, next)
                         },
                     },
                 ],
@@ -369,11 +405,15 @@ export default suite({
                     {
                         label: 'vanilla — surgical textContent',
                         run: () =>
-                            vanilla.updateRow(vanillaBigHost, 500, `row 500 · counted ${Math.random()}`),
+                            vanilla.updateRow(
+                                fixtures().vanillaBigHost,
+                                500,
+                                `row 500 · counted ${Math.random()}`,
+                            ),
                     },
                     {
                         label: 'vanilla — innerHTML rebuild',
-                        run: () => vanilla.buildRowsInnerHTML(innerHost, ROWS_1000),
+                        run: () => vanilla.buildRowsInnerHTML(fixtures().innerHost, ROWS_1000),
                     },
                 ],
             },
@@ -390,7 +430,7 @@ export default suite({
                         label: 'abide — mount + dispose',
                         run: () => {
                             const mounted = mount(
-                                listHost,
+                                fixtures().listHost,
                                 () => html`${ROWS_1000.map((r) => html`<li>${r.label}</li>`)}`,
                             )
                             mounted.dispose()
@@ -399,15 +439,15 @@ export default suite({
                     {
                         label: 'vanilla — createElement loop',
                         run: () => {
-                            vanilla.buildRows(listHost, ROWS_1000)
-                            listHost.replaceChildren()
+                            vanilla.buildRows(fixtures().listHost, ROWS_1000)
+                            fixtures().listHost.replaceChildren()
                         },
                     },
                     {
                         label: 'vanilla — innerHTML',
                         run: () => {
-                            vanilla.buildRowsInnerHTML(listHost, ROWS_1000)
-                            listHost.innerHTML = ''
+                            vanilla.buildRowsInnerHTML(fixtures().listHost, ROWS_1000)
+                            fixtures().listHost.innerHTML = ''
                         },
                     },
                 ],
@@ -425,7 +465,7 @@ export default suite({
                         label: 'abide — mount + dispose',
                         run: () => {
                             const mounted = mount(
-                                bigListHost,
+                                fixtures().bigListHost,
                                 () => html`${ROWS_10000.map((r) => html`<li>${r.label}</li>`)}`,
                             )
                             mounted.dispose()
@@ -434,15 +474,15 @@ export default suite({
                     {
                         label: 'vanilla — createElement loop',
                         run: () => {
-                            vanilla.buildRows(bigListHost, ROWS_10000)
-                            bigListHost.replaceChildren()
+                            vanilla.buildRows(fixtures().bigListHost, ROWS_10000)
+                            fixtures().bigListHost.replaceChildren()
                         },
                     },
                     {
                         label: 'vanilla — innerHTML',
                         run: () => {
-                            vanilla.buildRowsInnerHTML(bigListHost, ROWS_10000)
-                            bigListHost.innerHTML = ''
+                            vanilla.buildRowsInnerHTML(fixtures().bigListHost, ROWS_10000)
+                            fixtures().bigListHost.innerHTML = ''
                         },
                     },
                 ],
@@ -544,11 +584,12 @@ export default suite({
                     },
                     {
                         label: 'vanilla — two insertBefore calls',
-                        run: () => vanilla.swapRows(vanillaHost, 1, 198),
+                        run: () => vanilla.swapRows(fixtures().vanillaHost, 1, 198),
                     },
                     {
                         label: 'vanilla — innerHTML rebuild',
-                        run: () => vanilla.buildRowsInnerHTML(innerHost, swapped(ROWS_200, 1, 198)),
+                        run: () =>
+                            vanilla.buildRowsInnerHTML(fixtures().innerHost, swapped(ROWS_200, 1, 198)),
                     },
                 ],
             },
@@ -577,12 +618,15 @@ export default suite({
                     },
                     {
                         label: 'vanilla — two insertBefore calls',
-                        run: () => vanilla.swapRows(vanillaHost, 1, 198),
+                        run: () => vanilla.swapRows(fixtures().vanillaHost, 1, 198),
                     },
                     {
                         label: 'vanilla — innerHTML rebuild',
                         run: (i: number) =>
-                            vanilla.buildRowsInnerHTML(innerHost, i % 2 === 0 ? SWAP_DISTANT : ROWS_200),
+                            vanilla.buildRowsInnerHTML(
+                                fixtures().innerHost,
+                                i % 2 === 0 ? SWAP_DISTANT : ROWS_200,
+                            ),
                     },
                 ],
             },
@@ -636,16 +680,19 @@ export default suite({
                                     li.textContent = `row ${n}`
                                     fragment.append(li)
                                 }
-                                growVanillaHost.append(fragment)
+                                fixtures().growVanillaHost.append(fragment)
                                 return
                             }
-                            for (let n = 0; n < 10; n++) growVanillaHost.lastChild?.remove()
+                            for (let n = 0; n < 10; n++) fixtures().growVanillaHost.lastChild?.remove()
                         },
                     },
                     {
                         label: 'vanilla — innerHTML rebuild',
                         run: (i: number) =>
-                            vanilla.buildRowsInnerHTML(innerHost, i % 2 === 0 ? ROWS_1010 : ROWS_1000),
+                            vanilla.buildRowsInnerHTML(
+                                fixtures().innerHost,
+                                i % 2 === 0 ? ROWS_1010 : ROWS_1000,
+                            ),
                     },
                 ],
             },
@@ -712,7 +759,7 @@ export default suite({
                         async run() {
                             const rows = state(build(200))
                             const host = document.createElement('ul')
-                            detached.append(host)
+                            fixtures().detached.append(host)
                             const work = await measureFlush(() => {
                                 mount(host, () => list(rows))
                             })
@@ -724,7 +771,7 @@ export default suite({
                         label: 'vanilla — createElement loop over the same 200',
                         async run() {
                             const host = document.createElement('ul')
-                            detached.append(host)
+                            fixtures().detached.append(host)
                             const work = await measureFlush(() => vanilla.buildRows(host, ROWS_200))
                             host.remove()
                             return { count: nodesMade(work), of: 'DOM nodes for 200 rows' }
@@ -751,8 +798,8 @@ export default suite({
                     {
                         label: 'vanilla — append per row',
                         run: () => {
-                            const children = Array.from(vanillaHost.children).reverse()
-                            for (const child of children) vanillaHost.append(child)
+                            const children = Array.from(fixtures().vanillaHost.children).reverse()
+                            for (const child of children) fixtures().vanillaHost.append(child)
                         },
                     },
                 ],
@@ -775,12 +822,12 @@ export default suite({
                     },
                     {
                         label: 'vanilla — innerHTML with the same markup',
-                        run: () => vanilla.buildRowsInnerHTML(innerHost, ROWS_1000),
+                        run: () => vanilla.buildRowsInnerHTML(fixtures().innerHost, ROWS_1000),
                     },
                     {
                         label: 'vanilla — textContent per row, unguarded',
                         run: () => {
-                            const children = vanillaBigHost.children
+                            const children = fixtures().vanillaBigHost.children
                             for (let i = 0; i < children.length; i++) {
                                 ;(children[i] as HTMLElement).textContent = (ROWS_1000[i] as Item).label
                             }
@@ -797,28 +844,42 @@ export default suite({
                 kind: 'work',
                 arms: (() => {
                     const level = state('high')
-                    const host = document.createElement('div')
-                    detached.append(host)
-                    mount(
-                        host,
-                        () =>
-                            html`<p
-                                class=${() => level()}
-                                data-a=${() => level()}
-                                data-b=${() => level()}
-                                data-c=${() => level()}
-                                data-d=${() => level()}
-                            ></p>`,
-                    )
-                    const plain = document.createElement('p')
-                    detached.append(plain)
+                    // By `prepare`, not here: here is module scope — the suite object is built at
+                    // import, and this module is imported on the server too, where there is no
+                    // document. Every other fixture in this file went lazy for the same reason.
+                    let plain: HTMLElement | null = null
+                    const ready = (): void => {
+                        if (plain !== null) return
+                        const held = fixtures()
+                        const host = document.createElement('div')
+                        held.detached.append(host)
+                        mount(
+                            host,
+                            () =>
+                                html`<p
+                                    class=${() => level()}
+                                    data-a=${() => level()}
+                                    data-b=${() => level()}
+                                    data-c=${() => level()}
+                                    data-d=${() => level()}
+                                ></p>`,
+                        )
+                        plain = document.createElement('p')
+                        held.detached.append(plain)
+                    }
                     return [
-                        { label: 'abide — five slots, same value', run: () => level.set('high') },
+                        {
+                            label: 'abide — five slots, same value',
+                            prepare: ready,
+                            run: () => level.set('high'),
+                        },
                         {
                             label: 'vanilla — setAttribute, unguarded',
+                            prepare: ready,
                             run: () => {
+                                const node = plain as HTMLElement
                                 for (const name of ['class', 'data-a', 'data-b', 'data-c', 'data-d']) {
-                                    plain.setAttribute(name, 'high')
+                                    node.setAttribute(name, 'high')
                                 }
                             },
                         },

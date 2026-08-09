@@ -8,7 +8,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | The isomorphic surface: the three primitives, `watch`, `untrack`, `scope`, `isolate`, the template tag and its runtime, `log`, `online()`, `health()`, `identity()`, routing, and the client half of both transports (`remote`, `remoteSocket`) |
+| `abide` | The isomorphic surface: the three primitives, `watch`, `untrack`, `scope`, `isolate`, the template tag and its runtime, `suspend`, `log`, `online()`, `health()`, `identity()`, routing, and the client half of both transports (`remote`, `remoteSocket`) |
 | `abide/ui` | The DOM substrate: `mount`, `hydrate` |
 | `abide/server` | The SSR substrate, the request scope and its ambients, `server()`, `appDataDir()`, `config()`, `pages()`, the process lifecycle, and the declaring half of both transports |
 | `abide/tests` | The test kit: the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
@@ -72,7 +72,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `channel` | `<T>(options?: ChannelOptions) => Channel<T>` | One stream of messages anyone may publish to and anyone may subscribe to. |
-| `channel` | `<T, Args>(options?: ChannelOptions) => RoomChannel<Args, T>` | The same, split into independent rooms addressed by `Args`. Rooms are process-wide. |
+| `channel` | `<T, Args>(options?: ChannelOptions) => KeyedChannel<Args, T>` | The same, split into independent rooms addressed by `Args`. Rooms are process-wide. |
 | `ch` | `(args: Args) => Channel<T>` | SELECTS a room and hands back an ordinary channel. |
 | `ch.publish` | `(message: T) => void` | Sends one message to every current subscriber. Delivery is against a snapshot of subscribers. |
 | `ch.subscribe` | `(listener: (m: T) => void) => () => void` | A plain listener outside the graph; returns its own unsubscribe. |
@@ -166,10 +166,10 @@ Probes never throw and never start work.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `socket` | `<T>(options?: SocketOptions<T, void>) => Channel<T>` | Declares a stream of messages reaching subscribers on both sides of the wire. |
-| `socket` | `<T, Args>(options?: SocketOptions<T, Args>) => RoomChannel<Args, T>` | The room-addressed form. The server half is `channel()` unchanged. |
-| `remoteSocket` | `<T, Args>(id: string, options?: RemoteSocketOptions) => RemoteSocket<T, Args>` | The client half: an ordinary `Channel`/`RoomChannel` plus `close()`, reconnecting on its own if the connection drops. |
+| `socket` | `<T, Args>(options?: SocketOptions<T, Args>) => KeyedChannel<Args, T>` | The room-addressed form. The server half is `channel()` unchanged. |
+| `remoteSocket` | `<T, Args>(id: string, options?: RemoteSocketOptions) => RemoteSocket<T, Args>` | The client half: an ordinary `Channel`/`KeyedChannel` plus `close()`, reconnecting on its own if the connection drops. |
 | `options.channel` | `ChannelOptions` | The underlying stream's own memory: how many messages it keeps and how long one stays current. |
-| `options.clientPublish` | `false \| ((message: T, room: Args \| undefined) => void \| Promise<void>)` | Whether clients may publish, and what happens to what they send. `false` by default — a socket is a broadcast until an app says otherwise. |
+| `options.clientPublish` | `false \| ((message: T, room: Args \| undefined, into: Channel<T>) => void \| Promise<void>)` | Whether clients may publish, and what happens to what they send. `false` by default — a socket is a broadcast until an app says otherwise. `into` is the sender's own room, already resolved, so an echoing policy never names the declaration it is inside. |
 | `options.schema` | `Schema<T>` | The declared shape of a message a CLIENT sends — the wire is the only door one arrives through from outside the process. |
 | `options.middleware` | `SocketMiddleware<T, Args>[]` | `(next, event) => …` where `event` is `{ kind: 'subscribe' \| 'publish', room, message, request }`. A throw refuses it. |
 | `options.crossOrigin` | `string[]` | Which origins may upgrade, closed unless declared. |
@@ -197,8 +197,10 @@ Probes never throw and never start work.
 
 | Wire fact | Detail |
 | --- | --- |
-| a read | HTTP GET with its args JSON in one query parameter; past a URL length ceiling it falls back to a POST body, accepted for a read only |
-| a mutation | Its own method with a body |
+| a read | HTTP GET with ONE QUERY PARAMETER PER ARGUMENT — `?id=7&q=ada`, so the URL is the call and anyone can type it. Past a URL length ceiling it falls back to a POST body, accepted for a read only |
+| a mutation | Its own method with a JSON body |
+| the query | A value JSON would read as something other than a string travels as its JSON text (`42`, `true`, `{"from":1}`); a STRING that would be misread that way travels quoted (`"42"`). At the door the declared shape decides — `?name=42` on a `name: string` is the string — and without one the text speaks for itself. `?tag=a&tag=b` is a list, and one `?tag=a` against a declared list is a list of one. A socket's ROOM travels the same way, with no shape to consult — a socket's derived one is its message |
+| `__abide_args=` | The escape hatch: every argument as one JSON value. What carries args that are not an object, what an over-long read's body holds, and the multipart field beside a file |
 | coalescing | Three concurrent readers of one key cost one request — the memo slot does that, not the transport |
 | options | Never cross. A `ttl` crosses as its CONSEQUENCE, an `abide-ttl` response header in ms. Tags do not cross |
 | a failure | Crosses as `{ name, message, data? }` and is rebuilt as an `HttpError` carrying all three plus the status, which is what makes `isError(e, name)` answer over a wire and `.data` mean the same thing on both sides. `data` is absent unless the declaration carried one, and is read off an `HttpError` and nothing else — a payload crosses because a declaration said it may, not because a thrown object had a field by that name |
@@ -218,6 +220,11 @@ Probes never throw and never start work.
 Checked in the memo's BODY, the one place every door leads to. The slot stays keyed by what the
 CALLER asked with. The published shape is the WIRE form (`File` → `string`/`binary`; `Date` and `URL`
 → their `toJSON` strings), and the gate accepts the local form beside it.
+
+The input shape is also what READS A READ'S QUERY: a query is strings, so `?name=42` on a
+`name: string` is the string a caller obviously meant rather than a number their handler then
+refuses. An endpoint with no shape falls back to the text itself — valid JSON is what it says,
+anything else is a string — which is exactly what the client wrote it to be.
 
 ### The derived shape
 
@@ -472,7 +479,9 @@ is sugar over it, not a replacement.
 | narrowing | A `{#if}`/`{:else if}`/`{#switch}` condition reads ONCE into a local and its branch narrows off that. The body's other reads keep their own thunks |
 
 What counts as a cell is decided **syntactically**: `const x = state(…)` or `state.shared(key, …)` in
-a `<script>`, or a prop whose declared `Args` member is `State<…>`/`Memo<…>`/`Cell<…>`/`Channel<…>`.
+a `<script>`, or a prop BOUND from `props<T>()` whose member in `T` is
+`State<…>`/`Memo<…>`/`Cell<…>`/`Channel<…>`. The binding is what carries it, so `{ note: text }` makes
+`text` the cell and leaves `note` nobody.
 Whether the NAME or the CALL is the source comes from the declaration — `memo(() => …)` vs
 `memo(({ id }) => …)`, `channel<T>()` vs `channel<T, Args>()`. An **imported** source cannot be seen
 that way and keeps the explicit spelling.
@@ -486,7 +495,7 @@ that way and keeps the explicit spelling.
 | `name={expr}` | Reactive attribute or property (whole-value expression) |
 | `on<event>={fn}` | Native listener on an ELEMENT. On a **component** the same syntax is an ordinary prop named `onclick` |
 | `name="…{expr}…"` | Quoted values interpolate too, also on component props; a literal brace is `{'{'}` |
-| `bind:value` | Two-way bind — read the property, write back on input/change (also on component props) |
+| `bind:value` | Two-way bind — read the property, write back on input/change. On a **component** it is the same as passing the cell: the child declares the prop as one and writes it |
 | `bind:checked` / `bind:selected` | Boolean bind — a boolean DOM property mirrored as a boolean attribute, never stringified |
 | `bind:group` | Radio/checkbox membership, compared against the input's own `value`; never emitted as a `group` attribute |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair |
@@ -506,7 +515,7 @@ that way and keeps the explicit spelling.
 | `{#await p then v}` / `{#await p catch e}` | Inline shorthand — body = that branch, no pending branch |
 | `{#switch expr}` | `{:case v}`, `{:default}` |
 | `{#try}` | `{:catch e}`, `{:finally}` — JS-semantics error boundary, so SYNCHRONOUS. The body is one unit rather than one thunk per expression, so a dep inside re-runs the whole body |
-| `{#component Name(props)}` | **Inline component** — a reusable builder. TitleCase required. Invoked as `<Name/>`, passable as a value. Takes `args`; children arrive through `<slot/>`. Nested inside `<Foo>…</Foo>` it becomes Foo's `X` prop |
+| `{#component Name(pattern)}` | **Inline component** — a reusable builder. TitleCase required. Invoked as `<Name/>`, passable as a value. The parameter is the pattern written in the parens; children arrive through `<slot/>`, which is why one written with no parameter still binds `args`. Nested inside `<Foo>…</Foo>` it becomes Foo's `X` prop |
 
 ## Components
 
@@ -517,6 +526,36 @@ that way and keeps the explicit spelling.
 | `<Tag>…</Tag>` | Children passed to the component's `<slot/>` |
 | nested `{#component X()}` | Named component prop (render-prop) |
 | `const C = memo(…)` → `<C/>` | A state- or memo-named tag is a **reactive** component (re-mounts on change) |
+
+### Props
+
+```html
+<script>
+import { props, type State } from 'abide'
+
+type Card = { class?: string; note: State<string>; count?: number }
+
+const { class: className = '', note, count = 0 } = props<Card>()
+</script>
+```
+
+`props()` is imported and **compiler-erased**: the call becomes the emitted function's parameter and
+the type argument becomes its type, so the destructure beside it is ordinary TypeScript — renaming, a
+default and a rest element all mean what they mean anywhere else. There is no `args` object, which is
+the point: every name a `<script>` uses was imported or bound by the author.
+
+| Rule | |
+| --- | --- |
+| where | `<script>` only. In a `<script module>` it is a compile error — module scope has no instance |
+| not imported | A compile error. The call is erased, so an unimported one would otherwise work silently |
+| no `props()` call | The component accepts no props of its own, and a caller passing one is an error |
+| `props()` with no type | `Record<string, unknown>` — the opt-out, and what `const { ...rest } = props()` is for |
+| `children` | Always accepted, never a name: `<slot/>` renders what is between the tags, and nothing has to declare it |
+| a cell prop | Declared `State<…>`/`Memo<…>`/`Cell<…>`/`Channel<…>` in `T`, recognised at the BINDING — see above |
+| a derived prop | `doubled={n * 2}` reads a cell, so the whole invocation is in a reactive slot and the child RE-RUNS on change, losing its own state. Pass the cell, or a `memo`, to hand over a value that changes without remounting |
+
+A type declared in a `<script>` is lifted to module scope, because the signature that names it is
+written outside the body it was declared in.
 
 ## Script / style blocks
 
@@ -539,7 +578,7 @@ that way and keeps the explicit spelling.
 | `documentToStream` | `(document: string \| Shell, body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same document as a `ReadableStream`. What `abide start` answers a page with. |
 | `shell` | `(html: string) => Shell` | An app's own html as a document with a hole in it. THROWS when it has no `<slot></slot>`. |
 | `Shell` | `{ head: string; open: string; close: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close`. Cut once, because a document cannot change under a running process. |
-| `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => Renderable, fallback?: Renderable) => Renderable` | Emit a placeholder now and the real subtree when the value lands. Inside a `renderDocument` this defers rather than holding the walk. |
+| `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => unknown, fallback?: unknown) => Suspend` | Emit a placeholder now and the real subtree when the value lands. ISOMORPHIC — exported from `abide` and re-exported here — because a page is the same module on both sides, so a marker only one substrate knew would render `[object Object]` in the other. Three continuations, one call: a `renderDocument` DEFERS it and patches it in; a render with nowhere to patch AWAITS it inline and never emits the fallback; the client shows the fallback and swaps when it lands, and hydration adopts the settled body rather than re-running the load. |
 | `options.hydratable` | `boolean` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
 | `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`. |
 | `hydrate` | `(container: Element, view: () => TemplateResult) => Mounted` | The same over markup a hydratable render wrote — every part adopts its range. A divergence rebuilds that subtree and warns. |
@@ -585,6 +624,7 @@ ordinary authoring vocabulary too.
 | `awaited` | `<T>(value: PromiseLike<T> \| T, branches: Branches<T>) => Awaited` | `{#await}` | The operand plus the arms to call once it settles. The arms are closures, so settling never re-evaluates the operand. |
 | `boundary` | `(body: () => unknown, branches: Branches) => Boundary` | `{#try}` | A synchronous error boundary around a body thunk. |
 | `streamed` | `<T>(source, row, catch?) => Streamed` | `{#for await}` | A list fed by an async source, torn down and re-streamed when a reactive dependency of the source changes. |
+| `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => unknown, fallback?: unknown) => Suspend` | written by hand | Emit a placeholder now and the real subtree when the value lands. Here beside the other three markers because it IS one — exported from `abide`, so a page is the same module on both sides. Three continuations, one call; see the `abide/server` row. |
 | `adopt` | `(scope: string, css: string) => void` | `<style>` | Registers one scoped block by its scope name at MODULE scope. Idempotent. |
 
 | Name | Type Signature | Description |
@@ -619,7 +659,7 @@ Relative specifiers resolve beside the importer and anything else goes through B
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `emitFor` | `(path: string) => Promise<EmitResult>` | Writes the module, its declaration and its map beside a `.abide`. |
+| `emitFor` | `(path: string) => Promise<EmitResult>` | Writes the module, its declaration and its map into `<package>/.abide/types/`, mirroring the file's path from the nearest `package.json`. The package and not the repo, because a compiled `<script module>` imports `abide` by its public specifier and a bare specifier resolves by walking up for a `node_modules`. The `tsconfig` names the pair in `rootDirs`, which is what makes `./page.abide` resolve to a declaration that is not beside it. |
 | `emitAll` | `(roots: string[]) => Promise<EmitResult[]>` | The same over every `.abide` under the roots. |
 | `remap` | `(line: string, byModule: Map<string, EmitResult>) => string` | Moves a `tsc` diagnostic back onto the `.abide` line. A diagnostic inside a `<script>` is marked `[generated]`, since imports are hoisted and there is nothing to map it by. |
 | `diagnose` | `(roots: string[]) => Promise<string[]>` | The two of them over a project — what `abide check` runs. |
@@ -635,7 +675,7 @@ list alike. The `<` ambiguity is resolved by speculative parse.
 | narrowing | A `{#if}`/`{#switch}` condition reads once into a `const`, so the branch narrows off a real type — and only the switched cell narrows |
 | imported types | Resolved by the checker across the module boundary, exactly as in a `.ts` |
 | generics | A type argument reaches the read; a type-argument list in an expression is a type |
-| component props | `type Args` in a `<script>` types them, lifted to module scope so the signature can name it. Without one the signature is `Record<string, unknown>` |
+| component props | The type argument to `props<T>()` in a `<script>` types them, and a type declared there is lifted to module scope so the signature can name it. Without the call the component accepts none of its own |
 | writes | `count = v` keeps the cell's type through the `set` it desugars to |
 
 ## The test kit — `abide/tests`
@@ -676,6 +716,7 @@ JS allocations per template node is deliberately absent — no engine this runs 
 | `total` | `(counts: Counts) => number` | How much the region CHANGED the document, as opposed to what it merely built. |
 | `nonZero` | `(counts: Counts) => string` | Only the counters that moved, as `label: n` pairs. |
 | `timeArms` / `duration` / `ratioText` / `verdict` | — | The timing half: run the arms, and say whether a ratio is real or inside the noise (`NOISE`, `NOISY_SPREAD`, `clockResolution`). |
+| `nsPerOp` | `(arms: Arm[], settle?) => Promise<number[]>` | ns per op for each arm, calibrated and interleaved — for a `run` that asserts a ratio without a bench card. A fixed loop cannot: a 1 ms clock clamp reads a fast op as 0. |
 | `quiesce` / `settled` / `microtasks` / `frame` / `tick` | `() => Promise<void>` | Waiting primitives, so a bench measures the work rather than the harness. |
 
 ## Pages / routing
@@ -683,11 +724,12 @@ JS allocations per template node is deliberately absent — no engine this runs 
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `routes` | `(table: RouteEntry[]) => void` | Install the app's routes: `{ path, page, layouts? }`, where a page is reached through a LOADER so its code is absent until someone asks. |
+| `routes` | `() => RouteEntry[]` | What is installed right now, as it was declared. The table is PROCESS-WIDE — a server installs one at boot and serves every request from it — so a caller that installs one of its own is speaking for the whole process, and this is what lets it hand back what it displaced. |
 | `pages` | `(dir: string \| URL) => Promise<RouteEntry[]>` | A pages directory as a route table. The one part of routing that is not isomorphic; what it hands back is the same table `routes()` takes. |
 | `route` | `() => Route` | `.url`, `.params`, `.name`, `.kind`, `.navigating` — each its own read, over four small cells rather than one record. |
 | `url` | `(path: string, params?, query?) => string` | Build an in-app href. A missing required segment, or a param the pattern has no segment for, THROWS. |
-| `navigate` | `(target: string, options?: { replace?, keepScroll? }) => Promise<void>` | Move to one. A same-route param/query nav is a pure `route()` republish — no DOM swap, no re-hydrate. |
-| `outlet` | `() => TemplateResult` | The current route's page wrapped in its layouts. Reads the route's NAME and nothing else. |
+| `navigate` | `(target: string, options?: { replace?, keepScroll? }) => Promise<void>` | Move to one. In a document this is a REQUEST for the target url, so the app's middleware runs — see below. Every navigation, including one that stays on the route it is on: a different `[id]` is a different page to render, and the rule has no exceptions. |
+| `outlet` | `() => TemplateResult` | The current route's page wrapped in its layouts. Reads the route's NAME, and whether a range has been ADOPTED off the wire — two different facts, since a served navigation can land on the route already showing. Nothing else, so a param-only move re-runs it once and no more. |
 | `ready` | `() => Promise<void>` | Resolve the current route's modules, so the render that follows is a snapshot. What a server render calls before `renderToString` and what a client awaits before `hydrate` — a page adopted before its chunk arrives is a tree the server did not write. `navigate` awaits it for you. |
 
 | Pattern | Meaning |
@@ -701,7 +743,45 @@ JS allocations per template node is deliberately absent — no engine this runs 
 | `/__abide/**` | Every endpoint abide controls |
 
 `navigating` is set only where there is an in-flight window: a route is committed once its page has
-arrived, and a navigation to a route already loaded has none.
+arrived, and a navigation to a route already loaded has none. In a DOCUMENT there is always one — the
+request below is the window — so it reports every navigation there.
+
+### A navigation is a request
+
+In a document, `navigate` asks the server for the page it is navigating to. That is what puts a
+client-side navigation through the app's `middleware`, and it is why auth on a PAGE is middleware:
+the alternative is a route that is authorized on the first load and reachable without a rung for
+every navigation after it.
+
+| Rule | Detail |
+| --- | --- |
+| the address | The TARGET url, marked with `x-abide-navigation`. Not an endpoint under `/__abide/**`, which `handle` dispatches in FRONT of the onion — a rung would never see one. Same path, same cookies, same request scope a full page load has, so there is one chain and no authorization written twice |
+| what comes back | The outlet alone, in the same hydratable markup the document was served in — no second head, no shell, no `<script>` the browser has already run. Marked with `x-abide-navigation` and `Vary`-ing on it, so a shared cache never hands a fragment to a browser opening the page cold |
+| a refusal | A rung short-circuiting with a `Response` — a redirect, a 403 — hands the url to the BROWSER, so the server's own answer is what renders. There is no second refusal protocol, and nothing for an app to spell twice |
+| the paint | The part showing the outlet ADOPTS the fragment, so a navigation costs the same near-nothing hydration does. The page's own module is then what makes it interactive rather than what makes it visible |
+| the commit | On the MODULE, not on the markup: committing earlier re-runs `outlet()` against a view that has not arrived, which renders nothing over markup that was already right. The address bar moves with the screen, so `route()` catches up within the window `navigating` already reports |
+| who installs it | `abide/ui`, when `mount`/`hydrate` is handed `outlet` ITSELF. A renderer showing something else is not the part a navigation repaints, and an app that never puts the outlet on screen installs nothing |
+| where it does not apply | A caller with a SCOPE — a request being served, a test driving a route inside an `isolate`. Neither has a screen to repaint or an onion to pass through |
+
+### A navigation streams out of order
+
+`renderFragment` is `renderDocument` without the shell, and a navigation is answered with it — so a
+`suspend` DEFERS on this path exactly as it does on a page load, rather than being awaited in
+document order. Without it, a fast panel below a slow one waits for the slow one, and so does every
+static byte beneath it; measured on `pages/streaming` at a 600ms/50ms split, that was 654ms for
+content ready at 50ms, and 654ms for a paragraph that was never waiting on anything.
+
+| Rule | Detail |
+| --- | --- |
+| the pieces | HTML cannot be parsed halfway — no browser API feeds a partial tree, `document.write` is deprecated and needs an ACTIVE parser, and re-running `innerHTML` over a growing buffer re-parses what is already on screen. So the unit is a piece that is complete on its own: the in-order pass, then one per deferred subtree |
+| the framing | `<!--abide:piece-->` after each. A comment, so it survives concatenation into markup and is inert if one ever reaches a parser |
+| no patch script | A document's `<script>$p(N)</script>` cannot cross: the client parses a fragment itself, and script elements inserted that way are non-executable by spec. A bare `<template id="tN">` arrives and the client swaps `<slot-s id="sN">` for it |
+| what resolves when | `enter` resolves on the FIRST piece — a page on screen — and carries `complete` for the rest. The address bar moves with the paint; the route commits on `complete` plus the module, because adopting mid-stream hands a part nodes a later patch will replace |
+| a truncated stream | Whatever pieces arrived stay on screen and the range is still handed over, so a cut response degrades to a partial page rather than a blank one |
+
+The cost is one round trip per navigation, and it is not free: a warm route with no data to fetch
+paid none before. That is the price of the rule above having no exceptions — a route that is exempt
+because somebody forgot to mark it is the one that matters.
 
 ## Ceilings
 
@@ -789,7 +869,7 @@ it lives, once, for both `abide start` and `abide dev`.
 | `app.html` | The document its pages are served in. `<slot></slot>` is where the page renders; a `src`/`href` naming a build ENTRY is rewritten to what the build wrote, and the css the client graph imported is linked from the build. Absent → abide's own minimal shell |
 | `pages/` | What it serves. The directory IS the route table, installed for you — `pages(dir)` + `routes(...)`, and `route()` already answers off the request |
 | `server/rpc/**` · `server/sockets/**` | What it answers. Imported by the boot before a line of `app.ts` runs, so nothing imports a handler for its side effect |
-| `client.ts` | The lane the browser gets, and what `abide build` is pointed at |
+| `client.ts` | The lane the browser gets, and what `abide build` is pointed at. **Optional** — absent, one is GENERATED from `pages/` into `.abide/client.entry.ts`: the same route table, written as a static `import()` per row so every page is still its own chunk, plus `ready()`, `hydrate()` and link interception. Write one to take it over; it is read as the shortest lane that works, the way abide's own shell is read against your `app.html` |
 
 ### What a booting binary reads
 
@@ -840,7 +920,7 @@ failure in a line.
 | `abide run <file> [args…]` | Run a script under the abide runtime. Everything after `<file>` belongs to the SCRIPT, so it is SPAWNED: it reads its own `argv` and keeps its own exit code. |
 | `abide check [dir…]` | Type-check `.abide` script bodies, reporting every diagnostic on the `.abide` line. The list is stdout; the exit code says it failed. |
 | `abide dev [--port <n>]` | Watch the project and keep the app up: the client bundled into MEMORY, the server restarted on every change, and full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken, then PINS what it bound so no restart moves the app. `PORT` and `APP_URL` are written back from the socket and `config()` invalidated, so what the document reports is where it is actually listening and `abide logs` resolves an app a hop moved. |
-| `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the `client.ts` beside your `app.ts`. |
+| `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the `client.ts` beside your `app.ts`, or — if you wrote none — a lane generated from `pages/`. |
 | `abide start [--port <n>]` | Boot `app.ts` and serve its `pages/` in its `app.html`, with the bundle in front and `/__abide/**` behind that. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
 | `abide logs` | Tail `GET /__abide/logs`: the ring replayed, then every line as written. Printed by the rules THIS process's stdout answers to, with `+Nms` rebuilt from the record times. |
 | `abide compile [--target] [--out] [--platforms]` | ONE standalone executable, via `bun build --compile`. `--platforms` cross-compiles a release set for the price of one client build, and makes `--out` name a DIRECTORY. |
@@ -884,8 +964,8 @@ refuses: the pages still render, and the reload client is inline rather than bun
 page can reconnect once the build is fixed. Reload is that socket and no message on it — a "reload
 now" frame could only be written by a process that is about to stop being the one serving the page, so
 the CONNECTION is the signal. The watcher ignores dotted directories — which is what tells `.abide/`
-apart from `counter.abide` — plus `node_modules/` and the generated `.abide.ts` sidecars, and the
-worker force-closes its socket before draining, since a socket
+apart from `counter.abide`, and covers the bundle and the generated type tree alike — plus
+`node_modules/`, and the worker force-closes its socket before draining, since a socket
 never ends and `shutdown()`'s graceful close would otherwise wait out every open tab on every restart.
 
 `abide logs` asks `ABIDE_APP_URL`, then `APP_URL`, then `config().PORT` on localhost, and sends `ABIDE_APP_TOKEN`
@@ -910,13 +990,16 @@ line editor takes its terminal as HOOKS, so a test drives it with a string of ke
 | `ClientManifest` | `{ entries: Record<string, string>; assets: Record<string, ClientAsset> }` | Entry source path → the file it produced, and every file written keyed by its path relative to `CLIENT_DIR`. |
 | `ClientAsset` | `{ kind: 'entry' \| 'chunk' \| 'asset'; size: number; type: string; encodings: Sidecar[] }` | The identity form's size and content type, plus what was written beside it. |
 | `Sidecar` | `{ encoding: 'br' \| 'gzip'; file: string; size: number }` | A precompressed form written BESIDE the identity bytes, never instead. Listed SMALLEST first, so "best available" costs no comparison at request time. |
-| entry | — | The files named on the command line, or the first of `client.ts` / `client.tsx` / `client.abide` / `client.js` in the root. Named after the LANE, beside the `app.ts` that says what the app is. |
+| entry | — | The files named on the command line, or the first of `client.ts` / `client.tsx` / `client.abide` / `client.js` in the root, or the lane generated from `pages/` when the root holds none. Named after the LANE, beside the `app.ts` that says what the app is. The manifest keys whichever it was as `client.ts`, so an `app.html` naming that source resolves either. |
 | naming | `[name]-[hash].[ext]` | The hash is in the name rather than a query, so a chunk is immutable at its address and the directory is cacheable forever. |
 
 | Rule | Detail |
 | --- | --- |
 | the lane | `target: 'browser'`, which is what `abide/compiler/plugin` reads to elide a `server/rpc/**` module to its address. A client entry importing `getUser` gets `remote("users/getUser")` and none of the driver |
+| plugins | The app's own, read from `[serve.static] plugins` in its `bunfig.toml` — Bun's existing spelling for "what bundles this app's client", so a Tailwind stylesheet is compiled by the app's dependency rather than by one abide would have to acquire. Resolved from the app root; a plugin that is named and cannot be loaded FAILS the build, because a stylesheet that quietly did not compile is a build that succeeds and ships an unstyled page |
 | splitting | Every `import()` the bundler can SEE is a chunk, which is what makes a route reached through a loader absent from the first load |
+| the graph | `manifest.graph` — which chunk holds a source module, and what each chunk statically imports. Read off Bun's `metafile`, where a code-split chunk's `entryPoint` names the file it was split out of, so nothing here reproduces `[name]-[hash]` |
+| preloading | A route's page and layout chunks are `modulepreload`ed in its OWN head, computed per route at boot. Otherwise the browser cannot discover a chunk until the entry has downloaded, parsed and RUN to the `import()` — two serial round trips before the page is interactive. Static edges only: following `dynamic-import` would pull the whole route table into the first load, which is the splitting above undone |
 | a sidecar | Written only when SMALLER than the bytes it stands in for, at maximum compression. `zstd` is absent: no browser sends `Accept-Encoding: zstd` unasked |
 | a stylesheet | `import './app.css'` from a `.abide` `<script module>` or a `.ts` — an ordinary import in both lanes, a no-op on the server and an asset here. It is linked into the shell from what was BUILT, so a document names no stylesheet and a renamed one cannot go stale |
 | the environment | NOT inlined. A browser asks `GET /__abide/identity` for what it may know, and there is no `GET /__abide/config` |

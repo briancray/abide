@@ -83,7 +83,15 @@ const BRANCHES: Record<string, Set<string>> = {
     component: new Set(),
 }
 
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+/**
+ * A whole JavaScript identifier and nothing else.
+ *
+ * Exported because `emit.ts` asks the same question of a name it is about to write into output —
+ * whether a member can be a dotted access or has to be a quoted key, whether an attribute value is a
+ * bare cell read. One grammar, so the two halves cannot disagree about what a name is. Anchored and
+ * non-global, so `test` carries no `lastIndex` between callers.
+ */
+export const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 
 export class ParseError extends SyntaxError_ {}
 
@@ -103,6 +111,9 @@ export function parse(source: string): Blocks {
     // `<script>` and `<style>` hold raw text: their contents must not be scanned for `{` holes or
     // tags, so they are lifted out before the template parser ever sees them.
     let template = ''
+    // The bodies of blocks left in the template — a nested `<script>`'s TypeScript, which is not
+    // markup and must not be counted as any.
+    const inert: Skipped[] = []
     let at = 0
     while (at < source.length) {
         const open = findRawBlock(source, at)
@@ -118,8 +129,12 @@ export function parse(source: string): Blocks {
         // A NESTED block belongs to the branch it sits in, not to the module, so it is left in the
         // template for the parser to pick up as a node. Lifting one would move its bindings to the
         // component setup, where they outlive the branch and are visible to everything.
-        if (enclosingDepth(source, open.start) > 0) {
+        // Asked of `template`, which holds everything before this block with every lifted region
+        // blanked to the same length — so offsets still index the original file, and no lifted
+        // TypeScript is read as markup.
+        if (enclosingDepth(template, open.start, inert) > 0) {
             template += source.slice(open.start, open.end)
+            inert.push({ from: open.bodyStart, to: open.bodyEnd })
             at = open.end
             continue
         }
@@ -164,28 +179,52 @@ function padTemplate(source: string, template: string): string {
  * How many elements and control-flow blocks are still open at `to`. Counted on the raw text rather
  * than on the node tree, because this question has to be answered BEFORE the template is parsed —
  * the lift is what decides which text the parser ever sees.
+ *
+ * Counted on the text with every lifted block ALREADY BLANKED, and skipping the body of any block
+ * left in place. What is inside a `<script>` is TypeScript, and `Array<string>` is a generic rather
+ * than an open tag — reading the raw file here counted one per generic, so a module block with two
+ * of them put the `<script>` after it at depth 2 and dropped the component's whole setup.
  */
 const ENCLOSING = /<(\/?)([A-Za-z][\w:.-]*)[^>]*>|\{([#/])/g
 
-function enclosingDepth(source: string, to: number): number {
+/** A region of the text that is not markup: a nested block's body, left in place for the parser. */
+interface Skipped {
+    from: number
+    to: number
+}
+
+function enclosingDepth(text: string, to: number, skip: Skipped[]): number {
     let depth = 0
     // Bounded by `to` rather than by slicing to it — a slice here is a copy of everything before
     // the block, once per block found.
     ENCLOSING.lastIndex = 0
     for (;;) {
-        const match = ENCLOSING.exec(source)
+        const match = ENCLOSING.exec(text)
         if (match === null || match.index >= to) break
+
+        let inside = false
+        for (const region of skip) {
+            if (match.index >= region.from && match.index < region.to) {
+                inside = true
+                break
+            }
+        }
+        if (inside) continue
+
         const block = match[3]
         if (block !== undefined) {
             depth += block === '#' ? 1 : -1
             continue
         }
+        // Before the closing-tag branch, so both halves of a lifted block are invisible: the opener
+        // was already skipped as "never nesting", and a `</script>` that still decremented took the
+        // depth one BELOW where the block found it.
+        const name = (match[2] as string).toLowerCase()
+        if (name === 'script' || name === 'style') continue
         if (match[1] === '/') {
             depth--
             continue
         }
-        const name = (match[2] as string).toLowerCase()
-        if (name === 'script' || name === 'style') continue // lifted, never nesting
         if (VOID_ELEMENTS.has(name) || match[0].endsWith('/>')) continue
         depth++
     }

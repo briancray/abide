@@ -49,5 +49,29 @@ export const IDENTITY_PATH = `${ABIDE_PREFIX}identity`
  */
 export const CLIENT_ROUTE = `${ABIDE_PREFIX}client/`
 
-/** The query parameter carrying JSON args: a read's arguments, and a socket's room. */
-export const ARGS_PARAM = 'a'
+/**
+ * The ESCAPE HATCH parameter, carrying every argument as one JSON value.
+ *
+ * A read's arguments are ordinarily one query parameter EACH — `?id=7&q=ada` — because the URL is
+ * the public face of a call: it is what curl types, what an OpenAPI client generates, what a network
+ * panel shows and what an intermediary keys a cache on. This is what carries the rest: args that are
+ * not an object at all, so there is no name to put them under, and the multipart field beside a file.
+ *
+ * Spelled in full, the way `__abide_file` is: the name has to be one no app would write, because a
+ * caller's own argument called `a` — or `args` — would otherwise be read as the hatch and swallow
+ * the whole call.
+ */
+export const ARGS_PARAM = '__abide_args'
+
+/**
+ * What a client-side navigation puts on its request so the pages layer answers with the outlet alone
+ * rather than the whole document.
+ *
+ * A HEADER rather than a path or a query, and that is the whole point: a navigation asks for the URL
+ * it is actually navigating to, so it passes through the app's middleware onion with the same path,
+ * the same cookies and the same request scope a full page load would have. A `/__abide/` address
+ * would sit in FRONT of that chain — see `handle` — and an app's auth rung would never see it.
+ *
+ * It also has to reach `Vary`, because two callers asking for one URL get two different bodies.
+ */
+export const NAVIGATION_HEADER = 'x-abide-navigation'

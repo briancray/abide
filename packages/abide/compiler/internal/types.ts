@@ -226,8 +226,13 @@ function follows(tokens: Token[], i: number): boolean {
     )
 }
 
-/** Past the `>` that closes the `<` at `at`. `>>` closes two, so the run is counted rather than tested. */
-function closeAngle(tokens: Token[], at: number): number {
+/**
+ * Past the `>` that closes the `<` at `at`. `>>` closes two, so the run is counted rather than tested.
+ *
+ * `at + 1` when nothing closes it, which is also how a caller tells the two apart: a real list is at
+ * least `<T>`, so it can never land there.
+ */
+export function closeAngle(tokens: Token[], at: number): number {
     let depth = 0
     for (let i = at; i < tokens.length; i++) {
         const token = tokens[i] as Token

@@ -123,7 +123,7 @@ test('the token pass and the checker pass agree on every type both can read', as
 })
 
 // The socket case is separate because it is the one where the two halves read the message out of
-// DIFFERENT positions: `socket<T, Args>` puts it first and `RoomChannel<Args, T>` puts it second, so
+// DIFFERENT positions: `socket<T, Args>` puts it first and `KeyedChannel<Args, T>` puts it second, so
 // each derivation hard-codes an order the other cannot see. Reversing either one publishes the room
 // shape as the message gate, which refuses publishes that were correct.
 test('a socket message is the same shape from both derivations, either way round', async () => {

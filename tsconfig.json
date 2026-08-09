@@ -6,9 +6,20 @@
         "moduleResolution": "bundler",
         "moduleDetection": "force",
         "allowImportingTsExtensions": true,
-        // `.abide` files resolve to the `.d.abide.ts` the compiler generates beside them, so a
-        // template expression is checked by the real checker rather than by a second one.
+        // `.abide` files resolve to the `.d.abide.ts` the compiler generates, so a template
+        // expression is checked by the real checker rather than by a second one.
         "allowArbitraryExtensions": true,
+        // Where that generated tree actually IS. `allowArbitraryExtensions` looks for the declaration
+        // in the SAME directory as the source and cannot be redirected — `rootDirs` answers it by
+        // making these two one virtual directory for relative resolution, which is what keeps three
+        // generated files per page out of the tree the author reads. It merges BOTH ways, so a
+        // compiled module's own `../models.ts` still resolves back out into the source.
+        //
+        // A pair per PACKAGE that holds `.abide` files, because the mirror hangs off the package root
+        // — a compiled `<script module>` imports `abide` by its public specifier, and a bare specifier
+        // resolves by walking up for a `node_modules` rather than through anything here. An app
+        // outside a workspace writes the one pair, `[".", "./.abide/types"]`.
+        "rootDirs": ["packages/example", "packages/example/.abide/types"],
         "verbatimModuleSyntax": true,
         "noEmit": true,
         "strict": true,
@@ -43,10 +54,18 @@
         "packages/abide/tests/**/*.ts",
         "packages/abide/compiler/**/*.ts",
         "packages/abide/cli/**/*.ts",
-        "packages/example/**/*.ts"
+        "packages/example/**/*.ts",
+        // What every `.abide` compiled to. The MODULE is where a template's expressions actually are,
+        // so a config that only resolved the declarations would check the types a page exports and
+        // nothing inside it.
+        "packages/example/.abide/types/**/*.ts"
     ],
     // The type fixtures under `types/invalid` are SUPPOSED to fail. They are checked deliberately by
     // `packages/example/test/types.test.ts`, through their own config, and a repo whose own typecheck
     // is red says nothing at all — so they are not part of it.
-    "exclude": ["packages/example/types/invalid"]
+    //
+    // A pattern rather than the one path, because the fixtures are now in two trees: the `.abide`
+    // sources and what they compiled to under `.abide/types/`. Two spellings of one rule is the one
+    // that gets updated alone, and this failure mode is a repo whose typecheck is permanently red.
+    "exclude": ["**/types/invalid"]
 }

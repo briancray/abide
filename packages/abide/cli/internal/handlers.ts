@@ -35,9 +35,8 @@ export async function handlers(root: string): Promise<void> {
     for (const pattern of Object.values(TRANSPORT_ROOTS)) {
         const glob = new Bun.Glob(pattern)
         for await (const path of glob.scan({ cwd: root, absolute: true, onlyFiles: true })) {
-            // A declaration is not a module. `emitFor` writes `.d.abide.ts` files beside sources and
-            // an app may keep its own `.d.ts`; importing one is a runtime error about a file that
-            // exists only for the checker.
+            // A declaration is not a module. An app may keep its own `.d.ts`, and importing one is a
+            // runtime error about a file that exists only for the checker.
             if (path.endsWith('.d.ts')) continue
             found.push(path)
         }

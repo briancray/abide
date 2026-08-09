@@ -508,6 +508,52 @@ export default suite({
                     ).includes('${() => wide().size}'),
                     true,
                 )
+
+                // The other door to the same answer: a prop's TYPE says which of the two it is, and
+                // the BINDING says what it is called here. Nothing resolves the import, so the names
+                // in that set are the whole test — a type of an app's own that happens to be called
+                // `KeyedChannel` would be read as this one.
+                const declared = (members: string, bound: string): string =>
+                    `<script>\nimport { props } from 'abide'\ntype Props = {\n${members}\n}\nconst { ${bound} } = props<Props>()\n</script>`
+                is(
+                    'a prop typed as rooms is read by its CALL',
+                    template(
+                        `${declared('    chat: KeyedChannel<{ room: string }, string>', 'chat')}` +
+                            `<p>{chat({ room: 'a' }).length}</p>`,
+                    ).includes("chat({ room: 'a' })().length"),
+                    true,
+                )
+                is(
+                    '…where one typed as a cell is read by its NAME',
+                    template(`${declared('    note: State<string>', 'note')}<p>{note.length}</p>`).includes(
+                        '${() => note().length}',
+                    ),
+                    true,
+                )
+                // The rename, which is the reason the two facts have to MEET. Read off the declared
+                // type alone, the cell was still called `note` and `text` stayed a plain value — so
+                // `text.length` emitted a function's arity, which type-checks and renders `0`.
+                is(
+                    'a renamed cell prop follows the LOCAL name',
+                    template(
+                        `${declared('    note: State<string>', 'note: text')}<p>{text.length}</p>`,
+                    ).includes('${() => text().length}'),
+                    true,
+                )
+                is(
+                    '…and the name it was renamed FROM is nobody',
+                    template(
+                        `${declared('    note: State<string>', 'note: text')}<p>{text.length}</p>`,
+                    ).includes('note()'),
+                    false,
+                )
+                // `props()` is the parameter, so the call is erased and the import goes with it. The
+                // whole module rather than the template: this claim is about what surrounds it.
+                const erased = compile(`${declared('    note: State<string>', 'note')}<p>{note.length}</p>`, {
+                    filename: 'Case.abide',
+                }).code
+                is('the call becomes the parameter', erased.includes('const { note } = args'), true)
+                is('…and `props` is not imported by what was emitted', erased.includes('props'), false)
             },
         },
 
@@ -750,18 +796,22 @@ export default suite({
                 // The budget is generous because a card starts on LOAD: a page opened in a background
                 // tab has its timers clamped to about a second each, which turns a 24 ms stream into
                 // a three-second one and failed the card the reader eventually switched to.
-                await until(() => rows().length === 3, STREAM_BUDGET_MS)
+                await until(() => rows().length === 3, 'three rows', STREAM_BUDGET_MS)
                 is('rows arrive as they are yielded', rows(), ['lobby 1', 'lobby 2', 'lobby 3'])
 
                 room.set('bad')
-                await until(() => rows().some((line) => line?.startsWith('bad') === true), STREAM_BUDGET_MS)
+                await until(
+                    () => rows().some((line) => line?.startsWith('bad') === true),
+                    'the new source',
+                    STREAM_BUDGET_MS,
+                )
                 is(
                     'a new source starts over, it does not interleave',
                     rows().filter((line) => line?.startsWith('lobby') === true),
                     [],
                 )
 
-                await until(() => rows()[0] === 'Error: stream failed', STREAM_BUDGET_MS)
+                await until(() => rows()[0] === 'Error: stream failed', 'the {:catch} row', STREAM_BUDGET_MS)
                 is('and {:catch} takes a source that threw', rows(), ['Error: stream failed'])
                 host.remove()
             },

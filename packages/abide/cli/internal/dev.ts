@@ -227,9 +227,10 @@ function watching(root: string, changed: (path: string) => void): ReturnType<typ
  * A path a change to which is not a change to the app.
  *
  * A DOT prefix is the whole rule for directories, and it is the rule rather than a list because the
- * one that matters is `.abide/` — this command never writes there, but `abide build` does, and a
- * `bun run build` in another terminal must not restart the server once per chunk. `.git/` comes free
- * with it, which is what stops a `git status` from being a restart.
+ * one that matters is `.abide/` — this command never writes there, but `abide build` writes the
+ * bundle and `abide check` writes the generated type tree, and neither running in another terminal
+ * may restart the server once per file. `.git/` comes free with it, which is what stops a `git
+ * status` from being a restart.
  *
  * The leading dot is also what tells `.abide/` apart from `counter.abide`: the build directory and a
  * SOURCE file share the word, and a rule written against the extension would ignore every page in
@@ -238,13 +239,11 @@ function watching(root: string, changed: (path: string) => void): ReturnType<typ
  * `node_modules/` is the second, and it is named rather than derived because it carries no dot: an
  * install rewrites thousands of files, none of which a running app reads as source.
  *
- * The generated `.abide` sidecars are the third. `emitFor` writes `counter.abide.ts`, its map and a
- * `.d.abide.ts` beside every source, so an `abide check` in another terminal would otherwise be a
- * restart per page. The rule is `.abide.ts` rather than `.d.ts` — none of the three ends in `.d.ts`,
- * and `counter.abide` does not end in `.abide.ts`, which is what keeps editing a page a reload.
+ * There is no third. The generated sidecars used to need one — `emitFor` wrote `counter.abide.ts`
+ * beside `counter.abide`, inside the tree being watched — and moving that tree under `.abide/` is
+ * what deleted the rule rather than what made it redundant.
  */
 function ignored(path: string): boolean {
-    if (path.endsWith('.abide.ts') || path.endsWith('.abide.ts.map')) return true
     for (const segment of path.split(SEPARATOR)) {
         if (segment.startsWith('.') || segment === 'node_modules') return true
     }

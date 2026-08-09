@@ -102,13 +102,22 @@ const EXPECTED: {
         message: /'Paged<Book>' is not assignable/,
         where: 'script',
     },
-    // A prop the component never declared. This is what `type Args` buys, and what a component
-    // without one — `args: Record<string, unknown>` — cannot be told.
+    // A prop the component never declared. This is what the type argument to `props()` buys, and what
+    // a component that never calls it — children and nothing else — cannot be told.
     {
         fixture: 'props.abide',
-        line: 13,
+        line: 11,
         code: 'TS2339',
         message: /'missing' does not exist/,
+        where: 'script',
+    },
+    // …and the half the binding spelling adds: a template can only reach a name something BOUND, so a
+    // prop nobody destructured is not a silent `undefined`, it is a name that does not exist.
+    {
+        fixture: 'props.abide',
+        line: 16,
+        code: 'TS2304',
+        message: /Cannot find name 'unbound'/,
         where: 'template',
     },
     // The regression that has no other guard: an annotation naming a cell must not bind it, so the
@@ -126,7 +135,7 @@ const EXPECTED: {
 async function reported(): Promise<Reported[]> {
     const found: string[] = []
     for await (const path of new Bun.Glob('*.abide').scan({ cwd: HERE, absolute: true })) found.push(path)
-    const emitted = await Promise.all(found.map(emitFor))
+    const emitted = await Promise.all(found.map((path) => emitFor(path)))
 
     const byModule = new Map<string, Awaited<ReturnType<typeof emitFor>>>()
     for (const item of emitted) {

@@ -15,12 +15,10 @@
 // body", and moving it to another page to save a page nobody profiles would be hiding it.
 
 import {
-    type Channel,
     type Failed,
     type RemoteOptions,
     type RemoteSocket,
     type RemoteSocketOptions,
-    type RoomChannel,
     type Rpc,
     remote,
     remoteSocket,
@@ -143,6 +141,130 @@ export default suite({
                         }
                     }),
                 )
+            },
+        },
+
+        {
+            title: 'a read’s URL is the call — one parameter per argument',
+            note: 'The URL is the public face of a read: it is what curl types, what an OpenAPI client generates, what a network panel shows and what an intermediary keys a cache on. So the args are ordinary query parameters — `?id=7&q=ada` — and a caller who never loaded the stub can make the same call by typing it. Round-tripping is the part that is not free, since a query is strings: a value JSON would read as something else travels as its JSON text, a STRING that would be misread that way travels quoted, and the DECLARED shape decides at the door, so `?name=42` on a `name: string` is the string anyone obviously meant. `__abide_args=` is the escape hatch, and it is what carries args that are not an object at all.',
+            async run({ is }) {
+                // The URL is the claim, so the case has to see it — `wire.fetch` counts requests but
+                // does not keep them.
+                const asked: string[] = []
+                const watched = {
+                    ...wire,
+                    fetch: (input: string, init: RequestInit) => {
+                        // A stub addresses the base it was built with; the hand-typed calls below
+                        // are relative. Recorded as the path either way, since that is the claim.
+                        asked.push(input.startsWith(wire.base) ? input.slice(wire.base.length) : input)
+                        return wire.fetch(input, init)
+                    },
+                }
+                const seen = <Args, T>(id: string) =>
+                    remote<Args, T>(id, { base: watched.base, fetch: watched.fetch })
+
+                const search = GET(
+                    ({ q, page, tags }: { q: string; page: number; tags: string[] }) => ({ q, page, tags }),
+                    // Declared rather than derived: a demo registers by hand, so nothing here
+                    // appended the shape the compiler reads off the annotation.
+                    {
+                        schemas: {
+                            input: {
+                                type: 'object',
+                                properties: {
+                                    q: { type: 'string' },
+                                    page: { type: 'number' },
+                                    tags: { type: 'array', items: { type: 'string' } },
+                                },
+                            },
+                        },
+                    },
+                )
+                register('rpc', [['demo/query/search', 'search']], { search })
+                const remoteSearch = seen<
+                    { q: string; page: number; tags: string[] },
+                    { q: string; page: number; tags: string[] }
+                >('demo/query/search')
+
+                is('the answer', await remoteSearch({ q: 'ada', page: 2, tags: ['x', 'y'] }), {
+                    q: 'ada',
+                    page: 2,
+                    tags: ['x', 'y'],
+                })
+                is(
+                    '…and the URL it was asked with is readable',
+                    decodeURIComponent(asked[0] as string),
+                    '/__abide/rpc/demo/query/search?q=ada&page=2&tags=["x","y"]',
+                )
+
+                // The point of the whole change: a caller that never loaded the stub.
+                const typed = await watched.fetch(
+                    '/__abide/rpc/demo/query/search?q=ada&page=2&tags=x&tags=y',
+                    {},
+                )
+                is('a URL anyone could type reaches the same handler', await typed.json(), {
+                    q: 'ada',
+                    page: 2,
+                    tags: ['x', 'y'],
+                })
+                // `?tags=x` alone is how everyone writes a list of one, and the declared shape is
+                // what says it is one rather than a string.
+                const single = await watched.fetch('/__abide/rpc/demo/query/search?q=ada&page=2&tags=x', {})
+                is('a list of one is a list', ((await single.json()) as { tags: string[] }).tags, ['x'])
+
+                // A query is strings, so the two ways a value could change type in flight: the shape
+                // decides for a caller who typed the URL, and the quoting decides for the stub.
+                const codes = GET(
+                    ({ code }: { code: string }) => ({ code, isText: typeof code === 'string' }),
+                    {
+                        schemas: { input: { type: 'object', properties: { code: { type: 'string' } } } },
+                    },
+                )
+                register('rpc', [['demo/query/codes', 'codes']], { codes })
+                const remoteCodes = seen<{ code: string }, { code: string; isText: boolean }>(
+                    'demo/query/codes',
+                )
+
+                const typedCode = await watched.fetch('/__abide/rpc/demo/query/codes?code=42', {})
+                is('a declared string stays a string, however numeric it looks', await typedCode.json(), {
+                    code: '42',
+                    isText: true,
+                })
+                asked.length = 0
+                is('and the stub round-trips one whatever it holds', await remoteCodes({ code: '42' }), {
+                    code: '42',
+                    isText: true,
+                })
+                is(
+                    '…by quoting what would otherwise be read back as a number',
+                    decodeURIComponent(asked[0] as string),
+                    '/__abide/rpc/demo/query/codes?code="42"',
+                )
+
+                // The hatch: args with no name to travel under, and the door that still accepts one
+                // blob — which is what an over-long read falls back to and what a multipart body
+                // carries beside its files.
+                const total = GET((n: number) => ({ doubled: n * 2 }))
+                register('rpc', [['demo/query/total', 'total']], { total })
+                asked.length = 0
+                const remoteTotal = seen<number, { doubled: number }>('demo/query/total')
+                is('args that are not an object', await remoteTotal(21), { doubled: 42 })
+                is(
+                    '…take the escape hatch, because there is no name to put them under',
+                    decodeURIComponent(asked[0] as string),
+                    '/__abide/rpc/demo/query/total?__abide_args=21',
+                )
+                const blob = await watched.fetch(
+                    `/__abide/rpc/demo/query/search?__abide_args=${encodeURIComponent(
+                        '{"q":"ada","page":2,"tags":["x"]}',
+                    )}`,
+                    {},
+                )
+                is('and the hatch is a door on the way in too', await blob.json(), {
+                    q: 'ada',
+                    page: 2,
+                    tags: ['x'],
+                })
             },
         },
 
@@ -501,10 +623,7 @@ export default suite({
                 const getUser = GET(({ id }: { id: number }) => find(id))
                 register('rpc', [['demo/traced/getUser', 'getUser']], { getUser })
 
-                const answered = await wire.fetch(
-                    `/__abide/rpc/demo/traced/getUser?a=${encodeURIComponent('{"id":1}')}`,
-                    {},
-                )
+                const answered = await wire.fetch('/__abide/rpc/demo/traced/getUser?id=1', {})
                 is('a call that answered', await answered.json(), { id: 1, name: 'user 1' })
                 is('…carries it', parent.test(answered.headers.get('traceresponse') ?? ''), true)
 
@@ -768,10 +887,10 @@ export default suite({
                 // A socket's `schema` is the WIRE's door and only the wire's: the server half is
                 // `channel()` unchanged, so an app publishing into its own stream is publishing a
                 // value it already holds rather than sending one.
-                const chat: Channel<{ name: string }> = socket<{ name: string }>({
+                const chat = socket<{ name: string }>({
                     channel: { tail: 4 },
                     schema: aName,
-                    clientPublish: (message) => chat.publish(message),
+                    clientPublish: (message, _room, into) => into.publish(message),
                 })
                 register('socket', [['demo/shape/chat', 'chat']], { chat })
                 const remoteChat = sock<{ name: string }>('demo/shape/chat', { channel: { tail: 4 } })
@@ -1351,14 +1470,14 @@ export default suite({
 
         {
             title: 'rooms, and the publish a client is only allowed if the server says so',
-            note: 'A socket splits into rooms the way a channel does — the CALL selects one — and the room travels in the address, so the subscribe on the server is `ch(args).subscribe(…)` and nothing else. `clientPublish` is a POLICY: a socket is a broadcast until an app says otherwise, because a client that may publish into a room may write to every subscriber of it.',
+            note: 'A socket splits into rooms the way a channel does — the CALL selects one — and the room travels in the address, so the subscribe on the server is `ch(args).subscribe(…)` and nothing else. `clientPublish` is a POLICY: a socket is a broadcast until an app says otherwise, because a client that may publish into a room may write to every subscriber of it. It is handed `(message, room, into)`, where `into` is the room the sender is on, already resolved — an echo publishes there rather than re-selecting it by name.',
             async run({ is }) {
-                // Annotated because the policy names the socket it publishes into — a declaration
-                // that reads its own name needs a type to stand on while it is being written.
-                const open: RoomChannel<{ room: string }, string> = socket<string, { room: string }>({
+                // The policy is handed the room it is publishing into — the same channel the sender
+                // is subscribed to — so it never names the declaration it is inside.
+                const open = socket<string, { room: string }>({
                     channel: { tail: 4 },
-                    clientPublish: (message, room) => {
-                        open(room as { room: string }).publish(`echoed: ${String(message)}`)
+                    clientPublish: (message, _room, into) => {
+                        into.publish(`echoed: ${String(message)}`)
                     },
                 })
                 const shut = socket<string, { room: string }>({ channel: { tail: 4 } })

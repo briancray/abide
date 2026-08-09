@@ -1,0 +1,91 @@
+<!-- A page that WAITS, which is the one shape the streaming machinery exists for.
+
+     Every other page in this app renders in one pass, so nothing here was ever exercised by being
+     served: `renderDocument` defers a suspended subtree and patches it in as it settles, and until
+     this page there was no route that suspended. A capability with no served page behind it is a
+     capability whose regressions nobody sees.
+
+     TWO panels, slow then fast, because ONE cannot tell the two lanes apart. Both flush what they
+     have written before waiting, so a single-suspend page looks nearly identical either way — the
+     difference only shows when something FAST sits below something SLOW.
+
+     A document render defers both: every placeholder and all the static markup goes out at once, and
+     each panel is patched in when its own load settles, so the fast one lands first. A navigation has
+     nowhere to patch, so each block is awaited INLINE, in document order — the fast panel is
+     head-of-line blocked behind the slow one, and so is every byte below it. The loads themselves run
+     concurrently in both lanes; what differs is the order the markup may be EMITTED in.
+
+     `test/start.test.ts` reads both off the wire and asserts that ordering rather than describing it.
+
+     The slow delay is a query parameter because the point is the WAIT, and a fixed one would make
+     this a page about 300ms. The fast one is fixed: it is a control, not a subject. -->
+<script module>
+import { html, route, suspend } from 'abide'
+
+const DEFAULT_MS = 300
+
+/** Bounded, because this is a public page and an unbounded sleep is a held connection per caller. */
+const MOST_MS = 2000
+
+/**
+ * The control panel's wait — fixed, and deliberately much shorter than the default above.
+ *
+ * It sits BELOW the slow one, which is the whole of what makes this page able to tell the two lanes
+ * apart: out of order, it settles first; in document order, it cannot.
+ */
+const FAST_MS = 50
+
+const CARD = 'rounded-xl border border-slate-800 bg-slate-950/60 p-5'
+const NOTE = 'mt-2 text-sm text-slate-400'
+
+/**
+ * A load that takes a knowable amount of time.
+ *
+ * `setTimeout` rather than `Bun.sleep` — this module renders on BOTH sides, and a page is the one
+ * kind of module where that is not a stylistic choice: the same file is bundled for the browser, so
+ * a Bun API here is a page that does not build.
+ */
+function slowly<T>(ms: number, value: T): Promise<T> {
+    return new Promise((settle) => setTimeout(() => settle(value), ms))
+}
+
+/**
+ * The two arms, as functions rather than inline.
+ *
+ * `suspend(...)` is an EXPRESSION, so what it is handed is ordinary JavaScript — a nested `html` tag
+ * interpolates with `${}` like any other tagged template, and the `{…}` sugar of this file does not
+ * reach inside it. Hoisting them is what keeps that from being a trap written in one long line: the
+ * markup below reads as markup, and these read as the templates they are.
+ */
+const settledPanel = (text: string) => html`
+    <p class="text-emerald-300">${text}</p>
+    <p class=${NOTE}>Rendered after the wait. On a document render this arrived as a patch, after the shell was already on screen.</p>
+`
+
+const waitingPanel = (ms: number) => html`<p class="text-slate-500">waiting ${ms}ms…</p>`
+</script>
+
+<script>
+/**
+ * Read off the REQUEST when this renders on a server, and off the address bar when it renders here.
+ * One call, because `route()` is an ambient — which is what lets this page take a parameter without
+ * the two lanes reading it two ways.
+ */
+const asked = Number(route().url.searchParams.get('ms'))
+const ms = Number.isFinite(asked) && asked > 0 ? Math.min(asked, MOST_MS) : DEFAULT_MS
+</script>
+
+<div class="mx-auto max-w-3xl px-6 py-10 space-y-4">
+    <h1 class="text-3xl font-semibold text-slate-100">streaming</h1>
+    <p class="text-slate-400">Two panels: the first waits {ms}ms, the second {FAST_MS}ms. Reload and the placeholders and everything below them arrive at once, then each panel is patched in as its own load settles — so the fast one lands first even though it is second on the page. Navigate here instead and the order is the document's: the fast panel waits behind the slow one, and so does this paragraph's neighbour below.</p>
+
+    <div class={CARD}>
+        {suspend(slowly(ms, 'the load settled'), settledPanel, waitingPanel(ms))}
+    </div>
+
+    <div class={CARD}>
+        {suspend(slowly(FAST_MS, 'the fast load settled'), settledPanel, waitingPanel(FAST_MS))}
+    </div>
+
+    <p class="text-slate-600">Static markup below both panels. A document render sends this with the shell; a navigation sends it after the slowest block above it has settled.</p>
+</div>

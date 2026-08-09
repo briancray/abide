@@ -18,7 +18,17 @@ const HERE = new URL('../pages/', import.meta.url)
 test('a directory is a pattern and a filename is a kind', async () => {
     const table = await pages(HERE)
     const paths = table.map((entry) => entry.path).sort()
-    expect(paths).toEqual(['/', '/files/[...path]', '/users/[id]'])
+    // `[suite]/[...rest]` is the site's twenty capability pages behind one file, and it is the row
+    // that makes precedence load-bearing here rather than only in `demos/routing.ts`: `/users/42` and
+    // `/bench` both match it, and both are answered by the literal that outranks it.
+    expect(paths).toEqual([
+        '/',
+        '/[suite]/[...rest]',
+        '/bench',
+        '/files/[...path]',
+        '/streaming',
+        '/users/[id]',
+    ])
 })
 
 test('every layout above a page wraps it, outermost first', async () => {
@@ -35,11 +45,12 @@ test('a page renders through its layouts, with its params', async () => {
         await navigate('/users/42')
         return renderToString(outlet())
     })
-    expect(markup).toContain('<main>')
+    expect(markup).toContain('<header')
     expect(markup).toContain('<section class="users">')
     expect(markup).toContain('user 42')
-    // The outer layout reads the ambient too, and a server render is a snapshot of THIS caller.
-    expect(markup).toContain('/users/42')
+    // The outer layout reads the ambient too, and a server render is a snapshot of THIS caller: the
+    // nav marks the section the URL is in, and `/users/42` is in none of them.
+    expect(markup).toContain('href="/state"')
 })
 
 test('a rest segment reaches the page as the joined remainder', async () => {

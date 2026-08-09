@@ -21,13 +21,15 @@ import {
     assetOf,
     CLIENT_DIR,
     CLIENT_ENTRIES,
+    CLIENT_KEY,
     type ClientAsset,
     type ClientManifest,
+    clientGraph,
     entryNames,
-    firstPresent,
     MANIFEST_FILE,
     type Sidecar,
 } from '../CLIENT_BUILD.ts'
+import { clientLane, GENERATED_ENTRY } from './entry.ts'
 import { clientBuild, type Lane } from './lane.ts'
 import { BOLD, colored, DIM, paint, plural } from './paint.ts'
 
@@ -60,18 +62,38 @@ export async function build(argv: string[]): Promise<number> {
 
     const root = process.cwd()
     let entries = argv
+    // Reported rather than silent: a lane nobody wrote is a file the next reader will not find in
+    // their own source tree, and the one line that says where it came from is the whole of the fix.
+    let generated = false
+    // The manifest keys, when they are not the entry paths. Only the conventional lane sets them —
+    // an entry somebody NAMED is keyed by what they named, because that is what their document says.
+    let keys: string[] | undefined
     if (entries.length === 0) {
-        // The conventional lane when nothing was named — one entry, because the first that EXISTS wins.
-        const found = await firstPresent(root, CLIENT_ENTRIES)
-        entries = found === null ? [] : [found]
+        // The conventional lane when nothing was named: the app's own `client.ts` if it wrote one,
+        // and otherwise one generated from `pages/`, because a route table is already on disk and
+        // retyping it for the browser is the one piece of an app nobody should be writing by hand.
+        const lane = await clientLane(root)
+        if (lane !== null) {
+            entries = [lane.path]
+            keys = [CLIENT_KEY]
+            generated = lane.generated
+        }
     }
     if (entries.length === 0) {
-        console.error(`abide build: nothing to build — no ${CLIENT_ENTRIES.join(', ')} here`)
+        console.error(`abide build: nothing to build — no ${CLIENT_ENTRIES.join(', ')} and no pages/ here`)
         console.error('       name one: abide build <entry…>')
         return CLI_EXIT_CODES.usage
     }
 
-    const built = await clientBuild(entries, SHIPPED)
+    let built: Bun.BuildOutput
+    try {
+        built = await clientBuild(entries, SHIPPED, root)
+    } catch (failure) {
+        // A plugin the app declared and this could not load. Loud, because the build that would have
+        // followed it is one that succeeds and ships a page missing whatever the plugin makes.
+        console.error(`abide build: ${(failure as Error).message}`)
+        return CLI_EXIT_CODES.failed
+    }
 
     if (!built.success) {
         for (const message of built.logs) console.error(String(message))
@@ -100,10 +122,14 @@ export async function build(argv: string[]): Promise<number> {
     const assets: Record<string, ClientAsset> = {}
     for (let at = 0; at < names.length; at++) assets[names[at] as string] = settled[at] as ClientAsset
 
-    const manifest: ClientManifest = { entries: entryNames(root, entries, built.outputs), assets }
+    const manifest: ClientManifest = {
+        entries: entryNames(root, entries, built.outputs, keys),
+        assets,
+        graph: clientGraph(built.metafile, root),
+    }
     await Bun.write(`${root}/${MANIFEST_FILE}`, `${JSON.stringify(manifest, null, 4)}\n`)
 
-    report(manifest)
+    report(manifest, generated)
     return CLI_EXIT_CODES.ok
 }
 
@@ -175,9 +201,14 @@ async function compress(
  * Sorted by name and not by size: two builds of one tree should produce the same report, and a size
  * ordering shuffles the whole list when one chunk grows by a byte.
  */
-function report(manifest: ClientManifest): void {
+function report(manifest: ClientManifest, generated: boolean): void {
     const on = colored()
     const names = Object.keys(manifest.assets).sort()
+
+    if (generated) {
+        console.log(paint(`${GENERATED_ENTRY}  the lane, written from pages/ — copy it to`, DIM, on))
+        console.log(paint('                       client.ts to take it over', DIM, on))
+    }
 
     let width = 0
     for (const name of names) if (name.length > width) width = name.length

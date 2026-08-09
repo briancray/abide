@@ -6,7 +6,7 @@ import { classifySlots, escape, html, isTemplate, raw, state, type TemplateResul
 import { renderToString } from 'abide/server'
 import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
-import { button, el, LABEL, row, stage } from './dom.ts'
+import { button, el, LABEL, lazy, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -48,6 +48,17 @@ function both(host: HTMLElement, view: (lane: Lane) => TemplateResult): void {
         })
     })
 }
+
+/**
+ * Where a bench fixture lives: off the document, for the life of the page.
+ *
+ * A bench's arms are built when the suite object is — at module scope — so a fixture appended to the
+ * document then is one nothing will ever take down. The work these arms measure is attribute and DOM
+ * writing, which is identical on a detached tree.
+ *
+ * Built on first USE rather than at import — see `lazy`, which is here for this reason.
+ */
+const detached = lazy((): HTMLElement => document.createElement('div'))
 
 export default suite({
     ...META.template,
@@ -663,22 +674,38 @@ export default suite({
                         'data-a': 1,
                         'data-b': 2,
                     })
-                    const host = document.createElement('div')
-                    document.body.append(host)
-                    mount(host, () => html`<i ...=${() => props()}>x</i>`)
-                    const plain = document.createElement('i')
-                    document.body.append(plain)
                     const SAME = { class: 'row', title: 'a', 'data-a': 1, 'data-b': 2 }
+                    // Detached, like every other bench fixture in this repo — see `hydrate.ts`.
+                    // Anything put in the document here would be in it for the life of the page:
+                    // `bun test` never sees it, and a browser card would show it unstyled under the
+                    // last card forever. Setting an attribute is the same work off-document, which is
+                    // what this arm measures.
+                    //
+                    // Built by `prepare` and not here, because HERE is module scope — the suite object
+                    // is built when the module is imported, and this module is imported on the server
+                    // too, where there is no document to make any of it in.
+                    let plain: HTMLElement | null = null
+                    const ready = (): void => {
+                        if (plain !== null) return
+                        const host = document.createElement('div')
+                        detached().append(host)
+                        mount(host, () => html`<i ...=${() => props()}>x</i>`)
+                        plain = document.createElement('i')
+                        detached().append(plain)
+                    }
                     return [
                         {
                             label: 'abide — a fresh object with the SAME names and values',
+                            prepare: ready,
                             run: () => props.set({ ...SAME }),
                         },
                         {
                             label: 'vanilla — setAttribute per name, unguarded',
+                            prepare: ready,
                             run: () => {
+                                const node = plain as HTMLElement
                                 for (const name in SAME) {
-                                    plain.setAttribute(name, String(SAME[name as keyof typeof SAME]))
+                                    node.setAttribute(name, String(SAME[name as keyof typeof SAME]))
                                 }
                             },
                         },

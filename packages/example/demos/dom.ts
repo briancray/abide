@@ -1,9 +1,30 @@
 // Hand-written DOM helpers the demos use for their live areas.
 //
-// Deliberately not built with abide. The furniture must not be the thing under demonstration, or a
-// bug in `$ui` would take the page that shows it off the air — and a reader could never tell which
-// half of the screen was abide and which was scaffolding. It is also why these are safe to call from
-// a headless `run`: they touch nothing but `document`.
+// Deliberately not built with abide, and the reason is no longer that the page around them isn't:
+// the site IS an abide app now — `site/card.abide` renders every card these fill in. What stays
+// hand-written is the inside of a CASE, because a case is a comparison. A demo mounts abide into one
+// of these and a bench arm builds the same thing by hand beside it, so furniture that was itself
+// abide would put the subject on both sides of the measurement.
+//
+// It is also why these are safe to call from a headless `run`: they touch nothing but `document`.
+
+/**
+ * `make`, run on the first call and never again.
+ *
+ * Every suite module is imported on the SERVER too — the cards' titles and notes are server-rendered
+ * — and a fixture built at module scope would touch `document` where there is none. An arm is the
+ * only caller and an arm only ever runs in a browser, so deferring costs one null check and is the
+ * difference between a suite that imports and one that throws on the way in.
+ *
+ * `null` is not a value any caller here holds, so it doubles as "not built yet" without a flag.
+ */
+export function lazy<T>(make: () => T): () => T {
+    let held: T | null = null
+    return (): T => {
+        held ??= make()
+        return held
+    }
+}
 
 export function el<K extends keyof HTMLElementTagNameMap>(
     tag: K,

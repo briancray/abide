@@ -20,14 +20,32 @@ const PAGE = 'page.'
 const LAYOUT = 'layout.'
 
 /**
+ * One route as FILES — the table before anything can be loaded, and the shape `source` records.
+ *
+ * Paths are relative to the pages directory, in the order an outer layout wraps an inner one. This is
+ * what a LOADER is built over on the server and what an `import()` is WRITTEN over by the build that
+ * makes the client's table — one walk, so the two tables cannot disagree about which layouts are
+ * above a route.
+ */
+export interface PageFiles {
+    path: string
+    page: string
+    layouts: string[]
+}
+
+/**
  * Every `page.abide` / `page.ts` under `dir`, with the `layout` files above each one attached
- * outermost first.
+ * outermost first — as paths, before a loader exists for any of them.
+ *
+ * Separate from `pages()` because the client's table is written by a BUILD rather than by a scan: a
+ * browser has no directory to read, so the codegen emits a static `import()` per row from exactly
+ * this list. A second walk written beside the generator is a layout that wraps a route on one side
+ * and not the other, with nothing saying so.
  *
  * Not sorted: precedence belongs to `routes()`, which is also where a hand-written table gets it.
  */
-export async function pages(dir: string | URL): Promise<RouteEntry[]> {
+export async function pageFiles(dir: string | URL): Promise<PageFiles[]> {
     const root = typeof dir === 'string' ? dir : Bun.fileURLToPath(dir)
-    const base = Bun.pathToFileURL(root.endsWith('/') ? root : `${root}/`)
     const glob = new Bun.Glob('**/{page,layout}.{abide,ts}')
 
     // Directory relative to the root (`''` is the root itself) to the whole relative path, which is
@@ -46,6 +64,45 @@ export async function pages(dir: string | URL): Promise<RouteEntry[]> {
         into.set(inside, file)
     }
 
+    // Relative to the pages directory: whoever reads this knows where that is, and a path anchored to
+    // this process's cwd would be one no manifest could be keyed by and no generated import could be
+    // written from.
+    const table: PageFiles[] = []
+    for (const [inside, file] of found) {
+        // Every directory from the root down to the page's own, so an outer layout reaches in and an
+        // inner one never reaches out — the same containment a nested `<style>` has.
+        const wrapFiles: string[] = []
+        const outermost = layouts.get('')
+        if (outermost !== undefined) wrapFiles.push(outermost)
+        if (inside !== '') {
+            let prefix = ''
+            let at = 0
+            for (;;) {
+                const cut = inside.indexOf('/', at)
+                prefix = cut === -1 ? inside : inside.slice(0, cut)
+                const held = layouts.get(prefix)
+                if (held !== undefined) wrapFiles.push(held)
+                if (cut === -1) break
+                at = cut + 1
+            }
+        }
+        table.push({ path: inside === '' ? '/' : `/${inside}`, page: file, layouts: wrapFiles })
+    }
+    return table
+}
+
+/**
+ * The same table with a loader per file — what `routes()` is handed on the server.
+ *
+ * The loaders are dynamic imports, which is what makes a page's code absent until someone asks for
+ * it. `source` carries the files through unchanged, because a loader is a closure and a closure has
+ * no address: it is the only record of which file a route's code is in, and a route's chunk cannot be
+ * named in a document without one.
+ */
+export async function pages(dir: string | URL): Promise<RouteEntry[]> {
+    const root = typeof dir === 'string' ? dir : Bun.fileURLToPath(dir)
+    const base = Bun.pathToFileURL(root.endsWith('/') ? root : `${root}/`)
+
     // One loader per FILE, not per file per page: a root layout is above every route in the table,
     // and building it once per page would parse the same URL and hold a distinct closure for each.
     const loaders = new Map<string, Loader>()
@@ -60,28 +117,14 @@ export async function pages(dir: string | URL): Promise<RouteEntry[]> {
     }
 
     const table: RouteEntry[] = []
-    for (const [inside, file] of found) {
-        // Every directory from the root down to the page's own, so an outer layout reaches in and an
-        // inner one never reaches out — the same containment a nested `<style>` has.
+    for (const found of await pageFiles(root)) {
         const wraps: Loader[] = []
-        const outermost = layouts.get('')
-        if (outermost !== undefined) wraps.push(loaderFor(outermost))
-        if (inside !== '') {
-            let prefix = ''
-            let at = 0
-            for (;;) {
-                const cut = inside.indexOf('/', at)
-                prefix = cut === -1 ? inside : inside.slice(0, cut)
-                const held = layouts.get(prefix)
-                if (held !== undefined) wraps.push(loaderFor(held))
-                if (cut === -1) break
-                at = cut + 1
-            }
-        }
+        for (const wrapFile of found.layouts) wraps.push(loaderFor(wrapFile))
         table.push({
-            path: inside === '' ? '/' : `/${inside}`,
-            page: loaderFor(file),
+            path: found.path,
+            page: loaderFor(found.page),
             layouts: wraps,
+            source: { page: found.page, layouts: found.layouts },
         })
     }
     return table

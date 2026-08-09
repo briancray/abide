@@ -348,7 +348,7 @@ export default suite({
                     const cell = state<number | undefined>(undefined)
                     const at = performance.now()
                     cell.set(counted(n))
-                    await until(() => cell.done(), 30_000)
+                    await until(() => cell.done(), 'the stream to finish', 30_000)
                     const took = performance.now() - at
                     is(`${n} chunks all arrived`, cell.chunks().length, n)
                     return took

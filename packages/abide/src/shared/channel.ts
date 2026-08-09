@@ -93,7 +93,7 @@ export interface Channel<T> {
 }
 
 /** The `Args`-addressed form: the CALL selects a room, and everything else is read off the room. */
-export interface RoomChannel<Args, T> {
+export interface KeyedChannel<Args, T> {
     (args: Args): Channel<T>
     /**
      * Every room MATCHING the pattern — a subset of the args, compared the way rooms are keyed. No
@@ -114,8 +114,8 @@ export interface ChannelOptions {
 }
 
 export function channel<T>(options?: ChannelOptions): Channel<T>
-export function channel<T, Args>(options?: ChannelOptions): RoomChannel<Args, T>
-export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & RoomChannel<Args, T> {
+export function channel<T, Args>(options?: ChannelOptions): KeyedChannel<Args, T>
+export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & KeyedChannel<Args, T> {
     const tail = options.tail ?? 0
     const maxAge = options.maxAge ?? Infinity
     // How far past `tail` the buffer may run before it compacts — what turns the copy from per
@@ -146,7 +146,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Roo
     // substrates disagreed: the server recurses through any function and printed the message, while
     // the client asks the brand and printed the channel's own source text.
     const self = markSource(((args?: Args) =>
-        args === undefined ? cell().latest : roomFor(args)) as Channel<T> & RoomChannel<Args, T>)
+        args === undefined ? cell().latest : roomFor(args)) as Channel<T> & KeyedChannel<Args, T>)
 
     // --- expiry ------------------------------------------------------------
     //

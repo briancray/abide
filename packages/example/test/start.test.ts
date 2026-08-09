@@ -57,15 +57,184 @@ test('a page renders through its layouts, inside the app’s own onion', async (
     expect(answered.headers.get('traceresponse')).toMatch(/^00-[\da-f]{32}-[\da-f]{16}-[\da-f]{2}$/)
 })
 
+test('a route’s own chunks are named in its head, so the entry is not what discovers them', async () => {
+    // The waterfall this removes: a page reached through `() => import(…)` is absent from the first
+    // load on purpose, but the browser cannot ASK for it until the entry has downloaded, parsed and
+    // run far enough to reach the call — two serial round trips of JavaScript before the page is
+    // interactive. The chunk names are in the manifest's graph, so the document can name them.
+    const nested = await (await fetch(`${app.base}users/42`)).text()
+    const preloaded = [...nested.matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => m[1])
+    expect(preloaded.length).toBeGreaterThan(0)
+
+    // Every name is a file the build actually wrote — the manifest is the allowlist, so a preload it
+    // does not carry is a 404 the browser eats on every page view.
+    for (const href of preloaded) {
+        expect(href?.startsWith(CLIENT_ROUTE)).toBe(true)
+        expect(manifest.assets[href?.slice(CLIENT_ROUTE.length) as string]).toBeDefined()
+    }
+
+    // This route's page AND the layout nested above it, which is the half a flat "preload the entry"
+    // would miss: `/users/[id]` renders through `users/layout.abide` and the root layout both.
+    const graph = manifest.graph as NonNullable<ClientManifest['graph']>
+    const own = graph.modules['pages/users/[id]/page.abide'] as string
+    const layout = graph.modules['pages/users/layout.abide'] as string
+    expect(preloaded).toContain(`${CLIENT_ROUTE}${own}`)
+    expect(preloaded).toContain(`${CLIENT_ROUTE}${layout}`)
+
+    // And it is PER ROUTE rather than one list every page carries: the home page reaches neither of
+    // the two above, and shipping them with it would put the whole route table in the first load —
+    // which is the splitting this is meant to make cheap, undone.
+    const home = await (await fetch(app.base)).text()
+    expect(home).not.toContain(own)
+    expect(home).not.toContain(layout)
+})
+
+test('a client-side navigation is a real request, so it passes the app’s middleware', async () => {
+    const answered = await fetch(`${app.base}users/42`, { headers: { 'x-abide-navigation': '1' } })
+    expect(answered.status).toBe(200)
+
+    // The whole claim, and the reason this is a header on the real URL rather than an endpoint under
+    // `/__abide/`: that prefix is dispatched in FRONT of the onion, so a rung would never see it.
+    // Auth on a page is middleware, and a navigation that skipped it would be the one path into the
+    // app that nothing authorized.
+    expect(answered.headers.get('x-example')).toBe('served')
+
+    const markup = await answered.text()
+    // The outlet and nothing around it: the client is already looking at the document, so a second
+    // head is bytes it would parse and throw away.
+    expect(markup).toContain('<section class="users">')
+    expect(markup).toContain('42')
+    expect(markup).not.toContain('<!doctype')
+    expect(markup).not.toContain('<script type="module"')
+
+    // Hydratable, because the part showing the outlet ADOPTS this rather than building over it —
+    // the markers are the whole of what makes that possible.
+    expect(markup).toContain('<!--$0-->')
+
+    // Marked, so the client can tell a page from whatever else an app's route may answer with; and
+    // varied, so a shared cache never hands this fragment to a browser opening the page cold.
+    expect(answered.headers.get('x-abide-navigation')).toBe('1')
+    expect(answered.headers.get('vary')).toContain('x-abide-navigation')
+})
+
+test('the same url without the mark is still the whole document', async () => {
+    // The negative half of the case above: one URL, two bodies, and the ONLY thing that separates
+    // them is the request header — which is exactly why `Vary` has to name it.
+    const answered = await fetch(`${app.base}users/42`)
+    const markup = await answered.text()
+    expect(markup).toContain('<!doctype')
+    expect(answered.headers.get('x-abide-navigation')).toBeNull()
+})
+
+/** Every chunk of a response, with how long after the request it landed. */
+async function chunks(path: string, headers: Record<string, string> = {}): Promise<Timed[]> {
+    const started = performance.now()
+    const answered = await fetch(`${app.base}${path}`, { headers })
+    const seen: Timed[] = []
+    // A reader and a decoder by hand rather than `pipeThrough(new TextDecoderStream())`: what is
+    // being timed is when each chunk ARRIVES, and a transform stream sits between the socket and the
+    // stamp. `{ stream: true }` so a multi-byte character split across two chunks still decodes.
+    const reader = (answered.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        seen.push({ at: performance.now() - started, text: decoder.decode(value, { stream: true }) })
+    }
+    return seen
+}
+
+interface Timed {
+    at: number
+    text: string
+}
+
+const WAIT_MS = 400
+
+/** The page's own fixed control delay — much shorter, and BELOW the slow panel on the page. */
+const FAST_MS = 50
+
+/** When a chunk containing `mark` landed, in ms after the request went out. */
+function arrival(seen: Timed[], mark: string): number {
+    const found = seen.find((chunk) => chunk.text.includes(mark))
+    if (found === undefined) throw new Error(`nothing in the response contained ${JSON.stringify(mark)}`)
+    return found.at
+}
+
+test('a suspended page streams out of ORDER: a fast panel does not wait for a slow one', async () => {
+    // `/streaming` is the one route in this app that suspends, and it has TWO panels because one
+    // cannot distinguish the lanes: both flush before they wait, so a single-suspend page looks
+    // nearly the same either way. Slow first, fast second, is what makes the ordering visible.
+    const seen = await chunks(`streaming?ms=${WAIT_MS}`)
+
+    // Everything static, plus both placeholders, before EITHER load settled. Asserted against the
+    // arrivals themselves rather than against a wall number: a threshold in milliseconds is a claim
+    // about the machine running the suite, and this one has to survive a loaded CI box.
+    const fast = arrival(seen, 'the fast load settled')
+    const slow = arrival(seen, 'the load settled')
+    for (const early of [`waiting ${WAIT_MS}ms`, `waiting ${FAST_MS}ms`, 'Static markup below both panels']) {
+        expect(arrival(seen, early)).toBeLessThan(fast)
+    }
+
+    // The claim, and it is about ORDER IN TIME rather than bytes — a render that awaited everything
+    // before writing produces an identical document, which is exactly why arrival is what is asserted.
+    // The fast panel is SECOND on the page and must still land first; the slow one really waited.
+    expect(fast).toBeLessThan(slow)
+    expect(slow).toBeGreaterThanOrEqual(WAIT_MS * 0.8)
+})
+
+test('a navigation streams out of order too — the same page, without the document', async () => {
+    const seen = await chunks(`streaming?ms=${WAIT_MS}`, { 'x-abide-navigation': '1' })
+
+    // The same claim as the document case above, which is the whole point: a navigation is not a
+    // second-class render. `renderFragment` gives it a document context, so `suspend` DEFERS here too.
+    const fast = arrival(seen, 'the fast load settled')
+    const slow = arrival(seen, 'the load settled')
+    for (const early of [`waiting ${WAIT_MS}ms`, `waiting ${FAST_MS}ms`, 'Static markup below both panels']) {
+        expect(arrival(seen, early)).toBeLessThan(fast)
+    }
+
+    // And the fast panel is no longer held behind the slow one it sits below. This is the assertion
+    // that INVERTED: it read `slow < fast` while every block was awaited in document order.
+    expect(fast).toBeLessThan(slow)
+    expect(slow).toBeGreaterThanOrEqual(WAIT_MS * 0.8)
+})
+
+test('a navigation carries no patch SCRIPT — the client swaps the placeholders itself', async () => {
+    const seen = await chunks(`streaming?ms=${WAIT_MS}`, { 'x-abide-navigation': '1' })
+    const whole = seen.map((chunk) => chunk.text).join('')
+
+    // The one thing a fragment cannot reuse from the document protocol. A `<script>` the client
+    // injects while parsing this itself would never run — the HTML spec makes script elements
+    // inserted that way non-executable — so a fragment that shipped one would silently never patch.
+    expect(whole).not.toContain('<script')
+    expect(whole).not.toContain('$p(')
+
+    // What it carries instead: a placeholder per deferred subtree, a bare `<template>` per patch, and
+    // a sentinel after every complete piece. HTML cannot be parsed halfway, so the sentinel is what
+    // tells the client that what it is holding is a whole tree rather than a prefix of one.
+    expect(whole).toContain('<slot-s id="s0">')
+    expect(whole).toContain('<template id="t0">')
+    expect(whole).toContain('<!--abide:piece-->')
+
+    // One sentinel per piece: the in-order pass, then one per suspended panel.
+    expect(whole.split('<!--abide:piece-->').length - 1).toBe(3)
+})
+
 test('a path that is no route is a 404, and a method that is no page falls through to one', async () => {
+    // This one is the APP's: `pages/[suite]/` is one page for twenty suites, and a parameter matches
+    // anything — so the only half of this app that knows `/nowhere` is not a suite is `app.ts`, which
+    // is asked before the pages and answers it.
     const missing = await fetch(`${app.base}nowhere`)
     expect(missing.status).toBe(404)
-    // The app returned `undefined` and `handle` decided what that meant, which is why an app never
-    // writes a 404 of its own.
-    expect(((await missing.json()) as { error: { name: string } }).error.name).toBe('AbideRouteError')
+    expect(await missing.text()).toContain('no suite named nowhere')
 
+    // And this one is abide's, on the same route the app just declined to claim: a POST is not a page
+    // read, the app's own route answers `undefined`, and `handle` decides what that means. Which is
+    // why an app writes a 404 only for the case its route table cannot express.
     const posted = await fetch(`${app.base}users/42`, { method: 'POST' })
     expect(posted.status).toBe(404)
+    expect(((await posted.json()) as { error: { name: string } }).error.name).toBe('AbideRouteError')
 })
 
 test('the endpoints are in front of the app, without the app mounting anything', async () => {
@@ -79,7 +248,9 @@ test('the endpoints are in front of the app, without the app mounting anything',
 
     // A transport module is registered because the BOOT scanned for it, and the wire is the same one
     // `transport.test.ts` asserts against — here it is reached through the binary's own server.
-    const user = await fetch(`${app.base}__abide/rpc/users/getUser?a=${encodeURIComponent('{"id":7}')}`)
+    // A URL anyone could have typed: one parameter per argument, and `7` is a number because the
+    // handler's own annotation says the id is one.
+    const user = await fetch(`${app.base}__abide/rpc/users/getUser?id=7`)
     expect(user.status).toBe(200)
     expect((await user.json()) as { id: number }).toMatchObject({ id: 7 })
 })
@@ -172,7 +343,10 @@ test('the page is served in the app’s own app.html, in the slot', async () => 
     const body = markup.slice(markup.indexOf('<body>'))
     const inSlot = body.slice(body.indexOf('<slot>') + '<slot>'.length, body.indexOf('</slot>'))
     expect(inSlot).not.toContain('loading…')
-    expect(inSlot).toContain('<h1>home</h1>')
+    // The hub, rendered: its heading and one card per case of the overview suite. Server-rendered
+    // with no case having RUN — a case needs a live area, and a live area needs a browser.
+    expect(inSlot).toContain('>abide<')
+    expect(inSlot).toContain('<section')
     // Nothing else of abide's is in there. A `<script>` the shell did not write is an element the
     // hydrating client would find where its own first node should be.
     expect(inSlot).not.toContain('<script')
@@ -199,7 +373,12 @@ test('a stylesheet a page imported is built, linked and served', async () => {
     expect(styles.status).toBe(200)
     expect(styles.headers.get('content-type')).toContain('text/css')
     expect(styles.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
-    expect(await styles.text()).toContain('--ink')
+    // The app's OWN rule, not just the framework the plugin generated around it: `body` is what
+    // `app.css` writes under the `@import "tailwindcss"`, so finding it proves the file the page
+    // imported went through the plugin this app declared in its bunfig and came out the other side.
+    const text = await styles.text()
+    expect(text).toContain('var(--color-slate-900)')
+    expect(text).toContain('-webkit-font-smoothing:antialiased')
 })
 
 test('SIGTERM drains through the app’s onStop and closes the socket', async () => {

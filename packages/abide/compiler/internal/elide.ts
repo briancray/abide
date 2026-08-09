@@ -169,12 +169,12 @@ export function endpointsOf(source: string, filename: string, kind: Kind, resolv
         if (name === undefined) break
         let equals = i + 3
         // A type annotation is SKIPPED rather than read: an endpoint naming its own —
-        // `export const rooms: RoomChannel<…> = socket(…)` — is ordinary authoring, forced whenever
-        // a declaration's options mention the declaration, and the DECLARATION is what says the
-        // shape. The type arguments on `socket<…>` below are the same fact where it can be read.
+        // `export const rooms: KeyedChannel<…> = socket(…)` — is ordinary authoring, and the DECLARATION
+        // is what says the shape. The type arguments on `socket<…>` below are the same fact where it
+        // can be read.
         if ((tokens[equals] as Token | undefined)?.kind === SyntaxKind.ColonToken) {
             // Through the type reader rather than by scanning for the first `=`: a generic default
-            // in the annotation — `RoomChannel<Args, T = Tick>` — puts an `=` inside the type, and a
+            // in the annotation — `KeyedChannel<Args, T = Tick>` — puts an `=` inside the type, and a
             // scan that stopped there would read the method off a type token.
             equals = types.extent(equals + 1)
         }

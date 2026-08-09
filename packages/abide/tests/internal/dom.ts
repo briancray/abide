@@ -114,8 +114,17 @@ function countNodes(root: globalThis.Node): number {
 
 let installed = false
 
+/**
+ * Patch the DOM, if there is one.
+ *
+ * A suite module calls this at import time, and a suite module is imported on the SERVER too — the
+ * cards' titles and notes are server-rendered, so the module runs in a lane with no `document` to
+ * patch. That is not an error, it is the server; nothing it does can be counted anyway. `installed`
+ * stays false so the browser's copy of the same module still patches for real, and so does the test
+ * process once happy-dom has registered.
+ */
 export function install(): void {
-    if (installed) return
+    if (installed || typeof document === 'undefined') return
     installed = true
 
     // Sampled BEFORE anything is patched, so building them costs no counts.
@@ -357,9 +366,20 @@ export const tick = async (): Promise<void> => {
     for (let i = 0; i < 4; i++) await Promise.resolve()
 }
 
+/**
+ * The counters, or a failure saying why there are none.
+ *
+ * `install` is allowed to do nothing where there is no DOM, which means every counter would read
+ * zero — and zero is the number these measurements assert. A vacuous pass is worse than a throw.
+ */
+function armed(): void {
+    install()
+    if (!installed) throw new Error('abide: DOM work cannot be counted in a lane with no `document`')
+}
+
 /** Count the DOM work a synchronous region does. */
 export function measure(fn: () => void): Counts {
-    install()
+    armed()
     const before = { ...counts }
     fn()
     return since(before)
@@ -370,9 +390,16 @@ export function measure(fn: () => void): Counts {
  * batched onto a microtask and it is the EFFECT that touches the DOM. The window is a few microtasks
  * wide, so anything else doing DOM work in that window is attributed here too; a measured region
  * should be one write for that reason.
+ *
+ * The drain BEFORE the window is what makes that true in a browser. The counters are global, and on
+ * the demo page the case's own log is a rendered list: every `is` before this call leaves a row
+ * queued, and those rows landed inside the measured flush and were billed to the write. The spread
+ * case read three `setAttribute` for one changed name on screen and one under `bun test` — same
+ * body, same framework, two answers. Nothing queued before the write is the write's work.
  */
 export async function measureFlush(write: () => void): Promise<Counts> {
-    install()
+    armed()
+    await tick()
     const before = { ...counts }
     write()
     await tick()

@@ -7,7 +7,9 @@
 
 import type { TemplateResult } from '$shared/html.ts'
 import { scope, watch } from '$shared/reactive.ts'
+import { outlet } from '$shared/router.ts'
 import { installHistory } from './internal/history.ts'
+import { installNavigation } from './internal/navigation.ts'
 import { ChildPart } from './internal/parts.ts'
 
 // Routing's client edge, handed to `$shared` here rather than found there: importing this entry point
@@ -27,6 +29,11 @@ function attach(container: Element, view: () => TemplateResult, existing: ChildN
         container.append(anchor)
         const part = new ChildPart(anchor)
         if (existing !== null) part.adopt(existing, null)
+        // The part showing the OUTLET is the one a navigation repaints, so this is where the router
+        // is handed its way to the screen. Tested by identity rather than by a flag an app would
+        // pass: `outlet` is one function, and "this renderer is showing the pages" is exactly what
+        // being handed it means.
+        if (view === outlet) installNavigation(part)
         watch(() => part.set(view()))
         return part
     })

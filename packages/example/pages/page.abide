@@ -1,1 +1,34 @@
-<h1>home</h1>
+<!-- The hub: the overview suite, with an index of every other suite under it.
+
+     The suite module is imported by NAME, statically, so this page's chunk is its own suite and
+     nothing else. Reaching it through the loader map would put every suite in the graph — and
+     `compiler` brings TypeScript's scanner, so the front page would ship a compiler it never runs. -->
+<script module>
+import { NAV } from '../demos/SUITES.ts'
+import overview from '../demos/overview.ts'
+import Cards from '../site/cards.abide'
+
+const SUITES = NAV.filter((entry) => entry.name !== 'overview')
+
+const CARD = 'block rounded-xl border border-slate-800 bg-slate-950/60 p-5 hover:border-slate-600 transition-colors'
+const BENCH =
+    'Every case above that carries a bench, against a hand-written equivalent: time as a ratio, ' +
+    'work as DOM calls, and reactivity as wake-ups.'
+</script>
+
+<Cards suite={overview}>
+    <div class="grid gap-3 sm:grid-cols-2">
+        {#for entry of SUITES}
+            <a href="/{entry.name}" class={CARD}>
+                <h3 class="text-base font-medium text-slate-100">{entry.title}</h3>
+                <p class="mt-1 text-xs uppercase tracking-widest text-slate-600">{entry.tag}</p>
+                <p class="mt-2 text-sm text-slate-400">{entry.blurb}</p>
+            </a>
+        {/for}
+        <a href="/bench" class={CARD}>
+            <h3 class="text-base font-medium text-slate-100">bench</h3>
+            <p class="mt-1 text-xs uppercase tracking-widest text-slate-600">vs hand-written</p>
+            <p class="mt-2 text-sm text-slate-400">{BENCH}</p>
+        </a>
+    </div>
+</Cards>

@@ -3,7 +3,9 @@
 //
 // An app is four conventions and no wiring: `app.ts` says what this app IS, `app.html` is the
 // document it is served in, `pages/` is what it serves, `server/rpc/**` and `server/sockets/**` are
-// what it answers, and `client.ts` is the lane the browser gets. Nothing in any of them imports a
+// what it answers, and `client.ts` is the lane the browser gets — generated from `pages/` when the app
+// wrote none, because a route table is already on disk and only the browser cannot read it. Nothing in
+// any of them imports a
 // server, calls `Bun.serve`, mounts `dispatch`, installs a signal handler, matches a route, builds a
 // document or imports a handler for its side effect — every one of those is the same code in every
 // app, and the one an app forgets is the one that matters.
@@ -36,7 +38,7 @@ import '$compiler/preload.ts'
 import { type Config, type ConfigDefaults, isPort, onConfig } from '$server/config.ts'
 import { type HealthReporter, onHealth } from '$server/health.ts'
 import { type IdentityResolver, onIdentity } from '$server/identity.ts'
-import { documentToStream } from '$server/index.ts'
+import { documentToStream, fragmentToStream } from '$server/index.ts'
 import {
     type ErrorHook,
     handle,
@@ -55,11 +57,12 @@ import { page } from '$server/responses.ts'
 import type { Schema } from '$server/schema.ts'
 import type { Shell } from '$server/shell.ts'
 import { outlet, type RouteEntry, route as routeAsked, routes } from '$shared/index.ts'
+import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { appName } from '$shared/log.ts'
 import { readying } from '$shared/router.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
-import { CLIENT_ROUTE, type ClientManifest, firstPresent } from '../CLIENT_BUILD.ts'
+import { CLIENT_ROUTE, type ClientGraph, type ClientManifest, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
 import type { ClientAssets, LoadedClient } from './assets.ts'
 import { handlers } from './handlers.ts'
 import { BOLD, colored, DIM, paint, plural } from './paint.ts'
@@ -73,9 +76,6 @@ import { APP_HTML, type AppShell, appShell } from './shell.ts'
  * module is asked for hooks. A `.abide` app entry would be a page with nowhere to be served from.
  */
 const CONVENTIONAL = ['app.ts', 'app.tsx', 'app.js']
-
-/** Where the pages are. A directory rather than a declaration — the tree IS the route table. */
-const PAGES = 'pages'
 
 /** Hoisted: the render reads it once and keeps nothing, so a literal here would be per request. */
 const HYDRATABLE = { hydratable: true }
@@ -169,7 +169,7 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
     try {
         built = isThenable(asked.client) ? await asked.client : asked.client
         paged = await pageLayer(root, built?.manifest ?? null, asked.head)
-        serving = composed(declared, paged)
+        serving = composed(declared, paged, built?.manifest ?? null)
     } catch (failure) {
         // An `app.html` with nowhere to render is the loud one, and it is caught HERE rather than on
         // the first page view: a shell somebody mistyped should be a process that does not come up.
@@ -233,18 +233,90 @@ async function pageLayer(
  * wants none writes no default export at all. Composed once at boot: an app with no route of its own
  * gets the renderer itself, rather than a wrapper testing for it per request.
  */
-function composed(declared: Route | null, paged: Paged | null): Route {
+function composed(declared: Route | null, paged: Paged | null, manifest: ClientManifest | null): Route {
     // Nothing of its own and nothing to render: every path is then `handle`'s 404, which is an app
     // made entirely of endpoints.
     if (paged === null) return declared ?? ((): undefined => undefined)
     routes(paged.table)
-    const rendered = renderer(paged.shell.parts)
+    const rendered = renderer(paged.shell.parts, shellsPerRoute(paged, manifest))
     if (declared === null) return rendered
     return (request: Request, server: Parameters<Route>[1]): ReturnType<Route> => {
         const answered = declared(request, server)
         if (answered === undefined) return rendered(request)
         if (isThenable(answered)) return answered.then((settled) => settled ?? rendered(request))
         return answered
+    }
+}
+
+/**
+ * The document each route is served in, with that route's own chunks named in its head.
+ *
+ * Per ROUTE and built once, because a route table is fixed at boot and so is the set of files each
+ * route reaches: computing this per request would be a graph walk and a string concat on the hottest
+ * path this binary has, to produce the same head every time. What a request pays is a map lookup.
+ *
+ * The preload is what stops splitting costing a second serial round trip. A page reached through
+ * `() => import(…)` is deliberately absent from the first load — that is the whole point of a loader
+ * — but the browser cannot discover it until the entry has downloaded, parsed and RUN far enough to
+ * reach the call. Naming it in the head makes the two fetches overlap instead, which is the one
+ * change here that moves time-to-interactive rather than time-to-content.
+ *
+ * `modulepreload` and not `preload`: the two differ by more than a word — this one tells the browser
+ * the bytes are a MODULE, so it parses and instantiates them and pulls in their static imports rather
+ * than parking bytes in a cache for a second discovery to hit.
+ */
+function shellsPerRoute(paged: Paged, manifest: ClientManifest | null): Map<string, Shell> {
+    const perRoute = new Map<string, Shell>()
+    const graph = manifest?.graph
+    if (graph === undefined) return perRoute
+
+    for (const entry of paged.table) {
+        const source = entry.source
+        if (source === undefined) continue
+        // The table's paths are relative to the pages DIRECTORY and the graph is keyed from the
+        // project root, which is the seam where the two halves meet: `pages()` read a directory and
+        // cannot know where it sits, and the bundler recorded what it was pointed at.
+        const named: string[] = []
+        for (const file of source.layouts) reachable(graph, `${PAGES}/${file}`, named)
+        reachable(graph, `${PAGES}/${source.page}`, named)
+        if (named.length === 0) continue
+
+        let links = ''
+        for (const name of named) links += `<link rel="modulepreload" href="${CLIENT_ROUTE}${name}">`
+        // A shallow copy per ROUTE, not per request: `open` and `close` are the same strings every
+        // route is served with, and only the head differs.
+        perRoute.set(entry.path, { ...paged.shell.parts, head: paged.shell.parts.head + links })
+    }
+    return perRoute
+}
+
+/**
+ * The chunk holding `file`, and every chunk it STATICALLY imports, appended to `named` without
+ * repeats.
+ *
+ * Transitive because a chunk whose own imports are not named is a chunk that downloads and then
+ * blocks on discovering them — one round trip traded for another. Static only: a `dynamic-import`
+ * edge is a chunk the browser fetches if it ever gets there, and following those would pull the whole
+ * route table into the first load, undoing the splitting this exists to make cheap.
+ *
+ * The `named` array doubles as the seen-set. A route reaches a handful of chunks and its layouts
+ * share most of them, so a linear scan over what is already there beats a `Set` allocated per route.
+ */
+function reachable(graph: ClientGraph, file: string, named: string[]): void {
+    const held = graph.modules[file]
+    // Already named is already CLOSED over: every entry the loop below appends is walked by that same
+    // loop before the call returns, so nothing reachable from `held` can be missing. Returning here is
+    // what keeps the COMMON case cheap — a page and its layouts share most of their chunks, and
+    // re-entering the walk would re-enumerate a subtree already entirely in `named`.
+    if (held === undefined || named.indexOf(held) !== -1) return
+    let at = named.length
+    named.push(held)
+    // Index-based and re-reading `length`: entries are appended as the walk runs, which is what makes
+    // this a breadth-first close over the graph rather than a recursion carrying its own stack.
+    for (; at < named.length; at++) {
+        const imports = graph.imports[named[at] as string]
+        if (imports === undefined) continue
+        for (const name of imports) if (named.indexOf(name) === -1) named.push(name)
     }
 }
 
@@ -260,14 +332,18 @@ function composed(declared: Route | null, paged: Paged | null): Route {
  * `documentToStream` holds the scope itself until the last chunk, so a `memo` read halfway down the
  * page is still this caller's one cache rather than a second build of the same answer.
  */
-function renderer(shell: Shell): (request: Request) => Promise<Response | undefined> {
+function renderer(
+    shell: Shell,
+    perRoute: Map<string, Shell>,
+): (request: Request) => Promise<Response | undefined> {
     return async (request: Request): Promise<Response | undefined> => {
         // A page is a READ. Anything else against the same path is the app's to answer, and a 404
         // when it did not.
         if (request.method !== 'GET' && request.method !== 'HEAD') return undefined
         // `kind`, which is the router's own word for "nothing matched" — the empty name it is derived
         // from is that module's encoding rather than a fact this one may read.
-        if (routeAsked().kind === 'missing') return undefined
+        const asked = routeAsked()
+        if (asked.kind === 'missing') return undefined
 
         // The page's module, before the walk that renders it: a render is a snapshot, and a module
         // that has not arrived is not a tree. `readying` rather than `ready`, because after the first
@@ -276,8 +352,35 @@ function renderer(shell: Shell): (request: Request) => Promise<Response | undefi
         const loading = readying()
         if (loading !== null) await loading
 
-        return page(documentToStream(shell, outlet, HYDRATABLE))
+        // A client-side navigation asked for this page, and it is already looking at the document —
+        // so what it needs is the outlet and not a second head, a second shell or a second copy of
+        // every `<script>` it has already run. The same walk with the same options either way: the
+        // markup a navigation adopts has to be the markup it would have hydrated.
+        //
+        // This branch is the ONLY thing a navigation changes on the server. It is reached through the
+        // app's middleware exactly as a full page load is, because it IS a full page load as far as
+        // everything above here is concerned — same path, same scope, same onion.
+        if (request.headers.get(NAVIGATION_HEADER) !== null) {
+            return page(fragmentToStream(outlet, HYDRATABLE), { headers: NAVIGATION_HEADERS })
+        }
+
+        // This route's own document — the shell with its chunks named in the head. One map lookup,
+        // and the shared shell for a route the build knew nothing about.
+        return page(documentToStream(perRoute.get(asked.name) ?? shell, outlet, HYDRATABLE))
     }
+}
+
+/**
+ * What marks a navigation's answer, and what stops a cache from serving it to a page load.
+ *
+ * `Vary` is not optional here: two callers ask for ONE url and get a document or a fragment depending
+ * on a request header, and a shared cache that missed that would serve a fragment to a browser
+ * opening the page cold — a blank window with the head missing. The mark itself is what the client
+ * tells the two apart by, because an app's own route may answer the same path with anything.
+ */
+const NAVIGATION_HEADERS: Record<string, string> = {
+    [NAVIGATION_HEADER]: '1',
+    vary: NAVIGATION_HEADER,
 }
 
 // --- what an app's module says about itself ----------------------------------

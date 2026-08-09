@@ -5,6 +5,7 @@
 // separating them would buy nothing but an import cycle.
 
 import { attributeText, escape } from '$shared/html.ts'
+import { PATCH_SWAP } from '$shared/internal/MARKERS.ts'
 
 export interface Deferred {
     id: number
@@ -44,6 +45,4 @@ export function attribute(name: string, value: unknown): string {
     return ` ${name}="${escape(text)}"`
 }
 
-export const PATCH_SCRIPT =
-    `<script>window.$p=function(i){var t=document.getElementById("t"+i),s=document.getElementById("s"+i);` +
-    `if(t&&s){s.replaceWith(t.content);t.remove()}}</script>`
+export const PATCH_SCRIPT = `<script>window.$p=function(i){${PATCH_SWAP};if(t&&s){s.replaceWith(t.content);t.remove()}}</script>`

@@ -1,0 +1,96 @@
+<!-- One case as a card: what it claims, what it does, what it logged, and the code that did it.
+
+     The card runs the case's `run` — the same body `bun test` runs — and paints every line it logs,
+     with assertions in green and a failure in red. Then it runs `interact`, which is the half a test
+     cannot have: the buttons and inputs that need a person.
+
+     The live area is handed to the case as a bare element, and what the case builds inside it is its
+     own business: most of them build hand-written DOM from `demos/dom.ts` and mount abide into it,
+     which is what makes the comparison on the bench page an honest one. -->
+<script module>
+import { state, watch } from 'abide'
+import type { Case } from 'abide/tests'
+import { LABEL } from '../demos/dom.ts'
+import { enqueue, running, type Status } from './queue.ts'
+import Source from './source.abide'
+
+/** The badge's ramp. `waiting` and `running` are deliberately quiet — neither is news. */
+const TONE: Record<Status, string> = {
+    waiting: 'text-slate-600',
+    running: 'text-slate-600',
+    passing: 'text-emerald-500',
+    failed: 'text-rose-400',
+    interactive: 'text-emerald-500',
+    benched: 'text-emerald-500',
+}
+
+const LINE: Record<'note' | 'pass' | 'fail', string> = {
+    note: 'text-emerald-300',
+    pass: 'text-emerald-400',
+    fail: 'text-rose-400',
+}
+</script>
+
+<script>
+import { props } from 'abide'
+
+type CardProps = { spec: Case; suite: string }
+
+const { spec, suite } = props<CardProps>()
+
+/**
+ * The live area, and the case's whole context, made from it.
+ *
+ * `bind:element` is client-only, which is also what decides WHEN a case runs: a server render writes
+ * the card's shell and starts nothing, and the browser that adopts the shell is what puts the case in
+ * the queue. So a page of cards server-renders in one pass with no case having run.
+ */
+const stage = state<HTMLElement | null>(null)
+const held = running()
+
+watch(() => {
+    const node = stage()
+    if (node !== null) enqueue(spec, held, node)
+})
+
+/** The console follows its own tail — a case that logs forty lines should show the last one. */
+const console_ = state<HTMLElement | null>(null)
+watch(() => {
+    held.lines()
+    const node = console_()
+    if (node !== null) node.scrollTop = node.scrollHeight
+})
+</script>
+
+<section class="rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden">
+    <div class="px-5 pt-4 pb-3">
+        <div class="flex items-baseline justify-between gap-4">
+            <h2 class="text-lg font-medium text-slate-100">{spec.title}</h2>
+            <span class="{LABEL} {TONE[held.status()]}">{held.status()}</span>
+        </div>
+        {#if spec.note}<p class="mt-1 text-sm text-slate-400">{spec.note}</p>{/if}
+    </div>
+
+    <div class="px-5 pb-4 space-y-3 text-slate-200" bind:element={stage}></div>
+
+    <div
+        class="px-5 py-3 border-t border-slate-800 bg-black/40 font-mono text-xs text-slate-400 space-y-0.5 max-h-64 overflow-auto"
+        bind:element={console_}
+    >
+        {#for line of held.lines()}
+            <div class="flex gap-3">
+                <span class="text-slate-500 shrink-0 w-56 truncate">{line.label === '' ? ' ' : line.label}</span>
+                {#if line.value !== ''}
+                    <span class="{LINE[line.kind]} whitespace-pre-wrap break-all">{line.value}</span>
+                {/if}
+            </div>
+        {/for}
+    </div>
+
+    {#if spec.run}
+        <Source suite={suite} title={spec.title} face="run" label="the assertions"/>
+    {/if}
+    {#if spec.interact}
+        <Source suite={suite} title={spec.title} face="interact" label="the interactive half"/>
+    {/if}
+</section>

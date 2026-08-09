@@ -11,10 +11,11 @@
 // both sides. Three concurrent readers of one key cost one request because the SLOT coalesces, not
 // because anything here does.
 
-import { type Channel, type ChannelOptions, channel, type RoomChannel } from './channel.ts'
+import { type Channel, type ChannelOptions, channel, type KeyedChannel } from './channel.ts'
 import { markSource } from './internal/BRANDS.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
+import { hasFile } from './internal/probes.ts'
 import { arm } from './internal/timers.ts'
 import { traceHeaders } from './internal/trace.ts'
 import {
@@ -274,15 +275,18 @@ export function remote<Args, T, F extends Failed = never>(
     const path = RPC_PREFIX + id
     const address = options.base === undefined ? path : new URL(path, options.base).href
 
-    // A read is an HTTP GET so the address says what it is and an intermediary may cache it; a
-    // mutation is its own method with a body. Two things send a read to a body instead, and they are
-    // the same thing twice: the args do not fit in a URL. One is the ceiling every proxy puts on
-    // length; the other is a FILE, which has no text form at all. The server accepts a body for a
-    // read for exactly this reason, so neither is a second endpoint.
+    // A read is an HTTP GET with one query parameter per argument, so the address says what was
+    // asked and an intermediary may cache it; a mutation is its own method with a JSON body. Two
+    // things send a read to a body instead, and they are the same thing twice: the args do not fit
+    // in a URL. One is the ceiling every proxy puts on length; the other is a FILE, which has no text
+    // form at all. The server accepts a body for a read for exactly this reason, so neither is a
+    // second endpoint.
     function ask(args: Args, init?: RequestInit): Promise<Response> {
-        const encoded = encodeArgs(args)
-        if (method === 'GET' && encoded.files === null) {
-            const url = address + argsQuery(encoded.text)
+        // Asked before anything is built rather than read off an encoding: a read that fits in a URL
+        // is the whole of the client's ordinary path, and it should not pay a `JSON.stringify` of
+        // the args to find out that it is one.
+        if (method === 'GET' && !hasFile(args)) {
+            const url = address + argsQuery(args)
             if (url.length <= MAX_GET_URL) {
                 const headers = continued(init?.headers as Record<string, string> | undefined)
                 // The key is omitted rather than set to `undefined`: a read with no headers at all is
@@ -292,6 +296,7 @@ export function remote<Args, T, F extends Failed = never>(
                     : send(url, { method: 'GET', ...init, headers })
             }
         }
+        const encoded = encodeArgs(args)
         const sending = method === 'GET' ? 'POST' : method
         if (encoded.files !== null) {
             // No `content-type` of our own: `fetch` writes one naming the boundary it chose, and a
@@ -400,7 +405,7 @@ export interface RemoteSocketOptions {
  * type a component is checked against is the server module's, because the stub only exists at build
  * time. It is here for the caller that owns the connection: a test, a script, a page tearing down.
  */
-export type RemoteSocket<T, Args = void> = Channel<T> & RoomChannel<Args, T> & { close(): void }
+export type RemoteSocket<T, Args = void> = Channel<T> & KeyedChannel<Args, T> & { close(): void }
 
 /** One room's connection: an ordinary channel with the wire's verb on it. */
 type Connection<T> = Channel<T> & { close(): void }
@@ -473,7 +478,7 @@ export function remoteSocket<T, Args = void>(
 function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Connection<T> {
     const received = channel<T>(options.channel)
     const path = SOCKET_PREFIX + id
-    const relative = args === undefined ? path : path + argsQuery(encodeArgs(args).text)
+    const relative = args === undefined ? path : path + argsQuery(args)
     const base = options.base ?? (globalThis as { location?: { href: string } }).location?.href
     const address = base === undefined ? relative : new URL(relative, base).href
     const url = address.replace(/^http/, 'ws')

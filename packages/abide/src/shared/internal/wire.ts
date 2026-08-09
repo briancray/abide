@@ -7,6 +7,7 @@
 
 import { ARGS_PARAM } from './PATHS.ts'
 import { hasFile, isFile, isThenable } from './probes.ts'
+import type { JsonSchema } from './shapes.ts'
 
 /** A stream of chunks, one JSON value per line — what a handler that YIELDS is served as. */
 export const NDJSON_TYPE = 'application/x-ndjson'
@@ -90,9 +91,156 @@ export function encodeArgs(args: unknown): Encoded {
     return { text, files }
 }
 
-/** The same args as the query a read and a socket upgrade carry them in. */
-export function argsQuery(text: string): string {
-    return `?${ARGS_PARAM}=${encodeURIComponent(text)}`
+/**
+ * A call's args as the query a read and a socket upgrade carry them in — ONE PARAMETER PER ARGUMENT.
+ *
+ * `?id=7&q=ada`, not one opaque blob, because the URL is the public face of a read: it is what curl
+ * types, what an OpenAPI client generates, what a network panel shows, and what an intermediary keys
+ * a cache on. A blob makes every one of those readers decode a string before it can see what was
+ * asked, and a machine that reads the published shape has no way to write one.
+ *
+ * Lossless, which a query of strings is not for free: a value JSON would read as something other
+ * than a string travels as its JSON text (`42`, `true`, `{"from":1}`), and a STRING that would be
+ * misread that way travels quoted (`"42"`). So `?id=42&name=ada` is exactly what it looks like, and
+ * nothing arrives as the wrong type.
+ *
+ * Args that are not an object have no name to travel under, so they take the hatch.
+ */
+export function argsQuery(args: unknown): string {
+    if (args === undefined || args === null) return ''
+    if (typeof args !== 'object' || Array.isArray(args)) return hatch(args)
+    const record = args as Record<string, unknown>
+    let query = ''
+    // `for...in` rather than `Object.keys`, so a call allocates nothing to build its own address —
+    // with the guard that keeps it to what `JSON.stringify` would have written, since the two doors
+    // disagreeing about an inherited member is a difference nothing else would ever explain.
+    for (const name in record) {
+        if (!Object.hasOwn(record, name)) continue
+        const value = record[name]
+        // Skipped, exactly as `JSON.stringify` drops it: an absent argument and one written as
+        // `undefined` are the same call, and the two doors must agree about that.
+        if (value === undefined) continue
+        query += query === '' ? '?' : '&'
+        query += `${encodeURIComponent(name)}=${encodeURIComponent(parameter(value))}`
+    }
+    // An object with nothing in it is not the same call as no args at all — a handler destructuring
+    // its parameter is handed `{}` in-process and must be handed `{}` here. An empty query says
+    // `undefined`, so this one case takes the hatch to stay itself.
+    return query === '' ? hatch(record) : query
+}
+
+function hatch(args: unknown): string {
+    return `?${ARGS_PARAM}=${encodeURIComponent(JSON.stringify(args) ?? 'null')}`
+}
+
+/** One argument as its parameter's text. A string is itself unless that would be read back wrong. */
+function parameter(value: unknown): string {
+    if (typeof value === 'string') return jsonish(value) ? JSON.stringify(value) : value
+    return JSON.stringify(value) ?? 'null'
+}
+
+/**
+ * Would this text be read back as something other than itself?
+ *
+ * The ONE rule both halves obey — the encoder quotes a string this says yes about, the decoder parses
+ * a parameter this says yes about. Written once because the two disagreeing is a value that silently
+ * changes type in flight. Leading whitespace counts, since `JSON.parse` trims before it reads.
+ *
+ * `charCodeAt` of an empty string is `NaN`, so every comparison below is false and `''` stays `''`.
+ */
+function jsonish(text: string): boolean {
+    const first = text.charCodeAt(0)
+    if (first <= 32 || first === 45 || (first >= 48 && first <= 57)) return true
+    if (first === 34 || first === 91 || first === 123) return true
+    return text === 'true' || text === 'false' || text === 'null'
+}
+
+/**
+ * The other half of `argsQuery`: a query as the one args object a handler is called with.
+ *
+ * The DECLARED shape decides each parameter when there is one, and that is the point of taking it:
+ * `?name=42` on a `name: string` is a caller who obviously meant the string, and reading it as a
+ * number would 422 a call nobody got wrong. Without a shape the text speaks for itself — valid JSON
+ * is what it says, anything else is a string — which is what the encoder above wrote it to be.
+ */
+export function decodeQuery(params: URLSearchParams, shape: JsonSchema | null | undefined): unknown {
+    const blob = params.get(ARGS_PARAM)
+    if (blob !== null) return decodeArgs(blob)
+    const properties = shape?.properties
+    let args: Record<string, unknown> | undefined
+    for (const name of params.keys()) {
+        // Assigning it would set this object's PROTOTYPE rather than a member — the one name a
+        // parameter cannot carry. `JSON.parse` makes it an own property, so the hatch is unaffected.
+        if (name === '__proto__') continue
+        if (args === undefined) args = {}
+        // `keys()` repeats a name once per copy, and `getAll` already took all of them.
+        else if (Object.hasOwn(args, name)) continue
+        const member = properties?.[name]
+        const held = params.getAll(name)
+        if (held.length === 1) {
+            args[name] = value(held[0] as string, member)
+            continue
+        }
+        // `?tag=a&tag=b` — the conventional spelling of a list, which nothing else could mean.
+        const items: unknown[] = []
+        for (let i = 0; i < held.length; i++) items.push(value(held[i] as string, member?.items))
+        args[name] = items
+    }
+    return args
+}
+
+function value(text: string, member: JsonSchema | undefined): unknown {
+    if (member === undefined) return loose(text)
+    const type = member.type
+    if (type === 'string') return unquoted(text)
+    // A union of string literals derives to an `enum` with no type, and a member of it is itself.
+    if (member.enum?.includes(text) === true) return text
+    if (type === 'number' || type === 'integer') {
+        const parsed = Number(text)
+        // The text back when it is not a number at all, so the gate refuses what was SENT rather
+        // than a `NaN` nobody wrote. `Number('')` is 0, which is why the emptiness is asked first.
+        return text === '' || Number.isNaN(parsed) ? text : parsed
+    }
+    if (type === 'boolean') {
+        if (text === 'true') return true
+        if (text === 'false') return false
+        return text
+    }
+    if (type === 'array') {
+        const held = loose(text)
+        // A single `?tag=ada` for a declared list is one item — how everyone writes a list of one.
+        return Array.isArray(held) ? held : [value(text, member.items)]
+    }
+    if (type === 'null') return text === 'null' ? null : text
+    // `object`, a union of types, or a member the derivation could not read: the text decides.
+    return loose(text)
+}
+
+/**
+ * A declared string, as itself — which is verbatim, with ONE exception.
+ *
+ * A leading `"` is the JSON string form, and that is what the encoder above writes when a string
+ * would otherwise be read back as a number, a boolean or an object. Without this the shape and the
+ * quoting disagree, and `{ code: '42' }` from a stub arrives at a `code: string` handler as `"42"`
+ * with the quotes still on it.
+ */
+function unquoted(text: string): string {
+    if (text.charCodeAt(0) !== 34) return text
+    try {
+        const held = JSON.parse(text) as unknown
+        return typeof held === 'string' ? held : text
+    } catch {
+        return text
+    }
+}
+
+function loose(text: string): unknown {
+    if (!jsonish(text)) return text
+    try {
+        return JSON.parse(text) as unknown
+    } catch {
+        return text
+    }
 }
 
 /**

@@ -18,12 +18,13 @@ import {
     Raw,
     type SlotKind,
     Streamed,
+    Suspend,
     settledArms,
     settledBoundary,
     type TemplateResult,
 } from '$shared/html.ts'
 import { type Node, rerun, untrackCall, watchNode } from '$shared/internal/graph.ts'
-import { CLOSE_FORM, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
+import { CLOSE_FORM, PLACEHOLDER_TAG, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
 import { abideLog } from '$shared/log.ts'
@@ -82,6 +83,21 @@ function isClose(node: ChildNode): boolean {
 /** What a plain value renders as. Nullish and BOTH booleans are nothing, not their spelling. */
 function textOf(value: unknown): string {
     return value === null || value === undefined || value === false || value === true ? '' : String(value)
+}
+
+/**
+ * A range being filled from a stream — what `ChildPart.reclaiming` hands back.
+ *
+ * Three verbs rather than one `push`, because the pieces are not alike: the first STANDS in the
+ * range and every later one REPLACES something already in it. A single entry point would have to
+ * re-derive which kind it was holding, from markup it had already parsed.
+ */
+export interface Reclaiming {
+    insert(fragment: DocumentFragment): void
+    /** `false` when there is no placeholder by that id — a patch for a range already replaced. */
+    patch(id: string, fragment: DocumentFragment): boolean
+    /** The stream ended: snapshot the range so the next update ADOPTS it. */
+    done(): void
 }
 
 // --- child parts ----------------------------------------------------------
@@ -179,6 +195,27 @@ export class ChildPart {
             this.set(settledBoundary(value))
             return
         }
+        if (value instanceof Suspend) {
+            // `suspend` is about WHEN the markup is sent, which is a question only a server has. Here
+            // the answer is the one this part already gives a promise in a slot: show the fallback,
+            // swap when it lands. Rendering the fallback rather than nothing is the whole difference
+            // from an ordinary thenable — the author named what to show while waiting, and a server
+            // that deferred this subtree sent that same fallback as the placeholder.
+            const operand = value.value
+            this.holding = NOTHING
+            this.generation++
+            if (!isThenable(operand)) {
+                this.set(value.body(operand as never))
+                return
+            }
+            this.set(value.fallback)
+            // Re-read: `set` above bumped the generation itself, and a stamp taken before it would
+            // make this settle look superseded by its own fallback. `settle` with no branches is
+            // already the policy this wants — no arm to catch a rejection, because `suspend` has a
+            // fallback rather than a `{:catch}`, so the fallback stays up and the error is reported.
+            this.settle(operand, null, this.generation, value.body)
+            return
+        }
         this.holding = NOTHING
         this.generation++
         if (isThenable(value)) {
@@ -242,6 +279,28 @@ export class ChildPart {
         if (value instanceof Boundary) {
             // Synchronous, so the client reaches the same arm the server did by running the same body.
             this.take(claimed, settledBoundary(value))
+            return
+        }
+
+        if (value instanceof Suspend) {
+            // Whatever the server sent for this subtree is ALREADY the settled body. In a document it
+            // was deferred and patched in before `DOMContentLoaded`, which is the earliest this side
+            // hydrates; in a render with nowhere to patch it was awaited inline. Either way the
+            // fallback is not what is on screen, so claiming it as the body is what keeps hydration
+            // free — and re-running the promise to find that out would flash the fallback back up
+            // over markup that is already right.
+            const operand = value.value
+            this.generation++
+            if (!isThenable(operand)) {
+                this.take(claimed, value.body(operand as never))
+                return
+            }
+            // Still in flight on THIS side — a fresh operand rather than the one the server settled.
+            // Hold the server's nodes as an opaque range until it lands, exactly as the awaited case
+            // below does, and let the settle replace them.
+            this.owned = claimed
+            this.holding = operand
+            this.settle(operand, null, this.generation, value.body)
             return
         }
 
@@ -336,13 +395,22 @@ export class ChildPart {
      * settled arm renders and `holding` is put back — `set` clears it, and this block still owns the
      * slot. Both callers bump the generation before handing it over rather than having this do it:
      * `{#await}` stamps once for the whole block, including the arm it paints synchronously.
+     *
+     * `body` is what `suspend` adds over a bare promise: the settled value renders THROUGH it rather
+     * than as itself. Nothing else about the policy differs, which is why it is a parameter here
+     * rather than a second copy of the generation guard.
      */
-    private settle(operand: PromiseLike<unknown>, branches: Branches | null, generation: number): void {
+    private settle(
+        operand: PromiseLike<unknown>,
+        branches: Branches | null,
+        generation: number,
+        body?: Suspend['body'],
+    ): void {
         Promise.resolve(operand).then(
             (value) => {
                 if (generation !== this.generation) return
                 if (branches === null) {
-                    this.set(value)
+                    this.set(body === undefined ? value : body(value as never))
                     return
                 }
                 this.set(settledArms(branches, undefined, value, false))
@@ -456,6 +524,59 @@ export class ChildPart {
         this.nested = null
         this.list = null
         this.rawHtml = null
+    }
+
+    /**
+     * Throw away what this part is showing and take a fresh range AS IT ARRIVES.
+     *
+     * The handover a navigation uses, and `hydrate` is the same one at boot — where the nodes are
+     * already in the document and there is nothing to dispose. HTML cannot be parsed halfway, so the
+     * unit is a complete piece: the in-order pass, then each deferred subtree. What this owns is
+     * where they go — the first piece stands in the range, and every later one replaces the
+     * placeholder that was standing in for it.
+     *
+     * The range is snapshotted at `done` rather than at each push, because a patch can change it: a
+     * `suspend` at the top level of a page has its placeholder AS a top-level node, and replacing one
+     * rewrites the very list `claimed` would have held.
+     */
+    reclaiming(): Reclaiming {
+        // Before the teardown, so a load still in flight cannot settle into the range being replaced.
+        this.generation++
+        this.holding = NOTHING
+        this.claimed = null
+        // Through `clearExcept`, because a nested instance still owns live slot effects and `take`
+        // overwrites `nested` without disposing it — a part reclaimed without this leaves one live
+        // effect per reactive slot per navigation, each writing into nodes no longer in the document.
+        this.clearExcept(null)
+        // Where the range begins, captured before anything is inserted. `null` means "the start of
+        // the parent" — a part whose anchor is the first thing in its container, which is what the
+        // root part is after the teardown above.
+        const before = this.anchor.previousSibling
+        return {
+            insert: (fragment: DocumentFragment): void => {
+                this.anchor.before(fragment)
+            },
+            patch: (id: string, fragment: DocumentFragment): boolean => {
+                const parent = this.anchor.parentNode as ParentNode | null
+                if (parent === null) return false
+                // An ATTRIBUTE selector rather than `#id`: a generated id is `s0`, and while that is
+                // a legal identifier today, an id selector is one escaping rule away from being the
+                // reason a patch silently did not land.
+                const standing = parent.querySelector(`${PLACEHOLDER_TAG}[id="${id}"]`)
+                if (standing === null) return false
+                standing.replaceWith(fragment)
+                return true
+            },
+            done: (): void => {
+                const nodes: ChildNode[] = []
+                const parent = this.anchor.parentNode as ParentNode | null
+                const first = before === null ? (parent?.firstChild ?? null) : before.nextSibling
+                for (let node = first; node !== null && node !== this.anchor; node = node.nextSibling) {
+                    nodes.push(node as ChildNode)
+                }
+                this.claimed = nodes
+            },
+        }
     }
 
     dispose(): void {
@@ -736,13 +857,23 @@ class Instance {
 
             if (type === 3) {
                 // Static text. Both sides parsed the same string, so one live text node answers for it.
-                if ((node as Text).data === '') continue
-                if (cursor.node === null || cursor.node.nodeType !== 3) {
-                    mismatch(
-                        `expected the static text ${JSON.stringify((node as Text).data)}, found ${describe(cursor.node)}`,
-                    )
+                const wanted = (node as Text).data
+                if (wanted === '') continue
+                const live = cursor.node
+                if (live === null || live.nodeType !== 3) {
+                    mismatch(`expected the static text ${JSON.stringify(wanted)}, found ${describe(live)}`)
                 }
-                cursor.node = cursor.node.nextSibling
+                // …unless the PARSER merged it with the text that follows. Two adjacent rows of a list
+                // are two templates and one text node: a row ending in a newline and the next one
+                // beginning with the indentation of its own first line arrive from the server as one
+                // run of characters, and the browser has no reason to keep them apart. Splitting it
+                // here restores the invariant `ListPart.adopt` relies on — a row consumes exactly the
+                // nodes it describes and hands the cursor to the next — and costs nothing on any
+                // template whose text nodes already stand alone.
+                const data = (live as Text).data
+                if (data.length > wanted.length && data.startsWith(wanted))
+                    (live as Text).splitText(wanted.length)
+                cursor.node = live.nextSibling
                 continue
             }
 

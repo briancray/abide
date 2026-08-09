@@ -138,22 +138,26 @@ test('a page is its own chunk, absent from the entry until somebody navigates', 
     // Splitting is the row's first word, and this is what it buys: `/users/[id]`'s page is not in the
     // first load. A route table built by scanning at runtime could not have this property, which is
     // why the table is static `import()` calls the bundler can see.
-    expect(entry).not.toContain('user ')
+    expect(entry).not.toContain('<h1>user ')
     const chunks = Object.entries(manifest.assets).filter(([, asset]) => asset.kind === 'chunk')
     expect(chunks.length).toBeGreaterThan(1)
 
     // Each page really is somewhere, and in a chunk of its own rather than all in one.
+    //
+    // The needle carries its element, because the site's own prose is in these chunks too: `user ` on
+    // its own is in six of them, in sentences about users, and a page that "is somewhere" has to be
+    // found by the markup it renders rather than by a word it happens to contain.
     const holding = (needle: string): string[] =>
         [...texts].filter(([name, text]) => name !== entryName && text.includes(needle)).map(([n]) => n)
-    expect(holding('user ')).toHaveLength(1)
-    expect(holding('files ')).toHaveLength(1)
+    expect(holding('<h1>user ')).toHaveLength(1)
+    expect(holding('<h1>files ')).toHaveLength(1)
     // Two different pages are two different chunks — one chunk holding both would be a split that
-    // split nothing.
-    expect(holding('user ')).not.toEqual(holding('files '))
+    // split nothing. The same element-carrying needles, for the reason above: the bare words are in
+    // the prose of six chunks, so comparing those two lists passes on sentences rather than on pages.
+    expect(holding('<h1>user ')).not.toEqual(holding('<h1>files '))
 })
 
 test('a sidecar is written only when it is smaller, and holds the same bytes', async () => {
-    let skipped = 0
     for (const [name, asset] of Object.entries(manifest.assets)) {
         const identity = new Uint8Array(await Bun.file(`${OUT}/${name}`).arrayBuffer())
 
@@ -185,14 +189,34 @@ test('a sidecar is written only when it is smaller, and holds the same bytes', a
             ['gzip', '.gz'],
         ] as const) {
             if (written.has(encoding)) continue
-            skipped++
             expect(await Bun.file(`${OUT}/${name}${extension}`).exists()).toBe(false)
         }
     }
 
-    // The example really does contain a chunk small enough that gzip comes out bigger than the source
-    // — which is what makes the "only when smaller" rule a rule and not an untaken branch.
-    expect(skipped).toBeGreaterThan(0)
+    // Every sidecar the example wrote is smaller than what it stands in for. The other half of the
+    // rule — the sidecar NOT written — needs an asset small enough to grow under compression, and the
+    // example no longer has one: its smallest chunk is a page, and a page is a few hundred bytes of
+    // markup that compresses fine.
+    //
+    // So it is built. A one-line entry is the smallest bundle there is, and gzip's header alone makes
+    // it bigger — which is what turns "only when smaller" into a branch this suite has actually taken
+    // rather than one it has only read. The loop above still asserts the other half for every asset
+    // the example DOES ship: an encoding absent from `encodings` is absent from the disk too.
+    const root = `${import.meta.dir}/../.abide/tiny-root`
+    await Bun.write(`${root}/client.ts`, 'export const a = 1\n')
+    try {
+        const tiny = await abide(['build'], root)
+        expect(tiny.code).toBe(0)
+        const document = (await Bun.file(`${root}/${MANIFEST_FILE}`).json()) as ClientManifest
+        const assets = Object.entries(document.assets)
+        expect(assets.length).toBe(1)
+        const [name, asset] = assets[0] as [string, ClientAsset]
+        expect(asset.encodings).toEqual([])
+        expect(await Bun.file(`${root}/${CLIENT_DIR}/${name}.gz`).exists()).toBe(false)
+        expect(await Bun.file(`${root}/${CLIENT_DIR}/${name}.br`).exists()).toBe(false)
+    } finally {
+        await rm(root, { recursive: true, force: true })
+    }
 })
 
 test('an entry is keyed by what the file IS, not by how it was typed', async () => {
@@ -205,7 +229,11 @@ test('an entry is keyed by what the file IS, not by how it was typed', async () 
         const document = (await Bun.file(`${ROOT}/${MANIFEST_FILE}`).json()) as ClientManifest
         expect(Object.keys(document.entries)).toEqual(['client.ts'])
     }
-})
+    // THREE full builds of the whole example, which is seconds rather than milliseconds — the default
+    // per-test budget is one this case has no business fitting inside, and it was only ever passing
+    // because the app was small enough. A route added to `pages/` should not be what makes a test
+    // about manifest KEYS start failing.
+}, 60_000)
 
 test('a build replaces the last one rather than piling up beside it', async () => {
     // A hash means a build never overwrites the previous one's output, so merging would leave every
@@ -239,6 +267,63 @@ test('a flag it does not know, and nothing to build, are usage failures', async 
         await rm(empty, { recursive: true, force: true })
     }
 })
+
+test('an app with no client entry is bundled from its pages, split per route', async () => {
+    // The example writes its own `client.ts`, so the generated lane has no arm in the build above —
+    // and it is the lane most apps will actually ship. A root of its own, because the claim is about
+    // what happens when the file is ABSENT and the example cannot be absent of it.
+    const root = `${import.meta.dir}/../.abide/generated-root`
+    await Bun.write(
+        `${root}/pages/layout.abide`,
+        '<script>\n  const { children } = $props\n</script>\n<main>{children}</main>\n',
+    )
+    await Bun.write(`${root}/pages/page.abide`, '<h1>home</h1>\n')
+    await Bun.write(`${root}/pages/about/page.abide`, '<h1>about</h1>\n')
+    try {
+        const generated = await abide(['build'], root)
+        expect(generated.code).toBe(0)
+        expect(generated.err).toBe('')
+        // Said out loud: a lane nobody wrote is a file the next reader will not find in their source
+        // tree, and the line that says where it came from is the whole of the fix.
+        expect(generated.out).toContain('.abide/client.entry.ts')
+
+        const document = (await Bun.file(`${root}/${MANIFEST_FILE}`).json()) as ClientManifest
+        // Keyed by the CONVENTIONAL name and not by where the module sits. The generated lane is at
+        // `.abide/client.entry.ts` and an app's own is at `client.ts`, and an `app.html` writing
+        // `src="./client.ts"` must resolve either — a document should not have to know which of the
+        // two it got.
+        expect(Object.keys(document.entries)).toEqual(['client.ts'])
+
+        // The whole reason the table is written with a static `import()` per row rather than scanned
+        // at runtime: a call the bundler can SEE is a chunk. Three source modules, three distinct
+        // files, none of them the entry — a table built by scanning would put every page in the
+        // first load and this is the assertion that would still pass if it did not.
+        const modules = document.graph?.modules as Record<string, string>
+        const entry = document.entries['client.ts'] as string
+        const chunks = ['pages/layout.abide', 'pages/page.abide', 'pages/about/page.abide']
+        for (const source of chunks) {
+            expect(modules[source]).toBeDefined()
+            expect(modules[source]).not.toBe(entry)
+        }
+        expect(new Set(chunks.map((source) => modules[source])).size).toBe(3)
+
+        // A page ADDED is a row the table has to grow. The generated lane is written per build for
+        // this reason alone — a scan cached at startup is a route that renders on the server and
+        // 404s in the browser, which is exactly the failure hand-writing the table produces.
+        await Bun.write(`${root}/pages/deeper/page.abide`, '<h1>deeper</h1>\n')
+        const again = await abide(['build'], root)
+        expect(again.code).toBe(0)
+        const grown = (await Bun.file(`${root}/${MANIFEST_FILE}`).json()) as ClientManifest
+        expect(grown.graph?.modules['pages/deeper/page.abide']).toBeDefined()
+        const lane = await Bun.file(`${root}/.abide/client.entry.ts`).text()
+        expect(lane).toContain('"/deeper"')
+        // Sorted by route path, so two builds of one tree produce the same bytes rather than a hash
+        // that changes because the scan came back in a different order.
+        expect(lane.indexOf('"/about"')).toBeLessThan(lane.indexOf('"/deeper"'))
+    } finally {
+        await rm(root, { recursive: true, force: true })
+    }
+}, 60_000)
 
 test('a client entry that does not compile fails the build, on stderr', async () => {
     const broken = `${import.meta.dir}/../.abide/broken-root`

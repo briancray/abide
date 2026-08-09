@@ -1,8 +1,8 @@
 // Every suite MODULE, for the two consumers that genuinely need all of them: the test runners and
 // the bench page. Its metadata is in `SUITES.ts`, and the split is the point.
 //
-// A page does NOT come through here — `web/state.ts` imports `demos/state.ts` by name, so its bundle
-// is its own suite and nothing else. Routing every page through one list put every suite in every
+// A page does NOT come through here — it reaches ONE suite through `LOADERS`, so its chunk
+// is that suite and nothing else. Routing every page through one list put every suite in every
 // page, which was invisible until `compiler` joined it and dragged TypeScript's scanner along:
 // ~700 kB of compiler on `/state`, on `/watch`, on every page with nothing to do with compiling.
 //
@@ -14,7 +14,13 @@ import { ORDER, type SuiteName } from './SUITES.ts'
 
 export { META, NAV, ORDER, type SuiteMeta, type SuiteName } from './SUITES.ts'
 
-const LOADERS: Record<SuiteName, () => Promise<{ default: Suite }>> = {
+/**
+ * Every suite, reachable by name and absent until asked for.
+ *
+ * Exported because `pages/[suite]/` is one page for twenty routes: the segment is the key, and each
+ * entry being an `import()` is what keeps that page's chunk free of every suite it might show.
+ */
+export const LOADERS: Record<SuiteName, () => Promise<{ default: Suite }>> = {
     overview: () => import('./overview.ts'),
     state: () => import('./state.ts'),
     memo: () => import('./memo.ts'),

@@ -1,28 +1,34 @@
 <script>
-import type { State } from 'abide'
+import { props, type State } from 'abide'
 import type { Book, Shelf } from '../models.ts'
 import { assertType, type Exact } from '../exact.ts'
 
-// Declaring `Args` is what types a component's props. Without it the emitted signature is
-// `Record<string, unknown>`, which type-checks a caller's props against nothing at all — so this is
-// the declaration that makes `<Props n="x"/>` an error rather than a runtime surprise.
-type Args = {
+// The type argument to `props()` is what types a component's props, and the destructure beside it is
+// what brings them into scope. Without the call the signature is `Record<string, never>`, which is
+// what makes `<Props n="x"/>` an error at the CALLER rather than a runtime surprise.
+type Props = {
     book: Book
     shelf: Shelf
     /** A prop that IS a cell: declared as one, so the name reads it and `bind:` can write it. */
     note: State<string>
+    /** Renamed, because `class` cannot be a binding — and the cell rule follows the LOCAL name. */
+    class?: string
     footnote?: string
 }
 
-// The props arrive typed, not as `unknown` — the whole claim of declaring `Args`.
-assertType<Exact<typeof args.book, Book>>()
-assertType<Exact<typeof args.shelf, Shelf>>()
-assertType<Exact<typeof args.footnote, string | undefined>>()
+const { book, shelf, note, class: className = '', footnote } = props<Props>()
+
+// The props arrive typed, not as `unknown` — the whole claim of declaring the type.
+assertType<Exact<typeof book, Book>>()
+assertType<Exact<typeof shelf, Shelf>>()
+assertType<Exact<typeof footnote, string | undefined>>()
+// A default collapses the optional: the local is a `string`, whatever the caller left out.
+assertType<Exact<typeof className, string>>()
 </script>
 
-<article>
-    <h3>{args.book.title}</h3>
-    <p>{args.book.author.name} · {args.shelf} · {args.book.pages} pages</p>
-    <input bind:value={args.note} />
-    {#if args.footnote}<small>{args.footnote}</small>{/if}
+<article class={className}>
+    <h3>{book.title}</h3>
+    <p>{book.author.name} · {shelf} · {book.pages} pages</p>
+    <input bind:value={note} />
+    {#if footnote}<small>{footnote}</small>{/if}
 </article>

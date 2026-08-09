@@ -157,7 +157,7 @@ function membersOf(checker: Checker, type: Type, seen: Set<number>, depth: numbe
 /**
  * The two type arguments a declaration carries.
  *
- * An rpc IS a `Rpc<Args, T>` and a socket IS a `Channel<T>` or a `RoomChannel<Args, T>`, so the
+ * An rpc IS a `Rpc<Args, T>` and a socket IS a `Channel<T>` or a `KeyedChannel<Args, T>`, so the
  * declaration's own TYPE says both directions without anything here having to find the handler,
  * unwrap a generator, or know what `GET` means.
  */
@@ -172,7 +172,7 @@ function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'sock
     }
     if (kind === 'socket') {
         // A room channel addresses subscribers by its FIRST argument and carries its second.
-        const schema = at(name === 'RoomChannel' ? 1 : 0)
+        const schema = at(name === 'KeyedChannel' ? 1 : 0)
         return isAnything(schema) ? {} : { input: schema }
     }
     const input = at(0)

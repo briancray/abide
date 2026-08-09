@@ -91,6 +91,26 @@ function median(values: number[]): number {
  * frame, a headless smoke run yields nothing.
  */
 export async function timeArms(arms: Arm[], settle: () => Promise<void>): Promise<Timing[]> {
+    const state = await measureArms(arms, settle, PASSES)
+
+    return state.map((entry) => {
+        const best = Math.min(...entry.samples)
+        return {
+            nsPerOp: best * 1e6,
+            ops: entry.batch * PASSES,
+            spread: best === 0 ? 1 : median(entry.samples) / best,
+        }
+    })
+}
+
+interface Measured {
+    batch: number
+    /** Milliseconds per op, one entry per pass. */
+    samples: number[]
+}
+
+/** Calibrate every arm, then time them interleaved for `passes` passes. */
+async function measureArms(arms: Arm[], settle: () => Promise<void>, passes: number): Promise<Measured[]> {
     const state = arms.map((arm) => ({ arm, batch: 1, offset: 3, samples: [] as number[] }))
 
     for (const entry of state) {
@@ -102,7 +122,7 @@ export async function timeArms(arms: Arm[], settle: () => Promise<void>): Promis
         await settle()
     }
 
-    for (let pass = 0; pass < PASSES; pass++) {
+    for (let pass = 0; pass < passes; pass++) {
         for (const entry of state) {
             const elapsed = await runBatch(entry.arm, entry.batch, entry.offset)
             entry.offset += entry.batch
@@ -111,14 +131,25 @@ export async function timeArms(arms: Arm[], settle: () => Promise<void>): Promis
         }
     }
 
-    return state.map((entry) => {
-        const best = Math.min(...entry.samples)
-        return {
-            nsPerOp: best * 1e6,
-            ops: entry.batch * PASSES,
-            spread: best === 0 ? 1 : median(entry.samples) / best,
-        }
-    })
+    return state
+}
+
+/**
+ * Nanoseconds per op for each arm — what a `run` body needs to make a timing claim without a bench
+ * card around it.
+ *
+ * A fixed loop cannot make that claim: browsers clamp `performance.now` to 1 ms in Safari, so twenty
+ * thousand publishes read as 0 ms and a ratio between two arms that both read 0 is `NaN`, which
+ * fails the assertion for a reason that has nothing to do with the code under it. The batch is
+ * calibrated to `BATCH_TARGET_MS` here exactly as a bench arm's is, and the arms are interleaved for
+ * the same reason — whichever ran second would otherwise inherit what the first left behind.
+ *
+ * Three passes rather than nine: a `run` asserts a bound loose enough to survive a noisy pass, where
+ * a card prints the number itself.
+ */
+export async function nsPerOp(arms: Arm[], settle: () => Promise<void> = frame): Promise<number[]> {
+    const state = await measureArms(arms, settle, 3)
+    return state.map((entry) => Math.min(...entry.samples) * 1e6)
 }
 
 /** The smallest non-zero step this clock will report — the noise floor under every row. */

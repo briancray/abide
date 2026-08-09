@@ -23,3 +23,60 @@ export function closeMarker(slot: number): string {
 
 /** What a close marker's comment data looks like, for the depth scan. */
 export const CLOSE_FORM = /^\$\d+$/
+
+// --- streaming a fragment ------------------------------------------------------
+//
+// A document streams to the browser's OWN parser, which consumes bytes as they arrive and runs the
+// two-line `$p` script the moment it is parsed. A navigation has neither: the client is holding a
+// byte stream and doing the parsing itself, and a `<script>` it injects will not run at all — the
+// HTML spec makes script elements inserted this way non-executable, so the document's patch protocol
+// cannot simply be pointed at a fragment.
+//
+// What a client-side parser needs instead is to know where a PIECE ends, because HTML cannot be
+// parsed halfway: there is no browser API that feeds a partial tree, so the only safe unit is a run
+// of markup that is complete on its own. The walk already produces exactly those — the in-order pass
+// is one, and each deferred subtree is another — so the framing is a sentinel after each.
+//
+// A COMMENT, because it has to survive being concatenated into markup and then not be there: the
+// client cuts on it and never parses it, and if one ever did reach a parser it is inert.
+
+/** Written after every complete piece of a streamed fragment. The client cuts on it. */
+export const PIECE_END = '<!--abide:piece-->'
+
+// --- what a deferred subtree leaves behind, and what replaces it -----------------
+//
+// Two ids for one subtree: the PLACEHOLDER the walk writes where the subtree will go, and the PATCH
+// carrying the markup that lands there. A document swaps them with the two-line `$p` script; a
+// navigation swaps them from `ui/internal/navigation.ts`. Three writers and two readers of the same
+// two strings, so the prefixes are here and everything else is derived from them — a rename that
+// reaches only some of them breaks a navigation silently, because a patch that finds no placeholder
+// only warns.
+
+const PLACEHOLDER_PREFIX = 's'
+
+const PATCH_PREFIX = 't'
+
+/** The element a deferred subtree stands behind until it arrives, by id. */
+export function placeholderId(id: number): string {
+    return `${PLACEHOLDER_PREFIX}${id}`
+}
+
+export const PLACEHOLDER_TAG = 'slot-s'
+
+/** The `<template>` carrying one settled subtree, by the id of the placeholder it replaces. */
+export function patchId(id: number): string {
+    return `${PATCH_PREFIX}${id}`
+}
+
+/** What a patch id looks like to the client reading it back off the wire. */
+export const PATCH_FORM = new RegExp(`^${PATCH_PREFIX}(\\d+)$`)
+
+/**
+ * The same swap as a JS expression, for the inline script a DOCUMENT patches with.
+ *
+ * A string rather than a call because it runs in the browser with nothing imported — but the halves
+ * it is built from are the same ones the server writes with.
+ */
+export const PATCH_SWAP =
+    `var t=document.getElementById(${JSON.stringify(PATCH_PREFIX)}+i),` +
+    `s=document.getElementById(${JSON.stringify(PLACEHOLDER_PREFIX)}+i)`

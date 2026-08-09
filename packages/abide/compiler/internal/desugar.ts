@@ -28,8 +28,8 @@
 // there is no parser here — and every construct that binds a name inside a template is modelled.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
-import { Lexer, SyntaxError_, type Token } from './lex.ts'
-import { inObjectLiteral, typeRegions } from './types.ts'
+import { ENDS_EXPRESSION, Lexer, SyntaxError_, type Token } from './lex.ts'
+import { closeAngle, inObjectLiteral, typeRegions } from './types.ts'
 
 /**
  * The verbs every source carries (SPEC, "The shared surface"). Reserved: `x.set` is the verb, and
@@ -64,7 +64,7 @@ export const REACTIVE_TYPES = new Set([
     'Cell',
     'Channel',
     'KeyedMemo',
-    'RoomChannel',
+    'KeyedChannel',
 ])
 
 const COMPOUND_ASSIGN = new Map<SyntaxKind, string>([
@@ -301,7 +301,27 @@ export function desugar(
             continue
         }
 
-        if (DECLARERS.has(token.kind) || token.kind === SyntaxKind.CatchKeyword) {
+        // `catch (e)` binds its PARAMETER and nothing else. Read as a declarer it bound every
+        // identifier in the block after it — a declarer's scan stops at the `=` that starts its
+        // initialiser, and a catch has none, so the scan ran to the end of the block and every name
+        // inside became a binding. A cell written in a `catch` was then left alone as though it had
+        // been shadowed, which compiles to an assignment to a `const`.
+        if (token.kind === SyntaxKind.CatchKeyword) {
+            // A bare `catch { }` binds nothing, and so does anything that is not the shape below.
+            if (tokens[i + 1]?.kind !== SyntaxKind.OpenParenToken) continue
+            const close = matchForwards(cursor, i + 1)
+            if (close <= 0) continue
+            const brace = close + 1
+            if (tokens[brace]?.kind !== SyntaxKind.OpenBraceToken) continue
+            // Retired by INDEX rather than by depth, for the reason a `for` head is: the parameter is
+            // inside the parens and the body is inside the braces, and nesting dips back out between
+            // the two — so a depth rule kills the frame before the block that the parameter names.
+            const end = matchForwards(cursor, brace)
+            bind(boundNames(cursor, i + 2, close, inType), i, -1, false, end < 0 ? NO_END : end)
+            continue
+        }
+
+        if (DECLARERS.has(token.kind)) {
             // Up to the initialiser, the `of`/`in` of a for-head, or the end of the statement.
             let end = i + 1
             while (end < tokens.length) {
@@ -325,13 +345,18 @@ export function desugar(
             // shadow: treating it like any other binding makes the name reactive everywhere except
             // the body it was introduced in, which is every use of it. `state.shared(key, …)` is
             // the same declaration with an address in front of the value.
+            //
+            // The type arguments are STEPPED OVER rather than required to be absent: `state<Kind>('a')`
+            // is the same declaration as `state('a')`, and reading it as a binding made every use of
+            // the name compile to the cell itself — so `kind !== 'all'` compared a function to a
+            // string and was true forever, with nothing anywhere saying why.
             const maker = tokens[end + 1]?.text ?? ''
             const declares =
-                (REACTIVE_CONSTRUCTORS.has(maker) && tokens[end + 2]?.kind === SyntaxKind.OpenParenToken) ||
+                (REACTIVE_CONSTRUCTORS.has(maker) && opensCall(cursor, end + 2)) ||
                 (maker === 'state' &&
                     tokens[end + 2]?.kind === SyntaxKind.DotToken &&
                     tokens[end + 3]?.text === 'shared' &&
-                    tokens[end + 4]?.kind === SyntaxKind.OpenParenToken)
+                    opensCall(cursor, end + 4))
             if (declares) {
                 for (const index of names) binding.add(index)
                 continue
@@ -513,6 +538,28 @@ export function desugar(
     return { text: apply(source, from, to, edits), reads }
 }
 
+/**
+ * Whether a call opens at `at`, stepping over a type-argument list if one is written first.
+ *
+ * `closeAngle` rather than a second run-counter over `<` and `>`: two walkers that could disagree
+ * about where a type stops would put the rewrite one token off at exactly the place they disagreed,
+ * and `types.ts` is where that rule lives. It counts a run of `>` by TEXT, so `Memo<Array<string>>`
+ * closing with one `>>` token needs no enumeration of the shifted forms here.
+ */
+function opensCall(cursor: Cursor, at: number): boolean {
+    const tokens = cursor.tokens
+    const first = tokens[at]
+    if (first === undefined) return false
+    if (first.kind === SyntaxKind.OpenParenToken) return true
+    if (first.kind !== SyntaxKind.LessThanToken) return false
+
+    // Nothing closed it, so this `<` is the comparison it also spells — `a < (b)` must not be read
+    // as a call with type arguments.
+    const past = closeAngle(tokens, at)
+    if (past <= at + 1) return false
+    return tokens[past]?.kind === SyntaxKind.OpenParenToken
+}
+
 function matchForwards(cursor: Cursor, openIndex: number): number {
     const target = cursor.nesting[openIndex] as number
     for (let i = openIndex + 1; i < cursor.tokens.length; i++) {
@@ -522,8 +569,64 @@ function matchForwards(cursor: Cursor, openIndex: number): number {
 }
 
 /**
+ * A token that can CONTINUE the expression in front of it across a line break.
+ *
+ * The other half of ASI. `a\n+ b` is one expression and `a\nb()` is two statements, and the
+ * difference is entirely this list: an operator, a member access, or the opener of a call, an index
+ * or a tagged template keeps the line before it going.
+ */
+const CONTINUES_EXPRESSION = new Set<SyntaxKind>([
+    SyntaxKind.DotToken,
+    SyntaxKind.QuestionDotToken,
+    SyntaxKind.OpenParenToken,
+    SyntaxKind.OpenBracketToken,
+    SyntaxKind.TemplateHead,
+    SyntaxKind.NoSubstitutionTemplateLiteral,
+    SyntaxKind.CommaToken,
+    SyntaxKind.QuestionToken,
+    SyntaxKind.ColonToken,
+    SyntaxKind.EqualsGreaterThanToken,
+    SyntaxKind.PlusToken,
+    SyntaxKind.MinusToken,
+    SyntaxKind.AsteriskToken,
+    SyntaxKind.AsteriskAsteriskToken,
+    SyntaxKind.SlashToken,
+    SyntaxKind.PercentToken,
+    SyntaxKind.LessThanToken,
+    SyntaxKind.LessThanEqualsToken,
+    SyntaxKind.GreaterThanToken,
+    SyntaxKind.GreaterThanEqualsToken,
+    SyntaxKind.EqualsEqualsToken,
+    SyntaxKind.EqualsEqualsEqualsToken,
+    SyntaxKind.ExclamationEqualsToken,
+    SyntaxKind.ExclamationEqualsEqualsToken,
+    SyntaxKind.AmpersandToken,
+    SyntaxKind.AmpersandAmpersandToken,
+    SyntaxKind.BarToken,
+    SyntaxKind.BarBarToken,
+    SyntaxKind.CaretToken,
+    SyntaxKind.QuestionQuestionToken,
+    SyntaxKind.LessThanLessThanToken,
+    SyntaxKind.GreaterThanGreaterThanToken,
+    SyntaxKind.GreaterThanGreaterThanGreaterThanToken,
+    SyntaxKind.InKeyword,
+    SyntaxKind.InstanceOfKeyword,
+    SyntaxKind.AsKeyword,
+    SyntaxKind.SatisfiesKeyword,
+])
+
+/**
  * Where the right-hand side of an assignment ends: the first `,` `;` or closer at or below the
- * assignment's own level.
+ * assignment's own level — or the LINE BREAK that ended the statement.
+ *
+ * The line break is not a nicety. This project is written without semicolons, so `count = n` followed
+ * by the next statement has nothing between them but a newline: stopping only at `;` swallowed
+ * whatever came next into the call, and `count = n` then `await run()` compiled to
+ * `count.set(n await run())`. Which is a syntax error, so it was loud — but the same shape with a
+ * `console.log` on the next line is valid code that writes the wrong thing.
+ *
+ * Approximated the way ASI itself is: a break ends the statement when the token before it could have
+ * ended an expression and the token after it could not continue one.
  */
 function assignmentEnd(
     cursor: Cursor,
@@ -543,6 +646,16 @@ function assignmentEnd(
         if (
             at === level &&
             (token.kind === SyntaxKind.CommaToken || token.kind === SyntaxKind.SemicolonToken)
+        ) {
+            break
+        }
+        // Never on the first token: `x =` and its right-hand side on the next line is one statement,
+        // whatever that token is.
+        if (
+            i > from &&
+            token.startsLine &&
+            !CONTINUES_EXPRESSION.has(token.kind) &&
+            ENDS_EXPRESSION.has((cursor.tokens[i - 1] as Token).kind)
         ) {
             break
         }

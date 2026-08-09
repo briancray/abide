@@ -3,11 +3,15 @@
 // Two things happen here that cannot happen anywhere else, and they are the two claims the build is
 // asserted against:
 //
-// The route table is written by HAND, with a static `import()` per page. That is the known limit the
-// README names — `pages(dir)` reads a directory and a browser has none — and it is also exactly what
-// makes the bundle splittable: an `import()` the bundler can SEE is a chunk, so `/users/[id]`'s page
-// is absent from the first load and arrives when somebody navigates. A table built by scanning at
-// runtime would ship every page in the entry.
+// The route table is written by HAND, with a static `import()` per page. That is the known limit —
+// `pages(dir)` reads a directory and a browser has none — and it is also exactly what makes the
+// bundle splittable: an `import()` the bundler can SEE is a chunk, so `/users/[id]`'s page is absent
+// from the first load and arrives when somebody navigates. A table built by scanning at runtime would
+// ship every page in the entry.
+//
+// It splits twice over. `/[suite]/[...rest]` is one page for twenty capability suites, and the suite
+// itself arrives through a second `import()` — so the entry holds no suite at all, and `/state` never
+// loads the TypeScript scanner that `/compiler` needs.
 //
 // And it imports an endpoint from `server/rpc/users.ts` by the same name the server does. In this
 // lane that module elides to `remote("users/getUser")`, so `server/db.ts` — a driver with a
@@ -19,20 +23,47 @@ import { navigate, outlet, ready, route, routes } from 'abide'
 import { hydrate } from 'abide/ui'
 import { getUser } from './server/rpc/users.ts'
 
+// The one layout above every page, as ONE loader rather than one per row: a root layout is above the
+// whole table, and a fresh closure per route would be five modules the bundler cannot see are one.
+const CHROME = (): Promise<typeof import('./pages/layout.abide')> => import('./pages/layout.abide')
+
 routes([
     {
         path: '/',
         page: () => import('./pages/page.abide'),
-        layouts: [() => import('./pages/layout.abide')],
+        layouts: [CHROME],
+    },
+    {
+        // Twenty routes and one page: the segment names the suite, and `[...rest]` is what keeps the
+        // routing card's own navigations inside the page they are made from. This is the row the
+        // splitting claim rests on — the page's chunk holds no suite, and each suite arrives when
+        // somebody asks for it.
+        path: '/[suite]/[...rest]',
+        page: () => import('./pages/[suite]/[...rest]/page.abide'),
+        layouts: [CHROME],
+    },
+    {
+        path: '/bench',
+        page: () => import('./pages/bench/page.abide'),
+        layouts: [CHROME],
+    },
+    {
+        // The one route that SUSPENDS. Its whole job is to be slow in a knowable way, so the gap
+        // between what a document render streams and what a navigation waits for is a number off the
+        // wire rather than a claim — see `test/start.test.ts`.
+        path: '/streaming',
+        page: () => import('./pages/streaming/page.abide'),
+        layouts: [CHROME],
     },
     {
         path: '/users/[id]',
         page: () => import('./pages/users/[id]/page.abide'),
-        layouts: [() => import('./pages/layout.abide'), () => import('./pages/users/layout.abide')],
+        layouts: [CHROME, () => import('./pages/users/layout.abide')],
     },
     {
         path: '/files/[...path]',
         page: () => import('./pages/files/[...path]/page.abide'),
+        layouts: [CHROME],
     },
 ])
 

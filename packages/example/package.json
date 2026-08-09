@@ -4,7 +4,6 @@
     "type": "module",
     "private": true,
     "scripts": {
-        "web": "bun web/serve.ts",
         "dev": "bun ../abide/cli/index.ts dev",
         "start": "bun ../abide/cli/index.ts start",
         "build": "bun ../abide/cli/index.ts build",

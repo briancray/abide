@@ -32,6 +32,7 @@ export {
     microtasks,
     NOISE,
     NOISY_SPREAD,
+    nsPerOp,
     quiesce,
     ratioText,
     settled,
@@ -260,6 +261,7 @@ export async function runHeadless(spec: Case): Promise<LogLine[]> {
         if (spec.bench !== undefined) await smokeBench(spec.bench)
     } finally {
         host.remove()
+        sweepContainers()
     }
     return lines
 }
@@ -345,11 +347,14 @@ export const sleep = (ms: number): Promise<void> => new Promise((resolve) => set
  * stream yielding every 8 ms, given 20 ms, has landed two rows with a four-millisecond margin, and
  * that margin is gone the moment the machine is busy. Waiting for the state the claim is about makes
  * the same claim without a race in it.
+ *
+ * `what` names the condition in the failure, because a case that waits on three things in a row
+ * reports the same line for all three otherwise, and the wait that gave up is the whole diagnosis.
  */
-export async function until(ready: () => boolean, timeoutMs = 2_000): Promise<void> {
+export async function until(ready: () => boolean, what = 'its condition', timeoutMs = 2_000): Promise<void> {
     const deadline = Date.now() + timeoutMs
     while (!ready()) {
-        if (Date.now() > deadline) throw new Error('abide: `until` gave up waiting for its condition')
+        if (Date.now() > deadline) throw new Error(`abide: \`until\` gave up waiting for ${what}`)
         await sleep(2)
     }
 }
@@ -373,9 +378,39 @@ export function countCalls<T extends object>(target: T, method: keyof T): { call
     return record
 }
 
-/** A container in the document, plus the removal a case owes it. */
+/**
+ * Scratch space in the document for a case to render into.
+ *
+ * Under ONE holder rather than straight into `document.body`, and that is the whole of the change
+ * from a bare append. Removing it was the case's to do — and a case that THREW never got there, and a
+ * bench arm that makes one per iteration never even intended to. Headless that is invisible; in a
+ * browser card `document.body` IS the page somebody is reading, so the leftovers stack up unstyled
+ * under the last card, which is exactly how this was noticed.
+ *
+ * A holder rather than a list of what was handed out, because a bench arm runs thousands of
+ * iterations: an array would hold a reference to every detached node until the sweep, which is the
+ * retention this is meant to end rather than relocate.
+ */
+let HOLDER: HTMLElement | null = null
+
 export function container(): HTMLElement {
+    // `isConnected` as well as null, because a case is entitled to clear the document out from under
+    // this — `mount(...).dispose()` on a body-level container, a test that resets the DOM.
+    if (HOLDER === null || !HOLDER.isConnected) {
+        HOLDER = document.createElement('div')
+        HOLDER.setAttribute('data-abide-scratch', '')
+        document.body.append(HOLDER)
+    }
     const host = document.createElement('div')
-    document.body.append(host)
+    HOLDER.append(host)
     return host
+}
+
+/**
+ * Drop whatever the last case left behind. Idempotent, and free for a case that cleaned up after
+ * itself — which is still the ordinary thing for a case to do, because removing its own container is
+ * sometimes part of what it is measuring.
+ */
+export function sweepContainers(): void {
+    HOLDER?.replaceChildren()
 }

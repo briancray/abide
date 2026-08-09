@@ -12,8 +12,32 @@
 // wants a route of its own adds `export default` beside these — it is asked first, and `undefined` is
 // how it hands a path back to the pages.
 
-import { log } from 'abide'
+import { log, route } from 'abide'
 import type { Middleware } from 'abide/server'
+import { META } from './demos/SUITES.ts'
+
+/**
+ * The one path the pages directory cannot answer for itself.
+ *
+ * `pages/[suite]/[...rest]/` is one page for twenty suites, and a parameter matches anything — so
+ * `/nonsense` matches it and would be served as a 200 with an apology on it. A route only the APP
+ * knows is wrong is exactly what `export default` is for: it is asked before the pages, and
+ * `undefined` is how it hands the path back to them.
+ *
+ * The page still renders its own "nothing here" for the same case, and that is not a duplicate: a
+ * client that navigates there never asks this server anything.
+ */
+export default function notFound(): Response | undefined {
+    const asked = route()
+    if (asked.name !== SUITE_ROUTE || Object.hasOwn(META, asked.params.suite as string)) return undefined
+    return new Response(`no suite named ${asked.params.suite}\n`, {
+        status: 404,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+    })
+}
+
+/** The pattern `pages/[suite]/[...rest]/page.abide` installs — a route's NAME is the pattern. */
+const SUITE_ROUTE = '/[suite]/[...rest]'
 
 /**
  * One rung, and what a rung is for: it sees the request going down and the response coming back.

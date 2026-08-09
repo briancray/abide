@@ -8,7 +8,8 @@
 
 import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
 import { render, renderDocument, renderToString, shell, suspend, toStream } from 'abide/server'
-import { floorTicks, keep, microtasks, sleep, suite } from 'abide/tests'
+import { container, floorTicks, keep, microtasks, settled, sleep, suite } from 'abide/tests'
+import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
@@ -487,6 +488,48 @@ export default suite({
                     renderToString(html`<p>${suspend(failing, () => html`never`, '…')}</p>`),
                     'the load failed',
                 )
+            },
+        },
+
+        {
+            title: 'suspend is ISOMORPHIC — one marker, three continuations',
+            note: 'The same block a server defers is one the client understands: it shows the fallback and swaps when the promise lands, which is what it already does for a promise in a slot. It has to be — a PAGE is the same module on both sides, so a marker only the server knew would render `[object Object]` in the browser and lock every page out of the primitive. Hydration then ADOPTS, because whatever the server sent is already the settled body.',
+            async run({ is }) {
+                const view = (): TemplateResult =>
+                    html`<p>${suspend(
+                        sleep(5).then(() => 'ada'),
+                        (who) => html`hello ${who}`,
+                        'loading…',
+                    )}</p>`
+
+                // The client half: the fallback is on screen first, which is the whole reason an
+                // author wrote one. A server render never shows it — there is nothing to wake later.
+                const mounted = container()
+                mount(mounted, view)
+                is('the fallback, while it waits', mounted.textContent, 'loading…')
+                // The load is a real timer, so the graph flush alone would race it — `settled` drains
+                // the effects, not the clock.
+                await sleep(20)
+                await settled()
+                is('then the body', mounted.textContent, 'hello ada')
+
+                // And the hydration half. The parse belongs to the template cache rather than to
+                // adoption, so the call site is warmed before the markup is measured against it.
+                const warm = document.createElement('div')
+                mount(warm, view).dispose()
+                const host = container()
+                host.innerHTML = await renderToString(view(), { hydratable: true })
+                is('the server settled it inline', host.textContent, 'hello ada')
+
+                const paragraph = host.querySelector('p')
+                hydrate(host, view)
+                await settled()
+                // The claim is about WORK: a client that re-ran the promise would flash the fallback
+                // back up over markup that was already right, and rebuild the subtree to do it.
+                is('the element is the one the parser made', host.querySelector('p'), paragraph)
+                is('and it never flashed back to the fallback', host.textContent, 'hello ada')
+                mounted.remove()
+                host.remove()
             },
         },
 

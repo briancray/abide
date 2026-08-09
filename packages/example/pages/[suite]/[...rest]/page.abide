@@ -1,0 +1,38 @@
+<!-- Every suite, as one page.
+
+     `[suite]` is the segment that names it and `[...rest]` catches whatever is under it, which is
+     what makes `/routing/users/1` the routing page rather than a 404 — the routing card drives the
+     address bar for real, and a demo the browser can reach and a reload cannot is broken. Moving
+     inside it is still a navigation the server answers, `[suite]/[...rest]` being ONE route
+     notwithstanding: what comes back is this page rendered at the new url, and the outlet adopts it.
+
+     A literal outranks a parameter, so `/users/42` is still the app's own user page and `/bench` is
+     still the bench — precedence is decided once, at install, and not by the order of this tree. -->
+<script module>
+import { memo, route } from 'abide'
+import type { Suite } from 'abide/tests'
+import { LOADERS, type SuiteName } from '../../../demos/index.ts'
+import Cards from '../../../site/cards.abide'
+
+/**
+ * One suite, by name. The args are the cache key, so navigating away and back reads the suite that
+ * is already loaded rather than importing it again.
+ */
+const loaded = memo(async ({ name }: { name: string }): Promise<Suite | null> => {
+    if (!Object.hasOwn(LOADERS, name)) return null
+    return (await LOADERS[name as SuiteName]()).default
+})
+</script>
+
+{#await loaded({ name: route().params.suite ?? '' })}
+    <p class="mx-auto max-w-5xl px-6 py-16 text-slate-500">loading…</p>
+{:then suite}
+    {#if suite}
+        <Cards suite={suite}/>
+    {:else}
+        <div class="mx-auto max-w-5xl px-6 py-16">
+            <h1 class="text-3xl font-semibold text-slate-100">nothing here</h1>
+            <p class="mt-2 text-slate-400">There is no suite named “{route().params.suite}”.</p>
+        </div>
+    {/if}
+{/await}

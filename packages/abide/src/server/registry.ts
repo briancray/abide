@@ -8,10 +8,9 @@
 // mount it in front of its own routes and never think about it again.
 
 import type { Server, ServerWebSocket } from 'bun'
-import type { Channel, RoomChannel } from '$shared/channel.ts'
+import type { Channel, KeyedChannel } from '$shared/channel.ts'
 import {
     ABIDE_PREFIX,
-    ARGS_PARAM,
     HEALTH_PATH,
     IDENTITY_PATH,
     LOGS_PATH,
@@ -21,7 +20,7 @@ import {
 } from '$shared/internal/PATHS.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import type { EndpointShape, Shapes } from '$shared/internal/shapes.ts'
-import { decodeArgs, decodeForm, isMultipart } from '$shared/internal/wire.ts'
+import { decodeArgs, decodeForm, decodeQuery, isMultipart } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import type { Kind, Rpc } from '$shared/transport.ts'
 import { serveHealth } from './health.ts'
@@ -46,7 +45,7 @@ import { server as running } from './running.ts'
 import { serveIfScoped } from './scopes.ts'
 
 type AnyRpc = Rpc<unknown, unknown>
-type AnySocket = Channel<unknown> & RoomChannel<unknown, unknown>
+type AnySocket = Channel<unknown> & KeyedChannel<unknown, unknown>
 
 const RPCS = new Map<string, AnyRpc>()
 const SOCKETS = new Map<string, AnySocket>()
@@ -167,6 +166,8 @@ function crossOrigin(request: Request, url: URL, allowed: string[] | null): Reco
 interface SocketData {
     id: string
     room: unknown
+    /** The room itself, resolved once at upgrade: what `open` subscribes to and what a publish goes into. */
+    channel: Channel<unknown>
     request: Request
     stream: AnySocket
     policy: SocketPolicy | undefined
@@ -252,10 +253,11 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
 
     let args: unknown
     try {
-        // Three doors, one args object. A read carries them in the query; a body carries them as
-        // JSON, or as multipart when one of them is a FILE — and a read arrives that way too, since
-        // a file has no text form to put in a URL.
-        if (request.method === 'GET') args = decodeArgs(url.searchParams.get(ARGS_PARAM))
+        // Three doors, one args object. A read carries them in the query, one parameter each, read
+        // back through the DECLARED shape so `?name=42` on a `name: string` is the string a caller
+        // meant; a body carries them as JSON, or as multipart when one of them is a FILE — and a
+        // read arrives that way too, since a file has no text form to put in a URL.
+        if (request.method === 'GET') args = decodeQuery(url.searchParams, policy?.input)
         else if (isMultipart(request)) args = decodeForm(await request.formData())
         else args = decodeArgs(await request.text())
     } catch {
@@ -288,9 +290,10 @@ function upgrade(
     }
     let room: unknown
     try {
-        room = decodeArgs(url.searchParams.get(ARGS_PARAM))
+        // No shape: a socket's derived one is its MESSAGE, and the room is what selects the stream.
+        room = decodeQuery(url.searchParams, null)
     } catch {
-        return refuse(`${id} was subscribed to with a room that is not JSON`, 400)
+        return refuse(`${id} was subscribed to with a room it could not decode`, 400)
     }
     return authorized(request, target, id, room, stream, policy)
 }
@@ -319,7 +322,15 @@ async function authorized(
             return refuse(String((error as Error).message ?? error), 403)
         }
     }
-    const data: SocketData = { id, room, request, stream, policy, unsubscribe: null }
+    const data: SocketData = {
+        id,
+        room,
+        channel: roomFor(stream, room),
+        request,
+        stream,
+        policy,
+        unsubscribe: null,
+    }
     // The upgrade IS the subscribe; `open` below attaches it to the channel. Bun answers the
     // handshake itself, so a successful upgrade is a request with no response of its own.
     if (server.upgrade(request, { data })) return undefined
@@ -335,7 +346,7 @@ export const websocket = {
     open(connection: ServerWebSocket<SocketData>): void {
         // This is the entire socket transport: one subscribe. Everything a channel already does —
         // tail, fan-out, the reactive read, rooms — is untouched by it being remote.
-        const room = roomFor(connection.data.stream, connection.data.room)
+        const room = connection.data.channel
         // One `JSON.stringify` per subscriber per publish: the fan-out hands every listener the same
         // message, so a room with N connections encodes it N times. Caching the last frame by
         // identity was tried and reverted — a message object mutated between two publishes has the
@@ -395,12 +406,13 @@ function dropped(connection: ServerWebSocket<SocketData>, why: unknown): void {
 /** Past every gate: the chain runs, and what it lets through is what the app said to do with it. */
 function published(
     connection: ServerWebSocket<SocketData>,
-    accept: (message: unknown, room: unknown) => void | Promise<void>,
+    accept: (message: unknown, room: unknown, into: Channel<unknown>) => void | Promise<void>,
     message: unknown,
 ): void | Promise<void> {
     const policy = connection.data.policy
     const room = connection.data.room
-    if (policy === undefined) return accept(message, room)
+    const into = connection.data.channel
+    if (policy === undefined) return accept(message, room, into)
     const event: SocketEvent<unknown, unknown> = {
         kind: 'publish',
         room,
@@ -415,9 +427,9 @@ function published(
     } catch (refusal) {
         return dropped(connection, refusal)
     }
-    if (!isThenable(ran)) return accept(message, room)
+    if (!isThenable(ran)) return accept(message, room, into)
     return ran.then(
-        () => accept(message, room),
+        () => accept(message, room, into),
         // A refusal is a drop, the same as one thrown synchronously above.
         (refusal: unknown) => dropped(connection, refusal),
     )
