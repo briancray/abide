@@ -24,6 +24,9 @@ export interface Mounted {
 // The one body behind both entry points. `adopt` is the only thing that differs: null builds the
 // nodes, a node list claims the ones already there.
 function attach(container: Element, view: () => TemplateResult, existing: ChildNode[] | null): Mounted {
+    // Nothing else the scope holds can carry this: the sink lives in the ROUTER, which is one lane
+    // up from anything a scope owns, so the teardown has to be carried out by hand.
+    let uninstallNavigation: (() => void) | null = null
     const held = scope(() => {
         const anchor = document.createComment('$root')
         container.append(anchor)
@@ -33,12 +36,15 @@ function attach(container: Element, view: () => TemplateResult, existing: ChildN
         // is handed its way to the screen. Tested by identity rather than by a flag an app would
         // pass: `outlet` is one function, and "this renderer is showing the pages" is exactly what
         // being handed it means.
-        if (view === outlet) installNavigation(part)
+        if (view === outlet) uninstallNavigation = installNavigation(part)
         watch(() => part.set(view()))
         return part
     })
     return {
         dispose(): void {
+            // Before the part goes: the router must stop being handed a part that is about to lose
+            // its anchor, or every later `navigate` moves the address bar and paints nothing.
+            uninstallNavigation?.()
             held.dispose()
             held.value.dispose()
             container.replaceChildren()

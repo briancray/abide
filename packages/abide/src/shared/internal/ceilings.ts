@@ -118,6 +118,16 @@ export function renderBudget(): number {
 export class Bounded {
     /** What it is charged right now. Zero until it settles, and zero again once it is dropped. */
     charged = 0
+    /**
+     * The cache has FORGOTTEN this row, so nothing it does afterwards is the cache's business.
+     *
+     * An entry outlives its row: `handle.set` on a handle the caller kept, and the `.then` of a load
+     * that was still in flight when the row was evicted, both hand this back to `admit`. Re-admitted,
+     * it sits in the order charged against a row that no longer exists — and when it drains, `evict`
+     * deletes its key, which by then belongs to the fresh row that replaced it. That row's entry is
+     * still charged, so the next drain does it again, one live row at a time.
+     */
+    dropped = false
     constructor(
         private readonly cache: Map<string, unknown>,
         private readonly key: string,
@@ -131,6 +141,7 @@ export class Bounded {
      * eviction means. The tag goes with it, or the registry keeps naming a row nothing can reach.
      */
     evict(): void {
+        this.dropped = true
         this.cache.delete(this.key)
         this.leave?.()
     }
@@ -148,6 +159,9 @@ let held = 0
  * nobody is asking for any more.
  */
 export function admit(entry: Bounded, value: unknown): void {
+    // A settle that lands after its row was evicted is charged to nothing: the row it would be
+    // charged for is gone, and re-entering the order is how it comes back to delete its successor.
+    if (entry.dropped) return
     const ceiling = numberKnob('ABIDE_MAX_GLOBAL_CACHE_SIZE')
     if (ceiling === NO_LIMIT) {
         if (ORDER.size !== 0) {

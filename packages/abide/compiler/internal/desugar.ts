@@ -57,15 +57,19 @@ const SOURCE_SURFACE = new Set([
 /** The constructors whose result is a SOURCE, so `const x = state(…)` makes `x` reactive. */
 export const REACTIVE_CONSTRUCTORS = new Set(['state', 'memo', 'channel'])
 
-/** Prop types that mean "this prop IS a source", read off the declared `Args` member. */
-export const REACTIVE_TYPES = new Set([
-    'State',
-    'Memo',
-    'MemoHandle',
-    'Cell',
-    'Channel',
-    'KeyedMemo',
-    'KeyedChannel',
+/**
+ * Prop types that mean "this prop IS a source", read off the declared `Args` member — and which of
+ * the two kinds each one is, so the emit reads one table rather than a special case beside it. A
+ * `keyed` type's CALL is the source: a keyed memo selects a slot, a room channel selects a room.
+ */
+export const REACTIVE_TYPES = new Map<string, 'cell' | 'keyed'>([
+    ['State', 'cell'],
+    ['Memo', 'cell'],
+    ['MemoHandle', 'cell'],
+    ['Cell', 'cell'],
+    ['Channel', 'cell'],
+    ['KeyedMemo', 'keyed'],
+    ['KeyedChannel', 'keyed'],
 ])
 
 const COMPOUND_ASSIGN = new Map<SyntaxKind, string>([
@@ -169,12 +173,13 @@ function tokenize(source: string, from: number, to: number): Cursor {
  * The token indices a binding pattern introduces. An identifier followed by `:` is an object-pattern
  * KEY, not a binding — `{ a: b }` binds `b`. An identifier after `.` is a property.
  */
-function boundNames(cursor: Cursor, from: number, to: number, inType?: Uint8Array): number[] {
+function boundNames(cursor: Cursor, from: number, to: number, inType: Uint8Array): number[] {
     const indices: number[] = []
     for (let i = from; i < to; i++) {
         // `const a: typeof n = n` names `a` and mentions `n`. Without this the annotation's `n` was
-        // collected as a binding, which shadowed the cell for the rest of the block.
-        if (inType?.[i] === 1) continue
+        // collected as a binding, which shadowed the cell for the rest of the block. Required rather
+        // than optional so a new call site cannot skip the mask and reintroduce that.
+        if (inType[i] === 1) continue
         const token = cursor.tokens[i] as Token
         if (token.kind !== SyntaxKind.Identifier) continue
         const previous = cursor.tokens[i - 1]

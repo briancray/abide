@@ -1074,7 +1074,7 @@ export default suite({
 
         {
             title: 'a row whose values did not MOVE is skipped whole',
-            note: 'A list update hands every surviving row a fresh `values` array over identical entries — one changed row of a thousand means 999 arrays that are new objects holding the same things — so `Instance.update` compares by identity before it does anything. The cutoff only works if the entries ARE stable, which is why the compiler emits `${item.id}` rather than `${() => item.id}` for a hole that cannot read: a fresh closure per row is never identical, and the cutoff it defeats is worth more than the thunk it saves. Nothing about the output can show this — every arm below renders the same list — so the claim is a count of paints.',
+            note: 'A list update hands every surviving row a fresh `values` array over identical entries — one changed row of a thousand means 999 arrays that are new objects holding the same things — so `Instance.update` compares by identity before it does anything. The cutoff only works if the entries ARE stable, which is why the compiler emits `${item.id}` rather than `${() => item.id}` for a hole that cannot read: a fresh closure per row is never identical, and the cutoff it defeats is worth more than the thunk it saves. One fresh entry is enough to defeat the whole-row test, and a `@click` handler is one the compiler cannot spell any other way — so the same compare runs again per SLOT, and the row skips every slot that did not move. Nothing about the output can show this — every arm below renders the same list — so the claim is a count of paints.',
             async run({ is }) {
                 // A slot value that records being WRITTEN. A row that was skipped never reaches its
                 // binder; a row that was walked and found equal does, and only this tells them apart.
@@ -1139,8 +1139,37 @@ export default suite({
                     'row 10 — edited',
                 )
 
+                // A handler is a fresh closure per pass too, but it is not a hole the compiler can
+                // spell any other way — so the ARRAY test cannot hold for a row that carries one,
+                // and the compare has to be per SLOT to save the row's other slots. Nothing here is
+                // reactive but the list itself, so a repaint of row 3 is work nobody asked for.
+                painted = 0
+                const handled = state(build(50))
+                const third = container()
+                mount(
+                    third,
+                    () =>
+                        html`<ul>${() =>
+                            handled().map((i) =>
+                                keyed(i.id, html`<li @click=${() => void i.id}>${i.label}</li>`),
+                            )}</ul>`,
+                )
+                await tick()
+                painted = 0
+                const edited = handled.peek().slice()
+                edited[10] = { id: 'k10', label: label('row 10 — edited') }
+                handled.set(edited)
+                await tick()
+                is('a handler on every row still paints ONE row', painted, 1)
+                is(
+                    '…and it is the one that changed',
+                    third.querySelectorAll('li')[10]?.textContent,
+                    'row 10 — edited',
+                )
+
                 host.remove()
                 other.remove()
+                third.remove()
             },
             bench: {
                 kind: 'wake',
@@ -1186,6 +1215,43 @@ export default suite({
                         { label: 'the same hole behind a thunk', run: arm(true) },
                     ]
                 })(),
+            },
+        },
+
+        {
+            title: 'a pass that threw is not a pass that was APPLIED',
+            note: 'Skipping a slot whose value did not move is only sound against a pass that finished. A binder can throw out of the middle of the loop — a slot reading a cell whose load rejected throws by design, and so do a `{#try}` body with no `{:catch}` and an author’s `&ref` handler — and every slot after it was never applied. Comparing against what was HANDED OVER rather than what LANDED would skip those for as long as their values stay put: a value stuck on screen forever, with no error left to show for it. The instance keeps both, and only the finished pass is what a skip is judged against.',
+            async run({ is }) {
+                // Throwing on the way to text is a binder throwing — here at slot 0 of three, on the
+                // second pass only. `flush` rethrows it from a fresh microtask, so the error printed
+                // alongside this case is the framework keeping the throw observable, not a failure.
+                const n = state(1)
+                const bomb = (k: number): { toString(): string } => ({
+                    toString: () => {
+                        if (k === 2) throw new Error('a binder that throws mid-pass')
+                        return `v${k}`
+                    },
+                })
+                const host = container()
+                mount(host, () => {
+                    const k = n()
+                    return html`<b>${bomb(k)}</b><i>${k === 1 ? 'one' : 'two'}</i><u>${k}</u>`
+                })
+                is('the first pass lands whole', host.querySelector('i')?.textContent, 'one')
+
+                n.set(2)
+                await tick()
+                is('the pass that threw stopped at the slot that threw', host.querySelector('i')?.textContent, 'one')
+
+                // The third pass hands slot 1 the SAME `'two'` the half-pass was handed. Judged
+                // against what was handed over, it is unchanged and gets skipped — and `one` is then
+                // what the page shows for the rest of its life.
+                n.set(3)
+                await tick()
+                is('the slot that threw is retried', host.querySelector('b')?.textContent, 'v3')
+                is('…and so is the one it skipped past', host.querySelector('i')?.textContent, 'two')
+                is('…alongside the one that actually moved', host.querySelector('u')?.textContent, '3')
+                host.remove()
             },
         },
 

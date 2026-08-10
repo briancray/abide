@@ -79,7 +79,6 @@ const RPC_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 const SOCKET_METHODS = ['socket'] as const
 
 type Method = (typeof RPC_METHODS)[number] | (typeof SOCKET_METHODS)[number]
-export type { Kind }
 
 const LEGAL: Record<Kind, readonly string[]> = { rpc: RPC_METHODS, socket: SOCKET_METHODS }
 const DIRECTORIES: Record<Kind, string> = { rpc: RPC_DIRECTORY, socket: SOCKET_DIRECTORY }

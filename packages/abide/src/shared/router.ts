@@ -332,6 +332,15 @@ interface Cells {
      * standing there", which is a different fact from "the route changed".
      */
     adopted: State<number>
+    /**
+     * Which served navigation is the LIVE one. A plain counter, not a cell: nothing reads it to
+     * render, it is read back across the awaits in `enter` to ask "am I still the newest?".
+     *
+     * A navigation resolves when its whole range has landed, and a reader can start another one
+     * before that — so without this the overtaken call still ran `commit` when its stream finally
+     * ended, leaving the reader on the new page showing the old page's params.
+     */
+    entering: number
 }
 
 interface Here {
@@ -415,8 +424,19 @@ export interface NavigationSink {
 
 let NAVIGATION_SINK: NavigationSink | null = null
 
-export function useNavigationSink(sink: NavigationSink): void {
+/**
+ * Returns the way OUT, the way `joinTags` does. A renderer that installed this and was then torn
+ * down leaves the router driving a part whose anchor is no longer in the document — every later
+ * navigation moves the address bar, resolves, and paints nothing.
+ *
+ * Only the sink that is still installed may clear the slot: a second mount replacing the first must
+ * not be uninstalled by the first one's teardown arriving afterwards.
+ */
+export function useNavigationSink(sink: NavigationSink): () => void {
     NAVIGATION_SINK = sink
+    return () => {
+        if (NAVIGATION_SINK === sink) NAVIGATION_SINK = null
+    }
 }
 
 function hrefOf(fallback?: string): string {
@@ -441,6 +461,7 @@ function cellsFor(fallback?: string): Cells {
         url: state(url),
         navigating: state(false),
         adopted: state(0),
+        entering: 0,
     }
     here.cells = made
     return made
@@ -608,6 +629,12 @@ async function enter(
     sink: NavigationSink,
 ): Promise<void> {
     const loading = found === null ? null : loadFor(found.held)
+    // Claimed before the first await. Every step below that could have been overtaken asks whether
+    // this is still the newest navigation, because a reader who clicked twice is waiting on the
+    // second answer and this one has nothing left to say. The abandoned response is still read to
+    // its end — the part's reclaim handle is superseded, so what it reads paints nothing — rather
+    // than cancelled, which would need a way to say so through the sink.
+    const mine = ++cells.entering
     cells.navigating.set(true)
     try {
         const entered = await sink.enter(url)
@@ -616,17 +643,21 @@ async function enter(
         // rather than waiting on `complete`, which is a promise nothing settles: the caller asked to
         // move and the move is happening, just not here.
         if (entered.left) return
+        if (cells.entering !== mine) return
         // The first piece is on screen, so the address bar is now behind what the reader is looking
         // at. This is the half that cannot wait for the range to be whole.
         place(cells, url, options)
         await entered.complete
         if (loading !== null) await loading
+        if (cells.entering !== mine) return
         commit(cells, url, found)
         // In the same synchronous region as the commit, so the renderer takes both in ONE flush and
         // the page's view runs once for the navigation however many cells moved.
         cells.adopted.set(cells.adopted.peek() + 1)
     } finally {
-        cells.navigating.set(false)
+        // Only the live navigation may say the navigating is over: an overtaken one finishing its
+        // stream would otherwise clear the flag while the newer one is still in flight.
+        if (cells.entering === mine) cells.navigating.set(false)
     }
 }
 

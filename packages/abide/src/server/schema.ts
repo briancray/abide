@@ -21,7 +21,7 @@
 
 import { isFile, isThenable, messageOf } from '$shared/internal/probes.ts'
 import type { JsonSchema, JsonType } from '$shared/internal/shapes.ts'
-import { HttpError } from '$shared/internal/wire.ts'
+import { type Failed, HttpError } from '$shared/internal/wire.ts'
 
 export type { EndpointShape, JsonSchema, JsonType, Shapes } from '$shared/internal/shapes.ts'
 
@@ -67,6 +67,16 @@ export type Gate<T> = (value: unknown) => T | Promise<T>
 /** The one name a shape refusal travels under, on either side of a wire. */
 export const SCHEMA_ERROR = 'AbideSchemaError'
 
+/**
+ * That refusal as it is CAUGHT — the name, and every issue the walk found as the payload.
+ *
+ * In the refusal union of every declaration (`rpc.ts`'s `Declared`) rather than something an author
+ * adds, because every endpoint has this door: a shape nobody declared is still the one the compiler
+ * derived from the handler's type. So `fn(args).isError(e, SCHEMA_ERROR)` narrows `e.data` to the
+ * issues without anything being written twice.
+ */
+export type SchemaRefusal = Failed<typeof SCHEMA_ERROR, readonly Issue[]>
+
 /** Which of the three a declaration is. A function is not an object; the other two differ by tag. */
 function isStandard(schema: object): schema is StandardSchemaV1<unknown> {
     return '~standard' in schema
@@ -102,7 +112,10 @@ export function gate<T>(
             try {
                 return schema(value)
             } catch (cause) {
-                throw refused(named, what, messageOf(cause), status, cause)
+                // The one form with nowhere to put a path: a hand-written parse throws a sentence.
+                // Still an issue LIST, so what a caller reads off a refusal is one shape whichever
+                // of the three doors refused it.
+                throw refused(named, what, [{ path: '', message: messageOf(cause) }], status, cause)
             }
         }
     }
@@ -119,13 +132,13 @@ export function gate<T>(
     return (value: unknown): T => {
         const issues = validateJson(schema, value)
         if (issues === null) return value as T
-        throw refused(named, what, issueText(issues), status)
+        throw refused(named, what, issues, status)
     }
 }
 
 function taken<T>(result: StandardResult<T>, named: Named, what: string, status: number): T {
     if (result.issues === undefined) return result.value
-    throw refused(named, what, issueText(result.issues.map(flattened)), status)
+    throw refused(named, what, result.issues.map(flattened), status)
 }
 
 // --- the validator -----------------------------------------------------------
@@ -476,10 +489,17 @@ function pathText(path: StandardIssue['path']): string {
  * `respond` answers with it rather than a 500 — and so the NAME is what crosses the wire, which is
  * what `isError(e, 'AbideSchemaError')` asks about on the other side.
  *
- * The thrown validator is kept as `cause`: it is where a library's own structured issues are, and
- * `isError` looks through a cause already.
+ * The issues are the DATA and the message is built from them, rather than the other way round: a
+ * caller putting a refusal beside the field that caused it needs the path, and a sentence it would
+ * have to parse to get one is a sentence whose wording is now an interface. Both, because the
+ * message is what a log line and an unfamiliar caller read, and neither should have to know the
+ * other exists. `data` is what `errorPayload` carries and `wireError` rebuilds, so the array is the
+ * same array on either side.
+ *
+ * The thrown validator is kept as `cause`: it is where a library's own structured issues are, in a
+ * shape richer than the two fields that cross, and `isError` looks through a cause already.
  */
-function refused(named: Named, what: string, detail: string, status: number, cause?: unknown): HttpError {
-    const message = `abide: ${named.address} ${what} does not match its declared shape — ${detail}`
-    return new HttpError(SCHEMA_ERROR, message, status, cause === undefined ? undefined : { cause })
+function refused(named: Named, what: string, issues: Issue[], status: number, cause?: unknown): HttpError {
+    const message = `abide: ${named.address} ${what} does not match its declared shape — ${issueText(issues)}`
+    return new HttpError(SCHEMA_ERROR, message, status, { cause, data: issues })
 }

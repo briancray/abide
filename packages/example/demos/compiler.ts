@@ -310,8 +310,8 @@ export default suite({
 
         {
             title: 'bind:value is a read AND a write, so it compiles to two slots',
-            note: 'One spelling, two bindings on the same element: a property slot for the value and a listener that writes back. The value slot is handed the CELL, not a thunk that reads it — `unwrap` reads a slot’s source one step further, so the two write the same thing and the thunk was a fresh closure per bound input per row. The arms that cannot do that are the ones with something to compute: an accessor pair is not a cell, `bind:checked` needs `!!` for the attribute half, and `bind:group` compares against the input’s own value. The listener carries the element’s own type, because the emitted file is type-checked like any other — an untyped `event` there is an implicit `any` in the author’s build. `bind:checked` also emits the boolean ATTRIBUTE, so the state survives SSR.',
-            async run({ is }) {
+            note: 'One spelling, two bindings on the same element: a property slot for the value and a listener that writes back. The value slot is handed the CELL, not a thunk that reads it — `unwrap` reads a slot’s source one step further, so the two write the same thing and the thunk was a fresh closure per bound input per row. The arms that cannot do that are the ones with something to compute: an accessor pair is not a cell, `bind:checked` needs `!!` for the attribute half, and `bind:group` compares against the input’s own value. A `<select>` needs no arm at all — `.value` plus a `change` listener IS the default one — so a selection is bound there and each `<option>` carries a plain `value="…"`. The listener carries the element’s own type, because the emitted file is type-checked like any other — an untyped `event` there is an implicit `any` in the author’s build. `bind:checked` also emits the boolean ATTRIBUTE, so the state survives SSR.',
+            async run({ is, throws }) {
                 is(
                     'value',
                     template('<script>const f = state("")</script><input bind:value={f} />'),
@@ -321,6 +321,21 @@ export default suite({
                     'checked mirrors an attribute too',
                     template('<script>const on = state(true)</script><input bind:checked={on} />'),
                     '<input .checked=${() => !!on()} checked=${() => !!on()} @change=${(event: Event) => on.set((event.currentTarget as HTMLInputElement).checked)} />',
+                )
+
+                // A select needs no arm of its own: `.value` plus the `change` listener IS the
+                // default arm, and the option carries a plain attribute.
+                is(
+                    'a select binds through value, and its options are plain attributes',
+                    template(
+                        '<script>const chosen = state("a")</script><select bind:value={chosen}><option value="a">A</option></select>',
+                    ),
+                    '<select .value=${chosen} @change=${(event: Event) => chosen.set((event.currentTarget as HTMLSelectElement).value)}><option value="a">A</option></select>',
+                )
+                throws(
+                    'bind:selected is refused, and names the spelling that works',
+                    () => template('<script>const chosen = state("a")</script><option bind:selected={chosen}>A</option>'),
+                    'bind:value',
                 )
 
                 // `group` is membership, so both halves have something to compute — and each reads

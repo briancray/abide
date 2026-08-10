@@ -105,7 +105,25 @@ export class Node {
                 if (this.status === DIRTY) break
             }
         }
-        if (this.status === DIRTY) this.run()
+        if (this.status === DIRTY) {
+            // A DERIVATION whose body throws synchronously has FAILED TO SETTLE — the same outcome a
+            // keyed memo gives it (`memo.ts`'s `start` catches and calls `internals.fail`) — not a
+            // node left DIRTY. Left DIRTY, `mark` early-returns on `status >= next` forever, so
+            // nothing downstream ever wakes again even after the data recovers, and the memoisation
+            // is gone with it: every read re-runs the body and re-collects its sources. `readCell`
+            // still throws, now from the retained error rather than from the body.
+            //
+            // An EFFECT keeps throwing out of here: `flush` resets it to CLEAN and rethrows from a
+            // fresh microtask, which is what keeps the throw observable.
+            if (this.isEffect) this.run()
+            else {
+                try {
+                    this.run()
+                } catch (error) {
+                    settleError(this, error)
+                }
+            }
+        }
         this.status = CLEAN
     }
 
@@ -223,7 +241,6 @@ const NO_CHUNKS: unknown[] = []
 function resetChunks(track: Async): void {
     if (track.buffer.length === 0) return
     track.buffer = []
-    track.view = NO_CHUNKS
     track.chunks.write((track.chunks.value as number) + 1)
 }
 
@@ -286,14 +303,6 @@ class Async {
     readonly chunks = new Node(0, null)
     /** Chunks produced so far, in order. The shared empty array until a stream actually runs. */
     buffer: unknown[] = NO_CHUNKS
-    /**
-     * `buffer` as the array `chunks()` hands out, built on first ask and held for this version.
-     *
-     * A COPY, because the buffer keeps being pushed into — so a reader still sees a new array after
-     * every chunk and the same one within a version, exactly as it did when the copy was per chunk.
-     * The difference is that a stream nobody reads the transcript of now pays for none of them.
-     */
-    view: unknown[] | null = NO_CHUNKS
     /** A stream is running: chunks are still arriving. Its own signal, like `refreshing`. */
     readonly streaming = new Node(false, null)
     /**
@@ -399,9 +408,9 @@ function markSettled(track: Async): void {
 // (`refreshing`), `streaming` all the way through, and `settled` + `done` when it ends cleanly.
 //
 // The transcript is PUSHED into and a version counter is what wakes a reader — see `Async.chunks`.
-// `chunks()` still hands back a new array after every chunk and the same one within a version; the
-// copy that produces it moved from the write to the read, so a stream nobody reads the transcript of
-// pays for none.
+// `chunks()` hands back that buffer itself, not a copy of it, so the version is the ONLY wake signal
+// and the array's identity moves only when the transcript is replaced (a reset, or an overflow drop).
+// `iterate`'s cursor below reads it that way: a changed identity means start over, not one more chunk.
 function consume(node: Node, source: AsyncIterable<unknown>): void {
     const track = trackerFor(node)
     const generation = ++track.generation
@@ -409,8 +418,9 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
     else track.pending.write(true)
     track.streaming.write(true)
     resetChunks(track)
-    // NO_CHUNKS is SHARED. A run that is about to push needs one of its own, and swapping an empty
-    // array for an empty array is nothing a reader can see, so it wakes nobody.
+    // NO_CHUNKS is SHARED. A run that is about to push needs one of its own. Readers ARE handed this
+    // array now, so the swap is visible to them — but both are empty and the version does not move,
+    // so a cursor reading it finds the same nothing it found before.
     if (track.buffer === NO_CHUNKS) track.buffer = []
 
     // The transcript's ceiling, declared ONCE per stream — the cap is per-stream, so no chunk reads
@@ -435,11 +445,9 @@ function consume(node: Node, source: AsyncIterable<unknown>): void {
                         // for the drop and never again, so a reader wakes for it and then sleeps.
                         keeping = false
                         track.buffer = []
-                        track.view = NO_CHUNKS
                         reportOverflow(charged, ceiling)
                     } else {
                         track.buffer.push(chunk)
-                        track.view = null
                     }
                     track.chunks.write((track.chunks.value as number) + 1)
                 }
@@ -479,7 +487,12 @@ function settleError(node: Node, error: unknown): void {
     if (node.status === DEAD) return
     const track = trackerFor(node)
     const reason = error === undefined ? REJECTED_WITH_UNDEFINED : error
-    // A second failure with the very same reason changes nothing a reader can observe.
+    // A second failure with the very same reason changes nothing a reader can observe — which means
+    // the same OBJECT, so in practice this holds for `REJECTED_WITH_UNDEFINED` and for a reason an
+    // app hoisted, and not for the `new Error(...)` per attempt that most bodies throw. Deliberately
+    // not a structural compare: the read THROWS the reason, so a reader can see the message, and
+    // whether two failures carrying the same text are one event or two is the app's call rather than
+    // the graph's. What that costs is a wake per retry against a source that is still down.
     const changed = track.error.value !== reason
     track.error.write(reason)
     if (changed) wakeReaders(node)
@@ -537,10 +550,23 @@ function attachAsync(read: Cell<unknown>, node: Node): void {
     read.chunks = () => {
         const track = trackerFor(node)
         track.chunks.read() // the VERSION is what a reader subscribes to; the buffer is pushed into
-        if (track.view === null) track.view = track.buffer.slice()
-        return track.view
+        // The BUFFER, not a copy of it. A copy per version reads well — a reader is handed something
+        // that cannot move under it — but the reader a transcript is for reads once per chunk, so the
+        // copy is O(k) at chunk k and the stream is quadratic again: 4x the chunks measured 8.0x the
+        // time with a live reader against 0.64x with none. What made the copy defensible was never
+        // true here: a channel's `windowOf` copies too, and its copy is bounded by `tail`, while a
+        // cell's transcript has no cap at all.
+        //
+        // Nothing in the render path identity-checks it — `ChildPart.set` clears `holding` before an
+        // array and `ListPart.set` reconciles unconditionally — so what a slot renders is unchanged.
+        // What a caller gives up is holding the array across an await and expecting it frozen, and
+        // the version is what tells it there is more.
+        return track.buffer
     }
     read.streaming = () => trackerFor(node).streaming.read() as boolean
+    // Written here with the rest of the async surface, so every cell has the same shape whether or
+    // not it ever meets a stream — the generator is built per loop, not per cell.
+    read[Symbol.asyncIterator] = () => iterate(read)
     // No node of its own: "landed, did not fail, nothing still arriving" is exactly three nodes that
     // already exist, and reading all three is what subscribes a reader to any of them moving. A
     // fourth node would be a second record of the same fact for the settle paths to keep in step with.
@@ -600,24 +626,6 @@ export const internals = {
     derived<T>(fn: () => unknown, beforeRead: () => void, transform?: (value: unknown) => unknown): Memo<T> {
         return makeDerived(fn, beforeRead, transform) as Memo<T>
     },
-    /**
-     * The LIVE transcript buffer, for a reader that consumes in order.
-     *
-     * `chunks()` materialises a copy per version, which is what a template slot wants: it re-reads
-     * the whole list and must not see it mutate underneath. A cursor reader re-reads nothing, and
-     * copying the transcript for it costs a full slice per chunk — the O(n²) over a stream that the
-     * version counter exists to avoid. Subscribes to the version the same way; hands back the array
-     * itself rather than a snapshot of it.
-     *
-     * The IDENTITY is the signal that the transcript was replaced rather than appended to — an
-     * overflow drop and a reset both swap the array — so a cursor holding an index must compare it
-     * and start over when it moves.
-     */
-    transcript(cell: Cell<unknown>): readonly unknown[] {
-        const track = trackerFor(nodeOf(cell))
-        track.chunks.read()
-        return track.buffer
-    },
     loading<T>(cell: Cell<T>): boolean {
         const track = nodeOf(cell as Cell<unknown>).asyncTrack
         return track !== null && (track.pending.value === true || track.refreshing.value === true)
@@ -653,6 +661,101 @@ function resetNode(node: Node): void {
     node.write(undefined)
 }
 
+// --- iterating a cell -------------------------------------------------------
+
+/** The cursor's "no transcript yet" start. A sentinel, so the first look adopts the live buffer. */
+const NOTHING_YET: readonly never[] = []
+
+/**
+ * `for await (const chunk of cell)` — everything the cell has already produced, then everything that
+ * comes next.
+ *
+ * The replay is what makes it a CELL rather than a subscription: a second consumer of a stream that
+ * has already run gets the whole of it, because the transcript is retained. A failure is ASKED about
+ * rather than caught around the read, so the throw comes from the loop consuming it and not from
+ * whichever reader happened to kick the load.
+ *
+ * This is where `chunks()` stops being the only way to read a stream, and it is the reason `chunks()`
+ * can hand back the live buffer: the reader that must not see it move is the one that re-reads the
+ * whole thing, and this one never re-reads anything.
+ */
+async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
+    let wake: (() => void) | null = null
+    // LEVEL-triggered, not edge-triggered. A generator spends most of its life suspended at a
+    // `yield` waiting for its consumer, and every chunk that lands in that window would otherwise
+    // wake nobody: the flag is what the loop checks before parking, so a producer faster than the
+    // consumer cannot strand it. Over a real socket that is the common case, not the rare one.
+    let moved = false
+    const watcher = watchNode(() => {
+        // This body only wants to be WOKEN — what it reads is the version behind `chunks()`, and the
+        // buffer it hands back is walked by the cursor below rather than here.
+        cell.chunks()
+        cell.streaming()
+        cell.settled()
+        cell.error()
+        moved = true
+        const resume = wake
+        wake = null
+        resume?.()
+    })
+    try {
+        // The read is what starts the load. Untracked: this generator is not a reactive reader, and
+        // it may well be running inside someone else's effect.
+        untrack(() => {
+            try {
+                cell()
+            } catch {
+                // Asked about below, where the loop can throw it at its own consumer.
+            }
+        })
+        let at = 0
+        let finished = false
+        // The LIVE buffer, walked with a cursor: this loop only ever reads the tail it has not
+        // reached yet, so it holds an index rather than re-reading the whole transcript per chunk.
+        let produced: readonly T[] = NOTHING_YET
+        // Closures built ONCE for the whole loop rather than one per probe per turn: this runs per
+        // chunk, and a producer faster than its consumer is the common case over a socket.
+        const look = (): void => {
+            // ASKED BEFORE the transcript is read, and that order is the whole of it: a stream that
+            // ended between the two reads has already written its last chunk, so reading the
+            // transcript second cannot miss one. The other order drops the final chunk every time.
+            finished = cell.settled() && !cell.streaming()
+            const held = cell.chunks() as readonly T[]
+            // A new array means the transcript was REPLACED — dropped on overflow, or reset by a
+            // reload — rather than appended to, and a cursor into the old one indexes nothing.
+            if (held !== produced) {
+                produced = held
+                at = 0
+            }
+        }
+        // Asked AFTER the transcript is handed over, so a failure that arrived while this was
+        // suspended at a `yield` is thrown by the loop that was waiting on it.
+        const asked = (): unknown => cell.error()
+        for (;;) {
+            moved = false
+            untrack(look)
+            while (at < produced.length) yield produced[at++] as T
+            const failure = untrack(asked)
+            if (failure !== undefined) throw failure
+            if (finished) {
+                // A cell that never streamed has no transcript, so the loop hands over the value
+                // itself and ends. One shape reads both.
+                if (at === 0) {
+                    const value = untrack(() => cell.peek())
+                    if (value !== undefined) yield value as T
+                }
+                return
+            }
+            if (moved) continue // something landed while this was suspended at a `yield`
+            await new Promise<void>((resolve) => {
+                wake = resolve
+            })
+        }
+    } finally {
+        watcher.dispose()
+    }
+}
+
 // --- the surface ----------------------------------------------------------
 
 // The vocabulary is abide's, not the textbook one: `state` (own) / `memo` (derive) / `watch`
@@ -679,7 +782,13 @@ export interface Cell<T> extends PromiseLike<T> {
     set(value: T | Promise<T> | AsyncIterable<T>): void
     /** Drop the value and any error, cancel what is in flight, and go back to cold. */
     invalidate(): void
-    /** Everything a stream has produced so far, in order. Empty on a cell that never streamed. */
+    /**
+     * Everything a stream has produced so far, in order. Empty on a cell that never streamed.
+     *
+     * The LIVE transcript, not a copy of it: a slot that renders one re-reads it per chunk, and a
+     * copy per read is a full array per chunk — quadratic over the stream. Read it, render it, and
+     * let the next version wake you; to consume it in order, iterate the cell instead.
+     */
     chunks(): T[]
     /** A cold load is in flight — nothing retained to show. */
     pending(): boolean
@@ -710,6 +819,13 @@ export interface Cell<T> extends PromiseLike<T> {
      */
     // biome-ignore lint/suspicious/noConfusingVoidType: the union IS the contract — a handler either returns nothing or returns its teardown.
     watch(handler: (value: T) => void | (() => void)): () => void
+    /**
+     * `for await (const chunk of cell)` — everything it has produced, then everything that comes
+     * next. The cursor face of `chunks()`, for a consumer that reads in order and never re-reads.
+     *
+     * A cell that never streamed yields its value once and ends, so one loop reads both shapes.
+     */
+    [Symbol.asyncIterator](): AsyncIterator<T>
     /** Narrowed from `PromiseLike` to a real promise — `await x`, and `.catch` on the result. */
     then<Fulfilled = T, Rejected = never>(
         onFulfilled?: ((value: T) => Fulfilled | PromiseLike<Fulfilled>) | null,
@@ -846,13 +962,19 @@ function makeDerived(
     const read = makeCell(node, beforeRead) as Memo<unknown>
     // Re-run NOW. A load started by the body reports `refreshing` over the retained value, so the
     // old one keeps being served — the same shape a keyed slot's refresh has.
+    // Both verbs check DEAD first because both WRITE the status: assigning DIRTY over DEAD undoes
+    // the disposal, and the guards inside `pull`/`resetNode` then have nothing left to see. A
+    // disposed derivation refreshed by a surviving timer or by `refresh({ tags })` came back to
+    // life, re-subscribed to every source, and had no owner left to dispose it a second time.
     read.refresh = () => {
+        if (node.status === DEAD) return
         node.status = DIRTY
         node.pull()
     }
     // Dropping the value is not enough on a derivation: without re-marking it, the node is CLEAN and
     // holding `undefined`, so nothing would ever recompute it until a dependency happened to move.
     read.invalidate = () => {
+        if (node.status === DEAD) return
         node.status = DIRTY
         resetNode(node)
     }

@@ -73,9 +73,18 @@ const User: View = () => {
     )}`
 }
 
+/** Three deferred subtrees on one page, so a patch has siblings to be found among. */
+const Panels: View = () =>
+    html`<b>panels</b>${suspend(panel.promise, (s: string) => html`<i>${s}</i>`, html`<em>one</em>`)}${suspend(
+        panel.promise,
+        (s: string) => html`<i>${s}</i>`,
+        html`<em>two</em>`,
+    )}${suspend(panel.promise, (s: string) => html`<i>${s}</i>`, html`<em>three</em>`)}`
+
 const TABLE: RouteEntry[] = [
     { path: '/', page: load(Home) },
     { path: '/users/[id]', page: load(User) },
+    { path: '/panels', page: load(Panels) },
 ]
 
 /**
@@ -288,6 +297,132 @@ test('the page view runs once for the navigation, not once per piece', async () 
     } finally {
         view.dispose()
     }
+})
+
+test('an overtaken navigation stops painting, rather than patching into the page that replaced it', async () => {
+    const first = await fragmentFor('/users/6', 'panel from six')
+    const second = await fragmentFor('/users/7', 'panel from seven')
+
+    // Two gated bodies, one per URL — `answerWith` holds back one response, and the whole point here
+    // is that the FIRST one is still arriving while the second lands.
+    let releaseFirst: () => void = () => undefined
+    let releaseSecond: () => void = () => undefined
+    const held = new Promise<void>((resolve) => {
+        releaseFirst = resolve
+    })
+    const heldSecond = new Promise<void>((resolve) => {
+        releaseSecond = resolve
+    })
+    const bodyFor = (pieces: string[], gate: Promise<void> | null): ReadableStream<Uint8Array> => {
+        const whole = pieces.join('')
+        const cut = whole.indexOf(PIECE_END) + PIECE_END.length
+        return new ReadableStream<Uint8Array>({
+            async start(controller) {
+                const encoder = new TextEncoder()
+                controller.enqueue(encoder.encode(whole.slice(0, cut)))
+                if (gate !== null) await gate
+                if (cut < whole.length) controller.enqueue(encoder.encode(whole.slice(cut)))
+                controller.close()
+            },
+        })
+    }
+    globalThis.fetch = (async (input: RequestInfo | URL): Promise<Response> => {
+        const headers = new Headers({ [NAVIGATION_HEADER]: '1' })
+        const six = String(input).includes('/users/6')
+        return new Response(bodyFor(six ? first : second, six ? held : heldSecond), {
+            status: 200,
+            headers,
+        })
+    }) as typeof fetch
+
+    const into = container()
+    const view = mount(into, outlet)
+    try {
+        // Not awaited: `navigate` resolves when the STREAM is done, and this one's panel is being
+        // held back. Its first piece is on screen either way, which is what the reader has.
+        const overtaken = navigate('/users/6')
+        await until(() => into.textContent?.includes('user 6') === true, 'the first page')
+
+        // Held back too, so the live page's placeholder is still STANDING when the abandoned one's
+        // patch arrives. That is the whole collision: placeholder ids are per-render counters, so
+        // both pages named theirs the same thing.
+        const live = navigate('/users/7')
+        await until(() => into.textContent?.includes('loading') === true, 'the second page')
+
+        releaseFirst()
+        await overtaken
+
+        // Nothing of the abandoned page reached the live one's placeholder — which is still standing,
+        // waiting for its own panel.
+        expect(into.textContent).not.toContain('panel from six')
+        expect(into.textContent).toContain('loading')
+        // Nor did it commit its ROUTE on the way out. The live navigation has not committed either —
+        // that waits for its range to be whole — so what this pins is that finishing an abandoned
+        // stream is not what puts the reader back on `/users/6` while the address bar says `/users/7`.
+        expect(route().params.id).not.toBe('6')
+        expect(into.textContent).toContain('user 7')
+
+        releaseSecond()
+        await live
+        expect(into.textContent).toContain('panel from seven')
+        expect(route().params.id).toBe('7')
+        expect(route().navigating).toBe(false)
+    } finally {
+        view.dispose()
+    }
+})
+
+test('a patch finds its placeholder without searching the page', async () => {
+    const pieces = await fragmentFor('/panels', 'landed')
+    answerWith(pieces)
+    const into = container()
+    const view = mount(into, outlet)
+
+    // The tag is written down rather than imported, for the reason `PIECE_END` above is: this file
+    // holds itself to what an app can reach. A renamed tag makes the count 0 for the wrong reason,
+    // and the `<i>` assertions beside it are what catch that.
+    let pageScans = 0
+    const realQuerySelector = Element.prototype.querySelector
+    Element.prototype.querySelector = function scanning(this: Element, selector: string) {
+        if (selector.includes('slot-s')) pageScans++
+        return realQuerySelector.call(this, selector)
+    } as typeof Element.prototype.querySelector
+
+    try {
+        const navigating = navigate('/panels')
+        release()
+        await navigating
+
+        expect(into.querySelectorAll('i')).toHaveLength(3)
+        expect(into.querySelectorAll('slot-s')).toHaveLength(0)
+        // Not one page walk for three patches. A scan per patch is O(patches x page), and the page
+        // is what the earlier patches have been growing — invisible in the output, which is why the
+        // count is the assertion.
+        expect(pageScans).toBe(0)
+    } finally {
+        Element.prototype.querySelector = realQuerySelector
+        view.dispose()
+    }
+})
+
+test('a disposed renderer stops being the one a navigation paints into', async () => {
+    const pieces = await fragmentFor('/users/8', 'the panel')
+    answerWith(pieces)
+    const into = container()
+    // Mounted and torn down — a page that swapped its outlet, or a test that cleaned up after
+    // itself. The part's anchor leaves the document with it.
+    mount(into, outlet).dispose()
+
+    const navigating = navigate('/users/8')
+    release()
+    await navigating
+
+    // Nothing was even asked for. Left installed, the sink answers with a part whose anchor has no
+    // parent, so the fetch happens, the whole body is read and parsed, `before()` inserts against a
+    // detached node — a spec no-op — and the navigation resolves having painted nothing. Every
+    // assertion about the page still passes; only the request says it happened at all.
+    expect(asked).toBeNull()
+    expect(into.textContent).toBe('')
 })
 
 test('a response that is not a navigation is the browser’s, and commits nothing here', async () => {

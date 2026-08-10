@@ -14,7 +14,8 @@
 
 import { config } from '$server/config.ts'
 import { LOGS_PATH } from '$shared/internal/PATHS.ts'
-import { JSONL_TYPE, payloadOf } from '$shared/internal/wire.ts'
+import { messageOf } from '$shared/internal/probes.ts'
+import { JSONL_TYPE, payloadOf, STREAMING } from '$shared/internal/wire.ts'
 import { formatLogLine, type LogRecord, logShape, writeLogLine } from '$shared/log.ts'
 import { CLI_EXIT_CODES, exitForStatus } from '../CLI_EXIT_CODES.ts'
 
@@ -57,7 +58,7 @@ export async function logs(argv: string[]): Promise<number> {
         answered = await fetch(address, { headers })
     } catch (failure) {
         // Nothing answered, which has no status and so no HTTP code to map. That is what `1` is.
-        console.error(`abide logs: ${base} did not answer — ${(failure as Error).message}`)
+        console.error(`abide logs: ${base} did not answer — ${messageOf(failure)}`)
         return CLI_EXIT_CODES.failed
     }
 
@@ -155,7 +156,7 @@ async function readLines(response: Response, onLine: (line: string) => void): Pr
             held = held.slice(from)
             from = 0
         }
-        held += decoder.decode(step.value, { stream: true })
+        held += decoder.decode(step.value, STREAMING)
         for (;;) {
             const at = held.indexOf('\n', from)
             if (at < 0) break

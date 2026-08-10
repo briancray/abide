@@ -4,6 +4,8 @@
 // no test runner to report to. An assertion here is a value comparison plus a thrown `AssertionError`
 // — the demo card catches it and paints the line red, the test runner catches it and fails the test.
 
+import { messageOf } from '$shared/internal/probes.ts'
+
 export class AssertionError extends Error {
     constructor(
         message: string,
@@ -85,9 +87,15 @@ export function fail(label: string, actual: unknown, expected: unknown): never {
     )
 }
 
-/** Does a thrown value's message match? A string matches as a substring, the way a reader reads it. */
+/**
+ * Does a thrown value's message match? A string matches as a substring, the way a reader reads it.
+ *
+ * `messageOf` rather than `error.message`: a transpile or resolution failure arrives as an aggregate,
+ * and matching on the wrapper's generic sentence instead of the diagnostic is what `throws(fn, 'unexpected
+ * token')` would silently stop being able to do.
+ */
 export function messageMatches(error: unknown, match: string | RegExp | undefined): boolean {
     if (match === undefined) return true
-    const message = error instanceof Error ? error.message : String(error)
+    const message = messageOf(error)
     return typeof match === 'string' ? message.includes(match) : match.test(message)
 }

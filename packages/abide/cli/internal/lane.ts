@@ -17,6 +17,7 @@
 // command can be the one that forgets to.
 
 import { abidePlugin } from '$compiler/plugin.ts'
+import { messageOf } from '$shared/internal/probes.ts'
 
 /** What the two lanes differ about, and the whole of it. */
 export interface Lane {
@@ -78,7 +79,9 @@ async function appPlugins(root: string): Promise<Bun.BunPlugin[]> {
         try {
             module = (await import(Bun.resolveSync(specifier, root))) as { default?: unknown }
         } catch (failure) {
-            throw new Error(`the plugin "${specifier}" did not load — ${(failure as Error).message}`)
+            // `messageOf`, not `.message`: a failed `import()` arrives as `{ errors: [{ message }] }`,
+            // and the wrapper's sentence says only that it did not load, not which token was unexpected.
+            throw new Error(`the plugin "${specifier}" did not load — ${messageOf(failure)}`)
         }
         const plugin = module.default
         if (typeof plugin !== 'object' || plugin === null || !('setup' in plugin)) {

@@ -917,6 +917,7 @@ export {
     type JsonType,
     SCHEMA_ERROR,
     type Schema,
+    type SchemaRefusal,
     type Shapes,
     type StandardSchemaV1,
     validateJson,

@@ -12,15 +12,8 @@
 // throw — `SyntaxError_` deliberately is not, because a lexer error is one the shells only format.
 
 import type { Shapes } from '$shared/internal/shapes.ts'
-import {
-    type Endpoint,
-    endpointId,
-    endpointsOf,
-    type Kind,
-    kindOf,
-    registration,
-    stub,
-} from './internal/elide.ts'
+import type { Kind } from '$shared/transport.ts'
+import { type Endpoint, endpointId, endpointsOf, kindOf, registration, stub } from './internal/elide.ts'
 import { emit } from './internal/emit.ts'
 import { SyntaxError_ } from './internal/lex.ts'
 import { positionAt, type Segment, sourceMap, startsOf } from './internal/map.ts'
@@ -29,14 +22,11 @@ import type { TypeSource } from './internal/shape.ts'
 
 // `Method` deliberately stays internal: the compiler's is a DECLARATION keyword — it includes
 // `socket` — and `abide` already exports a `Method` that is the HTTP verb a call travels as.
-export {
-    ElisionError,
-    type Endpoint,
-    endpointId,
-    type Kind,
-    kindOf,
-    TRANSPORT_MODULE,
-} from './internal/elide.ts'
+// `Kind` comes straight from `$shared`, the way `compiler/shapes.ts` takes it: it is the runtime's
+// own name for what an endpoint is, and a hop through `elide.ts` would put a file that does not
+// declare it between the two.
+export type { Kind } from '$shared/transport.ts'
+export { ElisionError, type Endpoint, endpointId, kindOf, TRANSPORT_MODULE } from './internal/elide.ts'
 /**
  * Where a build leaves what the checker derived, and where the plugin looks for it.
  *

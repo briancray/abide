@@ -21,6 +21,10 @@ const tagged = new Map<string, Set<TagEntry>>()
  * Returns the way OUT. A memo declared at module scope joins for the life of the process and never
  * uses it; a per-caller instance is created per request, so leaving is what stops the registry — a
  * module-level map holding strong references — growing by one entry per request forever.
+ *
+ * The NAME leaves with the last entry carrying it, not just the entry: names are resolved per slot
+ * from the args (`tags: ({ id }) => [\`user:${id}\`]`), so on a server "distinct name" is "distinct
+ * row ever asked for", and dropping only the entry left an empty Set behind for each one.
  */
 export function joinTags(names: string[], entry: TagEntry): () => void {
     for (const name of names) {
@@ -32,7 +36,12 @@ export function joinTags(names: string[], entry: TagEntry): () => void {
         members.add(entry)
     }
     return () => {
-        for (const name of names) tagged.get(name)?.delete(entry)
+        for (const name of names) {
+            const members = tagged.get(name)
+            if (members === undefined) continue
+            members.delete(entry)
+            if (members.size === 0) tagged.delete(name)
+        }
     }
 }
 

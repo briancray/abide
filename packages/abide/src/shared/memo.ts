@@ -30,8 +30,6 @@ import { disposeWith, storeFor } from './internal/scopes.ts'
 import { joinTags, taggedTargets } from './internal/tags.ts'
 import { arm } from './internal/timers.ts'
 
-export type { Memo }
-
 // The handle a keyed call hands back: the slot's own cell, plus the two verbs that need a body to
 // re-run. Everything else — `()`, `peek`, `set`, the probes, `await` — is the ordinary cell surface,
 // which is why there is no `live`/`peek(args)`/`publish(args, v)` vocabulary here any more. The args
@@ -449,6 +447,7 @@ function scopedArgless<T>(fallback: Memo<T>, build: () => Memo<T>): Memo<T> {
         refresh: () => pick().refresh(),
         dispose: () => pick().dispose(),
         chunks: () => pick().chunks(),
+        [Symbol.asyncIterator]: () => pick()[Symbol.asyncIterator](),
         pending: () => pick().pending(),
         refreshing: () => pick().refreshing(),
         streaming: () => pick().streaming(),

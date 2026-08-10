@@ -15,8 +15,9 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | `abide/compiler` | `compile()`, `elide()`, and their diagnostics. Pure: text in, text out, no filesystem |
 | `abide/compiler/check` | `emitFor`, `remap`, `diagnose` — the lane `abide check` runs |
 | `abide/compiler/shapes` | `deriveShapes` — the real checker over a project, for the shapes tokens cannot read |
+| `abide/compiler/assemble` | `NAMED_FORMATS` and the JSON Schema assembler — the closed set of `format` names abide will publish, so what `deriveShapes` emits and what `validateJson` accepts cannot drift |
 | `abide/compiler/plugin` | The Bun plugin: compiles `.abide` on import, elides a transport module per lane |
-| `abide/cli` | `cli(argv)`, `COMMANDS`, `CLI_EXIT_CODES`, and the client-build manifest shape |
+| `abide/cli` | `cli(argv)`, `COMMANDS`, `commandNamed`, `usage`, `CLI_EXIT_CODES`, `exitForStatus`, the client-build manifest shape, and the REPL's `LineEditor` / `suggest` / `EditorHooks` |
 
 ## Terms
 
@@ -73,7 +74,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | --- | --- | --- |
 | `channel` | `<T>(options?: ChannelOptions) => Channel<T>` | One stream of messages anyone may publish to and anyone may subscribe to. |
 | `channel` | `<T, Args>(options?: ChannelOptions) => KeyedChannel<Args, T>` | The same, split into independent rooms addressed by `Args`. Rooms are process-wide. |
-| `ch` | `(args: Args) => Channel<T>` | SELECTS a room and hands back an ordinary channel. |
+| `ch` | `(args: Args) => Channel<T>` | SELECTS a room and hands back an ordinary channel. A room that has been subscribed to is FORGOTTEN when its last subscriber leaves, with whatever it retained — rooms are named by the caller, so a table that only grew is one an arriving connection could grow without bound. Selecting the same args again builds a fresh room. |
 | `ch.publish` | `(message: T) => void` | Sends one message to every current subscriber. Delivery is against a snapshot of subscribers. |
 | `ch.subscribe` | `(listener: (m: T) => void) => () => void` | A plain listener outside the graph; returns its own unsubscribe. |
 | `ch.tail` | `() => AsyncGenerator<T>` | The transcript replayed, then every message after it. Snapshot and subscribe happen in one synchronous run, so nothing is missed. |
@@ -117,7 +118,8 @@ ITSELF, where they are a pattern.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `x()` | `() => T` | The current value, filling in on its own once it arrives. THROWS if the last load failed. On a stream, the latest chunk. |
-| `x.chunks` | `() => T[]` | Everything a stream produced, in order. A NEW array after each chunk and the same one between them; the same empty array on a source that never streamed. |
+| `x.chunks` | `() => T[]` | Everything a stream produced, in order — the LIVE transcript, not a copy. The same array across chunks as well as between them; its identity moving means the transcript was replaced (a reset, or an overflow drop), never appended to. A reader wakes on the version and re-reads it; do not hold it across an await expecting it frozen. The same empty array on a source that never streamed. |
+| `for await (… of x)` | `AsyncIterable<T>` | The cursor face of the same transcript, for a consumer that reads each chunk once: everything already produced, then everything that comes next. A second consumer replays the whole of it, because the transcript is retained on the cell. A cell that never streamed yields its value once and ends. |
 | `x.peek` | `() => T` | Exactly what is there now, subscribing to nothing, starting nothing, and never throwing. |
 | `await x` | `PromiseLike<T>` | The settled value — narrower than `x()`, which may find nothing there yet. Awaiting a cold slot starts it. |
 
@@ -204,7 +206,7 @@ Probes never throw and never start work.
 | coalescing | Three concurrent readers of one key cost one request — the memo slot does that, not the transport |
 | options | Never cross. A `ttl` crosses as its CONSEQUENCE, an `abide-ttl` response header in ms. Tags do not cross |
 | a failure | Crosses as `{ name, message, data? }` and is rebuilt as an `HttpError` carrying all three plus the status, which is what makes `isError(e, name)` answer over a wire and `.data` mean the same thing on both sides. `data` is absent unless the declaration carried one, and is read off an `HttpError` and nothing else — a payload crosses because a declaration said it may, not because a thrown object had a field by that name |
-| a refusal | Bad input is 422, bad output 500 (checked per CHUNK on a handler that yields), both under `AbideSchemaError` |
+| a refusal | Bad input is 422, bad output 500 (checked per CHUNK on a handler that yields), both under `AbideSchemaError` — carrying every issue as its `data`, so a caller reads the path rather than parsing the message |
 
 ## Schemas
 
@@ -215,6 +217,8 @@ Probes never throw and never start work.
 | plain function | `(value: unknown) => T` | Returns what it accepts and THROWS what it refuses. Synchronous by that contract. |
 | Standard Schema | `StandardSchemaV1<T>` | The interop spec zod/valibot/arktype answer to; `validate` may return a promise. Validate-only, so it cannot be published. abide declares the interface and imports no implementation. |
 | `SCHEMA_ERROR` | `'AbideSchemaError'` | The one name every shape refusal in abide travels under. |
+| `SchemaRefusal` | `Failed<'AbideSchemaError', readonly Issue[]>` | That refusal as it is caught. In the refusal union of EVERY declaration, so `fn(args).isError(e, SCHEMA_ERROR)` narrows `e.data` to the issues with nothing declared. |
+| `Issue` | `{ path: string; message: string }` | One thing wrong, and where. `path` is `''` for the value itself, and for the plain-function form, which throws a sentence and has no path to give. |
 | `validateJson` | `(schema: JsonSchema, value: unknown) => Issue[] \| null` | The native validator, `null` when it matches. |
 
 Checked in the memo's BODY, the one place every door leads to. The slot stays keyed by what the
@@ -302,8 +306,9 @@ Per-caller is the default; `{ global }` is how something belonging to the proces
 client there is one caller forever, so neither is needed.
 
 The scope lasts as long as the RESPONSE, not as long as the handler. A handler answering with a
-stream returns before a byte of the body is written, so every streaming body abide builds — `toStream`
-and `documentToStream`, `jsonl` and `sse`, and a streaming rpc — holds the scope until its last chunk.
+stream returns before a byte of the body is written, so every streaming body abide builds — `toStream`,
+`documentToStream` and `fragmentToStream`, `jsonl` and `sse`, and a streaming rpc — holds the scope
+until its last chunk.
 Otherwise a `memo` the handler read and the body reads again finds a cache torn down under it and
 builds the same answer a second time: the right value, twice the work, and nothing to say so. The
 ambients need no such help: they ride the async context an `await` already carries.
@@ -521,7 +526,8 @@ that way and keeps the explicit spelling.
 | `on<event>={fn}` | Native listener on an ELEMENT. On a **component** the same syntax is an ordinary prop named `onclick` |
 | `name="…{expr}…"` | Quoted values interpolate too, also on component props; a literal brace is `{'{'}` |
 | `bind:value` | Two-way bind — read the property, write back on input/change. On a **component** it is the same as passing the cell: the child declares the prop as one and writes it |
-| `bind:checked` / `bind:selected` | Boolean bind — a boolean DOM property mirrored as a boolean attribute, never stringified |
+| `bind:checked` | Boolean bind — a boolean DOM property mirrored as a boolean attribute, never stringified |
+| a `<select>` | `bind:value` on the SELECT, with a plain `value="…"` on each `<option>`. `bind:selected` on an option is refused: `change` does not fire there, so only the select has both halves |
 | `bind:group` | Radio/checkbox membership, compared against the input's own `value`; never emitted as a `group` attribute |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair |
 | `bind:element={state \| fn}` | Node ref (state) or per-instance handler with the node as argument. Client-only |
@@ -612,7 +618,7 @@ stops being inline. A comment that has to reach the browser is `{html('<!-- … 
 | `Shell` | `{ head: string; open: string; close: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close`. Cut once, because a document cannot change under a running process. |
 | `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => unknown, fallback?: unknown) => Suspend` | Emit a placeholder now and the real subtree when the value lands. ISOMORPHIC — exported from `abide` and re-exported here — because a page is the same module on both sides, so a marker only one substrate knew would render `[object Object]` in the other. Three continuations, one call: a `renderDocument` DEFERS it and patches it in; a render with nowhere to patch AWAITS it inline and never emits the fallback; the client shows the fallback and swaps when it lands, and hydration adopts the settled body rather than re-running the load. |
 | `options.hydratable` | `boolean` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
-| `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`. |
+| `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`, which tears the tree down and — for a renderer that was handed `outlet` itself — hands the navigation sink back, so a second `mount` is the live one. |
 | `hydrate` | `(container: Element, view: () => TemplateResult) => Mounted` | The same over markup a hydratable render wrote — every part adopts its range. A divergence rebuilds that subtree and warns. |
 
 The two-line patch script goes out with the FIRST deferred subtree rather than in the shell: a page
@@ -686,7 +692,7 @@ ordinary authoring vocabulary too.
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `escape` | `(value: string) => string` | The text escape both substrates use. Probes before it replaces. |
-| `styleTags` | `() => string` | Every registered block as its own `<style data-abide="…">`, in registration order — what a server render puts in `<head>` and what `adopt` recognises. |
+| `styleTags` | `(nonce?: string \| null) => string` | Every registered block as its own `<style data-abide="…">`, in registration order — what a server render puts in `<head>` and what `adopt` recognises. Under a nonce the answer is not memoized and an empty `<style nonce data-abide="">` carrier is prepended, which is what `adopt` reads the nonce off — see "Styles under a policy". |
 | `classifySlots` | `(strings: readonly string[]) => SlotKind[]` | THE one slot classifier, shared by both substrates. One of `child`, `attr`, `event`, `property`, `ref`, `spread` per hole. |
 | `isTemplate` / `isKeyed` / `KEY` | `(v: unknown) => boolean`, `symbol` | The brands, for a renderer deciding what it was handed. |
 
@@ -700,7 +706,7 @@ One pure function and what a caller needs to REPORT what it did. No filesystem, 
 | `.code` | `string` | The emitted module — the `html` template you would have written by hand. |
 | `.map` | `string` | A v3 source map with the `.abide` file inlined. |
 | `.segments` | `Segment[]` | The same mapping unencoded, which is what moves a diagnostic back to the source. |
-| `originalPosition` | `(segments, position: number) => number` | A position in emitted code back to its position in the `.abide` file. |
+| `originalPosition` | `(segments: Segment[], generatedLine: number, generatedColumn: number) => { line: number; column: number } \| null` | A zero-based position in emitted code back to its position in the `.abide` file. `null` when that line maps to nothing. |
 | `locate` | `(source: string, position: number) => { line: number; column: number }` | That position as one-based line and column. |
 | `describe` | `(source: string, filename: string, error: unknown) => string` | A thrown compile failure as one `file:line:col message` string. Anything else stringifies unchanged. |
 | `ParseError` / `ElisionError` | `class` | The two classes, so a caller can tell a compile failure from any other throw. |
@@ -773,7 +779,8 @@ JS allocations per template node is deliberately absent — no engine this runs 
 | `nonZero` | `(counts: Counts) => string` | Only the counters that moved, as `label: n` pairs. |
 | `timeArms` / `duration` / `ratioText` / `verdict` | — | The timing half: run the arms, and say whether a ratio is real or inside the noise (`NOISE`, `NOISY_SPREAD`, `clockResolution`). |
 | `nsPerOp` | `(arms: Arm[], settle?) => Promise<number[]>` | ns per op for each arm, calibrated and interleaved — for a `run` that asserts a ratio without a bench card. A fixed loop cannot: a 1 ms clock clamp reads a fast op as 0. |
-| `quiesce` / `settled` / `microtasks` / `frame` / `tick` | `() => Promise<void>` | Waiting primitives, so a bench measures the work rather than the harness. |
+| `quiesce` / `settled` / `frame` / `tick` | `() => Promise<void>` | Waiting primitives, so a bench measures the work rather than the harness. |
+| `microtasks` | `(work: () => Promise<unknown>) => Promise<number>` | How many microtask TURNS a piece of work takes — the second of the three numbers emitted code is budgeted in. Subtract `floorTicks()`. |
 
 The small tools a `run` reaches for. `reader` is the first one to know: it is how a case asserts
 WAKE-UPS rather than values, which is the one thing a correctness test cannot show about a reactive
@@ -832,7 +839,8 @@ every navigation after it.
 | a refusal | A rung short-circuiting with a `Response` — a redirect, a 403 — hands the url to the BROWSER, so the server's own answer is what renders. There is no second refusal protocol, and nothing for an app to spell twice |
 | the paint | The part showing the outlet ADOPTS the fragment, so a navigation costs the same near-nothing hydration does. The page's own module is then what makes it interactive rather than what makes it visible |
 | the commit | On the MODULE, not on the markup: committing earlier re-runs `outlet()` against a view that has not arrived, which renders nothing over markup that was already right. The address bar moves with the screen, so `route()` catches up within the window `navigating` already reports |
-| who installs it | `abide/ui`, when `mount`/`hydrate` is handed `outlet` ITSELF. A renderer showing something else is not the part a navigation repaints, and an app that never puts the outlet on screen installs nothing |
+| an overtaken one | Only the NEWEST navigation commits, and only it clears `navigating` — an older one that lands second returns before `commit` rather than writing its params over the newer page. Its response is still read to the end rather than cancelled, so the stream's own bookkeeping is not left half-done |
+| who installs it | `abide/ui`, when `mount`/`hydrate` is handed `outlet` ITSELF. A renderer showing something else is not the part a navigation repaints, and an app that never puts the outlet on screen installs nothing. `dispose()` UNINSTALLS it, so the renderer driving the screen is the one driving navigation |
 | where it does not apply | A caller with a SCOPE — a request being served, a test driving a route inside an `isolate`. Neither has a screen to repaint or an onion to pass through |
 
 ### A navigation streams out of order

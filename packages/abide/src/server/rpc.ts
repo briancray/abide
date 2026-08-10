@@ -19,6 +19,7 @@ import {
     JSON_TYPE,
     NDJSON_TYPE,
     type Refusals,
+    TRANSPORT_ERROR,
     TTL_HEADER,
 } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
@@ -26,7 +27,7 @@ import { type KeyedMemo, type MemoOptions, memo } from '$shared/memo.ts'
 import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { knobOf } from './config.ts'
 import { failed, headersFor } from './responses.ts'
-import { type Gate, gate, publishable, type Schema } from './schema.ts'
+import { type Gate, gate, publishable, type Schema, type SchemaRefusal } from './schema.ts'
 import { heldStream } from './scopes.ts'
 
 /**
@@ -202,8 +203,13 @@ function chained<Args, T>(
  * output shape — a refusal left in it would be a schema saying the answer might be an error object.
  * The refusal half is what `fn(args).isError(e, name)` narrows against, and it is a third type
  * parameter rather than a second reading of the first so that neither reader has to strip the other.
+ *
+ * The shape refusal is in that half for EVERY declaration, without an author declaring it: a gate is
+ * built here from what was declared and again in `describeRpc` from what the compiler derived, so an
+ * endpoint with no schema written on it still has this door. Adding it costs nothing at runtime and
+ * nothing to the value half — a caller that never asks about it never sees it.
  */
-type Declared<Args, T> = Rpc<Args, Answer<T>, Refusals<T>>
+type Declared<Args, T> = Rpc<Args, Answer<T>, Refusals<T> | SchemaRefusal>
 
 function declare<Args, T>(
     method: Method,
@@ -363,7 +369,7 @@ const NO_STORE = 'private, no-store'
  * caller, and a reader of the raw body has the address in the URL bar already.
  */
 export function refuse(message: string, status: number, headers?: Record<string, string>): Response {
-    return failed('AbideTransportError', message, status, headers)
+    return failed(TRANSPORT_ERROR, message, status, headers)
 }
 
 /**

@@ -273,13 +273,14 @@ export default suite({
                 log('the reader saw', view.seen.join(' → '))
                 view.dispose()
 
-                // A new array per chunk is what a reader of `chunks()` wakes on, and the same one
-                // between chunks is what stops it doing the work twice. Both still hold now that the
-                // transcript is pushed into rather than rebuilt — a VERSION is what moves, and the
-                // array is built on the read that follows it.
+                // The VERSION is what a reader of `chunks()` wakes on, and what it is handed back is
+                // the transcript itself rather than a copy — the same array across chunks as well as
+                // between them. That is what stops a reader who re-reads the whole list paying an
+                // array per chunk; the identity moving at all means the transcript was REPLACED,
+                // which only a reset or an overflow drop does.
                 const asked = line.chunks()
                 const askedAgain = line.chunks()
-                is('chunks() is stable between chunks', asked === askedAgain, true)
+                is('chunks() hands back the transcript itself', asked === askedAgain, true)
             },
             interact({ host, log }) {
                 async function* typing(): AsyncGenerator<string> {
@@ -338,26 +339,66 @@ export default suite({
         },
 
         {
+            title: 'for await — the cursor face of the same transcript',
+            note: '`chunks()` is for a reader that re-reads the whole list; this is for one that reads each chunk once and never looks back. Same cell, same transcript, no second vocabulary — and the two are why `chunks()` can hand back the live buffer: the reader that must not see it move is the one that re-reads it, and this one re-reads nothing. The replay is what makes it a CELL rather than a subscription: a consumer that arrives after the stream ended still gets the whole of it.',
+            async run({ is }) {
+                async function* words(): AsyncGenerator<string> {
+                    for (const word of ['one', 'two', 'three']) {
+                        await sleep(3)
+                        yield word
+                    }
+                }
+                const line = state<string | undefined>(undefined)
+                line.set(words())
+
+                const got: (string | undefined)[] = []
+                for await (const word of line) got.push(word)
+                is('the loop received every chunk', got, ['one', 'two', 'three'])
+
+                const again: (string | undefined)[] = []
+                for await (const word of line) again.push(word)
+                is('a second consumer replays the whole of it', again, ['one', 'two', 'three'])
+
+                // Nothing here is special-cased for a stream: a cell that never met one has no
+                // transcript, so the loop hands over what it holds and ends.
+                const plain = state('just this')
+                const once: string[] = []
+                for await (const value of plain) once.push(value)
+                is('a cell that never streamed yields its value and ends', once, ['just this'])
+            },
+        },
+
+        {
             title: 'a long stream costs its LENGTH, not its length squared',
-            note: 'The transcript is what a stream accumulates, and unlike a channel’s it has no cap — so rebuilding it per chunk was O(n²) over the whole stream. At 64k chunks that was 98% of the entire cost of streaming: 781 ms, of which 770 ms was copying an array that had just been copied. It is pushed into now, with a version counter to wake readers, so `chunks()` still hands back a new array per chunk — built on the read that follows, which a stream nobody reads the transcript of never pays for.',
+            note: 'The transcript is what a stream accumulates, and unlike a channel’s it has no cap — so rebuilding it per chunk was O(n²) over the whole stream. At 64k chunks that was 98% of the entire cost of streaming: 781 ms, of which 770 ms was copying an array that had just been copied. It is pushed into now, with a version counter to wake readers, and `chunks()` hands back the buffer itself. Both arms below matter and only the second one is hard: a stream nobody reads the transcript of never copies anything, so it stayed linear even when a reader of one was still quadratic — the copy had moved from the write to the read rather than gone. The reader that re-reads the whole list per chunk is the one the shape has to survive.',
             async run({ is }) {
                 async function* counted(n: number): AsyncGenerator<number> {
                     for (let i = 0; i < n; i++) yield i
                 }
-                const drain = async (n: number): Promise<number> => {
+                const drain = async (n: number, live: boolean): Promise<number> => {
                     const cell = state<number | undefined>(undefined)
                     const at = performance.now()
                     cell.set(counted(n))
+                    // Subscribed to the transcript, which is what a slot rendering one is: it wakes
+                    // per chunk and reads the whole list back every time.
+                    const stop = live ? watch(() => void cell.chunks().length) : null
                     await until(() => cell.done(), 'the stream to finish', 30_000)
                     const took = performance.now() - at
+                    stop?.()
                     is(`${n} chunks all arrived`, cell.chunks().length, n)
                     return took
                 }
 
                 // Four times the chunks. Linear says about 4x; the quadratic shape this replaced was
                 // 8x between these two sizes and got worse from there.
-                const ratio = (await drain(16_000)) / (await drain(4_000))
-                is(`4x the chunks costs about 4x, not 16x (${ratio.toFixed(1)}x)`, ratio < 8, true)
+                const alone = (await drain(16_000, false)) / (await drain(4_000, false))
+                is(`4x the chunks costs about 4x, not 16x (${alone.toFixed(1)}x)`, alone < 8, true)
+
+                // The arm the copy hid in. Measured at 8.0x while `chunks()` still snapshotted, and
+                // 1.2–3.0x once it stopped — the bound sits between the two rather than beside
+                // either, because the quadratic only gets worse with n and the linear one does not.
+                const watched = (await drain(16_000, true)) / (await drain(4_000, true))
+                is(`…and the same with a reader of the transcript (${watched.toFixed(1)}x)`, watched < 6, true)
             },
         },
 

@@ -31,7 +31,8 @@ export interface Token {
      *
      * The scanner's own answer rather than a second scan for `\n`: this is what ASI is decided on,
      * and in a codebase written without semicolons it is the only thing that says where a statement
-     * ended. See `assignmentEnd` in `desugar.ts`, which is the consumer.
+     * ended. See `assignmentEnd` in `desugar.ts` and `startsStatement` in `types.ts` — the two
+     * consumers.
      */
     startsLine: boolean
 }

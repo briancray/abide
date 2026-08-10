@@ -132,14 +132,18 @@ class DocumentNavigation implements NavigationSink {
          * Both callers are past the point where `first` could still be true — the opening call
          * returns at its first piece — so a piece drained here is always a patch, and the text is
          * already one string, so there is no rope to re-flatten per search.
+         *
+         * A CURSOR rather than re-binding the remainder per piece: dropping the head of a k-piece
+         * remainder copies what is left of it k times, and settled patches arrive in bursts, so a
+         * remainder holding k pieces is the case this is on.
          */
         const drain = (text: string): string => {
-            let left = text
+            let from = 0
             for (;;) {
-                const cut = left.indexOf(PIECE_END)
-                if (cut === -1) return left
-                this.apply(held, left.slice(0, cut), false)
-                left = left.slice(cut + PIECE_END.length)
+                const cut = text.indexOf(PIECE_END, from)
+                if (cut === -1) return from === 0 ? text : text.slice(from)
+                this.apply(held, text.slice(from, cut), false)
+                from = cut + PIECE_END.length
             }
         }
 
@@ -238,7 +242,7 @@ const NEVER: Promise<void> = new Promise<void>(() => {})
  * not that part. An app that never puts the outlet on the screen has no navigation to serve and
  * installs nothing, which is also what makes this cost a bundle that renders no pages nothing.
  */
-export function installNavigation(part: ChildPart): void {
-    if (typeof fetch !== 'function') return
-    useNavigationSink(new DocumentNavigation(part))
+export function installNavigation(part: ChildPart): (() => void) | null {
+    if (typeof fetch !== 'function') return null
+    return useNavigationSink(new DocumentNavigation(part))
 }

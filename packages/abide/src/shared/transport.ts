@@ -13,7 +13,6 @@
 
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from './channel.ts'
 import { markSource } from './internal/BRANDS.ts'
-import { internals } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
 import { hasFile } from './internal/probes.ts'
@@ -33,7 +32,6 @@ import {
     wireError,
 } from './internal/wire.ts'
 import { type KeyedMemo, type MemoHandle, memo } from './memo.ts'
-import { untrack, watch } from './reactive.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -57,7 +55,14 @@ export interface CallOptions {
  * `never`, which is a handler that declared none: the name overload is then the only one that
  * resolves, and asking is the boolean it always was.
  */
-export interface RpcHandle<T, F extends Failed = never> extends MemoHandle<T>, AsyncIterable<T> {
+export interface RpcHandle<T, F extends Failed = never> extends MemoHandle<T> {
+    /**
+     * The CHUNKS, which are `T`. Narrowed from the cell's own iterator rather than extending
+     * `AsyncIterable<T>` beside it: a handle is `State<T | undefined>`, because `undefined` is what
+     * it holds before anything has landed — but that is not something the loop ever yields, and
+     * declaring the same member through two supertypes is a conflict rather than an intersection.
+     */
+    [Symbol.asyncIterator](): AsyncIterator<T>
     isError<Name extends F['name']>(failure: unknown, name: Name): failure is Extract<F, Failed<Name>>
     isError(failure: unknown, name: string): boolean
 }
@@ -68,100 +73,6 @@ export interface Rpc<Args, T, F extends Failed = never> extends KeyedMemo<Args, 
     raw(args: Args, init?: RequestInit): Promise<Response>
     readonly method: Method
     readonly description: string | undefined
-}
-
-// --- the loop over a slot ----------------------------------------------------
-
-// The cursor's "no transcript yet" start. A sentinel rather than `[]`, so the first `look()` sees
-// an identity change and adopts the live buffer instead of walking a private empty array forever.
-const NOTHING_YET: readonly never[] = []
-
-/**
- * `for await (const chunk of fn(args))` — everything the slot has already produced, then everything
- * that comes next.
- *
- * The replay is what makes it a slot rather than a subscription: a second consumer of a stream that
- * has already run gets the whole of it, because the transcript is retained on the cell. A failure is
- * ASKED about rather than caught around the read, so the throw comes from the loop that is consuming
- * it and not from whichever reader happened to kick the load.
- */
-async function* iterate<T>(handle: RpcHandle<T>): AsyncGenerator<T> {
-    let wake: (() => void) | null = null
-    // LEVEL-triggered, not edge-triggered. A generator spends most of its life suspended at a
-    // `yield` waiting for its consumer, and every chunk that lands in that window would otherwise
-    // wake nobody: the flag is what the loop checks before parking, so a producer faster than the
-    // consumer cannot strand it. Over a real socket that is the common case, not the rare one.
-    let moved = false
-    const stop = watch(() => {
-        // The version, not the transcript: this body only wants to be WOKEN. `chunks()` here would
-        // materialise a full copy per chunk that nothing in this closure ever looks at, and it would
-        // do it while the consumer is parked at a `yield`.
-        internals.transcript(handle)
-        handle.streaming()
-        handle.settled()
-        handle.error()
-        moved = true
-        const resume = wake
-        wake = null
-        resume?.()
-    })
-    try {
-        // The read is what starts the load. Untracked: this generator is not a reactive reader, and
-        // it may well be running inside someone else's effect.
-        untrack(() => {
-            try {
-                handle()
-            } catch {
-                // Asked about below, where the loop can throw it at its own consumer.
-            }
-        })
-        let at = 0
-        let finished = false
-        // The LIVE buffer, walked with a cursor. `chunks()` would hand over a fresh copy of the
-        // whole transcript per chunk — twice, counting the subscribe above — which is a full slice
-        // for a loop that only ever reads the tail it has not reached yet, and O(n²) over a stream.
-        let produced: readonly T[] = NOTHING_YET
-        // Closures built ONCE for the whole loop rather than one per probe per turn: this runs per
-        // chunk, and a producer faster than its consumer is the common case over a socket.
-        const look = (): void => {
-            // ASKED BEFORE the transcript is read, and that order is the whole of it: a stream that
-            // ended between the two reads has already written its last chunk, so reading the
-            // transcript second cannot miss one. The other order drops the final chunk every time.
-            finished = handle.settled() && !handle.streaming()
-            const held = internals.transcript(handle) as readonly T[]
-            // A new array means the transcript was REPLACED — dropped on overflow, or reset by a
-            // reload — rather than appended to, and a cursor into the old one indexes nothing.
-            if (held !== produced) {
-                produced = held
-                at = 0
-            }
-        }
-        // Asked AFTER the transcript is handed over, so a failure that arrived while this was
-        // suspended at a `yield` is thrown by the loop that was waiting on it.
-        const asked = (): unknown => handle.error()
-        for (;;) {
-            moved = false
-            untrack(look)
-            while (at < produced.length) yield produced[at++] as T
-            const failure = untrack(asked)
-            if (failure !== undefined) throw failure
-            if (finished) {
-                // A handler that returned one value rather than yielding has no transcript, so the
-                // loop hands over the value itself and ends. One shape reads both.
-                if (at === 0) {
-                    const value = untrack(() => handle.peek())
-                    if (value !== undefined) yield value as T
-                }
-                return
-            }
-            if (moved) continue // something landed while this was suspended at a `yield`
-            await new Promise<void>((resolve) => {
-                wake = resolve
-            })
-        }
-    } finally {
-        stop()
-    }
 }
 
 /**
@@ -212,11 +123,9 @@ interface RpcSpec<Args> {
  */
 export function asRpc<Args, T>(call: KeyedMemo<Args, T>, spec: RpcSpec<Args>): Rpc<Args, T> {
     const rpc = ((args: Args, options?: CallOptions): RpcHandle<T> => {
+        // Nothing to attach: a handle IS a cell, and every cell carries its own iterator. The
+        // per-slot attach this replaced existed only because the loop lived out here.
         const handle = call(args) as RpcHandle<T>
-        // Attached to the SLOT and once per slot: the handle is the same object every time the key
-        // is selected, so this is a lookup on every call but the first.
-        const attach = handle as unknown as { [Symbol.asyncIterator]?: () => AsyncIterator<T> }
-        if (attach[Symbol.asyncIterator] === undefined) attach[Symbol.asyncIterator] = () => iterate(handle)
         if (options === undefined || options.signal === undefined) return handle
         return abandonable(handle, options.signal)
     }) as Rpc<Args, T>

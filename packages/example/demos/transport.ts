@@ -45,12 +45,13 @@ import {
     register,
     type Schema,
     SCHEMA_ERROR,
+    type SchemaRefusal,
     socket,
     type StandardSchemaV1,
     sse,
     validateJson,
 } from 'abide/server'
-import { loopback, reader, sleep, suite, until } from 'abide/tests'
+import { countCalls, loopback, reader, sleep, suite, until } from 'abide/tests'
 import { assertType, type Exact } from '../types/exact.ts'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -869,6 +870,16 @@ export default suite({
                     remoteUser({ id: -1 }).isError(caught, SCHEMA_ERROR),
                     true,
                 )
+                // …and so did the issues, as the DATA rather than as a sentence to parse. The
+                // narrowing comes off `getUser` because that is the declaration: every one of them
+                // refuses this way, since a shape nobody wrote is still the one the compiler derived
+                // from the handler's type, so nothing here was declared to make the line below type.
+                if (getUser({ id: 0 }).isError(caught, SCHEMA_ERROR)) {
+                    assertType<Exact<typeof caught.data, SchemaRefusal['data']>>()
+                    is('…and every issue it found came with it', caught.data, [
+                        { path: '', message: 'id must be a positive integer' },
+                    ])
+                }
 
                 is('a Standard Schema is the other door', await remoteRename({ name: 'ada' }), {
                     name: 'ada',
@@ -878,6 +889,20 @@ export default suite({
                     remoteRename({ name: '' }),
                     /name: expected a non-empty string/,
                 )
+                let refusedName: unknown
+                try {
+                    rename({ name: '' })()
+                } catch (failure) {
+                    refusedName = failure
+                }
+                // The PATH is the reason this is data at all: a form putting the refusal beside the
+                // field that caused it has the field name here, rather than by splitting the message
+                // on a `: ` this file would then have to keep spelling the same way.
+                if (rename({ name: '' }).isError(refusedName, SCHEMA_ERROR)) {
+                    is('…each with the path that names the field', refusedName.data, [
+                        { path: 'name', message: 'expected a non-empty string' },
+                    ])
+                }
 
                 // A handler that answered the wrong shape is not something a caller can fix by
                 // calling differently, so it is not a 422.
@@ -1509,6 +1534,35 @@ export default suite({
                 is('the whole source surface answers', remoteTicks.settled(), true)
                 is('a channel never loads, so it never ends', remoteTicks.done(), false)
                 remoteTicks.close()
+            },
+        },
+
+        {
+            title: 'a room encodes a message once, however many are listening to it',
+            note: 'A publish hands every listener the SAME object, so a subscription per connection ran a `JSON.stringify` per connection over it — N identical walks producing byte-identical output, which at a thousand subscribers is a hundred times the encoding for one message. One subscription per room, encoding where the message arrives rather than where it leaves, makes it one. Nothing about what the clients receive changes, which is why the claim is a count of encodes rather than of frames.',
+            async run({ is }) {
+                const feed = socket<{ n: number }>({ channel: { tail: 4 } })
+                register('socket', [['demo/socket/fanout', 'feed']], { feed })
+
+                // Four independent client channels on one address is four connections into one room.
+                const listeners: RemoteSocket<{ n: number }>[] = []
+                for (let i = 0; i < 4; i++) {
+                    listeners.push(sock<{ n: number }>('demo/socket/fanout', { channel: { tail: 4 } }))
+                }
+                const upgraded = wire.connected
+                for (const listening of listeners) listening()
+                await until(() => wire.connected >= upgraded + listeners.length)
+
+                const encodes = countCalls(JSON, 'stringify')
+                feed.publish({ n: 1 })
+                encodes.restore()
+                is('one encode for the publish, not one per subscriber', encodes.calls, 1)
+
+                await until(() => listeners[0]?.chunks().length === 1)
+                for (const listening of listeners) {
+                    is('…and every subscriber got it', listening.peek(), { n: 1 })
+                }
+                for (const listening of listeners) listening.close()
             },
             interact({ host, log }) {
                 const feed = socket<string>({ channel: { tail: 6 } })

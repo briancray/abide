@@ -468,11 +468,9 @@ function reactiveProps(bound: Map<string, string>, declared: string, into: React
         if (match === null) return
         const local = bound.get(match[1] as string)
         if (local === undefined) continue
-        const type = match[2] as string
-        // The two types whose CALL is the source: a keyed memo selects a slot, a room channel
-        // selects a room. Everything else in the set is read by name.
-        if (type === 'KeyedMemo' || type === 'KeyedChannel') into.keyed.add(local)
-        else if (REACTIVE_TYPES.has(type)) into.cells.add(local)
+        const reactive = REACTIVE_TYPES.get(match[2] as string)
+        if (reactive === 'keyed') into.keyed.add(local)
+        else if (reactive === 'cell') into.cells.add(local)
     }
 }
 
@@ -480,7 +478,6 @@ interface Import {
     default: string | null
     namespace: string | null
     named: string[]
-    bare: boolean
 }
 
 const IMPORT_FORM = /^import\s+(?:(type)\s+)?([\s\S]*?)\s*from\s*['"]([^'"]+)['"]|^import\s*['"]([^'"]+)['"]/
@@ -514,14 +511,12 @@ function mergeImports(statements: string[], erased: ReadonlySet<string>): string
         const module = (match[3] ?? match[4]) as string
         let entry = byModule.get(module)
         if (entry === undefined) {
-            entry = { default: null, namespace: null, named: [], bare: false }
+            entry = { default: null, namespace: null, named: [] }
             byModule.set(module, entry)
             order.push(module)
         }
-        if (match[4] !== undefined) {
-            entry.bare = true
-            continue
-        }
+        // A bare `import 'x'` adds no specifier; the empty-clause arm below is what re-emits it.
+        if (match[4] !== undefined) continue
         const typeOnly = match[1] !== undefined
         const clause = (match[2] ?? '').trim()
         const braces = /^([^{]*?)\s*,?\s*\{([\s\S]*)\}$/.exec(clause)
@@ -1297,7 +1292,19 @@ function bind(
     const write = (value: string): string =>
         accessor ? `(${source}).set(${value})` : `${source}.set(${value})`
 
-    if (key_ === 'checked' || key_ === 'selected') {
+    if (key_ === 'selected') {
+        // Refused rather than emitted: a selection belongs to the `<select>`, not to an `<option>`.
+        // `change` does not fire on an option, so the write-back half was dead, and `option` is not in
+        // `ELEMENT_TYPES` — so the read half was `HTMLElement.selected`, a type error in the author's
+        // own build. The default arm below already binds a select, which is the whole feature.
+        throw new ParseError(
+            'abide: a selection is bound on the `<select>` — write `bind:value` there and give each ' +
+                '`<option>` its own `value="…"`',
+            attribute.value?.start ?? 0,
+        )
+    }
+
+    if (key_ === 'checked') {
         // A boolean DOM property mirrored as a boolean ATTRIBUTE: present iff truthy, never
         // stringified — which is why the attribute slot is handed the raw boolean.
         return (
@@ -1337,7 +1344,8 @@ function bind(
     // value goes through `unwrap`, which reads a source one step further, so the two are the same
     // write on both substrates — and the thunk was a fresh closure per bound input per row. The
     // exceptions are the arms above and are exactly why they are arms: an accessor pair is not a
-    // cell, and `checked`/`selected` need the `!!` coercion for the attribute half.
+    // cell, and `checked` needs the `!!` coercion for the attribute half. A `<select>` lands HERE —
+    // `.value` plus a `change` listener — which is why there is no arm of its own for one.
     const value = accessor ? `() => ${read}` : source
     return ` .${key_}=\${${value}}` + ` @${listener}=\${(event: Event) => ${write(target(key_))}}`
 }

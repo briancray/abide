@@ -31,6 +31,16 @@ const NO_MESSAGES: never[] = []
  */
 const DRAIN_SLACK = 64
 
+/**
+ * How a ROOM lets go of itself, keyed on the room rather than carried as a field on it.
+ *
+ * A channel's public shape is what a component reads, and a room is an ordinary channel — the whole
+ * claim of the room form is that there is no second vocabulary. So the one thing a room knows that a
+ * bare channel does not lives out here, where nothing that reads a channel can see it, and where a
+ * channel that is not a room carries no entry at all.
+ */
+const FORGET_ROOM = new WeakMap<object, () => void>()
+
 export interface Channel<T> {
     /** Latest message, reactive. Subscribes the caller. */
     (): T | undefined
@@ -158,6 +168,12 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         if (held !== undefined) return held.room
         const room = channel<T>(options)
         rooms.set(key, { args, room })
+        FORGET_ROOM.set(room, () => {
+            // Only if it is still the room under that key: a select that built a new one after the
+            // last subscriber left must not be dropped by the old one's departure arriving after it.
+            const table = rooms
+            if (table !== null && table.get(key)?.room === room) table.delete(key)
+        })
         return room
     }
 
@@ -299,6 +315,12 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
             clearTimeout(expiry)
             expiry = null
         }
+        // Asked BEFORE the reset, and separately, for the reason the three cells exist at all: a
+        // room with nothing in it has no transcript to forget and no message to un-say, so an
+        // unguarded bump woke every reader of every idle room on a bulk `invalidate(pattern)` and
+        // handed each one back exactly what it already had. `expire` guards the same two writes.
+        const hadWindow = buffer.length - head > 0
+        const hadMessage = got.peek()
         latest = undefined
         at = 0
         buffer = NO_MESSAGES
@@ -306,8 +328,8 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         head = 0
         view = NO_MESSAGES
         got.set(false)
-        transcript.set(transcript.peek() + 1)
-        messages.set(messages.peek() + 1)
+        if (hadWindow) transcript.set(transcript.peek() + 1)
+        if (hadMessage) messages.set(messages.peek() + 1)
     }
     // All five cold answers spelled as the constants they are. `messages` is only ever handed a
     // number, so routing the first three through it asked a cell that can never load: the first
@@ -326,7 +348,16 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     self.watch = (handler) => watch(self as () => T | undefined, handler)
     self.subscribe = (listener: (message: T) => void): (() => void) => {
         listeners.add(listener)
-        return () => void listeners.delete(listener)
+        return () => {
+            if (!listeners.delete(listener)) return
+            // The LAST subscriber leaving is what forgets a ROOM. Rooms are named by whoever selects
+            // one — a socket's comes off the query string of the request that upgraded — so a table
+            // that only ever grows is one an arriving connection can grow without a bound, and a
+            // room holds a retention and three cells. What goes is exactly what nothing can reach:
+            // a room nobody is subscribed to is a transcript nobody will be handed. The bare channel
+            // has no owner to be forgotten by and carries no entry here.
+            if (listeners.size === 0) FORGET_ROOM.get(self)?.()
+        }
     }
     // The one protocol both iterating faces have: a queue, a wake latch, and an unsubscribe on the
     // way out. The seed is read INSIDE the body rather than at the call, so it and the `subscribe`

@@ -439,6 +439,14 @@ export function errorPayload(error: unknown): { error: WireError } {
 }
 
 /**
+ * The name a refusal carries when nothing more specific did, spelled ONCE the way `AbideTimeoutError`
+ * is: `$server`'s `refuse` writes it and `wireError` below rebuilds it, and `fn.isError(e, …)` is the
+ * public question asked of the result — so a rename on one side alone makes that predicate answer
+ * `false` for exactly the unparseable-refusal path.
+ */
+export const TRANSPORT_ERROR = 'AbideTransportError'
+
+/**
  * The failure a caller sees, rebuilt with the name the server gave it — and with the status and the
  * data, which is what makes an in-process catch and a catch over a wire the same object.
  *
@@ -448,11 +456,7 @@ export function errorPayload(error: unknown): { error: WireError } {
 export function wireError(id: string, status: number, payload: unknown): Error {
     const carried = (payload as { error?: WireError } | null)?.error
     if (carried === undefined || carried === null) {
-        return new HttpError(
-            'AbideTransportError',
-            `abide: ${id} failed with ${status}${text(payload)}`,
-            status,
-        )
+        return new HttpError(TRANSPORT_ERROR, `abide: ${id} failed with ${status}${text(payload)}`, status)
     }
     return new HttpError(carried.name, `abide: ${id} — ${carried.message}`, status, {
         data: carried.data,

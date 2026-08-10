@@ -250,6 +250,58 @@ export default suite({
         },
 
         {
+            title: 'a room is forgotten when its last subscriber leaves',
+            note: 'Rooms are named by whoever selects one — a socket\'s comes off the query string of the request that upgraded it — so a table that only ever grows is one an arriving connection can grow without a bound, and each room holds a retention and three cells. The last subscriber leaving is the moment nothing can reach it any more: what a room retains is only ever handed to a subscriber, so dropping it then drops exactly what nothing was going to read. A room nobody ever subscribed to is nobody\'s to forget, and stays.',
+            async run({ is }) {
+                const chat = channel<string, { room: string }>({ tail: 3 })
+                const general = chat({ room: 'general' })
+                const off = general.subscribe(() => undefined)
+                general.publish('hello')
+                is('the same args select the same room', chat({ room: 'general' }) === general, true)
+
+                // A second subscriber is what makes this a COUNT rather than a flag.
+                const alsoOff = general.subscribe(() => undefined)
+                off()
+                is('one subscriber leaving keeps it', chat({ room: 'general' }) === general, true)
+
+                alsoOff()
+                is('the last one leaving forgets it', chat({ room: 'general' }) === general, false)
+                is('…and the retention goes with the room', chat({ room: 'general' }).chunks(), [])
+            },
+        },
+
+        {
+            title: 'invalidate wakes the rooms that had something to forget',
+            note: 'The same cutoff as the case above, on the other verb — and this is the one a bulk sweep walks: `invalidate(pattern)` visits every room, so an unguarded version bump costs one spurious wake per idle room per sweep. Every reader still reads the right value either way, which is why the count is the assertion.',
+            async run({ is }) {
+                const chat = channel<string, { room: string }>({ tail: 3 })
+                chat({ room: 'general' }).publish('hello')
+
+                // Reading a room is what creates it, so all three exist before the sweep below.
+                const general = reader(() => chat({ room: 'general' })())
+                const idle = reader(() => chat({ room: 'idle' })())
+                const idleChunks = reader(() => chat({ room: 'idle' }).chunks().length)
+
+                chat.invalidate()
+                await tick()
+
+                is('the room holding a message woke', general.seen.length, 2)
+                is('an idle room did not', idle.seen.length, 1)
+                is('…nor the transcript reader on it', idleChunks.seen.length, 1)
+
+                // Nothing is left to forget anywhere, so the second sweep is the empty case for
+                // every room at once.
+                chat.invalidate()
+                await tick()
+                is('and a second sweep wakes nobody', general.seen.length, 2)
+
+                general.dispose()
+                idle.dispose()
+                idleChunks.dispose()
+            },
+        },
+
+        {
             title: 'a channel answers the whole source surface',
             note: 'It never loads, so the load probes are always the cold answer. They are here so a reader can treat any source alike rather than having to know which primitive it was handed.',
             async run({ is }) {

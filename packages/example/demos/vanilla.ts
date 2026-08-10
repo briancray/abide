@@ -130,8 +130,9 @@ export function feed<T>(tail = 0): VanillaFeed<T> {
             for (const listener of listeners) listener(message)
         },
         latest: () => latest,
-        // The live array, not a copy. This is the honest hand-written answer AND the thing abide
-        // cannot do: a reactive transcript has to be a new array for a reader to see that it moved.
+        // The live array, not a copy — and a CELL's `chunks()` now answers the same way, because a
+        // version cell is what wakes a reader and the array's identity is not. What a CHANNEL still
+        // pays over this arm is `windowOf`'s copy, which `tail` is what bounds.
         chunks: () => transcript,
         subscribe(listener: (message: T) => void) {
             listeners.add(listener)

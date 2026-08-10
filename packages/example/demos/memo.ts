@@ -458,6 +458,62 @@ export default suite({
         },
 
         {
+            title: 'a body that throws SYNCHRONOUSLY settles, and recovers when its deps do',
+            note: 'A sync throw is a failed settle, the same outcome the keyed form gives it — not a node left mid-recompute. Left mid-recompute it can never be marked again, so nothing downstream wakes even after the data comes back, and the memoisation goes with it: every read re-runs the body. Both halves are invisible to a value assertion — the read throws the right error either way — so the claim is the wake count and the body count.',
+            async run({ is }) {
+                const n = state(1)
+                let bodyRuns = 0
+                const checked = memo(() => {
+                    bodyRuns++
+                    const value = n()
+                    if (value < 3) throw new Error('too small')
+                    return value * 10
+                })
+
+                // `reader` records one entry per RUN, and turns a throw into `THROW <message>`.
+                const view = reader(() => checked())
+                is('the read throws while the body does', view.seen, ['THROW too small'])
+
+                // A failed derivation is still a derivation: the failure is what it HOLDS.
+                for (let i = 0; i < 5; i++) {
+                    try {
+                        checked()
+                    } catch {}
+                }
+                is('five more reads, no more body runs', bodyRuns, 1)
+
+                n.set(5)
+                await tick()
+                is('the reader woke when the source recovered', view.seen.length, 2)
+                is('…and reads the recovered value', checked(), 50)
+                is('…which took exactly one more body run', bodyRuns, 2)
+                view.dispose()
+            },
+        },
+
+        {
+            title: 'a disposed derivation stays disposed, through refresh and invalidate',
+            note: 'Both verbs WRITE the status, so assigning "recompute me" over "dead" undid the disposal and the guards further in had nothing left to see. A revived node re-subscribes to every source and has no owner left to dispose it a second time — it just keeps running, which nothing about the values it reports can show.',
+            async run({ is }) {
+                const n = state(1)
+                let bodyRuns = 0
+                const doubled = memo(() => {
+                    bodyRuns++
+                    return n() * 2
+                })
+                is('doubled()', doubled(), 2)
+                doubled.dispose()
+
+                doubled.refresh()
+                doubled.invalidate()
+                n.set(5)
+                await tick()
+                is('neither verb re-ran the body', bodyRuns, 1)
+                is('…and what it held is still what it reads', doubled(), 2)
+            },
+        },
+
+        {
             title: 'disposing mid-load ENDS it: awaiters are told, later awaits do not hang',
             note: 'A settle after disposal is dropped, so an in-flight load has to be ended rather than left looking in flight — or anyone already awaiting it parks forever.',
             async run({ is }) {

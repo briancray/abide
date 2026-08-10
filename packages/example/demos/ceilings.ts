@@ -118,6 +118,47 @@ export default suite({
         },
 
         {
+            title: 'a row the cache forgot does not come back to evict the one that replaced it',
+            note: 'An entry outlives its row: the caller keeps the handle, and a load that was in flight when the row went still lands. Either one hands the entry back to be charged — for a key that by then belongs to a fresh row. The stale entry sits in the order, and when it drains it deletes that key, taking a live and recently-used row with it. The replacement is still charged, so the next drain does it again. Nothing about the answers changes; the cache just quietly loads more of them.',
+            async run({ is }) {
+                let runs = 0
+                const rows = memo(
+                    ({ id }: { id: string }) => {
+                        runs++
+                        return id.padEnd(100, 'x')
+                    },
+                    { global: true },
+                )
+
+                if (!DECLARABLE) {
+                    const kept = rows({ id: 'a' })
+                    kept()
+                    kept.set('written'.padEnd(100, 'x'))
+                    rows({ id: 'b' })()
+                    is('unbounded, a write through a kept handle evicts nothing', runs, 2)
+                    return
+                }
+
+                await withEnv({ [CACHE]: '250' }, async () => {
+                    const first = rows({ id: 'a' })
+                    first()
+                    rows({ id: 'b' })()
+                    rows({ id: 'c' })()
+                    is('the third 100-byte row does not fit, so the oldest goes', runs, 3)
+
+                    // The same key again is a FRESH row, and `b` is now the one sitting longest.
+                    rows({ id: 'a' })()
+                    is('it loads again, and pushes the next-oldest out', runs, 4)
+
+                    // `first` still points at the row the cache forgot.
+                    first.set('late'.padEnd(100, 'x'))
+                    rows({ id: 'c' })()
+                    is('a write through it costs the cache nothing', runs, 4)
+                })
+            },
+        },
+
+        {
             title: 'turning it off lets go of everything it was tracking',
             note: 'The ceiling is re-read where a slot settles — the one moment it can change anything, since a slot growing the cache is exactly what an operator set the number to stop. Reading it there rather than latching it at import is also what makes it honest in both directions: an app can declare one from its own entry point, and a process that stops declaring one stops being bounded rather than going on enforcing a number nobody is asking for.',
             async run({ is }) {

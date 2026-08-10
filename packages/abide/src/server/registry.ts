@@ -195,17 +195,45 @@ function crossOrigin(request: Request, url: URL, allowed: string[] | null): Reco
 
 // --- the entry point ---------------------------------------------------------
 
-// The declaration and its policy are RESOLVED ONCE, at the upgrade, and carried on the connection:
-// both are fixed for its lifetime, and `message` below runs per inbound frame.
+// What is fixed at the UPGRADE and carried for the connection's lifetime is the endpoint `id` and its
+// `policy`. The declaration and the room it selects are resolved at `open` instead — see `channel`
+// below for why. `message` runs per inbound frame and re-resolves neither.
 interface SocketData {
     id: string
     room: unknown
-    /** The room itself, resolved once at upgrade: what `open` subscribes to and what a publish goes into. */
-    channel: Channel<unknown>
+    /**
+     * The room itself: what the fan-out subscribes to and what a publish goes into.
+     *
+     * Resolved at OPEN and not at the upgrade, because SELECTING a room is what creates one — and a
+     * handshake that never becomes a connection would then leave a room behind that nothing will
+     * ever subscribe to, and so nothing will ever drop. The room name comes off the query string, so
+     * that is one room per malformed request.
+     */
+    channel: Channel<unknown> | null
     request: Request
     policy: SocketPolicy | undefined
-    unsubscribe: (() => void) | null
 }
+
+/**
+ * One channel subscription per ROOM, and the connections it feeds.
+ *
+ * A subscription per connection encoded the same message once per subscriber: `publish` hands every
+ * listener the same object in one synchronous fan-out, so a room with N connections ran N identical
+ * `JSON.stringify` walks over it — 24x the encoding at 64 subscribers and 139x at 1000, for output
+ * that is byte-identical. Encoding where the message ARRIVES rather than where it leaves makes it
+ * once per publish.
+ *
+ * This is also why the frame cannot be cached across publishes, which was tried and reverted: a
+ * message object mutated between two publishes has the same identity and a different value, so a
+ * cache keyed on it sends the stale one. The unit is the PUBLISH, not the message.
+ */
+interface Fanout {
+    connections: Set<ServerWebSocket<SocketData>>
+    /** Ends the room subscription when the last connection goes, so an idle room feeds nothing. */
+    off: () => void
+}
+
+const FANOUT = new Map<Channel<unknown>, Fanout>()
 
 /**
  * Everything abide serves, and nothing else.
@@ -326,7 +354,7 @@ function upgrade(
     } catch {
         return refuse(`${id} was subscribed to with a room it could not decode`, 400)
     }
-    return authorized(request, target, id, room, stream, policy)
+    return authorized(request, target, id, room, policy)
 }
 
 async function authorized(
@@ -334,7 +362,6 @@ async function authorized(
     server: Server<SocketData>,
     id: string,
     room: unknown,
-    stream: AnySocket,
     policy: SocketPolicy | undefined,
 ): Promise<Response | undefined> {
     if (policy !== undefined) {
@@ -356,13 +383,13 @@ async function authorized(
     const data: SocketData = {
         id,
         room,
-        channel: roomFor(stream, room),
+        channel: null,
         request,
         policy,
-        unsubscribe: null,
     }
-    // The upgrade IS the subscribe; `open` below attaches it to the channel. Bun answers the
-    // handshake itself, so a successful upgrade is a request with no response of its own.
+    // The upgrade only ADMITS the connection. `open` below is where it selects its room and either
+    // starts that room's fan-out or joins it, so a handshake that never opens subscribes to nothing.
+    // Bun answers the handshake itself, so a successful upgrade is a request with no response of its own.
     if (server.upgrade(request, { data })) return undefined
     return refuse(`${id} could not upgrade`, 400)
 }
@@ -374,18 +401,38 @@ function roomFor(stream: AnySocket, room: unknown): Channel<unknown> {
 /** The websocket half of the mount point, handed straight to `Bun.serve({ websocket })`. */
 export const websocket = {
     open(connection: ServerWebSocket<SocketData>): void {
-        // This is the entire socket transport: one subscribe. Everything a channel already does —
-        // tail, fan-out, the reactive read, rooms — is untouched by it being remote.
-        const room = connection.data.channel
-        // One `JSON.stringify` per subscriber per publish: the fan-out hands every listener the same
-        // message, so a room with N connections encodes it N times. Caching the last frame by
-        // identity was tried and reverted — a message object mutated between two publishes has the
-        // same identity and a different value, so the cache would send the stale one.
-        connection.data.unsubscribe = room.subscribe((message) => connection.send(JSON.stringify(message)))
+        // This is the entire socket transport: one subscribe per ROOM. Everything a channel already
+        // does — tail, fan-out, the reactive read, rooms — is untouched by it being remote.
+        const stream = SOCKETS.get(connection.data.id)
+        // Declared away between the upgrade and the open — a dev reload landing mid-handshake.
+        if (stream === undefined) return
+        const room = roomFor(stream, connection.data.room)
+        connection.data.channel = room
+        let fanout = FANOUT.get(room)
+        if (fanout === undefined) {
+            const connections = new Set<ServerWebSocket<SocketData>>()
+            const off = room.subscribe((message) => {
+                const frame = JSON.stringify(message)
+                for (const listener of connections) listener.send(frame)
+            })
+            fanout = { connections, off }
+            FANOUT.set(room, fanout)
+        }
+        fanout.connections.add(connection)
     },
     close(connection: ServerWebSocket<SocketData>): void {
-        connection.data.unsubscribe?.()
-        connection.data.unsubscribe = null
+        const room = connection.data.channel
+        if (room === null) return
+        const fanout = FANOUT.get(room)
+        if (fanout === undefined) return
+        fanout.connections.delete(connection)
+        // The last connection out ends the room subscription, and `channel` takes that as the last
+        // subscriber leaving and forgets the room itself. A listener called for every publish to
+        // send to nobody, and a table of rooms a client can name, are the same leak at two layers.
+        if (fanout.connections.size === 0) {
+            fanout.off()
+            FANOUT.delete(room)
+        }
     },
     message(connection: ServerWebSocket<SocketData>, raw: string | Buffer): void | Promise<void> {
         // Narrowed ONCE, here, and handed down: `data.policy` is written at the upgrade and never
@@ -483,5 +530,10 @@ function accepted(
     message: unknown,
 ): void | Promise<void> {
     if (socketLog.enabled()) socketLog.debug(`${connection.data.id} accepted a client publish`)
-    return accept(message, connection.data.room, connection.data.channel)
+    // Written by `open`, and a message cannot arrive before it: the only way past this is the socket
+    // having been declared away between the handshake and the frame, and there is nothing to publish
+    // into then.
+    const room = connection.data.channel
+    if (room === null) return
+    return accept(message, connection.data.room, room)
 }

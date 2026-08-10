@@ -18,6 +18,7 @@ import { rm } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { promisify } from 'node:util'
 import { brotliCompress, constants as ZLIB } from 'node:zlib'
+import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import {
     assetOf,
@@ -93,7 +94,7 @@ export async function build(argv: string[]): Promise<number> {
     } catch (failure) {
         // A plugin the app declared and this could not load. Loud, because the build that would have
         // followed it is one that succeeds and ships a page missing whatever the plugin makes.
-        console.error(`abide build: ${(failure as Error).message}`)
+        console.error(`abide build: ${messageOf(failure)}`)
         return CLI_EXIT_CODES.failed
     }
 

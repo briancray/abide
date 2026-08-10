@@ -26,6 +26,7 @@ import { abidePlugin } from '$compiler/plugin.ts'
 import * as SURFACE from '$shared'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { isSource } from '$shared/internal/slots.ts'
+import { STREAMING } from '$shared/internal/wire.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { LineEditor, suggest } from './editor.ts'
 import { BOLD, colored, DIM, paint, RED } from './paint.ts'
@@ -343,7 +344,7 @@ async function prompted(session: Session, colors: boolean): Promise<number> {
     const decoder = new TextDecoder()
     try {
         for await (const chunk of process.stdin) {
-            editor.feed(decoder.decode(chunk as Uint8Array, { stream: true }))
+            editor.feed(decoder.decode(chunk as Uint8Array, STREAMING))
             // Reading is OUR loop, so nothing is read while a line is being evaluated and a keystroke
             // typed during a slow one waits in the terminal's own buffer rather than in ours.
             const ran = lines.length > 0

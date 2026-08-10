@@ -445,7 +445,7 @@ test('appDataDir() is the platform convention under the app name, and ABIDE_DATA
     expect(renamed.endsWith(`${sep}ledger`)).toBe(true)
     // Same per-user root, different leaf: the app names the directory, the platform names where it is.
     expect(dirname(named)).toBe(dirname(renamed))
-    expect(named.startsWith(homedir()) || named.startsWith(Bun.env.XDG_DATA_HOME ?? ' ')).toBe(true)
+    expect(named.startsWith(homedir()) || named.startsWith(Bun.env.XDG_DATA_HOME ?? '\0')).toBe(true)
 
     // Taken VERBATIM: an operator who named a directory named the directory, not a parent for the
     // app's name to be appended to.
