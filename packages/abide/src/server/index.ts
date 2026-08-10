@@ -98,8 +98,11 @@ export { suspend } from '$shared/html.ts'
  */
 interface Out {
     text: string
-    /** Hand the buffer over. Resolves once the consumer is ready for more, so it IS the back-pressure. */
-    flush: (() => Promise<void>) | null
+    /**
+     * Hand the buffer over. The promise resolves once the consumer is ready for more, so it IS the
+     * back-pressure — and `null` means it is already ready, so there was never anything to wait for.
+     */
+    flush: (() => Promise<void> | null) | null
 }
 
 /** `null` means the node is fully written; a promise means the rest of it will be. */
@@ -486,7 +489,7 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
     // per node, so two orders here would be two hidden classes under every one of those reads.
     const out: Out = {
         text: '',
-        flush(): Promise<void> {
+        flush(): Promise<void> | null {
             if (out.text !== '') {
                 queue.push(out.text)
                 out.text = ''
@@ -495,6 +498,12 @@ function stream(node: Renderable, context: RenderContext, budget: Budget | null)
             wakeConsumer = null
             if (wake !== null) wake()
             if (abandoned) return Promise.reject(ABANDONED)
+            // Nothing to wait FOR when the consumer is not behind. The chunk is already queued and
+            // the consumer already woken, so parking here bought a promise and a full round trip per
+            // row of a streamed list to learn that it could carry on. Back-pressure starts where it
+            // is actually needed: one unread chunk is slack, two is a consumer falling behind, and
+            // the walk parks then — so the queue is bounded at two either way.
+            if (queue.length <= 1) return null
             return new Promise<void>((resolve, reject) => {
                 resumeWalk = () => resolve()
                 rejectWalk = reject

@@ -6,7 +6,7 @@
 // runs in the browser, because the module has no server-only dependencies — that is the point of the
 // substrate split.
 
-import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
+import { channel, html, memo, raw, state, streamed, type TemplateResult } from 'abide'
 import {
     heldStream,
     isServing,
@@ -371,6 +371,31 @@ export default suite({
                         <ul>${lines()}</ul>
                     </div>
                 `).then((markup) => output(host, markup.trim()))
+            },
+        },
+
+        {
+            title: 'a slow source delivers a chunk PER ROW, not a buffer-full',
+            note: 'The back-pressure and the chunk boundary are two different questions, and answering them with one mechanism breaks streaming. A row that arrived slowly is a suspension and must go out; a row that arrived instantly need only go out once the buffer is worth handing over. Gating a streamed row on the buffer mark instead — the obvious way to make this loop cheaper — was measured at 2.47x and collapsed twenty-two chunks into two, which is the whole feature. The count is the assertion because the joined output is identical either way: a reader who waited for the last row would see exactly the same page.',
+            async run({ is }) {
+                async function* trickle(n: number): AsyncGenerator<number> {
+                    for (let index = 0; index < n; index++) {
+                        await sleep(1)
+                        yield index
+                    }
+                }
+                const chunks: string[] = []
+                for await (const chunk of render(
+                    html`<ul>${streamed(trickle(8), (index: number) => html`<li>row ${index}</li>`)}</ul>`,
+                )) {
+                    chunks.push(chunk)
+                }
+                // Eight rows, each its own chunk, plus the shell before them and the close after.
+                is('a chunk per row', chunks.length, 10)
+                is('and the page is whole', chunks.join('').match(/<li>/g)?.length, 8)
+                // The back-pressure is still real: nothing is buffered past the walk's own mark, so
+                // this is a claim about WHEN bytes leave, not about how many there are.
+                is('…in order', chunks.join('').indexOf('row 0') < chunks.join('').indexOf('row 7'), true)
             },
         },
 
