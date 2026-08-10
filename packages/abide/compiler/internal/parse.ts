@@ -143,7 +143,18 @@ export function parse(source: string): Blocks {
         // spaces — every Expr `start` then indexes the ORIGINAL file and a source map needs no
         // second coordinate system.
         template += ' '.repeat(open.bodyStart - open.start)
-        template += source.slice(open.bodyStart, open.bodyEnd).replace(/[^\n]/g, ' ')
+        // Blanked a RUN at a time rather than a character at a time. The common shape of a lifted
+        // `<script>` is a line with no newline in it, and `/[^\n]/g` visits every character of every
+        // one of them — 51% of all source bytes across the example app, and the largest single
+        // self-time line in a compile. Same idiom `parseNodes` uses one function away.
+        for (let at = open.bodyStart; at < open.bodyEnd; ) {
+            const line = source.indexOf('\n', at)
+            const stop = line === -1 || line >= open.bodyEnd ? open.bodyEnd : line
+            template += ' '.repeat(stop - at)
+            if (stop === open.bodyEnd) break
+            template += '\n'
+            at = stop + 1
+        }
         template += ' '.repeat(open.end - open.bodyEnd)
 
         const body = source.slice(open.bodyStart, open.bodyEnd)

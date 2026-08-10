@@ -73,8 +73,26 @@ export class SyntaxError_ extends Error {
     }
 }
 
+/**
+ * ONE scanner for the whole compiler, not one per `Lexer`.
+ *
+ * TypeScript's `createScanner` hands back several dozen closures over a single scope, and a `Lexer`
+ * is built per AST node — per `{…}` hole, per attribute value, per block header, per desugared
+ * expression. That was 56 of the 58 `Function` objects a compiled AST node allocated, and sharing it
+ * takes a whole compile down by ~1.1x on its own.
+ *
+ * WHAT MAKES IT SAFE, and it is a property of the call sites rather than of this file: every
+ * `new Lexer` (four of them — `tokensOf` and `readExpression` here, `desugar.ts`'s `tokenize`,
+ * `emit.ts`'s `regionTokens`) is immediately followed by a synchronous `for(;;)` whose body calls
+ * only `lexer.next()`, so no `Lexer` is ever alive across a call that could construct another. The
+ * constructor's `setText` resets this, which is also what makes a `Lexer` abandoned by a thrown
+ * `ParseError` harmless. A new `new Lexer` whose loop grows a call is what would break it — that is
+ * the one grep to run before adding one.
+ */
+const SCANNER = createScanner(true, LanguageVariant.Standard, '')
+
 export class Lexer {
-    private readonly scanner = createScanner(true, LanguageVariant.Standard, '')
+    private readonly scanner = SCANNER
     private previous: SyntaxKind = SyntaxKind.Unknown
     /** Depths at which a `${` is open, so the matching `}` is re-read as template text. */
     private readonly substitutions: number[] = []

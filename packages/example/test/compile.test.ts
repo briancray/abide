@@ -135,3 +135,44 @@ test('every .abide in the example package parses', async () => {
         }
     }
 })
+
+// The compiler shares ONE TypeScript scanner across every `Lexer` — see `SCANNER` in
+// `compiler/internal/lex.ts` — because a `Lexer` is built per AST node and `createScanner` hands
+// back several dozen closures each time. Sharing is safe only while no two `Lexer`s are alive at
+// once, which is a property of the four `new Lexer` call sites rather than of that file.
+//
+// This is the failure that sharing INTRODUCES and nothing else here would see: a compile that throws
+// abandons its lexer mid-scan, and if the next one inherited that state the output would be wrong
+// while still parsing — so `every emitted module parses` above would stay green. A truncated source
+// is the cheapest way to throw at every position in a file.
+test('a compile that threw leaves nothing behind for the next one', async () => {
+    const root = new URL('..', import.meta.url).pathname
+    const files = [...new Bun.Glob('**/*.abide').scanSync({ cwd: root, absolute: true })].sort()
+    const sources = new Map<string, string>()
+    for (const file of files) sources.set(file, await Bun.file(file).text())
+
+    // What each file emits with nothing having thrown beforehand.
+    const clean = new Map<string, string>()
+    for (const [file, source] of sources) clean.set(file, compile(source, { filename: file }).code)
+
+    const biggest = files.reduce((a, b) =>
+        (sources.get(a) as string).length > (sources.get(b) as string).length ? a : b,
+    )
+    const whole = sources.get(biggest) as string
+    const probe = files[0] as string
+    let threw = 0
+    // Every 37th cut, so the throw lands inside a tag, a hole, a block header and a lifted script in
+    // turn rather than only at one kind of boundary.
+    for (let cut = 1; cut < whole.length; cut += 37) {
+        try {
+            compile(whole.slice(0, cut), { filename: biggest })
+        } catch {
+            threw++
+        }
+        expect(compile(sources.get(probe) as string, { filename: probe }).code).toBe(
+            clean.get(probe) as string,
+        )
+    }
+    // A truncation that never throws would make the assertion above vacuous.
+    expect(threw).toBeGreaterThan(20)
+})
