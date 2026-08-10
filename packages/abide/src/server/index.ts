@@ -41,7 +41,7 @@ import {
     placeholderId,
 } from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
-import { slotsOf, unwrap } from '$shared/internal/slots.ts'
+import { planOf, unwrap } from '$shared/internal/slots.ts'
 import { arm, NO_LIMIT, timeoutError } from '$shared/internal/timers.ts'
 import { styleTags } from '$shared/styles.ts'
 import {
@@ -210,18 +210,17 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
  * is allocated only on the branch that actually waited.
  */
 function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, from: number): Rest {
-    const kinds = slotsOf(result)
-    const { strings, values } = result
+    const { kinds, texts } = planOf(result)
+    const values = result.values
 
-    for (let i = from; i < strings.length; i++) {
-        let text = strings[i] as string
+    for (let i = from; i < texts.length; i++) {
+        // Already cut: an attribute/event/property slot owns the `name=` that precedes it, and that
+        // slice now happens once per call site rather than once per slot per row. `texts` is also a
+        // packed copy of a FROZEN array, which is the larger half of why this loop reads it — see
+        // `TemplatePlan`.
+        out.text += texts[i] as string
+
         const kind = kinds[i]
-
-        // An attribute/event/property slot owns the `name=` that precedes it, so that markup must
-        // not reach the output verbatim.
-        if (kind !== undefined && kind.kind !== 'child') text = text.slice(0, text.length - kind.staticTail)
-        out.text += text
-
         if (kind === undefined) continue
         const value = values[i]
 

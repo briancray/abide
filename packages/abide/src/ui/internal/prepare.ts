@@ -16,7 +16,7 @@
 // 500 ns for the clone alone — a TreeWalker costs more to construct than a row costs to build.
 
 import type { SlotKind, TemplateResult } from '$shared/html.ts'
-import { slotsOf } from '$shared/internal/slots.ts'
+import { planOf } from '$shared/internal/slots.ts'
 
 export interface PreparedPart {
     slot: number
@@ -59,7 +59,7 @@ export function prepare(result: TemplateResult): Prepared {
     const cached = prepared.get(result.strings)
     if (cached !== undefined) return cached
 
-    const kinds = slotsOf(result)
+    const kinds = planOf(result).kinds
     const { strings } = result
     let markup = ''
 
