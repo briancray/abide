@@ -576,21 +576,27 @@ export class ChildPart {
         this.list.append(item)
     }
 
-    private clearExcept(keep: 'text' | 'nested' | 'list' | null): void {
+    private clearExcept(keep: 'text' | 'nested' | 'list' | null, detach = true): void {
         if (keep === 'text' && this.text !== null) return
         if (keep === 'nested' && this.nested !== null) return
         if (keep === 'list' && this.list !== null) return
-        if (this.list !== null) this.list.dispose()
-        if (this.nested !== null) this.nested.dispose()
+        // The RANGE goes first, and what it covers is what nothing below has to touch again: `owned`
+        // is `nested.nodes` on the build path AND on the adopt path, so removing it takes that whole
+        // subtree out of the document in one call and the instance under it has only effects left to
+        // drop. A list BUILT by `set` keeps its rows outside `owned`, so it still detaches its own —
+        // `detach` is what an ancestor passes down to say its removal already covered them.
+        //
         // Only when there IS a range: on the build path a fresh part reaches here holding the empty
         // array its constructor made, and replacing that with a second empty one — which the caller
         // then pushes into — was one discarded array per child slot per row. A fresh array rather
         // than `length = 0` because `owned` is sometimes an array this part does not own: `take`
         // assigns it `claimed`, and the nested arm assigns it `nested.nodes`.
         if (this.owned.length !== 0) {
-            for (const node of this.owned) node.remove()
+            if (detach) for (const node of this.owned) node.remove()
             this.owned = []
         }
+        if (this.list !== null) this.list.dispose(detach)
+        if (this.nested !== null) this.nested.dispose(false)
         // Outside the guard: the server's opening marker outlives the range it bracketed, so a part
         // that painted through `set` has to let go of it whether or not it was holding nodes.
         this.dropOpened()
@@ -713,7 +719,9 @@ export class ChildPart {
         }
     }
 
-    dispose(): void {
+    // `detach` false when an ancestor's removal already took this part's nodes out of the document:
+    // every `remove()` below would then be walking a detached subtree to no effect.
+    dispose(detach = true): void {
         this.generation++ // a load still in flight must not paint into a disposed part
         this.holding = NOTHING
         // A part torn down before its first update still owns server nodes nobody else will remove,
@@ -727,7 +735,7 @@ export class ChildPart {
         // Through `clearExcept`, because a nested instance still owns live slot effects and `take`
         // overwrites `nested` without disposing it — a part torn down without this leaves one live
         // effect per reactive slot per navigation, each writing into nodes no longer in the document.
-        this.clearExcept(null)
+        this.clearExcept(null, detach)
     }
 }
 
@@ -888,8 +896,12 @@ class ListPart {
             for (let i = 0; i < previous.length; i++) {
                 const row = previous[i] as Row
                 if (row.usedAt === pass) continue
+                // The row's own nodes here, and `false` below: everything the instance holds is a
+                // DESCENDANT of what this loop just detached, so letting each child slot run its own
+                // removal walked an already-detached subtree — 4x the removes of the hand-written arm
+                // on a 500-of-1000 drop, none of them on a connected node.
                 for (const node of row.instance.nodes) node.remove()
-                row.instance.dispose()
+                row.instance.dispose(false)
             }
         }
         this.rows = next
@@ -934,10 +946,10 @@ class ListPart {
         }
     }
 
-    dispose(): void {
+    dispose(detach = true): void {
         for (const row of this.rows) {
-            for (const node of row.instance.nodes) node.remove()
-            row.instance.dispose()
+            if (detach) for (const node of row.instance.nodes) node.remove()
+            row.instance.dispose(false)
         }
         this.rows = []
     }
@@ -1374,7 +1386,7 @@ class Instance {
         this.applied = values
     }
 
-    dispose(): void {
+    dispose(detach = true): void {
         const effects = this.slotEffects
         if (effects !== null) {
             for (let i = 0; i < effects.length; i++) effects[i]?.dispose()
@@ -1386,7 +1398,7 @@ class Instance {
             partDisposers.length = 0
         }
         const children = this.children
-        for (let i = 0; i < children.length; i++) (children[i] as ChildPart).dispose()
+        for (let i = 0; i < children.length; i++) (children[i] as ChildPart).dispose(detach)
     }
 }
 

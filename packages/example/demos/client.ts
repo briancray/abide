@@ -827,6 +827,32 @@ export default suite({
         },
 
         {
+            title: 'dropping a row costs ONE removal, whatever the row holds inside it',
+            note: 'A row goes out of the document by its own top node; everything under it leaves at the same moment, as descendants. Letting each child slot then run its own removal walked an already-detached subtree — 4x the removes of a hand-written `li.remove()` on a 500-of-1000 drop, and not one of them on a connected node. The assertion is a ratio between two ROW SHAPES rather than an absolute: a row with three slots and a row with one must cost the same per drop, and only an implementation that stops at the top node can manage that. Output is identical either way, so nothing but a counter can see it.',
+            async run({ is, log }) {
+                const drop = async (row: (item: Item) => TemplateResult): Promise<number> => {
+                    const rows = state(build(20))
+                    const host = container()
+                    mount(host, () => html`<ul>${() => rows().map((item) => keyed(item.id, row(item)))}</ul>`)
+                    await tick()
+                    // Ten of twenty, from the middle, so the drop is not also a truncation.
+                    const work = await measureFlush(() => rows.set(rows.peek().slice(0, 10)))
+                    host.remove()
+                    return work.remove
+                }
+
+                const thin = await drop((item) => html`<li>${item.label}</li>`)
+                const fat = await drop(
+                    (item) =>
+                        html`<li><span>${item.label}</span><span>${item.id}</span><i>${item.label}</i></li>`,
+                )
+                log('removals for ten dropped rows', `one slot — ${thin}, three slots — ${fat}`)
+                is('a one-slot row costs one removal each', thin, 10)
+                is('…and three slots inside cost no more', fat, thin)
+            },
+        },
+
+        {
             title: 'a full reverse of 200 keyed rows',
             note: 'The worst case for the in-order walk, and the one where a hand-written version has no better answer either: reversing really does need a move per row. It is also the case that CANNOT distinguish a keyed reconcile from a rebuild — which is why the swap above is the one that earns its place.',
             bench: {

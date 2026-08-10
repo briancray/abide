@@ -162,21 +162,33 @@ class DocumentNavigation implements NavigationSink {
                 return { ok: !first, buffer: '' }
             }
             const chunk = DECODER.decode(value, STREAMING)
-            // The straddle window: a sentinel split across the seam starts in `tail` and ends here.
-            const hay = tail + chunk
-            const at = hay.indexOf(PIECE_END)
+            // Searched as two pieces rather than as one joined string: `tail + chunk` copied every
+            // byte of the response a second time, once per chunk, only to look at it. A sentinel
+            // either STRADDLES the seam — it then starts inside `tail`, which is `PIECE_END.length
+            // - 1` long, so a window that short catches every straddle and can hold nothing else —
+            // or it sits wholly inside `chunk`. A straddle also always precedes an in-chunk match,
+            // so finding one is finding the first.
+            const seam = tail === '' ? '' : tail + (chunk.length > OVERLAP ? chunk.slice(0, OVERLAP) : chunk)
+            const straddle = seam === '' ? -1 : seam.indexOf(PIECE_END)
+            const within = straddle === -1 ? chunk.indexOf(PIECE_END) : -1
+            const at = straddle !== -1 ? straddle : within === -1 ? -1 : tail.length + within
+            // What `tail + chunk` would have measured, without building it.
+            const spanned = tail.length + chunk.length
             if (at === -1) {
-                // The window carries forward from `hay`, not from `chunk`: chunks can be shorter
-                // than the sentinel, and a window rebuilt from the newest one alone would forget
-                // the head of a sentinel that started three chunks ago.
+                // The window carries forward from the SEAM, not from `chunk` alone: chunks can be
+                // shorter than the sentinel, and a window rebuilt from the newest one alone would
+                // forget the head of a sentinel that started three chunks ago.
                 parts.push(chunk)
-                tail = hay.length > OVERLAP ? hay.slice(hay.length - OVERLAP) : hay
+                tail =
+                    chunk.length >= OVERLAP
+                        ? chunk.slice(chunk.length - OVERLAP)
+                        : (tail + chunk).slice(-OVERLAP)
                 continue
             }
-            // `hay` is the suffix of the full text of its own length, so a match in one is a match
-            // in the other at that distance from the end.
+            // The span is the suffix of the full text of its own length, so a match in one is a
+            // match in the other at that distance from the end.
             const text = whole(chunk)
-            const from = text.length - hay.length + at
+            const from = text.length - spanned + at
             this.apply(held, text.slice(0, from), first)
             const remainder = text.slice(from + PIECE_END.length)
             if (first) return { ok: true, buffer: remainder }
