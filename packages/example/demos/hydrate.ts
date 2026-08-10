@@ -291,6 +291,32 @@ export default suite({
         },
 
         {
+            title: 'an adopted row carries the server’s opening marker with it when it moves',
+            note: '`claimChild` takes the server’s `<!--[-->` from IN FRONT of the nodes it claims, so an adopted range starts at that marker rather than at the first node the part is holding. A move that began one node late left the marker where it was: three reordered rows piled four of them at the head of the list and the rows arrived with none. The text reads correctly either way — which is why the count is the assertion. An unbalanced run of open markers is what a later depth scan walks into.',
+            async run({ is }) {
+                const rows = state([1, 2, 3])
+                // A LEADING slot, because that is the only position whose content sits in front of
+                // the part's own anchor and therefore decides where the row begins.
+                const view = (): TemplateResult =>
+                    html`<div>${() => rows().map((n) => keyed(n, html`${() => `p${n}`}<b>h${n}</b>`))}</div>`
+                const host = container()
+                host.innerHTML = await renderToString(view(), { hydratable: true })
+                hydrate(host, view)
+                await tick()
+                const opened = (markup: string): number => (markup.match(/<!--\[-->/g) ?? []).length
+                const before = opened(host.innerHTML)
+                is('the server wrote a marker per adopted slot', before, 7)
+
+                rows.set([3, 2, 1])
+                await tick()
+                is('the rows reversed', host.textContent, 'p3h3p2h2p1h1')
+                is('and not one marker was left behind', opened(host.innerHTML), before)
+                is('none of them piled up', host.innerHTML.includes('<!--[--><!--[--><!--[-->'), false)
+                host.remove()
+            },
+        },
+
+        {
             title: 'an ADOPTED list tears down by what its rows hold, not by what the server wrote',
             note: 'Every other teardown claim in this project is measured after a `mount`, and adoption is the case that breaks differently: `take` puts every server node of every row inside the part’s own range, so a teardown that detaches that range first leaves the rows loose — and a row walks its range by `nextSibling`, which is exactly what detaching it destroyed. Each row then stops after one node and the rest stay on screen, while the removal runs on past the range and takes the INCOMING content with it. Two shapes here because they fail in the two different directions: the first leaves nodes behind, the second removed too much and left the slot with no anchor at all.',
             async run({ is }) {

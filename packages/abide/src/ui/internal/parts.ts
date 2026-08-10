@@ -150,19 +150,27 @@ export class ChildPart {
 
     constructor(private readonly anchor: Comment) {}
 
+    /** Whether `node` is this part's anchor — how an instance finds the part sitting at a position. */
+    isAnchor(node: ChildNode): boolean {
+        return this.anchor === node
+    }
+
     /**
      * The first node this part currently has in the document, or its anchor when it has none.
      *
      * Only ever asked of a part that is the LEADING top-level node of a fragment-rooted instance —
      * the one position where what the part paints decides where the instance's range begins. Every
      * other position is reached by walking siblings from there.
+     *
+     * The server's opening marker comes FIRST when there is one: `claimChild` takes it from in front
+     * of the nodes it claims, so an adopted range starts at the marker rather than at `owned[0]`, and
+     * an instance that began the walk one node late left the marker behind on every move — three
+     * reordered rows piled four `<!--[-->` at the head of the list. Invisible in the text, and a
+     * depth scan counting markers would find them unbalanced.
      */
-    /** Whether `node` is this part's anchor — how an instance finds the part sitting at a position. */
-    isAnchor(node: ChildNode): boolean {
-        return this.anchor === node
-    }
-
     firstNode(): ChildNode {
+        const opened = this.opened
+        if (opened !== null) return opened
         const list = this.list
         if (list !== null) {
             const first = list.firstNode()
