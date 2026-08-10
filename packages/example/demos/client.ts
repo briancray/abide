@@ -827,32 +827,6 @@ export default suite({
         },
 
         {
-            title: 'dropping a row costs ONE removal, whatever the row holds inside it',
-            note: 'A row goes out of the document by its own top node; everything under it leaves at the same moment, as descendants. Letting each child slot then run its own removal walked an already-detached subtree — 4x the removes of a hand-written `li.remove()` on a 500-of-1000 drop, and not one of them on a connected node. The assertion is a ratio between two ROW SHAPES rather than an absolute: a row with three slots and a row with one must cost the same per drop, and only an implementation that stops at the top node can manage that. Output is identical either way, so nothing but a counter can see it.',
-            async run({ is, log }) {
-                const drop = async (row: (item: Item) => TemplateResult): Promise<number> => {
-                    const rows = state(build(20))
-                    const host = container()
-                    mount(host, () => html`<ul>${() => rows().map((item) => keyed(item.id, row(item)))}</ul>`)
-                    await tick()
-                    // Ten of twenty, from the middle, so the drop is not also a truncation.
-                    const work = await measureFlush(() => rows.set(rows.peek().slice(0, 10)))
-                    host.remove()
-                    return work.remove
-                }
-
-                const thin = await drop((item) => html`<li>${item.label}</li>`)
-                const fat = await drop(
-                    (item) =>
-                        html`<li><span>${item.label}</span><span>${item.id}</span><i>${item.label}</i></li>`,
-                )
-                log('removals for ten dropped rows', `one slot — ${thin}, three slots — ${fat}`)
-                is('a one-slot row costs one removal each', thin, 10)
-                is('…and three slots inside cost no more', fat, thin)
-            },
-        },
-
-        {
             title: 'a full reverse of 200 keyed rows',
             note: 'The worst case for the in-order walk, and the one where a hand-written version has no better answer either: reversing really does need a move per row. It is also the case that CANNOT distinguish a keyed reconcile from a rebuild — which is why the swap above is the one that earns its place.',
             bench: {
@@ -1425,6 +1399,38 @@ export default suite({
                     host.querySelector('p')?.textContent,
                     'results for b',
                 )
+                host.remove()
+            },
+        },
+
+        {
+            title: 'a nested template that REPAINTED still leaves nothing behind',
+            note: 'An instance captures its top-level nodes once, at construction. A nested template whose root is a fragment has a child slot AMONG those top-level nodes, so anything that slot repaints afterwards sits in the document without being in the captured list — and a teardown that trusts the capture to describe the live range walks past it. Asserted by `isConnected` on the node the repaint made, because the container looks close enough to right either way: the leak is a sibling of the incoming content, not a duplicate of it. This is the shape that makes an ancestor-covers-descendants shortcut in teardown unsound, and it is why one is not taken.',
+            async run({ is }) {
+                const which = state(0)
+                const flag = state(false)
+                const host = container()
+                const view = mount(
+                    host,
+                    () =>
+                        html`<div>${() =>
+                            which() === 0 ? html`${() => (flag() ? html`<b>B</b>` : 'plain')}` : 'gone'}</div>`,
+                )
+                await tick()
+
+                // The repaint has to happen AFTER the nested instance captured its nodes, or the
+                // capture would describe the live range and there would be nothing to miss.
+                flag.set(true)
+                await tick()
+                const painted = host.querySelector('b')
+                is('the repaint is on screen', painted?.textContent, 'B')
+
+                // Swap the outer slot away, which disposes the nested instance.
+                which.set(1)
+                await tick()
+                is('the swap painted its own content', host.textContent, 'gone')
+                is('and the repainted node left with it', painted?.isConnected, false)
+                view.dispose()
                 host.remove()
             },
         },
