@@ -933,8 +933,24 @@ class ListPart {
                 const at = previous[i]
                 if (at !== undefined && at.key === key) row = at
                 else if (carried < previous.length) {
-                    if (byKey === null) byKey = indexByKey(previous)
-                    row = byKey.get(key)
+                    // The NEIGHBOURS before the index. A row that moved usually moved one place —
+                    // a swap, an insert, a delete — and the index is a walk of every previous row
+                    // built from inside the per-row walk, so a two-row swap of two hundred indexed
+                    // all two hundred to answer two lookups. Probed only while `byKey` is still
+                    // null, so the general path costs two array reads per `set` rather than per row
+                    // once a pass has genuinely scattered.
+                    if (byKey !== null) row = byKey.get(key)
+                    else {
+                        const before = previous[i - 1]
+                        const after = previous[i + 1]
+                        if (before !== undefined && before.key === key && before.usedAt !== pass) row = before
+                        else if (after !== undefined && after.key === key && after.usedAt !== pass)
+                            row = after
+                        else {
+                            byKey = indexByKey(previous)
+                            row = byKey.get(key)
+                        }
+                    }
                 }
             }
             // Already taken this pass, so it is not available to take again: an unkeyed item claims

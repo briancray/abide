@@ -71,3 +71,59 @@ test('an OBSERVED write still wakes its reader', () => {
     expect(doubled()).toBe(42)
     expect(runs).toBeGreaterThan(before)
 })
+
+// The keyed reconcile's key index is a walk of every previous row, built from INSIDE the per-row
+// walk. A row that moved usually moved one place — a swap, an insert, a delete — so the neighbours
+// are tried first and the index is what a genuinely scattered pass falls back to.
+//
+// Counted as Maps rather than timed, because the index is one allocation and the walk that fills it
+// is invisible in the output: the same rows end up in the same order either way. A two-row swap is
+// the case CLAUDE.md names as the one that distinguishes reconcile implementations, and it is the
+// one where indexing all n rows to answer two lookups is pure waste.
+test('an adjacent swap builds no key index, and a scattered pass still does', async () => {
+    const { html, state } = await import('abide')
+    const { container, install, tick } = await import('abide/tests')
+    const { keyed, mount } = await import('abide/ui')
+    install()
+
+    type Item = { id: number; label: string }
+    const base: Item[] = Array.from({ length: 200 }, (_, i) => ({ id: i, label: `r${i}` }))
+    const adjacent = base.slice()
+    const held = adjacent[1] as Item
+    adjacent[1] = adjacent[2] as Item
+    adjacent[2] = held
+    // Every row far from where it was, which is what the index exists for.
+    const scattered = base.map((_, i) => base[(i * 97) % base.length] as Item)
+
+    const mapsPerPass = async (other: Item[]): Promise<number> => {
+        const cell = state(base)
+        const host = container()
+        mount(host, () => html`<ul>${() => cell().map((r) => keyed(r.id, html`<li>${r.label}</li>`))}</ul>`)
+        await tick()
+        for (let i = 0; i < 50; i++) {
+            cell.set(i % 2 ? other : base)
+            await tick()
+        }
+        Bun.gc(true)
+        const before = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
+        const passes = 100
+        for (let i = 0; i < passes; i++) {
+            cell.set(i % 2 ? other : base)
+            await tick()
+        }
+        const after = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
+        host.remove()
+        return (after - before) / passes
+    }
+
+    // A RATIO between the two shapes, not an absolute: `heapStats` counts the whole process, and the
+    // awaited ticks let every other suite in the run allocate into the same number. The background
+    // rate cancels between two measurements taken the same way; an absolute threshold passed alone
+    // and failed inside the full suite, which is the wrong way round for a gate.
+    const scatteredMaps = await mapsPerPass(scattered)
+    const adjacentMaps = await mapsPerPass(adjacent)
+    // The fallback still fires where it earns its keep, so this also says the probe NARROWED the
+    // general path rather than removing it.
+    expect(scatteredMaps).toBeGreaterThan(0.1)
+    expect(adjacentMaps).toBeLessThan(scatteredMaps / 2)
+})
