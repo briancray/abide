@@ -55,6 +55,27 @@ const listView = (rows: () => Item[]) => (): TemplateResult =>
         ${() => rows().map((item) => keyed(item.id, html`<li>${item.label}</li>`))}
     </ul>`
 
+/**
+ * The same list with the row shape a `{#for}` actually COMPILES TO.
+ *
+ * `{#for row of rows}\n  <li>…</li>\n{/for}` emits a row template that opens and closes with static
+ * whitespace, so the row above — whose markup starts at `<` and ends at `>` — is the one shape that
+ * avoids the boundary split entirely. Keeping both is the point: the headline claim next door is
+ * measured on the tight shape, and would read as a claim about `{#for}` if nothing said otherwise.
+ */
+const spacedListView = (rows: () => Item[]) => (): TemplateResult =>
+    html`<ul class="font-mono text-xs">
+        ${() =>
+            rows().map((item) =>
+                keyed(
+                    item.id,
+                    html`
+        <li>${item.label}</li>
+    `,
+                ),
+            )}
+    </ul>`
+
 // --- bench fixtures ---------------------------------------------------------
 //
 // Detached, and the markup is rendered ONCE at module scope: an arm that re-renders the string on
@@ -346,6 +367,30 @@ export default suite({
                             void vanilla.adoptRows(benchHost(VANILLA_MARKUP).firstElementChild as Element),
                     },
                 ],
+            },
+        },
+
+        {
+            title: 'a row that opens and closes in whitespace costs 2n−1, and that is what {#for} emits',
+            note: 'The case above adopts five rows for ONE mutation, which is the number this suite is known for — and it is measured on a row whose markup starts at `<` and ends at `>`. A `{#for}` does not emit that. `{#for row of rows}\\n  <li>…</li>\\n{/for}` compiles to a row template with static whitespace at both ends, and two adjacent rows then arrive from the server as ONE text node, because the parser has no reason to keep them apart. Splitting it at adopt time is what gives each row a disjoint range, without which a later move takes or leaves its neighbour’s whitespace. So the cost is real and so is the reason: 2n−1 mutations, kept here beside the 1 so neither number can be read as the other. What would make it 0 is deferring the split to the first move — a trade against the disjoint-range invariant, not a free win.',
+            async run({ is, log }) {
+                const rows = state(build(5))
+                const view = spacedListView(() => rows())
+                const host = await served(view)
+                const before = Array.from(host.querySelectorAll('li'))
+                is('the server wrote five rows', before.length, 5)
+
+                const work = measure(() => void hydrate(host, view))
+                // 2n−1: one insert per row, and a text write for every boundary but the last.
+                is('inserts, one per row', work.insert, 5)
+                is('text writes, one per boundary', work.textWrite, 4)
+                is('total DOM work is 2n−1', total(work), 9)
+                // Still no rebuild — the rows themselves are adopted, which is the claim that holds
+                // for both shapes. What differs is the whitespace between them.
+                is('nothing created', work.createElement, 0)
+                is('every row is the SAME element', Array.from(host.querySelectorAll('li')), before)
+                log('work to adopt five spaced rows', nonZero(work))
+                host.remove()
             },
         },
 

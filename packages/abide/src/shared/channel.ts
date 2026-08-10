@@ -297,7 +297,21 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         return windowOf()
     }
 
-    /** The live window as its own array. Built on the read that follows a move, and held until the next. */
+    /**
+     * The live window as its own array. Built on the read that follows a move, and held until the next.
+     *
+     * The copy is O(window) and reads like the retention rule's own counter-example, so: it is not.
+     * That rule forbids a cap becoming a cost per WRITE, and publish is flat in `tail` — 30.9 / 21.0 /
+     * 21.4 ns at tail 100 / 1000 / 10000 — because eviction is `head++` and `compact` runs once per
+     * `tail` messages. What is O(tail) is this read, at ~0.35 ns per retained item, which is a read of
+     * n items costing n. A second `chunks()` with no publish between costs nothing; `view` is why.
+     *
+     * A cell hands back its buffer uncopied (`graph.ts`'s `read.chunks`) and this cannot: a cell's
+     * transcript never evicts, so its buffer IS its window, while this one carries a dead head. The
+     * only way to drop the copy is to keep `head` at 0, which means compacting per eviction — O(tail)
+     * per publish, the exact trade the cursor exists to avoid. Measured, not argued; do not re-open it
+     * without a `chunks()` that can return something other than a plain array, which is public surface.
+     */
     function windowOf(): T[] {
         if (view === null) view = buffer.slice(head)
         return view
