@@ -731,6 +731,11 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
         // Asked AFTER the transcript is handed over, so a failure that arrived while this was
         // suspended at a `yield` is thrown by the loop that was waiting on it.
         const asked = (): unknown => cell.error()
+        // Hoisted for the same reason as the two above, which this used to sit seventeen lines under
+        // while allocating a fresh executor per turn.
+        const park = (resolve: () => void): void => {
+            wake = resolve
+        }
         for (;;) {
             moved = false
             untrack(look)
@@ -747,9 +752,7 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
                 return
             }
             if (moved) continue // something landed while this was suspended at a `yield`
-            await new Promise<void>((resolve) => {
-                wake = resolve
-            })
+            await new Promise<void>(park)
         }
     } finally {
         watcher.dispose()

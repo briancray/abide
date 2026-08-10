@@ -548,19 +548,29 @@ export async function* chunksOf(id: string, response: Response): AsyncGenerator<
     // A CURSOR rather than re-slicing the buffer per line: dropping the head of a k-line read copies
     // what is left of it k times, and a stream's whole point is that the buffer is not small.
     let from = 0
+    // ...and a second cursor for the SCAN, which is not the same position: `from` only moves when a
+    // line is consumed, so a line spanning k reads had every read re-search the bytes the previous
+    // one already proved newline-free — quadratic in the length of one line, not in the stream.
+    // `scanned >= from` always: it is set to `from` on consuming a line and only grows from there.
+    let scanned = 0
     for (;;) {
         const step = await reader.read()
         if (step.done === true) break
         if (from > 0) {
             held = held.slice(from)
+            scanned -= from
             from = 0
         }
         held += decoder.decode(step.value, STREAMING)
         for (;;) {
-            const at = held.indexOf('\n', from)
-            if (at < 0) break
+            const at = held.indexOf('\n', scanned)
+            if (at < 0) {
+                scanned = held.length
+                break
+            }
             const line = held.slice(from, at)
             from = at + 1
+            scanned = from
             if (line !== '') yield chunk(id, line)
         }
     }

@@ -375,6 +375,10 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         // trade `compact` already makes: O(1) per message, one O(k) copy per k messages.
         let sent = 0
         let wake: (() => void) | null = null
+        // Built once for the whole loop, not one executor per park: this runs per message.
+        const park = (resolve: () => void): void => {
+            wake = resolve
+        }
         const off = self.subscribe((message) => {
             pending.push(message)
             wake?.()
@@ -397,9 +401,7 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
                 }
                 pending.length = 0
                 sent = 0
-                await new Promise<void>((resolve) => {
-                    wake = resolve
-                })
+                await new Promise<void>(park)
             }
         } finally {
             // Reached when the consumer goes away — a cancelled reader calls `return()`, which is what

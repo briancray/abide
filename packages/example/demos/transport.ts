@@ -51,7 +51,7 @@ import {
     sse,
     validateJson,
 } from 'abide/server'
-import { countCalls, loopback, reader, sleep, suite, until } from 'abide/tests'
+import { countCalls, duration, loopback, nsPerOp, reader, sleep, suite, until } from 'abide/tests'
 import { assertType, type Exact } from '../types/exact.ts'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -768,6 +768,60 @@ export default suite({
                 is('…rung for rung', rungs, ['outer 2', 'inner', 'handler', 'outer done'])
 
                 await rejects('a refusal is a throw', remoteSecret({ id: 0 }), /not yours/)
+            },
+        },
+
+        {
+            title: 'the LENGTH of a chunk never reaches the reader that finds its end',
+            note: 'The wire is line-delimited, so the reader searches each read for a newline. It kept two positions in one: `from`, which only moves when a line is CONSUMED. A chunk larger than a read never moves it, so every read re-searched every byte the previous one had already proved newline-free — quadratic in the length of one chunk. The fix is the second cursor the first one implied: `scanned` remembers how far the search got, `from` still remembers where the line began. A correctness test cannot see any of this — the wrong reader yields exactly the right chunks.',
+            async run({ is, log }) {
+                // A ratio between two sizes of the SAME structure, which is the only timing claim
+                // that survives moving between substrates: one chunk, delivered in reads far smaller
+                // than it, at two lengths 4x apart. Linear costs ~4x; re-scanning costs ~16x.
+                // Reads far smaller than the chunk are what make the re-scan visible rather than
+                // merely present: the wasted work is quadratic in reads-per-chunk, so 1 KiB reads
+                // separate the two implementations where 4 KiB reads leave them 6.4x apart — inside
+                // a bound loose enough to survive a browser card's clock.
+                const READ = 1024
+                const streamOf = (length: number) => {
+                    const line = `${JSON.stringify('x'.repeat(length))}\n`
+                    const bytes = new TextEncoder().encode(line)
+                    return () =>
+                        new Response(
+                            new ReadableStream<Uint8Array>({
+                                start(controller) {
+                                    for (let at = 0; at < bytes.length; at += READ) {
+                                        controller.enqueue(bytes.subarray(at, at + READ))
+                                    }
+                                    controller.close()
+                                },
+                            }),
+                            { headers: { 'content-type': 'application/x-ndjson' } },
+                        )
+                }
+                const drain = async (make: () => Response): Promise<void> => {
+                    const one = remote<Record<string, never>, string>('demo/stream/long', {
+                        base: 'http://sizes.test',
+                        fetch: async () => make(),
+                        stream: true,
+                    })
+                    for await (const _ of one({})) {
+                        // The chunks themselves are not the claim; reaching the end of them is.
+                    }
+                }
+
+                const short = streamOf(128 * 1024)
+                const long = streamOf(512 * 1024)
+                const [cheap, dear] = (await nsPerOp([
+                    { label: '128 KiB in one chunk', run: () => drain(short) },
+                    { label: '512 KiB in one chunk', run: () => drain(long) },
+                ])) as [number, number]
+
+                const ratio = dear / cheap
+                log('per stream', `128 KiB — ${duration(cheap)}, 512 KiB — ${duration(dear)}`)
+                // Loose, because everything else in the drain is linear too and a card's clock is
+                // noisy. What it has to separate is the ~4x of a cursor from the ~16x of a re-scan.
+                is(`4x the chunk costs about 4x, not 16x (${ratio.toFixed(1)}x)`, ratio < 8, true)
             },
         },
 
