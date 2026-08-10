@@ -1408,6 +1408,32 @@ export default suite({
         },
 
         {
+            title: 'dropping a row costs ONE removal, whatever the row holds inside it',
+            note: 'A row goes out of the document by its own top node; everything under it leaves at the same moment, as descendants. Letting each child slot then run its own removal walked an already-detached subtree — 4x the removes of a hand-written `li.remove()` on a 500-of-1000 drop, and not one of them on a connected node. The assertion is a ratio between two ROW SHAPES rather than an absolute: a row with three slots and a row with one must cost the same per drop, and only an implementation that stops at the top node can manage that. This is sound only because a row reports the range it HOLDS rather than the one it was built with — the same shortcut over a captured list left repainted nodes connected, which the two cases below are about.',
+            async run({ is, log }) {
+                const drop = async (row: (item: Item) => TemplateResult): Promise<number> => {
+                    const rows = state(build(20))
+                    const host = container()
+                    mount(host, () => html`<ul>${() => rows().map((item) => keyed(item.id, row(item)))}</ul>`)
+                    await tick()
+                    // Ten of twenty, from the middle, so the drop is not also a truncation.
+                    const work = await measureFlush(() => rows.set(rows.peek().slice(0, 10)))
+                    host.remove()
+                    return work.remove
+                }
+
+                const thin = await drop((item) => html`<li>${item.label}</li>`)
+                const fat = await drop(
+                    (item) =>
+                        html`<li><span>${item.label}</span><span>${item.id}</span><i>${item.label}</i></li>`,
+                )
+                log('removals for ten dropped rows', `one slot — ${thin}, three slots — ${fat}`)
+                is('a one-slot row costs one removal each', thin, 10)
+                is('…and three slots inside cost no more', fat, thin)
+            },
+        },
+
+        {
             title: 'a keyed row whose ROOT is a fragment reorders by what it holds now',
             note: 'An instance records its top-level nodes once. When the root is a single element that record cannot go stale — the element IS the range and its slots are inside it. When the root is a fragment, a top-level slot paints into the range without the instance hearing about it, so the record describes nodes that have since been replaced: the reorder then moves those and strands the live ones, which read as `h1` and `X1` drifting apart. The range is contiguous, so what fixes it is walking it rather than remembering it. A text slot cannot show this — it rewrites one node and keeps its identity — so the slot here swaps a TEMPLATE in, which is what replaces nodes.',
             async run({ is }) {
