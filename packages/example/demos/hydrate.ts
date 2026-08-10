@@ -291,6 +291,65 @@ export default suite({
         },
 
         {
+            title: 'an ADOPTED list tears down by what its rows hold, not by what the server wrote',
+            note: 'Every other teardown claim in this project is measured after a `mount`, and adoption is the case that breaks differently: `take` puts every server node of every row inside the part’s own range, so a teardown that detaches that range first leaves the rows loose — and a row walks its range by `nextSibling`, which is exactly what detaching it destroyed. Each row then stops after one node and the rest stay on screen, while the removal runs on past the range and takes the INCOMING content with it. Two shapes here because they fail in the two different directions: the first leaves nodes behind, the second removed too much and left the slot with no anchor at all.',
+            async run({ is }) {
+                // A row whose top-level slot REPLACES nodes after adoption — the only kind that can
+                // put a row's live range out of step with the markup the server wrote for it.
+                const shown = state(true)
+                const swapped = state(false)
+                const rowsView = (): TemplateResult =>
+                    html`<div><span>kept</span>${() =>
+                        shown()
+                            ? [1, 2, 3].map((n) =>
+                                  keyed(
+                                      n,
+                                      html`<b>h${n}</b>${() => (swapped() ? html`<i>x${n}</i>` : `p${n}`)}`,
+                                  ),
+                              )
+                            : 'gone'}</div>`
+                const host = container()
+                host.innerHTML = await renderToString(rowsView(), { hydratable: true })
+                hydrate(host, rowsView)
+                await tick()
+                is('adopted the server’s rows', host.textContent, 'kepth1p1h2p2h3p3')
+
+                swapped.set(true)
+                await tick()
+                is('every row repainted', host.textContent, 'kepth1x1h2x2h3x3')
+
+                shown.set(false)
+                await tick()
+                is('the whole list left, and nothing beside it did', host.textContent, 'keptgone')
+                host.remove()
+
+                // The same teardown with a row that GREW a nested list rather than repainting one —
+                // no repaint at all, and still outside what the server wrote.
+                const held = state(true)
+                const sub = state([1])
+                const grownView = (): TemplateResult =>
+                    html`<div><span>kept</span>${() =>
+                        held()
+                            ? [1].map((n) =>
+                                  keyed(n, html`<b>h${n}</b>${() => sub().map((s) => html`<u>s${s}</u>`)}`),
+                              )
+                            : 'gone'}</div>`
+                const grown = container()
+                grown.innerHTML = await renderToString(grownView(), { hydratable: true })
+                hydrate(grown, grownView)
+                await tick()
+                sub.set([1, 2, 3])
+                await tick()
+                is('the sublist grew past the adopted range', grown.textContent, 'kepth1s1s2s3')
+
+                held.set(false)
+                await tick()
+                is('and all of it left together', grown.textContent, 'keptgone')
+                grown.remove()
+            },
+        },
+
+        {
             title: 'a keyed list is adopted row by row, with no per-row marker',
             note: 'A row IS a template, and adopting a template consumes exactly the nodes it describes — so each row delimits itself and hands the cursor to the next. The rows survive as the same elements, which is what makes the next reorder a MOVE rather than a rebuild.',
             async run({ is, log }) {

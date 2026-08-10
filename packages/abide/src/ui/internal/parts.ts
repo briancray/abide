@@ -625,22 +625,27 @@ export class ChildPart {
         // — so asking for it here is what makes the removal below cover what the instance currently
         // has rather than what it had when it was built. Before `dispose`, which owes nothing to it.
         if (this.nested !== null) this.nested.live()
-        // The RANGE goes first, and what it covers is what nothing below has to touch again. This is
-        // only sound because `live()` above made `owned` describe the range as it stands: the same
-        // shortcut over the CAPTURED list left repainted nodes connected, which is the whole of why
-        // an instance walks its range now. A list built by `set` keeps its rows outside `owned`, so
-        // it still detaches its own.
-        if (this.owned.length !== 0) {
-            if (detach) for (const node of this.owned) node.remove()
-            this.owned = []
-        }
+        // BEFORE the range is torn out, and that order is load-bearing rather than incidental: both
+        // of these walk their own live ranges to find what to remove, and a range is walked by
+        // `nextSibling`. Detaching `owned` first breaks that chain — `take`'s array arm puts every
+        // adopted row INSIDE `owned`, so the rows would already be loose and each row's walk would
+        // stop after one node, leaving the rest connected and taking the incoming content with it.
+        // Neither is handed a constant: what an ancestor did for them is exactly `detach`.
         if (this.list !== null) this.list.dispose(detach)
-        if (this.nested !== null) this.nested.dispose(false)
+        if (this.nested !== null) this.nested.dispose(detach)
         // Only when there IS a range: on the build path a fresh part reaches here holding the empty
         // array its constructor made, and replacing that with a second empty one — which the caller
         // then pushes into — was one discarded array per child slot per row. A fresh array rather
         // than `length = 0` because `owned` is sometimes an array this part does not own: `take`
         // assigns it `claimed`, and the nested arm assigns it `nested.nodes`.
+        //
+        // `detach` false when an ancestor's removal already took this range out of the document, so
+        // every `remove()` here would be walking a detached subtree. The saving that is worth having
+        // is per ROW, and `ListPart.set`'s own drop loop is where it is taken.
+        if (this.owned.length !== 0) {
+            if (detach) for (const node of this.owned) node.remove()
+            this.owned = []
+        }
         // Outside the guard: the server's opening marker outlives the range it bracketed, so a part
         // that painted through `set` has to let go of it whether or not it was holding nodes.
         this.dropOpened()
