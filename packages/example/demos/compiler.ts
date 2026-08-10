@@ -151,6 +151,21 @@ export default suite({
                     template('<script>const a = state(0)</script><div {...{ k: a }}>s</div>'),
                     '<div ...=${() => ({ k: a() })}>s</div>',
                 )
+                // The thunk above is kept because `a()` READS. A spread that reads nothing must lose
+                // it: inside a `{#for}` an unconditional thunk cost a closure, a graph node and an
+                // observer set per row for a wake that cannot happen — and a fresh closure per pass
+                // also defeats the slot's `values[i] === previous[i]` cutoff. The emit stays valid
+                // either way, so only an exact-emit assertion can see this.
+                is(
+                    'a spread that reads nothing is not thunked',
+                    template('<script>const PLAIN = { k: 1 }</script><div {...PLAIN}>s</div>'),
+                    '<div ...=${PLAIN}>s</div>',
+                )
+                is(
+                    '…and a row property in a {#for} is not either',
+                    template('<script>const rows = state([] as { attrs: object }[])</script>{#for row of rows}<li {...row.attrs}>s</li>{/for}'),
+                    '${() => (rows() ?? []).map((row) => html`<li ...=${row.attrs}>s</li>`)}',
+                )
                 // Both arms of a ternary are EXPRESSIONS, so a `{` in one opens a literal. Read as a
                 // block it made `k:` a label and the cell after it a type annotation.
                 is(

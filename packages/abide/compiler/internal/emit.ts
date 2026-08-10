@@ -1186,9 +1186,16 @@ function element(
             case 'event':
                 open += ` @${attribute.name}=\${${mark(attribute.value.start, code(attribute.value, context))}}`
                 break
-            case 'spread':
-                open += ` ...=\${() => ${body(code(attribute.value, context))}}`
+            case 'spread': {
+                // Asks like its `expression`/`interpolated` siblings: a spread whose object reads
+                // nothing cannot wake, so the thunk bought a closure, a graph node and an observer
+                // set per row — and, being fresh per pass, defeated the slot's identity cutoff too.
+                const emitted = code(attribute.value, context)
+                open += unthunked(emitted, context)
+                    ? ` ...=\${${body(emitted)}}`
+                    : ` ...=\${() => ${body(emitted)}}`
                 break
+            }
             case 'bind':
                 open += bind(attribute, node.name, staticValue, context)
                 break

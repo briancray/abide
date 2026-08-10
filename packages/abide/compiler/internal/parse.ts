@@ -322,8 +322,17 @@ function parseNodes(reader: Reader, closing: string | null): Node[] {
             }
         }
 
-        text += char
-        reader.at++
+        // The common shape of a template is a long run of markup holding neither `{` nor `<`; take it
+        // in one slice rather than a string index and a rope append per character. From `at + 1` so a
+        // `<` that opened nothing — a literal `a < b` — is consumed here exactly as it was before.
+        let run = reader.at + 1
+        while (run < reader.source.length) {
+            const code = reader.source.charCodeAt(run)
+            if (code === 123 /* { */ || code === 60 /* < */) break
+            run++
+        }
+        text += reader.source.slice(reader.at, run)
+        reader.at = run
     }
 
     if (closing !== null) fail(reader, `<${closing}> was never closed`)
