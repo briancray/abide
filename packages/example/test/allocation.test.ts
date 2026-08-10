@@ -127,3 +127,42 @@ test('an adjacent swap builds no key index, and a scattered pass still does', as
     expect(scatteredMaps).toBeGreaterThan(0.1)
     expect(adjacentMaps).toBeLessThan(scatteredMaps / 2)
 })
+
+// `url('/about')` — a path with no placeholder, already normalised — used to be split into segments
+// and rebuilt character-group by character-group to arrive back at the string it started with. Its
+// own comment says an href is built per ROW, so that walk was per row of every list of links.
+//
+// Counted as arrays because that is what the walk leaves behind: `parsePattern` builds a `segments`
+// array and a `names` array per call, and neither is cached for a path with no `[` in it (caching
+// those would grow the map by one entry per href for the life of the process). The output is the
+// same string either way, so nothing but a counter can see the difference.
+test('a literal href allocates nothing, and a pattern still parses', async () => {
+    const { url } = await import('abide')
+
+    const arraysPerCall = (run: () => string, n: number): number => {
+        for (let i = 0; i < 20_000; i++) run()
+        Bun.gc(true)
+        const before = (heapStats().objectTypeCounts as Record<string, number>).Array ?? 0
+        for (let i = 0; i < n; i++) run()
+        const after = (heapStats().objectTypeCounts as Record<string, number>).Array ?? 0
+        return (after - before) / n
+    }
+
+    const literal = arraysPerCall(() => url('/docs/guide/getting-started/install'), 20_000)
+    // The comparison has to be another PLACEHOLDER-FREE path, because those are the ones nothing
+    // caches — a pattern like `/users/[id]` is parsed once into `PARSED` and then allocates nothing
+    // per call either, so it cannot tell the two implementations apart. A trailing slash is the
+    // cheapest way to be un-normalised, so this one still takes the walk. A ratio rather than an
+    // absolute, for the reason the reconcile gate above is one.
+    const walked = arraysPerCall(() => url('/docs/guide/'), 20_000)
+    expect(walked).toBeGreaterThan(0.5)
+    expect(literal).toBeLessThan(walked / 2)
+
+    // Behaviour is the whole point of the fast path being conservative: anything that is not already
+    // exactly what the walk would produce takes the walk.
+    expect(url('/docs/guide/getting-started/install')).toBe('/docs/guide/getting-started/install')
+    expect(url('/a/b/')).toBe('/a/b')
+    expect(url('//a')).toBe('/a')
+    expect(url('')).toBe('/')
+    expect(url('/users/[id]', { id: 42 })).toBe('/users/42')
+})

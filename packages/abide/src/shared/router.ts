@@ -548,11 +548,44 @@ export function route(): Route {
 // through one pattern should parse it once, not five hundred times.
 const PARSED = new Map<string, Pattern>()
 
-function patternFor(path: string): Pattern {
-    // Only a real PATTERN is cached. An app writes a fixed set of those down; an already-built path
-    // — `url('/users/42')` — is not one, and caching those would grow the map by one entry per href
-    // for the life of the process. Parsing a path with no placeholder is a split and a push anyway.
-    if (path.indexOf('[') === -1) return parsePattern(path)
+/**
+ * Is this path already exactly what `buildPath` would produce for it?
+ *
+ * True only when there is nothing left to decide: rooted, no trailing or doubled slash, no
+ * placeholder, and every character one `encodeURIComponent` leaves alone. Anything else takes the
+ * long way, because the long way is where the meaning is — a space becomes `%20`, an existing `%20`
+ * becomes `%2520`, a trailing slash is dropped, and a `[` opens a segment. Getting that wrong would
+ * build an href to the wrong page, which is the failure `url` exists to prevent.
+ *
+ * The scan is per character of the PATH, not per row: a href is a handful of characters, and it
+ * replaces a split, an array of segments and a rebuild.
+ */
+function literalPath(path: string): boolean {
+    if (path.charCodeAt(0) !== 47 /* / */) return false
+    if (path.length > 1 && path.charCodeAt(path.length - 1) === 47) return false
+    for (let i = 0; i < path.length; i++) {
+        const code = path.charCodeAt(i)
+        if (code === 47) {
+            if (path.charCodeAt(i + 1) === 47) return false
+            continue
+        }
+        // Unreserved, per RFC 3986: these are the characters `encodeURIComponent` hands back
+        // untouched, so a segment made only of them rebuilds to itself.
+        const unreserved =
+            (code >= 97 && code <= 122) ||
+            (code >= 65 && code <= 90) ||
+            (code >= 48 && code <= 57) ||
+            code === 45 ||
+            code === 46 ||
+            code === 95 ||
+            code === 126
+        if (!unreserved) return false
+    }
+    return true
+}
+
+/** Only a real PATTERN is cached — see `url`, which is the only caller and does the dispatch. */
+function heldPattern(path: string): Pattern {
     let held = PARSED.get(path)
     if (held === undefined) {
         held = BY_NAME.get(path)?.pattern ?? parsePattern(path)
@@ -570,7 +603,19 @@ function patternFor(path: string): Pattern {
  * nothing catches until somebody clicks it.
  */
 export function url(path: string, params?: Record<string, unknown>, query?: Record<string, unknown>): string {
-    const built = buildPath(patternFor(path), params)
+    // The placeholder probe is the DISPATCH rather than a pre-check, and that is what keeps the two
+    // arms from taxing each other: a path with a `[` goes straight to its cached pattern and never
+    // touches the scan below, which was otherwise 65% on `url('/a/[[b]]')`. Only a real pattern is
+    // cached — caching built hrefs would grow the map by one entry per href for the process's life.
+    //
+    // And a path that is already the answer IS the answer. `url('/about')` is the commonest shape a
+    // nav has, and it was paying a split, a segment array and a rebuild to arrive back at the string
+    // it started with — per row, by the comment above. Only with no params to place, because a param
+    // against a placeholder-free pattern is a typo the long way is there to report.
+    let built: string
+    if (path.indexOf('[') !== -1) built = buildPath(heldPattern(path), params)
+    else if (params === undefined && literalPath(path)) built = path
+    else built = buildPath(parsePattern(path), params)
     if (query === undefined) return built
     let search = ''
     // `for…in` rather than `Object.keys`, for the reason `buildPath` one line up gives: an href is
