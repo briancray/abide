@@ -139,7 +139,9 @@ test('the same url without the mark is still the whole document', async () => {
  */
 async function chunks(path: string, headers: Record<string, string> = {}): Promise<Timed[]> {
     const started = performance.now()
-    const answered = await fetch(`${app.base}${path}`, { headers: { ...headers, 'accept-encoding': 'identity' } })
+    const answered = await fetch(`${app.base}${path}`, {
+        headers: { ...headers, 'accept-encoding': 'identity' },
+    })
     const seen: Timed[] = []
     // A reader and a decoder by hand rather than `pipeThrough(new TextDecoderStream())`: what is
     // being timed is when each chunk ARRIVES, and a transform stream sits between the socket and the

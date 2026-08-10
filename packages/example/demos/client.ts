@@ -1241,7 +1241,11 @@ export default suite({
 
                 n.set(2)
                 await tick()
-                is('the pass that threw stopped at the slot that threw', host.querySelector('i')?.textContent, 'one')
+                is(
+                    'the pass that threw stopped at the slot that threw',
+                    host.querySelector('i')?.textContent,
+                    'one',
+                )
 
                 // The third pass hands slot 1 the SAME `'two'` the half-pass was handed. Judged
                 // against what was handed over, it is unchanged and gets skipped — and `one` is then
@@ -1414,7 +1418,9 @@ export default suite({
                     host,
                     () =>
                         html`<div>${() =>
-                            which() === 0 ? html`${() => (flag() ? html`<b>B</b>` : 'plain')}` : 'gone'}</div>`,
+                            which() === 0
+                                ? html`${() => (flag() ? html`<b>B</b>` : 'plain')}`
+                                : 'gone'}</div>`,
                 )
                 await tick()
 

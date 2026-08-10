@@ -251,10 +251,7 @@ function principal(opened: Sealed | null): Identity | Promise<Identity> {
     }
     const said = 'what onIdentity returned'
     if (!isThenable(reported)) return merged(document, reported, identityLog, said)
-    return (reported as Promise<unknown>).then(
-        (value) => merged(document, value, identityLog, said),
-        failing,
-    )
+    return (reported as Promise<unknown>).then((value) => merged(document, value, identityLog, said), failing)
 }
 
 /**

@@ -18,7 +18,7 @@
 // `abide:request` case below claims the fields that are the same in both lanes and nothing else.
 
 import { log } from 'abide'
-import { GET, type LogRecord, error, handle, json, register, socket } from 'abide/server'
+import { error, GET, handle, json, type LogRecord, register, socket } from 'abide/server'
 import { loopback, sleep, suite, until } from 'abide/tests'
 import { button, field, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv, writeEnv } from './env.ts'

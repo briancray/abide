@@ -34,18 +34,7 @@ const ADJECTIVES = [
     'fancy',
 ]
 
-const COLOURS = [
-    'red',
-    'yellow',
-    'blue',
-    'green',
-    'pink',
-    'brown',
-    'purple',
-    'white',
-    'black',
-    'orange',
-]
+const COLOURS = ['red', 'yellow', 'blue', 'green', 'pink', 'brown', 'purple', 'white', 'black', 'orange']
 
 const NOUNS = [
     'table',

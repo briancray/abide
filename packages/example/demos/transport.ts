@@ -29,8 +29,8 @@ import {
     remoteSocket,
 } from 'abide'
 import { ElisionError, elide, endpointId, type ImportedModule, kindOf, type TypeSource } from 'abide/compiler'
-import { config } from 'abide/server'
 import {
+    config,
     DELETE,
     endpoints,
     error,
@@ -43,11 +43,11 @@ import {
     page,
     redirect,
     register,
-    type Schema,
     SCHEMA_ERROR,
+    type Schema,
     type SchemaRefusal,
-    socket,
     type StandardSchemaV1,
+    socket,
     sse,
     validateJson,
 } from 'abide/server'

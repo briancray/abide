@@ -10,9 +10,9 @@ import { channel, html, memo, raw, state, type TemplateResult } from 'abide'
 import {
     heldStream,
     isServing,
+    type Renderable,
     render,
     renderDocument,
-    type Renderable,
     renderToString,
     shell,
     suspend,
@@ -92,14 +92,18 @@ export default suite({
                 // `10n` writes `10`: a bigint is its digits, not its literal spelling, which is the
                 // one arm where the source text and the markup differ by a character.
                 is('a bigint drops the suffix', await renderToString(10n), '10')
-                is('nullish and both booleans write nothing', await renderToString([true, false, null, undefined]), '')
+                is(
+                    'nullish and both booleans write nothing',
+                    await renderToString([true, false, null, undefined]),
+                    '',
+                )
                 is('…while zero and empty string are values', await renderToString([0, '']), '0')
             },
         },
 
         {
             title: '`heldStream` — a body that outlives the handler still answers inside its scope',
-            note: 'A streaming response is built inside a request and CONSUMED after the handler returned, so the caller scope every ambient answers off has to be held open for as long as the body is pumping — otherwise a `memo` read on the third chunk answers from a different caller\'s cache, or from none. Abide holds what abide builds; this is the one piece an app reaches for directly, for a stream it made itself. IDEMPOTENT, so `page(toStream(view))` is one wrapper rather than two and an app may call it on anything it is about to answer with. Outside a request there is nothing to hold and the body is handed straight back — which is what this case is in a position to assert, since a demo runs in a browser card as readily as under `bun test`.',
+            note: "A streaming response is built inside a request and CONSUMED after the handler returned, so the caller scope every ambient answers off has to be held open for as long as the body is pumping — otherwise a `memo` read on the third chunk answers from a different caller's cache, or from none. Abide holds what abide builds; this is the one piece an app reaches for directly, for a stream it made itself. IDEMPOTENT, so `page(toStream(view))` is one wrapper rather than two and an app may call it on anything it is about to answer with. Outside a request there is nothing to hold and the body is handed straight back — which is what this case is in a position to assert, since a demo runs in a browser card as readily as under `bun test`.",
             run({ is }) {
                 is('nothing to hold out here', isServing(), false)
 
@@ -558,8 +562,9 @@ export default suite({
                 // A document render, which is the lane that HAS somewhere to defer to. Rendered to a
                 // plain string there is nowhere, so that lane could never have shown this.
                 let written = ''
-                for await (const chunk of renderDocument('<title>t</title>', () =>
-                    html`<p>${suspend('already here', (t) => html`<b>${t}</b>`, 'loading…')}</p>`,
+                for await (const chunk of renderDocument(
+                    '<title>t</title>',
+                    () => html`<p>${suspend('already here', (t) => html`<b>${t}</b>`, 'loading…')}</p>`,
                 )) {
                     written += chunk
                 }
@@ -686,7 +691,7 @@ export default suite({
 
         {
             title: 'a THENABLE fallback does not race the body it stands in for',
-            note: 'The fallback is rendered through the ordinary slot path, and a cell is thenable — so one handed over as a fallback starts a settle of its own. It used to be stamped with the same generation the suspend\'s own settle then took, which makes the two mutually exclusive: whichever landed first retired the other. The fallback is normally the settled one, so it won, and the body never ran at all.',
+            note: "The fallback is rendered through the ordinary slot path, and a cell is thenable — so one handed over as a fallback starts a settle of its own. It used to be stamped with the same generation the suspend's own settle then took, which makes the two mutually exclusive: whichever landed first retired the other. The fallback is normally the settled one, so it won, and the body never ran at all.",
             async run({ is }) {
                 // A cell, which is the ordinary thing to reach for and is thenable by contract.
                 const placeholder = state('waiting…')

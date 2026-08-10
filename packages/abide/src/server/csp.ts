@@ -9,8 +9,8 @@
 // cannot see — an embedded page, a CDN for fonts — and a security header that turns a working app
 // into a blank screen on upgrade is one nobody trusts again.
 
-import { nonce } from './scopes.ts'
 import type { Middleware } from './lifecycle.ts'
+import { nonce } from './scopes.ts'
 
 /**
  * The directives abide can state for any app, and what each is holding.

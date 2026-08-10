@@ -206,18 +206,17 @@ export default suite({
                 )) as [number, number]
 
                 const agedRatio = dearAged / cheapAged
-                log('per publish, maxAge', `tail 8 — ${duration(cheapAged)}, tail 512 — ${duration(dearAged)}`)
-                is(
-                    `and no more per publish under maxAge (${agedRatio.toFixed(1)}x)`,
-                    agedRatio < 4,
-                    true,
+                log(
+                    'per publish, maxAge',
+                    `tail 8 — ${duration(cheapAged)}, tail 512 — ${duration(dearAged)}`,
                 )
+                is(`and no more per publish under maxAge (${agedRatio.toFixed(1)}x)`, agedRatio < 4, true)
             },
         },
 
         {
             title: 'a reader wakes for what it READS, not for every publish',
-            note: 'The three questions a channel answers move at three different rates: a message arrives constantly, the transcript moves only when there is retention to move, and `settled()` flips once in a channel\'s life. One envelope rebuilt per publish made all three move together — the identity check downstream never held, so every reader woke for every message and read back exactly what it had before. Three cells is what makes the cutoffs real, and only counting the wake-ups can see it.',
+            note: "The three questions a channel answers move at three different rates: a message arrives constantly, the transcript moves only when there is retention to move, and `settled()` flips once in a channel's life. One envelope rebuilt per publish made all three move together — the identity check downstream never held, so every reader woke for every message and read back exactly what it had before. Three cells is what makes the cutoffs real, and only counting the wake-ups can see it.",
             async run({ is }) {
                 // A correctness test cannot reach this: the wrong implementation hands every reader
                 // the right value, just after waking it for a change it cannot see.
@@ -251,7 +250,7 @@ export default suite({
 
         {
             title: 'a room is forgotten when its last subscriber leaves',
-            note: 'Rooms are named by whoever selects one — a socket\'s comes off the query string of the request that upgraded it — so a table that only ever grows is one an arriving connection can grow without a bound, and each room holds a retention and three cells. The last subscriber leaving is the moment nothing can reach it any more: what a room retains is only ever handed to a subscriber, so dropping it then drops exactly what nothing was going to read. A room nobody ever subscribed to is nobody\'s to forget, and stays.',
+            note: "Rooms are named by whoever selects one — a socket's comes off the query string of the request that upgraded it — so a table that only ever grows is one an arriving connection can grow without a bound, and each room holds a retention and three cells. The last subscriber leaving is the moment nothing can reach it any more: what a room retains is only ever handed to a subscriber, so dropping it then drops exactly what nothing was going to read. A room nobody ever subscribed to is nobody's to forget, and stays.",
             async run({ is }) {
                 const chat = channel<string, { room: string }>({ tail: 3 })
                 const general = chat({ room: 'general' })

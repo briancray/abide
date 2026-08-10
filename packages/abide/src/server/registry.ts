@@ -173,7 +173,9 @@ function ownOrigin(url: URL): string {
             originValue = null
             abideLog
                 .channel('config')
-                .warning(`APP_URL is not a URL (${declared}) — the origin gates fall back to the request's own`)
+                .warning(
+                    `APP_URL is not a URL (${declared}) — the origin gates fall back to the request's own`,
+                )
         }
     }
     return originValue ?? url.origin
@@ -264,11 +266,7 @@ export function dispatch(
     return serveIfScoped(request, () => served(request, url, path))
 }
 
-function served(
-    request: Request,
-    url: URL,
-    path: string,
-): Response | Promise<Response | undefined> {
+function served(request: Request, url: URL, path: string): Response | Promise<Response | undefined> {
     if (path.startsWith(SOCKET_PREFIX)) return upgrade(request, url, path)
     if (path === LOGS_PATH) return logs(request)
     if (path === SCHEMA_PATH) return schema(request)
@@ -327,11 +325,7 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
     return respond(rpc, args, headers)
 }
 
-function upgrade(
-    request: Request,
-    url: URL,
-    path: string,
-): Response | Promise<Response | undefined> {
+function upgrade(request: Request, url: URL, path: string): Response | Promise<Response | undefined> {
     const id = path.slice(SOCKET_PREFIX.length)
     const stream = SOCKETS.get(id)
     if (stream === undefined) return refuse(`no socket at ${id}`, 404)

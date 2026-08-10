@@ -398,7 +398,11 @@ export default suite({
                 // 1.2–3.0x once it stopped — the bound sits between the two rather than beside
                 // either, because the quadratic only gets worse with n and the linear one does not.
                 const watched = (await drain(16_000, true)) / (await drain(4_000, true))
-                is(`…and the same with a reader of the transcript (${watched.toFixed(1)}x)`, watched < 6, true)
+                is(
+                    `…and the same with a reader of the transcript (${watched.toFixed(1)}x)`,
+                    watched < 6,
+                    true,
+                )
             },
         },
 

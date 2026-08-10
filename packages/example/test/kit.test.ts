@@ -9,7 +9,7 @@
 // is not one of them — a card titled "the harness works" is furniture, not a claim about abide.
 
 import { describe, expect, test } from 'bun:test'
-import { AssertionError, equals, NOISE, smokeBench, timeArms, quiesce } from 'abide/tests'
+import { AssertionError, equals, NOISE, quiesce, smokeBench, timeArms } from 'abide/tests'
 
 describe('equals — what `is` means by equal', () => {
     test('structural, not identity', () => {
@@ -72,7 +72,10 @@ describe('AssertionError — what the card and the runner both catch', () => {
     })
 
     test('…and a finite one passes', async () => {
-        await smokeBench({ kind: 'wake', arms: [{ label: 'counts one', run: async () => ({ count: 1, of: 'wake-ups' }) }] })
+        await smokeBench({
+            kind: 'wake',
+            arms: [{ label: 'counts one', run: async () => ({ count: 1, of: 'wake-ups' }) }],
+        })
     })
 })
 

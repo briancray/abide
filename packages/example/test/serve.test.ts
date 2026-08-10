@@ -821,7 +821,9 @@ test('dispatch opens the scope itself, so an answer and both refusals are correl
     // The refusals are the whole claim: each returns from a DIFFERENT point in `dispatch` — the
     // registry's gate and the prefix that claims no lane — and a header applied per-lane would have
     // been missed by at least one.
-    const missing = (await dispatch(new Request('https://x.test/__abide/rpc/nobody/registered/this'))) as Response
+    const missing = (await dispatch(
+        new Request('https://x.test/__abide/rpc/nobody/registered/this'),
+    )) as Response
     expect(missing.status).toBe(404)
     expect(missing.headers.get('traceresponse')).toMatch(parent)
 
@@ -842,7 +844,9 @@ test('dispatch opens the scope itself, so an answer and both refusals are correl
 
     // Two requests are two operations. The ids differing is what makes correlating by one mean
     // anything at all.
-    const second = (await dispatch(new Request('https://x.test/__abide/rpc/nobody/registered/this'))) as Response
+    const second = (await dispatch(
+        new Request('https://x.test/__abide/rpc/nobody/registered/this'),
+    )) as Response
     expect(second.headers.get('traceresponse')).not.toBe(missing.headers.get('traceresponse'))
 })
 

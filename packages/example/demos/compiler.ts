@@ -163,7 +163,9 @@ export default suite({
                 )
                 is(
                     '…and a row property in a {#for} is not either',
-                    template('<script>const rows = state([] as { attrs: object }[])</script>{#for row of rows}<li {...row.attrs}>s</li>{/for}'),
+                    template(
+                        '<script>const rows = state([] as { attrs: object }[])</script>{#for row of rows}<li {...row.attrs}>s</li>{/for}',
+                    ),
                     '${() => (rows() ?? []).map((row) => html`<li ...=${row.attrs}>s</li>`)}',
                 )
                 // Both arms of a ternary are EXPRESSIONS, so a `{` in one opens a literal. Read as a
@@ -349,7 +351,10 @@ export default suite({
                 )
                 throws(
                     'bind:selected is refused, and names the spelling that works',
-                    () => template('<script>const chosen = state("a")</script><option bind:selected={chosen}>A</option>'),
+                    () =>
+                        template(
+                            '<script>const chosen = state("a")</script><option bind:selected={chosen}>A</option>',
+                        ),
                     'bind:value',
                 )
 

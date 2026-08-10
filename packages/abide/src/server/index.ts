@@ -49,8 +49,8 @@ import {
     type Deferred,
     type DocumentContext,
     nonceAttribute,
-    patchScript,
     PLAIN,
+    patchScript,
     type RenderContext,
     type RenderOptions,
 } from './internal/emit.ts'
@@ -842,6 +842,9 @@ export {
     type Env,
     onConfig,
 } from './config.ts'
+// The one security header abide can help with, because the half an app cannot write — authorising
+// abide's OWN inline script and styles — is the half only abide knows. Opt-in: `middleware = [csp()]`.
+export { csp } from './csp.ts'
 // The app's own account of whether it is working. `health()` itself is on the isomorphic surface —
 // asking is the same call anywhere — and this is the half only the app being asked about can supply.
 export { type HealthReporter, onHealth } from './health.ts'
@@ -926,9 +929,6 @@ export {
 // `heldStream` is the one piece of it an app reaches for directly: abide holds what abide builds, and
 // a body written by hand takes its own hold with the same call the helpers make.
 export { bag, cookies, heldStream, isServing, nonce, request, serve, type Trace, trace } from './scopes.ts'
-// The one security header abide can help with, because the half an app cannot write — authorising
-// abide's OWN inline script and styles — is the half only abide knows. Opt-in: `middleware = [csp()]`.
-export { csp } from './csp.ts'
 // The document an app's pages are served IN. Here rather than in the CLI that reads `app.html`,
 // because what a shell IS belongs to the renderer that fills it — and an app rendering its own
 // document takes the same `Shell` `abide start` does.
