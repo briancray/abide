@@ -1408,6 +1408,41 @@ export default suite({
         },
 
         {
+            title: 'a keyed row whose ROOT is a fragment reorders by what it holds now',
+            note: 'An instance records its top-level nodes once. When the root is a single element that record cannot go stale — the element IS the range and its slots are inside it. When the root is a fragment, a top-level slot paints into the range without the instance hearing about it, so the record describes nodes that have since been replaced: the reorder then moves those and strands the live ones, which read as `h1` and `X1` drifting apart. The range is contiguous, so what fixes it is walking it rather than remembering it. A text slot cannot show this — it rewrites one node and keeps its identity — so the slot here swaps a TEMPLATE in, which is what replaces nodes.',
+            async run({ is }) {
+                const rows = state([1, 2, 3])
+                const swapped = state(false)
+                const host = container()
+                const view = mount(
+                    host,
+                    () =>
+                        html`<div>${() =>
+                            rows().map((n) =>
+                                keyed(
+                                    n,
+                                    html`<b>h${n}</b>${() => (swapped() ? html`<i>X${n}</i>` : `p${n}`)}`,
+                                ),
+                            )}</div>`,
+                )
+                await tick()
+                is('the first paint', host.textContent, 'h1p1h2p2h3p3')
+
+                // The repaint has to REPLACE nodes, and it has to happen before the reorder — that is
+                // the whole shape of it.
+                swapped.set(true)
+                await tick()
+                is('every row repainted', host.textContent, 'h1X1h2X2h3X3')
+
+                rows.set([3, 2, 1])
+                await tick()
+                is('and the reverse moved what each row HOLDS', host.textContent, 'h3X3h2X2h1X1')
+                view.dispose()
+                host.remove()
+            },
+        },
+
+        {
             title: 'a nested template that REPAINTED still leaves nothing behind',
             note: 'An instance captures its top-level nodes once, at construction. A nested template whose root is a fragment has a child slot AMONG those top-level nodes, so anything that slot repaints afterwards sits in the document without being in the captured list — and a teardown that trusts the capture to describe the live range walks past it. Asserted by `isConnected` on the node the repaint made, because the container looks close enough to right either way: the leak is a sibling of the incoming content, not a duplicate of it. This is the shape that makes an ancestor-covers-descendants shortcut in teardown unsound, and it is why one is not taken.',
             async run({ is }) {

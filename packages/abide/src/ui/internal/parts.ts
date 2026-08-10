@@ -77,6 +77,21 @@ function isOpen(node: ChildNode | null): boolean {
 }
 
 /**
+ * Does this template's top level START with a slot rather than with markup?
+ *
+ * Empty text nodes are stepped over for the same reason `level` skips them: they carry nothing, and
+ * the adopt walk never consumes a live node for one, so counting them here would put the opening
+ * position one node off the one the server wrote.
+ */
+function opensWithSlot(content: ParentNode): boolean {
+    for (let node = content.firstChild; node !== null; node = node.nextSibling) {
+        if (node.nodeType === 3 && (node as Text).data === '') continue
+        return node.nodeType === 8 && (node as Comment).data.startsWith('$')
+    }
+    return false
+}
+
+/**
  * What a plain value renders as. Nullish and BOTH booleans are nothing, not their spelling.
  *
  * The CHILD-position twin of `$shared`'s `attributeText`, and the same hydration mismatch is what the
@@ -134,6 +149,32 @@ export class ChildPart {
     private opened: Comment | null = null
 
     constructor(private readonly anchor: Comment) {}
+
+    /**
+     * The first node this part currently has in the document, or its anchor when it has none.
+     *
+     * Only ever asked of a part that is the LEADING top-level node of a fragment-rooted instance —
+     * the one position where what the part paints decides where the instance's range begins. Every
+     * other position is reached by walking siblings from there.
+     */
+    /** Whether `node` is this part's anchor — how an instance finds the part sitting at a position. */
+    isAnchor(node: ChildNode): boolean {
+        return this.anchor === node
+    }
+
+    firstNode(): ChildNode {
+        const list = this.list
+        if (list !== null) {
+            const first = list.firstNode()
+            if (first !== null) return first
+        } else if (this.nested !== null) {
+            const first = this.nested.firstNode()
+            if (first !== null) return first
+        } else if (this.owned.length !== 0) {
+            return this.owned[0] as ChildNode
+        }
+        return this.anchor
+    }
 
     /**
      * Hand this part the range the server wrote for it. Nothing is interpreted yet: what those nodes
@@ -580,6 +621,10 @@ export class ChildPart {
         if (keep === 'text' && this.text !== null) return
         if (keep === 'nested' && this.nested !== null) return
         if (keep === 'list' && this.list !== null) return
+        // `owned` IS `nested.nodes` for a nested template, and `live()` rebuilds that array IN PLACE
+        // — so asking for it here is what makes the removal below cover what the instance currently
+        // has rather than what it had when it was built. Before `dispose`, which owes nothing to it.
+        if (this.nested !== null) this.nested.live()
         if (this.list !== null) this.list.dispose()
         if (this.nested !== null) this.nested.dispose()
         // Only when there IS a range: on the build path a fresh part reaches here holding the empty
@@ -805,7 +850,7 @@ class ListPart {
         // The anchor is what every row sits BEFORE, so appending there is the end of the list. No
         // placement walk: nothing below this row moved, because there is nothing below it.
         const parent = this.anchor.parentNode as ParentNode
-        for (const node of instance.nodes) parent.insertBefore(node, this.anchor)
+        for (const node of instance.live()) parent.insertBefore(node, this.anchor)
     }
 
     set(items: unknown[]): void {
@@ -888,7 +933,7 @@ class ListPart {
             for (let i = 0; i < previous.length; i++) {
                 const row = previous[i] as Row
                 if (row.usedAt === pass) continue
-                for (const node of row.instance.nodes) node.remove()
+                for (const node of row.instance.live()) node.remove()
                 row.instance.dispose()
             }
         }
@@ -911,8 +956,8 @@ class ListPart {
         // one `nextSibling` rather than a thousand, and an adjacent swap of two hundred reads three.
         let reference: ChildNode = this.anchor
         for (let i = lastChanged + 1; i < next.length; i++) {
-            const first = (next[i] as Row).instance.nodes[0]
-            if (first !== undefined) {
+            const first = (next[i] as Row).instance.firstNode()
+            if (first !== null) {
                 reference = first
                 break
             }
@@ -923,20 +968,32 @@ class ListPart {
         const parent = this.anchor.parentNode as ParentNode
         for (let i = lastChanged; i >= 0; i--) {
             const instance = (next[i] as Row).instance
-            const first = instance.nodes[0]
-            if (first === undefined) continue
+            const first = instance.firstNode()
+            if (first === null) continue
             if (first.nextSibling !== reference || first.parentNode === null) {
-                for (const node of instance.nodes) parent.insertBefore(node, reference)
+                // Materialised BEFORE the moves: the walk is over siblings, and inserting the first
+                // node rewrites the `nextSibling` chain the rest of it would have been read from.
+                for (const node of instance.live()) parent.insertBefore(node, reference)
             } else if (i < firstChanged) {
                 break
             }
-            reference = instance.nodes[0] as ChildNode
+            reference = first
         }
+    }
+
+    /** The first node of the first row that has one — `null` when every row is empty, or there are none. */
+    firstNode(): ChildNode | null {
+        const rows = this.rows
+        for (let i = 0; i < rows.length; i++) {
+            const first = (rows[i] as Row).instance.firstNode()
+            if (first !== null) return first
+        }
+        return null
     }
 
     dispose(): void {
         for (const row of this.rows) {
-            for (const node of row.instance.nodes) node.remove()
+            for (const node of row.instance.live()) node.remove()
             row.instance.dispose()
         }
         this.rows = []
@@ -982,6 +1039,18 @@ class EventSlot implements EventListenerObject {
 class Instance {
     readonly nodes: ChildNode[]
     readonly strings: readonly string[]
+    /**
+     * Where the range begins, and where it ends — the two facts `live()` walks between.
+     *
+     * Both `null` on the single-element path, which is the signal that `nodes` cannot go stale: the
+     * element IS the range and its slots are inside it, so no update can move either end. On a
+     * fragment root `trailing` is the template's last top-level node, which stays last because a slot
+     * paints in FRONT of its anchor; `leading` is a plain node when the template opens with static
+     * markup, and the leading part itself when it opens with a slot — the one position where what a
+     * slot paints decides where the instance starts.
+     */
+    private readonly leading: ChildPart | ChildNode | null
+    private readonly trailing: ChildNode | null
     private readonly plan: Prepared
     private readonly binders: ((value: unknown) => void)[] = []
     private readonly children: ChildPart[] = []
@@ -1020,6 +1089,52 @@ class Instance {
      */
     private applied: readonly unknown[] | null = null
 
+    /** The child part anchored at `node`, if a slot sits at that position rather than static markup. */
+    private partAt(node: ChildNode): ChildPart | null {
+        const children = this.children
+        for (let i = 0; i < children.length; i++) {
+            const part = children[i] as ChildPart
+            if (part.isAnchor(node)) return part
+        }
+        return null
+    }
+
+    /**
+     * Where this instance's range currently BEGINS, or `null` when it holds nothing.
+     *
+     * Only a leading slot can move it, because that slot paints in front of its own anchor. Every
+     * other position is reached from here by walking siblings.
+     */
+    firstNode(): ChildNode | null {
+        const leading = this.leading
+        if (leading === null) return this.nodes[0] ?? null
+        return leading instanceof ChildPart ? leading.firstNode() : leading
+    }
+
+    /**
+     * The nodes this instance has in the document RIGHT NOW, rebuilt rather than remembered.
+     *
+     * A fragment-rooted template has child slots among its OWN top-level nodes, and what one of them
+     * paints changes without the instance hearing about it — so a list captured at construction goes
+     * stale in exactly the segment that slot owns. A keyed reorder then moves the nodes that used to
+     * be there and strands the live ones (`h3p3h2p2h1p1` where the page should read `h3X3h2X2h1X1`),
+     * and a teardown leaves them connected. Everything in the range is contiguous, so the walk from
+     * `firstNode()` to `trailing` is the whole of it.
+     *
+     * The single-element path returns its captured array untouched: the element IS the range.
+     */
+    live(): ChildNode[] {
+        const stop = this.trailing
+        if (stop === null) return this.nodes
+        const nodes = this.nodes
+        nodes.length = 0
+        for (let node = this.firstNode(); node !== null; node = node.nextSibling as ChildNode | null) {
+            nodes.push(node)
+            if (node === stop) break
+        }
+        return nodes
+    }
+
     /** `cursor` null builds fresh DOM; a cursor adopts the live DOM the server already wrote. */
     constructor(result: TemplateResult, cursor: Cursor | null) {
         this.strings = result.strings
@@ -1034,6 +1149,18 @@ class Instance {
                 claimed.push(node)
             }
             this.nodes = claimed
+            if (plan.root !== null) {
+                this.leading = null
+                this.trailing = null
+            } else {
+                // Read off the PLAN, not off `claimed`: the server's markup for a leading slot is
+                // already sitting in front of that slot's anchor, so the adopted nodes can no longer
+                // say which position the template started with.
+                this.leading = opensWithSlot(plan.element.content)
+                    ? (this.children[0] as ChildPart)
+                    : (claimed[0] ?? null)
+                this.trailing = claimed[claimed.length - 1] ?? null
+            }
             this.update(result.values)
             return
         }
@@ -1073,9 +1200,18 @@ class Instance {
             // The element is its own node list, and its slots live INSIDE it — so unlike the
             // fragment case below there is nothing an update could orphan.
             this.nodes = [clone as ChildNode]
+            this.leading = null
+            this.trailing = null
             this.update(result.values)
             return
         }
+
+        // Both read BEFORE the update, while the clone still holds exactly the template's top-level
+        // nodes: afterwards a leading slot's content sits in front of its anchor and `firstChild` is
+        // no longer the position the template opened with. `lastChild` stays last either way.
+        const opening = clone.firstChild as ChildNode | null
+        this.trailing = clone.lastChild as ChildNode | null
+        this.leading = opening === null ? null : (this.partAt(opening) ?? opening)
 
         // AFTER the first update, not before. A child slot at the TOP level of a template —
         // `html`${rows}`` with no wrapping element — inserts what it renders before its anchor
