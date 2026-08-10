@@ -629,18 +629,27 @@ export class ChildPart {
         if (keep === 'text' && this.text !== null) return
         if (keep === 'nested' && this.nested !== null) return
         if (keep === 'list' && this.list !== null) return
-        // `owned` IS `nested.nodes` for a nested template, and `live()` rebuilds that array IN PLACE
-        // — so asking for it here is what makes the removal below cover what the instance currently
-        // has rather than what it had when it was built. Before `dispose`, which owes nothing to it.
-        if (this.nested !== null) this.nested.live()
-        // BEFORE the range is torn out, and that order is load-bearing rather than incidental: both
-        // of these walk their own live ranges to find what to remove, and a range is walked by
-        // `nextSibling`. Detaching `owned` first breaks that chain — `take`'s array arm puts every
-        // adopted row INSIDE `owned`, so the rows would already be loose and each row's walk would
-        // stop after one node, leaving the rest connected and taking the incoming content with it.
-        // Neither is handed a constant: what an ancestor did for them is exactly `detach`.
+        // BEFORE anything is detached, and that order is load-bearing rather than incidental: a list
+        // finds its rows by walking a LIVE range, and `take`'s array arm puts every adopted row
+        // inside `owned` — so tearing that out first leaves the rows loose, and each row's walk stops
+        // after one node, leaving the rest connected and taking the incoming content with it.
         if (this.list !== null) this.list.dispose(detach)
-        if (this.nested !== null) this.nested.dispose(detach)
+        const nested = this.nested
+        if (nested !== null) {
+            // The nested instance's range comes out HERE, so its own parts have nothing left to
+            // remove: this is the saving `ListPart.set`'s drop loop takes per row, taken once per
+            // nested template, and it turns a 200-row `<ul>` teardown from 202 removals into 2.
+            // Materialised before the first removal, because a range is walked by `nextSibling`.
+            if (detach) {
+                const range = nested.live()
+                for (const node of range) node.remove()
+                // `owned` IS that array on both paths that assign `nested`, so it has just gone —
+                // but not always: `take` assigns `nested` BEFORE a range check that can throw, and a
+                // part can reach here holding something else. Identity is what tells the two apart.
+                if (this.owned === range) this.owned = []
+            }
+            nested.dispose(false)
+        }
         // Only when there IS a range: on the build path a fresh part reaches here holding the empty
         // array its constructor made, and replacing that with a second empty one — which the caller
         // then pushes into — was one discarded array per child slot per row. A fresh array rather

@@ -1408,6 +1408,36 @@ export default suite({
         },
 
         {
+            title: 'tearing down a WRAPPED list costs one removal, whatever its length',
+            note: 'A list inside an element goes out of the document by that element. Every row removing itself first is n removals to reach a state one removal already reaches — and it was n, so navigating away from a thousand-row page paid a thousand DOM calls it did not need. The assertion is a ratio between two LENGTHS of the same structure rather than an absolute, because that is the shape that says O(1) rather than “small”: two hundred rows and a thousand must cost the same. Only an implementation that takes the range out before letting the rows tear themselves down can manage it.',
+            async run({ is, log }) {
+                const teardown = async (n: number): Promise<number> => {
+                    const items = build(n)
+                    const shown = state(true)
+                    const host = container()
+                    mount(
+                        host,
+                        () =>
+                            html`<div>${() =>
+                                shown()
+                                    ? html`<ul>${items.map((item) => keyed(item.id, html`<li>${item.label}</li>`))}</ul>`
+                                    : 'gone'}</div>`,
+                    )
+                    await tick()
+                    const work = await measureFlush(() => shown.set(false))
+                    host.remove()
+                    return work.remove
+                }
+
+                const small = await teardown(200)
+                const large = await teardown(1000)
+                log('removals to tear the list down', `200 rows — ${small}, 1000 rows — ${large}`)
+                is('two hundred rows cost one removal', small, 1)
+                is('…and five times as many cost the same', large, small)
+            },
+        },
+
+        {
             title: 'dropping a row costs ONE removal, whatever the row holds inside it',
             note: 'A row goes out of the document by its own top node; everything under it leaves at the same moment, as descendants. Letting each child slot then run its own removal walked an already-detached subtree — 4x the removes of a hand-written `li.remove()` on a 500-of-1000 drop, and not one of them on a connected node. The assertion is a ratio between two ROW SHAPES rather than an absolute: a row with three slots and a row with one must cost the same per drop, and only an implementation that stops at the top node can manage that. This is sound only because a row reports the range it HOLDS rather than the one it was built with — the same shortcut over a captured list left repainted nodes connected, which the two cases below are about.',
             async run({ is, log }) {
