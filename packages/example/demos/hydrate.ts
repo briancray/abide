@@ -178,6 +178,57 @@ export default suite({
         },
 
         {
+            title: 'an adopted slot lets go of the server’s marker when it stops owning the range',
+            note: 'The opening marker is the server’s, and it brackets a range the part stops owning the moment it throws that range away — so it has to go with it. A repaint that reuses the same text node keeps both, which is why the claim is about the handover and not about the write. Left behind, the marker is invisible: the page reads correctly, every count is right, and the only trace is a comment accumulating in the document ahead of a range it no longer delimits. Every other case in this suite asserts markup or counts, and a stray comment changes neither — so this one asserts an ABSENCE, which is the only shape the claim has. The empty-range half is the half that discriminates: with nothing to remove, the release is not carried along by the removal loop beside it.',
+            async run({ is }) {
+                const shown = state<unknown>('first')
+                const view = (): TemplateResult => html`<p>a${() => shown()}b</p>`
+                const host = container()
+                host.innerHTML = await renderToString(view(), { hydratable: true })
+                is('the server wrote an opening marker', host.innerHTML.includes('<!--[-->'), true)
+
+                hydrate(host, view)
+                await tick()
+                is('adoption leaves it alone', host.innerHTML.includes('<!--[-->'), true)
+
+                // A write of the same KIND reuses the text node, so the range and its marker stand.
+                shown.set('second')
+                await tick()
+                is('a repaint keeps both', host.querySelector('p')?.textContent, 'asecondb')
+                is('…including the marker', host.innerHTML.includes('<!--[-->'), true)
+
+                // A different kind cannot reuse anything: the range is torn down and rebuilt.
+                shown.set(html`<i>third</i>`)
+                await tick()
+                is('the slot rebuilt', host.querySelector('p i')?.textContent, 'third')
+                is('…and the marker went with the range', host.innerHTML.includes('<!--[-->'), false)
+                host.remove()
+
+                // The half that discriminates. A slot the server wrote NOTHING into still carries a
+                // marker, and there is no removal loop for the release to ride along with — so this
+                // is the shape that fails if the release is folded into the loop's own guard.
+                const empty = state<unknown>('')
+                const emptyView = (): TemplateResult => html`<p>a${() => empty()}b</p>`
+                const bare = container()
+                bare.innerHTML = await renderToString(emptyView(), { hydratable: true })
+                is('an empty range still gets a marker', bare.innerHTML.includes('<!--[-->'), true)
+                is('…and holds no nodes', bare.innerHTML.includes('<!--[--><!--$'), true)
+
+                hydrate(bare, emptyView)
+                await tick()
+                empty.set('now something')
+                await tick()
+                is('the slot painted', bare.querySelector('p')?.textContent, 'anow somethingb')
+                is(
+                    '…and released a marker it had nothing to remove with',
+                    bare.innerHTML.includes('<!--[-->'),
+                    false,
+                )
+                bare.remove()
+            },
+        },
+
+        {
             title: 'every template SHAPE builds and adopts to the same markup',
             note: 'A template that is ONE element clones that element; anything else clones the fragment around it, because a single root that is a comment IS its own anchor and a part inserting before an anchor with no parent has nowhere to put what it renders. Two paths through the builder, and a table rather than one example, because the shape that breaks is never the one anybody writes a case for.',
             async run({ is }) {

@@ -32,6 +32,12 @@
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename } from 'node:path'
+// `Bun.gzipSync` is what these stand in for and cannot serve: it compresses a whole BUFFER, and a
+// streamed document is the one thing that does not have one. There is no flushing compressor on
+// `Bun.*` — see `compressed`, which needs a block ended at every write. `Duplex.toWeb` is the bridge
+// back from that node stream to the web `ReadableStream` a `Response` is built from.
+import { Duplex } from 'node:stream'
+import { constants, createGzip } from 'node:zlib'
 // The `.abide` loader, registered by importing the module that owns the registration — the same one
 // `abide run` preloads and `abide repl` makes. An app importing a page compiles it on the way in.
 import '$compiler/preload.ts'
@@ -59,6 +65,7 @@ import type { Shell } from '$server/shell.ts'
 import { outlet, type RouteEntry, route as routeAsked, routes } from '$shared/index.ts'
 import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
+import { acceptedEncoding } from '$shared/internal/wire.ts'
 import { appName } from '$shared/log.ts'
 import { readying } from '$shared/router.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
@@ -182,11 +189,16 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
     // Two shapes rather than one that tests `assets` per request: a process either has a bundle for
     // its whole life or it does not, and this is the outermost function on every request the app
     // takes.
+    //
+    // The asset route is IN FRONT of the compressor and deliberately: a bundle was compressed once at
+    // build time and its sidecar is already chosen by the same header — running it through a second
+    // compressor would spend cpu per request to make brotli bytes bigger.
     const answer: Answer =
         assets === null
-            ? handled
+            ? (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
+                  compressing(request, handled(request, server))
             : (request: Request, server: Parameters<typeof handled>[1]): ReturnType<typeof handled> =>
-                  assets.serve(request) ?? handled(request, server)
+                  assets.serve(request) ?? compressing(request, handled(request, server))
 
     return { entry, paged, assets, answer }
 }
@@ -381,6 +393,85 @@ function renderer(
 const NAVIGATION_HEADERS: Record<string, string> = {
     [NAVIGATION_HEADER]: '1',
     vary: NAVIGATION_HEADER,
+}
+
+// --- compressing what the app answered ---------------------------------------
+
+/** The one encoding offered. See `compressed` for why the asset route's brotli is not here. */
+const RESPONSE_ENCODINGS = ['gzip']
+
+/**
+ * The answer, compressed when it is markup and the caller takes it.
+ *
+ * Here rather than in `page()` for two reasons that point the same way: `$server/responses.ts` is
+ * bundled for the BROWSER — the example's server suite renders in a card — so it cannot reach a
+ * compressor at all, and a rule that only covered the documents abide itself builds would leave an
+ * app's own `text/html` route uncompressed for no reason a reader could name.
+ *
+ * `undefined` is `handle`'s 404 and passes straight through; a settled response is the common shape
+ * and is not awaited, because a page render that did not have to wait returns one.
+ */
+function compressing(
+    request: Request,
+    answered: Response | Promise<Response | undefined> | undefined,
+): Response | Promise<Response | undefined> | undefined {
+    if (answered === undefined) return undefined
+    if (isThenable(answered)) {
+        return answered.then((settled) => (settled === undefined ? undefined : compressed(request, settled)))
+    }
+    return compressed(request, answered)
+}
+
+/**
+ * One response, compressed or handed back as it is.
+ *
+ * Markup only. The two other streaming shapes on this server must NOT come through here: an SSE feed
+ * is framed so a browser can read it as it arrives, and the asset route is in front of this because
+ * its bytes were compressed once at build time. Everything else an endpoint answers is small enough
+ * that a compressor per request is the more expensive half.
+ *
+ * `vary` goes on even when this hands the bytes back untouched, for the reason the asset route says
+ * it: the header describes what the ANSWER depends on, and a shared cache that stored the identity
+ * form without it would go on serving those bytes to a caller that asked for gzip. That is what the
+ * rebuild on the identity path buys — one `Response` and one header copy per page, against a cache
+ * that hands compressed bytes to a caller that cannot read them.
+ */
+function compressed(request: Request, response: Response): Response {
+    const type = response.headers.get('content-type')
+    if (type === null || !type.startsWith('text/html')) return response
+    // Nothing to compress, and nothing a `Vary` would protect: a HEAD, a 204 and a 304 all carry no
+    // body, and rebuilding one would be a `Response` per request for no bytes.
+    if (response.body === null) return response
+    // An app that compressed its own answer means it.
+    if (response.headers.get('content-encoding') !== null) return response
+
+    const headers = new Headers(response.headers)
+    // Appended rather than set: the navigation branch above already varies on its own header, and a
+    // response that varies on two things has to say both or a cache picks one.
+    headers.append('vary', 'accept-encoding')
+    const init: ResponseInit = { status: response.status, statusText: response.statusText, headers }
+    if (acceptedEncoding(request.headers.get('accept-encoding'), RESPONSE_ENCODINGS) < 0) {
+        return new Response(response.body, init)
+    }
+
+    // SYNC-FLUSHED, which is the whole reason this is `node:zlib` rather than the web standard.
+    // `CompressionStream('gzip')` holds its input until the source closes: a document whose head was
+    // written immediately emitted 10 bytes — the gzip header — and nothing else until the last
+    // deferred subtree settled. The out-of-order protocol in `MARKERS.ts` exists precisely so a
+    // browser's parser gets the head early, and buffering the body would undo it. `Z_SYNC_FLUSH` ends
+    // a block at every write, so the same document came out at 1 ms and 122 ms instead of only at the
+    // end, for about five bytes per flush.
+    const gzip = createGzip({ flush: constants.Z_SYNC_FLUSH })
+    const bridged = Duplex.toWeb(gzip)
+    // Not awaited: `pipeTo` settles when the whole body has been written, and what the runtime is
+    // handed is the READ end, which it is already consuming. A rejection here is the caller having
+    // gone away — the pipe reports that by erroring the readable the runtime holds, so there is
+    // nothing for this to do with it but not become an unhandled rejection.
+    void response.body.pipeTo(bridged.writable).catch(() => {})
+    headers.set('content-encoding', 'gzip')
+    // The length described the identity bytes and describes nothing now.
+    headers.delete('content-length')
+    return new Response(bridged.readable as unknown as ReadableStream<Uint8Array>, init)
 }
 
 // --- what an app's module says about itself ----------------------------------

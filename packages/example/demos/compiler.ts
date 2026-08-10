@@ -9,7 +9,18 @@
 import { adopt, html, streamed, styleTags } from 'abide'
 import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
 import { renderToString } from 'abide/server'
-import { container, duration, install, keep, measureFlush, nonZero, sleep, suite, tick, until } from 'abide/tests'
+import {
+    container,
+    duration,
+    install,
+    keep,
+    measureFlush,
+    nonZero,
+    sleep,
+    suite,
+    tick,
+    until,
+} from 'abide/tests'
 import { mount } from 'abide/ui'
 import Compiled, {
     count as compiledCount,
@@ -107,10 +118,97 @@ export default suite({
                         `<p>\${() => s.${member}()}</p>`,
                     )
                 }
+                // A ternary's `:` and an object KEY's `:` are one token to a scanner, and the key
+                // rule fired on both — so the consequent of every `a ? b : c` went unread. Silent
+                // and worse than it looks: a cell is a function, so an unread one in a condition is
+                // always truthy and the true arm always won.
+                is(
+                    'a ternary consequent is a READ, not an object key',
+                    template('<script>const a = state(0)\nconst b = state(1)</script><p>{a ? b : a}</p>'),
+                    '<p>${() => a() ? b() : a()}</p>',
+                )
+                is(
+                    '…and an object key still is one',
+                    template('<script>const a = state(0)</script><p>{ {source: a} }</p>'),
+                    '<p>${() => ({source: a()})}</p>',
+                )
+                // An object literal reaching an arrow BODY has to be parenthesised, or the `{` opens
+                // a BLOCK: `() => { a: cell }` is an arrow with a labelled statement that returns
+                // undefined. It parses, so no parse check can see it — the slot rendered nothing,
+                // the attribute went unset and the spread applied nothing, silently.
+                is(
+                    'an object literal in a slot is parenthesised',
+                    template('<script>const a = state(0)</script><p>{ {k: a} }</p>'),
+                    '<p>${() => ({k: a()})}</p>',
+                )
+                is(
+                    '…in an attribute too',
+                    template('<script>const a = state(0)</script><p title={{ k: a }}>x</p>'),
+                    '<p title=${() => ({ k: a() })}>x</p>',
+                )
+                is(
+                    '…and in a spread',
+                    template('<script>const a = state(0)</script><div {...{ k: a }}>s</div>'),
+                    '<div ...=${() => ({ k: a() })}>s</div>',
+                )
+                // Both arms of a ternary are EXPRESSIONS, so a `{` in one opens a literal. Read as a
+                // block it made `k:` a label and the cell after it a type annotation.
+                is(
+                    'an object literal in a ternary arm is a literal',
+                    template(
+                        '<script>const a = state(0)\nconst f = state(true)</script><p>{f ? {k: a} : {k: a}}</p>',
+                    ),
+                    '<p>${() => f() ? {k: a()} : {k: a()}}</p>',
+                )
+                // An arrow with a BLOCK body is still a block, which is the case that would break if
+                // the rule above were widened past a ternary's arms.
+                is(
+                    'a block body is still a block',
+                    template(
+                        '<script>const a = state(0)</script><p>{(() => { const v = a(); return v })()}</p>',
+                    ),
+                    '<p>${() => (() => { const v = a(); return v })()}</p>',
+                )
                 is(
                     'the explicit spelling still compiles',
                     template('<script>const n = state(0)</script><p>{n()}</p>'),
                     '<p>${() => n()}</p>',
+                )
+                // Whitespace is not part of an expression, and an `Expr` carries a POSITION as well
+                // as text: `code()` slices the original file from it, so a source trimmed while its
+                // start still pointed at the space came back short by that many characters —
+                // `{#if  count > 10}` emitted `$0 > 1` and `{ n * 100 }` emitted `n() * 10`. Both
+                // type-check, both render wrong, and every block header and attribute reached the
+                // same way. One assertion per spelling that reads an expression out of a header.
+                is(
+                    'a doubled space in a hole',
+                    template('<script>const n = state(0)</script><p>{ n * 100 }</p>'),
+                    '<p>${() => n() * 100}</p>',
+                )
+                is(
+                    '…in an {#if} header',
+                    template('<script>const n = state(0)</script>{#if  n > 10}<b>x</b>{/if}'),
+                    '${() => { const $0 = n(); if ($0 > 10) return html`<b>x</b>`; return null }}',
+                )
+                is(
+                    '…in an {:else if} branch',
+                    template('<script>const n = state(0)</script>{#if n > 1}a{:else if  n > 100}b{/if}'),
+                    '${() => { const $0 = n(); if ($0 > 1) return html`a`; if ($0 > 100) return html`b`; return null }}',
+                )
+                is(
+                    '…in a {#for} header and its `by`',
+                    template('{#for  x of xs by  x.id}<li>{x}</li>{/for}'),
+                    '${() => (xs ?? []).map((x) => keyed(x.id, html`<li>${x}</li>`))}',
+                )
+                is(
+                    '…in an attribute',
+                    template('<script>const n = state(0)</script><div data-x={ n * 100 }></div>'),
+                    '<div data-x=${() => n() * 100}></div>',
+                )
+                is(
+                    '…and in a hole inside a quoted one',
+                    template('<script>const n = state(0)</script><div class="a { n * 100 } b"></div>'),
+                    '<div class=${() => `a ${n() * 100} b`}></div>',
                 )
             },
         },
@@ -176,19 +274,35 @@ export default suite({
 
         {
             title: 'class: and style: merge into ONE attribute, not one slot each',
-            note: '`class` is a single attribute however many toggles it carries, so the static value and every toggle are handed to one `classes()` call. On a component the same syntax is a compile error — there is no element to toggle a class on.',
+            note: '`class` is a single attribute however many toggles it carries, so the static value and every toggle are handed to one `classes()` call. The toggle NAMES are static, so they are lifted to module scope as one shared array and only the conditions travel per wake — a class list is rebuilt on every wake of the element’s binding, and on a row of a list that is per row. On a component the same syntax is a compile error — there is no element to toggle a class on.',
             run({ is, throws }) {
                 is(
                     'static plus two toggles',
                     template(
                         '<script>const n = state(3)</script><p class="card" class:high={n > 2} class:low={n <= 2}>x</p>',
                     ),
-                    '<p class=${() => classes("card", [n() > 2, "high"], [n() <= 2, "low"])}>x</p>',
+                    '<p class=${() => classes("card", $lifted0, n() > 2, n() <= 2)}>x</p>',
                 )
                 is(
                     'a style property',
                     template('<script>const w = state(1)</script><p style:width={w}>x</p>'),
-                    '<p style=${() => styles("", ["width", w()])}>x</p>',
+                    '<p style=${() => styles("", $lifted0, w())}>x</p>',
+                )
+                // A toggle whose condition reads nothing live loses its thunk, like every other
+                // attribute in the same loop: inside a `{#for}` that was a closure, a graph node and
+                // its observer set per row for a wake that cannot happen.
+                is(
+                    'a toggle over a loop binding gets no thunk',
+                    template('{#for row of rows}<b class:on={row.flag}>x</b>{/for}'),
+                    '${() => (rows ?? []).map((row) => html`<b class=${classes("", $lifted0, row.flag)}>x</b>`)}',
+                )
+                is(
+                    'the names are hoisted, and two elements toggling the same names share one array',
+                    compile(
+                        '<script>const n = state(3)</script><p class:big={n > 2}>x</p><i class:big={n < 1}>y</i>',
+                        { filename: 'C.abide' },
+                    ).code.includes('const $lifted0 = ["big"]'),
+                    true,
                 )
                 throws('class: on a component', () => template('<Card class:big={true}/>'), 'component')
             },
@@ -196,17 +310,29 @@ export default suite({
 
         {
             title: 'bind:value is a read AND a write, so it compiles to two slots',
-            note: 'One spelling, two bindings on the same element: a property slot for the value and a listener that writes back. The listener carries the element’s own type, because the emitted file is type-checked like any other — an untyped `event` there is an implicit `any` in the author’s build. `bind:checked` also emits the boolean ATTRIBUTE, so the state survives SSR.',
+            note: 'One spelling, two bindings on the same element: a property slot for the value and a listener that writes back. The value slot is handed the CELL, not a thunk that reads it — `unwrap` reads a slot’s source one step further, so the two write the same thing and the thunk was a fresh closure per bound input per row. The arms that cannot do that are the ones with something to compute: an accessor pair is not a cell, `bind:checked` needs `!!` for the attribute half, and `bind:group` compares against the input’s own value. The listener carries the element’s own type, because the emitted file is type-checked like any other — an untyped `event` there is an implicit `any` in the author’s build. `bind:checked` also emits the boolean ATTRIBUTE, so the state survives SSR.',
             async run({ is }) {
                 is(
                     'value',
                     template('<script>const f = state("")</script><input bind:value={f} />'),
-                    '<input .value=${() => f()} @input=${(event: Event) => f.set((event.currentTarget as HTMLInputElement).value)} />',
+                    '<input .value=${f} @input=${(event: Event) => f.set((event.currentTarget as HTMLInputElement).value)} />',
                 )
                 is(
                     'checked mirrors an attribute too',
                     template('<script>const on = state(true)</script><input bind:checked={on} />'),
                     '<input .checked=${() => !!on()} checked=${() => !!on()} @change=${(event: Event) => on.set((event.currentTarget as HTMLInputElement).checked)} />',
+                )
+
+                // `group` is membership, so both halves have something to compute — and each reads
+                // the cell ONCE into a local. `sources` has no dedupe, so a thunk reading it twice
+                // subscribed the slot's effect twice, and a group is N inputs on one cell.
+                is(
+                    'group reads the cell once per half',
+                    template(
+                        '<script>const many = state([])</script><input type="checkbox" value="x" bind:group={many} />',
+                    ),
+                    '<input type="checkbox" value="x" .checked=${() => { const held = many(); return Array.isArray(held) ? held.includes("x") : held === "x" }}' +
+                        ' @change=${(event: Event) => { const held = many(); many.set(Array.isArray(held) ? ((event.currentTarget as HTMLInputElement).checked ? [...held, "x"] : held.filter((v: unknown) => v !== "x")) : "x") }} />',
                 )
 
                 // The round trip, live: the cell writes the property, and typing writes the cell.
@@ -261,7 +387,7 @@ export default suite({
 
         {
             title: 'a hole that cannot READ gets no thunk',
-            note: 'A thunk is the reactivity convention, and on the client it costs a closure per instance AND an effect node per slot — plus, being fresh every time, it defeats the identity cutoff that skips an unchanged row. So a hole whose emitted form is a call-free path gets none. The test is on what the emit PRODUCED, not on what was written: a cell in a child slot comes back as `count` and a cell in an attribute comes back as `count()`, so one rule answers both positions. Call-free is the load-bearing half — `{helper()}` may read a cell and nothing about the expression says so.',
+            note: 'A thunk is the reactivity convention, and on the client it costs a closure per instance AND an effect node per slot — plus, being fresh every time, it defeats the identity cutoff that skips an unchanged row. So a hole whose emitted form CANNOT evaluate anything gets none, whatever its shape: every read this compiler emits is a call, so a call-free expression reads no source. The test is on what the emit PRODUCED, not on what was written — a cell in a child slot comes back as `count` and a cell in an attribute comes back as `count()`, so one rule answers both positions. Call-free is the load-bearing half: `{helper()}` may read a cell and nothing about the expression says so. A function literal is excluded for a different reason — a function reaching a slot is DATA the binder would call, so leaving one bare would change what it MEANS, not when it runs.',
             run({ is }) {
                 const cell = '<script>const n = state(0)</script>'
 
@@ -290,6 +416,22 @@ export default suite({
                     template('<ul>{#for x of xs}<script>const w = x * 2</script><li>{w}</li>{/for}</ul>'),
                     '<ul>${() => (xs ?? []).map((x) => {\nconst w = x * 2\nreturn html`<li>${w}</li>` })}</ul>',
                 )
+
+                // Call-free is the rule, not "is a plain path": these compose a loop binding into
+                // something bigger and still read nothing, so a thunk here bought an effect per row
+                // that can never wake — and, being a fresh closure, stopped the row being skipped.
+                is(
+                    'an index into a static table, over a loop binding',
+                    template('<ul>{#for item of xs}<li>{TONE[item.kind]}</li>{/for}</ul>'),
+                    '<ul>${() => (xs ?? []).map((item) => html`<li>${TONE[item.kind]}</li>`)}</ul>',
+                )
+                is(
+                    'a ternary over one',
+                    template('<ul>{#for item of xs}<li>{item.a === "" ? " " : item.a}</li>{/for}</ul>'),
+                    '<ul>${() => (xs ?? []).map((item) => html`<li>${item.a === "" ? " " : item.a}</li>`)}</ul>',
+                )
+                // …but a FUNCTION is data the binder would call, so it keeps its thunk.
+                is('a function literal keeps it', template('<p>{(x) => x}</p>'), '<p>${() => (x) => x}</p>')
 
                 // An ATTRIBUTE was handed the read rather than the cell, so the same name keeps its
                 // thunk there. This is the pair that would break if the rule looked at the SOURCE.
@@ -320,12 +462,12 @@ export default suite({
 
         {
             title: 'components: a tag is a call, children are a prop, {#component} is a value',
-            note: 'A capitalised tag invokes; `<slot/>` renders what was passed. A nested `{#component X()}` inside a component’s children becomes that component’s `X` prop, which is how a render-prop is spelled without a second concept.',
-            run({ is }) {
+            note: 'A capitalised tag invokes; `<slot/>` renders what was passed — through whatever name the enclosing parameter list bound it under, which for an inline `{#component X(props)}` is `props` and not the outer component’s `args`. A nested `{#component X()}` inside a component’s children becomes that component’s `X` prop, which is how a render-prop is spelled without a second concept.',
+            run({ is, throws }) {
                 is(
                     'invocation with props',
                     template('<Card title="hi" n={1}/>'),
-                    '${() => Card({ title: "hi", n: 1 })}',
+                    '${() => Card({ title: "hi", n: 1, children: undefined })}',
                 )
                 is(
                     'children become a prop',
@@ -336,12 +478,40 @@ export default suite({
                 is(
                     'onclick on a component is an ordinary prop',
                     template('<Card onclick={go}/>'),
-                    '${() => Card({ onclick: go })}',
+                    '${() => Card({ onclick: go, children: undefined })}',
                 )
                 is(
-                    'slot renders the children',
+                    'slot renders the children — UNTHUNKED, since the caller built them eagerly',
                     template('<div><slot/></div>'),
-                    '<div>${() => args.children}</div>',
+                    '<div>${args.children}</div>',
+                )
+                // …and inside an inline component it reaches THAT component's parameter. Emitting
+                // `args.children` there read past it to the enclosing component: the passed children
+                // were dropped and the parent's rendered instead, and the declared prop type carries
+                // `children`, so it type-checked.
+                is(
+                    'an inline component names its own parameter',
+                    compile(
+                        '{#component Row(props: { children?: unknown })}[<slot/>]{/component}<Row><b>S</b></Row>',
+                        { filename: 'C.abide' },
+                    ).code.includes('(props: { children?: unknown }) => html`[${props.children}]`'),
+                    true,
+                )
+                is(
+                    '…and a destructured one reaches the binding',
+                    compile(
+                        '{#component Row({ children }: { children?: unknown })}[<slot/>]{/component}<Row><b>S</b></Row>',
+                        { filename: 'C.abide' },
+                    ).code.includes('({ children }: { children?: unknown }) => html`[${children}]`'),
+                    true,
+                )
+                throws(
+                    'a pattern that binds no children says so, instead of reading the parent’s',
+                    () =>
+                        compile('{#component Row({ n }: { n: number })}[<slot/>]{/component}<Row n={1}/>', {
+                            filename: 'C.abide',
+                        }),
+                    'no children to render',
                 )
             },
         },
@@ -585,6 +755,44 @@ export default suite({
         },
 
         {
+            title: 'a comment in the markup is for the file, not for the wire',
+            note: "A component ships one copy of its own commentary per INSTANCE, and a file header is the biggest comment it has: the example's card and source panes were 22.7 kB of a single 88 kB page that way, against 1.9 kB for every hydration marker on it. Dropping them at emit rather than at parse keeps `check` pointing a diagnostic at what a human wrote, and dropping them ONCE is what keeps the two lanes agreeing — both substrates read this one template, so a comment absent from the client's markup is absent from the server's. Whitespace is left exactly as it was, because the space between two inline elements is content and a comment sitting in it is not.",
+            async run({ is }) {
+                is(
+                    'a header comment leaves nothing behind',
+                    template('<!-- gone -->\n<p>hi</p>'),
+                    '<p>hi</p>',
+                )
+                is(
+                    'and one between two elements takes only itself',
+                    template('<p><b>a</b> <!-- note --> <i>b</i></p>'),
+                    '<p><b>a</b>  <i>b</i></p>',
+                )
+                // The one that would be a rendering change rather than a saving: two inline elements
+                // separated by a single space are separated by a single space afterwards.
+                is(
+                    'an inline space is untouched',
+                    template('<p><b>a</b> <i>b</i></p>'),
+                    '<p><b>a</b> <i>b</i></p>',
+                )
+
+                // An ATTRIBUTE value is not markup, and `<!--` in one is four characters of the value.
+                is(
+                    'a comment-looking attribute value survives whole',
+                    template('<p title="use <!-- --> with care">x</p>'),
+                    '<p title="use <!-- --> with care">x</p>',
+                )
+
+                // And the escape hatch SPEC names, for a comment that really has to reach a browser.
+                is(
+                    '`{html(…)}` still emits one',
+                    template("<p>{html('<!-- kept -->')}</p>").includes('raw('),
+                    true,
+                )
+            },
+        },
+
+        {
             title: 'a condition NARROWS its branch, because it reads once into a const',
             note: 'Every abide read is a call, and TypeScript narrows a const but never a call — so `{#if session}{session.name}{/if}` had no way to typecheck: the test and the use were two separate `session()` calls with nothing tying them together. A condition takes its reads into locals and the branch narrows off those. It also costs LESS: separate reads subscribe to the same cell twice and both wake, where one hoisted read wakes the branch once.',
             async run({ is }) {
@@ -611,6 +819,52 @@ export default suite({
                         'if ($0) return html`a`; const $1 = m({ id: 2 })()',
                     ),
                     true,
+                )
+                // …and an arm that repeats the FIRST arm's read collapses onto its local instead of
+                // taking a second one. Two locals meant two subscriptions to one cell on a `sources`
+                // list that does not dedupe, so every later re-run of the slot walked both and did an
+                // `observers.delete` that misses. Right output, twice the work — see SPEC's
+                // "narrowing".
+                is(
+                    'a repeated read across arms is ONE local',
+                    body('<p>{#if s > 1}a{:else if s > 2}b{/if}</p>'),
+                    '<p>${() => { const $0 = s(); if ($0 > 1) return html`a`; if ($0 > 2) return html`b`; return null }}</p>',
+                )
+                // The switch subject is bound once WHATEVER it is, so the explicit spelling costs
+                // what the sugar costs — the sugar is over the explicit form, never instead of it.
+                // A subject or a case value that is not atomic goes in as an OPERAND. Pasted bare,
+                // `{#switch a ?? b}` emitted `a ?? b === 'x' ? … : …`, which JavaScript reads as
+                // `a ?? (b === 'x')` — the wrong branch, no error, and nothing a type-check sees.
+                is(
+                    'a loose subject is bound, not pasted into every arm',
+                    body('<p>{#switch s ?? 0}{:case 0}a{:default}b{/switch}</p>'),
+                    '<p>${() => { const $0 = s(); const $1 = $0 ?? 0; return $1 === 0 ? html`a` : html`b` }}</p>',
+                )
+                is(
+                    'a loose case value is parenthesised',
+                    body('<p>{#switch k}{:case alt ? 1 : 2}a{:default}b{/switch}</p>'),
+                    '<p>${() => k === (alt ? 1 : 2) ? html`a` : html`b`}</p>',
+                )
+                is(
+                    '…and a loose {#if} condition is too, since the ternary would swallow it',
+                    body('<p>{#if a ?? b}x{:else}y{/if}</p>'),
+                    '<p>${() => (a ?? b) ? html`x` : html`y`}</p>',
+                )
+                // A call already binds tighter than what it is pasted beside, so it is left alone.
+                is(
+                    'a call needs none of that',
+                    body('<p>{#if risky()}x{:else}y{/if}</p>'),
+                    '<p>${() => risky() ? html`x` : html`y`}</p>',
+                )
+                is(
+                    'the explicit switch spelling reads once, like the sugared one',
+                    body('<p>{#switch s()}{:case 1}a{:default}b{/switch}</p>'),
+                    body('<p>{#switch s}{:case 1}a{:default}b{/switch}</p>'),
+                )
+                is(
+                    '…and that is one read for the whole chain',
+                    body('<p>{#switch s()}{:case 1}a{:case 2}b{:default}c{/switch}</p>'),
+                    '<p>${() => { const $0 = s(); return $0 === 1 ? html`a` : $0 === 2 ? html`b` : html`c` }}</p>',
                 )
                 // Reads only. A write inside the branch must still reach the cell, not the local.
                 is(
@@ -754,6 +1008,11 @@ export default suite({
                 const already = 'data-aSpec02'
                 const served = document.createElement('style')
                 served.setAttribute('data-abide', already)
+                // Stamped like the real thing. This element stands in for one the SERVER wrote, and a
+                // server under a policy writes it with a nonce — a bare one is refused, which is a
+                // console error on a passing case and furniture that lies about what it imitates.
+                const stamp = (document.querySelector('style[data-abide]') as HTMLElement | null)?.nonce
+                if (stamp !== undefined && stamp !== '') served.nonce = stamp
                 served.textContent = `.b[${already}] { color: blue }`
                 document.head.append(served)
 
@@ -777,7 +1036,7 @@ export default suite({
                 is(
                     'the branches are closures, unevaluated',
                     emitted.includes(
-                        'awaited(p, { pending: () => html`a`, then: (v) => html`b`, catch: (e) => html`c` })',
+                        'awaited(p, { pending: () => html`a`, then: (v) => html`b`, catch: (e) => html`c`, finally: undefined })',
                     ),
                     true,
                 )
@@ -868,10 +1127,7 @@ export default suite({
                         done()
                     }
                     const started = performance.now()
-                    mount(
-                        host,
-                        () => html`<ul>${() => streamed(source(), (n) => html`<li>${n}</li>`)}</ul>`,
-                    )
+                    mount(host, () => html`<ul>${() => streamed(source(), (n) => html`<li>${n}</li>`)}</ul>`)
                     await finished
                     const perRow = (performance.now() - started) / count
                     is(`${count} rows landed`, host.querySelectorAll('li').length, count)
@@ -904,7 +1160,9 @@ export default suite({
                 }).code
                 is(
                     'the body is one thunk, its expressions unthunked',
-                    emitted.includes('boundary(() => html`${risky()}`, { catch: (e) => html`bad` })'),
+                    emitted.includes(
+                        'boundary(() => html`${risky()}`, { pending: undefined, then: undefined, catch: (e) => html`bad`, finally: undefined })',
+                    ),
                     true,
                 )
                 // A thunk IS a deferral, so a nested block would push its throw out of the try too.
@@ -993,6 +1251,15 @@ export default suite({
                     () => compile('<ul>{#for x of xs}<li>a</li><script>const b = 1</script>{/for}</ul>'),
                     'FIRST node',
                 )
+                // The same rule one level down, and the case that used to pass SILENTLY: a script
+                // nested inside an element is invisible to the walk that takes a body's leading one,
+                // so its declarations were dropped while every use of them stayed in the markup —
+                // a file that emits and then fails on a name nothing declared.
+                throws(
+                    'nested inside an element is the same error',
+                    () => compile('{#if 1 > 0}<div><script>const a = 1</script><p>{a}</p></div>{/if}'),
+                    'nested inside an element',
+                )
                 throws(
                     'and carries no import',
                     () => compile("<ul>{#for x of xs}<script>import { y } from 'z'</script>{/for}</ul>"),
@@ -1003,7 +1270,8 @@ export default suite({
                 // reason `ParseError` is exported rather than kept internal — a build shell has to
                 // know whether to print a place in the file or a stack. `position` is a character
                 // offset, and `locate` is what turns one into the line and column a person reads.
-                const broken = '<p>ok</p>\n<ul>{#for x of xs}<li>a</li><script>const b = 1</script>{/for}</ul>'
+                const broken =
+                    '<p>ok</p>\n<ul>{#for x of xs}<li>a</li><script>const b = 1</script>{/for}</ul>'
                 let caught: unknown
                 try {
                     compile(broken)
@@ -1016,7 +1284,9 @@ export default suite({
                 is('one-based, so it reads like an editor', at.column > 0, true)
                 is(
                     'which is what `describe` formats',
-                    describe(broken, 'Broken.abide', caught).startsWith(`Broken.abide:${at.line}:${at.column} `),
+                    describe(broken, 'Broken.abide', caught).startsWith(
+                        `Broken.abide:${at.line}:${at.column} `,
+                    ),
                     true,
                 )
                 is(

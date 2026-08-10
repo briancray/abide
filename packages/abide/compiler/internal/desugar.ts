@@ -258,7 +258,8 @@ export function desugar(
     // ONCE for the region and consulted by both passes: pass one would otherwise collect the `n` in
     // `const a: typeof n = n` as a bound name and shadow the cell for the rest of the block, and
     // pass two would rewrite `type A = typeof n` into a call.
-    const inType = typeRegions(tokens, nesting, expression)
+    const regions = typeRegions(tokens, nesting, expression)
+    const inType = regions.marks
     const edits: Edit[] = []
 
     // Pass one collects the bindings, because a parameter is written BEFORE the scope it opens:
@@ -385,6 +386,8 @@ export function desugar(
         }
     }
 
+    const closingColons = regions.ternary
+
     const frames: Frame[] = []
     const shadowed = (name: string): boolean => {
         for (let f = frames.length - 1; f >= 0; f--) {
@@ -465,8 +468,10 @@ export function desugar(
 
         // `.source` / `?.source` — a property, not this binding.
         if (previous?.kind === SyntaxKind.DotToken || previous?.kind === SyntaxKind.QuestionDotToken) continue
-        // `{ source: … }` — an object literal key.
-        if (next?.kind === SyntaxKind.ColonToken) continue
+        // `{ source: … }` — an object literal key. NOT every `:`: a ternary's consequent is followed
+        // by one too, and skipping `b` in `a ? b : c` left the cell unread — rendered as its own
+        // function in a slot, and unconditionally truthy in a condition, so the true arm always won.
+        if (next?.kind === SyntaxKind.ColonToken && !closingColons.has(i + 1)) continue
         // `source(…)` — the author wrote the read.
         if (next?.kind === SyntaxKind.OpenParenToken) continue
         // `source.set(…)` and the rest of the reserved surface. Matched on TEXT, not kind: `set` and

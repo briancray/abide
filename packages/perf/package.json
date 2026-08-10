@@ -1,0 +1,14 @@
+{
+    "name": "perf",
+    "version": "0.0.0",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "dev": "bun ../abide/cli/index.ts dev",
+        "start": "bun ../abide/cli/index.ts start",
+        "build": "bun ../abide/cli/index.ts build"
+    },
+    "dependencies": {
+        "abide": "workspace:*"
+    }
+}

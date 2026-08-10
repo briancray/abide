@@ -142,6 +142,9 @@ export function elide(source: string, options: ElideOptions): Elided | null {
         for (const endpoint of endpoints) {
             const known = better[endpointId(options.filename, endpoint.name)]
             if (known === undefined) continue
+            // Assigned, never ADDED: `shapesAt` writes both fields on every endpoint it builds, so
+            // a checker's better answer overwrites a field that is already there rather than growing
+            // the record mid-loop.
             if (known.input !== undefined) endpoint.input = known.input
             if (known.output !== undefined) endpoint.output = known.output
         }

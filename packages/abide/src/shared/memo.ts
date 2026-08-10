@@ -27,7 +27,7 @@ import { derive, internals, type Memo, type State, untrack } from './internal/gr
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { disposeWith, storeFor } from './internal/scopes.ts'
-import { byTag, joinTags } from './internal/tags.ts'
+import { joinTags, taggedTargets } from './internal/tags.ts'
 import { arm } from './internal/timers.ts'
 
 export type { Memo }
@@ -160,10 +160,10 @@ export interface TagSelector {
 
 /** Everything carrying any of these tags. `scope` narrows it to one memo's slots. */
 export function invalidate(selector: TagSelector, scope?: unknown): void {
-    byTag(selector.tags, scope, 'invalidate')
+    for (const target of taggedTargets(selector.tags, scope)) target.invalidate()
 }
 export function refresh(selector: TagSelector, scope?: unknown): void {
-    byTag(selector.tags, scope, 'refresh')
+    for (const target of taggedTargets(selector.tags, scope)) target.refresh()
 }
 
 function keyedMemo<Args, T>(

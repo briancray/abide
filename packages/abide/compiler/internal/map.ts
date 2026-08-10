@@ -45,14 +45,16 @@ export function extract(code: string, source: string): { code: string; segments:
         const text = code.slice(at, open)
         out += text
 
-        // Advance the generated position over the text just copied.
-        for (const character of text) {
-            if (character === '\n') {
-                line++
-                column = 0
-            } else {
-                column++
-            }
+        // Advance the generated position over the text just copied. The common shape is a run with
+        // no newline in it at all, which is a `lastIndexOf` and an add — where walking it as a
+        // string ITERATOR paid an iterator-result object and a surrogate-pair decision per character
+        // of the whole emitted module, to answer only "how many newlines, and how far past the last".
+        const lastBreak = text.lastIndexOf('\n')
+        if (lastBreak < 0) {
+            column += text.length
+        } else {
+            for (let at = text.indexOf('\n'); at !== -1; at = text.indexOf('\n', at + 1)) line++
+            column = text.length - lastBreak - 1
         }
 
         const offset = Number(code.slice(open + 1, close))

@@ -24,22 +24,27 @@ export function keyOf(args: unknown): string {
     if (typeof args !== 'object') return String(args)
     const record = args as Record<string, unknown>
     const keys = Object.keys(record)
-    // Sorted HERE, because the other caller of `sortedKey` reaches it past the insertion sort below
-    // and would otherwise pay `Array.sort` over an array already in order.
-    if (keys.length > 8) {
-        keys.sort()
-        return sortedKey(record, keys)
-    }
-    // Insertion order is not the key's order. An insertion sort over a handful of names beats
-    // `Array.sort` and, unlike `Object.entries().sort()`, allocates nothing beyond this array.
-    for (let i = 1; i < keys.length; i++) {
-        const name = keys[i] as string
-        let at = i - 1
-        while (at >= 0 && (keys[at] as string) > name) {
-            keys[at + 1] = keys[at] as string
-            at--
+    // Insertion order is not the key's order, and the arity decides only WHICH SORT — not which key
+    // format. It used to decide both, so nine primitive-valued names fell all the way to
+    // `sortedKey`'s entries array and `JSON.stringify` while eight took the concatenation below: an
+    // ~80× cliff at one more argument, on a path walked per row. Nothing about the length-prefixed
+    // format cares how many names there are.
+    //
+    // An insertion sort over a handful of names beats `Array.sort` and, unlike
+    // `Object.entries().sort()`, allocates nothing beyond this array — but it is quadratic, so past
+    // a handful the library sort is the cheaper one. `sortedKey` is reached past both and never
+    // sorts for itself.
+    if (keys.length > 8) keys.sort()
+    else {
+        for (let i = 1; i < keys.length; i++) {
+            const name = keys[i] as string
+            let at = i - 1
+            while (at >= 0 && (keys[at] as string) > name) {
+                keys[at + 1] = keys[at] as string
+                at--
+            }
+            keys[at + 1] = name
         }
-        keys[at + 1] = name
     }
     // A leading marker, so `{}` and `undefined` stay two different keys.
     let out = '{'

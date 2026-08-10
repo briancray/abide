@@ -308,8 +308,11 @@ export function remote<Args, T, F extends Failed = never>(
             const url = address + argsQuery(args)
             if (url.length <= MAX_GET_URL) {
                 const headers = continued(init?.headers as Record<string, string> | undefined)
-                // The key is omitted rather than set to `undefined`: a read with no headers at all is
-                // the client's whole path, and it should allocate nothing to stay that way.
+                // The key is OMITTED rather than written as `undefined`, and not by preference:
+                // `RequestInit.headers` is `HeadersInit` with no `| undefined`, so under
+                // `exactOptionalPropertyTypes` an explicit undefined does not type-check. The cost
+                // is a second shape for the init reaching `send` — stated here because the earlier
+                // reason given ("allocate nothing") was wrong: both arms build one object literal.
                 return headers === undefined
                     ? send(url, { method: 'GET', ...init })
                     : send(url, { method: 'GET', ...init, headers })
@@ -322,6 +325,7 @@ export function remote<Args, T, F extends Failed = never>(
             // header saying otherwise is a body nothing on the other side can parse.
             const headers = continued(init?.headers as Record<string, string> | undefined)
             const body = multipartBody(encoded)
+            // Omitted for the reason the read arm above states — the lib type, not a preference.
             return headers === undefined
                 ? send(address, { ...init, method: sending, body })
                 : send(address, { ...init, method: sending, headers, body })
@@ -515,7 +519,10 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
         wire = connection
         connection.onopen = () => {
             backoff = RECONNECT_FROM
-            while (queued.length > 0) connection.send(queued.shift() as string)
+            // Walked and then emptied, not shifted: a burst published while the socket was down
+            // would otherwise move what is left of the queue once per message.
+            for (let i = 0; i < queued.length; i++) connection.send(queued[i] as string)
+            queued.length = 0
         }
         connection.onmessage = (event) => received.publish(JSON.parse(String(event.data)) as T)
         connection.onclose = () => {

@@ -13,7 +13,7 @@
 // how it hands a path back to the pages.
 
 import { log, route } from 'abide'
-import type { Middleware } from 'abide/server'
+import { csp, type Middleware } from 'abide/server'
 import { META } from './demos/SUITES.ts'
 
 /**
@@ -51,6 +51,12 @@ export const middleware: Middleware[] = [
         answered.headers.set('x-example', 'served')
         return answered
     },
+    // The policy, at its default. This app is the reason to have it here rather than only in a test:
+    // the pages suspend, stream and load routes through `import()` long after hydration, so a nonce
+    // that reached the markup but not a later `adopt()` shows up as an unstyled card rather than as
+    // a failing assertion. `style-src-attr` stays at its baseline because the demo furniture computes
+    // widths at runtime, which is what a `style=` is for.
+    csp(),
 ]
 
 /** WRAPS the bind: everything before `start()` happens before the socket exists. */

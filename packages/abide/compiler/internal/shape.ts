@@ -732,11 +732,14 @@ export function shapesAt(reader: TypeReader, methodAt: number, rpc: boolean): De
             if (rpc) output ??= annotated.output
         }
     }
-    // Nothing known is not a shape. An endpoint publishing `{}` would be claiming to describe itself.
+    // Nothing known is not a shape. An endpoint publishing `{}` would be claiming to describe itself
+    // — so an unusable schema becomes `undefined` HERE rather than an absent key, and every `Declared`
+    // this file hands back is one shape for the loops in `elide`, `stub` and `registration` that walk
+    // them. `JSON.stringify` drops an undefined value, so the published document is unchanged.
     return {
         streams,
-        ...(usable(input) ? { input } : {}),
-        ...(usable(output) ? { output } : {}),
+        input: usable(input) ? input : undefined,
+        output: usable(output) ? output : undefined,
     }
 }
 
@@ -763,14 +766,16 @@ function prologue(tokens: Token[], call: number): { at: number; streams: boolean
 }
 
 /** The handler literal's own annotations, from the `(` of its parameter list. */
-function fromHandler(reader: TypeReader, params: number): { input?: JsonSchema; output?: JsonSchema } {
+function fromHandler(reader: TypeReader, params: number): Shapes {
     const tokens = reader.tokens
-    // Anything but a function LITERAL carries no annotation here to read.
-    if (tokens[params]?.kind !== SyntaxKind.OpenParenToken) return {}
+    // Anything but a function LITERAL carries no annotation here to read. One shape on every path,
+    // including the two that read nothing at all.
+    const nothing: Shapes = { input: undefined, output: undefined }
+    if (tokens[params]?.kind !== SyntaxKind.OpenParenToken) return nothing
     const close = balancedFrom(tokens, params, SyntaxKind.OpenParenToken, SyntaxKind.CloseParenToken)
-    if (close < 0) return {}
+    if (close < 0) return nothing
 
-    const found: { input?: JsonSchema; output?: JsonSchema } = {}
+    const found: Shapes = { input: undefined, output: undefined }
     const colon = firstAnnotation(tokens, params, close)
     if (colon >= 0) {
         const read = reader.read(colon + 1)
@@ -850,6 +855,8 @@ function inherited(own: JsonSchema, base: JsonSchema): JsonSchema {
 /** `Partial<T>` — the same members, none of them required. */
 function loosened(schema: JsonSchema): JsonSchema {
     if (schema.required === undefined) return schema
-    const { required: _dropped, ...rest } = schema
-    return rest
+    // Written as `undefined`, not spread away: a rest-omission is a `delete` in other clothes, and it
+    // was the one path left that took an `objectOf` result down to three keys after `objectOf` was
+    // made to build four. Same key set, same order, same JSON.
+    return { ...schema, required: undefined }
 }

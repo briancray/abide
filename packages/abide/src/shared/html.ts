@@ -100,11 +100,15 @@ export function isKeyed(value: unknown): value is Keyed {
 // behind it. Splitting "evaluate the operand" from "render a branch" into two effects is the fix,
 // and passing the branches unevaluated is how the split is expressed.
 
+// Every field takes an explicit `undefined` as well as being optional: under
+// `exactOptionalPropertyTypes` those are different types, and the compiler emits all four keys —
+// `undefined` included — so that every `{#await}` and `{#try}` in an app reaches `settledArms` and
+// `ChildPart` as ONE hidden class rather than one per arm combination.
 export interface Branches<T = unknown> {
-    pending?: () => unknown
-    then?: (value: T) => unknown
-    catch?: (error: unknown) => unknown
-    finally?: () => unknown
+    pending?: (() => unknown) | undefined
+    then?: ((value: T) => unknown) | undefined
+    catch?: ((error: unknown) => unknown) | undefined
+    finally?: (() => unknown) | undefined
 }
 
 export class Awaited {
@@ -236,13 +240,23 @@ export function settledBoundary(block: Boundary): unknown {
 
 // --- the one classifier ---------------------------------------------------
 
-export type SlotKind =
-    | { kind: 'child' }
-    | { kind: 'attr'; name: string; staticTail: number }
-    | { kind: 'event'; name: string; staticTail: number }
-    | { kind: 'property'; name: string; staticTail: number }
-    | { kind: 'ref'; name: string; staticTail: number }
-    | { kind: 'spread'; name: string; staticTail: number }
+/**
+ * ONE shape, discriminated by `kind`, rather than six variants — a child slot carries `name: ''` and
+ * `staticTail: 0` rather than omitting them.
+ *
+ * The array `classifySlots` returns is cached per template and re-walked on every instantiation, so
+ * a thousand-row list reads it a thousand times; two element shapes in it made `kind.kind` at
+ * `$server`'s `emitTemplate` a polymorphic load for a discriminant every element carries anyway. The
+ * client lane does not re-walk this array at all — `prepare` projects what it needs out of it once
+ * per template — so the cost was the server's alone.
+ */
+export interface SlotKind {
+    kind: 'child' | 'attr' | 'event' | 'property' | 'ref' | 'spread'
+    /** Empty for a child slot and for a spread, whose names arrive with the value. */
+    name: string
+    /** How many characters of the preceding static string are the `name=` markup. 0 for a child. */
+    staticTail: number
+}
 
 // Attribute slots are recognised from the tail of the static string that precedes them:
 //   `<a href=${url}>`      -> attr href
@@ -293,7 +307,7 @@ export function classifySlots(strings: readonly string[]): SlotKind[] {
         }
 
         if (!inTag) {
-            kinds.push({ kind: 'child' })
+            kinds.push({ kind: 'child', name: '', staticTail: 0 })
             continue
         }
         const match = ATTR_TAIL.exec(text)

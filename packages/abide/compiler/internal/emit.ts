@@ -48,11 +48,30 @@ interface Context {
      * still lands at module scope — and so the cascade order is the order they were WRITTEN.
      */
     sheets: Map<string, string>
+    /**
+     * Static arrays lifted to module scope, array literal → the name it was bound to.
+     *
+     * Only `class:`/`style:` toggle NAMES so far, and content-addressed for the reason `sheets` is:
+     * two elements toggling the same names share one array. Shared by reference across every derived
+     * context, so a toggle found inside a `{#for}` body still lands at module scope — which is the
+     * whole point, since the alternative is rebuilding it on every wake of that row's binding.
+     */
+    lifted: Map<string, string>
     reactive: Reactive
     /** Names bound by a `{#for}` or a branch, which shadow a reactive name of the same spelling. */
     shadow: Set<string>
     /** Reads a `{#if}` or `{#switch}` already took into a local, so the body narrows off it. */
     hoisted: Map<string, string>
+    /**
+     * What `<slot/>` renders, as the emitted file spells it here.
+     *
+     * `args.children` in a component's own body, but an INLINE `{#component X(props)}` names its
+     * parameter itself — and emitting `args.children` inside one reached past it to the enclosing
+     * component, dropping the children the caller passed and rendering the parent's instead. Silent:
+     * the declared prop type carries `children`, so it type-checks. `null` where the parameter is a
+     * destructuring pattern that did not bind them, which is a `<slot/>` with nothing to name.
+     */
+    children: string | null
     /**
      * Inside a `{#try}`: expressions are emitted UNTHUNKED so the boundary is one unit. An
      * expression that produced its value in a nested effect would throw into that effect's own
@@ -580,6 +599,11 @@ function splitImports(
 
 // --- expressions -----------------------------------------------------------
 
+// Materialising the shadow-filtered environment is for `desugar`, which needs the two sets as
+// arguments. A caller asking whether ONE name is live asks `liveCell`/`liveKeyed` instead: under a
+// `{#for}`, a `{#component}` or a branch script the shadow is non-empty, so `live` allocates two
+// sets and walks the whole environment — once per expression node and once per expression attribute
+// in the emitter's per-node walk, half of it thrown away unread.
 function live(context: Context): Reactive {
     if (context.shadow.size === 0) return context.reactive
     const cells = new Set<string>()
@@ -587,6 +611,14 @@ function live(context: Context): Reactive {
     const keyed = new Set<string>()
     for (const name of context.reactive.keyed) if (!context.shadow.has(name)) keyed.add(name)
     return { cells, keyed }
+}
+
+function liveCell(context: Context, name: string): boolean {
+    return context.reactive.cells.has(name) && !context.shadow.has(name)
+}
+
+function liveKeyed(context: Context, name: string): boolean {
+    return context.reactive.keyed.has(name) && !context.shadow.has(name)
 }
 
 /**
@@ -609,13 +641,15 @@ type Position = 'read' | 'slot' | 'cell'
 const NO_HOIST: ReadonlyMap<string, string> = new Map()
 
 function code(expr: Expr, context: Context, position: Position = 'read'): string {
-    const names = live(context)
     const hoisted = position === 'cell' ? NO_HOIST : context.hoisted
-    if (IDENTIFIER.test(expr.source) && names.cells.has(expr.source)) {
+    // The bare-cell case — `{count}`, the common slot — answers off two `has` calls and never
+    // reaches `desugar`, so the sets it would have taken are not built for it.
+    if (IDENTIFIER.test(expr.source) && liveCell(context, expr.source)) {
         const local = hoisted.get(expr.source)
         if (local !== undefined) return local
         return position === 'read' ? `${expr.source}()` : expr.source
     }
+    const names = live(context)
     return desugar(context.source, expr.start, expr.start + expr.source.length, names.cells, {
         keyed: names.keyed,
         hold: position !== 'read',
@@ -635,12 +669,21 @@ function code(expr: Expr, context: Context, position: Position = 'read'): string
  * Only the condition's OWN reads are hoisted. A body that reads something else keeps its own thunk,
  * so `{#if mode}{count}{/if}` still wakes on `count` alone.
  */
-function hoistReads(expr: Expr, context: Context): { declarations: string[]; scope: Map<string, string> } {
+function hoistReads(
+    expr: Expr,
+    context: Context,
+): { declarations: string[]; scope: Map<string, string>; text: string } {
     const names = live(context)
-    const found = desugar(context.source, expr.start, expr.start + expr.source.length, names.cells, {
+    // The TEXT comes back with the reads, and both are the same pass. Keeping only `.reads` meant
+    // every `{#if}`, `{:else if}` and `{#switch}` head was desugared twice — a second tokenize, a
+    // second `typeRegions` with its own `TypeReader`, and both walks — to recover text this pass had
+    // already produced. Reusable only where the hoisted scope did NOT change under it, which is what
+    // `declarations.length === 0` says; the callers check that rather than this function guessing.
+    const pass = desugar(context.source, expr.start, expr.start + expr.source.length, names.cells, {
         keyed: names.keyed,
         hoisted: context.hoisted,
-    }).reads
+    })
+    const found = pass.reads
 
     const scope = new Map(context.hoisted)
     const declarations: string[] = []
@@ -658,7 +701,7 @@ function hoistReads(expr: Expr, context: Context): { declarations: string[]; sco
         declarations.push(`const ${local} = ${code}`)
         scope.set(read.key, local)
     }
-    return { declarations, scope }
+    return { declarations, scope, text: pass.text }
 }
 
 function withHoists(context: Context, scope: Map<string, string>): Context {
@@ -673,6 +716,59 @@ function held(expr: Expr, context: Context): string {
 const PLAIN_PATH = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
 
 /**
+ * Emitted text that can be pasted into a LARGER expression without parentheses: a path, or a number
+ * or string literal.
+ *
+ * A separate question from `unthunked`'s, and the two must not be confused again. `unthunked` asks
+ * whether an expression can READ a source — `a ?? b` cannot, so it answers yes — while a caller
+ * interpolating text into `${x} === ${y} ? … : …` is asking whether the text BINDS tightly enough.
+ * `{#switch a ?? b}` inlined that way emits `a ?? b === 'x' ? … : …`, which JavaScript parses as
+ * `a ?? (b === 'x')`: wrong branch, no error, and nothing a type-check can see.
+ */
+const ATOMIC =
+    /^(?:[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*|-?\d+(?:\.\d+)?|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")$/
+
+/** Characters that could begin an operator binding LOOSER than the `===` / `?:` an operand goes into. */
+const LOOSE = /[?:|&=<>+\-*/%^~!,]/
+
+/**
+ * The same text, safe in an operand position.
+ *
+ * Parenthesised unless nothing at the TOP level could form an operator — a path, a literal, a call
+ * and an index all qualify, because their brackets are depth rather than operators, and a call
+ * already binds tighter than anything it would be pasted beside. Scanned rather than pattern-matched
+ * because the question is about nesting: `f(a ? b : c)` is safe and `a ? b : c` is not, and no regex
+ * tells those apart.
+ */
+function operand(emitted: string): string {
+    let depth = 0
+    let quote = ''
+    for (let i = 0; i < emitted.length; i++) {
+        const char = emitted[i] as string
+        if (quote !== '') {
+            if (char === '\\') i++
+            else if (char === quote) quote = ''
+            continue
+        }
+        if (char === '"' || char === "'" || char === '`') quote = char
+        else if (char === '(' || char === '[' || char === '{') depth++
+        else if (char === ')' || char === ']' || char === '}') depth--
+        // `?.` is optional chaining, which is part of the path rather than an operator over it.
+        else if (char === '?' && emitted[i + 1] === '.') i++
+        else if (depth === 0 && LOOSE.test(char)) return `(${emitted})`
+    }
+    return emitted
+}
+
+/**
+ * Anything that could EVALUATE something when the slot is read: a call, a tagged or plain template
+ * literal, or a function literal. `=>` and `function` are here for a different reason than `(` — a
+ * function reaching a slot or an attribute is DATA the binder would call, so leaving one unthunked
+ * would change what it means, not merely when it runs.
+ */
+const EVALUATES = /[(`]|=>|\bfunction\b/
+
+/**
  * Whether an emitted slot expression can go in WITHOUT its thunk.
  *
  * The test is on what `code` PRODUCED, not on what the author wrote, and that is what makes it both
@@ -683,13 +779,34 @@ const PLAIN_PATH = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
  *
  * CALL-FREE is the load-bearing half: `{helper()}` where `helper` reads a cell IS reactive, and
  * nothing about the expression says so. `{session.name}` is a read too, and comes back as
- * `session().name` — a call, so it is excluded by the same test rather than by a second one.
+ * `session().name` — a call, so it is excluded by the same test rather than by a second one. The
+ * converse is why the test is not "is a plain path": every read this compiler EMITS is a call, so
+ * call-free text mentions no cell this compiler knows about — `{TONE[row.kind]}` and `{a ? b : c}`
+ * over a `{#for}` binding are as unreactive as `{$0}` is, and thunking them bought one effect per
+ * row that can never wake plus the array holding it.
+ *
+ * Where that converse STOPS, because it was tried one step further and does not hold: "reads no cell
+ * this compiler emitted" is not "runs no code". A member access can reach a getter — `view.big` over
+ * `get big() { return n() > 3 }` is call-free text that reads a cell — so an unthunked expression is
+ * only as safe as the effect it is evaluated inside. Everywhere a template literal is built that is
+ * some enclosing effect, so the wake is wider than it should be and the screen stays right; the
+ * exception is a `{:then}`/`{:catch}`/`{:finally}` arm or a `{#for await}` row, which a promise
+ * continuation calls with no tracking context at all. That is why BLOCKS keep their thunks whatever
+ * their head reads: dropping them was measured, and it made a bare `{#if}` in an `{#await}` arm stop
+ * updating, and elsewhere widened the wake enough to throw a settled `{#await}` back to pending.
+ * `{a.b.c}` in a slot has always been unthunked, so this limit is the model's, not this rule's.
+ *
+ * The trade, stated: an unthunked expression is evaluated where the `html` tag is, so a throw inside
+ * it surfaces during render rather than inside the slot's own effect — already true of `{a.b.c}` and
+ * of everything inside a `{#try}`.
  */
 function unthunked(emitted: string, context: Context): boolean {
-    if (!PLAIN_PATH.test(emitted)) return false
+    if (EVALUATES.test(emitted)) return false
     // A keyed memo named alone is its HANDLE — `m` is not `m(args)` — so it is not a value to render.
+    // Only a bare path can be that: anything else has composed the name into something else.
+    if (!PLAIN_PATH.test(emitted)) return true
     const dot = emitted.indexOf('.')
-    return !live(context).keyed.has(dot < 0 ? emitted : emitted.slice(0, dot))
+    return !liveKeyed(context, dot < 0 ? emitted : emitted.slice(0, dot))
 }
 
 /** Record a runtime helper the emitted file turned out to need, so the header imports it. */
@@ -698,7 +815,21 @@ function need(context: Context, name: Runtime): Runtime {
     return name
 }
 
-/** Static markup text, escaped for the template literal it is being pasted into. */
+/**
+ * A comment in the markup. Read by `child`, which drops them, and by the `<script>`-ordering scan,
+ * which looks past them — the second reference that earns it a name.
+ *
+ * `.replace` only: a `/g` regex is stateful under `.test` and `.exec`, and this one is shared.
+ */
+const HTML_COMMENT = /<!--[\s\S]*?-->/g
+
+/**
+ * Static text, escaped for the template literal it is being pasted into.
+ *
+ * Escaping ONLY — an attribute value comes through here too (`interpolate`), and `<!--` inside one is
+ * four characters of the value rather than a comment. Dropping comments is `child`'s job, where the
+ * text is known to be markup.
+ */
 function literal(text: string): string {
     return text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${')
 }
@@ -741,6 +872,17 @@ function subtreeScoped(nodes: Node[], context: Context): Context {
     return { ...context, scope: `${inForce} ${attribute}` }
 }
 
+/** A static array at module scope, shared by every element that spells the same one. */
+function liftArray(elements: string, context: Context): string {
+    const literal = `[${elements}]`
+    let name = context.lifted.get(literal)
+    if (name === undefined) {
+        name = `$lifted${context.lifted.size}`
+        context.lifted.set(literal, name)
+    }
+    return name
+}
+
 /**
  * One block into the module-scope registry, and back out as the attribute its elements carry.
  *
@@ -769,6 +911,23 @@ function slot(value: string, context: Context): string {
     return context.eager ? `\${${value}}` : `\${() => ${value}}`
 }
 
+/**
+ * An expression as the BODY of an arrow.
+ *
+ * `() => { a: count() }` is an arrow with a block body holding a labelled statement, not an arrow
+ * returning an object — so `{a: cell}` in a slot, an attribute or a spread rendered nothing, applied
+ * nothing and set nothing, silently. Only a leading `{` can do this, so only a leading `{` is
+ * parenthesised.
+ *
+ * Applied at the two sites an author's own expression reaches an arrow body — a child slot and an
+ * element's attribute, both BEFORE the source marker goes on, since the marker would otherwise be
+ * the first character — plus the spread, which carries no marker. `slot()` does not apply it: every
+ * caller hands it marked text or a runtime call.
+ */
+function body(value: string): string {
+    return value.startsWith('{') ? `(${value})` : value
+}
+
 /** The same, for a producer that is already a thunk. */
 function called(thunk: string, context: Context): string {
     return context.eager ? `\${(${thunk})()}` : `\${${thunk}}`
@@ -777,14 +936,22 @@ function called(thunk: string, context: Context): string {
 function child(node: Node, context: Context): string {
     switch (node.kind) {
         case 'text':
-            return literal(node.value)
+            // A `.abide` file's own commentary is for whoever opens the file, and emitting it ships
+            // one copy PER INSTANCE: the example's card and source panes were 22.7 kB of a single
+            // 88 kB page that way, against 1.9 kB for every hydration marker on it. Dropped here
+            // rather than in the parser, so `check` still points a diagnostic at what a human wrote —
+            // and dropped ONCE, so both lanes agree: the two substrates read this one emitted
+            // template, and a comment absent from the client's markup is absent from the server's.
+            return literal(node.value.replace(HTML_COMMENT, ''))
         case 'expression': {
             const text = code(node.value, context, 'slot')
             // `{html(...)}` is SPEC's raw escape hatch; the runtime spells it `raw(...)`.
             const value = node.raw
                 ? `${need(context, 'raw')}(${text.replace(/^html\s*\(/, '').replace(/\)$/, '')})`
                 : text
-            const marked = mark(node.value.start, value)
+            // Parenthesised BEFORE the marker goes on, since the marker is a prefix and `body` reads
+            // the first character of the expression.
+            const marked = mark(node.value.start, body(value))
             // Nothing here can read a source, or it IS one — either way the thunk would only cost.
             if (unthunked(value, context)) return `\${${marked}}`
             // Inside a `{#try}` the boundary is one unit, so nothing gets its own thunk.
@@ -794,12 +961,39 @@ function child(node: Node, context: Context): string {
             return element(node, context)
         case 'component':
             return slot(invoke(node, context), context)
-        case 'slot':
-            return slot('args.children', context)
+        case 'slot': {
+            const held = context.children
+            if (held === null) {
+                throw new ParseError(
+                    `abide: <slot/> has no children to render — the enclosing {#component} destructures ` +
+                        `its parameter without binding \`children\`. Name the parameter instead ` +
+                        `(\`(props: {…})\`), or destructure \`children\` out of it.`,
+                    node.start,
+                )
+            }
+            // The same test the expression arm makes, and it passes: the children are a plain path
+            // the CALLER already built eagerly, never a source. Thunked, every instance of every
+            // component with a `<slot/>` paid an effect — plus the slot-effect array holding it —
+            // for a subscription that can never wake, and a component inside a `{#for}` paid it per
+            // row. A function handed in from JS is still deferred: the part treats a function child
+            // value as a thunk, which is the same mechanism `unthunked` relies on for a bare cell.
+            return unthunked(held, context) ? `\${${held}}` : slot(held, context)
+        }
         case 'script':
+            // A `<script>` never reaches here when it is where it may be: the component's own two are
+            // lifted by `parse`, and a branch-local one is taken by `scoped` off the FRONT of its
+            // body. So one that arrives is nested inside an element, where `scoped` cannot see it —
+            // and returning '' for it dropped the declarations on the floor while leaving every use
+            // of them in the markup, which is a file that emits and then fails on a name nothing
+            // declared. `scoped` raises the sibling case; this is the same rule one level down.
+            throw new ParseError(
+                'abide: a <script> nested inside an element has nowhere to put its declarations — ' +
+                    "the component's own goes at the top level, and a block-local one must be the " +
+                    'FIRST node of its block body',
+                node.start,
+            )
         case 'style':
-            // Both are lifted: the script into the level's closure, the style into the module-scope
-            // registry `subtreeScoped` already wrote it to.
+            // Lifted into the module-scope registry `subtreeScoped` already wrote it to.
             return ''
         // `conditional` and `switched` hand back a whole thunk, since an else-if chain needs a body
         // rather than an expression.
@@ -851,7 +1045,7 @@ function scoped(nodes: Node[], context: Context): Scoped {
         // above it far more often than not. A nested `<style>` is not one either — it declares
         // nothing and is lifted out of the markup, so ordering it against the script is a rule with
         // no consequence behind it.
-        if (node.kind === 'text' && node.value.replace(/<!--[\s\S]*?-->/g, '').trim() === '') continue
+        if (node.kind === 'text' && node.value.replace(HTML_COMMENT, '').trim() === '') continue
         if (node.kind === 'style') continue
         first = i
         break
@@ -981,7 +1175,7 @@ function element(
                 break
             case 'expression': {
                 const emitted = code(attribute.value, context)
-                const marked = mark(attribute.value.start, emitted)
+                const marked = mark(attribute.value.start, body(emitted))
                 open += unthunked(emitted, context)
                     ? ` ${attribute.name}=\${${marked}}`
                     : ` ${attribute.name}=\${() => ${marked}}`
@@ -998,7 +1192,7 @@ function element(
                 open += ` @${attribute.name}=\${${mark(attribute.value.start, code(attribute.value, context))}}`
                 break
             case 'spread':
-                open += ` ...=\${() => ${code(attribute.value, context)}}`
+                open += ` ...=\${() => ${body(code(attribute.value, context))}}`
                 break
             case 'bind':
                 open += bind(attribute, node.name, staticValue, context)
@@ -1009,17 +1203,37 @@ function element(
         }
     }
 
+    // The names are STATIC and the conditions are not, so they are emitted apart: the array is lifted
+    // to module scope once and the wake allocates only the rest array. Built as one pass rather than
+    // two `.map`s over the same toggles.
+    // …and the thunk is only kept when a condition can actually READ. The two sibling attribute cases
+    // in the loop above both ask; these did not, so `<b class:on={row.flag}>` inside a `{#for}` cost a
+    // closure, a graph node and its observer set per row for a wake that cannot happen.
     if (classToggles.length > 0) {
-        const pairs = classToggles
-            .map((a) => `[${code(a.value, context)}, ${JSON.stringify(a.name)}]`)
-            .join(', ')
-        open += ` class=\${() => ${need(context, 'classes')}(${JSON.stringify(staticClass)}, ${pairs})}`
+        let names = ''
+        let conditions = ''
+        let reads = false
+        for (const toggle of classToggles) {
+            const emitted = code(toggle.value, context)
+            if (!unthunked(emitted, context)) reads = true
+            names += `${names === '' ? '' : ', '}${JSON.stringify(toggle.name)}`
+            conditions += `, ${emitted}`
+        }
+        const call = `${need(context, 'classes')}(${JSON.stringify(staticClass)}, ${liftArray(names, context)}${conditions})`
+        open += ` class=\${${reads ? `() => ${call}` : call}}`
     }
     if (styleToggles.length > 0) {
-        const pairs = styleToggles
-            .map((a) => `[${JSON.stringify(a.name)}, ${code(a.value, context)}]`)
-            .join(', ')
-        open += ` style=\${() => ${need(context, 'styles')}(${JSON.stringify(staticStyle)}, ${pairs})}`
+        let names = ''
+        let values = ''
+        let reads = false
+        for (const toggle of styleToggles) {
+            const emitted = code(toggle.value, context)
+            if (!unthunked(emitted, context)) reads = true
+            names += `${names === '' ? '' : ', '}${JSON.stringify(toggle.name)}`
+            values += `, ${emitted}`
+        }
+        const call = `${need(context, 'styles')}(${JSON.stringify(staticStyle)}, ${liftArray(names, context)}${values})`
+        open += ` style=\${${reads ? `() => ${call}` : call}}`
     }
 
     if (node.children.length === 0 && VOID_ELEMENTS.has(node.name.toLowerCase())) return `${open} />`
@@ -1104,18 +1318,28 @@ function bind(
             )
         }
         const mine = JSON.stringify(own)
+        // Read ONCE into a local in each half. `sources` has no dedupe, so a thunk reading the same
+        // cell twice pushes two entries onto the slot's effect and every later re-run walks both,
+        // doing an `observers.delete` that misses — and a group is N inputs on ONE cell, so it was
+        // 2N. The same collapse `{#if}` and `{#switch}` conditions already make.
         const next =
-            `Array.isArray(${read})` +
-            ` ? (${target('checked')} ? [...${read}, ${mine}] : ${read}.filter((v: unknown) => v !== ${mine}))` +
+            `Array.isArray(held)` +
+            ` ? (${target('checked')} ? [...held, ${mine}] : held.filter((v: unknown) => v !== ${mine}))` +
             ` : ${mine}`
         return (
-            ` .checked=\${() => Array.isArray(${read}) ? ${read}.includes(${mine}) : ${read} === ${mine}}` +
-            ` @change=\${(event: Event) => ${write(next)}}`
+            ` .checked=\${() => { const held = ${read}; return Array.isArray(held) ? held.includes(${mine}) : held === ${mine} }}` +
+            ` @change=\${(event: Event) => { const held = ${read}; ${write(next)} }}`
         )
     }
 
     const listener = tag === 'select' ? 'change' : 'input'
-    return ` .${key_}=\${() => ${read}}` + ` @${listener}=\${(event: Event) => ${write(target(key_))}}`
+    // The CELL itself where the source is one, not a thunk that reads it: a property slot's function
+    // value goes through `unwrap`, which reads a source one step further, so the two are the same
+    // write on both substrates — and the thunk was a fresh closure per bound input per row. The
+    // exceptions are the arms above and are exactly why they are arms: an accessor pair is not a
+    // cell, and `checked`/`selected` need the `!!` coercion for the attribute half.
+    const value = accessor ? `() => ${read}` : source
+    return ` .${key_}=\${${value}}` + ` @${listener}=\${(event: Event) => ${write(target(key_))}}`
 }
 
 // --- components ------------------------------------------------------------
@@ -1161,11 +1385,23 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
         if (item.kind === 'define') props.push(`${key(item.name)}: ${define(item, context)}`)
         else content.push(item)
     }
+    // `children` is emitted whatever the tag was given, `undefined` included — `signature()` appends
+    // it to every component's props type unconditionally, and omitting it here made one component a
+    // different hidden class per call site, all landing on the same `args.children` read inside it.
+    // A component invoked from inside a `{#for}` builds this literal per row. The exception is a
+    // `...spread`, which is emitted BEFORE this and may carry a `children` of its own: an
+    // unconditional `undefined` would overwrite it, and a spread has already made the literal
+    // shapeless anyway.
     const rendered = content.filter((n) => n.kind !== 'text' || n.value.trim() !== '')
+    let spread = false
+    for (const attribute of node.attributes) {
+        if (attribute.kind === 'spread') spread = true
+    }
     if (rendered.length > 0) props.push(`children: ${fragment(content, context)}`)
+    else if (!spread) props.push('children: undefined')
 
     // A state- or memo-named tag is a REACTIVE component: the cell is read, so a change re-mounts it.
-    const callee = live(context).cells.has(node.name) ? `${node.name}()` : node.name
+    const callee = liveCell(context, node.name) ? `${node.name}()` : node.name
     return `${callee}({ ${props.join(', ')} })`
 }
 
@@ -1174,9 +1410,64 @@ function key(name: string): string {
 }
 
 function define(node: { name: string; parameters: string; body: Node[] }, context: Context): string {
-    const inner: Context = { ...context, shadow: new Set(context.shadow) }
+    const inner: Context = {
+        ...context,
+        shadow: new Set(context.shadow),
+        children: childrenOf(node.parameters),
+    }
     for (const name of bindingsOf(node.parameters)) inner.shadow.add(name)
     return `(${node.parameters || 'args'}) => ${fragment(node.body, inner)}`
+}
+
+/** Split on a character at the TOP level — outside every bracket, brace and string. */
+function splitTop(text: string, on: string): string[] {
+    const parts: string[] = []
+    let depth = 0
+    let quote = ''
+    let from = 0
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i] as string
+        if (quote !== '') {
+            if (char === '\\') i++
+            else if (char === quote) quote = ''
+        } else if (char === '"' || char === "'" || char === '`') quote = char
+        else if (char === '(' || char === '[' || char === '{') depth++
+        else if (char === ')' || char === ']' || char === '}') depth--
+        else if (char === on && depth === 0) {
+            parts.push(text.slice(from, i))
+            from = i + 1
+        }
+    }
+    parts.push(text.slice(from))
+    return parts
+}
+
+/**
+ * How a `<slot/>` inside this parameter list reaches the children — the name the parameter BOUND
+ * them under, not the `args` an outer component happens to use.
+ *
+ * The pattern is read rather than scanned for the WORD: `{ children: kids }` binds `kids`, and
+ * answering `children` there names either nothing or, worse, something else in scope — which is the
+ * same silent reach-past this function exists to stop, one spelling over.
+ */
+function childrenOf(parameters: string): string | null {
+    const trimmed = parameters.trim()
+    if (trimmed === '') return 'args.children'
+    // Apart from its type annotation and its default: `props: {…} = {}` binds `props`.
+    const bound = (splitTop(trimmed, ':')[0] as string).trim()
+    const named = (splitTop(bound, '=')[0] as string).trim()
+    if (IDENTIFIER.test(named)) return `${named}.children`
+    if (!named.startsWith('{') || !named.endsWith('}')) return null
+    // A destructuring pattern reaches them only if it TOOK them, and only from its own top level —
+    // a `children` nested inside another member is a different property entirely.
+    for (const member of splitTop(named.slice(1, -1), ',')) {
+        const renamed = splitTop(member, ':')
+        if ((renamed[0] as string).trim() !== 'children') continue
+        const target = renamed.length === 1 ? 'children' : (renamed[1] as string)
+        const local = (splitTop(target, '=')[0] as string).trim()
+        return IDENTIFIER.test(local) ? local : null
+    }
+    return null
 }
 
 /** Identifiers a parameter list binds — enough to shadow a reactive name of the same spelling. */
@@ -1201,16 +1492,24 @@ function conditional(branches: Branch[], context: Context): string {
     // The CONDITIONS alone decide the shape, so hoist them all before emitting a single body:
     // `fragment` recurses, so a body emitted for the losing shape would be compiled twice — and
     // exponentially with nesting.
-    const arms: { branch: Branch; inner: Context; declarations: string[] }[] = []
+    const arms: { branch: Branch; inner: Context; declarations: string[]; text: string }[] = []
     let hoists = false
+    // The scope is CARRIED from one arm to the next, so `{#if mode === 'a'}{:else if mode === 'b'}`
+    // reads `mode` once for the chain rather than once per arm. `hoistReads` skips a name already in
+    // the scope it was handed, so a later arm reading something ELSE still declares it in its own
+    // position — only the repeat collapses. Without this the arms each took their own local, and the
+    // duplicate reads subscribed the slot's effect to the same cell N times: `sources` has no dedupe,
+    // so every later re-run walked N entries and did N-1 `observers.delete` calls that miss.
+    let carried = context
     for (const branch of branches) {
         if (branch.test === null) {
-            arms.push({ branch, inner: context, declarations: [] })
+            arms.push({ branch, inner: carried, declarations: [], text: '' })
             break
         }
-        const { declarations, scope } = hoistReads(branch.test, context)
+        const { declarations, scope, text } = hoistReads(branch.test, carried)
         if (declarations.length > 0) hoists = true
-        arms.push({ branch, inner: withHoists(context, scope), declarations })
+        carried = withHoists(context, scope)
+        arms.push({ branch, inner: carried, declarations, text })
     }
 
     if (!hoists) {
@@ -1218,7 +1517,12 @@ function conditional(branches: Branch[], context: Context): string {
         let out = ''
         for (const arm of arms) {
             if (arm.branch.test === null) return `() => ${out}${fragment(arm.branch.body, context)}`
-            out += `${code(arm.branch.test, context)} ? ${fragment(arm.branch.body, context)} : `
+            // The text `hoistReads` already produced: nothing hoisted on this path, so the scope it
+            // was emitted against is the one `code` would use.
+            // Same operand rule as `switched`'s case values: `{#if a ?? b}` inlined bare emits
+            // `a ?? b ? x : y`, which JavaScript reads as `a ?? (b ? x : y)`. The `if (…)` form
+            // below is safe on its own, so only the ternary needs this.
+            out += `${operand(arm.text)} ? ${fragment(arm.branch.body, context)} : `
         }
         return `() => ${out}null`
     }
@@ -1238,9 +1542,21 @@ function conditional(branches: Branch[], context: Context): string {
 }
 
 function switched(node: { value: Expr; branches: Branch[] }, context: Context): string {
-    const { declarations, scope } = hoistReads(node.value, context)
+    const { declarations, scope, text } = hoistReads(node.value, context)
     const inner = withHoists(context, scope)
-    const subject = code(node.value, inner)
+    // Re-emitted only when the hoist CHANGED the scope; otherwise `hoistReads`'s own pass is it.
+    const emitted = declarations.length === 0 ? text : code(node.value, inner)
+    // Bound ONCE unless it is already atomic. The sugared `{#switch mode}` came back from
+    // `hoistReads` as a local already, but the explicit `{#switch mode()}` — which SPEC guarantees
+    // keeps working — came back as a call, and interpolating it per case read the cell once per arm
+    // and subscribed the slot's effect that many times to it. A switch subject is evaluated once in
+    // JS anyway, so this is also the more faithful emit. `ATOMIC` rather than `unthunked`: the
+    // question here is whether the text can be pasted into N comparisons, not whether it can read.
+    let subject = emitted
+    if (!ATOMIC.test(emitted)) {
+        subject = `$${context.counter.n++}`
+        declarations.push(`const ${subject} = ${emitted}`)
+    }
 
     let out = ''
     for (const branch of node.branches) {
@@ -1250,7 +1566,9 @@ function switched(node: { value: Expr; branches: Branch[] }, context: Context): 
                 ? `() => ${out}`
                 : `() => { ${declarations.join('; ')}; return ${out} }`
         }
-        out += `${subject} === ${code(branch.test, inner)} ? ${fragment(branch.body, inner)} : `
+        // The case value goes in as an OPERAND: `{:case alt ? 'a' : 'b'}` pasted bare emits
+        // `$0 === alt ? 'a' : 'b' ? … : …`, which is a different expression entirely.
+        out += `${subject} === ${operand(code(branch.test, inner))} ? ${fragment(branch.body, inner)} : `
     }
     return declarations.length === 0
         ? `() => ${out}null`
@@ -1316,18 +1634,19 @@ function awaited(node: { value: Expr; pending: Node[]; branches: Branch[] }, con
     // and to nothing else, and the part paints the branches later without ever waking it. Choosing a
     // branch here instead — by reading `pending()` — would make settling wake the thunk, which would
     // re-evaluate the operand into a fresh promise, which would settle, forever.
-    const arms: string[] = []
-    if (node.pending.length > 0) arms.push(`pending: () => ${fragment(node.pending, context)}`)
-    if (then !== undefined) {
-        arms.push(`then: (${then.binding ?? '_value'}) => ${fragment(then.body, inner(then))}`)
-    }
-    if (failure !== undefined) {
-        arms.push(`catch: (${failure.binding ?? '_error'}) => ${fragment(failure.body, inner(failure))}`)
-    }
-    if (settled !== undefined) arms.push(`finally: () => ${fragment(settled.body, context)}`)
+    // All four keys, `undefined` included: `Branches` declares four, and an arm omitted here is a
+    // different hidden class reaching the same reads in `settledArms` and `ChildPart`. Sixteen arm
+    // combinations across a page is what turns those shared reads megamorphic, and an `{#await}`
+    // inside a `{#for}` pays it per row.
+    const arms = [
+        `pending: ${node.pending.length > 0 ? `() => ${fragment(node.pending, context)}` : 'undefined'}`,
+        `then: ${then === undefined ? 'undefined' : `(${then.binding ?? '_value'}) => ${fragment(then.body, inner(then))}`}`,
+        `catch: ${failure === undefined ? 'undefined' : `(${failure.binding ?? '_error'}) => ${fragment(failure.body, inner(failure))}`}`,
+        `finally: ${settled === undefined ? 'undefined' : `() => ${fragment(settled.body, context)}`}`,
+    ]
 
-    const operand = code(node.value, context, 'slot')
-    return `${need(context, 'awaited')}(${operand}, { ${arms.join(', ')} })`
+    const awaitedValue = code(node.value, context, 'slot')
+    return `${need(context, 'awaited')}(${awaitedValue}, { ${arms.join(', ')} })`
 }
 
 function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): string {
@@ -1338,11 +1657,14 @@ function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): 
             ? context
             : { ...context, shadow: new Set([...context.shadow, failure.binding]) }
 
-    const arms: string[] = []
-    if (failure !== undefined) {
-        arms.push(`catch: (${failure.binding ?? '_error'}) => ${fragment(failure.body, inner)}`)
-    }
-    if (settled !== undefined) arms.push(`finally: () => ${fragment(settled.body, context)}`)
+    // All four keys, for the reason `awaited` states — and the same four, so a `{#try}`'s branches
+    // are the shape a `{#await}`'s are: `settledArms` is the read both of them land on.
+    const arms = [
+        `pending: undefined`,
+        `then: undefined`,
+        `catch: ${failure === undefined ? 'undefined' : `(${failure.binding ?? '_error'}) => ${fragment(failure.body, inner)}`}`,
+        `finally: ${settled === undefined ? 'undefined' : `() => ${fragment(settled.body, context)}`}`,
+    ]
 
     // The body is emitted EAGERLY — see `Context.eager`. One unit, so a throw anywhere in it reaches
     // the boundary rather than the nested effect that would otherwise have owned the expression.
@@ -1409,11 +1731,7 @@ export function emit(
     reactiveBindings(moduleTokens, reactive)
     reactiveBindings(setupRegion, reactive)
     if (declared !== null && declared.type !== null) {
-        reactiveProps(
-            declared.bound,
-            membersOf(declared.type, setup.rest, setupTokens, setupTypes),
-            reactive,
-        )
+        reactiveProps(declared.bound, membersOf(declared.type, setup.rest, setupTokens, setupTypes), reactive)
     }
 
     const context: Context = {
@@ -1422,9 +1740,11 @@ export function emit(
         reactive,
         scope: null,
         sheets: new Map(),
+        lifted: new Map(),
         eager: false,
         shadow: new Set(),
         hoisted: new Map(),
+        children: 'args.children',
         used: new Set(),
         counter: { n: 0 },
     }
@@ -1464,6 +1784,8 @@ export function emit(
     // complete until the walk is done.
     let adopted = ''
     for (const statement of context.sheets.values()) adopted += statement
+    // The same reasoning, for the static arrays a `class:`/`style:` toggle lifted out of its thunk.
+    for (const [literal, name] of context.lifted) adopted += `const ${name} = ${literal}\n`
 
     const setupBody = indent(desugarBody(blocks.setup, lifted.body, reactive))
     const assembled =

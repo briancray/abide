@@ -48,7 +48,8 @@ import {
     attribute,
     type Deferred,
     type DocumentContext,
-    PATCH_SCRIPT,
+    nonceAttribute,
+    patchScript,
     PLAIN,
     type RenderContext,
     type RenderOptions,
@@ -57,7 +58,7 @@ import {
 // under `ABIDE_APP_NAME`, which is what names `log`'s default channel. Importing `abide/server` at
 // all is the signal that there is a filesystem to ask.
 import './app.ts'
-import { heldPump, holdScope } from './scopes.ts'
+import { heldPump, holdScope, isServing, nonce } from './scopes.ts'
 import { type Shell, shellAround } from './shell.ts'
 
 /** Everything the walk knows how to write. */
@@ -674,9 +675,13 @@ export async function* renderDocument(
         // component that was imported has already declared its rules — which is why the whole sheet
         // can go out in the shell without tracking what this particular render reached. Each block
         // carries its scope name, which stops the client appending a second copy of every one.
-        yield `${parts.head}${styleTags()}${parts.open}`
+        // Read ONCE for the whole document rather than per patch: it is the same value every time,
+        // and a render outside a request — the demo card renders through this substrate in a browser
+        // — has no scope to read it from and nothing asking it to.
+        const stamp = isServing() ? nonce() : null
+        yield `${parts.head}${styleTags(stamp)}${parts.open}`
         yield* stream(body(), context, clock)
-        yield* drain(deferrals, clock, false)
+        yield* drain(deferrals, clock, false, stamp)
         yield parts.close
     } finally {
         clock?.close()
@@ -713,7 +718,7 @@ export async function* renderFragment(
         // single load — every `suspend` in it deferred. So this sentinel is the whole latency win:
         // the client may paint everything above, below and between the panels right here.
         yield PIECE_END
-        yield* drain(deferrals, clock, true)
+        yield* drain(deferrals, clock, true, null)
     } finally {
         clock?.close()
     }
@@ -738,6 +743,7 @@ async function* drain(
     deferrals: DocumentContext,
     clock: Budget | null,
     framed: boolean,
+    nonce: string | null,
 ): AsyncGenerator<string> {
     // The race carries the settled MARKUP, not the deferred: `ready.html` is settled by
     // definition once it wins, so awaiting it again would buy a microtask tick per subtree.
@@ -770,7 +776,7 @@ async function* drain(
     // `<script>` node inside the slot a hydrating client adopts — where an unexpected element is
     // a mismatch and a rebuilt subtree. Nothing calls `$p` before a patch exists, so a yield here
     // is early enough, and the loop below then has no state to carry between turns.
-    if (!framed && pending > 0) yield PATCH_SCRIPT
+    if (!framed && pending > 0) yield patchScript(nonce)
     while (pending > 0) {
         if (landed.length === 0) {
             const waiting = new Promise<void>((resolve) => {
@@ -787,7 +793,9 @@ async function* drain(
         pending--
         const patch = `<template id="${patchId(ready.id)}">${ready.text}</template>`
         // A framed patch carries no script: the client is parsing this itself and would not run one.
-        yield framed ? `${patch}${PIECE_END}` : `${patch}<script>$p(${ready.id})</script>`
+        yield framed
+            ? `${patch}${PIECE_END}`
+            : `${patch}<script${nonceAttribute(nonce)}>$p(${ready.id})</script>`
     }
 }
 
@@ -916,7 +924,10 @@ export {
 // The caller scope and its ambients. `serve` is what makes every module-level `memo` per-request.
 // `heldStream` is the one piece of it an app reaches for directly: abide holds what abide builds, and
 // a body written by hand takes its own hold with the same call the helpers make.
-export { bag, cookies, heldStream, isServing, request, serve, type Trace, trace } from './scopes.ts'
+export { bag, cookies, heldStream, isServing, nonce, request, serve, type Trace, trace } from './scopes.ts'
+// The one security header abide can help with, because the half an app cannot write — authorising
+// abide's OWN inline script and styles — is the half only abide knows. Opt-in: `middleware = [csp()]`.
+export { csp } from './csp.ts'
 // The document an app's pages are served IN. Here rather than in the CLI that reads `app.html`,
 // because what a shell IS belongs to the renderer that fills it — and an app rendering its own
 // document takes the same `Shell` `abide start` does.

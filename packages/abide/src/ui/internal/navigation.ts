@@ -23,6 +23,7 @@
 
 import { PATCH_FORM, PIECE_END, placeholderId } from '$shared/internal/MARKERS.ts'
 import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
+import { STREAMING } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import { type Entered, type NavigationSink, useNavigationSink } from '$shared/router.ts'
 import type { ChildPart, Reclaiming } from './parts.ts'
@@ -156,7 +157,7 @@ class DocumentNavigation implements NavigationSink {
                 if (parts.join('').trim() !== '') navigateLog.warning('the fragment ended mid-piece')
                 return { ok: !first, buffer: '' }
             }
-            const chunk = DECODER.decode(value, { stream: true })
+            const chunk = DECODER.decode(value, STREAMING)
             // The straddle window: a sentinel split across the seam starts in `tail` and ends here.
             const hay = tail + chunk
             const at = hay.indexOf(PIECE_END)

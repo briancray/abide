@@ -23,6 +23,14 @@ import { state, watch } from './reactive.ts'
 // identity every time and never wakes for it.
 const NO_MESSAGES: never[] = []
 
+/**
+ * How many yielded messages a reader's queue holds before the dead head is spliced off.
+ *
+ * The same slack `head`/`compact` keep for the transcript: nothing is copied per message, and the
+ * one copy is paid once per this many. A reader that keeps up never reaches it at all.
+ */
+const DRAIN_SLACK = 64
+
 export interface Channel<T> {
     /** Latest message, reactive. Subscribes the caller. */
     (): T | undefined
@@ -174,10 +182,13 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     let expiry: ReturnType<typeof setTimeout> | null = null
 
     function schedule(): void {
-        if (expiry !== null) {
-            clearTimeout(expiry)
-            expiry = null
-        }
+        // A live timer is LEFT alone, and that is safe because the deadline only ever moves forward:
+        // it is `stamps[head] + maxAge`, `head` only advances, and `stamps` only grows at the end.
+        // So an armed timer can be early but never late — and an early fire drops nothing and
+        // re-schedules from its own tail. Re-arming per publish meant a `clearTimeout` and a fresh
+        // timer object per message, which on a socket-fed channel is per chunk. `invalidate` clears
+        // it explicitly and `expire` nulls it before re-arming, so both still reach the recompute.
+        if (expiry !== null) return
         // `stamps[head]`, not `stamps[0]`: the oldest SURVIVING message, which is what the cursor
         // makes cheap to name. Everything before `head` was evicted and is waiting to be compacted.
         const oldest = head < stamps.length ? (stamps[head] as number) : got.peek() ? at : 0
@@ -323,6 +334,15 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
     // by the snapshot and dropped by the not-yet-subscriber.
     async function* follow(replay: boolean): AsyncGenerator<T> {
         const pending: T[] = replay ? buffer.slice(head) : []
+        // A CURSOR WITH SLACK — `buffer`/`head`/`compact` one screen up, spelled again for the queue
+        // a reader drains. A generator spends its life parked at the `yield` and `subscribe` pushes
+        // the whole time it is parked, so `shift` moved what was left of the queue once per message:
+        // quadratic on the `replay` drain, and a `tail` raised to remember more made it dearer still.
+        // But a bare cursor is worse in the other direction — a producer faster than its consumer
+        // never lets the drain catch up, so the reset never runs and the queue retains every message
+        // of the session. So the dead head is spliced off once it is worth a memmove, which is the
+        // trade `compact` already makes: O(1) per message, one O(k) copy per k messages.
+        let sent = 0
         let wake: (() => void) | null = null
         const off = self.subscribe((message) => {
             pending.push(message)
@@ -331,7 +351,21 @@ export function channel<T, Args>(options: ChannelOptions = {}): Channel<T> & Key
         })
         try {
             for (;;) {
-                while (pending.length > 0) yield pending.shift() as T
+                while (sent < pending.length) {
+                    const message = pending[sent++] as T
+                    // Both conditions, and the second is what makes the cost claim true: the splice
+                    // copies what is LEFT, so slack alone would copy a long backlog once per 64
+                    // messages — O(backlog/64) each, not O(1). Waiting until the dead head is at
+                    // least half the queue makes each copy pay for the slots it reclaims, which is
+                    // the amortisation `compact` gets for free from `tail` bounding its survivors.
+                    if (sent >= DRAIN_SLACK && sent * 2 >= pending.length) {
+                        pending.splice(0, sent)
+                        sent = 0
+                    }
+                    yield message
+                }
+                pending.length = 0
+                sent = 0
                 await new Promise<void>((resolve) => {
                     wake = resolve
                 })

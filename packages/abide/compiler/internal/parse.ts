@@ -43,7 +43,7 @@ export type Node =
     | { kind: 'expression'; value: Expr; raw: boolean }
     | { kind: 'element'; name: string; attributes: Attribute[]; children: Node[] }
     | { kind: 'component'; name: string; attributes: Attribute[]; children: Node[] }
-    | { kind: 'slot' }
+    | { kind: 'slot'; start: number }
     | { kind: 'script'; body: string; start: number }
     /** A nested `<style>` — subtree-scoped. A top-level one is lifted into `Blocks.styles` instead. */
     | { kind: 'style'; body: string; start: number }
@@ -347,6 +347,19 @@ function parseHole(reader: Reader): Node {
     }
 }
 
+/**
+ * How far into `text` the real expression starts.
+ *
+ * `code()` slices the ORIGINAL file from an `Expr.start` for `source.length` characters, so a source
+ * that was trimmed while its start still points at the whitespace comes back SHORT by however many
+ * characters were dropped — `{#if  count > 10}` emitted `if ($0 > 1)`, and `{ score * 100 }` emitted
+ * `score() * 10`. Both type-check and both render wrong, which is why trimming and positioning have
+ * to be one operation rather than two lines that agree by inspection.
+ */
+function leading(text: string): number {
+    return text.length - text.trimStart().length
+}
+
 function parseTag(reader: Reader): Node {
     const start = reader.at
     reader.at++ // '<'
@@ -383,7 +396,7 @@ function parseTag(reader: Reader): Node {
 
     if (name === 'slot') {
         if (!selfClosing) parseNodes(reader, 'slot')
-        return { kind: 'slot' }
+        return { kind: 'slot', start }
     }
 
     const component = /^[A-Z]/.test(name)
@@ -451,7 +464,9 @@ function parseAttributes(reader: Reader): Attribute[] {
             const start = reader.at
             const { text, end } = readExpression(reader.source, start)
             reader.at = end + 1
-            attributes.push(classify(reader, name, { source: text.trim(), start: start + 1 }, nameStart))
+            attributes.push(
+                classify(reader, name, { source: text.trim(), start: start + 1 + leading(text) }, nameStart),
+            )
             continue
         }
         if (value === '"' || value === "'") {
@@ -499,7 +514,7 @@ function parseQuoted(reader: Reader, name: string, quote: string): Attribute {
             } else {
                 if (literal !== '') parts.push(literal)
                 literal = ''
-                parts.push({ source: trimmed, start: start + 1 })
+                parts.push({ source: trimmed, start: start + 1 + leading(text) })
             }
             reader.at = end + 1
             continue
@@ -535,11 +550,13 @@ function parseBlock(reader: Reader): Node {
     const open = reader.at
     const { text, end } = readExpression(reader.source, open)
     reader.at = end + 1
-    const header = text.slice(1).trim() // past the '#'
+    const named = text.slice(1) // past the '#'
+    const header = named.trim()
     const space = header.search(/\s/)
     const name = space < 0 ? header : header.slice(0, space)
-    const rest = space < 0 ? '' : header.slice(space + 1).trim()
-    const headerStart = open + 2 + (space < 0 ? name.length : space + 1)
+    const tail = space < 0 ? '' : header.slice(space + 1)
+    const rest = tail.trim()
+    const headerStart = open + 2 + leading(named) + (space < 0 ? name.length : space + 1) + leading(tail)
 
     if (BRANCHES[name] === undefined) fail(reader, `unknown block {#${name}}`, open)
 
@@ -586,16 +603,25 @@ function takeMarker(reader: Reader, block: string): Marker {
     const { text, end } = readExpression(reader.source, open)
     reader.at = end + 1
     const inner = text.trim()
-    const body = inner.slice(1).trim() // past the ':'
+    const named = inner.slice(1) // past the ':'
+    const body = named.trim()
     const space = body.search(/\s/)
     const keyword = space < 0 ? body : body.slice(0, space)
     if (!(BRANCHES[block] as Set<string>).has(keyword)) {
         fail(reader, `{:${keyword}} is not a branch of {#${block}}`, open)
     }
+    const tail = space < 0 ? '' : body.slice(space + 1)
     return {
         keyword,
-        rest: space < 0 ? '' : body.slice(space + 1).trim(),
-        start: open + 2 + (space < 0 ? keyword.length : space + 1),
+        rest: tail.trim(),
+        start:
+            open +
+            1 +
+            leading(text) +
+            1 +
+            leading(named) +
+            (space < 0 ? keyword.length : space + 1) +
+            leading(tail),
     }
 }
 
@@ -628,7 +654,15 @@ function parseIf(reader: Reader, test: Expr, open: number): Node {
         // `{:else if c}` is one keyword and a condition; `{:else}` has neither.
         const elseIf = /^if\s+([\s\S]+)$/.exec(marker.rest)
         branches.push({
-            test: elseIf === null ? null : { source: (elseIf[1] as string).trim(), start: marker.start + 3 },
+            // Located in the REST rather than at a fixed `+ 3`: `{:else if  c}` puts more than one
+            // space between the keyword and the condition, and `\s+` in the pattern above ate it.
+            test:
+                elseIf === null
+                    ? null
+                    : {
+                          source: (elseIf[1] as string).trim(),
+                          start: marker.start + marker.rest.indexOf(elseIf[1] as string),
+                      },
             binding: null,
             body: parseNodes(reader, null),
         })
@@ -647,7 +681,8 @@ function parseFor(reader: Reader, rest: string, at: number, open: number): Node 
     let key: Expr | null = null
     const by = findKeyword(tail, 'by')
     if (by >= 0) {
-        key = { source: tail.slice(by + 3).trim(), start: at + rest.indexOf(tail) + by + 3 }
+        const named = tail.slice(by + 3)
+        key = { source: named.trim(), start: at + rest.indexOf(tail) + by + 3 + leading(named) }
         tail = tail.slice(0, by).trim()
     }
 

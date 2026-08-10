@@ -552,7 +552,9 @@ export function url(path: string, params?: Record<string, unknown>, query?: Reco
     const built = buildPath(patternFor(path), params)
     if (query === undefined) return built
     let search = ''
-    for (const name of Object.keys(query)) {
+    // `for…in` rather than `Object.keys`, for the reason `buildPath` one line up gives: an href is
+    // built per row, and the keys array would be garbage every time.
+    for (const name in query) {
         const value = query[name]
         if (value === undefined || value === null) continue
         const pair = `${encodeURIComponent(name)}=${encodeURIComponent(String(value))}`

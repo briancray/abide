@@ -35,32 +35,33 @@ export function typeRegions(
     tokens: Token[],
     nesting: number[],
     expression: boolean,
-): Uint8Array {
+): { marks: Uint8Array; ternary: Set<number> } {
     const marks = new Uint8Array(tokens.length)
-    if (tokens.length === 0) return marks
+    if (tokens.length === 0) return { marks, ternary: new Set() }
     const types = new TypeReader(tokens)
 
     const mark = (from: number, to: number): void => {
         for (let i = from; i < to && i < tokens.length; i++) marks[i] = 1
     }
 
-    // A `?` at some level claims the next `:` at that level, so a ternary's colon is not an
-    // annotation. Counted per level rather than as one stack, because `a ? f({ x: 1 }) : b` dips
-    // in and out between the two halves.
-    const pending = new Map<number, number>()
+    // A `?` at some level claims the next `:` at that level, so a ternary's colon is neither an
+    // annotation nor an object key. Counted HERE rather than in a pass of its own: this loop skips
+    // tokens already marked as types, and a standalone walk saw the `?` of every `m?()` in an
+    // interface and every optional parameter in a declaration — each of which then stole the next
+    // colon at that level. `{ a: 1 }` after `class C { m?() {} }` came out as `{ a(): 1 }`.
+    const ternary = new Set<number>()
+    const pending: number[] = []
 
     for (let i = 0; i < tokens.length; i++) {
+        const level = nesting[i] as number
+        // A deeper group starts its own count: an unmatched `?` must not poison a sibling's colon.
+        if (i > 0 && level > (nesting[i - 1] as number)) pending[level] = 0
         if (marks[i] === 1) continue
         const token = tokens[i] as Token
-        const level = nesting[i] as number
         const text = token.text
 
         // `type X = …` and `type X<T> = …`. The name is not a type; everything from `=` is.
-        if (
-            text === 'type' &&
-            startsStatement(tokens, i) &&
-            tokens[i + 1]?.kind === SyntaxKind.Identifier
-        ) {
+        if (text === 'type' && startsStatement(tokens, i) && tokens[i + 1]?.kind === SyntaxKind.Identifier) {
             let at = i + 2
             if (tokens[at]?.kind === SyntaxKind.LessThanToken) at = closeAngle(tokens, at)
             if (tokens[at]?.kind === SyntaxKind.EqualsToken) {
@@ -98,24 +99,25 @@ export function typeRegions(
         }
 
         if (token.kind === SyntaxKind.QuestionToken) {
-            // `x?: T` is an optional MEMBER, not a ternary — the `:` beside it is the annotation.
+            // `x?: T` and `(x?: T) => …` mark something OPTIONAL. A ternary's `?` is followed by its
+            // consequent, never by the `:` itself, so one lookahead separates them.
             if (tokens[i + 1]?.kind === SyntaxKind.ColonToken) continue
-            pending.set(level, (pending.get(level) ?? 0) + 1)
+            pending[level] = (pending[level] ?? 0) + 1
             continue
         }
 
         if (token.kind === SyntaxKind.ColonToken) {
-            const owed = pending.get(level) ?? 0
-            if (owed > 0) {
-                // The other half of a ternary.
-                pending.set(level, owed - 1)
+            // The other half of a ternary is neither an annotation nor an object key.
+            if ((pending[level] ?? 0) > 0) {
+                pending[level] = (pending[level] as number) - 1
+                ternary.add(i)
                 continue
             }
             if (!annotates(tokens, nesting, i, expression)) continue
             mark(i + 1, types.extent(i + 1))
         }
     }
-    return marks
+    return { marks, ternary }
 }
 
 /**
@@ -173,6 +175,10 @@ export function inObjectLiteral(tokens: Token[], nesting: number[], i: number, e
             before.kind === SyntaxKind.EqualsToken ||
             before.kind === SyntaxKind.ColonToken ||
             before.kind === SyntaxKind.OpenBracketToken ||
+            // A ternary's arms are EXPRESSIONS, so a `{` in either of them can only open a literal —
+            // read as a block, `a ? { k: cell } : b` made `k:` a label and the cell inside it a type
+            // annotation, so the cell was never read and the object rendered its own function.
+            before.kind === SyntaxKind.QuestionToken ||
             before.kind === SyntaxKind.ReturnKeyword
         )
     }

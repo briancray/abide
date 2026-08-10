@@ -912,7 +912,10 @@ export function watch(first: () => unknown, handler?: (value: unknown) => unknow
 export function watchNode(fn: () => void | (() => void)): Node {
     const node = new Node(undefined, fn as () => unknown, true)
     node.pull()
-    if (collecting !== null) collecting.push(() => node.dispose())
+    // No `collecting` registration, unlike `watch` beside it: the caller is handed the NODE and owns
+    // it — `Instance` keeps it in `slotEffects` and disposes it — so a disposer here would be a
+    // wrapper closure allocated per reactive slot per row solely to dispose something twice. `watch`
+    // pushes the function it had to allocate for its return value anyway.
     return node
 }
 

@@ -76,10 +76,6 @@ function isOpen(node: ChildNode | null): boolean {
     return node !== null && node.nodeType === 8 && (node as Comment).data === SLOT_OPEN
 }
 
-function isClose(node: ChildNode): boolean {
-    return node.nodeType === 8 && CLOSE_FORM.test((node as Comment).data)
-}
-
 /**
  * What a plain value renders as. Nullish and BOTH booleans are nothing, not their spelling.
  *
@@ -166,7 +162,9 @@ export class ChildPart {
                 if (text === null) {
                     const made = document.createTextNode(next)
                     this.text = made
-                    this.owned = [made]
+                    // Pushed, not re-assigned: `clearExcept` above left `owned` empty, so the array
+                    // the constructor made is the one this row uses.
+                    this.owned.push(made)
                     this.anchor.before(made)
                     return
                 }
@@ -187,11 +185,11 @@ export class ChildPart {
                 // slot and fall through to the ordinary build. The rest of the tree keeps its markup.
                 hydrateLog.warning(`${error.message} — building this slot instead of adopting it`)
                 // Through `clearExcept`, not a bare remove loop. `take` has to BUILD before it can
-                // know the range matches, and what it built holds one effect per reactive slot —
-                // `watchNode` registers a disposer only while `collecting` is set, and `collecting`
-                // is set only inside `scope`'s synchronous body, so a `take` reached from a
-                // navigation has nothing collecting it. An effect this part is not holding is one
-                // nothing can ever dispose, and it goes on writing into the nodes removed below.
+                // know the range matches, and what it built holds one effect per reactive slot.
+                // Nothing else owns those: `watchNode` hands the node to its caller and registers it
+                // nowhere, so the instance this part is holding is the only route to them. An effect
+                // this part drops is one nothing can ever dispose, and it goes on writing into the
+                // nodes removed below.
                 this.clearExcept(null)
                 for (const node of claimed) node.remove()
             }
@@ -225,12 +223,10 @@ export class ChildPart {
             this.holding = NOTHING
             this.generation++
             if (!isThenable(operand)) {
-                this.set(value.body(operand as never))
-                this.holding = operand // `set` cleared it
+                this.show(value.body(operand as never), operand)
                 return
             }
-            this.set(value.fallback)
-            this.holding = operand // `set` cleared it
+            this.show(value.fallback, operand)
             // A stamp of its OWN, bumped after the fallback is on screen rather than read off it.
             // A fallback may itself be thenable — a cell is, and a cell is ordinary to pass — in
             // which case `set` above started a settle of its own and stamped it with the generation
@@ -288,12 +284,31 @@ export class ChildPart {
         this.clearExcept('text')
         if (this.text === null) {
             this.text = document.createTextNode(next)
-            this.owned = [this.text]
+            this.owned.push(this.text)
             this.anchor.before(this.text)
             return
         }
         // Compare before writing.
         if (this.text.data !== next) this.text.data = next
+    }
+
+    /**
+     * Paint a block's content and leave the block OWNING the slot.
+     *
+     * `set` clears `holding` on every path that paints, because an ordinary value replaces whatever
+     * block was showing. A block painting its own arm is the exception, and this is the only spelling
+     * of it: the nine callers below are the enumeration the rule asks for, rather than nine separate
+     * `this.holding = operand // set cleared it` lines that a tenth path could silently forget.
+     * That failure is invisible — the arm still renders, and then re-enters and rebuilds its whole
+     * subtree on every re-run of the enclosing effect, per row for a block inside a list.
+     *
+     * Callers: the `suspend` arm of `set` (both settled and in-flight), `settle`'s three landings,
+     * `await_`'s pending and synchronous arms, and `stream_`'s start and failure arms. `take` does
+     * not go through here — it claims rather than paints, and never clears `holding` to begin with.
+     */
+    private show(value: unknown, operand: unknown): void {
+        this.set(value)
+        this.holding = operand
     }
 
     /**
@@ -448,17 +463,15 @@ export class ChildPart {
             (value) => {
                 if (generation !== this.generation) return
                 if (branches === null) {
-                    this.set(body === undefined ? value : body(value as never))
-                    // `set` cleared it, and a SUSPEND has to have it back: the guard in `set` is what
-                    // keeps an unrelated re-run from throwing this settled panel to its fallback and
-                    // rebuilding it, and until it is restored here that guard only ever held for an
-                    // operand that never suspended. A bare promise in a slot is deliberately not
-                    // recorded — `set` does not put one in `holding` on the way in either.
-                    if (body !== undefined) this.holding = operand
+                    // A bare promise in a slot is deliberately NOT recorded — `set` does not put one
+                    // in `holding` on the way in either — so it paints through `set` and a suspend,
+                    // which owns the slot for as long as its operand is unchanged, through `show`.
+                    const painted = body === undefined ? value : body(value as never)
+                    if (body === undefined) this.set(painted)
+                    else this.show(painted, operand)
                     return
                 }
-                this.set(settledArms(branches, undefined, value, false))
-                this.holding = operand
+                this.show(settledArms(branches, undefined, value, false), operand)
             },
             (error: unknown) => {
                 if (generation !== this.generation) return
@@ -469,8 +482,7 @@ export class ChildPart {
                     })
                     return
                 }
-                this.set(settledArms(branches, error, undefined, true))
-                this.holding = operand
+                this.show(settledArms(branches, error, undefined, true), operand)
             },
         )
     }
@@ -495,13 +507,11 @@ export class ChildPart {
         const branches = block.branches
         const operand = block.value
 
-        this.set(branches.pending?.() ?? null)
-        this.holding = operand // `set` cleared it; this block owns the slot again
+        this.show(branches.pending?.() ?? null, operand)
         const generation = this.generation
 
         if (!isThenable(operand)) {
-            this.set(settledArms(branches, undefined, operand, false))
-            this.holding = operand
+            this.show(settledArms(branches, undefined, operand, false), operand)
             return
         }
         this.settle(operand, branches, generation)
@@ -514,8 +524,7 @@ export class ChildPart {
     private stream_(block: Streamed): void {
         if (this.holding === block.source) return
         const source = block.source
-        this.set([])
-        this.holding = source
+        this.show([], source)
         // ONE stamp for the whole stream. Appending a row does not bump the generation — only a `set`
         // does, and a `set` here is something else taking the range over — so the stamp taken at the
         // start stays valid, and a re-run for any other reason is exactly what it has to catch.
@@ -550,8 +559,7 @@ export class ChildPart {
                     })
                     return
                 }
-                this.set(block.failure(error))
-                this.holding = source
+                this.show(block.failure(error), source)
             }
         })()
     }
@@ -579,9 +587,19 @@ export class ChildPart {
         if (keep === 'list' && this.list !== null) return
         if (this.list !== null) this.list.dispose()
         if (this.nested !== null) this.nested.dispose()
-        for (const node of this.owned) node.remove()
+        // Only when there IS a range: on the build path a fresh part reaches here holding the empty
+        // array its constructor made, and replacing that with a second empty one — which the caller
+        // then pushes into — was one discarded array per child slot per row. A fresh array rather
+        // than `length = 0` because `owned` is sometimes an array this part does not own: `take`
+        // assigns it `claimed`, and the nested arm assigns it `nested.nodes`.
+        if (this.owned.length !== 0) {
+            for (const node of this.owned) node.remove()
+            this.owned = []
+        }
+        // Outside the guard: the server's opening marker outlives the range it bracketed, so a part
+        // that painted through `set` has to let go of it whether or not it was holding nodes.
         this.dropOpened()
-        this.owned = []
+
         this.text = null
         this.nested = null
         this.list = null
@@ -678,12 +696,20 @@ interface Row {
     usedAt: number
 }
 
+/** Every keyed row of a pass, for the pass that found one of them somewhere other than its index. */
+function indexByKey(rows: Row[]): Map<unknown, Row> {
+    const index = new Map<unknown, Row>()
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] as Row
+        if (row.key !== undefined) index.set(row.key, row)
+    }
+    return index
+}
+
 class ListPart {
     private rows: Row[] = []
     /** Bumped per `set`, and written into every row carried forward. */
     private pass = 0
-    /** Has this list ever held a KEYED row? Until it has, there is no index to build. */
-    private keyed = false
 
     constructor(private readonly anchor: Comment) {}
 
@@ -700,7 +726,6 @@ class ListPart {
         for (const item of items) {
             const keyed = isKeyed(item)
             const template = keyed ? item.template : (item as TemplateResult)
-            if (keyed) this.keyed = true
             this.rows.push({
                 key: keyed ? item[KEY] : undefined,
                 instance: new Instance(template, cursor),
@@ -725,7 +750,6 @@ class ListPart {
     append(item: unknown): void {
         const keyed = isKeyed(item)
         const template = keyed ? item.template : (item as TemplateResult)
-        if (keyed) this.keyed = true
         const instance = instantiate(template)
         this.rows.push({ key: keyed ? item[KEY] : undefined, instance, usedAt: this.pass })
         // The anchor is what every row sits BEFORE, so appending there is the end of the list. No
@@ -738,24 +762,36 @@ class ListPart {
         const previous = this.rows
         const pass = ++this.pass
 
-        // The index is built only for a list that has actually held a keyed row. An unkeyed list —
-        // the one a plain `.map()` produces, and the one a thousand-row update walks — would
-        // otherwise pay for an empty `Map` and a whole pass over its rows for a lookup it never makes.
+        // Built only when a keyed row is genuinely somewhere OTHER than its own index, and there is
+        // still a previous row left for it to be found at. An unkeyed list — the one a plain `.map()`
+        // produces, and the one a thousand-row update walks — never asks. A keyed list whose order
+        // did not change, which is what a keyed feed does on every edit, would have paid a `Map.set`
+        // and a `Map.get` per row to be told what `previous[i]` already said: 0.165 vs 0.234 ms on
+        // the thousand-row same-order edit benched in the example package.
+        //
+        // The `carried` half is what keeps the two ends honest. A cold build has no previous rows at
+        // all, and an APPEND has claimed every one of them by position before it reaches the new
+        // tail — both would otherwise build an index whose every lookup provably misses, since a row
+        // already claimed this pass is dropped by the `usedAt` guard below anyway. Worth 0.074
+        // against 0.081 ms on the keyed append benched beside the edit; on the cold build the two
+        // are indistinguishable, since the index it skips is an EMPTY map and the misses are cheap.
+        // That end is kept for the shape of the thing, not for a number.
+        //
+        // Duplicate keys resolve differently from a pure index: it keeps the LAST row with a key,
+        // the position check takes the one already at `i`.
         let byKey: Map<unknown, Row> | null = null
-        if (this.keyed) {
-            for (let i = 0; i < previous.length; i++) {
-                const row = previous[i] as Row
-                if (row.key === undefined) continue
-                if (byKey === null) byKey = new Map<unknown, Row>()
-                byKey.set(row.key, row)
-            }
-        }
 
         // Where the list actually differs from the one before it. Everything outside `[firstChanged,
         // lastChanged]` is the SAME row object at the SAME index, which is what lets the placement
         // walk below start late and stop early instead of touching every row to find out that most
         // of them are where they already were.
-        const next: Row[] = new Array<Row>(items.length)
+        // Grown by `push` for CONSISTENCY, not for speed, and the difference matters: `adopt` and
+        // `append` both push, so a pre-sized `new Array(n)` here left `this.rows` one elements kind
+        // out of one writer and another out of the other two, and every `previous[i]` and placement
+        // read downstream saw both. The timings are indistinguishable either way under the emulator,
+        // which is the substrate available — so this is not a performance claim and should not be
+        // read as one. The loop fills 0…n-1 in order, so nothing else moves.
+        const next: Row[] = []
         let firstChanged = items.length
         let lastChanged = -1
         let carried = 0
@@ -766,9 +802,17 @@ class ListPart {
             const keyed = isKeyed(item)
             const template = keyed ? item.template : (item as TemplateResult)
             const key = keyed ? item[KEY] : undefined
-            if (keyed) this.keyed = true
 
-            let row = key === undefined ? previous[i] : byKey?.get(key)
+            let row: Row | undefined
+            if (key === undefined) row = previous[i]
+            else {
+                const at = previous[i]
+                if (at !== undefined && at.key === key) row = at
+                else if (carried < previous.length) {
+                    if (byKey === null) byKey = indexByKey(previous)
+                    row = byKey.get(key)
+                }
+            }
             // Already taken this pass, so it is not available to take again: an unkeyed item claims
             // `previous[i]` by INDEX while a keyed one can claim that same row out of `byKey`, and
             // `next` would then hold one `Row` at two indices — the placement walk reads the same
@@ -783,7 +827,7 @@ class ListPart {
             } else {
                 row = { key, instance: instantiate(template), usedAt: pass }
             }
-            next[i] = row
+            next.push(row)
             if (row === previous[i]) continue
             if (i < firstChanged) firstChanged = i
             lastChanged = i
@@ -851,6 +895,40 @@ class ListPart {
 
 // --- instances ------------------------------------------------------------
 
+/**
+ * One `@event` slot: the listener the element keeps, with the author's handler swapped behind it.
+ *
+ * A row's `@click` closes over its item, so it is a FRESH function on every reconcile — comparing
+ * identities meant a removeEventListener plus an addEventListener per row per update, and a
+ * thousand-row list re-attached a thousand listeners to change one. Nothing outside can observe
+ * which function is registered: the listener sits on the same element, so `event.currentTarget` is
+ * unchanged. A record rather than a closure, and `handleEvent` rather than a dispatch function,
+ * because the DOM's own object-listener protocol removes the second allocation a per-row event slot
+ * would otherwise pay.
+ */
+class EventSlot implements EventListenerObject {
+    private handler: EventListener | null = null
+    private listening = false
+
+    constructor(
+        private readonly element: Element,
+        private readonly name: string,
+    ) {}
+
+    handleEvent(event: Event): void {
+        if (this.handler !== null) this.handler.call(this.element, event)
+    }
+
+    write(value: unknown): void {
+        this.handler = (value ?? null) as EventListener | null
+        // Never detached. A slot that goes null and back is the only case it would serve, and the
+        // null check above answers it for nothing — the listener dies with the node.
+        if (this.handler === null || this.listening) return
+        this.listening = true
+        this.element.addEventListener(this.name, this)
+    }
+}
+
 class Instance {
     readonly nodes: ChildNode[]
     readonly strings: readonly string[]
@@ -870,8 +948,12 @@ class Instance {
      * Teardowns that must survive a patch — a `&ref` handler's, and nothing else so far. Separate
      * from the slot effects because the lifetimes differ: one array for both meant a ref teardown was
      * drained by the first update, before the binder that would have set it had even run.
+     *
+     * Null until a `&ref` binder asks for it, the same way `slotEffects` is: a row is instantiated
+     * per row of a list and almost no template has a `&ref` at all, so the eager array was one
+     * allocation per row that nothing could ever read.
      */
-    private readonly partDisposers: (() => void)[] = []
+    private partDisposers: (() => void)[] | null = null
     /** What the last update was handed, so an update that moves nothing can be skipped whole. */
     private lastValues: readonly unknown[] | null = null
 
@@ -1040,11 +1122,20 @@ class Instance {
         const claimed: ChildNode[] = []
         let close: Comment | null = null
         let depth = 1
+        // `nodeType` read ONCE per node rather than once in each of the two probes. This walks every
+        // node the server wrote inside the slot — every row of an adopted thousand-row list — and a
+        // row's own nodes are elements, which both probes would have loaded the type of only to bail.
+        // The marker test is the same two steps `isOpen` makes, in the order that pays: a comment is
+        // rare among the claimed nodes, and `CLOSE_FORM` only runs on one. `isClose` went with this
+        // — the walk was its only caller.
         for (let node = (open as ChildNode).nextSibling; node !== null; node = node.nextSibling) {
-            if (isOpen(node)) depth++
-            else if (isClose(node) && --depth === 0) {
-                close = node as Comment
-                break
+            if (node.nodeType === 8) {
+                const data = (node as Comment).data
+                if (data === SLOT_OPEN) depth++
+                else if (CLOSE_FORM.test(data) && --depth === 0) {
+                    close = node as Comment
+                    break
+                }
             }
             claimed.push(node)
         }
@@ -1066,25 +1157,8 @@ class Instance {
         }
         const element = target as Element
         if (kind.kind === 'event') {
-            // One listener for the life of the element, with the handler behind it swapped by
-            // assignment. A row's `@click` closes over its item, so it is a FRESH function on every
-            // reconcile — comparing identities meant a removeEventListener plus an addEventListener
-            // per row per update, and a thousand-row list re-attached a thousand listeners to change
-            // one. Nothing outside can observe which function is registered, so the indirection is
-            // invisible: `dispatch` sits on the same element, so `event.currentTarget` is unchanged.
-            let handler: EventListener | null = null
-            let listening = false
-            const dispatch: EventListener = (event) => {
-                if (handler !== null) handler.call(element, event)
-            }
-            return (value) => {
-                handler = (value ?? null) as EventListener | null
-                // Never detached. A slot that goes null and back is the only case it would serve, and
-                // a dead branch in `dispatch` answers it for nothing — the listener dies with the node.
-                if (handler === null || listening) return
-                listening = true
-                element.addEventListener(kind.name, dispatch)
-            }
+            const slot = new EventSlot(element, kind.name)
+            return (value) => slot.write(value)
         }
         if (kind.kind === 'property') {
             return (value) => {
@@ -1097,6 +1171,7 @@ class Instance {
             // per-instance handler whose return is its teardown — the contract `watch` already has,
             // rather than a second lifecycle spelling.
             let teardown: (() => void) | null = null
+            if (this.partDisposers === null) this.partDisposers = []
             this.partDisposers.push(() => {
                 if (teardown !== null) teardown()
                 teardown = null
@@ -1188,7 +1263,11 @@ class Instance {
             // An `@click=${fn}` or `&ref=${fn}` value is a function that IS the value.
             if (typeof value === 'function' && takesRawFunction[i] !== true) {
                 if (effects === null) {
-                    effects = new Array<Node | null>(values.length).fill(null)
+                    // Pushed, not `new Array(n).fill(null)`: `fill` closes the holes but leaves the
+                    // array holey, and this one is read at `effects[i]` for every thunked slot of
+                    // every row on every update, for the life of the instance.
+                    effects = []
+                    for (let slot = 0; slot < values.length; slot++) effects.push(null)
                     this.slotEffects = effects
                 }
                 const existing = effects[i] ?? null
@@ -1223,8 +1302,10 @@ class Instance {
             effects.length = 0
         }
         const partDisposers = this.partDisposers
-        for (let i = 0; i < partDisposers.length; i++) (partDisposers[i] as () => void)()
-        partDisposers.length = 0
+        if (partDisposers !== null) {
+            for (let i = 0; i < partDisposers.length; i++) (partDisposers[i] as () => void)()
+            partDisposers.length = 0
+        }
         const children = this.children
         for (let i = 0; i < children.length; i++) (children[i] as ChildPart).dispose()
     }

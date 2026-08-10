@@ -24,9 +24,29 @@ import type { JsonSchema, JsonType } from '$shared/internal/shapes.ts'
 /** Anything matches this, and it is what both derivations answer for a type they cannot describe. */
 export const ANYTHING: JsonSchema = {}
 
+/**
+ * DEFINED keys, not present ones. Every builder here writes the fields it does not know as
+ * `undefined` rather than omitting them — one hidden class per schema kind for the reads in `union`,
+ * `merged` and `inherited`, which walk them per member and per alternative — so "has no keys" is no
+ * longer the same question as "says nothing". `JSON.stringify` drops an undefined value, so the
+ * published document is unchanged either way.
+ */
 export function isAnything(schema: JsonSchema): boolean {
-    for (const _ in schema) return false
+    // Its OWN loop, exiting on the first field that says something — the common answer is "no", and
+    // routing it through `described` walked every key to count past the one that already settled it.
+    for (const key in schema) {
+        if ((schema as unknown as Record<string, unknown>)[key] !== undefined) return false
+    }
     return true
+}
+
+/** How many fields this schema actually claims — the count `union` needs, where 1 is the question. */
+function described(schema: JsonSchema): number {
+    let count = 0
+    for (const key in schema) {
+        if ((schema as unknown as Record<string, unknown>)[key] !== undefined) count++
+    }
+    return count
 }
 
 /**
@@ -107,7 +127,7 @@ export function union(parts: JsonSchema[]): JsonSchema {
         if ('const' in part) literals.push(part.const)
         else allLiteral = false
         if (typeof part.type === 'string') kinds.add(part.type)
-        if (typeof part.type !== 'string' || Object.keys(part).length !== 1) allBare = false
+        if (typeof part.type !== 'string' || described(part) !== 1) allBare = false
     }
     // `true | false` is a boolean, not a two-value enum — which is what the checker hands over for
     // one, and what an author who wrote `boolean` meant.
@@ -120,7 +140,10 @@ export function union(parts: JsonSchema[]): JsonSchema {
 }
 
 export function arrayOf(items: JsonSchema): JsonSchema {
-    return isAnything(items) ? { type: 'array' } : { type: 'array', items }
+    // One literal, both fields — the same reason `objectOf` builds four, and the sibling that was
+    // missed when it did: two shapes for one schema kind, read by the same per-alternative and
+    // per-part loops.
+    return { type: 'array', items: isAnything(items) ? undefined : items }
 }
 
 /**
@@ -137,9 +160,14 @@ export function objectOf(
 ): JsonSchema {
     const names = Object.keys(properties)
     if (names.length === 0 && additional === undefined) return ANYTHING
-    const schema: JsonSchema = { type: 'object' }
-    if (names.length > 0) schema.properties = properties
-    if (required.length > 0) schema.required = required
-    if (additional !== undefined && !isAnything(additional)) schema.additionalProperties = additional
-    return schema
+    // One literal, all four fields — the three unknown ones written as `undefined` rather than added
+    // on a later path. This is the only constructor of an object schema in either derivation, so
+    // growing it conditionally made up to eight shapes for the reads in `union`'s per-alternative
+    // loop and `merged`/`inherited`'s per-part loops.
+    return {
+        type: 'object',
+        properties: names.length > 0 ? properties : undefined,
+        required: required.length > 0 ? required : undefined,
+        additionalProperties: additional !== undefined && !isAnything(additional) ? additional : undefined,
+    }
 }

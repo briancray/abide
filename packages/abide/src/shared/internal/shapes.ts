@@ -32,15 +32,20 @@ export type Kind = 'rpc' | 'socket'
 
 export type JsonType = 'object' | 'array' | 'string' | 'number' | 'integer' | 'boolean' | 'null'
 
+// The four fields an OBJECT schema has take an explicit `undefined` as well as being optional: under
+// `exactOptionalPropertyTypes` those are different types, and the compiler's `objectOf` writes all
+// four so that every object schema it derives is one hidden class for the per-member and
+// per-alternative walks in `assemble.ts`. Nothing at RUNTIME sees that: a schema reaches the
+// validator through `JSON.stringify`, which drops an undefined value.
 export interface JsonSchema {
     /** One type, or the several a union of them derives to. */
-    type?: JsonType | JsonType[]
+    type?: JsonType | JsonType[] | undefined
     /** Object members, by name. */
-    properties?: Record<string, JsonSchema>
-    required?: string[]
+    properties?: Record<string, JsonSchema> | undefined
+    required?: string[] | undefined
     /** `false` closes the object; a schema is the value shape of a `Record`. Unset is open. */
-    additionalProperties?: boolean | JsonSchema
-    items?: JsonSchema
+    additionalProperties?: boolean | JsonSchema | undefined
+    items?: JsonSchema | undefined
     /** A closed set of values — what a union of literals derives to. */
     enum?: unknown[]
     const?: unknown
@@ -73,8 +78,8 @@ export interface JsonSchema {
 
 /** What one endpoint declares in each direction. Absent where nothing was declared or derivable. */
 export interface Shapes {
-    input?: JsonSchema
-    output?: JsonSchema
+    input?: JsonSchema | undefined
+    output?: JsonSchema | undefined
 }
 
 /** One endpoint as a machine reads it before calling: the whole of what a tool definition needs. */

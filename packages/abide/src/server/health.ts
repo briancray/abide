@@ -127,5 +127,10 @@ export function serveHealth(request: Request): Response | Promise<Response> {
  * there deliberately is saying the same thing the thrown reporter said, and one rule answers both.
  */
 function answer(document: Health): Response {
-    return json(document, document.error === undefined ? undefined : { status: 503 })
+    // `no-store` is the whole point of this answer: it describes this process at this moment, and a
+    // cached one is a load balancer being told a drained instance is healthy — the one failure a
+    // health check exists to prevent.
+    const init: ResponseInit = { headers: { 'cache-control': 'no-store' } }
+    if (document.error !== undefined) init.status = 503
+    return json(document, init)
 }

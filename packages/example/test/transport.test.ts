@@ -71,17 +71,23 @@ test('both laws meet over a real wire', async () => {
 
     // Both registries filled themselves from the imports — no filesystem scan, no manual wiring, and
     // the address is the module's own path with its subdirectory intact.
-    expect(result.registeredRpc).toEqual([
-        'users/getUser',
-        'users/slowUser',
-        'users/countdown',
-        'users/add',
-        'users/rename',
-        'users/listening',
-        'users/setAvatar',
-        'admin/audit/recent',
-    ])
-    expect(result.registeredSockets).toEqual(['feed/ticks', 'feed/rooms'])
+    //
+    // SORTED, because the claim is WHICH addresses registered and not in what order: registration
+    // order is module evaluation order, which the runner is free to vary, and asserting it made this
+    // fail intermittently on a fact nothing depends on.
+    expect(result.registeredRpc.slice().sort()).toEqual(
+        [
+            'users/getUser',
+            'users/slowUser',
+            'users/countdown',
+            'users/add',
+            'users/rename',
+            'users/listening',
+            'users/setAvatar',
+            'admin/audit/recent',
+        ].sort(),
+    )
+    expect(result.registeredSockets.slice().sort()).toEqual(['feed/ticks', 'feed/rooms'].sort())
 
     // A probe observes and never causes: selecting the slot started nothing.
     expect(result.coldPeek).toBeNull()

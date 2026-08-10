@@ -326,6 +326,7 @@ a fact about the stream rather than a rule about which layer is allowed to ask.
 | `cookies` | `() => Map<string, string>` | The cookies of the request being served, live and mutable. |
 | `bag` | `() => Map<string, unknown>` | A bag of values carried for the life of one request. |
 | `trace` | `() => string` | The trace id tying this work to its operation: the inbound `traceparent`'s, or a fresh one. W3C Trace Context. Nothing to do with `log.debug`. |
+| `nonce` | `() => string` | This request's CSP nonce, built on first ask and the same for every later one. 16 bytes of `crypto.getRandomValues`, base64url. What `csp()` names in the header and what the render stamps on abide's own inline output. |
 | `server` | `<WebSocketData>() => Server<WebSocketData>` | The Bun server that is listening. A PROCESS fact; throws before anything has served. |
 | `appDataDir` | `() => string` | The per-user directory this app may write to, as a PATH. A process fact, needing no `serve`, and not created here. |
 | `appName` / `appVersion` | `() => string` | The app's name and version, off `ABIDE_APP_NAME` / the nearest package.json above the working directory. |
@@ -591,6 +592,11 @@ written outside the body it was declared in.
 | `<style>` | Component-scoped: every element carries `data-a<hash>` and every selector requires it on its rightmost compound. Registered once at module scope |
 | nested `<style>` | Subtree-scoped — an element carries every scope in force, so an outer rule reaches in and an inner one cannot reach out |
 
+An `<!-- html comment -->` in the markup is for whoever opens the file and is NOT emitted: a
+component ships one copy of its own commentary per INSTANCE, and a file's header comment is the
+biggest one it has. Whitespace around a dropped comment is left alone, so nothing that was inline
+stops being inline. A comment that has to reach the browser is `{html('<!-- … -->')}`.
+
 ## Rendering
 
 | Name | Type Signature | Description |
@@ -669,8 +675,8 @@ ordinary authoring vocabulary too.
 | `html` | `(strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult` | every template | The one tagged template both substrates consume. Renders nothing by itself. |
 | `raw` | `(html: string) => Raw` | `{html(…)}` | Marks a string as already-HTML so the escape is skipped. The `.abide` spelling is `html(…)`. |
 | `keyed` | `(key: unknown, template: TemplateResult) => Keyed` | `{#for … by key}` | Tags a row with its identity, so a reconcile MOVES it instead of rebuilding it. |
-| `classes` | `(base: string, ...toggles: [unknown, string][]) => string \| null` | `class:name={c}` | Merges a static class list and any number of toggles into one value. `null` when nothing survives. |
-| `styles` | `(base: string, ...pairs: [string, unknown][]) => string \| null` | `style:prop={v}` | The same, one style property at a time, into one `style` attribute. |
+| `classes` | `(base: string, names: readonly string[], ...conditions: unknown[]) => string \| null` | `class:name={c}` | Merges a static class list and any number of toggles into one value. `null` when nothing survives. The names are static, so the compiler lifts that array to module scope and only the conditions travel per wake. |
+| `styles` | `(base: string, names: readonly string[], ...values: unknown[]) => string \| null` | `style:prop={v}` | The same, one style property at a time, into one `style` attribute. Names lifted the same way. |
 | `awaited` | `<T>(value: PromiseLike<T> \| T, branches: Branches<T>) => Awaited` | `{#await}` | The operand plus the arms to call once it settles. The arms are closures, so settling never re-evaluates the operand. |
 | `boundary` | `(body: () => unknown, branches: Branches) => Boundary` | `{#try}` | A synchronous error boundary around a body thunk. |
 | `streamed` | `<T>(source, row, catch?) => Streamed` | `{#for await}` | A list fed by an async source, torn down and re-streamed when a reactive dependency of the source changes. |
@@ -1071,4 +1077,72 @@ line editor takes its terminal as HOOKS, so a test drives it with a string of ke
 | the environment | NOT inlined. A browser asks `GET /__abide/identity` for what it may know, and there is no `GET /__abide/config` |
 | what is served | The manifest is the ALLOWLIST: a name is served because the build recorded it, so there is no path to normalise and `..` is simply a name nothing has. A name it does not carry is 404, and a method that is not `GET`/`HEAD` is 405 |
 | how it is served | `immutable` for a year, the identity form's content type on every encoding, and the first `Sidecar` the caller accepts — `br;q=0` is a refusal, and `*` is not read as an invitation. `Vary: accept-encoding` on every form, the plain one included |
-| where it sits | In FRONT of the request pipeline: outside the app's middleware, so a page never waits on an auth rung for its own JavaScript, and outside the request scope, because a file has no caller to be about |
+| where it sits | In FRONT of the request pipeline: outside the app's middleware, so a page never waits on an auth rung for its own JavaScript, and outside the request scope, because a file has no caller to be about. It is also in front of the `text/html` compressor below, because these bytes were compressed once at build time and a second pass would spend cpu per request to make them bigger |
+
+Everything the pipeline answers with `text/html` — a document, a navigation's fragment, an app's own
+route — is gzipped on the way out when the caller accepts it, with `Vary: accept-encoding` either
+way. It is `gzip` alone, sync-flushed at every write: the out-of-order protocol exists so a browser's
+parser gets the head before the last panel settles, and a compressor that buffered to the end would
+undo it. Brotli is the asset route's, where a sidecar is compressed once rather than per response.
+
+### Headers abide generates
+
+`headersFor` is the one funnel — every shape above passes through it, so a response abide builds
+carries these without its author asking. A caller's own header WINS over any default; the two
+unconditional ones are the two no caller wants otherwise.
+
+| Header | On | Why |
+| --- | --- | --- |
+| `x-content-type-options: nosniff` | everything, unconditional | Every abide response declares its own type, so a browser guessing a different one is only ever the vulnerability — a JSON refusal sniffed as HTML is script on this origin. Spelled a second time on the asset route, which is served in FRONT of the pipeline and never reaches the funnel |
+| `traceresponse` | everything, unconditional | The response you most want to correlate is a failure, so the 404 carries it too |
+| `cache-control: private, no-store` | a page, a navigation fragment, an rpc answer, any refusal | A page renders per request and `identity()` is a first-class thing to render off; a handler answers as whoever called it. Absent is NOT neutral — it licenses a shared cache to invent a freshness lifetime for an answer that names who asked. It does not fight `abide-ttl`, which is the caller's own memo lifetime rather than an HTTP directive |
+| `cache-control: no-store` | `/__abide/health`, `/__abide/identity` | Both describe this process or this caller at this moment. A cached health check is a load balancer being told a drained instance is healthy |
+| `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk is addressed by its own content hash, so it cannot go stale |
+| `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default written down, for the older agent that still defaults to `no-referrer-when-downgrade` and leaks an authenticated path to every cross-origin image |
+| `vary` | wherever an answer depends on a request header | `accept-encoding` on anything compressed or compressible, `x-abide-navigation` where one url has two bodies, `origin` on a cross-origin rpc |
+
+No `strict-transport-security` or `x-frame-options` by default: each is a policy only the app can
+state, and each has a real way to break one that abide cannot see. An app writes them in middleware.
+`content-security-policy` is the exception, because half of it is abide's — see below.
+
+### A content security policy
+
+```ts
+export const middleware = [csp()]
+export const middleware = [csp({ 'connect-src': ["'self'", 'https://api.stripe.com'] })]
+export const middleware = [csp({ 'style-src-attr': [] })]
+```
+
+| | |
+| --- | --- |
+| `csp` | `(sources?: Record<string, string[]>) => Middleware` | One rung. Sets `content-security-policy` on `text/html` answers only — a policy on a JSON refusal is a header nothing reads. |
+
+OPT-IN, because every directive can break an app that had a reason abide cannot see. What it does that
+an app cannot do for itself: `nonce()` is stamped onto abide's OWN inline output — `patchScript`, the
+`$p(<id>)` call per deferred subtree, and every scoped `<style>` — inside the render walk, where no
+middleware can reach. A hash cannot stand in: `$p(<id>)` differs per subtree, so a hash policy could
+not be written until the render finished, and running WHILE the document streams is that script's job.
+
+`sources` REPLACES a directive rather than adding to it, so what you pass is what it says; an empty
+array drops it; a name the baseline lacks is added. The nonce is appended to `script-src` and
+`style-src` after your sources either way — a policy without it does not run abide's own patch script,
+and a page that suspends would never swap a panel in. An app wanting something else entirely sets the
+header itself, which wins as any caller's own header does.
+
+The baseline: `default-src 'self'`, `script-src 'self'`, `style-src 'self'`, `img-src 'self' data:`,
+`font-src 'self'`, `connect-src 'self'`, `style-src-attr 'unsafe-inline'`, `object-src 'none'`,
+`base-uri 'self'`, `frame-ancestors 'none'`, `form-action 'self'`.
+
+`script-src` carries no `'unsafe-inline'` — it does not need one, and a browser honouring a nonce
+ignores `'unsafe-inline'` anyway, which is the mechanism that makes an injected `<script>` fail while
+abide's own runs. `style-src-attr` is the one weakened line and is weakened deliberately: a `style=`
+attribute cannot carry a nonce, and a `style=` is where a value COMPUTED AT RUNTIME belongs. An app
+with none passes `'style-src-attr': []`.
+
+A document under a policy always carries one empty `<style nonce data-abide="">` in its head. That is
+what the client's `adopt` takes a nonce from, via the `nonce` IDL property — a browser enforcing a
+policy hides the ATTRIBUTE from script. Without the carrier, a route whose scoped component arrives
+through `import()` after hydration had nowhere to read one, and its rules were refused.
+
+An app that drops to `new Response(...)` gets exactly what it wrote — these are what abide's own
+helpers put on, not a rule imposed on what a route returns.

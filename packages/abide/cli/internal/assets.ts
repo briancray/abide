@@ -21,6 +21,7 @@
 
 // `node:path` stands in for nothing: Bun ships no path api, and the builtin IS the supported one.
 import { basename } from 'node:path'
+import { acceptedEncoding } from '$shared/internal/wire.ts'
 import {
     assetOf,
     CLIENT_DIR,
@@ -51,6 +52,12 @@ interface Form {
 interface Held {
     identity: Form
     encoded: Form[]
+    /**
+     * `encoded`'s encodings, in its order — what `acceptedEncoding` is asked, and an index into it is
+     * an index into `encoded`. Built once at boot rather than per request: the asset path answers
+     * every module a page loads, and this is the only allocation the negotiation would have needed.
+     */
+    names: string[]
 }
 
 /**
@@ -163,10 +170,15 @@ export async function heldClient(
         held.set(name, {
             identity: {
                 file: new Blob([bytes], { type: artifact.type }),
-                headers: { 'content-type': artifact.type, 'cache-control': NEVER },
+                headers: {
+                    'content-type': artifact.type,
+                    'cache-control': NEVER,
+                    'x-content-type-options': NOSNIFF,
+                },
                 encoding: null,
             },
             encoded: NO_FORMS,
+            names: NO_NAMES,
         })
     }
     return { assets: new ClientAssets(held), manifest: { entries, assets, graph } }
@@ -182,8 +194,9 @@ export async function heldClient(
  */
 const NEVER = 'no-store'
 
-/** Shared because it is never written to: every dev asset has exactly the identity form. */
+/** Shared because neither is ever written to: every dev asset has exactly the identity form. */
 const NO_FORMS: Form[] = []
+const NO_NAMES: string[] = []
 
 /**
  * A year, and `immutable` on top of it.
@@ -195,6 +208,14 @@ const NO_FORMS: Form[] = []
  */
 const FOREVER = 'public, max-age=31536000, immutable'
 
+/**
+ * Spelled here as well as in `headersFor`, because this route never reaches it: the bundle is served
+ * in FRONT of the request pipeline, so nothing it answers goes through the funnel every other abide
+ * response does. This is the route that most needs it — a chunk is JavaScript, and a browser that
+ * sniffs one it was handed under the wrong type is executing it on this origin.
+ */
+const NOSNIFF = 'nosniff'
+
 function formsOf(directory: string, name: string, asset: ClientAsset): Held {
     // The identity form's type for every form of it. A `.br` sidecar is the same JavaScript compressed
     // — `Content-Encoding` is what says how — and Bun would otherwise read the type off the `.br`
@@ -203,53 +224,36 @@ function formsOf(directory: string, name: string, asset: ClientAsset): Held {
     // `vary` even on the form that has no encoding: a shared cache that stored this one without it
     // would go on serving identity bytes to a caller that asked for brotli, and to one that did not
     // ask at all. The header describes what the ANSWER depends on, not what this answer used.
-    const shared = { 'content-type': asset.type, 'cache-control': FOREVER, vary: 'accept-encoding' }
+    const shared = {
+        'content-type': asset.type,
+        'cache-control': FOREVER,
+        vary: 'accept-encoding',
+        'x-content-type-options': NOSNIFF,
+    }
     const identity: Form = { file: Bun.file(`${directory}/${name}`), headers: shared, encoding: null }
     const encoded: Form[] = []
+    const names: string[] = []
     for (const sidecar of asset.encodings) {
         encoded.push({
             file: Bun.file(`${directory}/${sidecar.file}`),
             headers: { ...shared, 'content-encoding': sidecar.encoding },
             encoding: sidecar.encoding,
         })
+        names.push(sidecar.encoding)
     }
-    return { identity, encoded }
+    return { identity, encoded, names }
 }
-
-/** `q=0` in an `Accept-Encoding` parameter list. Hoisted: this runs per asset request. */
-const REFUSED = /(^|;)\s*q\s*=\s*0(\.0*)?\s*(;|$)/i
 
 /**
  * The best form this caller accepts.
  *
- * ONE pass over the header rather than one per candidate: each token is cut, trimmed and lowered
- * ONCE and then asked of the encodings the build wrote. There are at most two of those, so a string
- * compare per encoding is cheaper than repeating the slicing per candidate — which is what asking
- * each candidate of every token did.
+ * The header reading is `acceptedEncoding`'s, shared with the streamed responses `page()` compresses
+ * — see there for why a `q=0` is the one weight that decides anything and why `*` is not an
+ * invitation. What is local is the RANKING: `encoded` is smallest-first out of the build, so the
+ * order the build wrote is already the order to prefer, and the index comes back against it.
  *
- * `encoded` is smallest-first out of the build, so the RANKING is an index and the lowest one this
- * caller named wins. The caller's own `q` weights are not ranked: abide holds one form per encoding,
- * so the only weight that decides anything is a refusal.
- *
- * `*` is deliberately NOT read as an invitation. It means "anything you have", and answering it with
- * brotli is correct for a browser and wrong for the long tail of things that send it while decoding
- * only what they listed — a caller that wants a compressed form says which one, and identity is
- * always right. This is the one place a conservative reading costs bytes rather than correctness.
  */
 function chosen(asset: Held, accepted: string | null): Form {
-    if (accepted === null || asset.encoded.length === 0) return asset.identity
-    let best = -1
-    for (const part of accepted.split(',')) {
-        const semi = part.indexOf(';')
-        // Encoding tokens are case-insensitive, and `Accept-Encoding: BR` is legal even if nothing
-        // sends it that way.
-        const name = (semi < 0 ? part : part.slice(0, semi)).trim().toLowerCase()
-        // `br;q=0` is a caller REFUSING brotli, which is the whole reason the parameters are read at
-        // all. Any other weight is an acceptance.
-        if (semi >= 0 && REFUSED.test(part.slice(semi))) continue
-        for (let at = 0; at < asset.encoded.length; at++) {
-            if ((asset.encoded[at] as Form).encoding === name && (best < 0 || at < best)) best = at
-        }
-    }
+    const best = acceptedEncoding(accepted, asset.names)
     return best < 0 ? asset.identity : (asset.encoded[best] as Form)
 }

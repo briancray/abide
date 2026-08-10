@@ -340,11 +340,21 @@ function statusOf(error: unknown): number {
     return typeof held === 'number' && held >= 400 && held <= 599 ? held : 500
 }
 
-/** The rpc wire's headers: the shape's own, plus the one option that crosses as a header. */
+/**
+ * The rpc wire's headers: the shape's own, plus the one option that crosses as a header.
+ *
+ * `no-store` for the reason a page carries it — a handler answers as whoever called it, and a shared
+ * cache with no directive to read invents a lifetime for that answer. It does not fight `abide-ttl`:
+ * that is the CALLER's memo lifetime, deliberately abide's own header because `max-age` counts whole
+ * seconds and a ttl may be shorter. One says how long a client may reuse a value it holds; the other
+ * says nobody in between may keep a copy.
+ */
 function wireHeaders(ttl: number, type: string, extra: Record<string, string> | undefined): Headers {
-    if (ttl === Infinity) return headersFor(extra, { 'content-type': type })
-    return headersFor(extra, { 'content-type': type, [TTL_HEADER]: String(ttl) })
+    if (ttl === Infinity) return headersFor(extra, { 'content-type': type, 'cache-control': NO_STORE })
+    return headersFor(extra, { 'content-type': type, 'cache-control': NO_STORE, [TTL_HEADER]: String(ttl) })
 }
+
+const NO_STORE = 'private, no-store'
 
 /**
  * A refusal from the mount point itself, under the one name every `/__abide/**` lane refuses with.

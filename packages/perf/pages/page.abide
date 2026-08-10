@@ -1,0 +1,25 @@
+<script>
+import { state } from 'abide'
+import { buildRows } from '../rows.ts'
+import { expose } from '../bench.ts'
+
+const ITEMS = buildRows(1, 10)
+
+let count = state(0)
+
+expose({
+    increment: () => {
+        count.set(count() + 1)
+    },
+})
+</script>
+
+<h1>simple</h1>
+<p>A small page: one cell, one list of ten rows, one event handler.</p>
+<p id="count">count {count}</p>
+<button id="inc" onclick={() => count++}>increment</button>
+<ul>
+    {#for item of ITEMS by item.id}
+        <li>{item.id} — {item.label}</li>
+    {/for}
+</ul>

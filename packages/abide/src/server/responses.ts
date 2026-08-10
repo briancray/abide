@@ -54,6 +54,11 @@ export function headersFor(carried: HeadersInit | undefined, defaults: Record<st
     for (const name in defaults) {
         if (!headers.has(name)) headers.set(name, defaults[name] as string)
     }
+    // Unconditional, like `traceresponse` below and unlike the defaults above: every response abide
+    // builds declares its own type, so there is no caller who wants a browser guessing a different
+    // one. The guess is the vulnerability — a JSON refusal sniffed as HTML, or an upload served back
+    // under a type it was not stored as, is script execution on this origin.
+    headers.set('x-content-type-options', 'nosniff')
     // Every response abide builds says which operation answered it — this helper is the one funnel
     // all of them go through, including the rpc wire and every refusal `dispatch` writes. A failure
     // is the response you most want to correlate, so the 404 carries it too.
@@ -133,10 +138,36 @@ export function page(body: string | ReadableStream<Uint8Array>, init?: ResponseI
     // Asked of every body, answered once: a render's stream already holds and comes straight back,
     // and an app streaming its own HTML through here gets the same guarantee without knowing there
     // was one to ask for. A string has no body to outlive the handler.
+    //
+    // Nothing here compresses. This entry point is BUNDLED FOR THE BROWSER — the example's server
+    // suite renders in a card to compare the two substrates — so it cannot reach a compressor, and a
+    // response that leaves an app's own route uncompressed would be a second rule to remember anyway.
+    // `compressing` in the cli's `layers.ts` is the one place, and it reaches every `text/html`
+    // answer rather than only the ones built here.
     return new Response(typeof body === 'string' ? body : heldStream(body), {
         ...init,
-        headers: headersFor(init?.headers, { 'content-type': HTML_TYPE }),
+        headers: headersFor(init?.headers, PAGE_HEADERS),
     })
+}
+
+/**
+ * What a rendered page says about itself when its route said nothing.
+ *
+ * `no-store` because a page here is rendered PER REQUEST and `identity()` is a first-class thing to
+ * render off: with no directive at all a shared cache is free to invent a freshness lifetime, and the
+ * response it invents one for may name whoever asked for it. `private` as well as `no-store` for the
+ * intermediary that honours only one of them.
+ *
+ * A public page that wants a CDN says so — `headersFor` takes a caller's own `cache-control` over
+ * this, which is what makes the safe direction the default and the fast one the decision.
+ *
+ * `referrer-policy` is the browsers' own default, written down: an older agent that defaults to
+ * `no-referrer-when-downgrade` leaks a full authenticated path to every cross-origin image and link.
+ */
+const PAGE_HEADERS: Record<string, string> = {
+    'content-type': HTML_TYPE,
+    'cache-control': 'private, no-store',
+    'referrer-policy': 'strict-origin-when-cross-origin',
 }
 
 // --- navigate ----------------------------------------------------------------
@@ -357,6 +388,8 @@ export function failed(
 ): Response {
     return new Response(JSON.stringify(errorFrame(name, message, data)), {
         status,
-        headers: headersFor(extra, { 'content-type': JSON_TYPE }),
+        // A refusal is about THIS call — a 403 is about who asked, a 404 about what they asked for
+        // — and a cached one is answered to the next caller, who may be someone else entirely.
+        headers: headersFor(extra, { 'content-type': JSON_TYPE, 'cache-control': 'private, no-store' }),
     })
 }

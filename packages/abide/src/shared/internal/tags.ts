@@ -5,7 +5,7 @@
 // module-level map rather than a field on each memo — and why the public verbs in `$shared/memo.ts`
 // are bare functions with no `fn.` in front of them.
 
-interface Taggable {
+export interface Taggable {
     invalidate(): void
     refresh(): void
 }
@@ -36,8 +36,15 @@ export function joinTags(names: string[], entry: TagEntry): () => void {
     }
 }
 
-/** Act on everything carrying any of these tags. `scope` narrows it to one memo's slots. */
-export function byTag(names: string[], scope: unknown, verb: keyof Taggable): void {
+/**
+ * Everything carrying any of these tags. `scope` narrows it to one memo's slots.
+ *
+ * The COLLECTION only — each public verb walks the result itself. Taking the verb as a parameter
+ * meant carrying a name, a branch and two loops to re-derive at runtime what both call sites spell
+ * as a literal; and reaching it as `target[verb]()` was a dynamic property access in a walk that is
+ * per slot, which for a memo tagged per row is per row.
+ */
+export function taggedTargets(names: string[], scope: unknown): Set<Taggable> {
     // A Set, so a target carrying two of the named tags is still acted on once.
     const hit = new Set<Taggable>()
     for (const name of names) {
@@ -47,5 +54,5 @@ export function byTag(names: string[], scope: unknown, verb: keyof Taggable): vo
             if (scope === undefined || entry.owner === scope) hit.add(entry.target)
         }
     }
-    for (const target of hit) target[verb]()
+    return hit
 }

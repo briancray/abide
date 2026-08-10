@@ -45,4 +45,24 @@ export function attribute(name: string, value: unknown): string {
     return ` ${name}="${escape(text)}"`
 }
 
-export const PATCH_SCRIPT = `<script>window.$p=function(i){${PATCH_SWAP};if(t&&s){s.replaceWith(t.content);t.remove()}}</script>`
+/**
+ * ` nonce="…"`, or nothing at all when this render has no policy to satisfy.
+ *
+ * The value is base64url out of `nonce()`, so there is nothing in it that needs escaping — which is
+ * also why the quoting here can be a plain interpolation rather than `attribute()`.
+ */
+export function nonceAttribute(nonce: string | null): string {
+    return nonce === null ? '' : ` nonce="${nonce}"`
+}
+
+/**
+ * The two-line script that swaps a deferred subtree into place, stamped for this request.
+ *
+ * A function rather than the constant it was, because a CSP nonce is per RESPONSE: a constant could
+ * not carry one, and a hash could not stand in for it — `$p(<id>)` differs per subtree, so a
+ * hash-based policy could not be written until the render finished, and running while the document
+ * is still streaming is this script's entire job.
+ */
+export function patchScript(nonce: string | null): string {
+    return `<script${nonceAttribute(nonce)}>window.$p=function(i){${PATCH_SWAP};if(t&&s){s.replaceWith(t.content);t.remove()}}</script>`
+}

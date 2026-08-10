@@ -1,0 +1,13 @@
+<script module>
+const NAV = [
+    { href: '/', label: 'simple' },
+    { href: '/complex', label: 'complex' },
+]
+</script>
+
+<header>
+    {#for link of NAV by link.href}<a href={link.href}>{link.label}</a> {/for}
+</header>
+<main>
+    <slot/>
+</main>

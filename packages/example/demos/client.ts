@@ -5,7 +5,7 @@
 // the two apart. Effects are microtask-batched, so every measurement brackets the write AND the
 // flush — the effect is what touches the DOM, not the write.
 
-import { html, memo, state, type TemplateResult } from 'abide'
+import { awaited, html, memo, state, type TemplateResult } from 'abide'
 import {
     container,
     countCalls,
@@ -18,6 +18,7 @@ import {
     sleep,
     suite,
     tick,
+    until,
 } from 'abide/tests'
 import { keyed, mount } from 'abide/ui'
 import { button, field, lazy, row, stage } from './dom.ts'
@@ -79,6 +80,13 @@ const SWAP_DISTANT = swapped(ROWS_200, 1, 198)
 
 // The cells the persistent lists track. Reactive state, not DOM — they belong out here with the rows.
 const liveRows = state(ROWS_1000)
+// The same thousand rows KEYED, for the same one-row edit: a keyed list whose order did not change
+// is the case the reorder arms cannot show, and the one that says whether the key index is built
+// for a pass that has nothing to look up in it.
+const keyedLiveRows = state(ROWS_1000)
+// The same append, KEYED — the case the guard on the index build is for: every previous row is
+// claimed by position before the walk reaches the new tail, so an index built there could only miss.
+const keyedGrowRows = state(ROWS_1000)
 const keyedRows = state(ROWS_200)
 const unkeyedRows = state(ROWS_200)
 const adjacentRows = state(ROWS_200)
@@ -91,6 +99,8 @@ interface Fixtures {
     listHost: HTMLElement
     bigListHost: HTMLElement
     liveHost: HTMLElement
+    keyedLiveHost: HTMLElement
+    keyedGrowHost: HTMLElement
     keyedHost: HTMLElement
     unkeyedHost: HTMLElement
     vanillaHost: HTMLElement
@@ -116,6 +126,11 @@ const fixtures = lazy((): Fixtures => {
     // One persistent abide list, kept in sync with a cell — the "update one row of a thousand" arm.
     const liveHost = ul()
     mount(liveHost, () => list(liveRows))
+
+    // …and the same list keyed, for the same edit: the arm that prices a keyed pass in which every
+    // row is still at its own index.
+    const keyedLiveHost = ul()
+    mount(keyedLiveHost, () => keyedList(keyedLiveRows))
 
     // …and the keyed equivalent, for the reorder cases.
     const keyedHost = ul()
@@ -146,6 +161,9 @@ const fixtures = lazy((): Fixtures => {
     const growHost = ul()
     mount(growHost, () => list(growRows))
 
+    const keyedGrowHost = ul()
+    mount(keyedGrowHost, () => keyedList(keyedGrowRows))
+
     const growVanillaHost = ul()
     vanilla.buildRows(growVanillaHost, ROWS_1000)
 
@@ -154,6 +172,8 @@ const fixtures = lazy((): Fixtures => {
         listHost,
         bigListHost,
         liveHost,
+        keyedLiveHost,
+        keyedGrowHost,
         keyedHost,
         unkeyedHost,
         vanillaHost,
@@ -355,6 +375,21 @@ export default suite({
                             const next = ROWS_1000.slice()
                             next[500] = { id: 500, label: `row 500 · ${i}` }
                             liveRows.set(next)
+                            await settled()
+                        },
+                    },
+                    {
+                        // The same edit on a KEYED list, and the reason the arm is here: every row
+                        // is still at its own index, so the reconcile finds each one by position and
+                        // the key index is never built. Building it up front instead cost 0.234 ms
+                        // against this arm's 0.172 — a `Map.set` and a `Map.get` per row to be told
+                        // what `previous[i]` already said. The reorder cases above are the other
+                        // half: there the index IS built, and they say that costs nothing extra.
+                        label: 'abide — the same edit, KEYED rows in unchanged order',
+                        run: async (i: number) => {
+                            const next = ROWS_1000.slice()
+                            next[500] = { id: 500, label: `row 500 · ${i}` }
+                            keyedLiveRows.set(next)
                             await settled()
                         },
                     },
@@ -667,6 +702,16 @@ export default suite({
                         label: 'abide — set the longer array',
                         run: async (i: number) => {
                             growRows.set(i % 2 === 0 ? ROWS_1010 : ROWS_1000)
+                            await settled()
+                        },
+                    },
+                    {
+                        // Keyed, and the arm the index guard is measured against: every row of the
+                        // thousand is claimed by position, so the ten new ones at the tail have
+                        // nothing left to look up and the index is never built.
+                        label: 'abide — the same append, KEYED rows',
+                        run: async (i: number) => {
+                            keyedGrowRows.set(i % 2 === 0 ? ROWS_1010 : ROWS_1000)
                             await settled()
                         },
                     },
@@ -1365,6 +1410,37 @@ export default suite({
                         button('1000 rows', () => void time(1000)),
                     ),
                 )
+            },
+        },
+        {
+            title: 'a settled block is not re-entered when a SIBLING slot wakes',
+            note: 'The claim every other case here makes about DOM work, made about WAKES instead — and the one this suite could not previously see. Each slot gets its own effect, so writing a cell one slot reads must not re-run the thunk of the slot beside it. When it does the output is still right, which is why only a counter catches it: an `{#await}` whose thunk re-runs evaluates its operand again, hands the part a promise it has not seen, and the `holding` cutoff correctly treats a new operand as a new load — so a settled panel flashes back to its pending arm and fetches a second time. That is the failure a bare block head reintroduced, and this is what would have failed instead of 417 green tests.',
+            async run({ is }) {
+                let loads = 0
+                const load = (): Promise<string> => {
+                    loads++
+                    return Promise.resolve(`load ${loads}`)
+                }
+                const beside = state(0)
+                const host = container()
+                mount(
+                    host,
+                    () =>
+                        html`<p>${() => beside()}</p><b>${() => awaited(load(), { pending: () => html`pending`, then: (value) => html`${value}`, catch: undefined, finally: undefined })}</b>`,
+                )
+                await until(() => host.querySelector('b')?.textContent === 'load 1', 'the panel to settle')
+                is('one load to settle it', loads, 1)
+
+                // The write the sibling reads. Nothing the block evaluates has changed.
+                beside.set(1)
+                await tick()
+                is('the sibling repainted', host.querySelector('p')?.textContent, '1')
+                // The counter is what catches it. By this point a re-entered block reads `load 2`
+                // rather than `pending`, so the text alone would only say the panel is wrong — not
+                // that it reloaded, which is the claim.
+                is('…and the block did NOT reload', loads, 1)
+                is('…and still shows what it settled to', host.querySelector('b')?.textContent, 'load 1')
+                host.remove()
             },
         },
     ],

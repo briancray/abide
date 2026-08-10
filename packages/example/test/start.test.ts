@@ -126,10 +126,20 @@ test('the same url without the mark is still the whole document', async () => {
     expect(answered.headers.get('x-abide-navigation')).toBeNull()
 })
 
-/** Every chunk of a response, with how long after the request it landed. */
+/**
+ * Every chunk of a response, with how long after the request it landed.
+ *
+ * IDENTITY, and that is the point of the header rather than an oversight: what these tests time is
+ * when the RENDER wrote each piece, and Bun's `fetch` holds a compressed body in its decoder until
+ * more of it arrives — the head of a document measured this way landed at 123 ms where the same
+ * bytes were on the socket at 5.6 ms. The compressor's own claim is that it does not do that, and it
+ * is asserted where it belongs: `a streamed document compresses without being held back`, below,
+ * reads the socket rather than a decoded body. Asking for identity here keeps the two apart, so a
+ * change to either one fails the test that is about it.
+ */
 async function chunks(path: string, headers: Record<string, string> = {}): Promise<Timed[]> {
     const started = performance.now()
-    const answered = await fetch(`${app.base}${path}`, { headers })
+    const answered = await fetch(`${app.base}${path}`, { headers: { ...headers, 'accept-encoding': 'identity' } })
     const seen: Timed[] = []
     // A reader and a decoder by hand rather than `pipeThrough(new TextDecoderStream())`: what is
     // being timed is when each chunk ARRIVES, and a transform stream sits between the socket and the
@@ -462,4 +472,146 @@ test('a directory with no app, and a client lane with no build, both refuse', as
     } finally {
         await rm(empty, { recursive: true, force: true })
     }
+})
+
+test('a document is compressed, and the compression does not hold the stream back', async () => {
+    const answered = await fetch(`${app.base}streaming?ms=${WAIT_MS}`, {
+        headers: { 'accept-encoding': 'gzip' },
+    })
+    expect(answered.headers.get('content-encoding')).toBe('gzip')
+    // The header is what a shared cache reads before it hands one caller's bytes to another, and
+    // there are now two things this url varies on. Both have to be named or a cache picks one.
+    expect(answered.headers.get('vary')).toContain('accept-encoding')
+
+    // Decoded, so this is the same document either way — the bytes it took to send are what the
+    // socket case below counts, because a streamed response carries no `content-length` to read.
+    const markup = await answered.text()
+    expect(markup).toContain('<!doctype')
+
+    // A caller that refuses it gets the bytes as they are, and the same `vary` beside them.
+    const plain = await fetch(`${app.base}streaming?ms=${WAIT_MS}`, {
+        headers: { 'accept-encoding': 'gzip;q=0' },
+    })
+    expect(plain.headers.get('content-encoding')).toBeNull()
+    expect(plain.headers.get('vary')).toContain('accept-encoding')
+})
+
+test('the compressed head is on the wire before the slow panel settles', async () => {
+    // A SOCKET rather than `fetch`, and that is the whole design of this case: Bun's fetch holds a
+    // compressed body in its decoder until more of it arrives, so a decoded read cannot tell a
+    // compressor that flushes per write from one that buffers to the end — which is the difference
+    // between a browser painting the head immediately and painting it when the last panel lands.
+    // What is timed here is the byte, not the character.
+    const url = new URL(`${app.base}streaming?ms=${WAIT_MS}`)
+    const started = performance.now()
+    const at: number[] = []
+    let wire = 0
+    const socket = await Bun.connect({
+        hostname: url.hostname,
+        port: Number(url.port),
+        socket: {
+            data(_handle, bytes) {
+                at.push(performance.now() - started)
+                wire += bytes.length
+            },
+            open(handle) {
+                handle.write(
+                    `GET ${url.pathname}${url.search} HTTP/1.1\r\nHost: ${url.host}\r\n` +
+                        `accept-encoding: gzip\r\nconnection: close\r\n\r\n`,
+                )
+            },
+        },
+    })
+    try {
+        // Long enough for the slow panel, which is what the early bytes have to beat.
+        await Bun.sleep(WAIT_MS * 1.5)
+    } finally {
+        socket.end()
+    }
+
+    expect(at.length).toBeGreaterThan(1)
+    // The claim: compressed bytes reached the wire well before the slow panel could have settled. A
+    // compressor that buffered to the end would put every one of these at `WAIT_MS` or later.
+    expect(at[0] as number).toBeLessThan(WAIT_MS * 0.5)
+    // And the stream really did continue afterwards — the slow panel arrived in its own write rather
+    // than the whole document having been small enough to land at once.
+    expect(at[at.length - 1] as number).toBeGreaterThanOrEqual(WAIT_MS * 0.8)
+
+    // The ratio, measured where it is real: `wire` is every byte the socket saw, headers and chunked
+    // framing included, against the document those bytes carry. A streamed response has no
+    // `content-length`, so this is the only honest place to compare the two.
+    const identity = await fetch(url, { headers: { 'accept-encoding': 'identity' } })
+    const whole = (await identity.text()).length
+    expect(wire).toBeLessThan(whole / 2)
+})
+
+test('every response abide generates carries the headers it should', async () => {
+    // One case over every SHAPE rather than an assertion bolted onto each of the cases above: what is
+    // being claimed is a property of the funnel — `headersFor` is the one place all of these pass
+    // through — so a shape added without going through it fails HERE, which is where a reader looks.
+    const asset = Object.keys(manifest.assets)[0] as string
+    const shapes: [string, string, Record<string, string>][] = [
+        ['document', 'channel', {}],
+        ['navigation', 'channel', { 'x-abide-navigation': '1' }],
+        ['asset', `${CLIENT_ROUTE.slice(1)}${asset}`, {}],
+        ['health', '__abide/health', {}],
+        ['identity', '__abide/identity', {}],
+        ['an rpc refusal', '__abide/rpc/nope/nope', {}],
+    ]
+    for (const [label, path, headers] of shapes) {
+        const answered = await fetch(`${app.base}${path}`, { headers })
+        // Never absent and never anything else: a browser guessing a type is the vulnerability, and
+        // there is no response abide builds whose type it did not itself declare.
+        expect([label, answered.headers.get('x-content-type-options')]).toEqual([label, 'nosniff'])
+        // And every one of them says whether it may be kept. Absent is not neutral — it licenses a
+        // shared cache to invent a freshness lifetime for an answer that may name who asked for it.
+        expect([label, answered.headers.get('cache-control')]).not.toEqual([label, null])
+    }
+})
+
+test('a rendered page is private by default, and a route that wants a CDN says so', async () => {
+    const page = await fetch(`${app.base}channel`)
+    expect(page.headers.get('cache-control')).toBe('private, no-store')
+    expect(page.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin')
+
+    // The bundle is the counter-example that proves it is a DEFAULT and not a rule: same process,
+    // same funnel, and a year of `immutable` because those bytes are addressed by their own hash.
+    const asset = Object.keys(manifest.assets)[0] as string
+    const held = await fetch(`${app.base}${CLIENT_ROUTE.slice(1)}${asset}`)
+    expect(held.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+})
+
+test('the policy names the nonce the markup is stamped with', async () => {
+    // `csp()` is on in this app's `app.ts`, so this is the real header a browser gets.
+    const answered = await fetch(`${app.base}streaming?ms=50`)
+    const policy = answered.headers.get('content-security-policy') as string
+    expect(policy).toContain(`object-src 'none'`)
+    expect(policy).toContain(`base-uri 'self'`)
+    // No `unsafe-inline` for SCRIPT: the two inline scripts a document carries are abide's own and
+    // both are stamped, which is the whole reason the nonce exists.
+    expect(policy).not.toContain(`script-src 'self' 'unsafe-inline'`)
+
+    const stamp = policy.match(/script-src[^;]*'nonce-([^']+)'/)?.[1]
+    expect(stamp).toBeDefined()
+
+    const markup = await answered.text()
+    // Every inline script the document carries — `patchScript` plus one `$p(id)` per deferred subtree
+    // — and every style block. An unstamped one is a panel that never swaps in.
+    const inline = markup.match(/<script(?![^>]*src=)[^>]*>/g) ?? []
+    expect(inline.length).toBeGreaterThan(1)
+    for (const tag of inline) expect(tag).toContain(`nonce="${stamp}"`)
+    for (const tag of markup.match(/<style[^>]*>/g) ?? []) expect(tag).toContain(`nonce="${stamp}"`)
+
+    // Guessable is the one thing a nonce may not be.
+    const second = await fetch(`${app.base}streaming?ms=50`)
+    const other = (second.headers.get('content-security-policy') as string).match(/'nonce-([^']+)'/)?.[1]
+    expect(other).not.toBe(stamp)
+})
+
+test('a nonce carrier is in the head even when the render had no scoped block', async () => {
+    // What `adopt` reads on the client. A route whose scoped component arrives through `import()`
+    // after hydration has no block of its OWN in the document, and without this it had nowhere to
+    // take a nonce from — so its rules were refused and the component rendered unstyled.
+    const markup = await (await fetch(`${app.base}streaming?ms=50`)).text()
+    expect(markup).toContain('data-abide=""')
 })

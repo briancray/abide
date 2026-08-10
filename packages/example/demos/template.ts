@@ -2,7 +2,18 @@
 // template both ways — to a string with `renderToString`, and to live DOM with `mount` — so the
 // difference between the lanes is visible where there is one, and asserted where there is not.
 
-import { classifySlots, escape, html, isKeyed, isTemplate, keyed, raw, state, type TemplateResult, watch } from 'abide'
+import {
+    classifySlots,
+    escape,
+    html,
+    isKeyed,
+    isTemplate,
+    keyed,
+    raw,
+    state,
+    type TemplateResult,
+    watch,
+} from 'abide'
 import { renderToString } from 'abide/server'
 import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'
@@ -634,7 +645,9 @@ export default suite({
                 is('slot 2', kinds[2], { kind: 'property', name: 'value', staticTail: 8 })
                 // The `>` inside the quoted title did NOT close the tag.
                 is('slot 3', kinds[3], { kind: 'attr', name: 'data-x', staticTail: 8 })
-                is('slot 4 — outside the tag now', kinds[4], { kind: 'child' })
+                // One shape for every slot: a child carries the two fields empty rather than omitting
+                // them, so the cached array the server re-walks per instantiation holds one type.
+                is('slot 4 — outside the tag now', kinds[4], { kind: 'child', name: '', staticTail: 0 })
                 is('isTemplate(sample)', isTemplate(sample), true)
                 is('isTemplate(a plain object)', isTemplate({ strings: [], values: [] }), false)
                 for (const kind of kinds) log('', show(kind))

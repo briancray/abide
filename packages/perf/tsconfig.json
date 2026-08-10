@@ -1,0 +1,4 @@
+{
+    "extends": "../../tsconfig.json",
+    "include": ["**/*.ts", "../abide/compiler/SOURCES.d.ts"]
+}

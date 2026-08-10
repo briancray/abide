@@ -38,6 +38,14 @@ interface Serving {
     /** `Set-Cookie` lines this request has decided to write. Only `identity` writes one so far. */
     cookiesOut: string[] | null
     /**
+     * The CSP nonce for this request, built on the first ask and the same for every later one.
+     *
+     * Shared is the whole point: the rung writes it into the header and the render writes it onto the
+     * markup, and a second value would authorise nothing. Which of the two asks first does not matter
+     * — a streamed document's body runs inside this scope, so both land here either way.
+     */
+    nonce: string | null
+    /**
      * What is still using this scope. The handler is one; a response BODY still being written is
      * another, and the teardown belongs to whichever finishes last.
      */
@@ -94,6 +102,7 @@ export function serve<T>(request: Request, fn: () => T): T {
         trace: null,
         identity: null,
         cookiesOut: null,
+        nonce: null,
         holds: 1,
     }
     return storage().run(held, () => settling(fn, () => release(held)))
@@ -303,6 +312,26 @@ export function bag(): Map<string, unknown> {
     if (held.bag !== null) return held.bag
     const made = new Map<string, unknown>()
     held.bag = made
+    return made
+}
+
+/**
+ * This request's CSP nonce — one value, however many times it is asked for.
+ *
+ * 16 bytes from the platform CSPRNG, base64url so it needs no quoting inside a header. The whole
+ * security property is that an injected script cannot GUESS it, which is why this is `getRandomValues`
+ * and not anything derived from the request.
+ *
+ * Lazy, like `bag` above: a process serving json endpoints has nothing inline to authorise, and this
+ * is 16 bytes of entropy plus an encode that it should not spend per request to find that out.
+ */
+export function nonce(): string {
+    const held = serving('nonce')
+    if (held.nonce !== null) return held.nonce
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    const made = bytes.toBase64({ alphabet: 'base64url', omitPadding: true })
+    held.nonce = made
     return made
 }
 

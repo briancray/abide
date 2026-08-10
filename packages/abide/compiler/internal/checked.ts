@@ -162,7 +162,9 @@ function membersOf(checker: Checker, type: Type, seen: Set<number>, depth: numbe
  * unwrap a generator, or know what `GET` means.
  */
 function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'socket'): Shapes {
-    if (type === undefined || !type.isTypeReference()) return {}
+    // One shape from every path, as `shape.ts`'s `shapesAt` answers — the two derivations differing
+    // about the SPELLING of an answer is the whole failure this file's header is about.
+    if (type === undefined || !type.isTypeReference()) return { input: undefined, output: undefined }
     const name = type.getSymbol()?.name
     const args = checker.getTypeArguments(type)
     const seen = new Set<number>()
@@ -173,13 +175,14 @@ function shapesFor(checker: Checker, type: Type | undefined, kind: 'rpc' | 'sock
     if (kind === 'socket') {
         // A room channel addresses subscribers by its FIRST argument and carries its second.
         const schema = at(name === 'KeyedChannel' ? 1 : 0)
-        return isAnything(schema) ? {} : { input: schema }
+        return { input: isAnything(schema) ? undefined : schema, output: undefined }
     }
     const input = at(0)
     const output = at(1)
-    const shapes: Shapes = {}
-    if (!isAnything(input)) shapes.input = input
-    if (!isAnything(output)) shapes.output = output
+    const shapes: Shapes = {
+        input: isAnything(input) ? undefined : input,
+        output: isAnything(output) ? undefined : output,
+    }
     return shapes
 }
 

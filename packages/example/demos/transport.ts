@@ -370,13 +370,21 @@ export default suite({
                         headers: { origin },
                     })
 
-                is('undeclared, the request’s own origin is what passes', (await ask('http://internal.local')).status, 200)
+                is(
+                    'undeclared, the request’s own origin is what passes',
+                    (await ask('http://internal.local')).status,
+                    200,
+                )
                 is('a foreign origin is refused', (await ask('https://evil.example')).status, 403)
                 is('a declared one is allowed', (await ask('https://named.example')).status, 200)
 
                 const off = onConfig(() => ({ APP_URL: 'https://app.example' }))
                 config.invalidate()
-                is('with APP_URL declared, THAT is same-origin', (await ask('https://app.example')).status, 200)
+                is(
+                    'with APP_URL declared, THAT is same-origin',
+                    (await ask('https://app.example')).status,
+                    200,
+                )
                 is(
                     'and the origin the caller’s own Host claims no longer is',
                     (await ask('http://internal.local')).status,
@@ -970,11 +978,21 @@ export default suite({
                 is(
                     'an inline object literal is the whole declaration',
                     derive(`export const a = GET(({ id }: { id: number }) => 1)\n`),
+                    // Every field of a derived shape is WRITTEN, `undefined` included — the schema
+                    // walk builds one hidden class per kind rather than growing one per fact it
+                    // happened to learn. `JSON.stringify` drops an undefined value, so the published
+                    // document carries only what is known; this is the in-memory form.
                     {
                         name: 'a',
                         method: 'GET',
                         streams: false,
-                        input: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+                        input: {
+                            type: 'object',
+                            properties: { id: { type: 'number' } },
+                            required: ['id'],
+                            additionalProperties: undefined,
+                        },
+                        output: undefined,
                     },
                 )
 
@@ -994,6 +1012,7 @@ export default suite({
                         // neither of them chose.
                         properties: { id: { type: 'number' }, tag: { type: ['null', 'string'] } },
                         required: ['id'],
+                        additionalProperties: undefined,
                     },
                 )
 
@@ -1050,7 +1069,12 @@ export default suite({
                             `interface Args { id: number; who: Inner }\ninterface Inner { ok: boolean }\nexport const a = GET((args: Args) => 1)\n`,
                         ) as { input?: { properties?: Record<string, unknown> } }
                     )?.input?.properties?.who,
-                    { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+                    {
+                        type: 'object',
+                        properties: { ok: { type: 'boolean' } },
+                        required: ['ok'],
+                        additionalProperties: undefined,
+                    },
                 )
 
                 // A type OPERATOR has an operand, and consuming it is the whole point: read as a bare
@@ -1132,15 +1156,17 @@ export default suite({
                                 type: 'object',
                                 properties: { name: { type: 'string' } },
                                 required: ['name'],
+                                additionalProperties: undefined,
                             },
                         },
                         required: ['title', 'author'],
+                        additionalProperties: undefined,
                     },
                 )
                 is(
                     '…and with no resolver the same file derives nothing rather than a guess',
                     derive(crossing),
-                    { name: 'a', method: 'GET', streams: false },
+                    { name: 'a', method: 'GET', streams: false, input: undefined, output: undefined },
                 )
                 is(
                     'a type from a module that does not resolve is the same answer',
@@ -1167,7 +1193,7 @@ export default suite({
                 is(
                     '…and so does a handler with no annotation at all',
                     derive(`export const a = GET((args) => 1)\n`),
-                    { name: 'a', method: 'GET', streams: false },
+                    { name: 'a', method: 'GET', streams: false, input: undefined, output: undefined },
                 )
 
                 // The two places a declaration can say BOTH directions.
@@ -1178,11 +1204,17 @@ export default suite({
                         name: 'a',
                         method: 'GET',
                         streams: false,
-                        input: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+                        input: {
+                            type: 'object',
+                            properties: { id: { type: 'number' } },
+                            required: ['id'],
+                            additionalProperties: undefined,
+                        },
                         output: {
                             type: 'object',
                             properties: { name: { type: 'string' } },
                             required: ['name'],
+                            additionalProperties: undefined,
                         },
                     },
                 )
@@ -1391,7 +1423,11 @@ export default suite({
                 // disagree because `elide` reads it from `kindOf` on the way in.
                 is('the result carries its kind', server?.kind, 'rpc')
                 is('…the same one on both lanes', browser?.kind, 'rpc')
-                is('and a file under neither elides to nothing at all', elide(source, { filename: '/app/db.ts' }), null)
+                is(
+                    'and a file under neither elides to nothing at all',
+                    elide(source, { filename: '/app/db.ts' }),
+                    null,
+                )
                 is('the stub carries the address', browser?.code.includes('"users/getUser"'), true)
                 is('…and none of the handler', browser?.code.includes('findUser'), false)
                 is('the server lane keeps the module', server?.code.includes('findUser'), true)
@@ -1421,7 +1457,15 @@ export default suite({
                     elide(`export const ticks = socket<number>()\n`, { filename: FEED })?.endpoints,
                     // The socket's first type argument is its MESSAGE, which is the one place a
                     // channel can say what it carries — so the shape comes along with the address.
-                    [{ name: 'ticks', method: 'socket', streams: false, input: { type: 'number' } }],
+                    [
+                        {
+                            name: 'ticks',
+                            method: 'socket',
+                            streams: false,
+                            input: { type: 'number' },
+                            output: undefined,
+                        },
+                    ],
                 )
                 is(
                     'the error is one a shell can place in the file',
