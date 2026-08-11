@@ -171,47 +171,6 @@ export function streamed<T>(
     return new Streamed(source, row as (item: never, index: number) => unknown, failure)
 }
 
-/**
- * A subtree the author asked to be rendered OUT OF ORDER — the one async marker that is about when
- * the markup is sent rather than about what the value is.
- *
- * Here beside the other three rather than in `$server`, and that is the whole of what makes it usable
- * in a PAGE. A page is isomorphic by construction: the same module renders on the server and then
- * hydrates in the browser. A marker only one substrate knows is one the other stringifies —
- * `[object Object]` on screen, and a hydration mismatch behind it — so a server-only `suspend` is a
- * primitive every page is locked out of, which is not what "how a load reaches SSR" should mean.
- *
- * A plain marker carrying unevaluated work, like `Awaited` above it: the walker hands out the id when
- * it reaches one, so nothing ambient has to correlate a placeholder with its patch.
- */
-export class Suspend {
-    constructor(
-        readonly value: unknown,
-        readonly body: (value: never) => unknown,
-        readonly fallback: unknown,
-    ) {}
-}
-
-/**
- * Render `body(value)` when `value` settles, showing `fallback` until it does.
- *
- * `PromiseLike` rather than `Promise` so a cell can be suspended directly: `state`/`memo` are
- * thenable, and this is how a load reaches a server render, where there is nothing to wake later.
- *
- * The two substrates read the same marker and differ only in what "out of order" can mean for them.
- * A document render defers the subtree and patches it in as it settles; a render with nowhere to
- * patch awaits it inline; the client shows the fallback and swaps when the promise lands, which is
- * the ordinary reactive thing it already does for a promise in a slot. Same call, same intent, three
- * continuations — which is the rule the rest of this file follows.
- */
-export function suspend<T>(
-    value: PromiseLike<T> | T,
-    body: (value: T) => unknown,
-    fallback: unknown = null,
-): Suspend {
-    return new Suspend(value, body as (value: never) => unknown, fallback)
-}
-
 /** The settled arms, in render order: the branch that matched, then `finally` if there is one. */
 export function settledArms(branches: Branches, error: unknown, value: unknown, failed: boolean): unknown[] {
     const arm = failed ? branches.catch?.(error) : branches.then?.(value as never)

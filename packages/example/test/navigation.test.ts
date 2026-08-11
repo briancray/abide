@@ -17,10 +17,10 @@
 // identity says which one happened.
 
 import { afterEach, beforeAll, expect, test } from 'bun:test'
-import { html, navigate, route, suspend } from 'abide'
+import { html, navigate, route } from 'abide'
 import type { Loader, RouteEntry, View } from 'abide/runtime'
 import { isolate } from '$shared/internal/scopes.ts'
-import { outlet, routes } from 'abide/runtime'
+import { awaited, outlet, routes } from 'abide/runtime'
 import { renderFragment } from 'abide/server'
 import { container, sweepContainers, until } from 'abide/tests'
 import { mount } from 'abide/ui'
@@ -58,20 +58,12 @@ const Home: View = () => html`<b>home</b>`
 
 const User: View = () => {
     userRuns++
-    return html`<b>user ${() => route().params.id}</b>${suspend(
-        panel.promise,
-        (settled: string) => html`<i>${settled}</i>`,
-        html`<em>loading</em>`,
-    )}`
+    return html`<b>user ${() => route().params.id}</b>${awaited(panel.promise, { pending: () => html`<em>loading</em>`, then: (settled: string) => html`<i>${settled}</i>`, catch: undefined, finally: undefined })}`
 }
 
 /** Three deferred subtrees on one page, so a patch has siblings to be found among. */
 const Panels: View = () =>
-    html`<b>panels</b>${suspend(panel.promise, (s: string) => html`<i>${s}</i>`, html`<em>one</em>`)}${suspend(
-        panel.promise,
-        (s: string) => html`<i>${s}</i>`,
-        html`<em>two</em>`,
-    )}${suspend(panel.promise, (s: string) => html`<i>${s}</i>`, html`<em>three</em>`)}`
+    html`<b>panels</b>${awaited(panel.promise, { pending: () => html`<em>one</em>`, then: (s: string) => html`<i>${s}</i>`, catch: undefined, finally: undefined })}${awaited(panel.promise, { pending: () => html`<em>two</em>`, then: (s: string) => html`<i>${s}</i>`, catch: undefined, finally: undefined })}${awaited(panel.promise, { pending: () => html`<em>three</em>`, then: (s: string) => html`<i>${s}</i>`, catch: undefined, finally: undefined })}`
 
 const TABLE: RouteEntry[] = [
     { path: '/', page: load(Home) },

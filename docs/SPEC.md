@@ -8,7 +8,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | What an author TYPES — **16 values and 21 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props` / `suspend`, `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
+| `abide` | What an author TYPES — **15 values and 20 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props`, `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
 | `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `raw` (`{html(...)}`), `keyed` (`by` on a `{#for}`), `remote` / `remoteSocket` (what a server module elides to in the client lane), and `routes` / `outlet` / `ready` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says. `html` is the one exception and stays on `abide`: it is the template tag, which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
 | `abide/ui` | The DOM substrate: `mount`, `hydrate` |
 | `abide/server` | The SSR substrate, the request scope and its ambients, `server()`, `appDataDir()`, `config()`, `pages()`, the process lifecycle, and the declaring half of both transports |
@@ -544,8 +544,10 @@ that way and keeps the explicit spelling.
 | `{#if cond}` | `{:else if cond}`, `{:else}` |
 | `{#for item, i of list by key}` | Keyless → positional (dev-warns if the body is stateful) |
 | `{#for await item of source}` | Streaming list; `{:catch}`. REACTIVE: a `refresh()`/`invalidate()` or a changed dep re-streams it. Rows go to the same list part, so a key still MOVES a row |
-| `{#await p}` | `{:then v}`, `{:catch e}`, `{:finally}`. The operand is evaluated by the slot's own effect and the branches are closures, so settling never re-evaluates it. A server render AWAITS rather than showing `pending` |
-| `{#await p then v}` / `{#await p catch e}` | Inline shorthand — body = that branch, no pending branch |
+| `{#await p}` | `{:then v}`, `{:catch e}`, `{:finally}`. The operand is evaluated by the slot's own effect and the branches are closures, so settling never re-evaluates it. The BLOCK form always has a pending body — everything before the first `{:then}`, empty if nothing was written — and a document render sends it as a PLACEHOLDER, patching the settled arm in as it lands. So `{#await p}{:then v}…{/await}` streams with an empty placeholder, which is what to write to narrow in `{:then}` or to stream one block without one |
+| `{#await p then v}` / `{#await p catch e}` | Inline shorthand — body = that branch, and no pending branch BY CONSTRUCTION. Nothing to send, so a server render BLOCKS and the markup is complete: what a reader running no scripts needs. The FORM decides, never whether a pending body is blank — whitespace must not be the difference between holding a response and streaming it |
+| `{await p}` | The shortest form — no arms at all, so the settled value IS the body. Exactly `{#await p then v}{v}{/await}`, compiled to the same call with an identity arm, so it blocks for the same reason |
+| `{(await p).b.c}` | The same, with the suffix as the arm: `awaited(p, { then: v => v.b.c })`. Liftable because the operand and the suffix are each CONTIGUOUS in the file, which is what desugaring needs. `{await p.b.c}` is legal too and means what JavaScript means — `await (p.b.c)`, so a cell is READ before it lands; that is the author's expression and abide does not rewrite it. Two awaits in one slot is one arm short of a shape and is refused; `{#await}` nests |
 | `{#switch expr}` | `{:case v}`, `{:default}` |
 | `{#try}` | `{:catch e}`, `{:finally}` — JS-semantics error boundary, so SYNCHRONOUS. The body is one unit rather than one thunk per expression, so a dep inside re-runs the whole body |
 | `{#component Name(pattern)}` | **Inline component** — a reusable builder. TitleCase required. Invoked as `<Name/>`, passable as a value. The parameter is the pattern written in the parens; children arrive through `<slot/>`, which is why one written with no parameter still binds `args`. Nested inside `<Foo>…</Foo>` it becomes Foo's `X` prop |
@@ -614,18 +616,18 @@ stops being inline. A comment that has to reach the browser is `{html('<!-- … 
 | `toStream` | `(node: Renderable, options?: RenderOptions) => ReadableStream<Uint8Array>` | The same walk as a `ReadableStream`, so the response back-pressures. |
 | `renderDocument` | `(document: string \| Shell, body: () => Renderable, options?) => AsyncGenerator<string>` | A whole document: shell, body in order, then out-of-order patches as they resolve. A `string` is the `<head>`, wrapped in abide's own document. |
 | `documentToStream` | `(document: string \| Shell, body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same document as a `ReadableStream`. What `abide start` answers a page with. |
-| `renderDocumentToString` | `(body: Renderable, document?: string \| Shell, options?) => Promise<string>` | The same document as one string, with every `suspend` awaited in place — for a reader that runs no scripts, so a deferred subtree in a `<template>` would never arrive. An email, a PDF renderer, a fixture. The document trails and defaults to abide's own; the body is a node, because a plain async function has nothing to delay. |
+| `renderDocumentToString` | `(body: Renderable, document?: string \| Shell, options?) => Promise<string>` | The same document as one string, with every `{#await}` awaited in place — for a reader that runs no scripts, so a deferred subtree in a `<template>` would never arrive. An email, a PDF renderer, a fixture. The document trails and defaults to abide's own; the body is a node, because a plain async function has nothing to delay. |
 | `renderFragment` | `(body: () => Renderable, options?) => AsyncGenerator<string>` | A `renderDocument` without the shell: the body in order, then its out-of-order patches. What a navigation is answered with — see below. |
 | `fragmentToStream` | `(body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same fragment as a `ReadableStream`. What `abide start` answers a navigation with. |
 | `shell` | `(html: string) => Shell` | An app's own html as a document with a hole in it. THROWS when it has no `<slot></slot>`. |
 | `Shell` | `{ head: string; open: string; close: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close`. Cut once, because a document cannot change under a running process. |
-| `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => unknown, fallback?: unknown) => Suspend` | Emit a placeholder now and the real subtree when the value lands. ISOMORPHIC — exported from `abide` and re-exported here — because a page is the same module on both sides, so a marker only one substrate knew would render `[object Object]` in the other. Three continuations, one call: a `renderDocument` DEFERS it and patches it in; a render with nowhere to patch AWAITS it inline and never emits the fallback; the client shows the fallback and swaps when it lands, and hydration adopts the settled body rather than re-running the load. |
+| a deferred `{#await}` | — | THE PENDING ARM IS THE DECISION. `{#await p}…{:then v}…{/await}` has markup to send now, so a `renderDocument` emits it as a placeholder and patches the settled arm in as it lands. `{#await p then v}` has none, so the walk AWAITS inline and the markup is complete when it arrives — which is what a reader running no scripts needs, since a patch travels in a `<template>` behind a script. A render with nowhere to patch awaits inline either way. `{:catch}` renders on the deferred path too; without one a failed deferred subtree is a comment and an `abide:render` error, because by then the shell is already on the wire. |
 | `options.hydratable` | `boolean` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
 | `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`, which tears the tree down and — for a renderer that was handed `outlet` itself — hands the navigation sink back, so a second `mount` is the live one. |
 | `hydrate` | `(container: Element, view: () => TemplateResult) => Mounted` | The same over markup a hydratable render wrote — every part adopts its range. A divergence rebuilds that subtree and warns. |
 
 The two-line patch script goes out with the FIRST deferred subtree rather than in the shell: a page
-that suspends nothing ships neither the script nor a `<script>` node inside the slot a hydrating
+that defers nothing ships neither the script nor a `<script>` node inside the slot a hydrating
 client adopts.
 
 ### Known limits
@@ -637,10 +639,10 @@ Two things a server render cannot hand across, both because the markup is the on
 - **A hydrated `{#for await}` re-streams from the top.** The markup does not say how far the server
   got, so the rows are rebuilt rather than adopted. Every other part adopts its range.
 
-A SETTLED operand is not suspended at all. `suspend` takes a plain value as well as a promise, and
-there is nothing to defer about one already in hand: both substrates render the body in place, so
-there is no placeholder, no fallback and no patch. The two have to agree here — a placeholder the
-client never expects to adopt is a hydration mismatch.
+A SETTLED operand is not deferred at all. `{#await}` takes a plain value as well as a promise, and
+there is nothing to defer about one already in hand: both substrates render the settled arm in place,
+so there is no placeholder, no pending arm and no patch. The two have to agree here — a placeholder
+the client never expects to adopt is a hydration mismatch.
 
 An operand that has not MOVED does not restart. The client keeps the operand a block is showing and
 compares it, so a re-run of the enclosing effect for some other reason leaves a settled panel alone
@@ -648,7 +650,7 @@ rather than throwing it back to its fallback and rebuilding it — the same cuto
 `{#for await}` have. A body closure that captured newer state is not re-rendered until the operand
 itself changes.
 
-A `suspend` NESTED inside a deferred subtree awaits inline rather than deferring again: the subtree
+An `{#await}` NESTED inside a deferred subtree awaits inline rather than deferring again: the subtree
 is rendered with nowhere to patch, so the inner one delays its parent's patch instead of registering
 a patch of its own. Deferral is one level deep by construction.
 
@@ -693,7 +695,7 @@ dedupe, since the author's own import of it merges into the same statement.
 | `awaited` | `<T>(value: PromiseLike<T> \| T, branches: Branches<T>) => Awaited` | `{#await}` | The operand plus the arms to call once it settles. The arms are closures, so settling never re-evaluates the operand. |
 | `boundary` | `(body: () => unknown, branches: Branches) => Boundary` | `{#try}` | A synchronous error boundary around a body thunk. |
 | `streamed` | `<T>(source, row, catch?) => Streamed` | `{#for await}` | A list fed by an async source, torn down and re-streamed when a reactive dependency of the source changes. |
-| `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => unknown, fallback?: unknown) => Suspend` | written by hand | Emit a placeholder now and the real subtree when the value lands. Here beside the other three markers because it IS one — but on `abide` rather than `abide/runtime`, because it is the one an author writes: nothing emits it. Three continuations, one call; see the `abide/server` row. |
+
 | `adopt` | `(scope: string, css: string) => void` | `<style>` | Registers one scoped block by its scope name at MODULE scope. Idempotent. |
 
 | Name | Type Signature | Description |
@@ -858,7 +860,7 @@ every navigation after it.
 ### A navigation streams out of order
 
 `renderFragment` is `renderDocument` without the shell, and a navigation is answered with it — so a
-`suspend` DEFERS on this path exactly as it does on a page load, rather than being awaited in
+A pending-armed `{#await}` DEFERS on this path exactly as it does on a page load, rather than being awaited in
 document order. Without it, a fast panel below a slow one waits for the slow one, and so does every
 static byte beneath it; measured on `pages/streaming` at a 600ms/50ms split, that was 654ms for
 content ready at 50ms, and 654ms for a paragraph that was never waiting on anything.
@@ -1149,7 +1151,7 @@ not be written until the render finished, and running WHILE the document streams
 `sources` REPLACES a directive rather than adding to it, so what you pass is what it says; an empty
 array drops it; a name the baseline lacks is added. The nonce is appended to `script-src` and
 `style-src` after your sources either way — a policy without it does not run abide's own patch script,
-and a page that suspends would never swap a panel in. An app wanting something else entirely sets the
+and a page that defers a subtree would never swap a panel in. An app wanting something else entirely sets the
 header itself, which wins as any caller's own header does.
 
 The baseline: `default-src 'self'`, `script-src 'self'`, `style-src 'self'`, `img-src 'self' data:`,

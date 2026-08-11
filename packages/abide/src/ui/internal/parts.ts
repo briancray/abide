@@ -18,7 +18,6 @@ import {
     Raw,
     type SlotKind,
     Streamed,
-    Suspend,
     settledArms,
     settledBoundary,
     type TemplateResult,
@@ -257,38 +256,6 @@ export class ChildPart {
             this.set(settledBoundary(value))
             return
         }
-        if (value instanceof Suspend) {
-            // `suspend` is about WHEN the markup is sent, which is a question only a server has. Here
-            // the answer is the one this part already gives a promise in a slot: show the fallback,
-            // swap when it lands. Rendering the fallback rather than nothing is the whole difference
-            // from an ordinary thenable — the author named what to show while waiting, and a server
-            // that deferred this subtree sent that same fallback as the placeholder.
-            const operand = value.value
-            // The same cutoff `{#await}` and `{#for await}` already have: an unchanged operand is
-            // not restarted, so a re-run of the enclosing effect for some OTHER reason does not
-            // throw a settled panel back to its fallback and rebuild it. `take` records the operand
-            // and this is what reads it back.
-            if (this.holding === operand) return
-            this.holding = NOTHING
-            this.generation++
-            if (!isThenable(operand)) {
-                this.show(value.body(operand as never), operand)
-                return
-            }
-            this.show(value.fallback, operand)
-            // A stamp of its OWN, bumped after the fallback is on screen rather than read off it.
-            // A fallback may itself be thenable — a cell is, and a cell is ordinary to pass — in
-            // which case `set` above started a settle of its own and stamped it with the generation
-            // it had just bumped to. Sharing that stamp means whichever lands first discards the
-            // other, and the fallback is usually the settled one, so the body would never run. The
-            // bump also retires that settle: a placeholder has no business painting over the value
-            // it was standing in for. `settle` with no branches is already the policy this wants —
-            // no arm to catch a rejection, because `suspend` has a fallback rather than a
-            // `{:catch}`, so the fallback stays up and the error is reported.
-            this.generation++
-            this.settle(operand, null, value.body)
-            return
-        }
         this.holding = NOTHING
         this.generation++
         if (isThenable(value)) {
@@ -351,7 +318,7 @@ export class ChildPart {
      * That failure is invisible — the arm still renders, and then re-enters and rebuilds its whole
      * subtree on every re-run of the enclosing effect, per row for a block inside a list.
      *
-     * Callers: the `suspend` arm of `set` (both settled and in-flight), `settle`'s three landings,
+     * Callers: the `{#await}` arm of `set` (both settled and in-flight), `settle`'s three landings,
      * `await_`'s pending and synchronous arms, and `stream_`'s start and failure arms. `take` does
      * not go through here — it claims rather than paints, and never clears `holding` to begin with.
      */
@@ -374,36 +341,11 @@ export class ChildPart {
             return
         }
 
-        if (value instanceof Suspend) {
-            // Whatever the server sent for this subtree is ALREADY the settled body. In a document it
-            // was deferred and patched in before `DOMContentLoaded`, which is the earliest this side
-            // hydrates; in a render with nowhere to patch it was awaited inline. Either way the
-            // fallback is not what is on screen, so claiming it as the body is what keeps hydration
-            // free — and re-running the promise to find that out would flash the fallback back up
-            // over markup that is already right.
-            const operand = value.value
-            this.generation++
-            if (!isThenable(operand)) {
-                this.take(claimed, value.body(operand as never))
-                // Recorded here as well as in `set`: an adopted panel is a settled one, and without
-                // this the first re-run of the slot finds `holding` still `NOTHING`, re-enters the
-                // body and updates the whole subtree it just adopted for free. `Awaited`'s arm below
-                // is the same line for the same reason.
-                this.holding = operand
-                return
-            }
-            // Still in flight on THIS side — a fresh operand rather than the one the server settled.
-            // Hold the server's nodes as an opaque range until it lands, exactly as the awaited case
-            // below does, and let the settle replace them.
-            this.owned = claimed
-            this.holding = operand
-            this.settle(operand, null, value.body)
-            return
-        }
-
         if (value instanceof Awaited) {
-            // The server AWAITED the operand and painted the settled arm. Keep it: showing `pending`
-            // over correct markup is a flash back to a state the reader never saw.
+            // Whatever the server sent for this subtree is ALREADY the settled arm — awaited inline
+            // if there was nowhere to patch or no `{:pending}` to send, and otherwise deferred and
+            // patched in before `DOMContentLoaded`, which is the earliest this side hydrates. Either
+            // way, showing `pending` over correct markup is a flash back to a state nobody saw.
             const operand = value.value
             this.generation++
             if (!isThenable(operand)) {
@@ -498,22 +440,16 @@ export class ChildPart {
      * slot. The stamp is read on ENTRY and never bumped here: a caller bumps before it gets this far,
      * so `{#await}` stamps once for the whole block, including the arm it paints synchronously.
      *
-     * `body` is what `suspend` adds over a bare promise: the settled value renders THROUGH it rather
-     * than as itself. Nothing else about the policy differs, which is why it is a parameter here
-     * rather than a second copy of the generation guard.
      */
-    private settle(operand: PromiseLike<unknown>, branches: Branches | null, body?: Suspend['body']): void {
+    private settle(operand: PromiseLike<unknown>, branches: Branches | null): void {
         const generation = this.generation
         Promise.resolve(operand).then(
             (value) => {
                 if (generation !== this.generation) return
+                // A bare promise in a slot is deliberately NOT recorded — `set` does not put one in
+                // `holding` on the way in either — so it paints through `set`.
                 if (branches === null) {
-                    // A bare promise in a slot is deliberately NOT recorded — `set` does not put one
-                    // in `holding` on the way in either — so it paints through `set` and a suspend,
-                    // which owns the slot for as long as its operand is unchanged, through `show`.
-                    const painted = body === undefined ? value : body(value as never)
-                    if (body === undefined) this.set(painted)
-                    else this.show(painted, operand)
+                    this.set(value)
                     return
                 }
                 this.show(settledArms(branches, undefined, value, false), operand)
@@ -558,6 +494,14 @@ export class ChildPart {
             this.show(settledArms(branches, undefined, operand, false), operand)
             return
         }
+        // A stamp of its OWN, bumped after the pending arm is on screen rather than read off it.
+        // That arm may itself be thenable — a cell is, and a cell is ordinary to put in a slot — in
+        // which case `show` above started a settle and stamped it with the generation this settle
+        // would otherwise share. Sharing means they are mutually exclusive: whichever lands first
+        // retires the other, and the pending one is usually already settled, so the body would never
+        // run at all. The bump also retires that settle on purpose — a placeholder has no business
+        // painting over the value it was standing in for.
+        this.generation++
         this.settle(operand, branches)
     }
 
@@ -683,7 +627,7 @@ export class ChildPart {
      * placeholder that was standing in for it.
      *
      * The range is snapshotted at `done` rather than at each push, because a patch can change it: a
-     * `suspend` at the top level of a page has its placeholder AS a top-level node, and replacing one
+     * A deferred `{#await}` at the top level of a page has its placeholder AS a top-level node, and replacing one
      * rewrites the very list `claimed` would have held.
      */
     reclaiming(): Reclaiming {
@@ -755,7 +699,7 @@ export class ChildPart {
                 standing.delete(id)
                 // A deferred subtree may defer one of its own, and its placeholder arrives here.
                 index(fragment)
-                // A top-level `suspend` has its placeholder AS an owned node, and `owned` is the only
+                // A top-level deferred `{#await}` has its placeholder AS an owned node, and `owned` is the only
                 // reference to what has been painted until `done` re-derives the range. Swapping one
                 // out without handing its entry over left a dispose mid-stream removing a placeholder
                 // that was already detached, and the patched subtree standing in the document in

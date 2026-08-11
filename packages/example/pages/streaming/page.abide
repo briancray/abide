@@ -1,12 +1,12 @@
 <!-- A page that WAITS, which is the one shape the streaming machinery exists for.
 
      Every other page in this app renders in one pass, so nothing here was ever exercised by being
-     served: `renderDocument` defers a suspended subtree and patches it in as it settles, and until
-     this page there was no route that suspended. A capability with no served page behind it is a
-     capability whose regressions nobody sees.
+     served: `renderDocument` defers an `{#await}` that has a `{:pending}` arm and patches it in as
+     it settles, and until this page there was no route that did. A capability with no served page behind
+     it is a capability whose regressions nobody sees.
 
      TWO panels, slow then fast, because ONE cannot tell the two lanes apart. Both flush what they
-     have written before waiting, so a single-suspend page looks nearly identical either way — the
+     have written before waiting, so a single deferred panel looks nearly identical either way — the
      difference only shows when something FAST sits below something SLOW.
 
      A document render defers both: every placeholder and all the static markup goes out at once, and
@@ -20,7 +20,7 @@
      The slow delay is a query parameter because the point is the WAIT, and a fixed one would make
      this a page about 300ms. The fast one is fixed: it is a control, not a subject. -->
 <script module>
-import { html, route, suspend } from 'abide'
+import { route } from 'abide'
 
 const DEFAULT_MS = 300
 
@@ -49,20 +49,6 @@ function slowly<T>(ms: number, value: T): Promise<T> {
     return new Promise((settle) => setTimeout(() => settle(value), ms))
 }
 
-/**
- * The two arms, as functions rather than inline.
- *
- * `suspend(...)` is an EXPRESSION, so what it is handed is ordinary JavaScript — a nested `html` tag
- * interpolates with `${}` like any other tagged template, and the `{…}` sugar of this file does not
- * reach inside it. Hoisting them is what keeps that from being a trap written in one long line: the
- * markup below reads as markup, and these read as the templates they are.
- */
-const settledPanel = (text: string) => html`
-    <p class="text-emerald-300">${text}</p>
-    <p class=${NOTE}>Rendered after the wait. On a document render this arrived as a patch, after the shell was already on screen.</p>
-`
-
-const waitingPanel = (ms: number) => html`<p class="text-slate-500">waiting ${ms}ms…</p>`
 </script>
 
 <script>
@@ -79,12 +65,31 @@ const ms = Number.isFinite(asked) && asked > 0 ? Math.min(asked, MOST_MS) : DEFA
     <h1 class="text-3xl font-semibold text-slate-100">streaming</h1>
     <p class="text-slate-400">Two panels: the first waits {ms}ms, the second {FAST_MS}ms. Reload and the placeholders and everything below them arrive at once, then each panel is patched in as its own load settles — so the fast one lands first even though it is second on the page. Navigate here instead and the order is the document's: the fast panel waits behind the slow one, and so does this paragraph's neighbour below.</p>
 
+    <!-- The `{:pending}` arm is what says "send something now and patch the rest in": there is markup
+         to put on the wire, so the server does, and the settled body follows as a patch. Written as
+         `{#await value then v}` instead there would be nothing to send, so the walk would block here
+         until the load landed and the markup would be complete when it arrived. That choice is the
+         whole of the difference between the two lanes below, and it is made in the markup. -->
     <div class={CARD}>
-        {suspend(slowly(ms, 'the load settled'), settledPanel, waitingPanel(ms))}
+        {#await slowly(ms, 'the load settled')}
+            <p class="text-slate-500">waiting {ms}ms…</p>
+        {:then settled}
+            <p class="text-emerald-300">{settled}</p>
+            <p class={NOTE}>Rendered after the wait. On a document render this arrived as a patch, after the shell was already on screen.</p>
+        {:catch failure}
+            <p class="text-rose-400">the load failed: {String(failure)}</p>
+        {/await}
     </div>
 
     <div class={CARD}>
-        {suspend(slowly(FAST_MS, 'the fast load settled'), settledPanel, waitingPanel(FAST_MS))}
+        {#await slowly(FAST_MS, 'the fast load settled')}
+            <p class="text-slate-500">waiting {FAST_MS}ms…</p>
+        {:then settled}
+            <p class="text-emerald-300">{settled}</p>
+            <p class={NOTE}>Rendered after the wait. On a document render this arrived as a patch, after the shell was already on screen.</p>
+        {:catch failure}
+            <p class="text-rose-400">the load failed: {String(failure)}</p>
+        {/await}
     </div>
 
     <p class="text-slate-600">Static markup below both panels. A document render sends this with the shell; a navigation sends it after the slowest block above it has settled.</p>

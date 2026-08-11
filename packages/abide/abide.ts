@@ -34,11 +34,7 @@ export { type Health, health } from './src/shared/health.ts'
 // template tag, and a hand-written `.ts` component writes the same tag. `raw` and `keyed` are NOT
 // here despite reading like they belong — the escape hatch is spelled `{html(...)}` and a key is
 // spelled `by` on a `{#for}`, so each is a SPELLING the emitter translates rather than a name.
-//
-// `suspend` is the one marker an author writes. Nothing emits it, and it is not `{#await}` in another
-// spelling: this is what makes a SERVER render defer a subtree and patch it in as it settles, which
-// is why `pages/streaming` cannot be written without it.
-export { html, props, type Suspend, suspend, type TemplateResult } from './src/shared/html.ts'
+export { html, props, type TemplateResult } from './src/shared/html.ts'
 // Who the server decided this caller is, asked the same way on both sides. `useIdentitySource` is
 // absent for the reason `useHealthSource` is, and the two WRITERS on `identity` throw in a browser
 // rather than being missing from it: a client that could set its own principal is a client that

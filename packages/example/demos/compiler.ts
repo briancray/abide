@@ -397,6 +397,87 @@ export default suite({
         },
 
         {
+            title: '{await value} is the short form of {#await value then v}{v}{/await}',
+            note: 'The shortest await there is: no arms, so the settled value IS the body. It compiles to the same `awaited()` call the long form does, with an identity `then` — which means it inherits what the long form means rather than being a second mechanism. In particular it has NO PENDING ARM, and that is what decides a server render BLOCKS on it and writes complete markup: there is nothing to send early, so nothing is deferred and a reader running no scripts still has the content. Adding a `{:pending}` arm is how the other lane is asked for. It used to compile to `() => await value` — a thunk is not async, so that was JavaScript no engine parses, produced silently, with the error arriving from the runtime and nothing pointing back at the line.',
+            run({ is, throws }) {
+                const short = template('<script>const cell = state(0)</script><p>{await cell}</p>')
+                is(
+                    'no pending arm, and the settled value is the body',
+                    short,
+                    '<p>${() => awaited(cell, { pending: undefined, then: (_awaited) => _awaited, catch: undefined, finally: undefined })}</p>',
+                )
+                // The same call the long form makes, which is the claim that it is one mechanism.
+                is(
+                    'the long form differs only in what the arm renders',
+                    template('<script>const cell = state(0)</script><p>{#await cell then c}{c}{/await}</p>'),
+                    '<p>${() => awaited(cell, { pending: undefined, then: (c) => html`${c}`, catch: undefined, finally: undefined })}</p>',
+                )
+                // The operand is the CELL, not a read of it: awaiting `cell()` would await whatever
+                // is there NOW, which for a load that has not landed is `undefined`.
+                is('the operand is the cell itself', short.includes('awaited(cell,'), true)
+                // A name that merely starts with the letters is not an await.
+                is('`awaitable` is an identifier', template('<p>{awaitable}</p>'), '<p>${awaitable}</p>')
+
+                // Awaiting a value and then reaching INTO it, which is the shape a cell actually
+                // wants. Liftable because both halves are CONTIGUOUS in the file — the operand
+                // inside the parentheses and the suffix after them — and that is the whole of what
+                // limits it, since desugaring works on file offsets and cannot see substituted text.
+                is(
+                    'the suffix after (await x) becomes the arm',
+                    template('<script>const user = state(0)</script><p>{(await user).profile.name}</p>'),
+                    '<p>${() => awaited(user, { pending: undefined, then: (_awaited) => _awaited.profile.name, catch: undefined, finally: undefined })}</p>',
+                )
+                // …and the suffix is ordinary template code, so a cell read in it still desugars.
+                is(
+                    'a cell read inside the suffix',
+                    template('<script>const user = state(0)\nconst key = state("a")</script><p>{(await user).items[key]}</p>'),
+                    '<p>${() => awaited(user, { pending: undefined, then: (_awaited) => _awaited.items[key()], catch: undefined, finally: undefined })}</p>',
+                )
+                // `await a.b.c` is `await (a.b.c)` in JavaScript and stays that: the operand is the
+                // whole chain, so a cell is READ before it has landed. That compiles and throws at
+                // render, and it is the author's expression — abide does not second-guess it.
+                is(
+                    'await binds looser than member access, as in JavaScript',
+                    template('<script>const user = state(0)</script><p>{await user.profile.name}</p>').includes(
+                        'awaited(user().profile.name,',
+                    ),
+                    true,
+                )
+                // Two operands and one arm is not a shape this can be. `{#await}` nests.
+                throws(
+                    'two awaits in one slot',
+                    () => template('<p>{(await a).x + (await b).y}</p>'),
+                    'only the whole expression',
+                )
+
+                // WHICH FORM, not whether the pending body is blank. `{#await p}{:then v}` with
+                // nothing before the branch is what an author writes to narrow in `{:then}`, or to
+                // stream one block with no placeholder — so it emits a pending arm and DEFERS. The
+                // compact forms have none by construction and block. Deciding on emptiness instead
+                // would make a stray space the difference between holding a response and streaming
+                // it, which is not a thing a reader of the file could see.
+                const pendingOf = (source: string): string =>
+                    /pending: ([^,]+)/.exec(template(source))?.[1] ?? 'none'
+                is('the block form, empty', pendingOf('<p>{#await p()}{:then v}{v}{/await}</p>'), '() => null')
+                is(
+                    'the block form, with a placeholder',
+                    pendingOf('<p>{#await p()}<em>x</em>{:then v}{v}{/await}</p>'),
+                    '() => html`<em>x</em>`',
+                )
+                is('the compact form', pendingOf('<p>{#await p() then v}{v}{/await}</p>'), 'undefined')
+                is('the short slot form', pendingOf('<p>{await p()}</p>'), 'undefined')
+                // And the one shape there is no rewrite for: a thunk with an await buried in it is
+                // not expressible as any arrangement of `{#await}`, so it is refused on the line
+                // rather than emitted as source no engine parses.
+                throws(
+                    'an await that is not the whole expression',
+                    () => template('<p>{x ? await a : b}</p>'),
+                    'the whole expression',
+                )
+            },
+        },
+
+        {
             title: 'control flow is ordinary expressions, one thunk per hole',
             note: 'The thunk around an `{#if}` subscribes to its CONDITION and nothing else, because evaluating an `html` tag does not call the thunks inside it. Wrapping a whole branch body in one thunk would produce identical output at a much coarser wake — which is why the shape is asserted, not just the render.',
             run({ is }) {
@@ -841,7 +922,7 @@ export default suite({
         {
             title: 'a comment in the markup is for the file, not for the wire',
             note: "A component ships one copy of its own commentary per INSTANCE, and a file header is the biggest comment it has: the example's card and source panes were 22.7 kB of a single 88 kB page that way, against 1.9 kB for every hydration marker on it. Dropping them at emit rather than at parse keeps `check` pointing a diagnostic at what a human wrote, and dropping them ONCE is what keeps the two lanes agreeing — both substrates read this one template, so a comment absent from the client's markup is absent from the server's. Whitespace is left exactly as it was, because the space between two inline elements is content and a comment sitting in it is not.",
-            async run({ is }) {
+            async run({ is, throws }) {
                 is(
                     'a header comment leaves nothing behind',
                     template('<!-- gone -->\n<p>hi</p>'),
@@ -865,6 +946,26 @@ export default suite({
                     'a comment-looking attribute value survives whole',
                     template('<p title="use <!-- --> with care">x</p>'),
                     '<p title="use <!-- --> with care">x</p>',
+                )
+
+                // A comment is not MARKUP either, which is a separate claim from not being output —
+                // the block depth is counted on raw text BEFORE anything is parsed, to decide which
+                // `<script>` is top-level, and that count used to read straight through a comment.
+                // So a file whose header described the syntax opened a block nobody wrote, and the
+                // `<script module>` under it was refused as nested. Found by writing exactly that
+                // sentence in `pages/streaming`, which is the file this whole mechanism is for.
+                is(
+                    'a block marker inside a comment opens nothing',
+                    compile('<!-- an {#await} with a {:pending} arm -->\n<script module>\nconst A = 1\n</script>\n<p>ok</p>\n', {
+                        filename: 'C.abide',
+                    }).code.includes('const A = 1'),
+                    true,
+                )
+                // …and the refusal it was drowning out still fires, so this is not the check removed.
+                throws(
+                    'a script module really nested in a branch is still refused',
+                    () => compile('{#if x}<script module>\nconst A = 1\n</script>{/if}\n', { filename: 'C.abide' }),
+                    'module scope',
                 )
 
                 // And the escape hatch SPEC names, for a comment that really has to reach a browser.

@@ -1631,7 +1631,10 @@ function loop(
     return `${need(context, 'streamed')}(${source}, ${row}${failure})`
 }
 
-function awaited(node: { value: Expr; pending: Node[]; branches: Branch[] }, context: Context): string {
+function awaited(
+    node: { value: Expr; pending: Node[]; branches: Branch[]; short?: boolean; compact?: boolean; suffix?: Expr | undefined },
+    context: Context,
+): string {
     const found = (keyword: string): Branch | undefined =>
         node.branches.find((b) => b.test?.source === keyword)
     const then = found('then')
@@ -1654,15 +1657,34 @@ function awaited(node: { value: Expr; pending: Node[]; branches: Branch[] }, con
     // different hidden class reaching the same reads in `settledArms` and `ChildPart`. Sixteen arm
     // combinations across a page is what turns those shared reads megamorphic, and an `{#await}`
     // inside a `{#for}` pays it per row.
+    // `{await value}`: no arms were written, so the settled value IS the body. Built here rather than
+    // as a synthesised `{:then}` node, because every `Expr` carries an offset into the original file
+    // and a node whose text is not in that file is sliced back out of it as whatever sat there.
+    // WHICH FORM the author wrote, not whether they left the pending body blank. `{#await p then v}`
+    // and `{await p}` have no pending branch by construction and BLOCK; the block form always has one
+    // — empty if that is what was written, which defers with an empty placeholder. Reaching for the
+    // block form to narrow in `{:then}`, or to stream one block without a placeholder, is ordinary,
+    // and whitespace should not be what decides whether a response is held.
+    const blocking = node.short === true || node.compact === true
     const arms = [
-        `pending: ${node.pending.length > 0 ? `() => ${fragment(node.pending, context)}` : 'undefined'}`,
-        `then: ${then === undefined ? 'undefined' : `(${then.binding ?? '_value'}) => ${fragment(then.body, inner(then))}`}`,
+        `pending: ${blocking ? 'undefined' : `() => ${fragment(node.pending, context)}`}`,
+        `then: ${node.short === true ? shortArm(node, context) : then === undefined ? 'undefined' : `(${then.binding ?? '_value'}) => ${fragment(then.body, inner(then))}`}`,
         `catch: ${failure === undefined ? 'undefined' : `(${failure.binding ?? '_error'}) => ${fragment(failure.body, inner(failure))}`}`,
         `finally: ${settled === undefined ? 'undefined' : `() => ${fragment(settled.body, context)}`}`,
     ]
 
     const awaitedValue = code(node.value, context, 'slot')
     return `${need(context, 'awaited')}(${awaitedValue}, { ${arms.join(', ')} })`
+}
+
+/**
+ * The `then` arm of `{await x}` and `{(await x).b.c}`: the settled value, then whatever the author
+ * wrote after the parentheses. Built HERE rather than as a parsed node, because a synthesised node
+ * has no region of the file to be desugared from — see `code`, which works on offsets.
+ */
+function shortArm(node: { suffix?: Expr | undefined }, context: Context): string {
+    if (node.suffix === undefined) return '(_awaited) => _awaited'
+    return `(_awaited) => _awaited${code(node.suffix, context)}`
 }
 
 function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): string {

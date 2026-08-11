@@ -7,7 +7,7 @@
 // substrate split.
 
 import { channel, html, memo, state, type TemplateResult } from 'abide'
-import { raw, streamed } from 'abide/runtime'
+import { awaited, raw, streamed } from 'abide/runtime'
 import {
     heldStream,
     isServing,
@@ -17,7 +17,6 @@ import {
     renderDocumentToString,
     renderToString,
     shell,
-    suspend,
     toStream,
 } from 'abide/server'
 import { container, floorTicks, keep, microtasks, settled, sleep, suite, tick } from 'abide/tests'
@@ -568,7 +567,7 @@ export default suite({
             async run({ is }) {
                 const body = () =>
                     html`<h1>receipt</h1>
-                        <p>${suspend(slow(5, '$12'), (total) => html`<b>${total}</b>`, 'loading…')}</p>`
+                        <p>${awaited(slow(5, '$12'), { pending: () => 'loading…', then: (total) => html`<b>${total}</b>`, catch: undefined, finally: undefined })}</p>`
 
                 const mailed = await renderDocumentToString(body())
                 is('the load is written in place', mailed.includes('<b>$12</b>'), true)
@@ -602,11 +601,11 @@ export default suite({
 
         {
             title: 'suspend — how a load reaches a snapshot',
-            note: 'Every cell is thenable, so `suspend(cell, …)` takes one directly. Rendered to a plain string there is no document to patch, so it is awaited INLINE and the fallback never appears.',
+            note: 'Every cell is thenable, so `awaited(cell, { pending: () => null, then: …, catch: undefined, finally: undefined })` takes one directly. Rendered to a plain string there is no document to patch, so it is awaited INLINE and the fallback never appears.',
             async run({ is, rejects }) {
                 const session = state(sleep(10).then(() => ({ name: 'ada' })))
                 const markup = await renderToString(
-                    html`<p>${suspend(session, (user) => html`hello ${user?.name}`, 'loading…')}</p>`,
+                    html`<p>${awaited(session, { pending: () => 'loading…', then: (user) => html`hello ${user?.name}`, catch: undefined, finally: undefined })}</p>`,
                 )
                 is('the value, not the fallback', markup, '<p>hello ada</p>')
                 is('the fallback never appeared', markup.includes('loading'), false)
@@ -617,7 +616,7 @@ export default suite({
                 })
                 await rejects(
                     'a failing load, suspended inline',
-                    renderToString(html`<p>${suspend(failing, () => html`never`, '…')}</p>`),
+                    renderToString(html`<p>${awaited(failing, { pending: () => '…', then: () => html`never`, catch: undefined, finally: undefined })}</p>`),
                     'the load failed',
                 )
             },
@@ -625,14 +624,14 @@ export default suite({
 
         {
             title: 'a SETTLED operand is not suspended at all, on either side',
-            note: '`suspend(value, …)` takes a plain value as well as a promise, and there is nothing to defer about one that is already in hand. The server used to spend the whole out-of-order apparatus on it — an id, a placeholder, a fallback, an extra drain turn and a patch — to arrive at markup it could have written straight out; and because the client renders the body IN PLACE for a settled operand, that placeholder was markup no hydration ever expected to adopt. The client half had the matching gap: every re-run of the enclosing effect tore the settled panel down and rebuilt it, which `{#await}` in the same slot has never done.',
+            note: '`awaited(value, { pending: () => null, then: …, catch: undefined, finally: undefined })` takes a plain value as well as a promise, and there is nothing to defer about one that is already in hand. The server used to spend the whole out-of-order apparatus on it — an id, a placeholder, a fallback, an extra drain turn and a patch — to arrive at markup it could have written straight out; and because the client renders the body IN PLACE for a settled operand, that placeholder was markup no hydration ever expected to adopt. The client half had the matching gap: every re-run of the enclosing effect tore the settled panel down and rebuilt it, which `{#await}` in the same slot has never done.',
             async run({ is }) {
                 // A document render, which is the lane that HAS somewhere to defer to. Rendered to a
                 // plain string there is nowhere, so that lane could never have shown this.
                 let written = ''
                 for await (const chunk of renderDocument(
                     '<title>t</title>',
-                    () => html`<p>${suspend('already here', (t) => html`<b>${t}</b>`, 'loading…')}</p>`,
+                    () => html`<p>${awaited('already here', { pending: () => 'loading…', then: (t) => html`<b>${t}</b>`, catch: undefined, finally: undefined })}</p>`,
                 )) {
                     written += chunk
                 }
@@ -656,14 +655,10 @@ export default suite({
                     // Read in the body that builds the block, for the reason spelled out below.
                     unrelated()
                     return html`<p>
-                        ${suspend(
-                            settled,
-                            (user: { name: string }) => {
+                        ${awaited(settled, { pending: () => 'loading…', then: (user: { name: string }) => {
                                 bodies++
                                 return html`<b>${user.name}</b>`
-                            },
-                            'loading…',
-                        )}
+                            }, catch: undefined, finally: undefined })}
                     </p>`
                 })
                 try {
@@ -693,14 +688,10 @@ export default suite({
                     // this function alone, and the re-run this case is about would never happen.
                     other()
                     return html`<p>
-                        ${suspend(
-                            landing,
-                            (user: { name: string }) => {
+                        ${awaited(landing, { pending: () => 'loading…', then: (user: { name: string }) => {
                                 waited++
                                 return html`<b>${user.name}</b>`
-                            },
-                            'loading…',
-                        )}
+                            }, catch: undefined, finally: undefined })}
                     </p>`
                 })
                 try {
@@ -729,14 +720,10 @@ export default suite({
                 const held = { name: 'hopper' }
                 const hydrating = (): TemplateResult => {
                     shifting()
-                    return html`<p>${suspend(
-                        held,
-                        (user: { name: string }) => {
+                    return html`<p>${awaited(held, { pending: () => 'loading…', then: (user: { name: string }) => {
                             adopted++
                             return html`<b>${user.name}</b>`
-                        },
-                        'loading…',
-                    )}</p>`
+                        }, catch: undefined, finally: undefined })}</p>`
                 }
                 const server = container()
                 server.innerHTML = await renderToString(hydrating(), { hydratable: true })
@@ -767,7 +754,7 @@ export default suite({
                 const host = container()
                 const view = mount(
                     host,
-                    () => html`<p>${suspend(landing, (t: string) => html`<b>${t}</b>`, placeholder)}</p>`,
+                    () => html`<p>${awaited(landing, { pending: () => placeholder, then: (t: string) => html`<b>${t}</b>`, catch: undefined, finally: undefined })}</p>`,
                 )
                 try {
                     await landing
@@ -786,11 +773,7 @@ export default suite({
             note: 'The same block a server defers is one the client understands: it shows the fallback and swaps when the promise lands, which is what it already does for a promise in a slot. It has to be — a PAGE is the same module on both sides, so a marker only the server knew would render `[object Object]` in the browser and lock every page out of the primitive. Hydration then ADOPTS, because whatever the server sent is already the settled body.',
             async run({ is }) {
                 const view = (): TemplateResult =>
-                    html`<p>${suspend(
-                        sleep(5).then(() => 'ada'),
-                        (who) => html`hello ${who}`,
-                        'loading…',
-                    )}</p>`
+                    html`<p>${awaited(sleep(5).then(() => 'ada'), { pending: () => 'loading…', then: (who) => html`hello ${who}`, catch: undefined, finally: undefined })}</p>`
 
                 // The client half: the fallback is on screen first, which is the whole reason an
                 // author wrote one. A server render never shows it — there is nothing to wake later.
@@ -832,8 +815,8 @@ export default suite({
                     '',
                     () => html`
                         <main>
-                            ${suspend(slow(40, 'SLOW'), (v) => html`<b>${v}</b>`, 'loading slow')}
-                            ${suspend(slow(5, 'FAST'), (v) => html`<i>${v}</i>`, 'loading fast')}
+                            ${awaited(slow(40, 'SLOW'), { pending: () => 'loading slow', then: (v) => html`<b>${v}</b>`, catch: undefined, finally: undefined })}
+                            ${awaited(slow(5, 'FAST'), { pending: () => 'loading fast', then: (v) => html`<i>${v}</i>`, catch: undefined, finally: undefined })}
                         </main>
                     `,
                 )) {
@@ -864,8 +847,8 @@ export default suite({
                 const body = (): TemplateResult => html`
                     <main>
                         <h1>shell</h1>
-                        ${suspend(slow(400, 'the SLOW subtree'), (t) => html`<p>${t}</p>`, html`<p>loading slow…</p>`)}
-                        ${suspend(slow(100, 'the FAST subtree'), (t) => html`<p>${t}</p>`, html`<p>loading fast…</p>`)}
+                        ${awaited(slow(400, 'the SLOW subtree'), { pending: () => html`<p>loading slow…</p>`, then: (t) => html`<p>${t}</p>`, catch: undefined, finally: undefined })}
+                        ${awaited(slow(100, 'the FAST subtree'), { pending: () => html`<p>loading fast…</p>`, then: (t) => html`<p>${t}</p>`, catch: undefined, finally: undefined })}
                     </main>
                 `
                 void (async () => {
@@ -877,6 +860,78 @@ export default suite({
                         'the 100ms subtree patched before the 400ms one, though it is second',
                     )
                 })()
+            },
+        },
+
+        {
+            title: 'the FORM decides whether a subtree is deferred',
+            note: 'One block form, and the choice is which SPELLING you reach for rather than which call. The block form — `{#await p}…{:then v}` — has a pending branch, so a document render sends it as a placeholder and patches the settled arm in; the shell goes out immediately. The compact forms, `{#await p then v}` and `{await p}`, have no pending branch by construction, so the walk blocks and the markup is complete when it arrives. Deliberately the FORM and not whether the pending body is blank: `{#await p}{:then v}` with nothing before the `{:then}` is what an author writes to narrow in the branch, or to stream one block without a placeholder, and whitespace should not be the difference between holding a response and streaming it. The choice matters because a patch travels in a `<template>` behind a two-line script, so a deferred subtree needs JAVASCRIPT — a crawler, a mail client or `curl` sees the placeholder and nothing else. Blocking is how an author says the content must be IN the html.',
+            async run({ is }) {
+                // What the BLOCK form compiles to. An empty pending body is `() => null` rather
+                // than `undefined`, which is what makes `{#await p}{:then v}` stream.
+                const withPending = (): TemplateResult => html`<p>shell</p>${awaited(slow(5, 'landed'), {
+                    pending: () => html`<em>waiting</em>`,
+                    then: (t) => html`<b>${t}</b>`,
+                    catch: undefined,
+                    finally: undefined,
+                })}`
+                // …and what `{#await p then v}` and `{await p}` compile to: no pending arm at all.
+                const without = (): TemplateResult => html`<p>shell</p>${awaited(slow(5, 'landed'), {
+                    pending: undefined,
+                    then: (t) => html`<b>${t}</b>`,
+                    catch: undefined,
+                    finally: undefined,
+                })}`
+
+                // WHICH CHUNK each string arrives in, not which bytes exist at the end: both
+                // documents contain the same text, and a render that awaited everything before
+                // writing produces an identical one. Order is the whole claim.
+                const at = (chunks: string[], text: string): number =>
+                    chunks.findIndex((chunk) => chunk.includes(text))
+
+                const deferred: string[] = []
+                for await (const chunk of renderDocument('', withPending)) deferred.push(chunk)
+                is('the pending arm is on the wire before the body', at(deferred, 'waiting') < at(deferred, 'landed'), true)
+                is('…and the body arrives behind a patch script', at(deferred, 'landed') > at(deferred, 'window.$p'), true)
+
+                const blocked: string[] = []
+                for await (const chunk of renderDocument('', without)) blocked.push(chunk)
+                is('no pending arm means no placeholder at all', blocked.join('').includes('<slot-s'), false)
+                is('…and no patch script either', blocked.join('').includes('window.$p'), false)
+                is('…and nothing in a template', blocked.join('').includes('<template'), false)
+                // Which is the whole point: the body is ordinary markup in the document, so a reader
+                // that runs nothing at all still has it. It is not in the SAME chunk as the shell —
+                // the walk flushes what it has written before it waits, which is what makes the
+                // blocking lane stream at all rather than buffer the whole page.
+                is('…the body is in the document itself', blocked.join('').includes('<b>landed</b>'), true)
+                is('…in document order, after the shell', at(blocked, 'landed') > at(blocked, 'shell'), true)
+            },
+        },
+
+        {
+            title: 'a deferred load that FAILS renders its {:catch}',
+            note: 'The gap the one-marker rewrite closed. `suspend(value, body, fallback)` had no error arm at all, so a deferred load that rejected wrote an HTML comment: the reader got a blank panel and was told nothing. `{#await}` has always had `{:catch}`, and carrying it through the deferred path is most of why there is one block form now rather than two. With no `{:catch}` it is still a comment — the author did not say what to show — but it is reported on abide’s own channel rather than only to somebody viewing source, because by the time a deferred subtree fails the shell is already on the wire and there is nothing left to fail INTO.',
+            async run({ is }) {
+                // `renderDocument`, and that is load-bearing rather than incidental: a pending arm
+                // only DEFERS where there is somewhere to patch, so asserting this through
+                // `renderDocumentToString` would take the inline path and pass with the deferred
+                // catch removed entirely. It did, until the revert said so.
+                const body = (): TemplateResult => html`<p>shell</p>${awaited(
+                    sleep(5).then(() => {
+                        throw new Error('the load refused')
+                    }),
+                    {
+                        pending: () => html`<em>waiting</em>`,
+                        then: () => html`<b>never</b>`,
+                        catch: (error: unknown) => html`<i>${String(error)}</i>`,
+                        finally: undefined,
+                    },
+                )}`
+                let caught = ''
+                for await (const chunk of renderDocument('', body)) caught += chunk
+                is('the catch arm arrived as the patch', caught.includes('the load refused'), true)
+                is('…and the then arm did not', caught.includes('never'), false)
+                is('…and it is not a comment', caught.includes('<!-- await'), false)
             },
         },
 
@@ -899,16 +954,8 @@ export default suite({
                                 '<title>streamed</title><style>body{font:14px system-ui;padding:12px}.slow{color:#0a7}.fast{color:#07a}.waiting{color:#999}</style>',
                                 () => html`
                                     <h3>shell — painted immediately</h3>
-                                    ${suspend(
-                                        slow(1200, 'the slow subtree, 1200ms'),
-                                        (t) => html`<p class="slow">${t}</p>`,
-                                        html`<p class="waiting">loading slow…</p>`,
-                                    )}
-                                    ${suspend(
-                                        slow(400, 'the fast subtree, 400ms'),
-                                        (t) => html`<p class="fast">${t}</p>`,
-                                        html`<p class="waiting">loading fast…</p>`,
-                                    )}
+                                    ${awaited(slow(1200, 'the slow subtree, 1200ms'), { pending: () => html`<p class="waiting">loading slow…</p>`, then: (t) => html`<p class="slow">${t}</p>`, catch: undefined, finally: undefined })}
+                                    ${awaited(slow(400, 'the fast subtree, 400ms'), { pending: () => html`<p class="waiting">loading fast…</p>`, then: (t) => html`<p class="fast">${t}</p>`, catch: undefined, finally: undefined })}
                                 `,
                             )) {
                                 doc.write(chunk)

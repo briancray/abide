@@ -10,7 +10,8 @@
 // that), so its only jobs are: find the holes, match the tags well enough to know where a block ends,
 // and tell an element from a component.
 
-import { readExpression, SyntaxError_ } from './lex.ts'
+import { SyntaxKind } from 'typescript/unstable/ast'
+import { readExpression, SyntaxError_, tokensOf } from './lex.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 export interface Expr {
@@ -59,7 +60,26 @@ export type Node =
           /** `{:catch}` on a streaming list. */
           failure: Branch | null
       }
-    | { kind: 'await'; value: Expr; pending: Node[]; branches: Branch[] }
+    | {
+          kind: 'await'
+          value: Expr
+          pending: Node[]
+          branches: Branch[]
+          /** `{await value}` — no arms at all, so the settled value IS the body. */
+          short?: boolean
+          /**
+           * `{#await p then v}` — the INLINE form, which has no pending branch by construction.
+           *
+           * Distinct from an empty one. `{#await p}{:then v}…{/await}` is the block form with
+           * nothing to show yet, and an author reaches for it deliberately — to narrow in `{:then}`,
+           * or to stream this block without a placeholder — so it DEFERS with an empty placeholder.
+           * Deciding on whether the pending body happened to be blank would make whitespace the
+           * difference between blocking a response and streaming it.
+           */
+          compact?: boolean
+          /** `{(await x).b.c}` — what the settled value is put through. Contiguous in the file. */
+          suffix?: Expr | undefined
+      }
     | { kind: 'switch'; value: Expr; branches: Branch[] }
     | { kind: 'try'; body: Node[]; branches: Branch[] }
     | { kind: 'define'; name: string; parameters: string; body: Node[] }
@@ -195,8 +215,14 @@ function padTemplate(source: string, template: string): string {
  * left in place. What is inside a `<script>` is TypeScript, and `Array<string>` is a generic rather
  * than an open tag — reading the raw file here counted one per generic, so a module block with two
  * of them put the `<script>` after it at depth 2 and dropped the component's whole setup.
+ *
+ * A COMMENT is matched first and then ignored, which is what keeps prose from being counted as
+ * markup. The alternation is what does the work: a comment is consumed whole, so a `{#await}` an
+ * author wrote ABOUT the syntax cannot open a block. Writing that sentence in a file's own header
+ * comment is exactly how this was found — the `<script module>` under it was then read as nested,
+ * and the error named a branch nobody had written.
  */
-const ENCLOSING = /<(\/?)([A-Za-z][\w:.-]*)[^>]*>|\{([#/])/g
+const ENCLOSING = /<!--[\s\S]*?-->|<(\/?)([A-Za-z][\w:.-]*)[^>]*>|\{([#/])/g
 
 /** A region of the text that is not markup: a nested block's body, left in place for the parser. */
 interface Skipped {
@@ -227,6 +253,9 @@ function enclosingDepth(text: string, to: number, skip: Skipped[]): number {
             depth += block === '#' ? 1 : -1
             continue
         }
+        // A comment: no capture group, so neither arm below applies. Consumed whole by the match,
+        // which is the point — nothing inside it was ever offered to this loop.
+        if (match[2] === undefined) continue
         // Before the closing-tag branch, so both halves of a lifted block are invisible: the opener
         // was already skipped as "never nesting", and a `</script>` that still decremented took the
         // depth one BELOW where the block found it.
@@ -417,13 +446,120 @@ function parseHole(reader: Reader): Node {
     const { text, end } = readExpression(reader.source, start)
     reader.at = end + 1
     const trimmed = text.trim()
+    const at = start + 1 + (text.length - text.trimStart().length)
+
+    // `{await value}` — the shortest await there is: no arms, just the settled value.
+    //
+    // Exactly `{#await value then v}{v}{/await}`, and it is built as that node rather than as a
+    // second mechanism, so it inherits the whole of what the block form means. In particular it has
+    // NO PENDING ARM, which is what decides that a server render blocks on it and writes complete
+    // markup — see the dispatch in `$server`. Deferring is what the long form asks for by having
+    // something to show; there is nothing to show here.
+    //
+    // The alternative was refusing it. A slot is a thunk and a thunk is not async, so this used to
+    // emit `() => await value` — JavaScript no engine parses, produced silently, with the error
+    // arriving from the runtime and nothing pointing back at the line. A short spelling for the
+    // common case is better than a good diagnostic for a spelling nobody can use.
+    const operand = AWAIT_PREFIX.exec(trimmed)
+    if (operand !== null) {
+        // `short`, rather than a synthesised `{:then}` body. Every `Expr` carries a `start` into the
+        // ORIGINAL file — `code()` desugars the REGION between `start` and `start + source.length`,
+        // so a node whose text is not in the file is read back out of it as whatever sat there.
+        // Building the identity arm in the emitter is the only place it can be built from nothing.
+        return {
+            kind: 'await',
+            value: { source: trimmed.slice(operand[0].length), start: at + operand[0].length },
+            pending: [],
+            branches: [],
+            short: true,
+        }
+    }
+
+    // `{(await user).profile.name}` — awaiting a value and then reaching INTO it, which is the shape
+    // an author actually wants from a cell. `{await user.profile.name}` is legal too and means what
+    // JavaScript says it means: `await (user.profile.name)`, a read of a cell that has not landed.
+    // That one compiles and throws, and it stays that way — the expression is the author's.
+    //
+    // Liftable because both halves are CONTIGUOUS in the file: the operand inside the parentheses,
+    // and the suffix after them. That is the whole of what limits this — a substituted expression
+    // could not be desugared, since desugaring works on file offsets.
+
+
+    const lifted = parenthesisedAwait(trimmed, at)
+    if (lifted !== null) return lifted
+
+    // Anywhere ELSE there is nothing to rewrite into: `{a + await b}` is one thunk with an await in
+    // the middle of it, and no arrangement of `{#await}` says that. Not a judgement about the
+    // JavaScript — it is that a slot is a THUNK and a thunk is not async, so there is no code to
+    // emit. Refused on the line rather than as a syntax error in generated output.
+    if (awaits(trimmed)) {
+        fail(reader, 'a slot can `await` only the whole expression, or `(await x)` — use {#await}', start)
+    }
+
     // `{html(...)}` is the raw escape hatch (SPEC), which the runtime spells `raw(...)`.
     const raw = /^html\s*\(/.test(trimmed)
-    return {
-        kind: 'expression',
-        raw,
-        value: { source: trimmed, start: start + 1 + (text.length - text.trimStart().length) },
+    return { kind: 'expression', raw, value: { source: trimmed, start: at } }
+}
+
+/**
+ * `(await X)SUFFIX` → the operand to await, and what to do to it once it lands.
+ *
+ * `null` for anything else, including a `(` that does not open an await and one that does not close
+ * the whole prefix — `(await a).b + (await c).d` has two operands and one arm, which is not a shape
+ * this can be. That one is refused above and `{#await}` nests.
+ */
+function parenthesisedAwait(trimmed: string, at: number): Node | null {
+    if (trimmed[0] !== '(') return null
+    let depth = 0
+    let close = -1
+    for (let i = 0; i < trimmed.length; i++) {
+        const c = trimmed[i]
+        if (c === '(' || c === '[' || c === '{') depth++
+        else if (c === ')' || c === ']' || c === '}') {
+            depth--
+            if (depth === 0) {
+                close = i
+                break
+            }
+        }
     }
+    if (close < 0) return null
+    const inside = trimmed.slice(1, close)
+    const opens = AWAIT_PREFIX.exec(inside.trimStart())
+    if (opens === null) return null
+    // A second await after the parentheses is the two-operand shape, which has no single arm.
+    const suffix = trimmed.slice(close + 1)
+    if (awaits(suffix)) return null
+
+    const insideAt = at + 1 + (inside.length - inside.trimStart().length)
+    return {
+        kind: 'await',
+        value: {
+            source: inside.trimStart().slice(opens[0].length).trimEnd(),
+            start: insideAt + opens[0].length,
+        },
+        pending: [],
+        branches: [],
+        short: true,
+        // Empty for a bare `(await x)`, which is then the identity arm the short form already is.
+        suffix: suffix === '' ? undefined : { source: suffix, start: at + close + 1 },
+    }
+}
+
+/** `await ` opening a slot, which is the whole expression being awaited. */
+const AWAIT_PREFIX = /^await\s+/
+
+/**
+ * Does an `await` KEYWORD appear anywhere in this expression?
+ *
+ * Asked of tokens rather than of the text: `awaitable` and `"await"` are not awaits, and the scanner
+ * has already told the two apart. Only reached once the leading form above has been ruled out.
+ */
+function awaits(source: string): boolean {
+    for (const token of tokensOf(source)) {
+        if (token.kind === SyntaxKind.AwaitKeyword) return true
+    }
+    return false
 }
 
 /**
@@ -838,6 +974,7 @@ function parseAwait(reader: Reader, rest: string, at: number, open: number): Nod
             kind: 'await',
             value,
             pending: [],
+            compact: true,
             branches: [{ ...branch, test: { source: inline[2] as string, start: at } }],
         }
     }

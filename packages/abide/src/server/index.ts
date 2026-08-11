@@ -26,11 +26,11 @@ import {
     type Keyed,
     Raw,
     Streamed,
-    Suspend,
     settledArms,
     settledBoundary,
     type TemplateResult,
 } from '$shared/html.ts'
+import { abideLog } from '$shared/log.ts'
 import { renderBudget } from '$shared/internal/ceilings.ts'
 import {
     closeMarker,
@@ -40,7 +40,7 @@ import {
     patchId,
     placeholderId,
 } from '$shared/internal/MARKERS.ts'
-import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
+import { isAsyncIterable, isThenable, messageOf } from '$shared/internal/probes.ts'
 import { planOf, unwrap } from '$shared/internal/slots.ts'
 import { arm, NO_LIMIT, timeoutError } from '$shared/internal/timers.ts'
 // Re-exported below as well: `<head>` is the only place a sheet is written as markup, so this is a
@@ -77,17 +77,10 @@ export type Renderable =
     | Awaited
     | Boundary
     | Streamed
-    | Suspend
     | Renderable[]
     | Promise<Renderable>
     | AsyncIterable<Renderable>
     | (() => Renderable)
-
-export type { Suspend } from '$shared/html.ts'
-// `suspend` is ISOMORPHIC and lives in `$shared/html.ts` with the other three markers — a page is the
-// same module on both sides, so a block only this substrate understood was one no page could use.
-// Re-exported here because this is the entry point a server render is already importing from.
-export { suspend } from '$shared/html.ts'
 
 // --- where the markup goes ---------------------------------------------------
 
@@ -185,11 +178,24 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
     }
     if (node instanceof Awaited) {
         const operand = node.value
-        // A server render is a snapshot with nothing to wake later, so it AWAITS rather than showing
-        // the pending branch — the same choice `Suspend` makes when there is no document to patch.
-        // `suspend(value, …)` is still how a load reaches SSR out of order.
+        // Nothing to wait for is nothing to defer, and nothing to await either.
         if (!isThenable(operand)) {
             return emit(settledArms(node.branches, undefined, operand, false) as Renderable, context, out)
+        }
+        // THE PENDING ARM IS THE DECISION, and it is the only thing that had to be read to make
+        // `{#await}` the one spelling. The BLOCK form always emits one — empty if that is what was
+        // written — so it goes out as a placeholder and is patched in when it settles. The compact
+        // forms, `{#await p then v}` and `{await p}`, emit none by construction, so they have nothing
+        // to send and block until the value lands. Which FORM was written is what decides it, rather
+        // than whether a pending body happened to be blank; see `awaited` in `$compiler`.
+        //
+        // That distinction is what an author is choosing between, and it is not a detail: a deferred
+        // subtree arrives through a `<template>` and a two-line script, so it needs JAVASCRIPT. A
+        // reader running none — a crawler, a mail client, `curl` — sees the placeholder forever.
+        // Blocking is what puts the settled markup in the HTML, and the compact form is how it is
+        // asked for. A render with nowhere to patch blocks either way.
+        if (context.document !== null && node.branches.pending !== undefined) {
+            return emitDeferred(node, context, out)
         }
         return emitAwaited(node, context, out)
     }
@@ -199,7 +205,6 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         return emit(settledBoundary(node) as Renderable, context, out)
     }
     if (node instanceof Streamed) return emitStreamed(node, context, out)
-    if (node instanceof Suspend) return emitSuspend(node, context, out)
     if (isThenable(node)) return emitPromise(node, context, out)
     if (isAsyncIterable(node)) return emitAsyncIterable(node, context, out)
 
@@ -374,31 +379,49 @@ async function emitAsyncIterable(
 
 const PLACEHOLDER_CLOSE = `</${PLACEHOLDER_TAG}>`
 
-function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
-    // Nothing to wait for is nothing to defer. `suspend<T>` declares a plain value as legal, and
-    // `ChildPart.set` renders its body IN PLACE for one — so a placeholder here is markup the client
-    // never expects to adopt, and the whole out-of-order apparatus (an id, a `Deferred`, a fallback,
-    // an extra drain turn and a patch) would be spent arriving at what was already in hand.
-    if (!isThenable(node.value)) return emit(node.body(node.value as never) as Renderable, context, out)
-    const document = context.document
-    // No document to patch (a component rendered to a string) → await it inline.
-    if (document === null) return emitSuspendInline(node, context, out)
+/** Abide's own channel for what a render could not say in the markup. Off unless `DEBUG` names it —
+ *  except `error`, which the gate never swallows, and a subtree that failed with nowhere to report it
+ *  is exactly what that exception is for. */
+const renderLog = abideLog.channel('render')
 
+/**
+ * An `{#await}` sent as a placeholder now and patched in when it settles.
+ *
+ * Reached only with a document to patch AND a pending arm to send — the dispatch above decides both,
+ * so there is no guard to repeat here.
+ */
+function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
+    const document = context.document as DocumentContext
     const id = document.nextId++
     document.deferred.push({
         id,
         html: (async () => {
+            let arms: unknown
             try {
-                return await renderToString(node.body((await node.value) as never) as Renderable, {
-                    hydratable: context.hydratable,
-                })
+                arms = settledArms(node.branches, undefined, await node.value, false)
             } catch (error) {
-                return `<!-- suspend ${id} failed: ${escape(String(error))} -->`
+                // `drain` is built on `html` never rejecting, and that is not an implementation
+                // detail to route around: the shell went out with the placeholder in it, so by the
+                // time this fails there is nothing left to fail INTO. A throw here would be an
+                // unhandled rejection over a response already half-written.
+                //
+                // So a `{:catch}` renders — which is the whole of what this path gained over the
+                // `suspend` it replaced, where a failed load had no arm to reach for. Without one it
+                // is still a comment, because the author did not say what to show; it is said out
+                // loud on abide's own channel rather than only to a reader viewing source.
+                if (node.branches.catch === undefined) {
+                    renderLog.error(`a deferred {#await} failed with no {:catch}: ${messageOf(error)}`)
+                    return `<!-- await ${id} failed: ${escape(String(error))} -->`
+                }
+                arms = settledArms(node.branches, error, undefined, true)
             }
+            return await renderToString(arms as Renderable, { hydratable: context.hydratable })
         })(),
     })
     out.text += `<${PLACEHOLDER_TAG} id="${placeholderId(id)}">`
-    const waiting = emit(node.fallback as Renderable, PLAIN, out) // a placeholder must not itself defer
+    // PLAIN, because a placeholder must not itself defer: it is markup the client adopts as one
+    // piece and replaces whole.
+    const waiting = emit((node.branches.pending as () => unknown)() as Renderable, PLAIN, out)
     if (waiting !== null) {
         return then_(waiting, () => {
             out.text += PLACEHOLDER_CLOSE
@@ -409,19 +432,11 @@ function emitSuspend(node: Suspend, context: RenderContext, out: Out): Rest {
     return null
 }
 
-async function emitSuspendInline(node: Suspend, context: RenderContext, out: Out): Promise<void> {
-    const handed = handOver(out)
-    if (handed !== null) await handed
-    // Reached only for a thenable operand: `emitSuspend` renders a settled one in place before it
-    // gets here, so there is no guard to repeat.
-    const more = emit(node.body((await node.value) as never) as Renderable, context, out)
-    if (more !== null) await more
-}
-
 /**
  * One render's wall budget: a single clock every PHASE of that render races against.
  *
- * A document render has two — the in-order walk, and the out-of-order drain after it — and `suspend`
+ * A document render has two — the in-order walk, and the out-of-order drain after it — and a deferred
+ * `{#await}`
  * under a document defers into the second. A clock armed per phase would be a per-phase budget
  * wearing a wall budget's name, and a page that suspends is exactly the page the budget is for.
  *
@@ -673,7 +688,7 @@ export async function* renderDocument(
     const parts = typeof document === 'string' ? shellAround(document) : document
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
     const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals }
-    // ONE clock for the whole document. `suspend` under a document does not hold the walk — it
+    // ONE clock for the whole document. A deferred `{#await}` does not hold the walk — it
     // defers into the drain below — so a budget that only reached the walk would miss the very case
     // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
     // where the render begins; the clock arms itself on the first phase that actually waits, so a
@@ -706,7 +721,7 @@ export async function* renderDocument(
  * scripts: an email client, a PDF renderer, a fixture holding an expected document. There the markup
  * has to be complete when the string is.
  *
- * So this is `renderToString`'s context — no `document`, which is what makes `suspend` await INLINE,
+ * So this is `renderToString`'s context — no `document`, which is what makes `{#await}` await INLINE,
  * in document order — with the shell around it. The shell half is `renderDocument`'s, down to the
  * nonce on the styles: a policy that reached this render reaches its `<style>` blocks too. Nothing
  * else here can emit a script, so there is no patch script to carry one.
@@ -741,7 +756,7 @@ export async function renderDocumentToString(
  *
  * The same walk and the same deferral as `renderDocument`, and that is the point: a navigation gets
  * out-of-order streaming rather than a second-class render that awaits everything inline. Without
- * this, `suspend` under a fragment falls to `emitSuspendInline`, which awaits IN DOCUMENT ORDER — so
+ * this, an `{#await}` under a fragment falls to `emitAwaited`, which awaits IN DOCUMENT ORDER — so
  * a fast panel below a slow one waits for the slow one, and so does every static byte beneath it,
  * neither of which was ever waiting on data of its own.
  *
@@ -762,7 +777,7 @@ export async function* renderFragment(
     try {
         yield* stream(body(), context, clock)
         // The in-order pass is a complete tree the moment it ends, and it ends without waiting for a
-        // single load — every `suspend` in it deferred. So this sentinel is the whole latency win:
+        // single load — every deferred `{#await}` in it. So this sentinel is the whole latency win:
         // the client may paint everything above, below and between the panels right here.
         yield PIECE_END
         yield* drain(deferrals, clock, true, null)

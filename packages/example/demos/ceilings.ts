@@ -16,8 +16,9 @@
 // wrong implementation retains exactly the right data, at whatever cost it likes.
 
 import { html, memo, state } from 'abide'
+import { awaited } from 'abide/runtime'
 import { isolate } from '$shared/internal/scopes.ts'
-import { render, renderDocument, suspend } from 'abide/server'
+import { render, renderDocument } from 'abide/server'
 import { reader, suite } from 'abide/tests'
 import { capture, writtenAt } from './console.ts'
 import { button, row, stage } from './dom.ts'
@@ -432,7 +433,7 @@ export default suite({
                         // is the DRAIN afterwards that waits on something that never lands.
                         const document = renderDocument(
                             '',
-                            () => html`<p>shell</p>${suspend(new Promise(() => {}), () => html`late`)}`,
+                            () => html`<p>shell</p>${awaited(new Promise(() => {}), { pending: () => null, then: () => html`late`, catch: undefined, finally: undefined })}`,
                         )
                         for await (const chunk of document) written.push(chunk)
                     } catch (error) {
