@@ -1,0 +1,13 @@
+<script>
+import { props } from 'abide'
+
+type CardProps = { title: string; value: string }
+
+const { title, value } = props<CardProps>()
+</script>
+
+<section class="card">
+    <h2>{title}</h2>
+    <p class="value">{value}</p>
+    <slot/>
+</section>

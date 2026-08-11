@@ -1,17 +1,10 @@
 <script>
 import { state } from 'abide'
 import { buildRows } from '../rows.ts'
-import { expose } from '../bench.ts'
 
 const ITEMS = buildRows(1, 10)
 
 let count = state(0)
-
-expose({
-    increment: () => {
-        count.set(count() + 1)
-    },
-})
 </script>
 
 <h1>simple</h1>

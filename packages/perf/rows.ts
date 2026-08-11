@@ -6,6 +6,15 @@ export interface Row {
     label: string
 }
 
+export interface Record_ {
+    id: number
+    name: string
+    owner: string
+    status: 'active' | 'paused' | 'failed'
+    amount: number
+    tags: string[]
+}
+
 const ADJECTIVES = [
     'pretty',
     'large',
@@ -52,6 +61,10 @@ const NOUNS = [
     'keyboard',
 ]
 
+const OWNERS = ['ada', 'grace', 'alan', 'edsger', 'barbara', 'donald', 'ken', 'dennis']
+
+const STATUSES = ['active', 'paused', 'failed'] as const
+
 export function labelFor(id: number): string {
     const adjective = ADJECTIVES[id % ADJECTIVES.length] as string
     const colour = COLOURS[(id >> 2) % COLOURS.length] as string
@@ -66,4 +79,22 @@ export function buildRows(from: number, count: number): Row[] {
         rows.push({ id, label: labelFor(id) })
     }
     return rows
+}
+
+// The dashboard's shape: a wider record with a status, a number to aggregate, and a small tag list
+// so the medium page has a nested loop to reconcile.
+export function buildRecords(from: number, count: number): Record_[] {
+    const records: Record_[] = []
+    for (let i = 0; i < count; i++) {
+        const id = from + i
+        records.push({
+            id,
+            name: labelFor(id),
+            owner: OWNERS[id % OWNERS.length] as string,
+            status: STATUSES[id % STATUSES.length] as 'active' | 'paused' | 'failed',
+            amount: ((id * 37) % 900) + 100,
+            tags: [COLOURS[id % COLOURS.length] as string, NOUNS[(id >> 3) % NOUNS.length] as string],
+        })
+    }
+    return records
 }

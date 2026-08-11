@@ -1,0 +1,60 @@
+<script>
+import { memo, state } from 'abide'
+import Card from '../../components/card.abide'
+import { buildRecords } from '../../rows.ts'
+
+const ALL = buildRecords(1, 200)
+
+let filter = state('')
+let onlyActive = state(false)
+
+const visible = memo(() =>
+    ALL.filter(
+        (record) =>
+            record.name.includes(filter) && (onlyActive === false || record.status === 'active'),
+    ),
+)
+
+const total = memo(() => {
+    let sum = 0
+    for (const record of visible) sum += record.amount
+    return sum
+})
+</script>
+
+<h1>dashboard</h1>
+<p>A filtered table of 200 records: two cells, two derived values, a component reused four times.</p>
+
+<div class="cards">
+    <Card title="records" value={`${visible.length}`}/>
+    <Card title="total" value={`${total}`}/>
+    <Card title="mean" value={`${visible.length === 0 ? 0 : Math.round(total / visible.length)}`}/>
+    <Card title="filter" value={filter === '' ? 'none' : filter}>
+        <small>live</small>
+    </Card>
+</div>
+
+<div class="controls">
+    <input id="filter" placeholder="filter" bind:value={filter}/>
+    <label><input id="active" type="checkbox" bind:checked={onlyActive}/> only active</label>
+</div>
+
+{#if visible.length === 0}
+    <p id="empty">No records match.</p>
+{/if}
+
+<table>
+    <tbody id="records">
+        {#for record of visible by record.id}
+            <tr class={record.status}>
+                <td class="col-id">{record.id}</td>
+                <td>{record.name}</td>
+                <td>{record.owner}</td>
+                <td>{record.amount}</td>
+                <td>
+                    {#for tag of record.tags by tag}<span class="tag">{tag}</span> {/for}
+                </td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

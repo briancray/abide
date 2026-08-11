@@ -1,6 +1,5 @@
 <script>
 import { state } from 'abide'
-import { expose } from '../../bench.ts'
 import { buildRows, type Row } from '../../rows.ts'
 
 const SIZE = 1000
@@ -9,39 +8,38 @@ let rows = state<Row[]>(buildRows(1, SIZE))
 let selected = state(-1)
 let next = SIZE + 1
 
-expose({
-    create: () => {
-        rows.set(buildRows(next, SIZE))
-        next += SIZE
-    },
-    append: () => {
-        rows.set(rows().concat(buildRows(next, SIZE)))
-        next += SIZE
-    },
-    update: () => {
-        const held = rows().slice()
-        for (let i = 0; i < held.length; i += 10) {
-            const row = held[i] as Row
-            held[i] = { id: row.id, label: `${row.label} !!!` }
-        }
-        rows.set(held)
-    },
-    swap: () => {
-        const held = rows().slice()
-        if (held.length < 999) return
-        const a = held[1] as Row
-        const b = held[998] as Row
-        held[1] = b
-        held[998] = a
-        rows.set(held)
-    },
-    select: () => {
-        selected.set((rows()[9] as Row).id)
-    },
-    clear: () => {
-        rows.set([])
-    },
-})
+function create(): void {
+    rows.set(buildRows(next, SIZE))
+    next += SIZE
+}
+
+function append(): void {
+    rows.set(rows().concat(buildRows(next, SIZE)))
+    next += SIZE
+}
+
+function update(): void {
+    const held = rows().slice()
+    for (let i = 0; i < held.length; i += 10) {
+        const row = held[i] as Row
+        held[i] = { id: row.id, label: `${row.label} !!!` }
+    }
+    rows.set(held)
+}
+
+function swap(): void {
+    const held = rows().slice()
+    if (held.length < 999) return
+    const a = held[1] as Row
+    const b = held[998] as Row
+    held[1] = b
+    held[998] = a
+    rows.set(held)
+}
+
+function clear(): void {
+    rows.set([])
+}
 
 function remove(id: number): void {
     rows.set(rows().filter((row) => row.id !== id))
@@ -50,6 +48,15 @@ function remove(id: number): void {
 
 <h1>complex</h1>
 <p>A keyed table of {SIZE} rows, server-rendered and adopted.</p>
+
+<div class="controls">
+    <button id="create" onclick={() => create()}>create</button>
+    <button id="append" onclick={() => append()}>append</button>
+    <button id="update" onclick={() => update()}>update</button>
+    <button id="swap" onclick={() => swap()}>swap</button>
+    <button id="clear" onclick={() => clear()}>clear</button>
+</div>
+
 <table>
     <tbody id="rows">
         {#for row of rows by row.id}

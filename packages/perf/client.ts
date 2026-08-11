@@ -3,22 +3,21 @@
 
 import { navigate, outlet, ready, routes } from 'abide'
 import { hydrate } from 'abide/ui'
-import { record } from './bench.ts'
 
 const CHROME = (): Promise<typeof import('./pages/layout.abide')> => import('./pages/layout.abide')
 
 routes([
     { path: '/', page: () => import('./pages/page.abide'), layouts: [CHROME] },
+    { path: '/dashboard', page: () => import('./pages/dashboard/page.abide'), layouts: [CHROME] },
     { path: '/complex', page: () => import('./pages/complex/page.abide'), layouts: [CHROME] },
+    { path: '/media', page: () => import('./pages/media/page.abide'), layouts: [CHROME] },
 ])
 
 await ready()
 
 const root = document.querySelector('slot')
 if (root !== null) {
-    const started = performance.now()
     hydrate(root, outlet)
-    record('hydrate', performance.now() - started)
 }
 
 document.addEventListener('click', (event) => {

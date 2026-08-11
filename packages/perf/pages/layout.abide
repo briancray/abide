@@ -1,6 +1,7 @@
 <script module>
 const NAV = [
     { href: '/', label: 'simple' },
+    { href: '/dashboard', label: 'dashboard' },
     { href: '/complex', label: 'complex' },
 ]
 </script>
