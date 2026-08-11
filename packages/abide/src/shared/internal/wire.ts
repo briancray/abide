@@ -42,8 +42,10 @@ export const TTL_HEADER = 'abide-ttl'
  */
 export const MAX_GET_URL = 2000
 
-/** The one door a value that is not JSON arrives through. */
+/** The one door a value that is not JSON arrives through, and what the stub writes for a file. */
 const MULTIPART_TYPE = 'multipart/form-data'
+/** The other spelling of a form — what a `<form method="post">` with no `enctype` sends. */
+const FORM_TYPE = 'application/x-www-form-urlencoded'
 
 /**
  * Where a file SAT in the args, written into the JSON in its place.
@@ -157,20 +159,33 @@ function jsonish(text: string): boolean {
     return text === 'true' || text === 'false' || text === 'null'
 }
 
-/**
- * The other half of `argsQuery`: a query as the one args object a handler is called with.
- *
- * The DECLARED shape decides each parameter when there is one, and that is the point of taking it:
- * `?name=42` on a `name: string` is a caller who obviously meant the string, and reading it as a
- * number would 422 a call nobody got wrong. Without a shape the text speaks for itself — valid JSON
- * is what it says, anything else is a string — which is what the encoder above wrote it to be.
- */
+/** The other half of `argsQuery`: a query as the one args object a handler is called with. */
 export function decodeQuery(params: URLSearchParams, shape: JsonSchema | null | undefined): unknown {
     const blob = params.get(ARGS_PARAM)
     if (blob !== null) return decodeArgs(blob)
+    return named(params, shape)
+}
+
+/**
+ * Entries as the one args object — ONE ENTRY PER ARGUMENT, for the query and the form alike.
+ *
+ * The DECLARED shape decides each one when there is one, and that is the point of taking it:
+ * `?name=42` on a `name: string` is a caller who obviously meant the string, and reading it as a
+ * number would 422 a call nobody got wrong. Without a shape the text speaks for itself — valid JSON
+ * is what it says, anything else is a string — which is what the encoder above wrote it to be.
+ *
+ * Structural in what it walks rather than written once per door: a `URLSearchParams` and a `FormData`
+ * are the same collection with the same repeated-name convention, and two readers disagreeing about
+ * what `tag=a&tag=b` means is a difference nothing else would ever explain. A form entry can also be
+ * a FILE, and that is itself — there is no text there for a shape to decide anything about.
+ */
+function named(
+    entries: { keys(): Iterable<string>; getAll(name: string): readonly (string | Blob)[] },
+    shape: JsonSchema | null | undefined,
+): unknown {
     const properties = shape?.properties
     let args: Record<string, unknown> | undefined
-    for (const name of params.keys()) {
+    for (const name of entries.keys()) {
         // Assigning it would set this object's PROTOTYPE rather than a member — the one name a
         // parameter cannot carry. `JSON.parse` makes it an own property, so the hatch is unaffected.
         if (name === '__proto__') continue
@@ -178,17 +193,23 @@ export function decodeQuery(params: URLSearchParams, shape: JsonSchema | null | 
         // `keys()` repeats a name once per copy, and `getAll` already took all of them.
         else if (Object.hasOwn(args, name)) continue
         const member = properties?.[name]
-        const held = params.getAll(name)
+        const held = entries.getAll(name)
         if (held.length === 1) {
-            args[name] = value(held[0] as string, member)
+            args[name] = entry(held[0] as string | Blob, member)
             continue
         }
-        // `?tag=a&tag=b` — the conventional spelling of a list, which nothing else could mean.
+        // `?tag=a&tag=b`, and the same name twice in a form — the conventional spelling of a list,
+        // which nothing else could mean.
         const items: unknown[] = []
-        for (let i = 0; i < held.length; i++) items.push(value(held[i] as string, member?.items))
+        for (let i = 0; i < held.length; i++) items.push(entry(held[i] as string | Blob, member?.items))
         args[name] = items
     }
     return args
+}
+
+/** One entry as its argument. A file has no text form, so it arrives as what it already is. */
+function entry(held: string | Blob, member: JsonSchema | undefined): unknown {
+    return typeof held === 'string' ? value(held, member) : held
 }
 
 function value(text: string, member: JsonSchema | undefined): unknown {
@@ -258,8 +279,15 @@ export function multipartBody(encoded: Encoded): FormData {
     return form
 }
 
-export function isMultipart(request: Request): boolean {
-    return (request.headers.get('content-type') ?? '').includes(MULTIPART_TYPE)
+/**
+ * Both spellings, because `Request.formData()` reads both and the door is what they have in common:
+ * named entries, one per argument. Which one a caller used is a fact about their form element and
+ * nothing this side needs to branch on — only a MULTIPART body can carry a file, and that falls out
+ * of the entry being a `Blob` rather than out of the header.
+ */
+export function isForm(request: Request): boolean {
+    const type = request.headers.get('content-type') ?? ''
+    return type.includes(MULTIPART_TYPE) || type.includes(FORM_TYPE)
 }
 
 /** `q=0` in an `Accept-Encoding` parameter list. Hoisted: this runs per request that can compress. */
@@ -305,11 +333,23 @@ export function decodeArgs(text: string | null): unknown {
     return parsed === null ? undefined : parsed
 }
 
-/** The other half of `multipartBody`: the args, with each file put back where it was taken from. */
-export function decodeForm(form: FormData): unknown {
+/**
+ * A form body as args, in either of the two shapes one arrives in.
+ *
+ * `multipartBody` above writes ONE `__abide_args` part and hangs the files off it by position, which
+ * is what the stub sends and what this puts back. A form built anywhere else carries no such part,
+ * and then its entries ARE the arguments — one each, read exactly as a query's are, so a
+ * `new FormData(element)` posted straight at an endpoint is the same call the stub would have made
+ * and a file input lands on a declared `File` with no upload vocabulary in between. Urlencoded or
+ * multipart makes no difference by here: `Request.formData()` has already read both into entries.
+ *
+ * The part's presence is what tells them apart rather than a header or an option: only the encoder
+ * writes that name, and a caller that wrote it is asking for the encoding it belongs to.
+ */
+export function decodeForm(form: FormData, shape: JsonSchema | null | undefined): unknown {
     const text = form.get(ARGS_PARAM)
-    const args = decodeArgs(typeof text === 'string' ? text : null)
-    return restored(args, form)
+    if (typeof text !== 'string') return named(form, shape)
+    return restored(decodeArgs(text), form)
 }
 
 // The walk is over what the SENDER wrote, so it visits a reference exactly where one was made and

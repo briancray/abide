@@ -20,7 +20,7 @@ import {
 } from '$shared/internal/PATHS.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import type { EndpointShape, Shapes } from '$shared/internal/shapes.ts'
-import { decodeArgs, decodeForm, decodeQuery, isMultipart } from '$shared/internal/wire.ts'
+import { decodeArgs, decodeForm, decodeQuery, isForm } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import type { Kind, Rpc } from '$shared/transport.ts'
 import { config } from './config.ts'
@@ -311,12 +311,14 @@ async function call(request: Request, url: URL, path: string): Promise<Response>
 
     let args: unknown
     try {
-        // Three doors, one args object. A read carries them in the query, one parameter each, read
-        // back through the DECLARED shape so `?name=42` on a `name: string` is the string a caller
-        // meant; a body carries them as JSON, or as multipart when one of them is a FILE — and a
-        // read arrives that way too, since a file has no text form to put in a URL.
+        // Three doors, one args object, and the DECLARED shape reads the two that arrive as text so
+        // `?name=42` on a `name: string` is the string a caller meant. A read carries its args in the
+        // query, one parameter each; a body carries them as JSON, or as a form in either encoding —
+        // which is what the stub sends when an argument is a FILE, and equally what a caller who
+        // submitted a form element sends, one entry per argument. A read arrives by that door too,
+        // since a file has no text form to put in a URL.
         if (request.method === 'GET') args = decodeQuery(url.searchParams, policy?.input)
-        else if (isMultipart(request)) args = decodeForm(await request.formData())
+        else if (isForm(request)) args = decodeForm(await request.formData(), policy?.input)
         else args = decodeArgs(await request.text())
     } catch {
         return refuse(`${id} was called with arguments it could not decode`, 400, headers)

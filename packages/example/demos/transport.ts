@@ -1401,6 +1401,126 @@ export default suite({
         },
 
         {
+            title: 'a form anyone could post is a call, exactly as a URL anyone could type is',
+            note: 'The form door is not the stub\'s private encoding. A form built anywhere — `new FormData(element)` out of a page, a `<form method="post">` with no `enctype`, a `curl -F`, some other language\'s http client — is read ONE ENTRY PER ARGUMENT by the same reader the query goes through, so the same declared shape turns `age=36` into a number, the same repeated name is a list, and a file input lands on a declared `File`. Multipart and urlencoded are one door, because `Request.formData()` reads both into the same entries and only the first can hold a file. What tells the stub\'s encoding apart is the presence of the `__abide_args` part, which only the encoder writes: with it, the JSON is the args and the other parts are its files; without it, the entries ARE the args. So an endpoint takes a form post and a stub call with nothing declared per door and no second handler.',
+            async run({ is }) {
+                const enrol = POST(
+                    async ({
+                        name,
+                        age,
+                        tags,
+                        avatar,
+                    }: {
+                        name: string
+                        age: number
+                        tags: string[]
+                        // Optional because only a MULTIPART form can carry one, and the urlencoded
+                        // call below is the same endpoint through the other spelling.
+                        avatar?: File
+                    }) => ({
+                        name,
+                        age,
+                        tags,
+                        isNumber: typeof age === 'number',
+                        text: avatar === undefined ? null : await avatar.text(),
+                    }),
+                    {
+                        // Declared rather than derived, as everywhere in this file: a demo registers
+                        // by hand. A FILE is `string`/`binary` — the wire form, which is what a
+                        // published shape has to say, and the gate takes the local `File` beside it.
+                        schemas: {
+                            input: {
+                                type: 'object',
+                                properties: {
+                                    name: { type: 'string' },
+                                    age: { type: 'number' },
+                                    tags: { type: 'array', items: { type: 'string' } },
+                                    avatar: { type: 'string', format: 'binary' },
+                                },
+                            },
+                        },
+                    },
+                )
+                register('rpc', [['demo/form/enrol', 'enrol']], { enrol })
+
+                const posted = new FormData()
+                posted.set('name', 'ada')
+                posted.set('age', '36')
+                posted.append('tags', 'x')
+                posted.append('tags', 'y')
+                posted.set('avatar', new File(['hello bytes'], 'a.txt'))
+                // No stub in this call at all: the body is what a browser's own form serialises to.
+                const answered = await wire.fetch('/__abide/rpc/demo/form/enrol', {
+                    method: 'POST',
+                    body: posted,
+                })
+                is('a hand-built FormData reaches the handler', await answered.json(), {
+                    name: 'ada',
+                    age: 36,
+                    tags: ['x', 'y'],
+                    isNumber: true,
+                    text: 'hello bytes',
+                })
+
+                // The same three readings the query door makes, because it is the same reader: the
+                // shape says `age` is a number though the entry is text, the same name twice is a
+                // list, and one entry against a declared list is a list of one.
+                const single = new FormData()
+                single.set('name', 'ada')
+                single.set('age', '36')
+                single.set('tags', 'x')
+                single.set('avatar', new File(['b'], 'b.txt'))
+                const one = await wire.fetch('/__abide/rpc/demo/form/enrol', {
+                    method: 'POST',
+                    body: single,
+                })
+                is('a list of one is a list', ((await one.json()) as { tags: string[] }).tags, ['x'])
+
+                // The OTHER spelling of a form — what a `<form method="post">` with no `enctype`
+                // sends, and all a form without a file input ever needs. Nothing branches on which:
+                // `Request.formData()` reads both into the same entries.
+                const urlencoded = await wire.fetch('/__abide/rpc/demo/form/enrol', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                    body: 'name=ada&age=36&tags=x&tags=y',
+                })
+                is(
+                    'and urlencoded is the same call, minus what only multipart can carry',
+                    await urlencoded.json(),
+                    { name: 'ada', age: 36, tags: ['x', 'y'], isNumber: true, text: null },
+                )
+
+                // And the stub's own encoding — `__abide_args` plus a part per file — still reaches
+                // the same handler. Two forms of one door, not two endpoints.
+                const remoteEnrol = client<
+                    { name: string; age: number; tags: string[]; avatar: File },
+                    Record<string, unknown>
+                >('demo/form/enrol', { method: 'POST' })
+                is(
+                    'the stub takes the same door and the handler cannot tell',
+                    await remoteEnrol({
+                        name: 'ada',
+                        age: 36,
+                        tags: ['x', 'y'],
+                        avatar: new File(['hello bytes'], 'a.txt'),
+                    }),
+                    { name: 'ada', age: 36, tags: ['x', 'y'], isNumber: true, text: 'hello bytes' },
+                )
+
+                // A form that does not match is refused where every other door's mismatch is — 422
+                // out of the input gate, not a decode failure.
+                const wrong = new FormData()
+                wrong.set('name', 'ada')
+                wrong.set('age', 'thirty six')
+                const refused = await wire.fetch('/__abide/rpc/demo/form/enrol', {
+                    method: 'POST',
+                    body: wrong,
+                })
+                is('and a form the shape refuses is a 422', refused.status, 422)
+            },
+        },
+
+        {
             title: 'every endpoint publishes the shape a machine reads before calling it',
             note: 'This is what the shape story is FOR. Standard Schema is validate-only — it hands over a `validate` function and nothing that says what the shape IS — so a schema declared through one cannot become a tool definition or an OpenAPI operation. That is why JSON Schema is what a declaration MEANS rather than something abide converts to on the way out: an MCP tool is `{ name: id, description, inputSchema: input }` and an OpenAPI operation is the same three facts under other names, so neither needs a generator in here. `endpoints()` answers in-process and `GET /__abide/schema` answers over the wire — open, because every address in it is already in the client bundle and the shape beside it is the contract for calling one.',
             async run({ is }) {
