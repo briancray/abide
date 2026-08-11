@@ -546,6 +546,13 @@ export default suite({
                     ['swap 1↔98', swapped(build(100), 1, 98), 2],
                     ['send row 1 down to 98', lifted(build(100), 1, 98), 1],
                     ['pull row 98 up to 1', lifted(build(100), 98, 1), 97],
+                    // The two that LOOK like a swap at the ends and are not. A reverse trades row 0
+                    // with row 99 and moves everything between as well; a rotation trades nothing at
+                    // all. Both reach the fast path's identity checks, and both come out with the
+                    // right first and last row — which is the whole of what a spot check reads, and
+                    // is why these are here as counts rather than as a glance at the page.
+                    ['reverse all 100', build(100).slice().reverse(), 99],
+                    ['rotate the last row to the front', lifted(build(100), 99, 0), 99],
                 ] as const) {
                     const source = build(100)
                     const rows = state(source)

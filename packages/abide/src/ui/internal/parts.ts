@@ -918,6 +918,11 @@ class ListPart {
         const next: Row[] = []
         let firstChanged = items.length
         let lastChanged = -1
+        // HOW MANY indices differ, not just the outermost two. `firstChanged`/`lastChanged` bracket
+        // the changes; they do not say the middle is untouched, and a full reverse has its two ends
+        // traded with everything between them moved as well. Counting here is what tells the two
+        // apart for nothing — the branch below already runs exactly on the indices that differ.
+        let changed = 0
         let carried = 0
         for (let i = 0; i < items.length; i++) {
             const item = items[i]
@@ -971,6 +976,7 @@ class ListPart {
             if (row === previous[i]) continue
             if (i < firstChanged) firstChanged = i
             lastChanged = i
+            changed++
         }
 
         // Drop rows no longer present before placing, so the placement walk sees only survivors.
@@ -990,8 +996,7 @@ class ListPart {
         if (lastChanged < 0) return // nothing moved and nothing was rebuilt
 
         const parent = this.anchor.parentNode as ParentNode
-        if (lastChanged > firstChanged && this.transposed(next, previous, firstChanged, lastChanged, parent))
-            return
+        if (changed === 2 && this.transposed(next, previous, firstChanged, lastChanged, parent)) return
 
         // Place in order, walking backwards. A row already sitting where it belongs is not touched,
         // so a change at one end of the list does not disturb the other.
@@ -1052,14 +1057,20 @@ class ListPart {
      * `[a, b] = [b, a]` all produce. The general walk stays the fallback: a re-sort or a filter is a
      * different shape, and there the distance IS the work (see the placement comment in `set`).
      *
-     * Detected in three identity checks and no scan. `firstChanged`/`lastChanged` are the FIRST and
-     * LAST indices where the pass differs from the previous one, so every index strictly between them
-     * already holds the same row object it did — that is what makes this a transposition rather than
-     * an arbitrary pair, and it is why no third comparison over the middle is needed. A row rebuilt
-     * this pass is a fresh object and cannot match either end, so a rebuild falls through.
+     * The caller has already counted that EXACTLY TWO indices differ from the previous pass, which is
+     * what makes `firstChanged`/`lastChanged` the two rows in question rather than merely the outside
+     * of a wider change. Getting that wrong is not a slow path, it is a WRONG one, and it is silent
+     * in the obvious test: a full reverse trades its two ends too, so it passes the identity checks
+     * below and comes out as `99 1 2 … 98 0` — whose first and last rows are exactly right, which is
+     * all a spot check reads. The count is free (the caller's branch already runs on exactly the
+     * differing indices) and a scan over the middle would not be.
      *
-     * @returns `false` when the shape is not a transposition, or when either row has no nodes to
-     * move — the general walk is the fallback for both.
+     * The two identity checks are still needed on top of the count: two differing indices say the
+     * pass changed in two places, not that those two places TRADED. A row rebuilt this pass is a
+     * fresh object and cannot match either end, so a rebuild falls through.
+     *
+     * @returns `false` when the two rows did not trade, or when either has no nodes to move — the
+     * general walk is the fallback for both.
      */
     private transposed(
         next: Row[],
