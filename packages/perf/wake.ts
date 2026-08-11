@@ -16,7 +16,7 @@
 // Blink builds its style invalidation sets from the stylesheets, so on the five unstyled arms writing
 // `class="danger"` matched no rule, recalculated no style and painted nothing. Both directions, both
 // arms, `RecalcStyleCount` per click and the sampler agreeing: 0.97 ms with the rule and 0.37 without.
-// The rule now lives in the harness and every arm gets it. See ~/code/abide-select-profile.ts.
+// The rule now lives in the harness and every arm gets it. See ~/code/abide-op-profile.ts.
 //
 // So the ladder below prices what it says it prices, and nothing above it is waiting on an answer.
 
