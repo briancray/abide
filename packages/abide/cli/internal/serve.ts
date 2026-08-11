@@ -24,8 +24,8 @@
 //                 next `abide start` to serve
 //   the port      HOPS. A developer wants the thing to come up; a deploy wants to fail loudly, which
 //                 is why `abide start` refuses the same case
-//   the shell     carries a reload client, which is a socket through the ordinary mux and not a
-//                 second server on a second port
+//   the shell     names a reload client this worker serves, which is a socket through the ordinary
+//                 mux and not a second server on a second port
 //
 // The reload is a full page load rather than a module swap. A restart already threw away every piece
 // of server state, so there is nothing on the client worth preserving against it — and "the browser
@@ -35,7 +35,7 @@ import { config } from '$server/config.ts'
 import { boot, shutdown } from '$server/lifecycle.ts'
 import { register, websocket } from '$server/registry.ts'
 import { socket } from '$server/rpc.ts'
-import { SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
+import { RELOAD_PATH, SOCKET_PREFIX } from '$shared/internal/PATHS.ts'
 import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import { CLIENT_KEY, clientGraph, entryNames } from '../CLIENT_BUILD.ts'
@@ -98,23 +98,53 @@ const reload = socket<never>()
 register('socket', [[RELOAD_ID, 'reload']], { reload })
 
 /**
- * The reload client, appended to the end of the shell's head.
+ * The reload client, hand-written and served from this worker's memory at `RELOAD_PATH`.
  *
- * Inline and hand-written, because it must not depend on the bundle: a client build that is BROKEN
- * is exactly when a developer needs the page to still reconnect and reload itself once the build is
- * fixed. Reconnecting is the whole of it — the first open is this page's own, and any open after
- * that is a server that was not there when the page loaded.
+ * Not from the bundle, because a client build that is BROKEN is exactly when a developer needs the
+ * page to still reconnect and reload itself once the build is fixed. Reconnecting is the whole of it
+ * — the first open is this page's own, and any open after that is a server that was not there when
+ * the page loaded.
+ *
+ * A file rather than an inline `<script>` for the reason `RELOAD_PATH` states: an app running `csp()`
+ * refuses inline script it did not stamp, and a head cut once at boot has no per-request nonce to be
+ * stamped with. That failure is the quiet kind — the page renders, and only the reloading stops.
  *
  * The backoff exists so a page left open after Ctrl-C is not a socket attempt every 100ms forever.
  */
 const RELOAD_CLIENT =
-    '<script>(()=>{' +
+    '(()=>{' +
     `const at=(location.protocol==='https:'?'wss://':'ws://')+location.host+${JSON.stringify(SOCKET_PREFIX + RELOAD_ID)};` +
     'let seen=false,wait=100;' +
     'const open=()=>{const live=new WebSocket(at);' +
     'live.onopen=()=>{if(seen)location.reload();seen=true;wait=100};' +
     'live.onclose=()=>setTimeout(open,wait=Math.min(wait*2,1000))};' +
-    'open()})()</script>'
+    'open()})()'
+
+/**
+ * What the head carries instead — appended to the end of the shell's head.
+ *
+ * `defer` so the document's parse does not wait on a fetch: a page that streams is one this would
+ * otherwise stall at the head, and the socket is worth nothing until there is a page to reload.
+ */
+const RELOAD_TAG = `<script defer src="${RELOAD_PATH}"></script>`
+
+/** Dev's own file, in FRONT of the app — or `undefined` when the request is the app's. */
+function reloadClient(request: Request): Response | undefined {
+    // The raw url text first and the parsed pathname deciding, exactly as the bundle route does it:
+    // an app's own request pays one substring test rather than a URL parse.
+    if (!request.url.includes(RELOAD_PATH)) return undefined
+    if (new URL(request.url).pathname !== RELOAD_PATH) return undefined
+    return new Response(RELOAD_CLIENT, {
+        headers: {
+            'content-type': 'text/javascript; charset=utf-8',
+            // Every dev asset's answer: the address is stable, so the bytes behind it are not.
+            'cache-control': 'no-store',
+            // This route never reaches `headersFor` — it is answered in front of the pipeline — and
+            // what it hands back is JavaScript on the app's own origin.
+            'x-content-type-options': 'nosniff',
+        },
+    })
+}
 
 /** How far `--port` will walk before giving up. A range, so a busy machine fails rather than spins. */
 const HOPS = 64
@@ -152,14 +182,17 @@ async function run(argv: string[], pin: number | null): Promise<void> {
     // handler scan and the `app.ts` import rather than in front of them.
     const building = bundle(root)
 
-    const assembled = await assemble({ root, label: 'abide dev', client: building, head: RELOAD_CLIENT })
+    const assembled = await assemble({ root, label: 'abide dev', client: building, head: RELOAD_TAG })
     if (typeof assembled === 'number') return scope.postMessage({ refused: assembled } satisfies Said)
 
     const first = config().PORT
+    // The reload client in front of the app, the way the bundle is: it is this command's file rather
+    // than a route the app could know about, and a middleware onion has nothing to say about it.
+    const answering: Answer = (request, server) => reloadClient(request) ?? assembled.answer(request, server)
     let running: Awaited<ReturnType<typeof boot<ReturnType<typeof Bun.serve>>>>
     try {
         running = await boot(() => {
-            bound = listening(first, assembled.answer)
+            bound = listening(first, answering)
             return bound
         })
     } catch (failure) {
@@ -253,11 +286,11 @@ const HELD: Lane = {
  * The client lane, bundled into memory — or `null` for an app that has no client lane at all.
  *
  * A build that FAILS is not a process that refuses, and neither is a lane this cannot even read.
- * The pages still render, the endpoints still answer, and the reload client is inline rather than
- * bundled, so the page that comes up can still reconnect and reload itself the moment the build is
- * fixed — which is the whole loop a developer is in when a build is broken. `abide start` makes the
- * opposite call about the same state, and both are right: one is being asked to serve, and this one
- * is being asked to help.
+ * The pages still render, the endpoints still answer, and the reload client is served by this worker
+ * rather than out of the bundle, so the page that comes up can still reconnect and reload itself the
+ * moment the build is fixed — which is the whole loop a developer is in when a build is broken.
+ * `abide start` makes the opposite call about the same state, and both are right: one is being asked
+ * to serve, and this one is being asked to help.
  *
  * So this NEVER rejects, which is also what lets `run` leave it in flight: a refusal from `assemble`
  * returns without ever looking at it, and a promise nobody awaited is an unhandled rejection that

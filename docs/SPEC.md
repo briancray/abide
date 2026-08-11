@@ -1042,10 +1042,13 @@ The dev bundle is `Bun.build` into memory: unminified, and entry-named by its SO
 `client-<hash>.js`) so a breakpoint and a stack frame survive a rebuild — which is what `no-store` on
 every dev asset pays for. Nothing is written to `.abide/client`, so `abide dev` cannot leave a
 half-built directory for `abide start` to serve. A client build that FAILS is not a process that
-refuses: the pages still render, and the reload client is inline rather than bundled precisely so the
-page can reconnect once the build is fixed. Reload is that socket and no message on it — a "reload
-now" frame could only be written by a process that is about to stop being the one serving the page, so
-the CONNECTION is the signal. The watcher ignores dotted directories — which is what tells `.abide/`
+refuses: the pages still render, and the reload client is served by the dev worker itself — from
+`/__abide/reload.js`, never out of the bundle — precisely so the page can reconnect once the build is
+fixed. A file rather than an inline `<script>` because a document is served under the app's own
+policy: `csp()` allows no unstamped inline script, and a shell head cut once at boot has no
+per-request nonce to carry, where a script on this origin is already `'self'`. Reload is that socket
+and no message on it — a "reload now" frame could only be written by a process that is about to stop
+being the one serving the page, so the CONNECTION is the signal. The watcher ignores dotted directories — which is what tells `.abide/`
 apart from `counter.abide`, and covers the bundle and the generated type tree alike — plus
 `node_modules/`, and the worker force-closes its socket before draining, since a socket
 never ends and `shutdown()`'s graceful close would otherwise wait out every open tab on every restart.

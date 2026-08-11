@@ -30,6 +30,9 @@ import {
 
 let app: Running
 
+/** Spelled by hand, the way the socket address below is: a wire is what a browser asks for. */
+const RELOAD_CLIENT = '/__abide/reload.js'
+
 // Port `0` throughout — the kernel's own spelling of "whatever is free". The supervisor pins whatever
 // it resolves to, so it is also the address every restart in this file comes back on. The one case
 // that needs a TAKEN port is the hop, and it takes one it holds itself.
@@ -125,14 +128,40 @@ test('the page is the app’s own, with a reload client that is not in the bundl
     expect(markup).toContain('<section class="users">')
     expect(markup).toContain('42')
 
-    // INLINE, and that is the claim rather than an implementation note: a client build that is broken
-    // is exactly when the page has to still be able to reconnect and reload itself once it is fixed.
-    // A reload client that shipped in the bundle could not do that.
-    expect(markup).toContain('__abide/socket/abide/reload')
-    expect(markup).toContain('location.reload()')
+    // NOT FROM THE BUNDLE, and that is the claim rather than an implementation note: a client build
+    // that is broken is exactly when the page has to still be able to reconnect and reload itself
+    // once it is fixed. A reload client that shipped in the bundle could not do that — so this is
+    // the dev server's own file, hand-written and served from memory.
+    expect(markup).toContain(`<script defer src="${RELOAD_CLIENT}">`)
+    const client = await fetch(`${app.base}${RELOAD_CLIENT.slice(1)}`)
+    expect(client.headers.get('content-type')).toContain('javascript')
+    // Same reason `client.js` is `no-store`: the address does not promise one set of bytes.
+    expect(client.headers.get('cache-control')).toBe('no-store')
+    const source = await client.text()
+    expect(source).toContain('__abide/socket/abide/reload')
+    expect(source).toContain('location.reload()')
 
     const health = await fetch(`${app.base}__abide/health`)
     expect(((await health.json()) as { example: unknown }).example).toEqual({ serving: true })
+})
+
+test('the reload client passes the app’s own policy', async () => {
+    // The failure this guards is invisible to every assertion above it: `csp()` is on in this app's
+    // `app.ts`, so a dev client written INLINE into the head is refused by the browser — the page
+    // renders, the markup contains every byte a test could look for, and the tab silently stops
+    // reloading. With the script back in the head this case reports the tag that has no nonce.
+    const answered = await fetch(`${app.base}users/42`)
+    const policy = answered.headers.get('content-security-policy') as string
+    const stamp = policy.match(/script-src[^;]*'nonce-([^']+)'/)?.[1]
+    expect(stamp).toBeDefined()
+    // A shell head is cut ONCE at boot and the nonce is per request, which is why the reload client
+    // cannot be stamped and is a file under `'self'` instead.
+    expect(policy).not.toContain(`script-src 'self' 'unsafe-inline'`)
+
+    const markup = await answered.text()
+    for (const tag of markup.match(/<script(?![^>]*src=)[^>]*>/g) ?? []) {
+        expect(tag).toContain(`nonce="${stamp}"`)
+    }
 })
 
 test('a change restarts the app, and the socket a browser holds is what notices', async () => {

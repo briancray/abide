@@ -50,6 +50,20 @@ export const IDENTITY_PATH = `${ABIDE_PREFIX}identity`
 export const CLIENT_ROUTE = `${ABIDE_PREFIX}client/`
 
 /**
+ * `abide dev`'s reload client, which is a FILE rather than an inline `<script>` in the shell's head.
+ *
+ * The document is served under the app's own policy, and `csp()`'s `script-src` carries no
+ * `'unsafe-inline'`: abide stamps the inline output it writes per RENDER with that request's nonce,
+ * where a dev client lives in a shell head cut once at boot and has no nonce to carry. A script from
+ * this origin is `'self'` — already allowed by any policy that allows the bundle — so the head names
+ * one instead.
+ *
+ * Claimed here for the reason `CLIENT_ROUTE` is, and answered the same way: in FRONT of the request
+ * pipeline, by the command that serves it.
+ */
+export const RELOAD_PATH = `${ABIDE_PREFIX}reload.js`
+
+/**
  * The ESCAPE HATCH parameter, carrying every argument as one JSON value.
  *
  * A read's arguments are ordinarily one query parameter EACH — `?id=7&q=ada` — because the URL is

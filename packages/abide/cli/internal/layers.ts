@@ -110,7 +110,7 @@ export interface Assembling {
      * `abide start`'s already-settled value costs no tick.
      */
     client: LoadedClient | null | Promise<LoadedClient | null>
-    /** Appended to the end of the shell's head. `abide dev`'s reload client, and nothing else. */
+    /** Appended to the end of the shell's head. The tag naming `abide dev`'s reload client, and nothing more. */
     head?: string
 }
 
