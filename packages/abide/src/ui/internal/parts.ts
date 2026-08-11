@@ -989,14 +989,23 @@ class ListPart {
         this.rows = next
         if (lastChanged < 0) return // nothing moved and nothing was rebuilt
 
+        const parent = this.anchor.parentNode as ParentNode
+        if (lastChanged > firstChanged && this.transposed(next, previous, firstChanged, lastChanged, parent))
+            return
+
         // Place in order, walking backwards. A row already sitting where it belongs is not touched,
         // so a change at one end of the list does not disturb the other.
         //
-        // The cost of a swap is the DISTANCE between the two rows, not 2 and not n: once the walk
-        // moves the later row, every row between them has the wrong `nextSibling` and is moved in
-        // turn. Adjacent rows cost 1 move; rows 1 and 198 of 200 cost 197. A minimal-move (LIS)
-        // reconcile would cost 2 — this is the trade, not an oversight, and the example package
-        // benches it at both distances.
+        // Outside the transposition above, a move costs the DISTANCE it covers — and the walk runs
+        // BACKWARDS, so the two directions of the same move are not alike: sending a row 97 places
+        // down the list costs one insert, because everything it passed shifted up into the gap it
+        // left and the walk meets each of them already in place. Pulling that row back up costs 97,
+        // because each row it passes now needs the one below it and has the one above.
+        //
+        // That is the trade, and it is deliberate: on a REAL reorder (a re-sort, a filter) this
+        // already moves ~n rows against the ~n−2√n an uncorrelated permutation needs, so a
+        // minimal-move (LIS) reconcile is worth about 5% for a whole second pass and an array per
+        // update. The example package benches both directions.
         //
         // The WALK, though, no longer costs n. Rows after `lastChanged` are the same objects at the
         // same indices and were in order already, so the walk starts against the first of them
@@ -1011,10 +1020,9 @@ class ListPart {
                 break
             }
         }
-        // Constant across the loop — the anchor is never moved, only inserted before — and the loop
-        // runs once per row from `lastChanged` down, so reading it inside cost a native getter per
-        // MOVED row: 197 of them on the two-row swap this list is benched with.
-        const parent = this.anchor.parentNode as ParentNode
+        // `parent` is read once above the fast path rather than in here: the anchor is never moved,
+        // only inserted before, so it is constant across the loop — and the loop runs once per row
+        // from `lastChanged` down, which cost a native getter per MOVED row.
         for (let i = lastChanged; i >= 0; i--) {
             const instance = (next[i] as Row).instance
             const first = instance.firstNode()
@@ -1032,6 +1040,70 @@ class ListPart {
             }
             reference = first
         }
+    }
+
+    /**
+     * The two rows at the ends of the changed range have TRADED PLACES: move two ranges, not the
+     * distance between them.
+     *
+     * This is the common shape the general walk is worst at. Distance-based placement moves the later
+     * row and then every row between them in turn, so a two-row swap 197 apart costs 197 moves for
+     * two rows' worth of change — and a swap is what a drag handle, a move-up button and an
+     * `[a, b] = [b, a]` all produce. The general walk stays the fallback: a re-sort or a filter is a
+     * different shape, and there the distance IS the work (see the placement comment in `set`).
+     *
+     * Detected in three identity checks and no scan. `firstChanged`/`lastChanged` are the FIRST and
+     * LAST indices where the pass differs from the previous one, so every index strictly between them
+     * already holds the same row object it did — that is what makes this a transposition rather than
+     * an arbitrary pair, and it is why no third comparison over the middle is needed. A row rebuilt
+     * this pass is a fresh object and cannot match either end, so a rebuild falls through.
+     *
+     * @returns `false` when the shape is not a transposition, or when either row has no nodes to
+     * move — the general walk is the fallback for both.
+     */
+    private transposed(
+        next: Row[],
+        previous: Row[],
+        firstChanged: number,
+        lastChanged: number,
+        parent: ParentNode,
+    ): boolean {
+        const earlier = previous[firstChanged]
+        const later = previous[lastChanged]
+        if (earlier === undefined || later === undefined) return false
+        if (next[firstChanged] !== later || next[lastChanged] !== earlier) return false
+
+        // Both ranges materialised BEFORE either moves: a range is walked by `nextSibling`, and
+        // inserting the first node of one rewrites the chain the other would have been read from.
+        // Two instances, so these are two distinct arrays — `live()` reuses each instance's own.
+        const earlierNodes = earlier.instance.live()
+        const laterNodes = later.instance.live()
+        const earlierFirst = earlierNodes[0]
+        const laterLast = laterNodes[laterNodes.length - 1]
+        if (earlierFirst === undefined || laterLast === undefined) return false
+        // Both ends have to be IN the document. The placement walk skips a row with no nodes rather
+        // than placing it, so a row that was empty on the previous pass and has content on this one
+        // is detached — and `laterLast.nextSibling` would then be a node in some other range, or
+        // null, which appends the earlier row to the end of the list instead of moving it.
+        if (earlierFirst.parentNode === null || laterLast.parentNode === null) return false
+
+        // Where the later row currently ENDS, captured before the moves — nothing below it is
+        // touched, so this stays the right destination for the earlier row.
+        const after = laterLast.nextSibling
+        for (let i = 0; i < laterNodes.length; i++) {
+            parent.insertBefore(laterNodes[i] as ChildNode, earlierFirst)
+        }
+        // Adjacent rows are already done: the later row went in front of the earlier one, which puts
+        // the earlier one exactly where this loop would insert it. Without the test a swap of
+        // neighbours would cost two moves where the general walk costs one, and the fast path would
+        // be a pessimisation on the very shape it is most often handed.
+        const earlierLast = earlierNodes[earlierNodes.length - 1] as ChildNode
+        if (earlierLast.nextSibling !== after) {
+            for (let i = 0; i < earlierNodes.length; i++) {
+                parent.insertBefore(earlierNodes[i] as ChildNode, after)
+            }
+        }
+        return true
     }
 
     /** The first node of the first row that has one — `null` when every row is empty, or there are none. */

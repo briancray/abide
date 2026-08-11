@@ -41,6 +41,18 @@ function swapped(items: Item[], a: number, b: number): Item[] {
     return next
 }
 
+/**
+ * One row taken out and put back somewhere else — a reorder that is NOT a transposition, which is
+ * what separates the swap fast path from the walk behind it. Which DIRECTION is the other half: the
+ * walk runs backwards, so the two directions of the same move cost very differently.
+ */
+function lifted(items: Item[], from: number, to: number): Item[] {
+    const next = items.slice()
+    const [held] = next.splice(from, 1)
+    next.splice(to, 0, held as Item)
+    return next
+}
+
 function rand(): string {
     return Math.random().toString(36).slice(2, 6)
 }
@@ -525,13 +537,15 @@ export default suite({
         },
 
         {
-            title: 'keyed — a reorder MOVES DOM instead of rebuilding it, and costs the DISTANCE',
-            note: 'No element is re-created: every row survives as the same object. But placement is a simple in-order walk, not a minimal-move (LIS) reconcile, and this prices that honestly — a swap costs one move per row BETWEEN the two. Adjacent rows cost 1; rows 1 and 98 of 100 cost 97, where a minimal reconcile would cost 2. A five-row swap cannot see this, because 4 of 5 rows is both "minimal" and "the whole list".',
+            title: 'keyed — a reorder MOVES DOM, and a SWAP moves two rows rather than the distance',
+            note: 'No element is re-created: every row survives as the same object. Placement is an in-order walk rather than a minimal-move (LIS) reconcile, so in general a move costs the DISTANCE it covers — once the walk moves a row, every row between it and where it came from has the wrong next sibling and is moved in turn. A two-row swap is the shape that walk is worst at and the one the DOM is asked for most, so it is detected instead: the first and last rows of the changed range have traded places, which is three identity checks and no scan, and two ranges move. The last two pairs are what is NOT taken, and they are the same reorder in the two directions — the walk runs backwards from the last change, so sending a row DOWN the list costs one move and pulling the same row back UP costs the distance. That asymmetry is the trade LIS would buy out; on a real re-sort it is worth about 5%, because an uncorrelated permutation needs ~n−2√n moves against the ~n this makes.',
             async run({ is }) {
-                for (const [a, b, expected] of [
-                    [1, 2, 1],
-                    [1, 20, 19],
-                    [1, 98, 97],
+                for (const [label, reorder, expected] of [
+                    ['swap 1↔2 (adjacent)', swapped(build(100), 1, 2), 1],
+                    ['swap 1↔20', swapped(build(100), 1, 20), 2],
+                    ['swap 1↔98', swapped(build(100), 1, 98), 2],
+                    ['send row 1 down to 98', lifted(build(100), 1, 98), 1],
+                    ['pull row 98 up to 1', lifted(build(100), 98, 1), 97],
                 ] as const) {
                     const source = build(100)
                     const rows = state(source)
@@ -543,23 +557,23 @@ export default suite({
                     )
 
                     const spy = countCalls(Node.prototype, 'insertBefore')
-                    rows.set(swapped(source, a, b))
+                    rows.set(reorder)
                     await tick()
                     spy.restore()
 
                     const after = Array.from(host.querySelectorAll('li'))
                     is(
-                        `swap ${a}↔${b} — the order`,
+                        `${label} — the order`,
                         after.map((li) => li.textContent),
-                        swapped(source, a, b).map((item) => `row ${item.id}`),
+                        reorder.map((item) => `row ${item.id}`),
                     )
-                    // Every element is the SAME object it was — a swap moved them, nothing was rebuilt.
+                    // Every element is the SAME object it was — the rows moved, nothing was rebuilt.
                     for (const li of after) {
                         if (before.get(li.textContent) !== li) {
-                            is(`swap ${a}↔${b} — "${li.textContent}" was rebuilt`, false, true)
+                            is(`${label} — "${li.textContent}" was rebuilt`, false, true)
                         }
                     }
-                    is(`swap ${a}↔${b} — moves`, spy.calls, expected)
+                    is(`${label} — moves`, spy.calls, expected)
                     host.remove()
                 }
             },
@@ -576,7 +590,11 @@ export default suite({
                         }),
                         button('swap rows 1 and 198 (distant)', async () => {
                             const work = await measureFlush(() => rows.set(swapped(rows.peek(), 1, 198)))
-                            log.live('distant swap — one move per row between', nonZero(work))
+                            log.live('distant swap — two ranges, not the distance', nonZero(work))
+                        }),
+                        button('pull row 198 up to 1', async () => {
+                            const work = await measureFlush(() => rows.set(lifted(rows.peek(), 198, 1)))
+                            log.live('one row up 197 places — not a swap, so the distance', nonZero(work))
                         }),
                         button('reverse all 200', async () => {
                             const work = await measureFlush(() => rows.set(rows.peek().slice().reverse()))
@@ -602,7 +620,7 @@ export default suite({
                         run: () => keyedRows.set(swapped(ROWS_200, 1, 2)),
                     },
                     {
-                        label: 'abide — keyed, DISTANT rows (one move per row between)',
+                        label: 'abide — keyed, DISTANT rows (a swap, so two ranges)',
                         prepare: async () => {
                             keyedRows.set(ROWS_200)
                             await tick()
@@ -677,7 +695,7 @@ export default suite({
 
         {
             title: 'the same two reorders, TIMED',
-            note: 'The counters above say a distant swap moves 197 rows where a hand-written one moves 2. This is what that costs on a clock, and it is the number the counters cannot give: the walk itself is O(n) whatever it moves, so the adjacent swap — which moves ONE row — still pays for a pass over two hundred. A reconcile that is cheap in moves and linear in walk is priced honestly by having both cards.',
+            note: 'The counters above say both swaps now move two ranges, the same as a hand-written one. This is the number they cannot give: the DESCRIBING is what a whole-array update costs before any reconciling starts, and it is O(n) whatever the reorder turns out to be — two hundred rows are re-evaluated to swap two of them, and that is the floor the two arms below share. A reconcile that is cheap in moves and linear in describing is priced honestly by having both cards.',
             bench: {
                 kind: 'time',
                 floor: 'flush',
@@ -790,51 +808,71 @@ export default suite({
 
         {
             title: 'the reconcile is right under ARBITRARY mutation, not just the ones with cases',
-            note: 'The placement walk starts at the last row that changed and stops once it is below the first, which is what makes an edit of one row of a thousand read one `nextSibling` instead of a thousand — and it is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap and edit, at random positions, two hundred times, with the whole list checked after every one. The seed is fixed, so a failure is a failure anybody can reproduce.',
+            note: 'The placement walk starts at the last row that changed and stops once it is below the first, and a two-row swap skips the walk entirely — which is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap and edit, at random positions, two hundred times, with the whole list checked after every one. Run over TWO row shapes, because a row that is one element and a row that is a fragment are two different pieces of code — one moves a node and the other moves a range it has to walk out first. The seed is fixed, so a failure is a failure anybody can reproduce.',
             async run({ is }) {
-                const rows = state(build(30))
-                const host = container()
-                mount(host, () => keyedList(rows))
-                await tick()
-
-                // A fixed seed rather than `Math.random`: a fuzz nobody can re-run is a fuzz that
-                // reports a bug once and never again.
-                let seed = 987654
-                const rand = (): number => {
-                    seed = (seed * 1103515245 + 12345) % 2147483648
-                    return seed / 2147483648
-                }
-                let mismatches = 0
-                for (let step = 0; step < 200; step++) {
-                    const next = rows.peek().slice()
-                    const roll = rand()
-                    if (roll < 0.3 && next.length > 1) next.splice(Math.floor(rand() * next.length), 1)
-                    else if (roll < 0.6) {
-                        next.splice(Math.floor(rand() * (next.length + 1)), 0, {
-                            id: 5000 + step,
-                            label: `new ${step}`,
-                        })
-                    } else if (roll < 0.8 && next.length > 1) {
-                        const a = Math.floor(rand() * next.length)
-                        const b = Math.floor(rand() * next.length)
-                        const held = next[a] as Item
-                        next[a] = next[b] as Item
-                        next[b] = held
-                    } else if (next.length > 0) {
-                        const at = Math.floor(rand() * next.length)
-                        next[at] = { id: (next[at] as Item).id, label: `edited ${step}` }
+                const fuzz = async (view: (item: Item) => TemplateResult, perRow: number): Promise<number> => {
+                    // Every shape carries the label in its FIRST node, so one stride reads the order
+                    // out of all of them.
+                    const read = (host: HTMLElement): (string | null)[] => {
+                        const found = host.querySelectorAll('li')
+                        const labels: (string | null)[] = []
+                        for (let i = 0; i < found.length; i += perRow) labels.push(found[i]?.textContent ?? null)
+                        return labels
                     }
-                    rows.set(next)
+                    const rows = state(build(30))
+                    const host = container()
+                    mount(
+                        host,
+                        () => html`<ul>${() => rows().map((item) => keyed(item.id, view(item)))}</ul>`,
+                    )
                     await tick()
-                    const shown = Array.from(host.querySelectorAll('li')).map((li) => li.textContent)
-                    const wanted = next.map((item) => item.label)
-                    if (shown.length !== wanted.length || shown.some((t, i) => t !== wanted[i])) {
-                        mismatches++
+
+                    // A fixed seed rather than `Math.random`: a fuzz nobody can re-run is a fuzz that
+                    // reports a bug once and never again. Per shape, so both see the same mutations.
+                    let seed = 987654
+                    const rand = (): number => {
+                        seed = (seed * 1103515245 + 12345) % 2147483648
+                        return seed / 2147483648
                     }
+                    let mismatches = 0
+                    for (let step = 0; step < 200; step++) {
+                        const next = rows.peek().slice()
+                        const roll = rand()
+                        if (roll < 0.3 && next.length > 1) next.splice(Math.floor(rand() * next.length), 1)
+                        else if (roll < 0.6) {
+                            next.splice(Math.floor(rand() * (next.length + 1)), 0, {
+                                id: 5000 + step,
+                                label: `new ${step}`,
+                            })
+                        } else if (roll < 0.8 && next.length > 1) {
+                            const a = Math.floor(rand() * next.length)
+                            const b = Math.floor(rand() * next.length)
+                            const held = next[a] as Item
+                            next[a] = next[b] as Item
+                            next[b] = held
+                        } else if (next.length > 0) {
+                            const at = Math.floor(rand() * next.length)
+                            next[at] = { id: (next[at] as Item).id, label: `edited ${step}` }
+                        }
+                        rows.set(next)
+                        await tick()
+                        const shown = read(host)
+                        const wanted = next.map((item) => item.label)
+                        if (shown.length !== wanted.length || shown.some((t, i) => t !== wanted[i])) {
+                            mismatches++
+                        }
+                    }
+                    // Length as well as order: a walk that dropped a row leaves a shorter list that
+                    // still reads right for every index it has.
+                    if (read(host).length !== rows.peek().length) mismatches++
+                    host.remove()
+                    return mismatches
                 }
-                is('200 random mutations, every one landing right', mismatches, 0)
-                is('and the list is still live', host.querySelectorAll('li').length, rows.peek().length)
-                host.remove()
+
+                const single = await fuzz((item) => html`<li>${item.label}</li>`, 1)
+                const fragment = await fuzz((item) => html`<li>${item.label}</li><li>·</li>`, 2)
+                is('200 random mutations of one-element rows', single, 0)
+                is('…and of two-node rows, the same 200', fragment, 0)
             },
         },
 
