@@ -117,23 +117,24 @@ test('an adjacent swap builds no key index, and a scattered pass still does', as
     const scattered = base.map((_, i) => base[(i * 97) % base.length] as Item)
 
     /**
-     * Maps allocated per reconcile pass — the LARGEST of several trials, which is the whole of what
-     * makes this stable inside the full suite.
+     * Maps CONSTRUCTED per reconcile pass, counted by standing in front of the constructor.
      *
-     * `heapStats` counts the whole process, so the question is what else can move the number between
-     * the two readings, and there are exactly two candidates. Another suite allocating cannot: the
-     * only yields in the loop below are microtask drains, and a macrotask cannot run until the
-     * microtask queue is empty — which the case above this one asserts rather than assumes. That
-     * leaves a COLLECTION, and a collection can only REMOVE.
+     * Not `heapStats`, and the reason is the whole history of this case. A census counts what is
+     * LIVE, and a key index is garbage the moment the pass that built it ends — so what the census
+     * actually reported was how many dead Maps had not been collected yet, which is a coin flip. It
+     * failed about one run in four with `scattered` at 0.1 against a true rate of 1.0: a collection
+     * inside the loop had taken ninety of the hundred back.
      *
-     * So the contamination is one-directional and the largest reading is the least contaminated one.
-     * Taking the max is not tuning towards a pass: it is the same estimator for both arms, and an
-     * implementation that really allocated an index per pass would report that in every trial.
+     * Two rounds of statistics were spent on that before the mechanism was read properly. First a
+     * RATIO between the arms, on the theory that a background rate cancels — there is no background
+     * rate, because a macrotask cannot interleave a loop that only drains microtasks, which the case
+     * above asserts. Then the MAX of five trials, on the theory that a collection only deflates so
+     * the largest reading is the truest — which is sound, and still loses when every trial contains a
+     * collection.
      *
-     * This replaced a ratio between two single measurements, which was built on the premise that a
-     * background rate cancels between them. There is no background rate — the premise was wrong, and
-     * the ratio flaked about twice in twenty full runs because a mid-loop collection deflated
-     * whichever arm it landed in.
+     * Counting constructions has no such failure mode: it is exact, it needs no trials, and a
+     * collection cannot reach it. The subclass is installed only around the measured loop and both
+     * arms are measured through it, so what it counts is what the reconcile did.
      */
     const mapsPerPass = async (other: Item[]): Promise<number> => {
         const cell = state(base)
@@ -145,29 +146,37 @@ test('an adjacent swap builds no key index, and a scattered pass still does', as
             await tick()
         }
 
+        let built = 0
+        const Real = globalThis.Map
+        // A SUBCLASS rather than a wrapper function: `new Map(...)` has to keep working for every
+        // other caller in the process during the window, `instanceof Map` has to stay true, and a
+        // subclass is the only shape that gives both for free.
+        class Counted<K, V> extends Real<K, V> {
+            constructor(entries?: readonly (readonly [K, V])[] | null) {
+                super(entries)
+                built++
+            }
+        }
         const passes = 100
-        let most = 0
-        for (let trial = 0; trial < 5; trial++) {
-            Bun.gc(true)
-            const before = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
+        globalThis.Map = Counted as unknown as MapConstructor
+        try {
             for (let i = 0; i < passes; i++) {
                 cell.set(i % 2 ? other : base)
                 await tick()
             }
-            const after = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
-            const rate = (after - before) / passes
-            if (rate > most) most = rate
+        } finally {
+            globalThis.Map = Real
         }
         host.remove()
-        return most
+        return built / passes
     }
 
     const scatteredMaps = await mapsPerPass(scattered)
     const adjacentMaps = await mapsPerPass(adjacent)
-    // The fallback still fires where it earns its keep, so this also says the probe NARROWED the
-    // general path rather than removing it.
-    expect(scatteredMaps).toBeGreaterThan(0.1)
-    expect(adjacentMaps).toBeLessThan(scatteredMaps / 2)
+    // Exact now, so the bounds can be: a scattered pass builds its one index, an adjacent swap builds
+    // none. The first is what says the probe NARROWED the general path rather than removing it.
+    expect(scatteredMaps).toBeGreaterThanOrEqual(1)
+    expect(adjacentMaps).toBe(0)
 })
 
 // `url('/about')` — a path with no placeholder, already normalised — used to be split into segments
