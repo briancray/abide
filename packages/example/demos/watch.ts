@@ -550,6 +550,124 @@ export default suite({
         },
 
         {
+            title: 'the subscription LEDGER — every shape that a re-collect can get wrong',
+            note: 'A run detaches from every source and the body re-collects them, so the observer list of a hot cell is torn down and rebuilt on every wake. What that list IS — a Set, an array with back-pointers — is an implementation detail with no output to show for it: get the bookkeeping wrong and a reader stops waking, or wakes twice, and the value it reads is still right either way. So the shapes that can break are enumerated here as WAKE COUNTS rather than left to be discovered. A source read twice in one run is the one that separates a container which dedupes from one that does not; a dependency dropped between runs is the one that separates detaching from pretending to.',
+            async run({ is }) {
+                // 1. Fan-out. Every reader wakes, each exactly once.
+                const shared = state(0)
+                const runs: number[] = [0, 0, 0]
+                const stops = runs.map((_, i) =>
+                    watch(() => {
+                        shared()
+                        runs[i] = (runs[i] as number) + 1
+                    }),
+                )
+                await tick()
+                shared.set(1)
+                await tick()
+                is('every reader of one cell woke exactly once', runs, [2, 2, 2])
+
+                // 2. The same source read TWICE in one run. A Set holds one entry, an array holds
+                // two — and two detach slots that must both be given back, or the second write
+                // finds a stale entry pointing at a node that has moved on.
+                const twice = state(1)
+                let twiceRuns = 0
+                let sum = 0
+                const stopTwice = watch(() => {
+                    twiceRuns++
+                    sum = twice() + twice()
+                })
+                await tick()
+                twice.set(5)
+                await tick()
+                is('a source read twice wakes its reader ONCE', twiceRuns, 2)
+                is('…and the body saw both reads', sum, 10)
+
+                // 3. A dependency DROPPED between runs. The whole point of detaching: after the
+                // flag flips, `left` is no longer read, so writing it must wake nothing.
+                const flag = state(true)
+                const left = state('L')
+                const right = state('R')
+                let branchRuns = 0
+                let shown = ''
+                const stopBranch = watch(() => {
+                    branchRuns++
+                    shown = flag() ? left() : right()
+                })
+                await tick()
+                flag.set(false)
+                await tick()
+                is('flipping the branch woke it', [branchRuns, shown], [2, 'R'])
+                left.set('L2')
+                await tick()
+                is('the dropped dependency wakes nothing', branchRuns, 2)
+                right.set('R2')
+                await tick()
+                is('…and the acquired one still does', [branchRuns, shown], [3, 'R2'])
+
+                // 4. A diamond. One write reaches the effect by two routes and must wake it once.
+                const root = state(1)
+                const viaA = memo(() => root() * 2)
+                const viaB = memo(() => root() * 3)
+                let diamondRuns = 0
+                let total = 0
+                const stopDiamond = watch(() => {
+                    diamondRuns++
+                    total = viaA() + viaB()
+                })
+                await tick()
+                root.set(2)
+                await tick()
+                is('a diamond wakes its foot ONCE, not once per path', diamondRuns, 2)
+                is('…with both arms recomputed', total, 10)
+
+                // 5. A reader that goes away. Its slot must leave the list with it, or the next
+                // write walks an entry whose node is dead.
+                const watched = state(0)
+                let liveRuns = 0
+                let deadRuns = 0
+                const stopLive = watch(() => {
+                    watched()
+                    liveRuns++
+                })
+                const stopDead = watch(() => {
+                    watched()
+                    deadRuns++
+                })
+                await tick()
+                stopDead()
+                watched.set(1)
+                await tick()
+                is('the disposed reader did not wake', deadRuns, 1)
+                is('…and the one beside it still did', liveRuns, 2)
+
+                for (const stop of stops) stop()
+                stopTwice()
+                stopBranch()
+                stopDiamond()
+                stopLive()
+
+                // 6. The list REFILLED after being emptied. Every reader of `shared` has just gone,
+                // so this is the swap-remove edge no other case reaches: an implementation that
+                // mishandles the last element out leaves the container describing a length it no
+                // longer has, and the readers attached afterwards land in the gap.
+                const fresh = [0, 0]
+                const stopFresh = fresh.map((_, i) =>
+                    watch(() => {
+                        shared()
+                        fresh[i] = (fresh[i] as number) + 1
+                    }),
+                )
+                await tick()
+                shared.set(2)
+                await tick()
+                is('readers attached after the list emptied wake exactly once', fresh, [2, 2])
+                is('…and the disposed ones stayed disposed', runs, [2, 2, 2])
+                for (const stop of stopFresh) stop()
+            },
+        },
+
+        {
             title: 'awaiting a cell inside an effect does not subscribe it',
             note: 'Nothing can be tracked through an await anyway, so `await x` reads untracked on purpose — otherwise an effect would silently acquire dependencies it cannot re-collect.',
             async run({ is }) {
