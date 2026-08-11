@@ -1335,6 +1335,67 @@ export default suite({
         },
 
         {
+            title: 'a REACTIVE slot on every row wakes on every row, whatever moved',
+            note: 'The case above skips a row whose values did not move, and per SLOT the row that carries a handler. Neither cutoff can hold for a slot whose value is a THUNK, because a thunk is a fresh closure on every describe and the only thing an identity test can say about it is that it is new. So a list of 1000 rows with one reactive attribute apiece re-runs all 1000 of them for any list update at all — 100 changed labels, or a two-row swap. The DOM is protected: every binding compares before it writes, so the attribute writes stay at 0. The WAKE is not, and it is the thing no output and no DOM counter can show. Two costs are being separated here and only one of them is a defect: waking 1000 rows because 1000 rows read the cell that changed is what every fine-grained framework does and is the shape of the app, not the framework. Waking 1000 rows because the LIST was re-described is the one worth removing — nothing those thunks read had moved.',
+            async run({ is, log }) {
+                const SIZE = 200
+                const rows = state(build(SIZE))
+                const selected = state(-1)
+                let ran = 0
+                const host = container()
+                // The compiler's own emit for a row with a conditional class — see the complex page
+                // in `packages/perf`, which is where these three ops come from.
+                mount(
+                    host,
+                    () =>
+                        html`<ul>${() =>
+                            rows().map((item) =>
+                                keyed(
+                                    item.id,
+                                    html`<li class=${() => {
+                                        ran++
+                                        return item.id === selected() ? 'on' : ''
+                                    }}>${item.label}</li>`,
+                                ),
+                            )}</ul>`,
+                )
+                await tick()
+
+                let before = ran
+                const selecting = await measureFlush(() => selected.set(SIZE / 2))
+                const onSelect = ran - before
+                is('selecting one row writes ONE attribute', selecting.setAttribute, 1)
+                is('…and wakes every row that reads the cell', onSelect, SIZE)
+
+                before = ran
+                const editing = await measureFlush(() => {
+                    const next = rows.peek().slice()
+                    for (let i = 0; i < next.length; i += 10) {
+                        next[i] = { id: (next[i] as Item).id, label: `${(next[i] as Item).label} !!!` }
+                    }
+                    rows.set(next)
+                })
+                const onEdit = ran - before
+                // The contract that IS kept, and the reason this is invisible without a wake count.
+                is('editing a tenth of the labels writes no attribute at all', editing.setAttribute, 0)
+                is('…and writes exactly the changed labels', editing.textWrite, SIZE / 10)
+                is('but every row woke anyway', onEdit, SIZE)
+
+                before = ran
+                const swapping = await measureFlush(() => rows.set(swapped(rows.peek(), 1, SIZE - 2)))
+                const onSwap = ran - before
+                is('a swap moves two rows', swapping.insert, 2)
+                is('…and wakes all of them', onSwap, SIZE)
+
+                log(
+                    `wakes per DOM write, ${SIZE} rows`,
+                    `select ${onSelect}/1 · edit a tenth ${onEdit}/${SIZE / 10} · swap ${onSwap}/2`,
+                )
+                host.remove()
+            },
+        },
+
+        {
             title: 'a pass that threw is not a pass that was APPLIED',
             note: 'Skipping a slot whose value did not move is only sound against a pass that finished. A binder can throw out of the middle of the loop — a slot reading a cell whose load rejected throws by design, and so do a `{#try}` body with no `{:catch}` and an author’s `&ref` handler — and every slot after it was never applied. Comparing against what was HANDED OVER rather than what LANDED would skip those for as long as their values stay put: a value stuck on screen forever, with no error left to show for it. The instance keeps both, and only the finished pass is what a skip is judged against.',
             async run({ is }) {
