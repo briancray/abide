@@ -5,7 +5,7 @@
 // the two apart. Effects are microtask-batched, so every measurement brackets the write AND the
 // flush — the effect is what touches the DOM, not the write.
 
-import { awaited, html, memo, state, type TemplateResult } from 'abide'
+import { awaited, html, memo, state, type State, type TemplateResult } from 'abide'
 import {
     container,
     countCalls,
@@ -18,6 +18,7 @@ import {
     sleep,
     suite,
     tick,
+    total,
     until,
 } from 'abide/tests'
 import { keyed, mount } from 'abide/ui'
@@ -66,6 +67,98 @@ const keyedList = (rows: () => Item[]): TemplateResult =>
     html`<ul class="font-mono text-xs">
         ${() => rows().map((item) => keyed(item.id, html`<li>${item.label}</li>`))}
     </ul>`
+
+// --- a transcript with a live tail ------------------------------------------
+//
+// The shape every list above is missing, and the one a token stream has: the list is LONG and STILL
+// while ONE row at the end changes tens of times a second. Every other list case here moves rows or
+// edits many at once, and both amortise the framework's per-update cost over hundreds of rows. A
+// token amortises nothing — it pays that cost sixty times a second — and nothing else in this suite
+// can see it.
+//
+// The two arms differ in how the APP spells "the tail got longer", not in what the framework does,
+// and the DOM cannot tell them apart: both write one text node and create nothing.
+
+interface ChatArm {
+    /** Put `text` in the tail message. */
+    setTail(text: string): void
+    /** How many times a message body has been DESCRIBED — the number no DOM counter can show. */
+    readonly describes: number
+    dispose(): void
+}
+
+/** A message that owns its text, so a token is a write to that message and nothing else. */
+interface OwnedMessage {
+    id: number
+    text: State<string>
+}
+
+/**
+ * The tail message OWNS its text.
+ *
+ * `${message.text}` hands the slot the CELL rather than a string — `unwrap` calls it inside that
+ * slot's own effect, so the subscription belongs to one message and the list slot never re-runs.
+ */
+function chatOwningTail(host: HTMLElement, depth: number): ChatArm {
+    const messages: OwnedMessage[] = []
+    for (let i = 0; i < depth; i++) messages.push({ id: i, text: state(`message ${i}`) })
+    const log = state(messages)
+    const counted = { describes: 0 }
+    const mounted = mount(
+        host,
+        () =>
+            html`<ul>${() =>
+                log().map((message) => {
+                    counted.describes++
+                    return keyed(message.id, html`<li>${message.text}</li>`)
+                })}</ul>`,
+    )
+    const tail = messages[depth - 1] as OwnedMessage
+    return {
+        setTail: (text) => tail.text.set(text),
+        get describes() {
+            return counted.describes
+        },
+        dispose: () => mounted.dispose(),
+    }
+}
+
+/** The spelling everyone writes first: a fresh array with a fresh tail element, per token. */
+function chatRebuildingArray(host: HTMLElement, depth: number): ChatArm {
+    const messages: Item[] = []
+    for (let i = 0; i < depth; i++) messages.push({ id: i, label: `message ${i}` })
+    const log = state(messages)
+    const counted = { describes: 0 }
+    const mounted = mount(
+        host,
+        () =>
+            html`<ul>${() =>
+                log().map((message) => {
+                    counted.describes++
+                    return keyed(message.id, html`<li>${message.label}</li>`)
+                })}</ul>`,
+    )
+    return {
+        setTail(text) {
+            const next = log.peek().slice()
+            next[depth - 1] = { id: (next[depth - 1] as Item).id, label: text }
+            log.set(next)
+        },
+        get describes() {
+            return counted.describes
+        },
+        dispose: () => mounted.dispose(),
+    }
+}
+
+/** The text on screen in the last message, read from the document rather than from the model. */
+function tailOnScreen(host: HTMLElement): string {
+    const items = host.querySelectorAll('li')
+    return items[items.length - 1]?.textContent ?? ''
+}
+
+/** How deep the transcript is under the live tail. Deep enough that describing it all is visible. */
+const CHAT_DEPTH = 200
 
 // --- bench fixtures ---------------------------------------------------------
 //
@@ -195,6 +288,29 @@ const fixtures = lazy((): Fixtures => {
         distantHost,
         growHost,
         growVanillaHost,
+    }
+})
+
+/**
+ * The three transcripts the token arms write into, built once and left standing.
+ *
+ * Separate from `fixtures` because these are not hosts — each carries the arm's own handle on its
+ * tail, which is the whole of what a hand-written chat keeps and therefore the thing the abide arms
+ * have to be measured against.
+ */
+const chats = lazy((): { owning: ChatArm; rebuilding: ChatArm; byHand: vanilla.VanillaChat } => {
+    const detached = fixtures().detached
+    const div = (): HTMLElement => {
+        const host = document.createElement('div')
+        detached.append(host)
+        return host
+    }
+    const byHandHost = document.createElement('ul')
+    detached.append(byHandHost)
+    return {
+        owning: chatOwningTail(div(), CHAT_DEPTH),
+        rebuilding: chatRebuildingArray(div(), CHAT_DEPTH),
+        byHand: vanilla.buildChat(byHandHost, CHAT_DEPTH),
     }
 })
 
@@ -1392,6 +1508,134 @@ export default suite({
                     `select ${onSelect}/1 · edit a tenth ${onEdit}/${SIZE / 10} · swap ${onSwap}/2`,
                 )
                 host.remove()
+            },
+        },
+
+        {
+            title: 'a token into the tail message describes one message, or every message',
+            note: 'The case above edits many rows at once; this one edits ONE row, sixty times a second, with two hundred still rows above it — the shape a token stream has and the one every other list case here amortises away. The two arms differ only in how the app spells "the tail got longer", and the DOM cannot tell them apart: both write exactly one text node, insert nothing and create nothing, so no counter above this line and no assertion about what is on screen can separate them. What separates them is that setting a fresh ARRAY asks for the whole list to be described again before any reconciling starts — two hundred `html` tags and two hundred keyed wrappers allocated per token, for one text write — while a tail message that owns its own text cell is a subscription of its own and the list slot never re-runs. At sixty tokens a second the first spelling describes twelve thousand messages a second to change one of them.',
+            async run({ is, log }) {
+                const ownHost = container()
+                const rebuiltHost = container()
+                const owning = chatOwningTail(ownHost, CHAT_DEPTH)
+                const rebuilding = chatRebuildingArray(rebuiltHost, CHAT_DEPTH)
+                await tick()
+
+                const ownedBefore = owning.describes
+                const owned = await measureFlush(() => owning.setTail('message 199 tok'))
+                const ownedDescribes = owning.describes - ownedBefore
+
+                const rebuiltBefore = rebuilding.describes
+                const rebuilt = await measureFlush(() => rebuilding.setTail('message 199 tok'))
+                const rebuiltDescribes = rebuilding.describes - rebuiltBefore
+
+                // Everything a test that was not counting describes could have looked at.
+                is('a token writes one text node', owned.textWrite, 1)
+                is('…and the naive spelling writes the same one', rebuilt.textWrite, 1)
+                is('neither inserts a node', owned.insert + rebuilt.insert, 0)
+                is('neither creates one', nodesMade(owned) + nodesMade(rebuilt), 0)
+                is('and both transcripts read the same', tailOnScreen(ownHost), tailOnScreen(rebuiltHost))
+
+                // What actually separates them.
+                is('a tail that owns its text describes nothing', ownedDescribes, 0)
+                is('rebuilding the array describes every message', rebuiltDescribes, CHAT_DEPTH)
+
+                log(
+                    `per token, ${CHAT_DEPTH} messages deep`,
+                    `owned tail ${ownedDescribes} describes · rebuilt array ${rebuiltDescribes}`,
+                )
+                owning.dispose()
+                rebuilding.dispose()
+                ownHost.remove()
+                rebuiltHost.remove()
+            },
+            bench: {
+                kind: 'wake',
+                arms: [
+                    {
+                        label: 'abide — the tail message owns its text',
+                        async run() {
+                            const arm = chats().owning
+                            const before = arm.describes
+                            for (let i = 0; i < 60; i++) {
+                                arm.setTail(`message 199 ${i}`)
+                                await settled()
+                            }
+                            return {
+                                count: arm.describes - before,
+                                of: `message describes for 60 tokens, ${CHAT_DEPTH} deep`,
+                            }
+                        },
+                    },
+                    {
+                        label: 'abide — the array rebuilt per token',
+                        async run() {
+                            const arm = chats().rebuilding
+                            const before = arm.describes
+                            for (let i = 0; i < 60; i++) {
+                                arm.setTail(`message 199 ${i}`)
+                                await settled()
+                            }
+                            return {
+                                count: arm.describes - before,
+                                of: `message describes for 60 tokens, ${CHAT_DEPTH} deep`,
+                            }
+                        },
+                    },
+                ],
+            },
+        },
+
+        {
+            title: 'what one token costs',
+            note: 'The fixed cost of a single update, which every other bench in this suite divides by a thousand rows and therefore cannot show. A token is one write, one flush and one text node, sixty times a second, with nothing to amortise the framework over — so this is the one arm where the scheduling, the queue and the microtask drain are the whole of what abide adds. The hand-written arm keeps a reference to the text node, because an author writing a chat by hand knows which node the tokens go into; that knowledge is exactly what a framework has to recover, and it is what the ratio is against. All three arms SET a bounded string rather than appending to a growing one — a timed arm runs tens of thousands of times, and a tail that really accumulated would make every arm a measurement of string concatenation. What accumulation costs has its own cases, in `state` and `channel`.',
+            async run({ is }) {
+                // The three arms have to leave the same thing on screen, or the ratio is between two
+                // different jobs. Asserted here rather than assumed, because the bench below is the
+                // only other place these arms run and a bench asserts nothing.
+                const host = container()
+                const owning = chatOwningTail(host, CHAT_DEPTH)
+                const byHandHost = container()
+                const byHand = vanilla.buildChat(byHandHost, CHAT_DEPTH)
+                await tick()
+
+                owning.setTail('message 199 tok')
+                vanilla.setTail(byHand, 'message 199 tok')
+                await tick()
+
+                is('abide and the hand-written arm agree', tailOnScreen(host), tailOnScreen(byHandHost))
+                is('…on the text the tokens produced', tailOnScreen(host), 'message 199 tok')
+
+                const work = await measureFlush(() => owning.setTail('message 199 tok tok'))
+                is('and a token is one text write with nothing else', total(work), 1)
+
+                owning.dispose()
+                host.remove()
+                byHandHost.remove()
+            },
+            bench: {
+                kind: 'time',
+                floor: 'flush',
+                arms: [
+                    {
+                        label: 'abide — the tail message owns its text',
+                        run: async (i: number) => {
+                            chats().owning.setTail(`message 199 ${i}`)
+                            await settled()
+                        },
+                    },
+                    {
+                        label: 'abide — the array rebuilt per token',
+                        run: async (i: number) => {
+                            chats().rebuilding.setTail(`message 199 ${i}`)
+                            await settled()
+                        },
+                    },
+                    {
+                        label: 'vanilla — the tail text node, held and written',
+                        run: (i: number) => vanilla.setTail(chats().byHand, `message 199 ${i}`),
+                    },
+                ],
             },
         },
 

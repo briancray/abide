@@ -398,6 +398,63 @@ export function adoptRows(host: Element): Text[] {
     return texts
 }
 
+// --- a chat transcript, by hand ---------------------------------------------
+//
+// The shape a token stream has and none of the other arms here do: a list that is long and STILL,
+// with one row at the end changing tens of times a second. Every other list arm in this file moves
+// rows; this one moves a single text node while the rows around it are untouched.
+
+export interface VanillaChat {
+    /** The text node every token goes into — the whole of what a hand-written chat keeps. */
+    tail: Text
+    /** Start a new message and make it the tail. */
+    append(text: string): void
+}
+
+/**
+ * `count` messages, one element and one text node each, and a handle on the last one's text.
+ *
+ * The handle is what makes this the floor rather than a strawman: an author writing this by hand
+ * knows which node the tokens go into and keeps a reference, so a token costs one `data` write and
+ * no lookup. That knowledge is exactly what a framework has to recover, which is what the ratio is
+ * measuring.
+ */
+export function buildChat(host: Element, count: number): VanillaChat {
+    const fragment = document.createDocumentFragment()
+    let tail!: Text
+    for (let i = 0; i < count; i++) {
+        const line = document.createElement('li')
+        const text = document.createTextNode(`message ${i}`)
+        line.append(text)
+        fragment.append(line)
+        tail = text
+    }
+    host.replaceChildren(fragment)
+    const chat: VanillaChat = {
+        tail,
+        append(text: string) {
+            const line = document.createElement('li')
+            const node = document.createTextNode(text)
+            line.append(node)
+            host.append(line)
+            chat.tail = node
+        },
+    }
+    return chat
+}
+
+/**
+ * Put the tail message's text on screen. The entire per-token cost of a hand-written chat.
+ *
+ * SETS rather than appends, and the abide arms beside it do the same, because a timed arm runs tens
+ * of thousands of times: a tail that really accumulated would be a 100 kB string being copied per
+ * op, and every arm would be measuring `+` rather than the update path. What accumulation costs is
+ * a different claim with its own cases — see the transcript in `state` and the `tail` in `channel`.
+ */
+export function setTail(chat: VanillaChat, text: string): void {
+    chat.tail.data = text
+}
+
 /** The markup `adoptRows` expects, so the two arms start from the same bytes. */
 export function rowsToString(items: Row[]): string {
     let markup = '<ul>'
