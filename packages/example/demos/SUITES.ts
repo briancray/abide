@@ -1,7 +1,7 @@
 // Every suite's NAME, TITLE, TAG and BLURB — and nothing else.
 //
 // Split out from the suites themselves so a page can draw its nav and the hub can draw its index
-// without importing twelve suite modules. That mattered once `compiler` existed: it pulls
+// without importing twenty suite modules. That mattered once `compiler` existed: it pulls
 // TypeScript's scanner, so a static list of suites put ~700 kB of compiler on `/state`.
 //
 // This is the ONE place the prose lives. A suite spreads its own entry into `suite({ ... })`, so the

@@ -133,8 +133,8 @@ test('the same url without the mark is still the whole document', async () => {
  * when the RENDER wrote each piece, and Bun's `fetch` holds a compressed body in its decoder until
  * more of it arrives — the head of a document measured this way landed at 123 ms where the same
  * bytes were on the socket at 5.6 ms. The compressor's own claim is that it does not do that, and it
- * is asserted where it belongs: `a streamed document compresses without being held back`, below,
- * reads the socket rather than a decoded body. Asking for identity here keeps the two apart, so a
+ * is asserted where it belongs: `the compressed head is on the wire before the slow panel settles`,
+ * below, reads the socket rather than a decoded body. Asking for identity here keeps the two apart, so a
  * change to either one fails the test that is about it.
  */
 async function chunks(path: string, headers: Record<string, string> = {}): Promise<Timed[]> {

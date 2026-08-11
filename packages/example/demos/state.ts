@@ -389,8 +389,27 @@ export default suite({
                     return took
                 }
 
+                // The WORK the two ratios below are a proxy for, asserted directly — and the arm that
+                // actually discriminates, because both bounds sit within a clock's slack of the
+                // number the wrong shape measured. The transcript is pushed into, so the array a
+                // reader was handed on the first chunk is the array it is handed on the last. A
+                // write-side copy REPLACES it per chunk and a read-side one hands back a fresh array
+                // per call; both stream the identical values, and only identity can see either.
+                // (`chunks() === chunks()` in one turn is asserted above — this is across chunks.)
+                const live = state<number | undefined>(undefined)
+                live.set(counted(500))
+                const reading = watch(() => void live.chunks().length)
+                await until(() => live.chunks().length > 0, 'the first chunk', 30_000)
+                const firstSeen = live.chunks()
+                await until(() => live.done(), 'the stream to finish', 30_000)
+                reading()
+                is('all 500 arrived', live.chunks().length, 500)
+                is('and it is the array the first chunk was in', live.chunks() === firstSeen, true)
+
                 // Four times the chunks. Linear says about 4x; the quadratic shape this replaced was
-                // 8x between these two sizes and got worse from there.
+                // 8x between these two sizes and got worse from there. A backstop, not the claim:
+                // 4x against a bound of 8 is a clock's worth of room, which is why the identity
+                // assertion above is what a regression fails on first.
                 const alone = (await drain(16_000, false)) / (await drain(4_000, false))
                 is(`4x the chunks costs about 4x, not 16x (${alone.toFixed(1)}x)`, alone < 8, true)
 
@@ -426,6 +445,28 @@ export default suite({
                 await tick()
                 is('a write that normalises to what is held wakes nobody', heard.seen.length, 1)
                 heard.dispose()
+
+                // "It runs untracked" — the clamp above reads no cell, so tracking it would be
+                // invisible. This one reads its ceiling from a cell, and `set` is called from inside
+                // an effect, which is the routine case. A tracked transform hands the CALLING effect
+                // a dependency on whatever the transform touched, and that effect then re-runs on a
+                // write it never reads: the right value, at a wake nobody asked for.
+                const ceiling = state(10)
+                // `ceiling()`, not `ceiling.peek()` — a peek is untracked by construction and would
+                // make this assertion unfailable. The read has to be the tracking kind for the
+                // transform's own guard to be the thing under test.
+                const level = state(0, (n: number) => Math.max(0, Math.min(ceiling(), n)))
+                let writerRuns = 0
+                const writing = watch(() => {
+                    writerRuns++
+                    level.set(3)
+                })
+                await tick()
+                is('the writing effect ran once', writerRuns, 1)
+                ceiling.set(5)
+                await tick()
+                is('and the cell its TRANSFORM read wakes it not at all', writerRuns, 1)
+                writing()
             },
             interact({ host, log }) {
                 const volume = state(5, (n: number) => Math.max(0, Math.min(10, n)))

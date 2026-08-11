@@ -20,6 +20,7 @@
 import { log } from 'abide'
 import { error, GET, handle, json, type LogRecord, register, socket } from 'abide/server'
 import { loopback, sleep, suite, until } from 'abide/tests'
+import { capture, type Written } from './console.ts'
 import { button, field, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv, writeEnv } from './env.ts'
 import { META } from './SUITES.ts'
@@ -572,9 +573,12 @@ export default suite({
                 'The number that decides whether a channel can be left in the code, against a hand-written boolean that does ' +
                 'nothing at all. A closed gate reads the spelling, compares it and returns: it never rebuilds the channel name, ' +
                 'never recompiles a pattern and never reaches the console. The read is the whole cost, and in a browser it is ' +
-                '`localStorage.debug` — ~225 ns against ~15 ns for a property on an ordinary object, measured here — so it is held ' +
-                'for the rest of the synchronous run and dropped on the next microtask. That is what this ratio is: a loop pays ' +
-                'for one read, and a change made from a console or a click is a later turn and is still seen on it.',
+                '`localStorage.debug` — a synchronous platform call, where an environment variable is an ordinary property — so it ' +
+                'is held for the rest of the synchronous run and dropped on the next microtask. That is what these four arms are: ' +
+                'the loop pair divides one held read across the whole batch, the per-turn pair pays it every call, and a change made ' +
+                'from a console or a click is a later turn and is still seen on it. No arm here prices the storage read itself — ' +
+                'under `bun test` the gate is the environment and `localStorage` is never reached — so the ratio on the card is ' +
+                'gate-versus-boolean, which is the number that decides whether a channel can be left in the code.',
             bench: {
                 kind: 'time',
                 arms: [
@@ -642,8 +646,9 @@ function writeDebug(spec: string | undefined): void {
 /**
  * Change the gate, and wait the one turn a browser needs to see it.
  *
- * `localStorage.debug` is read once per synchronous run and held — the read is ~15x a property on an
- * ordinary object, and holding it is what makes a suppressed channel in a loop cost a compare. So a
+ * `localStorage.debug` is read once per synchronous run and held — web storage is a synchronous
+ * platform call where a property is not, and holding it is what makes a suppressed channel in a
+ * loop cost a compare rather than a call into storage on every message. So a
  * change is visible on the NEXT turn, which is every way anyone actually makes one: a console, a
  * click, a reload. An environment variable is an ordinary property and is live, so on a server this
  * await is one the demo pays and the runtime does not.
@@ -657,62 +662,6 @@ async function setDebug(spec: string | undefined): Promise<void> {
 // and the readable form is the one shape that carries them.
 const ESC = String.fromCharCode(27)
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g')
-
-interface Written {
-    /** The console method the level asked for. */
-    level: string
-    text: string
-}
-
-const METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const
-
-/**
- * Every line the region wrote, and which console method wrote it.
- *
- * A logger's whole observable behaviour is what reaches a console, so this is the only way to assert
- * one — and swapping the five methods is exactly what a collector does, which is why the demo can do
- * it honestly rather than reaching inside.
- */
-function capture(fn: () => void): Written[]
-function capture(fn: () => Promise<unknown>): Promise<Written[]>
-function capture(fn: () => unknown): Written[] | Promise<Written[]> {
-    const written: Written[] = []
-    const held = METHODS.map((name) => console[name])
-    const restore = (): void => {
-        for (let i = 0; i < METHODS.length; i++)
-            console[METHODS[i] as (typeof METHODS)[number]] = held[i] as never
-    }
-    for (const name of METHODS) {
-        console[name] = (...args: unknown[]): void => {
-            written.push({ level: name, text: args.map(String).join(' ') })
-        }
-    }
-    // A request is answered over at least one await, so the swap has to outlive the call rather than
-    // be put back by a `finally` that runs first. Widened here rather than copied into a second
-    // helper: what a case asserts is the same lines either way, and two of these would be two places
-    // to remember the restore in.
-    let ran: unknown
-    try {
-        ran = fn()
-    } catch (failure) {
-        restore()
-        throw failure
-    }
-    if (typeof (ran as Promise<unknown> | undefined)?.then !== 'function') {
-        restore()
-        return written
-    }
-    return (ran as Promise<unknown>).then(
-        () => {
-            restore()
-            return written
-        },
-        (failure: unknown) => {
-            restore()
-            throw failure
-        },
-    )
-}
 
 /**
  * How many times the region read the CLOCK.

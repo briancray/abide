@@ -828,7 +828,7 @@ export default suite({
 
         {
             title: 'a full reverse of 200 keyed rows',
-            note: 'The worst case for the in-order walk, and the one where a hand-written version has no better answer either: reversing really does need a move per row. It is also the case that CANNOT distinguish a keyed reconcile from a rebuild — which is why the swap above is the one that earns its place.',
+            note: 'The worst case for the in-order walk, and the one where a hand-written version has no better answer either: reversing really does need a move per row. What it separates is a reconcile from a REBUILD — a rebuild puts 200 creations on the counter next to abide’s zero. What it cannot separate is a minimal-move reconcile from an in-order one, because both move every row; that is the swap above, which is why the swap is the one carrying the keying claim.',
             bench: {
                 kind: 'work',
                 arms: [
@@ -1579,30 +1579,38 @@ export default suite({
 
         {
             title: 'parse once per call site',
-            note: 'One call site is parsed once no matter how many rows come out of it, and every later row is a clone plus a walk. A browser clock is clamped to about a millisecond, so read the 1000-row number, not the single-row one.',
+            note: 'One call site is parsed once no matter how many rows come out of it, and every later row is a clone plus a walk. The number is a RATIO against the createElement loop beside it — the same rows, the same box, the same clock — because a bare millisecond off a browser clock describes this machine. Both lists are visible and both scroll, so neither arm is dodging layout the other pays. The clock is clamped to about a millisecond, which is why the smallest button is 100 rows and not one.',
             interact({ host, log }) {
-                const out = stage(host, 'live (scroll)')
+                const out = stage(host, 'abide — one call site (scroll)')
                 out.className += ' max-h-40 overflow-auto'
                 const rows = state<Item[]>([])
                 mount(out, () => list(rows))
 
+                const arm = stage(host, 'vanilla — createElement per row (scroll)')
+                arm.className += ' max-h-40 overflow-auto'
+                const byHand = document.createElement('ul')
+                byHand.className = 'font-mono text-xs'
+                arm.append(byHand)
+
                 const time = async (n: number): Promise<void> => {
+                    const items = build(n)
                     rows.set([])
+                    byHand.replaceChildren()
                     await tick()
-                    const started = performance.now()
-                    rows.set(build(n))
+                    const startedAbide = performance.now()
+                    rows.set(items)
                     await tick()
-                    const elapsed = performance.now() - started
-                    log(
-                        `${n} rows`,
-                        `${elapsed.toFixed(2)}ms · ${((elapsed / n) * 1000).toFixed(1)}µs per row`,
-                    )
+                    const abide = performance.now() - startedAbide
+                    const startedByHand = performance.now()
+                    vanilla.buildRows(byHand, items)
+                    const hand = performance.now() - startedByHand
+                    log(`${n} rows`, `${(abide / hand).toFixed(2)}× the createElement loop`)
                 }
                 host.append(
                     row(
-                        button('1 row', () => void time(1)),
                         button('100 rows', () => void time(100)),
                         button('1000 rows', () => void time(1000)),
+                        button('5000 rows', () => void time(5000)),
                     ),
                 )
             },

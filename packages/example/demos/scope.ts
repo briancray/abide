@@ -14,6 +14,7 @@ import { isolate, memo, online, state, watch } from 'abide'
 import { suite } from 'abide/tests'
 import { button, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
+import * as vanilla from './vanilla.ts'
 
 export default suite({
     ...META.scope,
@@ -261,8 +262,9 @@ export default suite({
             title: 'what the facade costs when there is no caller scope',
             note:
                 'The argless form has no args key, so scoping it means handing back a facade over “whichever cell belongs to the caller”. ' +
-                'The `{ global }` arm is the raw cell with no facade at all, so the ratio IS the added cost — about 1.7ns a read under JSC, ' +
-                'and on a client the branch always goes the same way.',
+                'The `{ global }` arm is the raw cell with no facade at all, so the gap between the first two arms IS the added cost, ' +
+                'and on a client the branch always goes the same way. The third arm is the floor both sit on: a memoised read by hand ' +
+                'is a closure handing back a captured value, so two arms of abide alone could move together and still read as free.',
             bench: {
                 kind: 'time',
                 arms: [
@@ -273,6 +275,10 @@ export default suite({
                     {
                         label: 'memo({ global }) — the raw cell',
                         run: (): unknown => GLOBAL_READ(),
+                    },
+                    {
+                        label: 'vanilla — a memoised read, no scope to consult',
+                        run: (): unknown => PLAIN_READ.get(),
                     },
                 ],
             },
@@ -321,3 +327,5 @@ export default suite({
 const SOURCE_CELL = state(1)
 const SCOPED_READ = memo(() => SOURCE_CELL() * 2)
 const GLOBAL_READ = memo(() => SOURCE_CELL() * 2, { global: true })
+const PLAIN_SOURCE = vanilla.cell(1)
+const PLAIN_READ = vanilla.derivedMemoised([PLAIN_SOURCE], () => PLAIN_SOURCE.get() * 2)

@@ -564,18 +564,37 @@ export default suite({
 
         {
             title: 'a divergence costs that subtree, not the page',
-            note: 'The adopt walk verifies as it goes — tag by tag, marker by marker — and a slot whose range is not what this template writes warns and builds itself instead. Nothing else on the page is touched, so a stale cache or a non-deterministic render degrades to a rebuild rather than a blank screen.',
-            async run({ is }) {
-                const view = (): TemplateResult => html`<div><p>${'right'}</p><i>${'kept'}</i></div>`
+            note: 'The adopt walk verifies as it goes — tag by tag, marker by marker — and a slot whose range is not what this template writes warns and builds itself instead. The unit that rebuilds is the template INSTANCE holding the divergent slot, so a stale cache or a non-deterministic render degrades to a rebuild of that component rather than a blank screen. The divergent half is a nested template here for that reason: in a page whose only template is the one that diverged, "that subtree" and "the page" are the same nodes and the case cannot tell a bounded rebuild from a total one — measured, that fixture clones five where this one clones two.',
+            async run({ is, log }) {
+                const inner = (): TemplateResult => html`<p>${'right'}</p>`
+                const view = (): TemplateResult => html`<div><i>${'kept'}</i>${inner()}</div>`
                 const host = await served(view)
 
                 // What a divergent server would have written: the wrong tag inside the first slot.
                 const wrong = host.querySelector('p') as Element
                 wrong.replaceChildren(document.createElement('span'))
+                // The half the note says is untouched, held by IDENTITY before the walk runs. A
+                // client that bailed on the whole hydration and rebuilt the page reads identically
+                // on both textContent assertions below — these are the only lines that can tell it
+                // apart from one that rebuilt the divergent subtree alone.
+                const untouched = host.querySelector('i') as Element
+                const root = host.querySelector('div') as Element
 
-                hydrate(host, view)
+                const work = measure(() => void hydrate(host, view))
                 is('the divergent slot was rebuilt correctly', host.querySelector('p')?.textContent, 'right')
                 is('and the rest of the page still reads right', host.querySelector('i')?.textContent, 'kept')
+                // Both lines above pass just as well for a client that threw the whole page away and
+                // rebuilt it — identical screen, identical text. These are the ones that separate it.
+                is('the untouched half is the element the parser made', host.querySelector('i'), untouched)
+                is('and so is the page around it', host.querySelector('div'), root)
+                // Bounded to the inner INSTANCE: two clones, which is what `inner()` is made of. The
+                // same divergence in a page whose only template is the one that diverged cloned five
+                // — the whole thing — which is why the divergent half is nested here rather than
+                // being a second slot in one template, where "that subtree" and "the page" are the
+                // same nodes and no counter could tell the two implementations apart.
+                is('only the inner template was cloned', work.cloneNode, 2)
+                is('and nothing was created from scratch', work.createElement, 0)
+                log('work to rebuild one divergent slot', nonZero(work))
                 host.remove()
             },
         },

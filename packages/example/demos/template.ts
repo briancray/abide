@@ -791,16 +791,33 @@ export default suite({
             note: 'A tagged template literal produces the same `strings` array object on every evaluation, so the scan and the <template> parse are cached on its identity. Every later instantiation is a clone plus a walk.',
             async run({ is }) {
                 const rowOf = (n: number): TemplateResult => html`<li class="text-sm">row ${n}</li>`
+                const listOf = (rows: TemplateResult[]): TemplateResult => html`<ul>${rows}</ul>`
+
+                // `createElement` fires when a call site is PREPARED — the scan and the `<template>`
+                // parse — and that happens once per process. So both call sites are warmed here,
+                // and the measured mount below starts from where the second row of any real list
+                // starts. Without this the case would price the first instantiation, which is the
+                // one instantiation that legitimately parses.
+                const warm = container()
+                mount(warm, () => listOf([rowOf(0)]))
+                warm.remove()
+
                 const built: TemplateResult[] = []
                 for (let i = 0; i < 500; i++) built.push(rowOf(i))
 
                 const identities = new Set(built.map((result) => result.strings))
                 is('500 rows from one call site', built.length, 500)
+                // The premise, not the claim: one `strings` object per call site is what the language
+                // guarantees. What abide owes is caching the parse on that identity, and only the
+                // counter below can say it did.
                 is('distinct `strings` identities', identities.size, 1)
 
                 const host = container()
-                mount(host, () => html`<ul>${built}</ul>`)
+                const work = await measureFlush(() => void mount(host, () => listOf(built)))
                 is('and they all rendered', host.querySelectorAll('li').length, 500)
+                // The claim. An implementation that re-scanned and re-parsed per instantiation
+                // renders the same 500 rows and scores 500 here.
+                is('500 more instantiations parsed nothing', work.createElement, 0)
                 host.remove()
             },
             bench: {
@@ -829,11 +846,10 @@ export default suite({
                 const out = stage(host)
                 const list = document.createElement('ul')
                 out.append(list)
-                const started = performance.now()
                 const built: TemplateResult[] = []
                 for (let i = 0; i < 500; i++) built.push(rowOf(i))
                 mount(list, () => html`${built}`)
-                log('500 rows from one call site', `${(performance.now() - started).toFixed(1)}ms`)
+                log('500 rows from one call site', built.length)
                 log('distinct `strings` identities', new Set(built.map((r) => r.strings)).size)
             },
         },

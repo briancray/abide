@@ -2,14 +2,16 @@
 //
 // `abide/tests` is surface like any other, and every case in `demos/` runs THROUGH it — so a change
 // to what `is` counts as equal, or to where the noise band sits, moves every claim on every page
-// silently and in the same direction. Nothing else in the example reaches these names: a demo asserts
-// with the kit rather than about it, which is exactly why they had no reader.
+// silently and in the same direction. `equals`, `NOISE` and `smokeBench` have no other reader in the
+// example: a demo asserts with the kit rather than about it, which is why they had none at all.
+// `timeArms`, `quiesce` and `verdict` do have one — `site/bench.ts` paints every bench row with them,
+// and `verdict` picks the tail and tone — so a change there is not contained by this file.
 //
 // Here rather than in `demos/` because a demo is a page about the APP's capabilities, and the runner
 // is not one of them — a card titled "the harness works" is furniture, not a claim about abide.
 
 import { describe, expect, test } from 'bun:test'
-import { AssertionError, equals, NOISE, quiesce, smokeBench, timeArms } from 'abide/tests'
+import { AssertionError, equals, NOISE, quiesce, smokeBench, timeArms, verdict } from 'abide/tests'
 
 describe('equals — what `is` means by equal', () => {
     test('structural, not identity', () => {
@@ -82,10 +84,14 @@ describe('AssertionError — what the card and the runner both catch', () => {
 describe('the noise band', () => {
     test('NOISE is the width of `same`, from either side', () => {
         // `verdict` buckets a ratio, and NOISE is what makes it three buckets rather than two. Read
-        // off the constant rather than spelled again, so a widened band moves this with it.
-        const inside = 1 + NOISE / 2
-        expect(inside).toBeLessThan(1 + NOISE)
-        expect(1 / inside).toBeGreaterThan(1 - NOISE)
+        // off the constant rather than spelled again, so a widened band moves this with it — and
+        // asserted through `verdict` rather than about the number, because a band that lost its
+        // lower half prints "same, within noise" over an arm that is genuinely faster, and
+        // arithmetic over the constant alone cannot tell.
+        expect(verdict(1 + NOISE / 2, 1)).toBe('same')
+        expect(verdict(1, 1 + NOISE / 2)).toBe('same')
+        expect(verdict(1 + NOISE * 2, 1)).toBe('slower')
+        expect(verdict(1, 1 + NOISE * 2)).toBe('faster')
     })
 })
 
@@ -100,11 +106,17 @@ describe('Timing.ops — how many operations a number is the average of', () => 
         )
         expect(timings.length).toBe(2)
         for (const timing of timings) {
-            // The field nothing read: without it a ns/op is a number with no sample size behind it,
-            // and `spread` beside it cannot be interpreted.
-            expect(timing.ops).toBeGreaterThan(0)
+            // The field nothing read: without it a ns/op is a number with no sample size behind it.
+            // Bounded well above `PASSES` rather than above zero, because `ops` is `batch * PASSES`
+            // and a no-op arm calibrates its batch against BATCH_TARGET_MS — so this is the bound
+            // that separates the real count from `PASSES` alone or from any small constant, which
+            // `> 0` did not.
+            expect(timing.ops).toBeGreaterThan(10_000)
             expect(Number.isFinite(timing.nsPerOp)).toBe(true)
-            expect(timing.spread).toBeGreaterThanOrEqual(1)
         }
+        // `spread` is deliberately not asserted here. It is `median(samples) / min(samples)`, so
+        // `>= 1` holds for every possible implementation including a hardcoded `1` — it was
+        // arithmetic, not a claim. Making it falsifiable needs pass-to-pass variance a test cannot
+        // schedule, so what guards it is `site/bench.ts`'s NOISY_SPREAD warning, on a real run.
     })
 })

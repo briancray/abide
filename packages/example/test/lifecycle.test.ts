@@ -76,6 +76,11 @@ test('a breakout never binds, and boot says so', async () => {
     expect(await new Response(app.child.stderr).text()).toContain('onStart returned without calling start()')
 })
 
+// `demos/config.ts` owns the resolution ORDER and covers more of it than this does — coercion, the
+// port floor, the app-field override. What a spawn shows that `withEnv` cannot is the two halves
+// that are not in-process: `tag` comes from `appName()` climbing to the nearest package.json above
+// the cwd, which is why `start()` passes one, and the operator's value arrives across a process
+// boundary rather than from a write into this test's own `Bun.env`.
 test('config layers a real environment over the app’s defaults over abide’s floor', async () => {
     // Nothing declared: the app's own default stands, and it was computed off the environment it was
     // handed — `name` came from the package.json climb, which is a fact no default may overrule.

@@ -20,6 +20,7 @@
 import { health } from 'abide'
 import { onHealth } from 'abide/server'
 import { loopback, suite } from 'abide/tests'
+import { capture, writtenAt } from './console.ts'
 import { button, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 
@@ -77,7 +78,16 @@ export default suite({
                 const off = onHealth(() => {
                     throw new TypeError('the pool is empty')
                 })
-                const failed = await health()
+                // "written to `abide:health` as a warning" is the claim the document cannot carry:
+                // delete the line and every field below is unchanged, so the degradation reaches the
+                // endpoint and nothing else. Captured here, which is where a log's behaviour is.
+                let failed = await health()
+                const written = await capture(async () => {
+                    failed = await health()
+                })
+                const warnings = writtenAt(written, 'warn')
+                is('said as a warning, which the gate never swallows', warnings.length, 1)
+                is('on the health channel', warnings[0]?.text.includes('abide:health'), true)
                 is('the failure is a field', failed.error, {
                     name: 'TypeError',
                     message: 'the pool is empty',

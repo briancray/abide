@@ -697,6 +697,43 @@ export async function* renderDocument(
 }
 
 /**
+ * The same document as ONE string, with nothing left in it to run.
+ *
+ * `renderDocument` defers a suspended subtree into a `<template>` and a two-line script that puts it
+ * back, which is the right answer for a browser and no answer at all for a reader that does not run
+ * scripts: an email client, a PDF renderer, a fixture holding an expected document. There the markup
+ * has to be complete when the string is.
+ *
+ * So this is `renderToString`'s context — no `document`, which is what makes `suspend` await INLINE,
+ * in document order — with the shell around it. The shell half is `renderDocument`'s, down to the
+ * nonce on the styles: a policy that reached this render reaches its `<style>` blocks too. Nothing
+ * else here can emit a script, so there is no patch script to carry one.
+ *
+ * The arguments are `renderToString`'s rather than `renderDocument`'s, and both differences are the
+ * same fact: this is a plain async function, so the whole walk happens before it returns. There is
+ * nothing to delay, so `body` is the NODE — a thunk is one arm of `Renderable` anyway, so `() => …`
+ * still works and is no longer a wrapper the caller has to write. `renderDocument` needs the thunk
+ * because it is a generator: its body does not run until the first `next()`, which is a pull the
+ * runtime makes from its own context, and a tree built before that is a tree built outside the
+ * request. And `document` trails with a default, because the caller with no document of its own —
+ * the mail, the fixture — is the one this exists for.
+ *
+ * That default, and any head string, is abide's own document around it. `shell(app.html)` is the
+ * other form and rarely what mail wants: it leaves the `<slot>` tags in the markup, because they are
+ * the container a hydrating client adopts, and there is no client here to adopt anything.
+ */
+export async function renderDocumentToString(
+    body: Renderable,
+    document: string | Shell = '',
+    options?: RenderOptions,
+): Promise<string> {
+    const parts = typeof document === 'string' ? shellAround(document) : document
+    const stamp = isServing() ? nonce() : null
+    const markup = await renderToString(body, options)
+    return `${parts.head}${styleTags(stamp)}${parts.open}${markup}${parts.close}`
+}
+
+/**
  * A page WITHOUT its document — the outlet alone, streamed the same way, for a client that is already
  * looking at the shell.
  *

@@ -17,7 +17,8 @@
 
 import { html, isolate, memo, state } from 'abide'
 import { render, renderDocument, suspend } from 'abide/server'
-import { suite } from 'abide/tests'
+import { reader, suite } from 'abide/tests'
+import { capture, writtenAt } from './console.ts'
 import { button, row, stage } from './dom.ts'
 import { DECLARABLE, withEnv, writeEnv } from './env.ts'
 import { META } from './SUITES.ts'
@@ -57,6 +58,27 @@ export default suite({
                 is('fifty rows loaded', runs, 50)
                 for (let id = 0; id < 50; id++) rows({ id })()
                 is('and 50 kB of them is still cached', runs, 50)
+
+                // The half above is output; this is the cost. Every assertion so far passes for an
+                // implementation that walked and charged all fifty values on the way past — the
+                // right data retained, at a price nobody asked for. The getter counts the walk, and
+                // the ceiling is unset EXPLICITLY so both lanes assert it: without the `withEnv` the
+                // headless lane can declare one and this is the file's loudest claim.
+                let looks = 0
+                const weighable = memo(
+                    ({ id }: { id: number }) => ({
+                        id,
+                        get body(): string {
+                            looks++
+                            return 'x'.repeat(1000)
+                        },
+                    }),
+                    { global: true },
+                )
+                await withEnv({ [CACHE]: undefined }, async () => {
+                    for (let id = 0; id < 50; id++) weighable({ id })()
+                    is('with no ceiling declared, nothing sized a value at all', looks, 0)
+                })
 
                 // The third knob, and the branch nothing races: undeclared, the walk is awaited with
                 // no timer beside it at all rather than under a number abide picked.
@@ -255,13 +277,36 @@ export default suite({
             title: 'a transcript that overflows drops the REPLAY, not the stream',
             note: 'What a cap on a transcript protects is a REPLAY, and half a replay is worse than none: a transcript missing its middle is a hole no reader can see, where an empty one says plainly there is nothing to replay. So the whole thing is dropped on the chunk that passed the cap, the version moves once so a reader wakes for the drop and then sleeps, and the stream itself carries on — the cell still holds every chunk that arrives and still finishes. It is also said once on `abide:stream`, as a warning: the `DEBUG` gate controls volume, not breakage, and a transcript that silently went empty reads as a stream that produced nothing.',
             async run({ is }) {
-                await withEnv({ [TRANSCRIPT]: '250' }, async () => {
+                await withEnv({ [TRANSCRIPT]: '250', DEBUG: undefined }, async () => {
                     const feed = state('')
-                    feed.set(lines(5, 100))
-                    await feed
+                    // "the version moves once so a reader wakes for the drop and then sleeps" is a
+                    // WAKE claim, and every value assertion below passes without it: a transcript
+                    // that kept bumping its version after the drop hands a reader the same empty
+                    // array again and again, and reads correct every time.
+                    const replay = reader(() => feed.chunks().length)
+                    // …and "said once, as a warning" is the third claim, which every assertion here
+                    // was blind to: delete the line and a transcript goes empty in silence, which is
+                    // exactly what the note says must not happen. `DEBUG` is unset above so the
+                    // capture also carries the gate half — a warning the gate could swallow would
+                    // arrive as zero lines here.
+                    const written = await capture(async () => {
+                        feed.set(lines(5, 100))
+                        await feed
+                    })
+                    const warnings = writtenAt(written, 'warn')
+                    if (DECLARABLE) {
+                        is('said once, whatever DEBUG says', warnings.length, 1)
+                        is('on the stream channel', warnings[0]?.text.includes('abide:stream'), true)
+                    }
 
                     if (DECLARABLE) is('the third 100-byte chunk is what passed 250', feed.chunks(), [])
                     else is('no environment here, so the whole transcript stands', feed.chunks().length, 5)
+                    if (DECLARABLE) {
+                        // First run, the two chunks kept, and the drop. Then silence: chunks four
+                        // and five move no version a reader of the transcript can see.
+                        is('a reader woke for the drop and then slept', replay.seen.length, 4)
+                    }
+                    replay.dispose()
                     // Both lanes say these two, which is the claim: an overflow disables replay,
                     // never the stream.
                     is('the cell still holds the latest', feed(), sized(4, 100))

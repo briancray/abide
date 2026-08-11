@@ -154,6 +154,27 @@ export default suite({
                 await tick()
                 dispose()
                 is('the order', events, ['up:0', 'down:0', 'up:1', 'down:1'])
+
+                // "it is untracked" is the other half of the note, and the order above is blind to
+                // it: the teardown here reads no cell, so a tracked teardown would produce the same
+                // four events. This one reads one. A teardown that subscribed its effect to what it
+                // touched would re-run the BODY on the next write to `touched` — right value, work
+                // nobody asked for, which is the shape only a counter sees.
+                const touched = state(0)
+                const trigger = state(0)
+                let runs = 0
+                const stop = watch(() => {
+                    void trigger()
+                    runs++
+                    return () => void touched()
+                })
+                trigger.set(1)
+                await tick()
+                is('the body ran once per write to what it reads', runs, 2)
+                touched.set(1)
+                await tick()
+                is('and a cell only the TEARDOWN read wakes it not at all', runs, 2)
+                stop()
             },
         },
 
@@ -299,6 +320,28 @@ export default suite({
                             for (let i = 0; i < 100; i++) noise.set(i)
                             await tick()
                             return { count: runs - 1, of: 're-runs from 100 writes to what the BODY reads' }
+                        },
+                    },
+                    // The floor the declared form is claiming to match. A hand-declared subscription
+                    // never had auto-tracking to opt out of, so it wakes zero times — without this
+                    // arm the card can only say the declared spelling beats the discovered one, not
+                    // that it costs what declaring the dependency by hand costs.
+                    {
+                        label: 'vanilla — subscribe(declared), handler reads the other cell freely',
+                        run: async () => {
+                            const declared = vanilla.cell(0)
+                            const noise = vanilla.cell(0)
+                            let runs = 0
+                            const off = declared.subscribe(() => {
+                                void noise.get()
+                                runs++
+                            })
+                            for (let i = 0; i < 100; i++) noise.set(i)
+                            off()
+                            return {
+                                count: runs,
+                                of: 're-runs from 100 writes to what the HANDLER reads',
+                            }
                         },
                     },
                 ],

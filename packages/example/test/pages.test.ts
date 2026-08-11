@@ -35,6 +35,13 @@ test('every layout above a page wraps it, outermost first', async () => {
     const table = await pages(HERE)
     const user = table.find((entry) => entry.path === '/users/[id]')
     expect(user?.layouts?.length).toBe(2)
+    // The ORDER, which the count cannot see: the prefix walk in `pages()` pushes the root and then
+    // descends, and an inverted walk emits the same two files and the same two counts. The render
+    // test below cannot see it either — `toContain` finds both strings whichever one is outside —
+    // and `demos/routing.ts` drives a table with a single layout, so this is the only line in the
+    // package that fails when the nesting flips.
+    // …read off `source`, because a loader is a closure and a closure has no address.
+    expect(user?.source?.layouts).toEqual(['layout.abide', 'users/layout.abide'])
     const home = table.find((entry) => entry.path === '/')
     expect(home?.layouts?.length).toBe(1)
 })

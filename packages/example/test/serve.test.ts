@@ -212,6 +212,11 @@ test('two requests interleaving across their awaits do not share a cache', async
 })
 
 test('a keyed memo is per-request under serve', async () => {
+    // Not the demo's `isolate` arm again: what this adds over the case above is KEYED slot storage
+    // reached through the async-local source rather than the plain variable — `storeFor` is where
+    // the two substrates differ, and an argless async memo is the only shape above that gets there.
+    // (`{ global }` has no arm here on purpose: `memo` returns the shared map before `storeFor` is
+    // called, so `serve` and `isolate` are one branch and `demos/scope.ts` already owns it.)
     let bodyRuns = 0
     const profile = memo(({ id }: { id: number }) => {
         bodyRuns++
@@ -224,23 +229,6 @@ test('a keyed memo is per-request under serve', async () => {
     expect(bodyRuns).toBe(2)
     expect(one).toEqual({ id: 7, seat: 1 })
     expect(two).toEqual({ id: 7, seat: 2 })
-})
-
-test('{ global } survives across requests', async () => {
-    let bodyRuns = 0
-    const config = memo(
-        ({ key }: { key: string }) => {
-            bodyRuns++
-            return `${key}:${bodyRuns}`
-        },
-        { global: true },
-    )
-
-    const one = await serve(new Request('https://x.test/'), async () => config({ key: 'a' })())
-    const two = await serve(new Request('https://x.test/'), async () => config({ key: 'a' })())
-
-    expect(bodyRuns).toBe(1)
-    expect([one, two]).toEqual(['a:1', 'a:1'])
 })
 
 test('a synchronous handler never becomes a promise', () => {
@@ -734,20 +722,17 @@ test('production refuses to seal without a declared secret', async () => {
     })
 })
 
-test('the endpoint answers about the caller that asked, and is never cached', async () => {
+// The status, the `no-store` header and the anonymous floor are `demos/identity.ts`'s — it reaches
+// the same `dispatch` through `loopback()` and asserts all three on the card. What only lives here is
+// the cookie-bearing arm: a real seal minted under a request scope, which is the half a browser card
+// cannot show.
+test('the endpoint answers about the caller that asked', async () => {
     const cookie = cookieOf(await login({ id: 'u1', name: 'Ada' }))
 
     const answered = (await dispatch(
         new Request('https://x.test/__abide/identity', { headers: { cookie } }),
     )) as Response
-    expect(answered.status).toBe(200)
-    // Per-caller by construction, so anything caching it would hand one visitor another's principal.
-    expect(answered.headers.get('cache-control')).toBe('no-store')
     expect(await answered.json()).toMatchObject({ authenticated: true, id: 'u1', name: 'Ada' })
-
-    // The same address with no cookie is a different caller, and gets the floor.
-    const anonymous = (await dispatch(new Request('https://x.test/__abide/identity'))) as Response
-    expect(await anonymous.json()).toMatchObject({ authenticated: false })
 })
 
 test('tracestate is a Map, like bag() and cookies(), and propagates', async () => {

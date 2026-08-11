@@ -307,6 +307,12 @@ export default suite({
             note: 'A missing segment and a param the pattern has no segment for are both typos every time, and both otherwise produce an href pointing at the wrong page — a bug nothing catches until somebody clicks it.',
             run({ is, throws }) {
                 is('a required segment', url('/users/[id]', { id: 42 }), '/users/42')
+                // The normalisation the placeholder-free fast path has to be conservative ABOUT: a
+                // path already in this shape is handed back untouched, anything else takes the walk.
+                is('an already-normalised path is handed back', url('/docs/guide'), '/docs/guide')
+                is('a trailing slash goes', url('/a/b/'), '/a/b')
+                is('a doubled slash collapses', url('//a'), '/a')
+                is('and the empty path is the root', url(''), '/')
                 is('with a query', url('/users/[id]', { id: 42 }, { tab: 'posts' }), '/users/42?tab=posts')
                 is('an absent optional drops out', url('/blog/[[slug]]'), '/blog')
                 is('…and present when given', url('/blog/[[slug]]', { slug: 'hi' }), '/blog/hi')

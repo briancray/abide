@@ -16,6 +16,7 @@ import {
     keep,
     measureFlush,
     nonZero,
+    nsPerOp,
     sleep,
     suite,
     tick,
@@ -1140,11 +1141,12 @@ export default suite({
 
         {
             title: 'a streamed row costs one row, however many are already there',
-            note: 'The case above proves rows ARRIVE; three of them cannot tell an append from a rebuild, because both put the same text on screen. This one streams two sizes and compares the per-row cost. A stream used to hand its whole accumulated array to `ListPart.set`, which reconciles the LIST — so row 400 re-probed and re-updated the 399 already placed, and the quadratic was invisible because every one of those updates correctly wrote nothing.',
+            note: 'The case above proves rows ARRIVE; three of them cannot tell an append from a rebuild, because both put the same text on screen. This one streams two sizes and compares how the per-row cost grows against the same rows appended by hand. A stream used to hand its whole accumulated array to `ListPart.set`, which reconciles the LIST — so row 400 re-probed and re-updated the 399 already placed, and the quadratic was invisible because every one of those updates correctly wrote nothing.',
             async run({ is, log }) {
-                // A ratio between two sizes of the same structure, which is the one timing claim
-                // that stays honest across substrates: an absolute number here would describe the
-                // machine and the DOM emulator, not the reconcile.
+                // How the per-row cost GROWS between two sizes of the same structure, over the same
+                // growth measured by hand — a ratio of ratios, which is the form of this claim that
+                // stays honest across substrates. An absolute number here would describe the machine
+                // and the DOM emulator, not the reconcile.
                 const streamRows = async (count: number): Promise<number> => {
                     const host = container()
                     // The source SIGNALS its own end, and nothing here polls. `until` sleeps 2 ms a
@@ -1161,28 +1163,73 @@ export default suite({
                         for (let i = 0; i < count; i++) yield i
                         done()
                     }
-                    const started = performance.now()
-                    mount(host, () => html`<ul>${() => streamed(source(), (n) => html`<li>${n}</li>`)}</ul>`)
+                    const mounted = mount(
+                        host,
+                        () => html`<ul>${() => streamed(source(), (n) => html`<li>${n}</li>`)}</ul>`,
+                    )
                     await finished
-                    const perRow = (performance.now() - started) / count
-                    is(`${count} rows landed`, host.querySelectorAll('li').length, count)
+                    const landed = host.querySelectorAll('li').length
+                    // Disposed, not just detached: this runs thousands of times inside the batch
+                    // below, and a scope left standing per op would make the later passes measure
+                    // the accumulation rather than the stream.
+                    mounted.dispose()
                     host.remove()
-                    return perRow
+                    return landed
                 }
 
-                // Warmed first, and the warmup is what makes this case DISTINGUISH at all: measured
-                // cold, the small arm carries the JIT and reads as slow, which flattered the
-                // rebuild to ~1.2x and let it pass. Warm, the two arms separate 4x.
-                await streamRows(64)
-                const few = await streamRows(64)
-                const many = await streamRows(2048)
-                const ratio = many / few
-                log('per row', `64 rows — ${duration(few)}, 2048 rows — ${duration(many)}`)
-                // 32x the rows. Appending, the per-row cost does not grow with the list and this
-                // measures ~0.4x; rebuilding, it does, and the same case measures ~1.55x. The bound
-                // sits between them with 3x of room on each side, because a clock in a browser card
-                // is loose — what it has to separate is a flat cost from a growing one.
-                is(`32x the rows costs no more per row (${ratio.toFixed(2)}x)`, ratio < 1.2, true)
+                is('64 rows landed', await streamRows(64), 64)
+                is('2048 rows landed', await streamRows(2048), 2048)
+
+                // The same rows appended by hand, out of the same async source — and it is here to
+                // absorb the substrate rather than to win: a longer parent costs more to append to
+                // in any DOM, so BOTH arms grow with the list, and only the growth abide adds ON TOP
+                // of the hand-written arm's is a claim about the reconcile. Against a fixed bound
+                // instead, abide's own growth reads 1.44x under Bun's DOM and 0.89x in Safari, which
+                // is a bound that would have to straddle the substrate rather than measure the code.
+                const byHand = async (count: number): Promise<number> => {
+                    const host = container()
+                    const list = document.createElement('ul')
+                    host.append(list)
+                    const source = async function* (): AsyncGenerator<number> {
+                        for (let i = 0; i < count; i++) yield i
+                    }
+                    for await (const n of source()) {
+                        const li = document.createElement('li')
+                        li.textContent = String(n)
+                        list.append(li)
+                    }
+                    const landed = list.children.length
+                    host.remove()
+                    return landed
+                }
+
+                is('and the hand-written arm lands them too', await byHand(64), 64)
+
+                // Timed by `nsPerOp` rather than by a clock around one run, and that is what makes
+                // the case portable: Safari clamps `performance.now` to 1 ms, one 64-row stream
+                // lands well inside a quantum, so the small arm read 0 and the ratio came out
+                // `Infinity` — a fact about the clock, not about the reconcile. Sizing the batch to
+                // 40 ms also warms the JIT, which is what makes the arms DISTINGUISH at all:
+                // measured cold, the small arm carries the warmup and reads as slow, which
+                // flattered the rebuild this case was written to catch.
+                const [fewStreamed, manyStreamed, fewByHand, manyByHand] = (await nsPerOp([
+                    { label: '64 rows', run: () => streamRows(64) },
+                    { label: '2048 rows', run: () => streamRows(2048) },
+                    { label: '64 rows by hand', run: () => byHand(64) },
+                    { label: '2048 rows by hand', run: () => byHand(2048) },
+                ])) as [number, number, number, number]
+
+                const growth = (few: number, many: number): number => many / 2048 / (few / 64)
+                const ratio = growth(fewStreamed, manyStreamed) / growth(fewByHand, manyByHand)
+                log('per row', `64 rows — ${duration(fewStreamed / 64)}, 2048 — ${duration(manyStreamed / 2048)}`)
+                log('per row, by hand', `64 rows — ${duration(fewByHand / 64)}, 2048 — ${duration(manyByHand / 2048)}`)
+                // 32x the rows. Appending, abide grows with the list exactly as far as the DOM under
+                // it does and this measures ~1.2x; the accumulated-array rebuild this case was
+                // written to catch grows 12x where the hand-written arm grows 1.2x, so the same
+                // number reads ~10x. The bound sits between them with 2.5x of room below and 3x
+                // above, because a clock in a browser card is loose — what it has to separate is a
+                // flat cost from a growing one.
+                is(`32x the rows costs no more per row than by hand (${ratio.toFixed(2)}x)`, ratio < 3, true)
             },
         },
 

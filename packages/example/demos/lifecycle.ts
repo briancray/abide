@@ -17,6 +17,7 @@
 
 import { boot, error, handle, json, middleware, onError, onStart, onStop, shutdown } from 'abide/server'
 import { suite } from 'abide/tests'
+import { capture, writtenAt } from './console.ts'
 import { button, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 
@@ -66,13 +67,23 @@ export default suite({
                     // No `start()`. A licence check failed, a migration refused, an env var is missing.
                 })
 
-                const answered = await boot(() => {
-                    bound = true
-                    return 'the socket'
+                // "said once as a warning" is the half `bound` and `answered` cannot see: without
+                // the line, a process that decided not to serve is a SILENT success, which is the
+                // one outcome the note rules out. Captured rather than asserted on the document,
+                // because what reached a console is the whole of a log's observable behaviour.
+                let answered: string | null = null
+                const written = await capture(async () => {
+                    answered = await boot(() => {
+                        bound = true
+                        return 'the socket'
+                    })
                 })
 
                 is('nothing bound', bound, false)
                 is('and the answer says so', answered, null)
+                const warnings = writtenAt(written, 'warn')
+                is('said once, and never gated', warnings.length, 1)
+                is('on the lifecycle channel', warnings[0]?.text.includes('abide:lifecycle'), true)
                 off()
             },
         },

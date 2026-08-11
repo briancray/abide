@@ -13,6 +13,7 @@ import {
     type Renderable,
     render,
     renderDocument,
+    renderDocumentToString,
     renderToString,
     shell,
     suspend,
@@ -242,9 +243,12 @@ export default suite({
                         )}</tbody></table>`,
                     ),
                 )
-                // Not zero, because `renderToString` is an async function and awaiting it is itself a
-                // turn. What must not happen is a turn PER ROW.
-                is('200 rows cost fewer turns than there are rows', turns - floor < 200, true)
+                // The floor is `renderToString` being an async function — awaiting it is itself a
+                // turn — so what is left after subtracting it is what the WALK owed, and the walk
+                // owes none. Pinned at 0 rather than bounded below the row count: a bound of 200
+                // over 200 rows still passes a walk that yields every other row, which is the same
+                // O(n) shape the case exists to forbid.
+                is('the walk over 200 rows owes no turns of its own', turns - floor, 0)
             },
             bench: {
                 kind: 'budget',
@@ -554,6 +558,44 @@ export default suite({
                     refused = (failure as Error).message
                 }
                 is('a shell with nowhere to render is refused', refused.includes('<slot></slot>'), true)
+            },
+        },
+
+        {
+            title: 'a document for a reader that runs nothing',
+            note: '`renderDocumentToString(body)` is the same shell around `renderToString`’s walk, and the difference is where a `suspend` lands. A streamed document defers it into a `<template>` and a two-line script that puts it back; an email client runs no script, so that subtree would sit in the template forever. Rendering to a string there is nowhere to patch, so the load is awaited in place and the markup is complete when the string is. The head trails and defaults to nothing — abide’s own document is the whole of what a mail needs around it — and the body is a NODE rather than a thunk, because a plain async function has nothing to delay.',
+            async run({ is }) {
+                const body = () =>
+                    html`<h1>receipt</h1>
+                        <p>${suspend(slow(5, '$12'), (total) => html`<b>${total}</b>`, 'loading…')}</p>`
+
+                const mailed = await renderDocumentToString(body())
+                is('the load is written in place', mailed.includes('<b>$12</b>'), true)
+                is('so the fallback never appears', mailed.includes('loading…'), false)
+                is('and there is nothing to run', mailed.includes('<script'), false)
+                // No head asked for, so what is around it is abide's own document — the doctype, the
+                // lang and the charset — followed by whatever scoped styles are registered, which is
+                // the one thing that reaches a head nobody wrote.
+                is(
+                    'abide’s own document around it',
+                    mailed.startsWith('<!doctype html><html lang="en"><head><meta charset="utf-8">'),
+                    true,
+                )
+                is('and no head of its own', mailed.includes('<title'), false)
+                is('closed', mailed.endsWith('</body></html>'), true)
+
+                // A thunk is an arm of `Renderable`, so the wrapper a streamed render needs is still
+                // accepted here rather than being a second spelling to remember.
+                const titled = await renderDocumentToString(body, '<title>receipt</title>')
+                is('a head, when there is one to give', titled.includes('<title>receipt</title>'), true)
+                is('and a thunk renders the same', titled.includes('<b>$12</b>'), true)
+
+                // The same body through the streamed lane, which is what the string lane exists
+                // beside: the subtree is markup a script has to move, and nothing moves it here.
+                let streamed = ''
+                for await (const chunk of renderDocument('<title>receipt</title>', body)) streamed += chunk
+                is('streamed, it arrives as a patch', streamed.includes('<template id='), true)
+                is('that only a script applies', streamed.includes('<script'), true)
             },
         },
 
