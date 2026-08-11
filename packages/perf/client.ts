@@ -1,7 +1,8 @@
 // The client lane: the route table as static imports the bundler can see, then hydrate the slot the
 // server rendered into.
 
-import { navigate, outlet, ready, routes } from 'abide'
+import { navigate } from 'abide'
+import { outlet, ready, routes } from 'abide/runtime'
 import { hydrate } from 'abide/ui'
 
 const CHROME = (): Promise<typeof import('./pages/layout.abide')> => import('./pages/layout.abide')

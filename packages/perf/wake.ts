@@ -55,7 +55,9 @@ async function drain(): Promise<void> {
 function median(values: number[]): number {
     const sorted = values.slice().sort((a, b) => a - b)
     const at = sorted.length >> 1
-    return sorted.length % 2 === 0 ? ((sorted[at - 1] as number) + (sorted[at] as number)) / 2 : (sorted[at] as number)
+    return sorted.length % 2 === 0
+        ? ((sorted[at - 1] as number) + (sorted[at] as number)) / 2
+        : (sorted[at] as number)
 }
 
 /**
@@ -207,7 +209,10 @@ async function slotArm(host: HTMLElement): Promise<Arm> {
         () =>
             html`<ul>${() =>
                 cell().map((row) =>
-                    keyed(row.id, html`<li class=${() => (row.id === selected() ? 'on' : '')}>${row.label}</li>`),
+                    keyed(
+                        row.id,
+                        html`<li class=${() => (row.id === selected() ? 'on' : '')}>${row.label}</li>`,
+                    ),
                 )}</ul>`,
     )
     await drain()

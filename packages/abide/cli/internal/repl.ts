@@ -23,7 +23,7 @@
 import vm from 'node:vm'
 import { plugin } from 'bun'
 import { abidePlugin } from '$compiler/plugin.ts'
-import * as SURFACE from '$shared'
+import * as SURFACE from '$abide'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
 import { isSource } from '$shared/internal/slots.ts'
 import { STREAMING } from '$shared/internal/wire.ts'

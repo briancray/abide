@@ -6,7 +6,8 @@
 // `counter.abide` and `counter.ts` are the same component written twice, and the compiler's whole claim is
 // that the two are indistinguishable at the output AND at the cost.
 
-import { html, styleTags } from 'abide'
+import { html } from 'abide'
+import { styleTags } from 'abide/server'
 import { adopt, streamed } from 'abide/runtime'
 import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
 import { renderToString } from 'abide/server'
@@ -428,7 +429,9 @@ export default suite({
             run({ is }) {
                 is(
                     'a row is the row, with nothing either side of it',
-                    template('<ul>\n    {#for w of ws by w.id}\n        <li>{w.label}</li>\n    {/for}\n</ul>'),
+                    template(
+                        '<ul>\n    {#for w of ws by w.id}\n        <li>{w.label}</li>\n    {/for}\n</ul>',
+                    ),
                     '<ul>\n    ${() => (ws ?? []).map((w) => keyed(w.id, html`<li>${w.label}</li>`))}</ul>',
                 )
                 // The exception, and the reason the test is for a NEWLINE rather than for whitespace.
@@ -441,7 +444,9 @@ export default suite({
                 // it holds — the run being removed is the one the author never wrote as content.
                 is(
                     'and so does the break BETWEEN two nodes of one row',
-                    template('<ul>\n    {#for w of ws}\n        <li>{w}</li>\n        <li>x</li>\n    {/for}\n</ul>'),
+                    template(
+                        '<ul>\n    {#for w of ws}\n        <li>{w}</li>\n        <li>x</li>\n    {/for}\n</ul>',
+                    ),
                     '<ul>\n    ${() => (ws ?? []).map((w) => html`<li>${w}</li>\n        <li>x</li>`)}</ul>',
                 )
                 // Whitespace outside a body is not the body's, which is what keeps the ordinary
@@ -456,7 +461,9 @@ export default suite({
                 // every row that neither file looks like it produced.
                 is(
                     'a comment on its own line does not hold the indent in',
-                    template('<ul>\n    {#for w of ws}\n        <!-- the row -->\n        <li>{w}</li>\n    {/for}\n</ul>'),
+                    template(
+                        '<ul>\n    {#for w of ws}\n        <!-- the row -->\n        <li>{w}</li>\n    {/for}\n</ul>',
+                    ),
                     '<ul>\n    ${() => (ws ?? []).map((w) => html`<li>${w}</li>`)}</ul>',
                 )
             },
@@ -1262,8 +1269,14 @@ export default suite({
 
                 const growth = (few: number, many: number): number => many / 2048 / (few / 64)
                 const ratio = growth(fewStreamed, manyStreamed) / growth(fewByHand, manyByHand)
-                log('per row', `64 rows — ${duration(fewStreamed / 64)}, 2048 — ${duration(manyStreamed / 2048)}`)
-                log('per row, by hand', `64 rows — ${duration(fewByHand / 64)}, 2048 — ${duration(manyByHand / 2048)}`)
+                log(
+                    'per row',
+                    `64 rows — ${duration(fewStreamed / 64)}, 2048 — ${duration(manyStreamed / 2048)}`,
+                )
+                log(
+                    'per row, by hand',
+                    `64 rows — ${duration(fewByHand / 64)}, 2048 — ${duration(manyByHand / 2048)}`,
+                )
                 // 32x the rows. Appending, abide grows with the list exactly as far as the DOM under
                 // it does and this measures ~1.2x; the accumulated-array rebuild this case was
                 // written to catch grows 12x where the hand-written arm grows 1.2x, so the same

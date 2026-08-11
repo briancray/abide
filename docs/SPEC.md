@@ -8,8 +8,8 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | What an author TYPES: the three primitives, `watch`, `untrack`, `scope`, `isolate`, `html`, `props`, `suspend`, `log`, `online()`, `health()`, `identity()`, and routing |
-| `abide/runtime` | What only the COMPILER writes: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `raw` (`{html(...)}`), `keyed` (`by` on a `{#for}`), and `remote` / `remoteSocket` (what a server module elides to in the client lane). Each is what the emitter writes for a SPELLING, never a name a source file says. `html` is the one exception and stays on `abide`: it is the template tag, which a hand-written `.ts` component writes too |
+| `abide` | What an author TYPES — **16 values and 21 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props` / `suspend`, `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
+| `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `raw` (`{html(...)}`), `keyed` (`by` on a `{#for}`), `remote` / `remoteSocket` (what a server module elides to in the client lane), and `routes` / `outlet` / `ready` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says. `html` is the one exception and stays on `abide`: it is the template tag, which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
 | `abide/ui` | The DOM substrate: `mount`, `hydrate` |
 | `abide/server` | The SSR substrate, the request scope and its ambients, `server()`, `appDataDir()`, `config()`, `pages()`, the process lifecycle, and the declaring half of both transports |
 | `abide/tests` | The test kit: the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
@@ -95,8 +95,8 @@ is always true and `done()` always false. `settled()` asks whether anything curr
 | `watch` | `<T>(source: () => T, handler: (v: T) => void \| (() => void)) => () => void` | The dependency DECLARED: only `source` is read under tracking, so the handler may read anything without subscribing. |
 | `x.watch` | `(handler: (v: T) => void \| (() => void)) => () => void` | The same effect spelled off the source. Which source you asked IS the declaration, so the handler is untracked. |
 | the handler's return | `() => void` | The teardown, run before every re-run and once on disposal. There is no `onMount`/`onDestroy`. |
-| `untrack` | `<T>(fn: () => T) => T` | Runs `fn` reading whatever it likes without any of it becoming a dependency. |
-| `scope` | `<T>(fn: () => T) => { value: T; dispose: () => void }` | Runs `fn`; `dispose` tears down every `watch` created inside it, in reverse order. A `watch` inside registers automatically. |
+| `untrack` | `<T>(fn: () => T) => T` | Runs `fn` reading whatever it likes without any of it becoming a dependency. On no entry point — `$shared/reactive.ts`. |
+| `scope` | `<T>(fn: () => T) => { value: T; dispose: () => void }` | Runs `fn`; `dispose` tears down every `watch` created inside it, in reverse order. A `watch` inside registers automatically. On no entry point — `$shared/reactive.ts`; `mount` calls it for you, which is why no app writes one. |
 
 ## The shared surface
 
@@ -299,7 +299,7 @@ three facts under other names.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `isolate` | `<T>(fn: () => T) => T` | Runs `fn` with its own caches and ambients, dropped when it settles. One variable set and put back, so a second while an async one is in flight THROWS. |
+| `isolate` | `<T>(fn: () => T) => T` | On no entry point — `$shared/internal/scopes.ts`; it is what a TEST uses to prove two callers do not share a cache. Runs `fn` with its own caches and ambients, dropped when it settles. One variable set and put back, so a second while an async one is in flight THROWS. |
 | `serve` | `<T>(request: Request, fn: () => T) => T` | The same for one request, and what makes the ambients answerable. Async-local, so it has no such limit. |
 | `isServing` | `() => boolean` | Whether there is a request scope to ask at all, so a shared path can branch instead of catching a throw. |
 | `heldStream` | `(body: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>` | A body that keeps its caller's scope alive until its last chunk. Idempotent, and a no-op outside a request. |
@@ -674,10 +674,14 @@ A `.abide` file compiles to an `html` tagged template. Every expression gets its
 A slot inside a tag is one of four sigils or it is an attribute: `.prop` a DOM property, `@event` a
 listener, `&ref` the node itself, `...` a spread.
 
-## The template runtime
+## The template runtime — `abide/runtime`
 
-Nine names — the WHOLE set a compiled `.abide` file may import from `abide` on its own behalf, and
-ordinary authoring vocabulary too.
+The WHOLE set a compiled `.abide` file imports on its own behalf. Not authoring vocabulary: each
+emitted name is what the compiler writes for a SPELLING — `{html(...)}` becomes `raw`, `by` on a
+`{#for}` becomes `keyed`, a `class:` toggle becomes `classes` — so none of them is a name a source
+file says. `html` is the exception and is imported from `abide`, because a hand-written `.ts`
+component writes the same tag; that is also what keeps the emitted header free of a cross-module
+dedupe, since the author's own import of it merges into the same statement.
 
 | Name | Type Signature | Emitted for | Description |
 | --- | --- | --- | --- |
@@ -689,15 +693,15 @@ ordinary authoring vocabulary too.
 | `awaited` | `<T>(value: PromiseLike<T> \| T, branches: Branches<T>) => Awaited` | `{#await}` | The operand plus the arms to call once it settles. The arms are closures, so settling never re-evaluates the operand. |
 | `boundary` | `(body: () => unknown, branches: Branches) => Boundary` | `{#try}` | A synchronous error boundary around a body thunk. |
 | `streamed` | `<T>(source, row, catch?) => Streamed` | `{#for await}` | A list fed by an async source, torn down and re-streamed when a reactive dependency of the source changes. |
-| `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => unknown, fallback?: unknown) => Suspend` | written by hand | Emit a placeholder now and the real subtree when the value lands. Here beside the other three markers because it IS one — exported from `abide`, so a page is the same module on both sides. Three continuations, one call; see the `abide/server` row. |
+| `suspend` | `<T>(value: PromiseLike<T> \| T, body: (v: T) => unknown, fallback?: unknown) => Suspend` | written by hand | Emit a placeholder now and the real subtree when the value lands. Here beside the other three markers because it IS one — but on `abide` rather than `abide/runtime`, because it is the one an author writes: nothing emits it. Three continuations, one call; see the `abide/server` row. |
 | `adopt` | `(scope: string, css: string) => void` | `<style>` | Registers one scoped block by its scope name at MODULE scope. Idempotent. |
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `escape` | `(value: string) => string` | The text escape both substrates use. Probes before it replaces. |
-| `styleTags` | `(nonce?: string \| null) => string` | Every registered block as its own `<style data-abide="…">`, in registration order — what a server render puts in `<head>` and what `adopt` recognises. Under a nonce the answer is not memoized and an empty `<style nonce data-abide="">` carrier is prepended, which is what `adopt` reads the nonce off — see "Styles under a policy". |
+| `styleTags` | `(nonce?: string \| null) => string` | On **`abide/server`**, not here: writing a stylesheet as markup is something only a server render does, and the client lane adopts into the document instead. Every registered block as its own `<style data-abide="…">`, in registration order — what a server render puts in `<head>` and what `adopt` recognises. Under a nonce the answer is not memoized and an empty `<style nonce data-abide="">` carrier is prepended, which is what `adopt` reads the nonce off — see "Styles under a policy". |
 | `classifySlots` | `(strings: readonly string[]) => SlotKind[]` | THE one slot classifier, shared by both substrates. One of `child`, `attr`, `event`, `property`, `ref`, `spread` per hole. |
-| `isTemplate` / `isKeyed` / `KEY` | `(v: unknown) => boolean`, `symbol` | The brands, for a renderer deciding what it was handed. |
+| `isTemplate` / `isKeyed` | `(v: unknown) => boolean` | The brands, for a renderer deciding what it was handed. `KEY`, the symbol behind the second, is not exported: `keyed()` writes it and `isKeyed()` reads it. |
 
 ## The compiler — `abide/compiler`
 
@@ -802,6 +806,11 @@ system — a reader that woke when nothing it reads changed still reads the righ
 | `sleep` | `(ms: number) => Promise<void>` | A real span, for the cases that genuinely need one. Prefer `until`. |
 
 ## Pages / routing
+
+`route()`, `navigate()` and `url()` are on `abide` — where am I, take me there, build me a link, which
+is the whole of what an app asks. `routes`, `outlet` and `ready` INSTALL and RENDER the table and are
+on **`abide/runtime`**: `abide build` writes the client entry that calls all three, so an app names
+none of them. The TYPES stay on `abide`, because `pages()` hands back a `RouteEntry[]`.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |

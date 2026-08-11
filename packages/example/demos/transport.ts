@@ -19,9 +19,17 @@
 // That is deliberate: the claim a reader comes here for is "the browser gets the address and not the
 // body", and moving it to another page to save a page nobody profiles would be hiding it.
 
-import type { Failed, RemoteOptions, RemoteSocket, RemoteSocketOptions, Rpc } from 'abide'
-// The two stubs the elider writes, called directly here because this suite is what tests them.
-import { remote, remoteSocket } from 'abide/runtime'
+import type { Failed } from 'abide'
+// The two stubs the elider writes and the shapes that describe them, called directly here because
+// this suite is what tests them.
+import {
+    type RemoteOptions,
+    remote,
+    type RemoteSocket,
+    type RemoteSocketOptions,
+    remoteSocket,
+    type Rpc,
+} from 'abide/runtime'
 import { ElisionError, elide, endpointId, type ImportedModule, kindOf, type TypeSource } from 'abide/compiler'
 import {
     config,
@@ -1396,7 +1404,7 @@ export default suite({
 
         {
             title: 'a form anyone could post is a call, exactly as a URL anyone could type is',
-            note: 'The form door is not the stub\'s private encoding. A form built anywhere — `new FormData(element)` out of a page, a `<form method="post">` with no `enctype`, a `curl -F`, some other language\'s http client — is read ONE ENTRY PER ARGUMENT by the same reader the query goes through, so the same declared shape turns `age=36` into a number, the same repeated name is a list, and a file input lands on a declared `File`. Multipart and urlencoded are one door, because `Request.formData()` reads both into the same entries and only the first can hold a file. What tells the stub\'s encoding apart is the presence of the `__abide_args` part, which only the encoder writes: with it, the JSON is the args and the other parts are its files; without it, the entries ARE the args. So an endpoint takes a form post and a stub call with nothing declared per door and no second handler.',
+            note: "The form door is not the stub's private encoding. A form built anywhere — `new FormData(element)` out of a page, a `<form method=\"post\">` with no `enctype`, a `curl -F`, some other language's http client — is read ONE ENTRY PER ARGUMENT by the same reader the query goes through, so the same declared shape turns `age=36` into a number, the same repeated name is a list, and a file input lands on a declared `File`. Multipart and urlencoded are one door, because `Request.formData()` reads both into the same entries and only the first can hold a file. What tells the stub's encoding apart is the presence of the `__abide_args` part, which only the encoder writes: with it, the JSON is the args and the other parts are its files; without it, the entries ARE the args. So an endpoint takes a form post and a stub call with nothing declared per door and no second handler.",
             async run({ is }) {
                 const enrol = POST(
                     async ({

@@ -11,19 +11,9 @@
 import { expect, test } from 'bun:test'
 import { homedir } from 'node:os'
 import { dirname, sep } from 'node:path'
-import {
-    health,
-    html,
-    identity,
-    log,
-    memo,
-    outlet,
-    type RouteEntry,
-    ready,
-    route,
-    routes,
-} from 'abide'
-import { remote } from 'abide/runtime'
+import { health, html, identity, log, memo, route } from 'abide'
+import type { RouteEntry } from 'abide/runtime'
+import { outlet, ready, remote, routes } from 'abide/runtime'
 import {
     appDataDir,
     bag,

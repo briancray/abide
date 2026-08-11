@@ -39,15 +39,17 @@
         // through: `$ui` and `$server` may import shared, never each other, and nothing may import a
         // renderer except through its public entry point. The test kit has no alias for the same
         // reason — it is reached as `abide/tests`, and an alias would be a way around that.
+        // `$abide` is the CURATED front door — the file `.` resolves to, and the one place the
+        // author-facing surface is enumerated. It has exactly one consumer, the REPL, which puts that
+        // namespace into scope: what `abide repl` hands you and what an app may import are the same
+        // list by construction. The bare `$shared` / `$ui` / `$server` / `$compiler` aliases went with
+        // it — each named a barrel, and after the curation there is no barrel left to name.
         "paths": {
             "$shared/*": ["./packages/abide/src/shared/*"],
             "$ui/*": ["./packages/abide/src/ui/*"],
             "$server/*": ["./packages/abide/src/server/*"],
             "$compiler/*": ["./packages/abide/compiler/*"],
-            "$shared": ["./packages/abide/src/shared/index.ts"],
-            "$ui": ["./packages/abide/src/ui/index.ts"],
-            "$server": ["./packages/abide/src/server/index.ts"],
-            "$compiler": ["./packages/abide/compiler/index.ts"]
+            "$abide": ["./packages/abide/abide.ts"]
         }
         // The public specifiers — `abide`, `abide/ui`, `abide/server`, `abide/tests`,
         // `abide/compiler` — are deliberately NOT aliased here: the example resolves them through

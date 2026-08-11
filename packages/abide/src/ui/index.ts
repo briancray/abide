@@ -74,4 +74,3 @@ export function hydrate(container: Element, view: () => TemplateResult): Mounted
     // Snapshotted BEFORE the anchor is appended, so the anchor is not one of the nodes to claim.
     return attach(container, view, Array.from(container.childNodes) as ChildNode[])
 }
-

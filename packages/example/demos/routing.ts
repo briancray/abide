@@ -20,19 +20,10 @@
 // The interactive card at the bottom installs nothing at all. It drives the app's OWN router, which
 // is the thing this page is now inside — see the note there.
 
-import {
-    html,
-    isolate,
-    type Loader,
-    navigate,
-    outlet,
-    type RouteEntry,
-    route,
-    routes,
-    url,
-    type View,
-    watch,
-} from 'abide'
+import { html, navigate, route, url, watch } from 'abide'
+import type { Loader, RouteEntry, View } from 'abide/runtime'
+import { isolate } from '$shared/internal/scopes.ts'
+import { outlet, routes } from 'abide/runtime'
 import { reader, settled, suite } from 'abide/tests'
 import { mount } from 'abide/ui'
 import { button, el, row } from './dom.ts'

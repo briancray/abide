@@ -88,7 +88,8 @@ function source(table: PageFiles[]): string {
             ` layouts: [${wraps.join(', ')}] },\n`
     }
 
-    return `${HEADER}import { navigate, outlet, ready, routes, type ViewModule } from 'abide'
+    return `${HEADER}import { navigate, type ViewModule } from 'abide'
+import { outlet, ready, routes } from 'abide/runtime'
 import { hydrate } from 'abide/ui'
 
 ${hoisted}

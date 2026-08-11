@@ -10,7 +10,8 @@
 // `abide/server` is the async-local form a server needs, because requests interleave across every
 // await and one variable cannot tell two of them apart.
 
-import { isolate, memo, online, state, watch } from 'abide'
+import { memo, online, state, watch } from 'abide'
+import { isolate } from '$shared/internal/scopes.ts'
 import { suite } from 'abide/tests'
 import { button, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'

@@ -10,7 +10,8 @@
 // browser's. What a card does once it HAS one is `demos/*.ts`, which `demos.test.ts` runs.
 
 import { expect, test } from 'bun:test'
-import { isolate, navigate } from 'abide'
+import { navigate } from 'abide'
+import { isolate } from '$shared/internal/scopes.ts'
 import { renderToString } from 'abide/server'
 import { allSuites } from '../demos/index.ts'
 import { NAV } from '../demos/SUITES.ts'

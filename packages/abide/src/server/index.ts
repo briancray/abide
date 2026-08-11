@@ -43,6 +43,8 @@ import {
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { planOf, unwrap } from '$shared/internal/slots.ts'
 import { arm, NO_LIMIT, timeoutError } from '$shared/internal/timers.ts'
+// Re-exported below as well: `<head>` is the only place a sheet is written as markup, so this is a
+// SERVER name that happened to live in `$shared` because `adopt()` fills the registry it reads.
 import { styleTags } from '$shared/styles.ts'
 import {
     attribute,
@@ -867,7 +869,9 @@ export function documentToStream(
 export { type Identity, identity } from '$shared/identity.ts'
 // The shape one line takes on the remote feed. The endpoint itself is `dispatch`'s — an app mounts
 // that and gets `/__abide/logs` with it — but a reader of the feed needs the record to decode into.
-export type { LogRecord } from '$shared/log.ts'
+// `Level` beside the record it is a field of. Not on `abide`, because no call there takes or returns
+// one — `log.warning(...)` is a method per level rather than a level-taking call.
+export type { Level, LogRecord } from '$shared/log.ts'
 // The other two facts DERIVED from the environment rather than named by it. They are not `config()`
 // fields — a field there is a variable, and these are conclusions: `ABIDE_APP_NAME` is the variable,
 // and this is it resolved against the nearest package.json and then against `abide`.
@@ -978,3 +982,7 @@ export { bag, cookies, heldStream, isServing, nonce, request, serve, type Trace,
 // because what a shell IS belongs to the renderer that fills it — and an app rendering its own
 // document takes the same `Shell` `abide start` does.
 export { type Shell, shell } from './shell.ts'
+// The sheet every `adopt()` registered, as `<style>` tags for `<head>`. On `abide/server` and not on
+// `abide`, because writing a stylesheet as markup is something only a server render does — the client
+// lane adopts into the document instead, and never spells this.
+export { styleTags } from '$shared/styles.ts'

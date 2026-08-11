@@ -10,7 +10,9 @@
 // mock: a layout's `<slot/>` really does receive the page below it.
 
 import { expect, test } from 'bun:test'
-import { isolate, navigate, outlet, routes } from 'abide'
+import { navigate } from 'abide'
+import { isolate } from '$shared/internal/scopes.ts'
+import { outlet, routes } from 'abide/runtime'
 import { pages, renderToString } from 'abide/server'
 
 const HERE = new URL('../pages/', import.meta.url)

@@ -138,8 +138,11 @@ const EXPECTED: {
     {
         fixture: 'moved.abide',
         line: 2,
-        code: 'TS2724',
-        message: /no exported member named 'keyed'/,
+        // TS2305 and not TS2724: the "did you mean" form needs a near-match still on the module, and
+        // the `Keyed` TYPE moved to `abide/runtime` alongside the value it describes. So the message
+        // is the plain one — which is the honest report, since there is nothing on `abide` to mean.
+        code: 'TS2305',
+        message: /no exported member 'keyed'/,
         where: 'script',
     },
 ]

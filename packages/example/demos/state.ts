@@ -2,7 +2,8 @@
 // what it demonstrates: the values AND the wake-ups, because a cell that reports the right thing
 // while waking readers nothing moved for is the wrong implementation.
 
-import { isolate, state, watch } from 'abide'
+import { state, watch } from 'abide'
+import { isolate } from '$shared/internal/scopes.ts'
 import { keep, reader, settled, sleep, suite, tick, until } from 'abide/tests'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'

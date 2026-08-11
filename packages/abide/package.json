@@ -4,7 +4,7 @@
     "type": "module",
     "private": true,
     "exports": {
-        ".": "./src/shared/index.ts",
+        ".": "./abide.ts",
         "./runtime": "./src/shared/runtime.ts",
         "./ui": "./src/ui/index.ts",
         "./server": "./src/server/index.ts",

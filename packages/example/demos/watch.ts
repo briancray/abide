@@ -1,7 +1,8 @@
 // `watch` — the effect. Its RETURN is the lifecycle hook: a returned function is the teardown, run
 // before every re-run and once on disposal. That is why there is no onMount/onDestroy.
 
-import { channel, memo, scope, state, untrack, watch } from 'abide'
+import { channel, memo, state, watch } from 'abide'
+import { scope, untrack } from '$shared/reactive.ts'
 import { keep, reader, sleep, suite, tick } from 'abide/tests'
 import { button, el, row } from './dom.ts'
 import { META } from './SUITES.ts'

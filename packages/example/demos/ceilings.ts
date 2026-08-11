@@ -15,7 +15,8 @@
 // charge looked inside a value, which row went first. A correctness test cannot see any of it — the
 // wrong implementation retains exactly the right data, at whatever cost it likes.
 
-import { html, isolate, memo, state } from 'abide'
+import { html, memo, state } from 'abide'
+import { isolate } from '$shared/internal/scopes.ts'
 import { render, renderDocument, suspend } from 'abide/server'
 import { reader, suite } from 'abide/tests'
 import { capture, writtenAt } from './console.ts'

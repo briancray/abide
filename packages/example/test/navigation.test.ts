@@ -17,18 +17,10 @@
 // identity says which one happened.
 
 import { afterEach, beforeAll, expect, test } from 'bun:test'
-import {
-    html,
-    isolate,
-    type Loader,
-    navigate,
-    outlet,
-    type RouteEntry,
-    route,
-    routes,
-    suspend,
-    type View,
-} from 'abide'
+import { html, navigate, route, suspend } from 'abide'
+import type { Loader, RouteEntry, View } from 'abide/runtime'
+import { isolate } from '$shared/internal/scopes.ts'
+import { outlet, routes } from 'abide/runtime'
 import { renderFragment } from 'abide/server'
 import { container, sweepContainers, until } from 'abide/tests'
 import { mount } from 'abide/ui'

@@ -13,7 +13,7 @@
 // then have a document pointing at a file that no longer exists.
 
 import { commented, DOCUMENT_OPEN, type Shell, shell, within } from '$server/shell.ts'
-import { escape } from '$shared/index.ts'
+import { escape } from '$shared/html.ts'
 import { CLIENT_ROUTE, type ClientAsset, type ClientManifest } from '../CLIENT_BUILD.ts'
 
 /**

@@ -348,7 +348,10 @@ test('a page that does not compile fails the build, on stderr', async () => {
     // A PAGE rather than a hand-written entry: the lane is generated, so a page is what a broken
     // client build now has in it, and the module the bundler chokes on is one the app wrote.
     const broken = `${import.meta.dir}/../.abide/broken-root`
-    await Bun.write(`${broken}/pages/page.abide`, `<script>\nimport './nothing-is-here.ts'\n</script>\n<p>x</p>\n`)
+    await Bun.write(
+        `${broken}/pages/page.abide`,
+        `<script>\nimport './nothing-is-here.ts'\n</script>\n<p>x</p>\n`,
+    )
     try {
         const failed = await abide(['build'], broken)
         // `1` and not `2`: it ran and did not work, which is a different thing to CI from a command
