@@ -6,9 +6,19 @@
 // So the arms live here, in the app the browser actually loads, and the comparison is the same
 // hand-written floor the rest of this package is measured against.
 //
-// Each arm moves a SELECTION across a thousand rows — the `select row` op of the complex page, which
-// is where the gap is: 1.45 ms against abideclean's 0.37 and a hand-written 0.18. What separates the
-// arms is how much of the framework sits between the write and the attribute.
+// Each arm moves a SELECTION across a thousand rows — the `select row` op of the complex page. What
+// separates the arms is how much of the framework sits between the write and the attribute.
+//
+// These arms answered their question and the answer held: the whole framework path is ~0.055 ms of an
+// op the harness reported at 1.45. What they could not say was where the other 96% went, and the
+// guesses were the `<table>` and the CSS behind `.danger`. It was the CSS, and not because the rule is
+// expensive — because `app.html` was the only one of six comparison arms that shipped ANY stylesheet.
+// Blink builds its style invalidation sets from the stylesheets, so on the five unstyled arms writing
+// `class="danger"` matched no rule, recalculated no style and painted nothing. Both directions, both
+// arms, `RecalcStyleCount` per click and the sampler agreeing: 0.97 ms with the rule and 0.37 without.
+// The rule now lives in the harness and every arm gets it. See ~/code/abide-select-profile.ts.
+//
+// So the ladder below prices what it says it prices, and nothing above it is waiting on an answer.
 
 import { html, state, watch } from 'abide'
 import { keyed, mount } from 'abide/ui'
@@ -216,12 +226,12 @@ async function slotArm(host: HTMLElement): Promise<Arm> {
  */
 export async function profileWakePath(attached: boolean): Promise<{ arms: Arm[]; rows: number }> {
     const host = document.createElement('div')
-    // Both, because the two answer different questions and the difference between them turned out to
-    // be nearly all of it. DETACHED isolates the framework: no style recalculation, no layout, so
-    // what is left is the graph and the bindings. ATTACHED is what the page actually does — a live
-    // thousand-row table where changing one class invalidates style for the subtree — and the perf
-    // harness's `select row` is 1.45 ms against 0.055 detached, so the framework is a twentieth of
-    // what that op costs and the rest is the browser answering for the DOM.
+    // Both, because the two answer different questions. DETACHED isolates the framework: no style
+    // recalculation, no layout, so what is left is the graph and the bindings. ATTACHED is what the
+    // page does. They read the same here (0.054 against 0.055) and that is not a null result — these
+    // arms use `.on`, which no rule in the app matches, so Blink invalidates nothing on the write.
+    // That is exactly the condition that decided the framework comparison, and it is spelled at the
+    // top of this file: to make attaching cost anything, give the class a rule first.
     if (attached) document.body.append(host)
     const arms: Arm[] = []
     arms.push(await vanillaArm(host))
