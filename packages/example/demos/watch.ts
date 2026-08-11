@@ -567,21 +567,31 @@ export default suite({
                 await tick()
                 is('every reader of one cell woke exactly once', runs, [2, 2, 2])
 
-                // 2. The same source read TWICE in one run. A Set holds one entry, an array holds
-                // two — and two detach slots that must both be given back, or the second write
-                // finds a stale entry pointing at a node that has moved on.
+                // 2. The same source read TWICE in one run, and then ONCE. The list holds one entry
+                // per read, so the run that drops to a single read has to give exactly one of them
+                // back — and a container that cannot hold a duplicate gives back BOTH, leaving the
+                // reader unsubscribed from a cell it is still reading. It then goes silent for good,
+                // with the last value it happened to compute still on screen and nothing to say so.
                 const twice = state(1)
+                const readTwice = state(true)
                 let twiceRuns = 0
                 let sum = 0
                 const stopTwice = watch(() => {
                     twiceRuns++
-                    sum = twice() + twice()
+                    sum = readTwice() ? twice() + twice() : twice()
                 })
                 await tick()
                 twice.set(5)
                 await tick()
                 is('a source read twice wakes its reader ONCE', twiceRuns, 2)
                 is('…and the body saw both reads', sum, 10)
+
+                readTwice.set(false) // two reads become one
+                await tick()
+                is('dropping to a single read wakes it', [twiceRuns, sum], [3, 5])
+                twice.set(9)
+                await tick()
+                is('…and it is still subscribed afterwards', [twiceRuns, sum], [4, 9])
 
                 // 3. A dependency DROPPED between runs. The whole point of detaching: after the
                 // flag flips, `left` is no longer read, so writing it must wake nothing.
@@ -647,7 +657,53 @@ export default suite({
                 stopDiamond()
                 stopLive()
 
-                // 6. The list REFILLED after being emptied. Every reader of `shared` has just gone,
+                // 6. Disposing the FIRST of three, and then the one that took its place. This is
+                // the shape that catches a list which forgets to tell a moved reader where it went:
+                // removing the first shuffles the last into its slot, so the last is now somewhere
+                // other than it believes, and the damage only shows when IT leaves — it hands back
+                // a position that belongs to a bystander, unsubscribing a stranger and staying
+                // attached itself. Three readers is the minimum that can show it, and disposing in
+                // this order is the whole of the case: nothing about two readers, or about
+                // disposing in the order they were made, moves anything at all.
+                const shuffled = state(0)
+                const stays = state(true)
+                let firstRuns = 0
+                let bystanderRuns = 0
+                let movedRuns = 0
+                const stopFirst = watch(() => {
+                    shuffled()
+                    firstRuns++
+                })
+                const stopBystander = watch(() => {
+                    shuffled()
+                    bystanderRuns++
+                })
+                // Third, so disposing the first is what relocates THIS one — and it is the only
+                // reader that can later stop reading, which is the half that makes the damage show.
+                const stopMoved = watch(() => {
+                    movedRuns++
+                    if (stays()) shuffled()
+                })
+                await tick()
+                stopFirst()
+
+                // The moved reader now drops `shuffled`. Detaching at a position it no longer
+                // occupies takes a BYSTANDER's entry out instead of its own, and leaves itself
+                // subscribed to a cell it has stopped reading — so the write below wakes it. That is
+                // the whole failure, and neither a value nor a DOM counter has anything to say about
+                // it: nothing this effect renders would be wrong.
+                stays.set(false)
+                await tick()
+                const before = movedRuns
+                shuffled.set(1)
+                await tick()
+                is('a reader that stopped reading is not woken by the write', movedRuns, before)
+                is('…and the bystander it was standing on still is', bystanderRuns, 2)
+                is('…and the disposed one stays gone', firstRuns, 1)
+                stopBystander()
+                stopMoved()
+
+                // 7. The list REFILLED after being emptied. Every reader of `shared` has just gone,
                 // so this is the swap-remove edge no other case reaches: an implementation that
                 // mishandles the last element out leaves the container describing a length it no
                 // longer has, and the readers attached afterwards land in the gap.

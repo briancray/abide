@@ -29,7 +29,28 @@ const DEAD: number = 3
 /** The empty every node starts and ends on. Only `run`'s own array is ever pushed into — see below. */
 const NO_SOURCES: Node[] = []
 
+/** The same, for the other direction. `read` replaces it before it pushes. */
+const NO_OBSERVERS: Node[] = []
+
 let current: Node | null = null
+
+/**
+ * How far the running node's reads have MATCHED the sources its previous run collected, and the
+ * fresh list once one of them has not.
+ *
+ * A re-run almost always reads the same sources in the same order — `${() => row.id === selected()}`
+ * reads one cell, in one order, forever — and the subscription it wants is already the one it has.
+ * Detaching from every source and re-collecting them was therefore a remove and an add per source
+ * per wake, all of it to arrive back where it started: on a thousand rows reading one cell it was
+ * the single largest item in the wake, and abideclean skips it and runs `select row` at 0.40 ms
+ * against 1.50.
+ *
+ * So a matching read only advances `sourceIndex`, and `collected` stays null. The first read that
+ * DIVERGES starts a fresh list, and only from that point is anything unsubscribed — the prefix in
+ * front of it was right and is left alone.
+ */
+let sourceIndex = 0
+let collected: Node[] | null = null
 let queue: Node[] = []
 let scheduled = false
 let collecting: (() => void)[] | null = null
@@ -39,19 +60,27 @@ export class Node {
     fn: (() => unknown) | null
     status: number
     isEffect: boolean
-    // The SHARED empty, never the node's own: `run` installs a fresh array before it sets `current`,
-    // and `read`'s `current.sources.push` is the only writer, so nothing can reach this one. Every
-    // `state()`, every cold slot and all six trackers of an `Async` are `fn === null` nodes that
-    // never run at all — a keyed memo with 500 settled slots was allocating ~3500 arrays for an
-    // iteration that is always empty. Same invariant `NO_CHUNKS` below and `channel`'s `NO_MESSAGES`
-    // already rest on.
+    // The SHARED empty, never the node's own: it is REPLACED before anything is written into it, so
+    // nothing can reach this one. Every `state()`, every cold slot and all six trackers of an `Async`
+    // are `fn === null` nodes that never run at all — a keyed memo with 500 settled slots was
+    // allocating ~3500 arrays for an iteration that is always empty. Same invariant `NO_CHUNKS` below
+    // and `channel`'s `NO_MESSAGES` already rest on.
     sources: Node[] = NO_SOURCES
-    // Allocating this lazily — null until something reads the node under tracking, which an effect
-    // never is — was tried and reverted. It is a real allocation avoided on most nodes, and it is
-    // worth 2.5 ns of the 10.5 ns a node costs to construct: measurable, and not worth a null check
-    // on the four hot paths that iterate it. Reusing the `sources` array across runs instead of
-    // replacing it went the same way, at 2 ns of 60.
-    observers = new Set<Node>()
+    /**
+     * The nodes that read this one. An ARRAY, and one that may hold the same node twice.
+     *
+     * The duplicate is the point rather than a tolerated cost: a body reading one source twice
+     * records two reads, and `settleSources` gives back exactly as many as the run took. A `Set`
+     * cannot — `add` twice is one entry and the first `delete` is total, so a body that reads a
+     * source twice and then once unsubscribes itself completely while still reading it, and the
+     * effect goes silent for good. Wake counts are the only thing that can see that, which is why
+     * the `watch` suite counts it.
+     *
+     * A shared empty for the same reason `sources` has one: a `state` nothing derives from is the
+     * common shape, and it used to allocate a `Set` eagerly — 104 bytes per observing effect and 32
+     * per bare cell, measured over 100k of each.
+     */
+    observers: Node[] = NO_OBSERVERS
     cleanup: (() => void) | null = null
     // A settled value is present. Distinguishes "loaded undefined" from "never loaded", and is what
     // decides cold-pending vs warm-refreshing on the next load.
@@ -71,8 +100,13 @@ export class Node {
 
     read(): unknown {
         if (current !== null) {
-            current.sources.push(this)
-            this.observers.add(current)
+            // Still walking the previous run's list, and this is what it says comes next: the
+            // subscription that read wants is the one already in place, so there is nothing to
+            // unsubscribe and nothing to add. This is the arm nearly every read of every re-run
+            // takes — see `sourceIndex`.
+            if (collected === null && current.sources[sourceIndex] === this) sourceIndex++
+            else if (collected === null) collected = [this]
+            else collected.push(this)
         }
         if (this.fn !== null) this.pull()
         return this.value
@@ -87,8 +121,11 @@ export class Node {
         // an empty Set still allocates its iterator here — JSC sinks it at some sites and not at
         // these — so the guard is 1.000 fewer Set Iterators per write, and 2.7x on an unobserved
         // `state.set`. The observed arm measured within noise, so the branch costs nothing to keep.
-        if (this.observers.size === 0) return
-        for (const observer of this.observers) observer.mark(DIRTY)
+        const observers = this.observers
+        if (observers.length === 0) return
+        // Indexed, and safe to index: `mark` queues and sets status, it never runs a body, so
+        // nothing under this loop can add or remove an edge in the array being walked.
+        for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(DIRTY)
     }
 
     mark(next: number): void {
@@ -101,8 +138,9 @@ export class Node {
             }
         }
         this.status = next
-        if (this.observers.size === 0) return
-        for (const observer of this.observers) observer.mark(CHECK)
+        const observers = this.observers
+        if (observers.length === 0) return
+        for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(CHECK)
     }
 
     pull(): void {
@@ -135,11 +173,57 @@ export class Node {
         this.status = CLEAN
     }
 
-    run(): void {
-        // Detach from every source; the run re-collects them.
-        for (const source of this.sources) source.observers.delete(this)
-        this.sources = []
+    /** Give back one edge. Linear, and that is affordable BECAUSE `read` makes it rare — see below. */
+    private unsubscribeFrom(index: number): void {
+        const sources = this.sources
+        for (let i = index; i < sources.length; i++) {
+            const observers = (sources[i] as Node).observers
+            // One occurrence per read, so one removal per read: a source this node read twice is in
+            // here twice, and a run that now reads it once has to give back exactly one of them.
+            const at = observers.indexOf(this)
+            if (at === -1) continue
+            const last = observers.length - 1
+            if (at !== last) observers[at] = observers[last] as Node
+            observers.pop()
+        }
+    }
 
+    /**
+     * Make the subscriptions match what the run just read.
+     *
+     * Three outcomes, and the first is the one that matters: every read matched, so `collected` is
+     * null and `sourceIndex` reached the end — nothing is unsubscribed, nothing is added, and the
+     * run cost the graph nothing at all.
+     */
+    private settleSources(): void {
+        if (collected !== null) {
+            // A read diverged at `sourceIndex`. The prefix in front of it was right; everything from
+            // there on is not read any more and the fresh tail replaces it.
+            this.unsubscribeFrom(sourceIndex)
+            if (sourceIndex > 0) {
+                const sources = this.sources
+                sources.length = sourceIndex + collected.length
+                for (let i = 0; i < collected.length; i++) {
+                    sources[sourceIndex + i] = collected[i] as Node
+                }
+            } else {
+                // Never the shared empty: `collected` is this run's own array.
+                this.sources = collected
+            }
+            const sources = this.sources
+            for (let i = sourceIndex; i < sources.length; i++) {
+                const source = sources[i] as Node
+                if (source.observers === NO_OBSERVERS) source.observers = [this]
+                else source.observers.push(this)
+            }
+        } else if (sourceIndex < this.sources.length) {
+            // Every read matched, but there were FEWER of them: the tail is no longer read.
+            this.unsubscribeFrom(sourceIndex)
+            this.sources.length = sourceIndex
+        }
+    }
+
+    run(): void {
         if (this.cleanup !== null) {
             const teardown = this.cleanup
             this.cleanup = null
@@ -148,13 +232,24 @@ export class Node {
         }
 
         const previous = current
+        const previousIndex = sourceIndex
+        const previousCollected = collected
         current = this
+        sourceIndex = 0
+        collected = null
         const before = this.value
         let next: unknown
         try {
             next = this.fn!()
         } finally {
+            // BEFORE the restore, while these two still describe THIS run — and in a `finally`,
+            // because a body that throws has still read whatever it read before it did. Leaving the
+            // subscriptions half-settled would keep the node attached to sources the next run never
+            // reaches, which is a wake for something it no longer reads.
+            this.settleSources()
             current = previous
+            sourceIndex = previousIndex
+            collected = previousCollected
         }
 
         if (this.isEffect) {
@@ -181,7 +276,10 @@ export class Node {
         }
         if (this.transform !== null) next = transformed(this, next)
         // Memoise: only wake observers when the derived value actually moved.
-        if (before !== next) for (const observer of this.observers) observer.status = DIRTY
+        if (before !== next) {
+            const observers = this.observers
+            for (let i = 0; i < observers.length; i++) (observers[i] as Node).status = DIRTY
+        }
         this.value = next
         this.hasValue = true
     }
@@ -206,9 +304,11 @@ export class Node {
             this.cleanup = null
             untrack(teardown)
         }
-        for (const source of this.sources) source.observers.delete(this)
+        this.unsubscribeFrom(0)
         this.sources = NO_SOURCES
-        this.observers.clear()
+        // A fresh empty rather than `length = 0`: this may be the SHARED one, which a node that
+        // nothing ever read still holds.
+        this.observers = NO_OBSERVERS
         this.status = DEAD
     }
 }
@@ -367,7 +467,8 @@ function adopt(node: Node, promise: PromiseLike<unknown>): void {
 // reader that ran before the cell ever met a promise subscribed when there was no error node to
 // subscribe TO, and would then sit on the last good value as though the load had succeeded.
 function wakeReaders(node: Node): void {
-    for (const observer of node.observers) observer.mark(DIRTY)
+    const observers = node.observers
+    for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(DIRTY)
 }
 
 function settleValue(node: Node, value: unknown): void {
