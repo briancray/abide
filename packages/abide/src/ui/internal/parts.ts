@@ -905,10 +905,15 @@ class ListPart {
         // the position check takes the one already at `i`.
         let byKey: Map<unknown, Row> | null = null
 
-        // Where the list actually differs from the one before it. Everything outside `[firstChanged,
+        // Where the list actually differs from the one before it. Everything OUTSIDE `[firstChanged,
         // lastChanged]` is the SAME row object at the SAME index, which is what lets the placement
         // walk below start late and stop early instead of touching every row to find out that most
         // of them are where they already were.
+        //
+        // The converse does not follow and reading it that way shipped a corrupted reconcile: these
+        // two BRACKET the changes and say nothing whatever about the middle. A full reverse has
+        // `firstChanged` 0 and `lastChanged` n-1 with every row between them moved as well. Anything
+        // needing "and nothing else changed" wants `changed` below, not these.
         // Grown by `push` for CONSISTENCY, not for speed, and the difference matters: `adopt` and
         // `append` both push, so a pre-sized `new Array(n)` here left `this.rows` one elements kind
         // out of one writer and another out of the other two, and every `previous[i]` and placement
