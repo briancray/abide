@@ -415,8 +415,12 @@ test('SIGTERM drains through the app’s onStop and closes the socket', async ()
 
 test('--port binds directly, and a taken one is a refusal rather than a hop', async () => {
     // Held by this process, so the port is genuinely in use and this case does not depend on
-    // anything else running.
-    const holder = Bun.serve({ port: 0, fetch: () => new Response('mine') })
+    // anything else running — and held the way `abide start` holds one, which is the whole of what
+    // this row tests. A BARE holder cannot: SO_REUSEPORT only lets a second socket in when the
+    // FIRST one set it too, so a holder that does not looks in-use to any binder and the refusal
+    // fires however `abide start` binds. The case the comment below is about is the deploy meeting
+    // the process it replaces, and that one is another `development: false` server.
+    const holder = Bun.serve({ port: 0, development: false, fetch: () => new Response('mine') })
     const port = holder.port
     const taken = await ended(spawn(['bun', BINARY, 'start', '--port', String(port)], { cwd: ROOT }))
     holder.stop(true)

@@ -65,6 +65,13 @@ export async function start(argv: string[]): Promise<number> {
                 // describing the stack, which is a debugging tool and an information leak in the same
                 // response. `onError` is where an app decides what a failure looks like here.
                 development: false,
+                // Spelled, because Bun infers it from `development` and infers the wrong one here:
+                // `development: false` turns SO_REUSEPORT ON, so a second production process binds
+                // the same port instead of failing, both listen, and the kernel hands the requests
+                // to whichever bound first. That is precisely the case `refused` below exists to
+                // make loud — a deploy answering from the process it was meant to replace — and it
+                // is silent, because both processes print `listening` on the port they agree on.
+                reusePort: false,
                 fetch: assembled.answer,
                 websocket,
             }),

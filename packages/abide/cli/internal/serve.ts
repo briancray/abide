@@ -258,6 +258,11 @@ function listening(first: number, answer: Answer): ReturnType<typeof Bun.serve> 
                 // an uncaught throw with a page describing the stack — is the reason development wants
                 // it: there is no operator to leak to, and the stack is the point.
                 development: true,
+                // Spelled for the reason `abide start` spells it: Bun reads SO_REUSEPORT off
+                // `development`, and a bind that cannot fail is a hop that never happens. Dev gets
+                // the value it wants by accident today — said out loud, the hop stops depending on
+                // what the other flag is for.
+                reusePort: false,
                 fetch: answer,
                 websocket,
             })
