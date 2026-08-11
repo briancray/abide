@@ -11,6 +11,7 @@ routes([
     { path: '/dashboard', page: () => import('./pages/dashboard/page.abide'), layouts: [CHROME] },
     { path: '/complex', page: () => import('./pages/complex/page.abide'), layouts: [CHROME] },
     { path: '/media', page: () => import('./pages/media/page.abide'), layouts: [CHROME] },
+    { path: '/wake', page: () => import('./pages/wake/page.abide'), layouts: [CHROME] },
 ])
 
 await ready()
