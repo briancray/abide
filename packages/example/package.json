@@ -10,7 +10,8 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "abide": "workspace:*"
+        "abide": "workspace:*",
+        "marked": "^18.0.9"
     },
     "devDependencies": {
         "bun-plugin-tailwind": "^0.1.2",

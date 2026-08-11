@@ -5,6 +5,8 @@
 // Where the vanilla version can be written carelessly or carefully, BOTH are here, because the
 // difference between them is usually the whole point of the machinery.
 
+import { marked } from 'marked'
+
 // --- a reactive cell, by hand -----------------------------------------------
 
 export interface VanillaCell<T> {
@@ -453,6 +455,125 @@ export function buildChat(host: Element, count: number): VanillaChat {
  */
 export function setTail(chat: VanillaChat, text: string): void {
     chat.tail.data = text
+}
+
+// --- how a model actually streams over HTTP ----------------------------------
+//
+// Server-sent events, which is what the OpenAI and Anthropic APIs speak: `data: {json}\n\n` per
+// frame, over one long response. abide's own `sse()` in `$server/responses.ts` frames identically.
+//
+// The part that matters for a UI, and the part a loop over a token array cannot reproduce: deltas
+// arrive in NETWORK-SIZED READS. One `reader.read()` hands back whatever bytes are in the socket
+// buffer, which is several frames at a time and a partial one at the end. A client that touches the
+// DOM per delta is doing several writes for one paint; one that coalesces per read does one.
+
+/** Anthropic's Messages API text delta, the one event a rendering client actually acts on. */
+export interface TextDelta {
+    type: 'content_block_delta'
+    index: number
+    delta: { type: 'text_delta'; text: string }
+}
+
+/**
+ * The deltas as bytes on a wire, `perRead` frames to a chunk.
+ *
+ * The frames are cut at a fixed count rather than a byte size so a case can state the burst it is
+ * measuring. A real socket cuts wherever it likes, INCLUDING mid-frame, which is why the reader
+ * below carries a remainder rather than assuming a chunk ends on a boundary — and cutting only on
+ * boundaries here would leave that path untested. So the last chunk of each burst is split.
+ */
+export function sseBody(texts: string[], perRead: number): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder()
+    const chunks: Uint8Array[] = []
+    let pending = ''
+    for (let i = 0; i < texts.length; i++) {
+        const event: TextDelta = {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text: texts[i] as string },
+        }
+        pending += `event: content_block_delta\ndata: ${JSON.stringify(event)}\n\n`
+        if ((i + 1) % perRead === 0) {
+            // Split one byte before the end, so every burst but the last leaves a partial frame in
+            // the reader's remainder — the case a boundary-aligned fixture never exercises.
+            chunks.push(encoder.encode(pending.slice(0, -1)))
+            pending = pending.slice(-1)
+        }
+    }
+    if (pending !== '') chunks.push(encoder.encode(pending))
+    let at = 0
+    return new ReadableStream<Uint8Array>({
+        pull(controller) {
+            if (at >= chunks.length) {
+                controller.close()
+                return
+            }
+            controller.enqueue(chunks[at++] as Uint8Array)
+        },
+    })
+}
+
+/**
+ * Read an SSE body and hand back every delta a chunk carried, once per chunk.
+ *
+ * `onRead` takes the WHOLE burst rather than one delta at a time, because that is the choice a chat
+ * UI has: the deltas of one read are already in hand, so touching the DOM once for all of them is
+ * available for free and is what separates a client that paints once from one that paints eight
+ * times. An arm that wants the per-delta shape can still loop inside the callback.
+ */
+export async function readSse(
+    body: ReadableStream<Uint8Array>,
+    onRead: (texts: string[]) => void,
+): Promise<void> {
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    // The remainder a chunk ended part-way through. A reader that assumed whole frames would drop
+    // the tail of every read and silently lose tokens — the output is still plausible prose, which
+    // is why this is a cursor and not an assumption.
+    let held = ''
+    for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        held += decoder.decode(value, { stream: true })
+        const texts: string[] = []
+        for (;;) {
+            const end = held.indexOf('\n\n')
+            if (end === -1) break
+            const frame = held.slice(0, end)
+            held = held.slice(end + 2)
+            const line = frame.indexOf('data: ')
+            if (line === -1) continue
+            const event = JSON.parse(frame.slice(line + 6)) as TextDelta
+            if (event.delta?.type === 'text_delta') texts.push(event.delta.text)
+        }
+        if (texts.length > 0) onRead(texts)
+    }
+}
+
+/** The deltas a model would send for one answer, split the way a tokeniser splits prose. */
+export function deltasFor(markdown: string, size = 4): string[] {
+    const out: string[] = []
+    for (let i = 0; i < markdown.length; i += size) out.push(markdown.slice(i, i + size))
+    return out
+}
+
+// --- markdown, by hand -------------------------------------------------------
+
+/**
+ * Render the tail message as markdown, the way a chat UI does: parse the whole message, assign.
+ *
+ * Both this and the abide arm beside it call the same `marked.parse` and assign the same
+ * `innerHTML`, and that is deliberate — with markdown in the picture the framework's share of a
+ * delta is what the comparison is FOR, and it can only be read if everything either side of it is
+ * identical.
+ *
+ * The shape is also the trap: parsing the whole accumulated message per delta is O(n) work on an
+ * n that grows by one delta each time, so a message costs O(n²) to stream. `renderTail` is where
+ * that is paid, and coalescing a network read's worth of deltas into one call is what a client can
+ * do about it without changing the parser.
+ */
+export function renderTail(into: HTMLElement, markdown: string): void {
+    into.innerHTML = marked.parse(markdown, { async: false })
 }
 
 /** The markup `adoptRows` expects, so the two arms start from the same bytes. */
