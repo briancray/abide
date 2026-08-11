@@ -19,15 +19,9 @@
 // That is deliberate: the claim a reader comes here for is "the browser gets the address and not the
 // body", and moving it to another page to save a page nobody profiles would be hiding it.
 
-import {
-    type Failed,
-    type RemoteOptions,
-    type RemoteSocket,
-    type RemoteSocketOptions,
-    type Rpc,
-    remote,
-    remoteSocket,
-} from 'abide'
+import type { Failed, RemoteOptions, RemoteSocket, RemoteSocketOptions, Rpc } from 'abide'
+// The two stubs the elider writes, called directly here because this suite is what tests them.
+import { remote, remoteSocket } from 'abide/runtime'
 import { ElisionError, elide, endpointId, type ImportedModule, kindOf, type TypeSource } from 'abide/compiler'
 import {
     config,

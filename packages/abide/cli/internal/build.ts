@@ -23,13 +23,13 @@ import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
 import {
     assetOf,
     CLIENT_DIR,
-    CLIENT_ENTRIES,
     CLIENT_KEY,
     type ClientAsset,
     type ClientManifest,
     clientGraph,
     entryNames,
     MANIFEST_FILE,
+    PAGES,
     type Sidecar,
 } from '../CLIENT_BUILD.ts'
 import { clientLane, GENERATED_ENTRY } from './entry.ts'
@@ -72,18 +72,18 @@ export async function build(argv: string[]): Promise<number> {
     // an entry somebody NAMED is keyed by what they named, because that is what their document says.
     let keys: string[] | undefined
     if (entries.length === 0) {
-        // The conventional lane when nothing was named: the app's own `client.ts` if it wrote one,
-        // and otherwise one generated from `pages/`, because a route table is already on disk and
-        // retyping it for the browser is the one piece of an app nobody should be writing by hand.
+        // The conventional lane when nothing was named, written from `pages/`: a route table is
+        // already on disk, and retyping it for the browser is the one piece of an app nobody should
+        // be writing by hand.
         const lane = await clientLane(root)
         if (lane !== null) {
-            entries = [lane.path]
+            entries = [lane]
             keys = [CLIENT_KEY]
-            generated = lane.generated
+            generated = true
         }
     }
     if (entries.length === 0) {
-        console.error(`abide build: nothing to build — no ${CLIENT_ENTRIES.join(', ')} and no pages/ here`)
+        console.error(`abide build: nothing to build — no ${PAGES}/ here`)
         console.error('       name one: abide build <entry…>')
         return CLI_EXIT_CODES.usage
     }
@@ -209,8 +209,8 @@ function report(manifest: ClientManifest, generated: boolean): void {
     const names = Object.keys(manifest.assets).sort()
 
     if (generated) {
-        console.log(paint(`${GENERATED_ENTRY}  the lane, written from pages/ — copy it to`, DIM, on))
-        console.log(paint('                       client.ts to take it over', DIM, on))
+        console.log(paint(`${GENERATED_ENTRY}  the lane, written from pages/ — client-side`, DIM, on))
+        console.log(paint('                       code of your own goes in pages/layout.abide', DIM, on))
     }
 
     let width = 0

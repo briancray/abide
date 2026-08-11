@@ -6,7 +6,8 @@
 // `counter.abide` and `counter.ts` are the same component written twice, and the compiler's whole claim is
 // that the two are indistinguishable at the output AND at the cost.
 
-import { adopt, html, streamed, styleTags } from 'abide'
+import { html, styleTags } from 'abide'
+import { adopt, streamed } from 'abide/runtime'
 import { compile, describe, locate, originalPosition, ParseError } from 'abide/compiler'
 import { renderToString } from 'abide/server'
 import {
@@ -1469,6 +1470,41 @@ export default suite({
                     "import { html, type TemplateResult } from 'abide'",
                 )
                 is('no compiler runtime of its own', code.includes('abide/compiler'), false)
+                log('emitted', code)
+            },
+        },
+
+        {
+            title: 'the header splits by who WRITES the name, not by what it does',
+            note: '`abide` is what an author types and `abide/runtime` is what only the emitter does, so a name appearing in generated output and never in a source file is off the surface an app reads. `html` is the only name on both sides: it is the template TAG a hand-written `.ts` component also writes, so it stays on `abide` and merges with the author’s own import of it — which is why no cross-module dedupe is needed. `raw` and `keyed` read like authoring vocabulary and are not: the escape hatch is spelled `{html(...)}` and a key is spelled `key={...}`, and each of those is a SPELLING the emitter translates.',
+            run({ is, log }) {
+                // Every emit-only name in one file: class: → classes, style: → styles, <style> →
+                // adopt, {#await} → awaited, {#try} → boundary, {#for await} → streamed,
+                // {html(...)} → raw, `by` → keyed. The author's own `html` import is here to prove
+                // it merges rather than doubling.
+                const code = compile(
+                    '<script module>\nimport { html } from "abide"\n</script>\n' +
+                        '<style>.a { color: red }</style>\n' +
+                        '<p class:on={f} style:width={w}>{html(s)}</p>\n' +
+                        '{#await p}…{:then v}<b>{v}</b>{/await}\n' +
+                        '{#try}<b>{s}</b>{:catch e}<i>{e}</i>{/try}\n' +
+                        '{#for await r of feed by r.id}<li>{r}</li>{/for}\n',
+                    { filename: 'Everything.abide' },
+                ).code
+                const lines = code.split('\n')
+                const from = (module: string): string =>
+                    lines.find((line) => line.endsWith(`from '${module}'`)) ?? `no import from ${module}`
+
+                is(
+                    '`html` alone comes from `abide`, and the author’s own import of it merges',
+                    from('abide'),
+                    "import { html, type TemplateResult } from 'abide'",
+                )
+                is(
+                    'everything the emitter alone writes comes from `abide/runtime`',
+                    from('abide/runtime'),
+                    "import { adopt, awaited, boundary, classes, keyed, raw, streamed, styles } from 'abide/runtime'",
+                )
                 log('emitted', code)
             },
         },

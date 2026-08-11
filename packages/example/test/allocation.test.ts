@@ -72,6 +72,26 @@ test('an OBSERVED write still wakes its reader', () => {
     expect(runs).toBeGreaterThan(before)
 })
 
+// What licenses every count in this file to be read as THIS test's allocations, rather than as the
+// process's: `heapStats` is process-wide, and the only thing that could put somebody else's work
+// between two readings is a macrotask running in the gap. It cannot. A loop whose only yields are
+// microtask drains never empties the microtask queue, and a timer runs only when it does.
+//
+// Asserted rather than reasoned about, because it is the premise the `mapsPerPass` estimator below
+// rests on: if this ever stopped being true, that measurement would start counting other suites and
+// the failure would look like a reconcile regression. A timer set to fire immediately, and a loop of
+// exactly the awaits the measurement uses.
+test('a timer cannot interleave a loop that only drains microtasks', async () => {
+    let fired = 0
+    const noise = setInterval(() => fired++, 0)
+    try {
+        for (let i = 0; i < 100; i++) for (let j = 0; j < 4; j++) await Promise.resolve()
+        expect(fired).toBe(0)
+    } finally {
+        clearInterval(noise)
+    }
+})
+
 // The keyed reconcile's key index is a walk of every previous row, built from INSIDE the per-row
 // walk. A row that moved usually moved one place — a swap, an insert, a delete — so the neighbours
 // are tried first and the index is what a genuinely scattered pass falls back to.
@@ -83,7 +103,8 @@ test('an OBSERVED write still wakes its reader', () => {
 test('an adjacent swap builds no key index, and a scattered pass still does', async () => {
     const { html, state } = await import('abide')
     const { container, install, tick } = await import('abide/tests')
-    const { keyed, mount } = await import('abide/ui')
+    const { keyed } = await import('abide/runtime')
+    const { mount } = await import('abide/ui')
     install()
 
     type Item = { id: number; label: string }
@@ -95,6 +116,25 @@ test('an adjacent swap builds no key index, and a scattered pass still does', as
     // Every row far from where it was, which is what the index exists for.
     const scattered = base.map((_, i) => base[(i * 97) % base.length] as Item)
 
+    /**
+     * Maps allocated per reconcile pass — the LARGEST of several trials, which is the whole of what
+     * makes this stable inside the full suite.
+     *
+     * `heapStats` counts the whole process, so the question is what else can move the number between
+     * the two readings, and there are exactly two candidates. Another suite allocating cannot: the
+     * only yields in the loop below are microtask drains, and a macrotask cannot run until the
+     * microtask queue is empty — which the case above this one asserts rather than assumes. That
+     * leaves a COLLECTION, and a collection can only REMOVE.
+     *
+     * So the contamination is one-directional and the largest reading is the least contaminated one.
+     * Taking the max is not tuning towards a pass: it is the same estimator for both arms, and an
+     * implementation that really allocated an index per pass would report that in every trial.
+     *
+     * This replaced a ratio between two single measurements, which was built on the premise that a
+     * background rate cancels between them. There is no background rate — the premise was wrong, and
+     * the ratio flaked about twice in twenty full runs because a mid-loop collection deflated
+     * whichever arm it landed in.
+     */
     const mapsPerPass = async (other: Item[]): Promise<number> => {
         const cell = state(base)
         const host = container()
@@ -104,22 +144,24 @@ test('an adjacent swap builds no key index, and a scattered pass still does', as
             cell.set(i % 2 ? other : base)
             await tick()
         }
-        Bun.gc(true)
-        const before = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
+
         const passes = 100
-        for (let i = 0; i < passes; i++) {
-            cell.set(i % 2 ? other : base)
-            await tick()
+        let most = 0
+        for (let trial = 0; trial < 5; trial++) {
+            Bun.gc(true)
+            const before = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
+            for (let i = 0; i < passes; i++) {
+                cell.set(i % 2 ? other : base)
+                await tick()
+            }
+            const after = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
+            const rate = (after - before) / passes
+            if (rate > most) most = rate
         }
-        const after = (heapStats().objectTypeCounts as Record<string, number>).Map ?? 0
         host.remove()
-        return (after - before) / passes
+        return most
     }
 
-    // A RATIO between the two shapes, not an absolute: `heapStats` counts the whole process, and the
-    // awaited ticks let every other suite in the run allocate into the same number. The background
-    // rate cancels between two measurements taken the same way; an absolute threshold passed alone
-    // and failed inside the full suite, which is the wrong way round for a gate.
     const scatteredMaps = await mapsPerPass(scattered)
     const adjacentMaps = await mapsPerPass(adjacent)
     // The fallback still fires where it earns its keep, so this also says the probe NARROWED the

@@ -5,7 +5,8 @@
 // the two apart. Effects are microtask-batched, so every measurement brackets the write AND the
 // flush — the effect is what touches the DOM, not the write.
 
-import { awaited, html, memo, state, type State, type TemplateResult } from 'abide'
+import { html, memo, state, type State, type TemplateResult } from 'abide'
+import { awaited, keyed } from 'abide/runtime'
 import {
     container,
     countCalls,
@@ -21,7 +22,7 @@ import {
     total,
     until,
 } from 'abide/tests'
-import { keyed, mount } from 'abide/ui'
+import { mount } from 'abide/ui'
 import { button, field, lazy, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'

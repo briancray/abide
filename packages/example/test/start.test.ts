@@ -309,8 +309,9 @@ test('the bundle is served immutable, precompressed, and in front of the onion',
     expect(compressed.headers.get('x-example')).toBeNull()
 
     // Bun's fetch decodes what it accepted, so the bytes it hands back are the module either way —
-    // and what is IN them is the address, which is the elision the build test asserts in full.
-    expect(await compressed.text()).toContain('users/getUser')
+    // and what is IN them is the route table, which is what the generated lane exists to carry. The
+    // ELISION is asserted where the stub now lands, in `pages/users/[id]`'s chunk; see `build.test.ts`.
+    expect(await compressed.text()).toContain('"/users/[id]"')
 
     const plain = await fetch(address, { headers: { 'accept-encoding': 'identity' } })
     expect(plain.headers.get('content-encoding')).toBeNull()
@@ -450,19 +451,20 @@ test('a directory with no app, and a client lane with no build, both refuse', as
         expect(nothing.code).toBe(2)
         expect(nothing.err).toContain('no app here')
 
-        // The one shape that is unambiguously a mistake: the lane is written and the bundle is not
-        // there, so every `<script>` the pages emit would 404. Refused before anything binds, and
-        // the message is the command that fixes it.
+        // The one shape that is unambiguously a mistake: there are pages and the bundle is not there,
+        // so every `<script>` they emit would 404. Asked of `pages/` and not of a client entry,
+        // because the lane is generated from the one and there is no longer any such thing as the
+        // other. Refused before anything binds, and the message is the command that fixes it.
         await Bun.write(`${empty}/app.ts`, 'export default (): undefined => undefined\n')
-        await Bun.write(`${empty}/client.ts`, 'console.log("hydrate")\n')
+        await Bun.write(`${empty}/pages/page.abide`, '<h1>home</h1>\n')
         const unbuilt = await abide(['start'], { cwd: empty })
         expect(unbuilt.code).toBe(1)
         expect(unbuilt.err).toContain('run `abide build`')
 
-        // And the shape that is NOT a mistake: no client lane, and a module that exports no route at
-        // all. That is an app made of endpoints, and it comes up — `/__abide/**` is served without
-        // the app mounting anything, which is the whole reason this is allowed to start.
-        await rm(`${empty}/client.ts`)
+        // And the shape that is NOT a mistake: no pages, and a module that exports no route at all.
+        // That is an app made of endpoints, and it comes up — `/__abide/**` is served without the app
+        // mounting anything, which is the whole reason this is allowed to start.
+        await rm(`${empty}/pages`, { recursive: true })
         await Bun.write(`${empty}/app.ts`, 'export const onHealth = (): unknown => ({ empty: true })\n')
         const endpoints = await started(['start', '--port', '0'], empty)
         try {

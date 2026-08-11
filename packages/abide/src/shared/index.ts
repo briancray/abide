@@ -6,36 +6,35 @@
 //
 // The two RENDERERS are separate entry points (`abide/ui`, `abide/server`) because only one of them
 // ships to a browser. Nothing here imports either, so a page pays for the renderer it uses.
+//
+// What only the COMPILER writes is on `abide/runtime` — `classes`, `styles`, `adopt`, `awaited`,
+// `boundary`, `streamed`, `raw`, `keyed`, `remote`, `remoteSocket`. This file is what an author TYPES,
+// and `html` is the only one of the ten on both sides of that line.
 
-// What a compiled `class:`/`style:` toggle lands on. Authoring vocabulary too — nothing stops a
-// hand-written template from calling them.
-export { classes, styles } from './attrs.ts'
 export { type Channel, type ChannelOptions, channel, type KeyedChannel } from './channel.ts'
 // The app's own account of whether it is working, asked the same way on both sides. `useHealthSource`
 // is deliberately absent: it is how `abide/server` installs the LOCAL answer — the same shape as the
 // app-name source under `log` — and a caller installing one would be answering for an app it is not.
 export { type Health, health } from './health.ts'
+// The five block classes are exported as TYPES only. Each has a lowercase factory beside it, which is
+// the whole of how one is built — `new Awaited(...)` is not a spelling anything uses, here or in an
+// app, and every consumer inside the package reaches the class through `$shared/html.ts` directly.
+// `KEY` went the same way: `keyed()` writes the brand and `isKeyed()` reads it.
 export {
-    Awaited,
-    awaited,
-    Boundary,
+    type Awaited,
+    type Boundary,
     type Branches,
-    boundary,
     classifySlots,
     escape,
     html,
     isKeyed,
     isTemplate,
-    KEY,
     type Keyed,
-    keyed,
     props,
-    Raw,
-    raw,
+    type Raw,
     type SlotKind,
-    Streamed,
-    Suspend,
-    streamed,
+    type Streamed,
+    type Suspend,
     suspend,
     type TemplateResult,
 } from './html.ts'
@@ -94,24 +93,22 @@ export {
     type View,
     type ViewModule,
 } from './router.ts'
-// Where a compiled `<style>` block lands. `styleTags()` is what a server render puts in <head> —
-// not `styles()`, re-exported at the top of this file, which is the `style:` toggle builder.
-export { adopt, styleTags } from './styles.ts'
-// The client half of the two transport laws — what a generated stub imports, and what a hand-written
-// one would. The DECLARING half is in `abide/server`, because a handler's body must not ship to a
-// browser; these two are the same shapes with a fetch and a websocket for bodies.
-export {
-    type CallOptions,
-    type Kind,
-    type Method,
-    type RemoteOptions,
-    type RemoteSocket,
-    type RemoteSocketOptions,
-    type Rpc,
-    type RpcHandle,
-    remote,
-    remoteSocket,
-    type Wire,
+// What a server render puts in <head>. `adopt()`, which is where a compiled `<style>` block lands,
+// is on `abide/runtime` — only the emitter writes one.
+export { styleTags } from './styles.ts'
+// The TYPES of the two transport laws. `remote` and `remoteSocket` themselves are on `abide/runtime`:
+// a stub is what the elider writes in place of a handler's body, not a call an app makes. The
+// DECLARING half is in `abide/server`, because a handler's body must not ship to a browser.
+export type {
+    CallOptions,
+    Kind,
+    Method,
+    RemoteOptions,
+    RemoteSocket,
+    RemoteSocketOptions,
+    Rpc,
+    RpcHandle,
+    Wire,
     // Which app a call is addressed to, which `health()` takes and means the same by.
-    type WireOptions,
+    WireOptions,
 } from './transport.ts'

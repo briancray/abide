@@ -2,18 +2,9 @@
 // template both ways — to a string with `renderToString`, and to live DOM with `mount` — so the
 // difference between the lanes is visible where there is one, and asserted where there is not.
 
-import {
-    classifySlots,
-    escape,
-    html,
-    isKeyed,
-    isTemplate,
-    keyed,
-    raw,
-    state,
-    type TemplateResult,
-    watch,
-} from 'abide'
+import { classifySlots, escape, html, isKeyed, isTemplate, state, type TemplateResult, watch } from 'abide'
+// This suite is what tests the template runtime, so it calls what the emitter writes by hand.
+import { keyed, raw } from 'abide/runtime'
 import { renderToString } from 'abide/server'
 import { container, install, keep, measureFlush, show, sleep, suite, tick } from 'abide/tests'
 import { mount } from 'abide/ui'

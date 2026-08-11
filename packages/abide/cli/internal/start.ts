@@ -9,10 +9,11 @@
 
 import { config } from '$server/config.ts'
 import { boot } from '$server/lifecycle.ts'
+import { pageFiles } from '$server/pages.ts'
 import { websocket } from '$server/registry.ts'
 import { messageOf } from '$shared/internal/probes.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
-import { CLIENT_DIR, CLIENT_ENTRIES, firstPresent } from '../CLIENT_BUILD.ts'
+import { CLIENT_DIR, PAGES } from '../CLIENT_BUILD.ts'
 import { clientAssets, type LoadedClient } from './assets.ts'
 import { assemble, portFrom, report } from './layers.ts'
 
@@ -39,12 +40,13 @@ export async function start(argv: string[]): Promise<number> {
         console.error(`abide start: ${CLIENT_DIR} is there and cannot be read — ${messageOf(failure)}`)
         return CLI_EXIT_CODES.failed
     }
-    if (built === null && (await firstPresent(root, CLIENT_ENTRIES)) !== null) {
-        // A client entry with no build is the one shape that is unambiguously a mistake: somebody
-        // wrote the lane and the bundle is not there, so every `<script>` the pages emit would 404.
-        // An app with no client entry at all is not this — it is an app made of endpoints, and it
-        // starts. `abide dev` never reaches this, because building is what it does.
-        console.error(`abide start: a client entry is here and ${CLIENT_DIR} is not — run \`abide build\``)
+    // Asked of `pages/` rather than of a client entry, because the entry is generated from it: what
+    // says a browser is owed a bundle is that there is something to render, not that somebody wrote
+    // a file. An app with no pages is not this — it is an app made of endpoints, and it starts.
+    if (built === null && (await pageFiles(`${root}/${PAGES}`).catch(() => [])).length > 0) {
+        // Pages with no build is the one shape that is unambiguously a mistake: every `<script>` the
+        // pages emit would 404. `abide dev` never reaches this, because building is what it does.
+        console.error(`abide start: ${PAGES}/ is here and ${CLIENT_DIR} is not — run \`abide build\``)
         return CLI_EXIT_CODES.failed
     }
 

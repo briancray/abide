@@ -129,6 +129,19 @@ const EXPECTED: {
         message: /'number' is not assignable/,
         where: 'script',
     },
+    // A name that MOVED to `abide/runtime` says so. `keyed` reads like authoring vocabulary and is
+    // not — `by` on a `{#for}` is the spelling, and `keyed(...)` is what the emitter writes for it —
+    // so importing it from `abide` is a mistake, and this is the half of the split that a change to
+    // `shared/index.ts` alone could undo. The emitted file also carries a duplicate binding, because
+    // the header imports the same name from `abide/runtime`; that noise sits on a file already being
+    // rejected, and suppressing it would cost the cross-module dedupe the split exists to avoid.
+    {
+        fixture: 'moved.abide',
+        line: 2,
+        code: 'TS2724',
+        message: /no exported member named 'keyed'/,
+        where: 'script',
+    },
 ]
 
 /** Every `.abide` under `types/invalid`, emitted, then checked through its own config in one run. */

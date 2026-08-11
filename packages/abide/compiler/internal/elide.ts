@@ -218,8 +218,8 @@ export function stub(modulePath: string, kind: Kind, endpoints: Endpoint[]): str
     const build = socket ? '__socket' : '__remote'
     const address = moduleAddress(modulePath, kind)
     let out = socket
-        ? `import { remoteSocket as __socket } from "abide"\n`
-        : `import { remote as __remote } from "abide"\n`
+        ? `import { remoteSocket as __socket } from "abide/runtime"\n`
+        : `import { remote as __remote } from "abide/runtime"\n`
     for (const endpoint of endpoints) {
         const id = JSON.stringify(joinId(address, endpoint.name))
         // A socket stub takes no options at all: the method is the directory, and a socket never

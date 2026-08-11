@@ -88,6 +88,15 @@ interface Context {
 // function, so there is no runtime helper behind it to import.
 type Runtime = 'html' | 'raw' | 'keyed' | 'classes' | 'styles' | 'awaited' | 'boundary' | 'streamed' | 'adopt'
 
+/**
+ * The one of those an author also types, so the header keeps it on `abide`.
+ *
+ * `raw` and `keyed` are NOT authored, despite reading like it: the escape hatch is spelled
+ * `{html(...)}` and a key is spelled `key={...}` on a `{#for}`. Both are what this emitter writes for
+ * those spellings, never what a source file says.
+ */
+const AUTHORED_RUNTIME: ReadonlySet<string> = new Set<Runtime>(['html'])
+
 /** The absent region — a file with no `<script module>`, or no `<script>`. Shared, never written. */
 const NO_TOKENS: Token[] = []
 
@@ -1784,8 +1793,18 @@ export function emit(
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
     context.used.add('html')
-    const runtime = [...context.used].sort()
-    const header = `import { ${runtime.join(', ')}, type TemplateResult } from 'abide'`
+    // Two statements, because the two specifiers mean different things: `abide` is what an author
+    // types, and `abide/runtime` is what only this emitter does. The split falls where AUTHORED does —
+    // a hand-written template calls `html`, `raw` and `keyed`, so those stay on `abide` and merge with
+    // the author's own import of them. Nothing on `abide/runtime` can collide, because nothing there
+    // is a name a source file spells.
+    const authored: string[] = []
+    const emitted: string[] = []
+    for (const name of [...context.used].sort()) (AUTHORED_RUNTIME.has(name) ? authored : emitted).push(name)
+    // Two ENTRIES, not one string with a newline in it: `mergeImports` parses one statement per
+    // element, and a two-line element matches nothing and falls through unmerged.
+    const header = [`import { ${authored.join(', ')}, type TemplateResult } from 'abide'`]
+    if (emitted.length > 0) header.push(`import { ${emitted.join(', ')} } from 'abide/runtime'`)
 
     // Joined only now: `children` above is what discovers a nested block, so the registry is not
     // complete until the walk is done.
@@ -1796,7 +1815,7 @@ export function emit(
 
     const setupBody = indent(desugarBody(blocks.setup, lifted.body, reactive))
     const assembled =
-        mergeImports([header, ...moduleImports.imports, ...setup.imports], ERASED_IMPORTS) +
+        mergeImports([...header, ...moduleImports.imports, ...setup.imports], ERASED_IMPORTS) +
         `${desugarBody(blocks.module, moduleImports.rest, reactive)}\n${adopted}` +
         (lifted.declarations === '' ? '' : `${lifted.declarations}\n`) +
         `export default function ${name}(${args}): TemplateResult {\n` +

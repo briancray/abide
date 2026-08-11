@@ -21,7 +21,8 @@
 // So the ladder below prices what it says it prices, and nothing above it is waiting on an answer.
 
 import { html, state, watch } from 'abide'
-import { keyed, mount } from 'abide/ui'
+import { keyed } from 'abide/runtime'
+import { mount } from 'abide/ui'
 
 const ROWS = 1000
 const WARM = 5

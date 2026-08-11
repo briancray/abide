@@ -309,11 +309,11 @@ async function bundle(root: string): Promise<LoadedClient | null> {
         const lane = await clientLane(root)
         if (lane === null) return null
 
-        const built = await clientBuild([lane.path], HELD, root)
+        const built = await clientBuild([lane], HELD, root)
         if (built.success) {
             return await heldClient(
                 built.outputs,
-                entryNames(root, [lane.path], built.outputs, [CLIENT_KEY]),
+                entryNames(root, [lane], built.outputs, [CLIENT_KEY]),
                 clientGraph(built.metafile, root),
             )
         }

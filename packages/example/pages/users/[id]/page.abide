@@ -1,6 +1,21 @@
-<!-- `[id]` in the DIRECTORY name is the parameter, and `route().params` is where it arrives. -->
+<!-- `[id]` in the DIRECTORY name is the parameter, and `route().params` is where it arrives.
+
+     This page is also where the ELISION claim is asserted from, and it is asserted from real app
+     code rather than a probe: it imports `getUser` by the same name the server declares it under, so
+     in this lane that module elides to `remote("users/getUser")` and `server/db.ts` — a driver with a
+     module-level side effect a bundler may not drop — never enters the client graph at all. The
+     build test looks for the ADDRESS in what shipped and for the driver's marker in every byte. -->
 <script>
-import { route } from 'abide'
+import { memo, route } from 'abide'
+import { getUser } from '../../../server/rpc/users.ts'
+
+// The id is a SEGMENT, so it arrives as a string and the endpoint declares a number.
+const found = memo(() => getUser({ id: Number(route().params.id) }))
 </script>
 
 <h1>user {route().params.id}</h1>
+
+<!-- The refusal is narrowed in the lane that has none of the declaration in it: the name and the
+     shape are in the handler's TYPE, and the schema that checks the data is server-side text this
+     bundle never sees. -->
+{#try}<p>{found()?.name}</p>{:catch e}<p>no user {route().params.id}</p>{/try}

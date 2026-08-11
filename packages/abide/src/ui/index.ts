@@ -1,9 +1,10 @@
 // Client substrate: a TemplateResult becomes DOM, and slots become effects.
 //
-// Three functions, because that is the whole public surface of a renderer: `mount` puts a view on
-// the screen and keeps it live, `hydrate` does the same over markup the server already wrote, and
-// `keyed` tells a list which row is which. Everything else — the parse-once cache, the child/list
-// parts, the per-slot effects — is in `internal/` and is reached only through these.
+// Two functions, because that is the whole public surface of a renderer: `mount` puts a view on the
+// screen and keeps it live, and `hydrate` does the same over markup the server already wrote.
+// Everything else — the parse-once cache, the child/list parts, the per-slot effects — is in
+// `internal/` and is reached only through these. `keyed` used to be re-exported here as authoring
+// vocabulary; it is on `abide/runtime`, because `key={...}` on a `{#for}` is what an author writes.
 
 import type { TemplateResult } from '$shared/html.ts'
 import { scope, watch } from '$shared/reactive.ts'
@@ -74,6 +75,3 @@ export function hydrate(container: Element, view: () => TemplateResult): Mounted
     return attach(container, view, Array.from(container.childNodes) as ChildNode[])
 }
 
-// `keyed` is isomorphic — a key is data, not a renderer concept — so it is re-exported here
-// rather than owned here, and the same call works in a template that is server-rendered.
-export { keyed } from '$shared/html.ts'

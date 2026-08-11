@@ -15,9 +15,10 @@
 // same thing: it is a build artifact, it is already gitignored, and `abide dev`'s watcher already
 // ignores the directory — so regenerating on every rebuild is not a save that triggers a rebuild.
 //
-// It is a FALLBACK and never an override. An app that writes `client.ts` gets `client.ts`, and this
-// file is then what it should be read as: the shortest lane that works, to copy and take over from —
-// the same relationship `shell.ts`'s `fallback()` has with an app's own `app.html`.
+// There is no app-written override. The lane is ALWAYS this file, because everything an app used to
+// put in a hand-written `client.ts` — a click handler, an analytics call, anything that runs once in
+// the browser — belongs in `pages/layout.abide`, which is above every route and already isomorphic.
+// One lane with one shape is what lets the routing boilerplate leave every app at once.
 
 import { type PageFiles, pageFiles } from '$server/pages.ts'
 import { CLIENT_ENTRIES, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
@@ -25,31 +26,29 @@ import { CLIENT_ENTRIES, firstPresent, PAGES } from '../CLIENT_BUILD.ts'
 /** The generated lane, relative to the project root. Under `.abide/`, beside the build it feeds. */
 export const GENERATED_ENTRY = '.abide/client.entry.ts'
 
-/** The lane the build is pointed at. Keyed by `CLIENT_KEY` either way — see there for why. */
-export interface ClientLane {
-    /** The file handed to the bundler, relative to the project root. */
-    path: string
-    /** Whether this file was written by the command that is about to bundle it. For the report. */
-    generated: boolean
-}
-
 /**
- * The client lane at `root` — the app's own if it wrote one, otherwise one written from `pages/`.
+ * The client lane at `root`, written from `pages/`.
  *
- * `null` is an app with neither: no client entry and no pages is an app made of endpoints, and there
- * is nothing for a browser to be handed. Both commands that bundle go through here, so `abide dev`
- * and `abide build` cannot be pointed at different modules.
+ * `null` is an app with no pages: nothing for a browser to be handed, which is an app made of
+ * endpoints. Both commands that bundle go through here, so `abide dev` and `abide build` cannot be
+ * pointed at different modules.
  */
-export async function clientLane(root: string): Promise<ClientLane | null> {
-    const own = await firstPresent(root, CLIENT_ENTRIES)
-    if (own !== null) return { path: own, generated: false }
+export async function clientLane(root: string): Promise<string | null> {
+    // Said out loud, because it is otherwise the quietest kind of breakage: the app still builds and
+    // still runs, and the only symptom is that whatever was in that file stopped happening. Here
+    // rather than in either command, so `abide dev` and `abide build` cannot warn differently.
+    const ignored = await firstPresent(root, CLIENT_ENTRIES)
+    if (ignored !== null) {
+        console.error(`abide: ${ignored} is not built — the client lane is generated from ${PAGES}/`)
+        console.error('       client-side code of your own goes in pages/layout.abide')
+    }
 
     const table = await pageFiles(`${root}/${PAGES}`).catch(() => [])
     if (table.length === 0) return null
 
     const path = `${root}/${GENERATED_ENTRY}`
     await Bun.write(path, source(table))
-    return { path, generated: true }
+    return path
 }
 
 /**
@@ -117,7 +116,7 @@ document.addEventListener('click', (event) => {
 }
 
 const HEADER = `// GENERATED from pages/ by \`abide build\` / \`abide dev\`. Edits here are overwritten on the next
-// build — to take this lane over, copy it to \`client.ts\` in the project root and it wins.
+// build — client-side code of your own goes in \`pages/layout.abide\`, which is above every route.
 `
 
 /** A page file as a specifier from `.abide/`, which is one directory below the pages directory. */

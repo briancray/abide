@@ -9,7 +9,8 @@
 // `classifySlots` is already the one classifier both substrates read, so the marker contract is
 // declared once (`$shared/internal/MARKERS.ts`) rather than kept true by hand in two files.
 
-import { awaited, html, state, type TemplateResult } from 'abide'
+import { html, state, type TemplateResult } from 'abide'
+import { awaited, keyed } from 'abide/runtime'
 import { renderToString } from 'abide/server'
 import {
     container,
@@ -22,7 +23,7 @@ import {
     tick,
     total,
 } from 'abide/tests'
-import { hydrate, keyed, mount } from 'abide/ui'
+import { hydrate, mount } from 'abide/ui'
 import { button, lazy, output, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'

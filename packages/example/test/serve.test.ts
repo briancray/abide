@@ -20,10 +20,10 @@ import {
     outlet,
     type RouteEntry,
     ready,
-    remote,
     route,
     routes,
 } from 'abide'
+import { remote } from 'abide/runtime'
 import {
     appDataDir,
     bag,

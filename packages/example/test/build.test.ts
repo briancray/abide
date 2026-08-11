@@ -100,9 +100,16 @@ test('the server half does not ship — the address does', () => {
         expect(text, `${name} carries the server-only marker`).not.toContain(SERVER_ONLY_MARKER)
     }
 
-    // What DID cross is the address, which is the whole of what a stub is.
-    const entry = texts.get(manifest.entries['client.ts'] as string) as string
-    expect(entry).toContain('users/getUser')
+    // What DID cross is the address, which is the whole of what a stub is. Asked of the chunk the
+    // importing module landed in rather than of the entry: the lane is generated from `pages/` now,
+    // so `pages/users/[id]/page.abide` is what imports the endpoint and a page is a CHUNK by
+    // construction — asserting it on the entry would be asserting that the page failed to split.
+    //
+    // And of THAT chunk rather than of any asset: the transport suite names the same address in its
+    // own text, so "some file contains it" is a string that would still be there with the stub gone.
+    const page = manifest.graph?.modules?.['pages/users/[id]/page.abide']
+    expect(page).toBeDefined()
+    expect(texts.get(page as string)).toContain('users/getUser')
 })
 
 test('the operator’s environment is not inlined into a browser bundle', async () => {
@@ -114,10 +121,13 @@ test('the operator’s environment is not inlined into a browser bundle', async 
     // Its own fixture rather than an assertion over the example's bundle: nothing in the example
     // reads `process.env` directly, so the same expectation there would pass for want of anything to
     // inline. This entry reads one, and the value is set on the BUILD's environment.
+    //
+    // NAMED rather than conventional: the lane is generated from `pages/` now, so a file called
+    // `client.ts` is built by nothing unless the build is pointed at it.
     const root = `${import.meta.dir}/../.abide/env-root`
     await Bun.write(`${root}/client.ts`, `console.log(process.env.ABIDE_BUILD_PROBE ?? 'unset')\n`)
     try {
-        const probed = await abide(['build'], root, { ABIDE_BUILD_PROBE: 'leaked-value-9f3a' })
+        const probed = await abide(['build', 'client.ts'], root, { ABIDE_BUILD_PROBE: 'leaked-value-9f3a' })
         expect(probed.code).toBe(0)
         const document = (await Bun.file(`${root}/${MANIFEST_FILE}`).json()) as ClientManifest
         for (const name of Object.keys(document.assets)) {
@@ -205,7 +215,7 @@ test('a sidecar is written only when it is smaller, and holds the same bytes', a
     const root = `${import.meta.dir}/../.abide/tiny-root`
     await Bun.write(`${root}/client.ts`, 'export const a = 1\n')
     try {
-        const tiny = await abide(['build'], root)
+        const tiny = await abide(['build', 'client.ts'], root)
         expect(tiny.code).toBe(0)
         const document = (await Bun.file(`${root}/${MANIFEST_FILE}`).json()) as ClientManifest
         const assets = Object.entries(document.assets)
@@ -223,17 +233,24 @@ test('an entry is keyed by what the file IS, not by how it was typed', async () 
     // Three spellings of one entry. A manifest that recorded `./client.ts` because that is what the
     // deploy script happened to type is one a server cannot look `client.ts` up in — and the two
     // would sit in the same document as though they were different entry points.
-    for (const spelling of ['client.ts', './client.ts', `${ROOT}/client.ts`]) {
-        const named = await abide(['build', spelling])
-        expect(named.code).toBe(0)
-        const document = (await Bun.file(`${ROOT}/${MANIFEST_FILE}`).json()) as ClientManifest
-        expect(Object.keys(document.entries)).toEqual(['client.ts'])
+    //
+    // A fixture rather than the example, for two reasons that arrived together: the example has no
+    // `client.ts` any more — the lane is generated from `pages/` — and this was three full builds of
+    // the whole app for a claim about manifest KEYS, so a route added to `pages/` was what made it
+    // start needing a minute.
+    const root = `${import.meta.dir}/../.abide/spelling-root`
+    await Bun.write(`${root}/client.ts`, 'export const a = 1\n')
+    try {
+        for (const spelling of ['client.ts', './client.ts', `${root}/client.ts`]) {
+            const named = await abide(['build', spelling], root)
+            expect(named.code).toBe(0)
+            const document = (await Bun.file(`${root}/${MANIFEST_FILE}`).json()) as ClientManifest
+            expect(Object.keys(document.entries)).toEqual(['client.ts'])
+        }
+    } finally {
+        await rm(root, { recursive: true, force: true })
     }
-    // THREE full builds of the whole example, which is seconds rather than milliseconds — the default
-    // per-test budget is one this case has no business fitting inside, and it was only ever passing
-    // because the app was small enough. A route added to `pages/` should not be what makes a test
-    // about manifest KEYS start failing.
-}, 60_000)
+})
 
 test('a build replaces the last one rather than piling up beside it', async () => {
     // A hash means a build never overwrites the previous one's output, so merging would leave every
@@ -255,23 +272,25 @@ test('a flag it does not know, and nothing to build, are usage failures', async 
     expect(flagged.err).toContain('--minify')
     expect(flagged.out).toBe('')
 
-    // A directory with no conventional entry is a usage failure that names what was looked for,
-    // rather than a build of nothing that exits `0`.
+    // A directory with no pages is a usage failure that names what was looked for, rather than a
+    // build of nothing that exits `0`. `pages/` and not `client.ts`, because the lane is generated
+    // from the one and there is no longer any such thing as the other.
     const empty = `${import.meta.dir}/../.abide/empty-root`
     await Bun.write(`${empty}/package.json`, '{}\n')
     try {
         const nothing = await abide(['build'], empty)
         expect(nothing.code).toBe(2)
-        expect(nothing.err).toContain('client.ts')
+        expect(nothing.err).toContain('pages/')
     } finally {
         await rm(empty, { recursive: true, force: true })
     }
 })
 
-test('an app with no client entry is bundled from its pages, split per route', async () => {
-    // The example writes its own `client.ts`, so the generated lane has no arm in the build above —
-    // and it is the lane most apps will actually ship. A root of its own, because the claim is about
-    // what happens when the file is ABSENT and the example cannot be absent of it.
+test('an app is bundled from its pages, split per route', async () => {
+    // The example exercises the generated lane too — it is the only lane now — so this root is not
+    // about the lane EXISTING. It is about the two properties a build of the example cannot show:
+    // that the table is right for a tree small enough to state exhaustively, and that a page ADDED
+    // grows it. Both need a directory this case controls.
     const root = `${import.meta.dir}/../.abide/generated-root`
     await Bun.write(
         `${root}/pages/layout.abide`,
@@ -325,9 +344,11 @@ test('an app with no client entry is bundled from its pages, split per route', a
     }
 }, 60_000)
 
-test('a client entry that does not compile fails the build, on stderr', async () => {
+test('a page that does not compile fails the build, on stderr', async () => {
+    // A PAGE rather than a hand-written entry: the lane is generated, so a page is what a broken
+    // client build now has in it, and the module the bundler chokes on is one the app wrote.
     const broken = `${import.meta.dir}/../.abide/broken-root`
-    await Bun.write(`${broken}/client.ts`, `import './nothing-is-here.ts'\n`)
+    await Bun.write(`${broken}/pages/page.abide`, `<script>\nimport './nothing-is-here.ts'\n</script>\n<p>x</p>\n`)
     try {
         const failed = await abide(['build'], broken)
         // `1` and not `2`: it ran and did not work, which is a different thing to CI from a command

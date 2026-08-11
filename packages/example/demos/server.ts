@@ -6,7 +6,8 @@
 // runs in the browser, because the module has no server-only dependencies — that is the point of the
 // substrate split.
 
-import { channel, html, memo, raw, state, streamed, type TemplateResult } from 'abide'
+import { channel, html, memo, state, type TemplateResult } from 'abide'
+import { raw, streamed } from 'abide/runtime'
 import {
     heldStream,
     isServing,

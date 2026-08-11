@@ -101,10 +101,15 @@ test('the client is built into memory, with nothing on disk to have built first'
     const src = (script as RegExpExecArray)[1] as string
     expect(src).toStartWith(CLIENT_ROUTE)
 
-    // The SOURCE name, where `abide build` writes `client-<hash>.js`. That is the falsifiable half of
-    // "this is not the directory `abide build` wrote" — a hash in the name would mean the manifest
-    // came off a disk — and it is also what lets a breakpoint survive a rebuild.
-    expect(src).toBe(`${CLIENT_ROUTE}client.js`)
+    // The SOURCE name, where `abide build` writes `client.entry-<hash>.js`. That is the falsifiable
+    // half of "this is not the directory `abide build` wrote" — a hash in the name would mean the
+    // manifest came off a disk — and it is also what lets a breakpoint survive a rebuild.
+    //
+    // `client.entry` and not `client`, because both lanes name the file the build was pointed at and
+    // that file is `.abide/client.entry.ts` — generated from `pages/`, for every app. What a document
+    // WRITES is still `./client.ts`; `shell.ts` maps that through the manifest, which is the whole
+    // reason the conventional key and the file on disk are allowed to differ.
+    expect(src).toBe(`${CLIENT_ROUTE}client.entry.js`)
 
     const asset = await fetch(`${app.base}${src.slice(1)}`)
     expect(asset.status).toBe(200)
@@ -116,7 +121,18 @@ test('the client is built into memory, with nothing on disk to have built first'
 
     // The same elision `abide build` makes, because it is the same `target: 'browser'` lane: the
     // client gets the ADDRESS of the rpc and none of what is behind it.
-    expect(await asset.text()).toContain('users/getUser')
+    //
+    // Followed into the CHUNK rather than read off the entry. The lane is generated from `pages/`, so
+    // the module importing the endpoint is `pages/users/[id]/page.abide` — and a page being its own
+    // chunk is the property the splitting claim rests on, so the entry is exactly where the address
+    // should NOT be. The row's own `import()` is how the chunk is named here, which means this walks
+    // the same edge a browser would.
+    const lane = await asset.text()
+    const row = /"\/users\/\[id\]",\s*page:\s*\(\)\s*=>\s*import\("\.\/([^"]+)"\)/.exec(lane)
+    expect(row).not.toBeNull()
+    const chunk = await fetch(`${app.base}${CLIENT_ROUTE.slice(1)}${(row as RegExpExecArray)[1]}`)
+    expect(chunk.status).toBe(200)
+    expect(await chunk.text()).toContain('users/getUser')
 })
 
 test('the page is the app’s own, with a reload client that is not in the bundle', async () => {

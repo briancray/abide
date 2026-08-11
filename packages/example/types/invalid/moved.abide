@@ -1,0 +1,9 @@
+<script module>
+import { keyed, state } from 'abide'
+
+export const rows = state<{ id: number; label: string }[]>([])
+</script>
+
+<ul>
+    {#for r of rows by r.id}<li>{r.label}</li>{/for}
+</ul>

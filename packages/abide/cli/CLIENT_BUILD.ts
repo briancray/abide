@@ -32,16 +32,14 @@ export const CLIENT_DIR = '.abide/client'
 export const MANIFEST_FILE = `${CLIENT_DIR}/manifest.json`
 
 /**
- * What the build is pointed at when nothing is named, in the order it is looked for.
+ * What an app's client lane USED to be called, kept only to say that it is not one any more.
  *
- * `client` beside `app`, which is what an app already calls the other half — the two entry points of
- * an isomorphic app are the two lanes it has, and naming them after the lanes is why neither needs a
- * config file to be found. The first one that EXISTS wins rather than every one that does: two
- * client entries in a root is a mistake, and building both would hide it.
+ * The lane is now always generated from `pages/` — see `internal/entry.ts` — so a file by any of
+ * these names is built by nothing. That is the quietest breakage an upgrade could have: the app
+ * still builds and still starts, and the only symptom is that whatever was in the file stopped
+ * happening. So the names stay listed, and `clientLane` warns on any of them.
  *
- * Here rather than in the builder because `abide start` reads it too: a lane that is written with no
- * bundle beside it is the one shape that is unambiguously a mistake, and a second copy of this list
- * is how that refusal silently stops firing for an extension somebody added to only one of them.
+ * All four rather than `client.ts` alone: an app that wrote `client.tsx` is owed the same sentence.
  */
 export const CLIENT_ENTRIES = ['client.ts', 'client.tsx', 'client.abide', 'client.js']
 
