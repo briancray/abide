@@ -815,7 +815,7 @@ export default suite({
 
         {
             title: 'the reconcile is right under ARBITRARY mutation, not just the ones with cases',
-            note: 'The placement walk starts at the last row that changed and stops once it is below the first, and a two-row swap skips the walk entirely — which is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap and edit, at random positions, two hundred times, with the whole list checked after every one. Run over TWO row shapes, because a row that is one element and a row that is a fragment are two different pieces of code — one moves a node and the other moves a range it has to walk out first. The seed is fixed, so a failure is a failure anybody can reproduce.',
+            note: 'The placement walk starts at the last row that changed and stops once it is below the first, and a two-row swap skips the walk entirely — which is exactly the kind of reasoning that is right for every mutation somebody thought of. So the mutations are generated: insert, remove, swap, reverse a run, rotate one row, and edit, at random positions, two hundred times, with the whole list checked after every one. Several PER STEP, which is the half that matters: with one mutation per step the first and last changed index are always the two changed rows, so a fast path that confuses "the brackets around the changes" with "the only changes" agrees with the truth by construction and the fuzz can never disagree with it. That confusion shipped once. Run over TWO row shapes as well, because a row that is one element and a row that is a fragment are two different pieces of code — one moves a node and the other moves a range it has to walk out first. The seed is fixed, so a failure is a failure anybody can reproduce.',
             async run({ is }) {
                 const fuzz = async (view: (item: Item) => TemplateResult, perRow: number): Promise<number> => {
                     // Every shape carries the label in its FIRST node, so one stride reads the order
@@ -841,26 +841,52 @@ export default suite({
                         seed = (seed * 1103515245 + 12345) % 2147483648
                         return seed / 2147483648
                     }
-                    let mismatches = 0
-                    for (let step = 0; step < 200; step++) {
-                        const next = rows.peek().slice()
+                    // One mutation per step is what this did first, and it could not have found the
+                    // bug it now covers: a placement fast path keyed on the FIRST and LAST changed
+                    // index is only ever handed one change, so those two brackets are always the two
+                    // changed rows and the two readings agree by construction. Several per step is
+                    // what makes them disagree.
+                    const mutate = (next: Item[], step: number): void => {
                         const roll = rand()
-                        if (roll < 0.3 && next.length > 1) next.splice(Math.floor(rand() * next.length), 1)
-                        else if (roll < 0.6) {
+                        if (roll < 0.24 && next.length > 1) next.splice(Math.floor(rand() * next.length), 1)
+                        else if (roll < 0.48) {
                             next.splice(Math.floor(rand() * (next.length + 1)), 0, {
                                 id: 5000 + step,
                                 label: `new ${step}`,
                             })
-                        } else if (roll < 0.8 && next.length > 1) {
+                        } else if (roll < 0.66 && next.length > 1) {
                             const a = Math.floor(rand() * next.length)
                             const b = Math.floor(rand() * next.length)
                             const held = next[a] as Item
                             next[a] = next[b] as Item
                             next[b] = held
+                        } else if (roll < 0.78 && next.length > 1) {
+                            // A REVERSE of a run. The whole-list case is the one that reads right at
+                            // both ends and wrong everywhere between, and a sub-run is the same shape
+                            // with rows outside it to stay put.
+                            const from = Math.floor(rand() * next.length)
+                            const to = from + 1 + Math.floor(rand() * (next.length - from))
+                            const run = next.slice(from, to).reverse()
+                            for (let i = 0; i < run.length; i++) next[from + i] = run[i] as Item
+                        } else if (roll < 0.88 && next.length > 1) {
+                            // A ROTATION: one row lifted out and put back somewhere else, which
+                            // changes every index between the two and trades neither end.
+                            const from = Math.floor(rand() * next.length)
+                            const [held] = next.splice(from, 1)
+                            next.splice(Math.floor(rand() * (next.length + 1)), 0, held as Item)
                         } else if (next.length > 0) {
                             const at = Math.floor(rand() * next.length)
                             next[at] = { id: (next[at] as Item).id, label: `edited ${step}` }
                         }
+                    }
+
+                    let mismatches = 0
+                    for (let step = 0; step < 200; step++) {
+                        const next = rows.peek().slice()
+                        // One to four, so a step is sometimes the single mutation the brackets
+                        // describe exactly and sometimes several they only bound.
+                        const count = 1 + Math.floor(rand() * 4)
+                        for (let k = 0; k < count; k++) mutate(next, step)
                         rows.set(next)
                         await tick()
                         const shown = read(host)
