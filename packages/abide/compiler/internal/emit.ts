@@ -23,7 +23,7 @@ import { CLOSERS, desugar, OPENERS, REACTIVE_CONSTRUCTORS, REACTIVE_TYPES } from
 import { Lexer, type Token, tokensOf } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
-import { IDENTIFIER, ParseError } from './parse.ts'
+import { HTML_COMMENT, IDENTIFIER, ParseError } from './parse.ts'
 import { TypeReader } from './shape.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
@@ -809,14 +809,6 @@ function need(context: Context, name: Runtime): Runtime {
     context.used.add(name)
     return name
 }
-
-/**
- * A comment in the markup. Read by `child`, which drops them, and by the `<script>`-ordering scan,
- * which looks past them — the second reference that earns it a name.
- *
- * `.replace` only: a `/g` regex is stateful under `.test` and `.exec`, and this one is shared.
- */
-const HTML_COMMENT = /<!--[\s\S]*?-->/g
 
 /**
  * Static text, escaped for the template literal it is being pasted into.
