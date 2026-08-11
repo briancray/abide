@@ -19,7 +19,12 @@
         // — a compiled `<script module>` imports `abide` by its public specifier, and a bare specifier
         // resolves by walking up for a `node_modules` rather than through anything here. An app
         // outside a workspace writes the one pair, `[".", "./.abide/types"]`.
-        "rootDirs": ["packages/example", "packages/example/.abide/types"],
+        "rootDirs": [
+            "packages/example",
+            "packages/example/.abide/types",
+            "packages/perf",
+            "packages/perf/.abide/types"
+        ],
         "verbatimModuleSyntax": true,
         "noEmit": true,
         "strict": true,
@@ -58,7 +63,13 @@
         // What every `.abide` compiled to. The MODULE is where a template's expressions actually are,
         // so a config that only resolved the declarations would check the types a page exports and
         // nothing inside it.
-        "packages/example/.abide/types/**/*.ts"
+        "packages/example/.abide/types/**/*.ts",
+        // The perf app and its mirror. Absent until a `details?: boolean` prop that should have been
+        // `State<boolean>` shipped through `abide check packages/perf` reporting clean — the checker
+        // emits the named package's mirror and then runs `tsc` over whatever THIS file covers, so a
+        // package missing here is checked to zero files and passes.
+        "packages/perf/**/*.ts",
+        "packages/perf/.abide/types/**/*.ts"
     ],
     // The type fixtures under `types/invalid` are SUPPOSED to fail. They are checked deliberately by
     // `packages/example/test/types.test.ts`, through their own config, and a repo whose own typecheck

@@ -10,7 +10,7 @@
         "test": "bun test",
         "cli": "bun packages/abide/cli/index.ts",
         "abide": "bun packages/abide/compiler/check.ts packages/example",
-        "typecheck": "bun packages/abide/cli/index.ts check packages/example",
+        "typecheck": "bun packages/abide/cli/index.ts check packages/example packages/perf",
         "shapes": "bun packages/abide/compiler/shapes.ts packages/example --out .abide/shapes.json --pretty",
         "dev": "bun run --filter example dev",
         "build": "bun run --filter example build",
