@@ -1019,7 +1019,11 @@ class ListPart {
             const instance = (next[i] as Row).instance
             const first = instance.firstNode()
             if (first === null) continue
-            if (first.nextSibling !== reference || first.parentNode === null) {
+            // Cheapest disqualifier first: a row built this pass is not in the document at all, so
+            // there is no position to test and no reason to ask where its range ends — which is
+            // every row of a cold build and of a `create`. Otherwise the row's LAST node is what has
+            // to be followed by the row after it, see `lastNode()`.
+            if (first.parentNode === null || instance.lastNode()?.nextSibling !== reference) {
                 // Materialised BEFORE the moves: the walk is over siblings, and inserting the first
                 // node rewrites the `nextSibling` chain the rest of it would have been read from.
                 for (const node of instance.live()) parent.insertBefore(node, reference)
@@ -1158,6 +1162,22 @@ class Instance {
         const leading = this.leading
         if (leading === null) return this.nodes[0] ?? null
         return leading instanceof ChildPart ? leading.firstNode() : leading
+    }
+
+    /**
+     * Where the range ENDS — the counterpart to `firstNode()`, and what an in-place test has to ask.
+     *
+     * A row is where it belongs when the node it ENDS with is followed by the row after it. Asking
+     * `firstNode().nextSibling` instead only answers that for a template that is exactly ONE node:
+     * a row with static markup around it — `{#for}` over indented source, three top-level nodes with
+     * the whitespace either side — has its own second node there, so the test could never succeed
+     * and every row below the last change was re-inserted to find that out. That cost a 1000-row
+     * removal 5937 DOM records against the 3 it needs, and an append 1.9x the hand-written arm.
+     */
+    lastNode(): ChildNode | null {
+        const trailing = this.trailing
+        if (trailing !== null) return trailing
+        return this.nodes[this.nodes.length - 1] ?? null
     }
 
     /**
