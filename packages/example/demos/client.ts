@@ -631,6 +631,51 @@ export default suite({
         },
 
         {
+            title: 'a row of THREE nodes is in place on the same terms as a row of one',
+            note: 'The placement walk leaves a row alone when it is already where it belongs, and what answers that is where the row ENDS: its last node has to be followed by the row after it. Asking `firstNode().nextSibling` instead answers it only for a row that is exactly one node — a multi-node row has its OWN second node sitting there, so the test can never succeed and every row below the change is re-inserted to find that out. The output is identical either way, which is why this is a ratio between two row SHAPES rather than a screenshot: drop the first of 200 and nothing below it moves, whether a row is one node or three. A single-node row cannot show it, and a single-node row is what a hand-written `<li>` list is — the shapes that are not are `{#for}` over a body with markup at both ends, and any component whose root is a fragment.',
+            async run({ is, log }) {
+                const dropFirst = async (
+                    view: (item: Item) => TemplateResult,
+                    perRow: number,
+                ): Promise<{ moved: number; labels: (string | null)[] }> => {
+                    const rows = state(build(200))
+                    const host = container()
+                    mount(host, () => html`<ul>${() => rows().map((item) => keyed(item.id, view(item)))}</ul>`)
+                    await tick()
+                    // Every row below the drop shifts INDEX, so nothing here is outside the walk's
+                    // changed range: the rows are reconsidered and then left where they are.
+                    const work = await measureFlush(() => rows.set(rows.peek().slice(1)))
+                    // Read after the measurement, not inside it — a query is a walk, and the window
+                    // is a few microtasks wide. Every shape carries the label in its FIRST node, so
+                    // one stride reads the order out of both. That is what stops a zero from being
+                    // vacuous: a reconcile that moved nothing AND placed nothing scores the same.
+                    const found = host.querySelectorAll('li')
+                    const labels: (string | null)[] = []
+                    for (let i = 0; i < found.length; i += perRow) labels.push(found[i]?.textContent ?? null)
+                    host.remove()
+                    return { moved: work.insert, labels }
+                }
+
+                const one = await dropFirst((item) => html`<li>${item.label}</li>`, 1)
+                const three = await dropFirst(
+                    (item) => html`<li>${item.label}</li><li>#${item.id}</li><li>·</li>`,
+                    3,
+                )
+                const expected = build(200)
+                    .slice(1)
+                    .map((item) => item.label)
+                log(
+                    'nodes moved dropping the first of 200',
+                    `one-node rows — ${one.moved}, three-node rows — ${three.moved}`,
+                )
+                is('a one-node row leaves the 199 below it alone', one.moved, 0)
+                is('…and so does a three-node row', three.moved, one.moved)
+                is('the one-node list is in order', one.labels, expected)
+                is('and so is the three-node one', three.labels, expected)
+            },
+        },
+
+        {
             title: 'the same two reorders, TIMED',
             note: 'The counters above say a distant swap moves 197 rows where a hand-written one moves 2. This is what that costs on a clock, and it is the number the counters cannot give: the walk itself is O(n) whatever it moves, so the adjacent swap — which moves ONE row — still pays for a pass over two hundred. A reconcile that is cheap in moves and linear in walk is priced honestly by having both cards.',
             bench: {

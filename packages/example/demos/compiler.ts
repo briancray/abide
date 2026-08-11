@@ -422,6 +422,46 @@ export default suite({
         },
 
         {
+            title: 'a block body does not carry the source’s own indentation into every row',
+            note: 'A block written across lines opens with the newline and indent before its first node and closes with the indent before `{/for}`. Left in, those are two static text nodes PER ITERATION and they join the row’s movable range, so a keyed reorder relocates them alongside the row and a 500-row list pays for them 500 times. Nothing about the rendered page says so — this is the shape claim; what it costs is the client suite’s per-row node count. Only whitespace CARRYING A NEWLINE is taken, and only at the two ends: a space written deliberately between two inline nodes on one line is content, and it is the one thing this would otherwise change the layout of.',
+            run({ is }) {
+                is(
+                    'a row is the row, with nothing either side of it',
+                    template('<ul>\n    {#for w of ws by w.id}\n        <li>{w.label}</li>\n    {/for}\n</ul>'),
+                    '<ul>\n    ${() => (ws ?? []).map((w) => keyed(w.id, html`<li>${w.label}</li>`))}</ul>',
+                )
+                // The exception, and the reason the test is for a NEWLINE rather than for whitespace.
+                is(
+                    'a deliberate inline space inside a body survives',
+                    template('<p>{#if a}<b>x</b> <i>y</i>{/if}</p>'),
+                    '<p>${() => a ? html`<b>x</b> <i>y</i>` : null}</p>',
+                )
+                // Only the body's ENDS are trimmed, so text between two nodes is left alone whatever
+                // it holds — the run being removed is the one the author never wrote as content.
+                is(
+                    'and so does the break BETWEEN two nodes of one row',
+                    template('<ul>\n    {#for w of ws}\n        <li>{w}</li>\n        <li>x</li>\n    {/for}\n</ul>'),
+                    '<ul>\n    ${() => (ws ?? []).map((w) => html`<li>${w}</li>\n        <li>x</li>`)}</ul>',
+                )
+                // Whitespace outside a body is not the body's, which is what keeps the ordinary
+                // shape — a block on its own lines with text around it — spaced as it was written.
+                is(
+                    'whitespace around the block is untouched',
+                    template('<p>before {#if a}<b>x</b>{/if} after</p>'),
+                    '<p>before ${() => a ? html`<b>x</b>` : null} after</p>',
+                )
+                // The trim has to see PAST a doc comment to the newline behind it: the emitter drops
+                // the comment, so a boundary the two disagreed about leaves a stray text node in
+                // every row that neither file looks like it produced.
+                is(
+                    'a comment on its own line does not hold the indent in',
+                    template('<ul>\n    {#for w of ws}\n        <!-- the row -->\n        <li>{w}</li>\n    {/for}\n</ul>'),
+                    '<ul>\n    ${() => (ws ?? []).map((w) => html`<li>${w}</li>`)}</ul>',
+                )
+            },
+        },
+
+        {
             title: 'a hole that cannot READ gets no thunk',
             note: 'A thunk is the reactivity convention, and on the client it costs a closure per instance AND an effect node per slot — plus, being fresh every time, it defeats the identity cutoff that skips an unchanged row. So a hole whose emitted form CANNOT evaluate anything gets none, whatever its shape: every read this compiler emits is a call, so a call-free expression reads no source. The test is on what the emit PRODUCED, not on what was written — a cell in a child slot comes back as `count` and a cell in an attribute comes back as `count()`, so one rule answers both positions. Call-free is the load-bearing half: `{helper()}` may read a cell and nothing about the expression says so. A function literal is excluded for a different reason — a function reaching a slot is DATA the binder would call, so leaving one bare would change what it MEANS, not when it runs.',
             run({ is }) {
