@@ -6,24 +6,34 @@ import { assertType, type Exact } from '../exact.ts'
 // The type argument to `props()` is what types a component's props, and the destructure beside it is
 // what brings them into scope. Without the call the signature is `Record<string, never>`, which is
 // what makes `<Props n="x"/>` an error at the CALLER rather than a runtime surprise.
+//
+// The author writes what a prop IS. What arrives is a CELL of it, because the position showing this
+// component holds the instance and writes each prop into a cell of its own — so the name reads, the
+// way every other name in a `.abide` template reads, and a new `book` repaints without the component
+// being rebuilt. `State<string>` is not special any more: it says only that `bind:` may write.
 type Props = {
     book: Book
     shelf: Shelf
-    /** A prop that IS a cell: declared as one, so the name reads it and `bind:` can write it. */
+    /** Declared as a cell, so `bind:` may write it — and passed through rather than wrapped twice. */
     note: State<string>
     /** Renamed, because `class` cannot be a binding — and the cell rule follows the LOCAL name. */
     class?: string
     footnote?: string
+    /** A callback is CALLED, not read, so it is one of the two things a prop cell is not made of. */
+    onpick?: (title: string) => void
 }
 
-const { book, shelf, note, class: className = '', footnote } = props<Props>()
+const { book, shelf, note, class: className = '', footnote, onpick } = props<Props>()
 
-// The props arrive typed, not as `unknown` — the whole claim of declaring the type.
-assertType<Exact<typeof book, Book>>()
-assertType<Exact<typeof shelf, Shelf>>()
-assertType<Exact<typeof footnote, string | undefined>>()
-// A default collapses the optional: the local is a `string`, whatever the caller left out.
-assertType<Exact<typeof className, string>>()
+// The props arrive typed, not as `unknown` — the whole claim of declaring the type — and every one of
+// them that is data arrives behind a cell.
+assertType<Exact<ReturnType<typeof book>, Book>>()
+assertType<Exact<ReturnType<typeof shelf>, Shelf>>()
+assertType<Exact<ReturnType<typeof footnote>, string | undefined>>()
+// A default collapses the optional: the cell reads a `string`, whatever the caller left out.
+assertType<Exact<ReturnType<typeof className>, string>>()
+// A function prop is handed over as it was written.
+assertType<Exact<typeof onpick, ((title: string) => void) | undefined>>()
 </script>
 
 <article class={className}>

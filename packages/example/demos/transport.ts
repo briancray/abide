@@ -19,7 +19,7 @@
 // That is deliberate: the claim a reader comes here for is "the browser gets the address and not the
 // body", and moving it to another page to save a page nobody profiles would be hiding it.
 
-import type { Failed } from 'abide'
+import { channel, type Failed, html } from 'abide'
 // The two stubs the elider writes and the shapes that describe them, called directly here because
 // this suite is what tests them.
 import {
@@ -29,7 +29,8 @@ import {
     type RemoteSocketOptions,
     remoteSocket,
     type Rpc,
-} from 'abide/runtime'
+    type Wire,
+} from 'abide/runtime/transport'
 import { ElisionError, elide, endpointId, type ImportedModule, kindOf, type TypeSource } from 'abide/compiler'
 import {
     config,
@@ -49,11 +50,13 @@ import {
     type Schema,
     type SchemaRefusal,
     type StandardSchemaV1,
+    renderToString,
     socket,
     sse,
     validateJson,
 } from 'abide/server'
-import { countCalls, duration, loopback, nsPerOp, reader, sleep, suite, until } from 'abide/tests'
+import { countCalls, duration, loopback, nsPerOp, reader, sleep, suite, tick, until } from 'abide/tests'
+import { hydrate } from 'abide/ui'
 import { assertType, type Exact } from '../types/exact.ts'
 import { button, el, field, row, stage } from './dom.ts'
 import { META } from './SUITES.ts'
@@ -523,8 +526,9 @@ export default suite({
 
                 // The type-level half of the claim, asserted rather than described: the value a
                 // caller reads is the ANSWER with the refusals taken out, and `any` would pass an
-                // assignability check where this identity one fails.
-                assertType<Exact<ReturnType<ReturnType<typeof getUser>>, User | undefined>>()
+                // assignability check where this identity one fails. No `| undefined` for the load
+                // still being in flight — a read that cannot answer yet signals instead.
+                assertType<Exact<ReturnType<ReturnType<typeof getUser>>, User>>()
 
                 let local: unknown
                 try {
@@ -1631,6 +1635,22 @@ export default suite({
                 )
                 is('the stub carries the address', browser?.code.includes('"users/getUser"'), true)
                 is('…and none of the handler', browser?.code.includes('findUser'), false)
+                // The SPECIFIER is a bundling fact, not a naming one, and it is asserted here because
+                // nothing else can see it: `abide/runtime` is what the generated client entry imports
+                // for `routes`/`outlet`/`ready`, so a stub reaching the transport THROUGH it puts the
+                // whole call-and-decode path in the chunk every page loads — 4,066 bytes of the perf
+                // app's shared entry, for one lazy route with one rpc. Its own specifier is not
+                // reachable from that entry, so it lands in the chunk of the page that has the rpc.
+                is(
+                    'the stub imports the transport by its OWN specifier',
+                    browser?.code.includes(`from "abide/runtime/transport"`),
+                    true,
+                )
+                is(
+                    '…and never through the barrel the client entry already pulls in',
+                    browser?.code.includes(`from "abide/runtime"`),
+                    false,
+                )
                 is('the server lane keeps the module', server?.code.includes('findUser'), true)
                 is('…and appends its own address', server?.code.includes('"users/getUser"'), true)
                 // Appended rather than woven in, so every line the author wrote keeps its number.
@@ -1866,6 +1886,60 @@ export default suite({
                 const response = await remoteSlowly.raw({ id: 3 })
                 is('raw() is the same call as a response', response.status, 200)
                 is('…decoded by whoever asked for it', await response.json(), find(3))
+            },
+        },
+        {
+            title: 'a socket that has not received yet SIGNALS, so hydration keeps what the server wrote',
+            note: 'A `channel` never loads, so its cold read hands back `undefined` and the slot paints empty — which on a client that has just adopted server markup blanks a value the server got right, warns, and fills it back in a round trip later. A `memo` in the same slot does not, because its pending read signals. A connection IS a load, so `remoteSocket` spells it as one and every catcher already knows what to do with it. The server is untouched: `socket()`s server half is `channel()`, and a walk that waited on a channel which may never receive would wait forever.',
+            async run({ is, host }) {
+                // The server's half: a plain channel holding a value, rendered to markup.
+                const served = channel<string>()
+                served.publish('STATUS-OK')
+                const markup = await renderToString(html`<p>${() => served()}</p>`, { hydratable: true })
+
+                // The client's half, over a wire this case drives by hand.
+                let live: Wire | null = null
+                const feed = remoteSocket<string>('demo/status/feed', {
+                    base: wire.base,
+                    open: () => {
+                        live = { send: () => {}, close: () => {}, onmessage: null, onopen: null, onclose: null }
+                        return live
+                    },
+                })
+
+                const adopted = el('div')
+                adopted.innerHTML = markup
+                host.append(adopted)
+                hydrate(adopted, () => html`<p>${() => feed()}</p>`)
+                await tick()
+                const text = () => (adopted.textContent ?? '').trim()
+
+                is('the server’s value survived hydration', text(), 'STATUS-OK')
+                is('…because the connection reads as a load', feed.pending(), true)
+
+                // Connected, but still nothing to show — the markup is still the best answer.
+                ;(live as Wire | null)?.onopen?.()
+                await tick()
+                is('…and still survives an open with no message', text(), 'STATUS-OK')
+
+                ;(live as Wire | null)?.onmessage?.({ data: JSON.stringify('STATUS-LIVE') })
+                await tick()
+                is('the first message is what repaints it', text(), 'STATUS-LIVE')
+                is('…and the load is over', feed.pending(), false)
+
+                // A dropped wire is a reload in flight over a value still being served — the one
+                // thing a subscriber could not otherwise ask, since after the first message a
+                // healthy connection and a dead one read identically.
+                is('a live wire is not refreshing', feed.refreshing(), false)
+                ;(live as Wire | null)?.onclose?.()
+                await tick()
+                is('a dropped one is', feed.refreshing(), true)
+                is('…while still serving the last message', text(), 'STATUS-LIVE')
+                is('…and without going back to pending', feed.pending(), false)
+
+                feed.close()
+                await tick()
+                is('closing is not reconnecting', feed.refreshing(), false)
             },
         },
     ],

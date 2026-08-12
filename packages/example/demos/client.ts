@@ -6,7 +6,7 @@
 // flush — the effect is what touches the DOM, not the write.
 
 import { html, memo, state, type State, type TemplateResult } from 'abide'
-import { awaited, keyed } from 'abide/runtime'
+import { awaited, component, keyed } from 'abide/runtime'
 import {
     container,
     countCalls,
@@ -57,6 +57,38 @@ function lifted(items: Item[], from: number, to: number): Item[] {
 
 function rand(): string {
     return Math.random().toString(36).slice(2, 6)
+}
+
+// --- a component with state of its own --------------------------------------
+//
+// What the two instance cases below are about, and the reason both of them COUNT: an instance that
+// survived a re-render and one rebuilt with the same props paint the same characters. `bodies` is
+// how many times the view was called, and `edit` reaches a live instance's own cell from outside —
+// which is a user typing into it, and the only thing a rebuild destroys.
+//
+// A prop arrives as a CELL, because the position holding the instance writes each one on every pass.
+// That is the whole shape a compiled `<Editor n={…}/>` has, written out.
+const editors = {
+    bodies: 0,
+    own: new Map<number, State<string>>(),
+    edit(id: number, text: string): void {
+        ;(editors.own.get(id) as State<string>).set(text)
+    },
+}
+
+function Editor({ id, n }: { id: State<number>; n: State<number> }): TemplateResult {
+    editors.bodies++
+    const own = state('initial')
+    // `peek`, not a read: a key never moves under its own row, and setup is not a subscription.
+    editors.own.set(id.peek(), own)
+    return html`<b>${() => `${n()}/${own()}`}</b>`
+}
+
+/** Every instance's text, in document order — the value half of what the counters above claim. */
+function shown(host: HTMLElement): string {
+    const parts: string[] = []
+    for (const node of host.querySelectorAll('b')) parts.push(node.textContent ?? '')
+    return parts.join(' ')
 }
 
 const list = (rows: () => Item[]): TemplateResult =>
@@ -1741,6 +1773,26 @@ export default suite({
         },
 
         {
+            title: 'an UNGUARDED read paints nothing until it lands, and never throws',
+            note: 'The probe above is optional, not the price of admission. A cold read SIGNALS rather than handing back `undefined`, and the slot effect is what stands under it: no output for that region, no throw out of the mount, and one repaint on the wake the graph was going to send anyway. The signal fires on the READ, so an expression built out of one never gets as far as producing garbage — no `undefined.name`, no `NaN`.',
+            async run({ is }) {
+                const session = state(Promise.resolve({ name: 'ada', visits: 2 }))
+                const host = container()
+                mount(
+                    host,
+                    () => html`<p>${() => session()?.name}</p>
+                        <b>${() => (session()?.visits ?? 0) + 1}</b>`,
+                )
+                is('the member access painted nothing', host.querySelector('p')?.textContent, '')
+                is('…and so did the arithmetic, rather than NaN', host.querySelector('b')?.textContent, '')
+                await tick()
+                is('once it lands', host.querySelector('p')?.textContent, 'ada')
+                is('…and the whole expression ran', host.querySelector('b')?.textContent, '3')
+                host.remove()
+            },
+        },
+
+        {
             title: 'a promise superseded before it lands never paints over the newer one',
             note: 'Each child part stamps what it is showing, so a settle that arrives after it has been replaced — or after the tree was disposed — is discarded.',
             async run({ is }) {
@@ -1955,6 +2007,157 @@ export default suite({
         },
 
         {
+            title: 'a component keeps its own state when a PROP changes',
+            note: 'A component call is carried to the position that shows it rather than made in the slot thunk, so the instance outlives a re-render: the view runs once, the props are cells the position writes, and the child’s own `state` is never rebuilt. Before this, a computed prop made the enclosing thunk reactive, so a new `n` called the view again and `state(\'initial\')` made a fresh cell — the prop really did update, so the output looked right and the edit was simply gone. The counter is the claim: the value alone cannot tell an instance that survived from one rebuilt with the same props.',
+            async run({ is }) {
+                const outer = state(0)
+                const host = container()
+                const before = editors.bodies
+                const view = mount(
+                    host,
+                    () => html`<div>${() => component(Editor, { id: 1, n: outer() + 1 })}</div>`,
+                )
+                await tick()
+                is('the first paint', host.textContent, '1/initial')
+
+                editors.edit(1, 'EDITED')
+                await tick()
+                is('the edit is on screen', host.textContent, '1/EDITED')
+
+                outer.set(1)
+                await tick()
+                is('the prop moved', host.textContent, '2/EDITED')
+                is('and the view ran once', editors.bodies - before, 1)
+                view.dispose()
+                host.remove()
+
+                // A prop that is ALREADY a cell is handed over rather than copied into one, which is
+                // what `bind:` on a component prop compiles to: the child holds the very cell the
+                // parent does, so a write inside it is a write the parent sees. Wrapping it would
+                // give the child something it cannot write back to, and nothing about a read says so.
+                const note = state('from the parent')
+                const shell = container()
+                const Bound = ({ note: held }: { note: State<string> }): TemplateResult => {
+                    held.set('from the child')
+                    return html`<i>${held}</i>`
+                }
+                const bound = mount(shell, () => html`<div>${() => component(Bound, { note })}</div>`)
+                await tick()
+                is('the child wrote the parent’s own cell', note(), 'from the child')
+                is('…and it is the same cell the child reads', shell.textContent, 'from the child')
+                bound.dispose()
+                shell.remove()
+            },
+        },
+
+        {
+            title: 'a keyed list GAINING a row rebuilds nothing, and a row that MOVES takes its state',
+            note: 'The reset was never really about props: what re-runs a component is the thunk that renders it, and a list gaining a row re-runs that thunk for every row in it. No prop moves here — `n` is the same number for every surviving row — and before this, all of them were rebuilt anyway, which is CLAUDE.md’s “the wrong implementation still produces the right output” in the exact shape a work counter exists for. Append and reorder are the pair, the way a full reverse and a two-row swap are for the reconcile: the append says the instance survives at its position, and only the reorder distinguishes an identity that TRAVELS from one that keys on position alone.',
+            async run({ is, log }) {
+                const rows = state([1, 2, 3])
+                const host = container()
+                const before = editors.bodies
+                const view = mount(
+                    host,
+                    () =>
+                        html`<ul>${() =>
+                            rows().map((id) =>
+                                keyed(id, html`<li>${() => component(Editor, { id, n: id })}</li>`),
+                            )}</ul>`,
+                )
+                await tick()
+                is('mounted', shown(host), '1/initial 2/initial 3/initial')
+                is('one view call per row', editors.bodies - before, 3)
+
+                // A DISTINCT edit per row, because the reorder below is what they are for: identical
+                // ones are indistinguishable wherever they end up, and an unkeyed list — which reuses
+                // rows by POSITION — passed the whole case with three copies of `EDITED` in it.
+                editors.edit(1, 'A')
+                editors.edit(2, 'B')
+                editors.edit(3, 'C')
+                await tick()
+                is('the edits are on screen', shown(host), '1/A 2/B 3/C')
+
+                const appended = editors.bodies
+                rows.set([1, 2, 3, 4])
+                await tick()
+                log('view calls to append one row to three', `${editors.bodies - appended}`)
+                is('only the new row is built', editors.bodies - appended, 1)
+                is('and every other row kept what it held', shown(host), '1/A 2/B 3/C 4/initial')
+
+                // A rotation, not a swap: every one of the three moves, so a state that stayed where
+                // it was reads differently from one that travelled at every position but the last.
+                const reordered = editors.bodies
+                rows.set([3, 1, 2, 4])
+                await tick()
+                is('a reorder builds nothing', editors.bodies - reordered, 0)
+                is('and each row took its own state with it', shown(host), '3/C 1/A 2/B 4/initial')
+                view.dispose()
+                host.remove()
+
+                // The same count at two SIZES, which is the shape that says O(1) rather than
+                // "small": the rebuild this replaced was one view call per row, so the number it
+                // reported GREW with the list — a thousand rows cost a thousand calls to add one.
+                const perAppend = async (n: number): Promise<number> => {
+                    const many = state(Array.from({ length: n }, (_, i) => 1_000 + i))
+                    const held = container()
+                    const tree = mount(
+                        held,
+                        () =>
+                            html`<ul>${() =>
+                                many().map((id) =>
+                                    keyed(id, html`<li>${() => component(Editor, { id, n: id })}</li>`),
+                                )}</ul>`,
+                    )
+                    await tick()
+                    const from = editors.bodies
+                    many.set([...many.peek(), 9_000 + n])
+                    await tick()
+                    tree.dispose()
+                    held.remove()
+                    return editors.bodies - from
+                }
+
+                const small = await perAppend(200)
+                const large = await perAppend(1_000)
+                log('view calls to append one row', `200 rows — ${small}, 1000 rows — ${large}`)
+                is('two hundred rows cost one view call', small, 1)
+                is('…and five times as many cost the same', large, small)
+            },
+        },
+
+        {
+            title: 'an instance that LEAVES the position is dropped, not kept for its return',
+            note: 'The instance is held by the part that shows it, so the other half of holding one is letting it go: a slot that paints something else is a component that left the tree. Missing that, the record survived showing `gone` and the component’s return was a write into cells nobody was reading — the part reused the instance, so it never repainted at all and the slot stayed on the text it had swapped to. The count is the same claim at the other end of a list: a page that scrolls would otherwise hold a props record and a cell per prop for every row it has ever shown, and nothing about the output says so.',
+            async run({ is }) {
+                const shownNow = state(true)
+                const host = container()
+                const before = editors.bodies
+                const view = mount(
+                    host,
+                    () =>
+                        html`<div>${() =>
+                            shownNow() ? component(Editor, { id: 9, n: 9 }) : 'gone'}</div>`,
+                )
+                await tick()
+                editors.edit(9, 'EDITED')
+                await tick()
+                is('the edit is on screen', host.textContent, '9/EDITED')
+
+                shownNow.set(false)
+                await tick()
+                is('the slot painted something else', host.textContent, 'gone')
+
+                shownNow.set(true)
+                await tick()
+                is('and coming back is a NEW instance', host.textContent, '9/initial')
+                is('…which is the view running a second time', editors.bodies - before, 2)
+                view.dispose()
+                host.remove()
+            },
+        },
+
+        {
             title: 'dispose tears the tree down and stops updates',
             note: '`mount` returns a handle. Everything created under it — every slot effect, every nested part, every list row — disposes together, because they were all created inside one `scope`.',
             async run({ is }) {
@@ -2039,7 +2242,7 @@ export default suite({
         },
         {
             title: 'a settled block is not re-entered when a SIBLING slot wakes',
-            note: 'The claim every other case here makes about DOM work, made about WAKES instead — and the one this suite could not previously see. Each slot gets its own effect, so writing a cell one slot reads must not re-run the thunk of the slot beside it. When it does the output is still right, which is why only a counter catches it: an `{#await}` whose thunk re-runs evaluates its operand again, hands the part a promise it has not seen, and the `holding` cutoff correctly treats a new operand as a new load — so a settled panel flashes back to its pending arm and fetches a second time. That is the failure a bare block head reintroduced, and this is what would have failed instead of 417 green tests.',
+            note: 'The claim every other case here makes about DOM work, made about WAKES instead — and the one this suite could not previously see. Each slot gets its own effect, so writing a cell one slot reads must not re-run the thunk of the slot beside it. When it does the output is still right, which is why only a counter catches it: a block whose thunk re-runs evaluates its operand again, hands the part a value it has not seen, and the `holding` cutoff correctly treats a new operand as a new load — so a settled panel flashes back to its pending arm and fetches a second time. That is the failure a bare block head reintroduced, and this is what would have failed instead of 417 green tests.',
             async run({ is }) {
                 let loads = 0
                 const load = (): Promise<string> => {

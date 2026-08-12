@@ -18,15 +18,25 @@
 /**
  * An app's document, cut at the two places a render writes into.
  *
- * Concatenated in this order: `head` + the scoped styles + `open` + the page + `close`.
+ * Concatenated in this order: `head` + the scoped styles + `open` + the page + `close` + `tail`.
  */
 export interface Shell {
     /** Everything up to where the scoped styles go — the text before `</head>`. */
     head: string
     /** The rest of the head, and the body down to the inside of the slot. */
     open: string
-    /** From the end of the slot to the end of the document. */
+    /**
+     * The close of the hydration ROOT, and nothing after it.
+     *
+     * Split from `tail` because the boundary is load-bearing and was implicit: everything between
+     * `open` and this is what a client ADOPTS, so anything written inside it has to be something the
+     * client's own render produces too. A `<script>` of seeded values is not — it was emitted here,
+     * survived only because hydration read it before discarding it as an extra child, and left a
+     * stray element inside the content for any reader that runs no scripts.
+     */
     close: string
+    /** From after the hydration root to the end of the document. Where anything the client must not adopt goes. */
+    tail: string
 }
 
 // `<slot>`, `<slot/>`, `<slot />`, or one carrying attributes. The closing tag is matched with it so
@@ -78,7 +88,8 @@ export function shell(html: string): Shell {
     return {
         head: headEnd === null ? '' : before.slice(0, headEnd.index),
         open: headEnd === null ? before : before.slice(headEnd.index),
-        close: `</slot>${html.slice(hole.index + hole[0].length)}`,
+        close: '</slot>',
+        tail: html.slice(hole.index + hole[0].length),
     }
 }
 
@@ -138,5 +149,7 @@ export const DOCUMENT_OPEN = '<!doctype html><html lang="en"><head><meta charset
 
 /** What `renderDocument(head, …)` means: abide's own document, with the app's head inside it. */
 export function shellAround(head: string): Shell {
-    return { head: `${DOCUMENT_OPEN}${head}`, open: '</head><body>', close: '</body></html>' }
+    // No slot at all in this form, so the hydration root is the body and there is nothing between the
+    // two — `close` is empty and everything is `tail`.
+    return { head: `${DOCUMENT_OPEN}${head}`, open: '</head><body>', close: '', tail: '</body></html>' }
 }

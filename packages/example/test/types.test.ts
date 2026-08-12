@@ -59,8 +59,8 @@ const EXPECTED: {
     message: RegExp
     where: 'template' | 'script'
 }[] = [
-    // A cell read is `T | undefined` and a narrowed branch is the REAL type, so a typo inside one is
-    // caught. If narrowing produced `any` this line would compile.
+    // A template read has the LOADED type, so a typo in one is caught. If the read had been widened
+    // to `any` — or to `unknown` — this line would compile.
     {
         fixture: 'narrowing.abide',
         line: 9,
@@ -68,14 +68,15 @@ const EXPECTED: {
         message: /'nmae' does not exist/,
         where: 'template',
     },
-    // …and without the narrowing, the same read is possibly-undefined. The pair is the proof: one
-    // says the branch has a type, the other says it was not simply widened away.
+    // …and the same member access in a `<script>` is possibly-undefined, because setup runs once and
+    // a read there peeks. The pair is the proof, and it is the one that says where the split falls:
+    // one position has a real type, the other still has to handle the absence.
     {
         fixture: 'unnarrowed.abide',
-        line: 9,
+        line: 15,
         code: 'TS2532',
         message: /possibly 'undefined'/,
-        where: 'template',
+        where: 'script',
     },
     // A write desugars to `set`, and keeps the cell's type doing it.
     {
@@ -106,7 +107,9 @@ const EXPECTED: {
     // a component that never calls it — children and nothing else — cannot be told.
     {
         fixture: 'props.abide',
-        line: 11,
+        // One line lower than the destructure it is on: the file now imports `propCell`, which is a
+        // second header statement.
+        line: 12,
         code: 'TS2339',
         message: /'missing' does not exist/,
         where: 'script',

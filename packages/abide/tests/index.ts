@@ -16,6 +16,7 @@
 // test runner. `ctx.is(...)` records a line and throws an `AssertionError` on mismatch: the runner
 // turns that into a failed test, the card paints it red.
 
+import { isPending } from '$shared/internal/graph.ts'
 import { isThenable } from '$shared/internal/probes.ts'
 import { watch } from '$shared/reactive.ts'
 import { AssertionError, equals, fail, messageMatches, show } from './internal/assert.ts'
@@ -315,6 +316,10 @@ export function reader<T>(read: () => T): Reader {
         try {
             seen.push(show(read()))
         } catch (error) {
+            // A read with nothing to serve YET is not an observation — the body did not finish and
+            // the graph will run it again. Passed through, so this recorder never counts a pass the
+            // reader never had. Any try/catch standing between a slot and a read owes the same.
+            if (isPending(error)) throw error
             seen.push(`THROW ${(error as Error).message}`)
         }
     })

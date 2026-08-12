@@ -29,8 +29,12 @@ import { TRANSPORT_ROOTS } from '$compiler/internal/elide.ts'
  * A module that throws is NOT swallowed: a broken endpoint file is a broken app, and the boot that
  * finds out is the one that can still refuse to listen. That is the opposite of the shapes pass,
  * which skips what it cannot read — it is an enrichment, and this is the app.
+ *
+ * How many were FOUND is the return, because the registry cannot answer the question the caller has:
+ * a command registers endpoints of its own — `abide dev`'s reload socket is one — so a count taken
+ * from the registry says "this app has endpoints" about a directory that has none.
  */
-export async function handlers(root: string): Promise<void> {
+export async function handlers(root: string): Promise<number> {
     const found: string[] = []
     for (const pattern of Object.values(TRANSPORT_ROOTS)) {
         const glob = new Bun.Glob(pattern)
@@ -46,4 +50,5 @@ export async function handlers(root: string): Promise<void> {
     // limiter, a client for something else — and their module bodies run here. Two of them opening
     // the same resource concurrently is a race an app never wrote, in an order it cannot see.
     for (const path of found) await import(Bun.pathToFileURL(path).href)
+    return found.length
 }

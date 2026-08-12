@@ -5,6 +5,14 @@ import type { Book } from '../models.ts'
 export const session = state(new Promise<Book>((resolve) => resolve({ title: 'a', pages: 1, author: { name: 'b' } })))
 </script>
 
+<script>
+// Setup runs ONCE, so a read here peeks — there is no re-run for a cold read to signal to, and the
+// load being in flight is a state the author has to handle. Its pair beside this one is `{session.title}`
+// in a TEMPLATE, which is not an error: a slot thunk is re-run, so the read there either has the
+// value or produces nothing at all.
+const first = session.title
+</script>
+
 <div>
-    <p>{session.title}</p>
+    <p>{first}</p>
 </div>

@@ -35,6 +35,31 @@ const NO_OBSERVERS: Node[] = []
 let current: Node | null = null
 
 /**
+ * A walk that will CALL THE THUNK AGAIN is standing under this read.
+ *
+ * The other half of "who catches a pending read", and the half `current` cannot describe: the server
+ * walk subscribes to nothing, so there is no running node to recognise it by — it recovers by
+ * re-calling, not by waking. Set around a synchronous call and never across an await, or a
+ * concurrent request's reads see it.
+ */
+let willRetry = false
+
+/**
+ * The signal a read threw that nothing has answered for yet.
+ *
+ * A JavaScript `catch` is TOTAL: an author's `try` around a read WILL fire, and no throw can be made
+ * to skip it. So the signal is not made invisible — it is made not to MATTER. A body that returns
+ * while this is set returns output built from a read that never happened, so its boundary throws the
+ * signal on its behalf and waits exactly as though the throw had reached it. The `catch` block still
+ * runs; what it produced is discarded.
+ *
+ * Meaningful only INSIDE the body currently running: every boundary saves and restores it around its
+ * own call, so a nested one cannot leak a signal outwards or wipe an outer one. A signal that escapes
+ * a body does so as a throw, and the catcher that means to keep it travelling re-arms this.
+ */
+let outstanding: Pending | null = null
+
+/**
  * How far the running node's reads have MATCHED the sources its previous run collected, and the
  * fresh list once one of them has not.
  *
@@ -90,6 +115,10 @@ export class Node {
     // Every write passes through this before it is stored — `state(initial, transform)` and
     // `memo(fn, transform)`. Null on almost every node, so the cost is one field and one null check.
     transform: ((value: unknown) => unknown) | null = null
+    // The last run of this body did not finish, because a read inside it SIGNALLED — so the node is
+    // DIRTY with no value behind it. Read by `mark`, and false on every node that has never met a
+    // load. See the note there for why the distinction has to exist.
+    signalled = false
 
     constructor(payload: unknown, fn: (() => unknown) | null, isEffect = false) {
         this.fn = fn
@@ -129,7 +158,22 @@ export class Node {
     }
 
     mark(next: number): void {
-        if (this.status >= next) return
+        if (this.status >= next) {
+            // Already at least this dirty, so there is nothing to raise — but a node left DIRTY by a
+            // SIGNAL has produced no value and told its observers nothing, and absorbing the mark
+            // here is what made it serve a stale one for good. `relayed` subscribes the READER to the
+            // flip that ends the load, which covers the load it was armed for and no other: when the
+            // body goes on to read a DIFFERENT cell — a keyed slot whose args moved is the ordinary
+            // way — that first flip never fires again and the change stops here.
+            //
+            // So the status stays DIRTY, which is what keeps the next read running the body, and the
+            // mark still travels. Every other mark takes the return above, which is the arm the
+            // propagation cost is paid on.
+            if (!this.signalled) return
+            const observers = this.observers
+            for (let i = 0; i < observers.length; i++) (observers[i] as Node).mark(CHECK)
+            return
+        }
         if (this.status === CLEAN && this.isEffect) {
             queue.push(this)
             if (!scheduled) {
@@ -161,11 +205,37 @@ export class Node {
             //
             // An EFFECT keeps throwing out of here: `flush` resets it to CLEAN and rethrows from a
             // fresh microtask, which is what keeps the throw observable.
-            if (this.isEffect) this.run()
-            else {
+            if (this.isEffect) {
                 try {
                     this.run()
                 } catch (error) {
+                    // A body that could not read yet has not RUN — there is nothing to report and
+                    // nothing to undo. The signalling read subscribed this node to the flip that ends
+                    // the load, so the body runs again the moment it can.
+                    if (!(error instanceof Pending)) throw error
+                }
+            } else {
+                // Cleared BEFORE the run and set only by the signal below, so any run that reaches a
+                // value clears it — including the one this pull is about to make.
+                this.signalled = false
+                try {
+                    this.run()
+                } catch (error) {
+                    if (error instanceof Pending) {
+                        // The node is DIRTY with nothing behind it, and `mark` has to know: it would
+                        // otherwise absorb every later change to this body's own sources.
+                        this.signalled = true
+                        // Nobody to signal: whoever read this derivation is at a position that will
+                        // not run again, so it serves what it has — nothing yet — exactly as the cold
+                        // cell under it would have. Returning here leaves the node DIRTY, so the next
+                        // read runs the body rather than trusting a value it never produced.
+                        if (current === null && !willRetry) return
+                        // Re-armed for whoever is reading: the derivation's own run restored this on
+                        // its way out, so without it a body that CATCHES the relayed signal would
+                        // look like a body that never met one.
+                        outstanding = error
+                        throw relayed(error)
+                    }
                     settleError(this, error)
                 }
             }
@@ -234,13 +304,19 @@ export class Node {
         const previous = current
         const previousIndex = sourceIndex
         const previousCollected = collected
+        const previousOutstanding = outstanding
         current = this
         sourceIndex = 0
         collected = null
+        outstanding = null
         const before = this.value
         let next: unknown
         try {
             next = this.fn!()
+            // Returned normally, but a read inside it did NOT — see `outstanding`. Thrown from
+            // inside the `try` on purpose, so the `finally` below still settles the subscriptions the
+            // run collected: those are what wake it when the load lands.
+            if (outstanding !== null) throw outstanding
         } finally {
             // BEFORE the restore, while these two still describe THIS run — and in a `finally`,
             // because a body that throws has still read whatever it read before it did. Leaving the
@@ -250,6 +326,7 @@ export class Node {
             current = previous
             sourceIndex = previousIndex
             collected = previousCollected
+            outstanding = previousOutstanding
         }
 
         if (this.isEffect) {
@@ -622,6 +699,94 @@ function finish(track: Async, value: unknown, failed: boolean): void {
     }
 }
 
+// --- a read that is not ready yet -------------------------------------------
+//
+// A COLD load has nothing to serve, and `undefined` is the wrong answer to give for it: it makes
+// every caller narrow a value that is only absent for as long as the load takes. So the read SIGNALS
+// instead — it throws, whoever is standing under it produces no output for that region, and they run
+// again when the graph wakes them.
+//
+// It signals only where RE-RUNNING is the recovery, which is exactly the two catchers below: a
+// running effect or derivation (`current`), and a walk that says it will call the thunk again
+// (`willRetry`). Anywhere else — `<script>` setup, an event handler, module scope — the read hands
+// back what is there, because nobody would run it a second time.
+
+/** The signal itself, carrying the CELL that was not ready — the one thing a catcher can wait for. */
+export class Pending {
+    constructor(readonly node: Node) {}
+}
+
+export function isPending(error: unknown): error is Pending {
+    return error instanceof Pending
+}
+
+/** The load the signalling read was waiting on. Rejects exactly as that read will throw. */
+export function settledOf(pending: Pending): Promise<unknown> {
+    return settledPromise(pending.node)
+}
+
+/** `retryableCall` for a caller that already holds a thunk. */
+export function retryable<T>(fn: () => T): T {
+    return retryableCall(callThunk, fn)
+}
+
+function callThunk<T>(fn: () => T): T {
+    return fn()
+}
+
+function pullNode(node: Node): void {
+    node.pull()
+}
+
+/**
+ * Call `fn(arg)` with a pending read allowed to signal, for a caller that will call it AGAIN once
+ * the load lands. Synchronous by contract — see `willRetry`.
+ *
+ * The argument is threaded rather than captured for the same reason `untrackCall` exists beside
+ * `untrack`: an attribute slot is unwrapped once per attribute per ROW, and the captured form
+ * allocates a closure per one of them to make a call the engine can make directly.
+ */
+export function retryableCall<A, T>(fn: (arg: A) => T, arg: A): T {
+    const previous = willRetry
+    const previousOutstanding = outstanding
+    willRetry = true
+    outstanding = null
+    try {
+        const produced = fn(arg)
+        if (outstanding !== null) throw outstanding // something caught the signal — see `outstanding`
+        return produced
+    } finally {
+        willRetry = previous
+        outstanding = previousOutstanding
+    }
+}
+
+/**
+ * Did a read in the body currently running signal, and get caught on the way out?
+ *
+ * For a caller that PRODUCES a value and then acts on it in one body, where `run`'s own check comes
+ * too late — a slot binder has already written to the DOM by then. `run` still throws afterwards; this
+ * is only what stops the write. No bracket, because `run` already zeroed this at the top of the body.
+ */
+export function swallowed(): boolean {
+    return outstanding !== null
+}
+
+/**
+ * Pass a signal on through the derivation it unwound out of, and leave that derivation DIRTY so the
+ * next read of it runs the body rather than serving a value it never produced.
+ *
+ * Staying DIRTY costs the wake, though: `mark` stops at a node that is already DIRTY, so the flip
+ * that ends the load would reach this derivation and go no further. So whoever is READING it —
+ * `current` again by here, the derivation's own run having restored it — is subscribed to that flip
+ * directly. The signal keeps carrying the cell it started at, which is the one that can be awaited;
+ * a derivation cannot be, since nothing would pull it.
+ */
+function relayed(pending: Pending): Pending {
+    trackerFor(pending.node).pending.read()
+    return pending
+}
+
 // THE read. A failed load throws here rather than reporting `undefined` and letting a caller who
 // never checked `error()` render as though nothing went wrong. The failure is read untracked — the
 // subscription is to the value, and `settleError`/`settleValue` wake those readers on a flip.
@@ -629,14 +794,39 @@ function finish(track: Async, value: unknown, failed: boolean): void {
 function readCell(node: Node): unknown {
     const value = node.read()
     const track = node.asyncTrack
-    if (track !== null && track.error.value !== undefined) throw track.error.value
+    if (track === null) return value
+    if (track.error.value !== undefined) throw track.error.value
+    if (track.pending.value === true && (current !== null || willRetry)) {
+        // Subscribed to the FLIP, not to the value: a load that settles to `undefined` moves no
+        // value at all, so a reader holding only the value subscription would never be woken for it
+        // and would sit signalling forever.
+        track.pending.read()
+        const signal = new Pending(node)
+        outstanding = signal
+        throw signal
+    }
     return value
 }
 
 // Backing for `then`: the promise of the SETTLED value. Reads untracked — awaiting a cell inside an
 // effect must not subscribe the effect to it, since nothing can be tracked through an await anyway.
 function settledPromise(node: Node): Promise<unknown> {
-    if (node.fn !== null) node.pull() // awaiting an async memo starts its load
+    if (node.fn !== null) {
+        // Awaiting an async memo starts its load — and `await` is a CATCHER, in the same shape the
+        // server walk is: a body that could not read yet is waited out and run again. Without this
+        // an `await` on a derivation over a cold cell resolves the `undefined` the body never
+        // returned, which is the one place the signal could still hand back an unsettled value.
+        try {
+            retryableCall(pullNode, node)
+        } catch (error) {
+            if (!(error instanceof Pending)) throw error
+            // The retry re-reads the cell, so a FAILED load is thrown by the read rather than here.
+            return settledOf(error).then(
+                () => settledPromise(node),
+                () => settledPromise(node),
+            )
+        }
+    }
     const track = node.asyncTrack
     if (track === null) return Promise.resolve(node.value)
     if (track.pending.value === true || track.refreshing.value === true) {
@@ -883,10 +1073,19 @@ async function* iterate<T>(cell: Cell<T>): AsyncGenerator<T> {
 // `refresh` is the one verb that is NOT here, because re-running requires a body to re-run; it lives
 // on `Memo` and on a keyed handle. `dispose` likewise: only a derivation owns subscriptions.
 export interface Cell<T> extends PromiseLike<T> {
-    /** The value. THROWS if the last load failed — a caller that ignores it is not handling it. */
+    /**
+     * The value. THROWS if the last load failed — a caller that ignores it is not handling it — and
+     * SIGNALS where re-running is the recovery, which is why the type carries no `| undefined` for a
+     * load that has not landed: in a slot thunk, a `memo` body or an effect body the read either
+     * hands back the value or does not return at all.
+     */
     (): T
-    /** The retained value, subscribing to nothing and never throwing. The escape hatch. */
-    peek(): T
+    /**
+     * The retained value, subscribing to nothing, never throwing and never signalling — so
+     * `undefined` here means NOTHING HAS LANDED YET. The escape hatch, and the read a `<script>`
+     * gets, where nobody would run the body a second time.
+     */
+    peek(): T | undefined
     /**
      * Write it directly. A promise here is a LOAD and an async iterable is a STREAM; anything else
      * settles the cell in the call.
@@ -945,8 +1144,19 @@ export interface Cell<T> extends PromiseLike<T> {
     ): Promise<Fulfilled | Rejected>
 }
 
-/** A cell you own outright. Nothing beyond `Cell` — owning one is what `state` means. */
-export type State<T> = Cell<T>
+/**
+ * A cell you own outright that had its value before anything could read it — `state(v)`, a prop cell,
+ * a `state.shared` slot.
+ *
+ * The one thing it adds is that `peek` cannot miss: nothing was ever in flight, so there is no moment
+ * where the retained value is absent. That is what keeps `count += 1` — which desugars to
+ * `count.set(count.peek() + 1)`, because a write must not subscribe — from needing a narrowing that
+ * could never fail. A cell handed a promise is a `Cell` instead, and there the same write is an error
+ * worth having.
+ */
+export interface State<T> extends Cell<T> {
+    peek(): T
+}
 
 export interface Memo<T> extends Cell<T> {
     /** Re-run the body NOW, keeping the current value served until the new one lands. */
@@ -1011,8 +1221,12 @@ function makeCell(node: Node, beforeRead: (() => void) | null): State<unknown> {
     return read
 }
 
-export function state<T>(initial: Promise<T>, transform?: (value: T) => T): State<T | undefined>
-export function state<T>(initial: AsyncIterable<T>, transform?: (value: T) => T): State<T | undefined>
+// A promise or a stream is a LOAD, so the cell starts COLD — which is the whole of the difference
+// between the two return types. The read is `T` either way, because a read that cannot answer yet
+// signals rather than reporting `undefined`; what a load costs is `peek`, which is the one place the
+// absence is still visible.
+export function state<T>(initial: Promise<T>, transform?: (value: T) => T): Cell<T>
+export function state<T>(initial: AsyncIterable<T>, transform?: (value: T) => T): Cell<T>
 export function state<T>(initial: T, transform?: (value: T) => T): State<T>
 // biome-ignore lint/suspicious/noExplicitAny: the overloads above ARE the public type; unifying them in the implementation signature would widen the two return types the overloads exist to keep apart.
 export function state(initial: unknown, transform?: (value: unknown) => unknown): any {
@@ -1056,8 +1270,8 @@ state.shared = <T>(key: string, initial: T, transform?: (value: T) => T): State<
 // The ARGLESS form of abide's `memo`: auto-tracked derivation, lazy, memoised on identity. A body
 // that returns a promise becomes a load — its dependencies are the ones read BEFORE the first
 // `await`, which is everything tracking can honestly see. Args-keyed memoisation lives in `memo.ts`.
-export function derive<T>(fn: () => Promise<T>, transform?: (value: T) => unknown): Memo<T | undefined>
-export function derive<T>(fn: () => AsyncIterable<T>, transform?: (value: T) => unknown): Memo<T | undefined>
+export function derive<T>(fn: () => Promise<T>, transform?: (value: T) => unknown): Memo<T>
+export function derive<T>(fn: () => AsyncIterable<T>, transform?: (value: T) => unknown): Memo<T>
 export function derive<T>(fn: () => T, transform?: (value: T) => unknown): Memo<T>
 // biome-ignore lint/suspicious/noExplicitAny: the overloads above ARE the public type; unifying them in the implementation signature would widen the two return types the overloads exist to keep apart.
 export function derive(fn: () => unknown, transform?: (value: unknown) => unknown): any {
@@ -1156,7 +1370,14 @@ export function watchNode(fn: () => void | (() => void)): Node {
 /** Run an effect node NOW, as `pull` would. Its sources are re-collected, so a new body is adopted. */
 export function rerun(node: Node): void {
     if (node.status === DEAD) return
-    node.run()
+    try {
+        node.run()
+    } catch (error) {
+        // As in `pull`: a body that could not read yet has not run, and the read subscribed this node
+        // to what ends the load. `rerun` is the one path into an effect that does not go through
+        // `pull`, so the catch is owed here too.
+        if (!(error instanceof Pending)) throw error
+    }
     node.status = CLEAN
 }
 

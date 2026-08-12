@@ -17,7 +17,7 @@ const { suite } = props<{ suite: Suite }>()
 // The document's title, which is the one piece of chrome that is not an element. Guarded rather than
 // assumed: this component renders on the server too, and there is no document there to name.
 watch(() => {
-    if (typeof document !== 'undefined') document.title = `${suite.title} — abide`
+    if (typeof document !== 'undefined') document.title = `${suite().title} — abide`
 })
 </script>
 

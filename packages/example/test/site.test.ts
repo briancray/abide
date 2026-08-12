@@ -12,6 +12,7 @@
 import { expect, test } from 'bun:test'
 import { navigate } from 'abide'
 import { isolate } from '$shared/internal/scopes.ts'
+import { component } from 'abide/runtime'
 import { renderToString } from 'abide/server'
 import { allSuites } from '../demos/index.ts'
 import { NAV } from '../demos/SUITES.ts'
@@ -22,7 +23,7 @@ const SUITES = await allSuites()
 
 test('every suite renders as a page of cards', async () => {
     for (const suite of SUITES) {
-        const markup = await renderToString(Cards({ suite }))
+        const markup = await renderToString(component(Cards, { suite }))
         expect(markup, `${suite.name} renders its title`).toContain(suite.title)
         // One `<section>` per case, which is what says a card was built for each of them rather than
         // for the ones that happened to have a `run`.

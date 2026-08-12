@@ -46,6 +46,14 @@ interface Serving {
      */
     nonce: string | null
     /**
+     * What a DOCUMENT RENDER has resolved so far, for the client that will hydrate it.
+     *
+     * `null` on every request that is not rendering a document, which is what makes this free: an
+     * endpoint answering a fetch records nothing, because there is nobody to hand it to. The render
+     * opens it and takes it back, so the lifetime is the render's rather than the request's.
+     */
+    seeds: Map<string, unknown> | null
+    /**
      * What is still using this scope. The handler is one; a response BODY still being written is
      * another, and the teardown belongs to whichever finishes last.
      */
@@ -103,6 +111,7 @@ export function serve<T>(request: Request, fn: () => T): T {
         identity: null,
         cookiesOut: null,
         nonce: null,
+        seeds: null,
         holds: 1,
     }
     return storage().run(held, () => settling(fn, () => release(held)))
@@ -313,6 +322,56 @@ export function bag(): Map<string, unknown> {
     const made = new Map<string, unknown>()
     held.bag = made
     return made
+}
+
+/**
+ * Start collecting what this render resolves, for the client that will hydrate it.
+ *
+ * Called by `renderDocument` and `renderFragment` — the two forms with a client on the other end of
+ * them, and so the only two with somewhere to put the answer. NOT by `renderDocumentToString`: that
+ * form exists for a reader with no scripts, where the markup is complete when the string is and a
+ * data block would be bytes nobody reads.
+ *
+ * Silent outside a request, because this substrate renders in a browser too — the example's server
+ * suite draws a card through it — and a demo has no scope to collect into.
+ */
+export function openSeeding(): void {
+    const held = STORAGE?.getStore()
+    if (held !== undefined) held.seeds = new Map()
+}
+
+/** What was collected, and the end of collecting. `null` when nothing opened it or nothing recorded. */
+export function closeSeeding(): Map<string, unknown> | null {
+    const held = STORAGE?.getStore()
+    if (held === undefined) return null
+    const seeds = held.seeds
+    held.seeds = null
+    return seeds !== null && seeds.size > 0 ? seeds : null
+}
+
+/**
+ * One resolved value, if a render is collecting.
+ *
+ * The whole cost to an endpoint answering an ordinary fetch is the two loads and the null compare
+ * below: nothing opened a table, so there is nothing to write to and no key to build. The KEY is
+ * built by the caller, which is why it takes one — an rpc knows its own address and args, and this
+ * knows neither.
+ */
+export function recordSeed(key: string, value: unknown): void {
+    const held = STORAGE?.getStore()
+    if (held === undefined || held.seeds === null) return
+    held.seeds.set(key, value)
+}
+
+/**
+ * The table a render is collecting into, or null if none is.
+ *
+ * A caller that will WRITE takes this rather than asking `recordSeed` after a separate "is anything
+ * collecting" probe — that pair is two `getStore()` loads for one write. It still answers the
+ * question the probe did, so a key that would only be thrown away is still never built.
+ */
+export function seedsTable(): Map<string, unknown> | null {
+    return STORAGE?.getStore()?.seeds ?? null
 }
 
 /**

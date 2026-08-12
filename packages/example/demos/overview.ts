@@ -12,7 +12,7 @@ export default suite({
     cases: [
         {
             title: 'the whole model, on one screen',
-            note: '`state` owns a value · `memo` derives or loads one · `channel` receives them. Same import, same call, both sides — the component below is rendered to live DOM and to a string without changing a character of it.',
+            note: '`state` owns a value · `memo` derives or loads one · `channel` receives them. Same import, same call, both sides — the component below is rendered to live DOM and to a string without changing a character of it. The list slot reads a load with no ceremony at all: a cold read signals, so the client paints nothing there until it lands and the server waits for it.',
             async run({ is }) {
                 const count = state(0)
                 const doubled = memo(() => count() * 2)
@@ -28,16 +28,10 @@ export default suite({
                             count ${() => count()} · doubled ${() => doubled()}
                         </p>
                         <ul>
-                            ${() => {
-                                // Read first: the read is what kicks a cold slot, and a probe never
-                                // causes one. Asking `pending()` before reading reports `false` and
-                                // starts nothing, so the spinner branch would be chosen too early.
-                                const slot = search({ q: filter() })
-                                const words = slot()
-                                return slot.pending()
-                                    ? html`<li>loading…</li>`
-                                    : (words ?? []).map((word) => html`<li>${word}</li>`)
-                            }}
+                            ${() =>
+                                // No probe and no narrowing: a read with nothing to serve yet
+                                // SIGNALS, so this thunk simply does not paint until the load lands.
+                                search({ q: filter() })().map((word) => html`<li>${word}</li>`)}
                         </ul>
                         <p>${() => notices.chunks().join(' · ')}</p>
                     </div>
@@ -50,7 +44,7 @@ export default suite({
                     host.querySelector('p')?.textContent?.includes('count 0'),
                     true,
                 )
-                is('…and the cold slot said so', host.querySelector('li')?.textContent, 'loading…')
+                is('…and the cold slot painted nothing at all', host.querySelector('li'), null)
                 await tick()
                 is(
                     'then the load landed',
@@ -87,13 +81,8 @@ export default suite({
                             count ${() => count()} · doubled ${() => doubled()}
                         </p>
                         <ul class="text-sm text-slate-400">
-                            ${() => {
-                                const slot = search({ q: filter() })
-                                const words = slot()
-                                return slot.pending()
-                                    ? html`<li>loading…</li>`
-                                    : (words ?? []).map((word) => html`<li>${word}</li>`)
-                            }}
+                            ${() =>
+                                search({ q: filter() })().map((word) => html`<li>${word}</li>`)}
                         </ul>
                         <p class="text-xs text-emerald-300">${() => notices.chunks().join(' · ')}</p>
                     </div>

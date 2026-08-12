@@ -20,6 +20,8 @@
 import {
     Awaited,
     Boundary,
+    cellProps,
+    Component,
     escape,
     isKeyed,
     isTemplate,
@@ -28,10 +30,12 @@ import {
     Streamed,
     settledArms,
     settledBoundary,
+    started,
     type TemplateResult,
 } from '$shared/html.ts'
 import { abideLog } from '$shared/log.ts'
 import { renderBudget } from '$shared/internal/ceilings.ts'
+import { isPending, type Pending, retryable, retryableCall, settledOf } from '$shared/internal/graph.ts'
 import {
     closeMarker,
     OPEN_MARKER,
@@ -41,6 +45,7 @@ import {
     placeholderId,
 } from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable, messageOf } from '$shared/internal/probes.ts'
+import { seedScript } from '$shared/internal/seed.ts'
 import { planOf, unwrap } from '$shared/internal/slots.ts'
 import { arm, NO_LIMIT, timeoutError } from '$shared/internal/timers.ts'
 // Re-exported below as well: `<head>` is the only place a sheet is written as markup, so this is a
@@ -60,7 +65,7 @@ import {
 // under `ABIDE_APP_NAME`, which is what names `log`'s default channel. Importing `abide/server` at
 // all is the signal that there is a filesystem to ask.
 import './app.ts'
-import { heldPump, holdScope, isServing, nonce } from './scopes.ts'
+import { closeSeeding, heldPump, holdScope, isServing, nonce, openSeeding } from './scopes.ts'
 import { type Shell, shellAround } from './shell.ts'
 
 /** Everything the walk knows how to write. */
@@ -76,6 +81,7 @@ export type Renderable =
     | Keyed
     | Awaited
     | Boundary
+    | Component
     | Streamed
     | Renderable[]
     | Promise<Renderable>
@@ -160,7 +166,9 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         case 'undefined':
             return null
         case 'function':
-            return emit((node as () => Renderable)(), context, out)
+            // `emitProduced` takes the thunk itself, so the common arm allocates nothing it did not
+            // already.
+            return emitProduced(node as () => Renderable, context, out)
     }
     if (node === null) return null
 
@@ -180,14 +188,13 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         const operand = node.value
         // Nothing to wait for is nothing to defer, and nothing to await either.
         if (!isThenable(operand)) {
-            return emit(settledArms(node.branches, undefined, operand, false) as Renderable, context, out)
+            return emitProduced(() => armsOf(node, operand, false), context, out)
         }
-        // THE PENDING ARM IS THE DECISION, and it is the only thing that had to be read to make
-        // `{#await}` the one spelling. The BLOCK form always emits one — empty if that is what was
-        // written — so it goes out as a placeholder and is patched in when it settles. The compact
-        // forms, `{#await p then v}` and `{await p}`, emit none by construction, so they have nothing
-        // to send and block until the value lands. Which FORM was written is what decides it, rather
-        // than whether a pending body happened to be blank; see `awaited` in `$compiler`.
+        // THE PENDING ARM IS THE DECISION, and it is the only thing that had to be read. An `{#if}`
+        // chain whose first test is a `pending()` probe emits one — asking about a load is having
+        // something to show while it runs — so it goes out as a placeholder and is patched in when
+        // the load settles. Every other chain emits none, so there is nothing to send and the walk
+        // blocks until the value lands; see `deferrable` in `$compiler`.
         //
         // That distinction is what an author is choosing between, and it is not a detail: a deferred
         // subtree arrives through a `<template>` and a two-line script, so it needs JAVASCRIPT. A
@@ -199,10 +206,22 @@ function emit(node: Renderable, context: RenderContext, out: Out): Rest {
         }
         return emitAwaited(node, context, out)
     }
+    if (node instanceof Component) {
+        // A snapshot has no instance to KEEP, so the call is the whole of the render — and it is a
+        // producer like any other, since a `<script>` may read a load. The props are still wrapped:
+        // what a component receives is cells on both sides, and a lane that handed the plain values
+        // over would work for every compiled `.abide` file and break every hand-written one.
+        return emitProduced(() => node.view(cellProps(node.props)) as Renderable, context, out)
+    }
     if (node instanceof Boundary) {
         // Synchronous, like the `try` it is named after. A body that returns a promise is rendered
         // below in the ordinary way, and its rejection is NOT this boundary's to catch.
-        return emit(settledBoundary(node) as Renderable, context, out)
+        //
+        // Through `emitProduced` because the body runs HERE rather than in the thunk that handed the
+        // boundary over — outside a catcher a cold read inside a `{#try}` signals to nobody, and the
+        // region renders empty on a snapshot the walk could have waited for. One closure per
+        // boundary, which is per REGION rather than per row.
+        return emitProduced(() => settledBoundary(node) as Renderable, context, out)
     }
     if (node instanceof Streamed) return emitStreamed(node, context, out)
     if (isThenable(node)) return emitPromise(node, context, out)
@@ -254,12 +273,33 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                 }
                 break
             }
-            case 'attr':
+            case 'attr': {
                 // `unwrap`, not a bare call: a thunk handing back a SOURCE is read one step further,
                 // and the client's binder does exactly that. Calling once left `class=${() => cls}`
                 // rendering the cell's own source text where the client renders its value.
-                out.text += attribute(kind.name, unwrap(value))
+                //
+                // A catcher here as much as in a child slot, and the asymmetry it fixes is invisible:
+                // the client BINDS `class=${() => tone()}` once the load lands, so a server that let
+                // the read serve `undefined` dropped an attribute the client then had — markup that
+                // is wrong for anyone running no scripts, and nothing compares the two.
+                const name = kind.name
+                let produced: unknown
+                try {
+                    produced = retryableCall(unwrap, value)
+                } catch (error) {
+                    if (!isPending(error)) throw error
+                    // Resumed at the NEXT slot, and the attribute written here: the static text in
+                    // front of this one is already in the buffer, so the walk cannot re-enter at it.
+                    const slot = i
+                    return awaitedProduce(error, () => unwrap(value), out).then((settled) => {
+                        out.text += attribute(name, settled)
+                        const rest = emitTemplate(result, context, out, slot + 1)
+                        return rest === null ? undefined : rest
+                    })
+                }
+                out.text += attribute(name, produced)
                 break
+            }
             case 'event':
                 // No listeners in a string. The client attaches it on mount.
                 break
@@ -271,9 +311,19 @@ function emitTemplate(result: TemplateResult, context: RenderContext, out: Out, 
                 // A node reference, and there are no nodes here. Client-only by definition.
                 break
             case 'spread': {
-                const spread = unwrap(value) as Record<string, unknown> | null | undefined
-                if (spread === null || spread === undefined) break
-                for (const name in spread) out.text += attribute(name, spread[name])
+                let spread: unknown
+                try {
+                    spread = retryableCall(unwrap, value)
+                } catch (error) {
+                    if (!isPending(error)) throw error
+                    const slot = i
+                    return awaitedProduce(error, () => unwrap(value), out).then((settled) => {
+                        writeSpread(settled, out)
+                        const rest = emitTemplate(result, context, out, slot + 1)
+                        return rest === null ? undefined : rest
+                    })
+                }
+                writeSpread(spread, out)
                 break
             }
         }
@@ -303,18 +353,109 @@ function emitArray(nodes: Renderable[], context: RenderContext, out: Out, from: 
 // means the resumption shape `emitArray` uses, and that is real machinery for the one case where a
 // block declared `{#for await}` was handed something that never awaits.
 
+function writeSpread(spread: unknown, out: Out): void {
+    if (spread === null || spread === undefined) return
+    const fields = spread as Record<string, unknown>
+    for (const name in fields) {
+        out.text += attribute(name, fields[name])
+    }
+}
+
+/**
+ * The ONE recovery a snapshot has: wait out the load a read could not serve, and call the producer
+ * again — as many times as it takes, since a body reading three loads signals once per load.
+ *
+ * Hands the VALUE back rather than writing it, because every caller does something different with it:
+ * a child slot emits it, an attribute writes itself and resumes the template at the NEXT slot (the
+ * static text in front of its own is already in the buffer), a deferred block renders it through
+ * a nested walk. Everything written so far goes out first, exactly as any other suspension does.
+ */
+async function awaitedProduce(signal: Pending, produce: () => unknown, out: Out): Promise<unknown> {
+    const handed = handOver(out)
+    if (handed !== null) await handed
+    for (;;) {
+        try {
+            await settledOf(signal)
+        } catch {
+            // Waited out, not handled: a FAILED load is reported by the read itself on the next call,
+            // so the throw arrives with the author's own expression under it rather than from here.
+        }
+        try {
+            return retryable(produce)
+        } catch (error) {
+            if (!isPending(error)) throw error
+            signal = error
+        }
+    }
+}
+
+/**
+ * The settled arms of a block, which are BODIES: they can read, so they are a producer like a slot
+ * thunk. A settled arm that throws reaches the failure arm exactly as a rejected operand does — and a
+ * signal is not a throw of that kind, so it travels on to the walk.
+ */
+function armsOf(node: Awaited, settled: unknown, failed: boolean): Renderable {
+    if (failed) return settledArms(node.branches, settled, undefined, true) as Renderable
+    try {
+        return settledArms(node.branches, undefined, settled, false) as Renderable
+    } catch (error) {
+        if (isPending(error) || node.branches.catch === undefined) throw error
+        return settledArms(node.branches, error, undefined, true) as Renderable
+    }
+}
+
+/**
+ * Run something that PRODUCES a renderable, with a catcher standing under it, and emit what it made.
+ *
+ * The one shape both producers in the walk take: a slot thunk, and a `{#try}` body. What makes it a
+ * catcher is that `produce` can be called again — which is the whole recovery a snapshot has.
+ */
+function emitProduced(produce: () => Renderable, context: RenderContext, out: Out): Rest {
+    let produced: Renderable
+    try {
+        produced = retryable(produce)
+    } catch (error) {
+        if (!isPending(error)) throw error
+        return awaitPending(error, produce, context, out)
+    }
+    return emit(produced, context, out)
+}
+
+/**
+ * A slot whose read had nothing to serve yet: wait for that load, then call the producer AGAIN.
+ *
+ * Re-calling is the server's whole half of "a pending read signals" — there is no effect to wake in a
+ * snapshot render, so the walk itself is what runs the body a second time. Everything written so far
+ * goes out first, exactly as every other suspension does, and a thunk that signals on a SECOND cell
+ * simply waits again: a page reading three loads resolves them one pass each, with no block form
+ * naming any of them. Termination is the wall budget the whole walk is already raced against.
+ */
+async function awaitPending(
+    signal: Pending,
+    produce: () => Renderable,
+    context: RenderContext,
+    out: Out,
+): Promise<void> {
+    const produced = (await awaitedProduce(signal, produce, out)) as Renderable
+    const rest = emit(produced, context, out)
+    if (rest !== null) await rest
+}
+
 async function emitAwaited(node: Awaited, context: RenderContext, out: Out): Promise<void> {
     const handed = handOver(out)
     if (handed !== null) await handed
-    let arms: unknown
+    let settled: unknown
+    let failed = false
     try {
-        arms = settledArms(node.branches, undefined, await node.value, false)
+        settled = await node.value
     } catch (error) {
         // No `{:catch}` means the author did not claim to handle it, so it stays a failure.
         if (node.branches.catch === undefined) throw error
-        arms = settledArms(node.branches, error, undefined, true)
+        settled = error
+        failed = true
     }
-    const more = emit(arms as Renderable, context, out)
+    // Through `emitProduced` because the arms are BODIES — see `armsOf`.
+    const more = emitProduced(() => armsOf(node, settled, failed), context, out)
     if (more !== null) await more
 }
 
@@ -336,16 +477,23 @@ async function emitStreamed(node: Streamed, context: RenderContext, out: Out): P
         // `streamed()` takes `AsyncIterable<T> | Iterable<T>`, and a sync source has nothing to wait
         // on: `for await` over one wraps every item in a promise and pays a tick per ROW to learn
         // that. The browser half of this walk forks the same way, on the same probe.
+        //
+        // The row body is a PRODUCER like the two above — it runs here rather than in the thunk that
+        // handed the block over — so a cold read in a row signals to this walk instead of to nobody.
+        // One closure per row on both arms. Threading `(item, at)` instead would need the retry in
+        // `awaitPending` to carry them too; unmeasured against the emit it wraps, so not done.
         if (isAsyncIterable(node.source)) {
             for await (const item of node.source as AsyncIterable<never>) {
-                const more = emit(node.row(item, index++) as Renderable, context, out)
+                const at = index++
+                const more = emitProduced(() => node.row(item, at) as Renderable, context, out)
                 if (more !== null) await more
                 const handed = handOver(out)
                 if (handed !== null) await handed
             }
         } else {
             for (const item of node.source as Iterable<never>) {
-                const more = emit(node.row(item, index++) as Renderable, context, out)
+                const at = index++
+                const more = emitProduced(() => node.row(item, at) as Renderable, context, out)
                 if (more !== null) await more
                 // `paused`, not `handOver`: a chunk boundary is a SUSPENSION, and a sync source has
                 // none to mark. `handOver` flushes unconditionally, and its promise only settles when
@@ -357,7 +505,8 @@ async function emitStreamed(node: Streamed, context: RenderContext, out: Out): P
         }
     } catch (error) {
         if (node.failure === undefined) throw error
-        const more = emit(node.failure(error) as Renderable, context, out)
+        const failure = node.failure
+        const more = emitProduced(() => failure(error) as Renderable, context, out)
         if (more !== null) await more
     }
 }
@@ -385,7 +534,7 @@ const PLACEHOLDER_CLOSE = `</${PLACEHOLDER_TAG}>`
 const renderLog = abideLog.channel('render')
 
 /**
- * An `{#await}` sent as a placeholder now and patched in when it settles.
+ * A block sent as a placeholder now and patched in when it settles.
  *
  * Reached only with a document to patch AND a pending arm to send — the dispatch above decides both,
  * so there is no guard to repeat here.
@@ -393,12 +542,18 @@ const renderLog = abideLog.channel('render')
 function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
     const document = context.document as DocumentContext
     const id = document.nextId++
+    // STARTED here, synchronously, and awaited below — see `started`. The pending arm is arbitrary
+    // code that may probe or read this very operand, which is exactly what `{#if x.pending()}`
+    // compiles to, and `await` would not have reached a lazy operand's `then` until after that arm
+    // had already run and been told there was no load.
+    const settling = started(node.value as PromiseLike<unknown>)
     document.deferred.push({
         id,
         html: (async () => {
-            let arms: unknown
+            let settled: unknown
+            let failed = false
             try {
-                arms = settledArms(node.branches, undefined, await node.value, false)
+                settled = await settling
             } catch (error) {
                 // `drain` is built on `html` never rejecting, and that is not an implementation
                 // detail to route around: the shell went out with the placeholder in it, so by the
@@ -410,18 +565,29 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
                 // is still a comment, because the author did not say what to show; it is said out
                 // loud on abide's own channel rather than only to a reader viewing source.
                 if (node.branches.catch === undefined) {
-                    renderLog.error(`a deferred {#await} failed with no {:catch}: ${messageOf(error)}`)
+                    renderLog.error(`a deferred block failed with no failure arm: ${messageOf(error)}`)
                     return `<!-- await ${id} failed: ${escape(String(error))} -->`
                 }
-                arms = settledArms(node.branches, error, undefined, true)
+                settled = error
+                failed = true
             }
-            return await renderToString(arms as Renderable, { hydratable: context.hydratable })
+            // The arms are a producer here too, and this walk is the one that waits for them: a
+            // deferred boundary renders through `renderToString`, which is handed what they MADE.
+            let arms: Renderable
+            try {
+                arms = retryable(() => armsOf(node, settled, failed))
+            } catch (error) {
+                if (!isPending(error)) throw error
+                arms = (await awaitedProduce(error, () => armsOf(node, settled, failed), out)) as Renderable
+            }
+            return await renderToString(arms, { hydratable: context.hydratable })
         })(),
     })
     out.text += `<${PLACEHOLDER_TAG} id="${placeholderId(id)}">`
     // PLAIN, because a placeholder must not itself defer: it is markup the client adopts as one
-    // piece and replaces whole.
-    const waiting = emit((node.branches.pending as () => unknown)() as Renderable, PLAIN, out)
+    // piece and replaces whole. Through `emitProduced` because the arm is a BODY like every other —
+    // a `{#if x.pending()}` chain reads the very cell this block is waiting for.
+    const waiting = emitProduced(node.branches.pending as () => Renderable, PLAIN, out)
     if (waiting !== null) {
         return then_(waiting, () => {
             out.text += PLACEHOLDER_CLOSE
@@ -435,9 +601,8 @@ function emitDeferred(node: Awaited, context: RenderContext, out: Out): Rest {
 /**
  * One render's wall budget: a single clock every PHASE of that render races against.
  *
- * A document render has two — the in-order walk, and the out-of-order drain after it — and a deferred
- * `{#await}`
- * under a document defers into the second. A clock armed per phase would be a per-phase budget
+ * A document render has two — the in-order walk, and the out-of-order drain after it — and a
+ * deferred block under a document defers into the second. A clock armed per phase would be a per-phase budget
  * wearing a wall budget's name, and a page that suspends is exactly the page the budget is for.
  *
  * Armed on the first phase that actually WAITS, so a synchronous page still costs no timer: the
@@ -688,7 +853,7 @@ export async function* renderDocument(
     const parts = typeof document === 'string' ? shellAround(document) : document
     const deferrals = { nextId: 0, deferred: [] as Deferred[] }
     const context: RenderContext = { hydratable: options?.hydratable === true, document: deferrals }
-    // ONE clock for the whole document. A deferred `{#await}` does not hold the walk — it
+    // ONE clock for the whole document. A deferred block does not hold the walk — it
     // defers into the drain below — so a budget that only reached the walk would miss the very case
     // it exists for: the page that suspends. Read here rather than inside `stream`, because this is
     // where the render begins; the clock arms itself on the first phase that actually waits, so a
@@ -704,12 +869,41 @@ export async function* renderDocument(
         // and a render outside a request — the demo card renders through this substrate in a browser
         // — has no scope to read it from and nothing asking it to.
         const stamp = isServing() ? nonce() : null
+        // Opened before a byte of the body, because the first read of an rpc happens inside the walk
+        // below and there has to be somewhere for it to land.
+        openSeeding()
         yield `${parts.head}${styleTags(stamp)}${parts.open}`
         yield* stream(body(), context, clock)
         yield* drain(deferrals, clock, false, stamp)
+        // AFTER the drain, and OUTSIDE the hydration root — two separate requirements that both put
+        // it exactly here. After the drain, because a `{#if x.pending()}` region resolves its reads
+        // long after the shell is on the wire, so a block written beside the styles would carry only
+        // the slots that were already warm. Outside `close`, because everything between `open` and
+        // `close` is what the client ADOPTS: written inside, this is an extra child the client's own
+        // render never produces, and it survived only because hydration happened to read it before
+        // discarding it — leaving a stray script in the content for anyone running no scripts.
         yield parts.close
+        yield seeds(stamp)
+        yield parts.tail
     } finally {
         clock?.close()
+    }
+}
+
+/** What this render resolved, as the block the client reads it out of. Empty when nothing did. */
+function seeds(stamp: string | null): string {
+    const collected = closeSeeding()
+    if (collected === null) return ''
+    const table: Record<string, unknown> = {}
+    for (const [key, value] of collected) table[key] = value
+    // A value that will not serialise is one the client could not have been handed anyway — a
+    // `Map`, a class instance with a cycle. The render has already succeeded by here and the markup
+    // is on the wire, so the answer is to seed nothing rather than to fail a page over its own
+    // optimisation: every slot then loads the way it did before any of this existed.
+    try {
+        return seedScript(JSON.stringify(table), stamp)
+    } catch {
+        return ''
     }
 }
 
@@ -721,7 +915,7 @@ export async function* renderDocument(
  * scripts: an email client, a PDF renderer, a fixture holding an expected document. There the markup
  * has to be complete when the string is.
  *
- * So this is `renderToString`'s context — no `document`, which is what makes `{#await}` await INLINE,
+ * So this is `renderToString`'s context — no `document`, which is what makes a block await INLINE,
  * in document order — with the shell around it. The shell half is `renderDocument`'s, down to the
  * nonce on the styles: a policy that reached this render reaches its `<style>` blocks too. Nothing
  * else here can emit a script, so there is no patch script to carry one.
@@ -747,7 +941,7 @@ export async function renderDocumentToString(
     const parts = typeof document === 'string' ? shellAround(document) : document
     const stamp = isServing() ? nonce() : null
     const markup = await renderToString(body, options)
-    return `${parts.head}${styleTags(stamp)}${parts.open}${markup}${parts.close}`
+    return `${parts.head}${styleTags(stamp)}${parts.open}${markup}${parts.close}${parts.tail}`
 }
 
 /**
@@ -756,7 +950,7 @@ export async function renderDocumentToString(
  *
  * The same walk and the same deferral as `renderDocument`, and that is the point: a navigation gets
  * out-of-order streaming rather than a second-class render that awaits everything inline. Without
- * this, an `{#await}` under a fragment falls to `emitAwaited`, which awaits IN DOCUMENT ORDER — so
+ * this, a block under a fragment falls to `emitAwaited`, which awaits IN DOCUMENT ORDER — so
  * a fast panel below a slow one waits for the slow one, and so does every static byte beneath it,
  * neither of which was ever waiting on data of its own.
  *
@@ -765,6 +959,14 @@ export async function renderDocumentToString(
  * the client swaps the placeholder itself. And every piece is followed by `PIECE_END`, because HTML
  * cannot be parsed halfway — the sentinel is what tells a reader that what it holds is a complete
  * tree it may parse now rather than a prefix of one.
+ *
+ * The seeds go LAST, which a document cannot do and this can: a document's client hydrates as the
+ * parser reaches the markup, so its block has to be written before the reads that consume it. A
+ * navigation commits only once the whole stream has been read — `router.ts`'s `enter` awaits
+ * `complete` before `commit`, and `commit` is what runs the page's view on this side — so a block
+ * written after the drain still lands before the first client read. That is what lets the DEFERRED
+ * half be seeded too: a panel whose load settles during the drain is in this table, so the arriving
+ * page paints its settled arm rather than a `pending()` placeholder over a value already on screen.
  */
 export async function* renderFragment(
     body: () => Renderable,
@@ -775,12 +977,18 @@ export async function* renderFragment(
     const limit = renderBudget()
     const clock = limit === NO_LIMIT ? null : new Budget(limit)
     try {
+        openSeeding()
         yield* stream(body(), context, clock)
         // The in-order pass is a complete tree the moment it ends, and it ends without waiting for a
-        // single load — every deferred `{#await}` in it. So this sentinel is the whole latency win:
+        // single load — every deferred block in it. So this sentinel is the whole latency win:
         // the client may paint everything above, below and between the panels right here.
         yield PIECE_END
         yield* drain(deferrals, clock, true, null)
+        // No nonce: this block is never inserted. The client parses it out of a `<template>` and
+        // reads its text, so there is no element for a policy to evaluate — and `application/json`
+        // would not execute even if there were.
+        const seeded = seeds(null)
+        if (seeded !== '') yield `${seeded}${PIECE_END}`
     } finally {
         clock?.close()
     }

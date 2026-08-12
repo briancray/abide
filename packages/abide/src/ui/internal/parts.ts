@@ -12,17 +12,21 @@ import {
     attributeText,
     Boundary,
     type Branches,
+    cellProps,
+    Component,
     isKeyed,
     isTemplate,
     KEY,
+    passedThrough,
     Raw,
     type SlotKind,
     Streamed,
     settledArms,
     settledBoundary,
+    started,
     type TemplateResult,
 } from '$shared/html.ts'
-import { type Node, rerun, untrackCall, watchNode } from '$shared/internal/graph.ts'
+import { type Node, rerun, type State, swallowed, untrack, untrackCall, watchNode } from '$shared/internal/graph.ts'
 import { CLOSE_FORM, PLACEHOLDER_TAG, SLOT_OPEN } from '$shared/internal/MARKERS.ts'
 import { isAsyncIterable, isThenable } from '$shared/internal/probes.ts'
 import { unwrap } from '$shared/internal/slots.ts'
@@ -33,7 +37,11 @@ import { type Prepared, type PreparedPart, prepare } from './prepare.ts'
 // server sent looks exactly like a page that adopted it.
 const hydrateLog = abideLog.channel('hydrate')
 
-// A sentinel distinct from every value an operand could be, `undefined` included — `{#await}` over a
+// A `warning` for the reason `hydrateLog`'s are: a prop that silently stopped arriving looks exactly
+// like a prop the parent stopped changing.
+const componentLog = abideLog.channel('component')
+
+// A sentinel distinct from every value an operand could be, `undefined` included — a block over a
 // cell that has not loaded yet awaits `undefined`, and that is a real operand, not the absence of one.
 const NOTHING = Symbol('abide.nothing')
 
@@ -117,6 +125,14 @@ export interface Reclaiming {
     patch(id: string, fragment: DocumentFragment): boolean
     /** The stream ended: snapshot the range so the next update ADOPTS it. */
     done(): void
+    /**
+     * Whether this handle is still the newest one — false once a later navigation took its own.
+     *
+     * The three verbs above each answer it for themselves, by ignoring what they were handed. This
+     * is for what a superseded stream carries that is NOT a range: the seed table, which is global
+     * and would otherwise be merged out of a response for a page nobody will see.
+     */
+    alive(): boolean
 }
 
 // --- child parts ----------------------------------------------------------
@@ -143,6 +159,9 @@ export class ChildPart {
 
     /** Server nodes waiting to be interpreted, until the first value says what they are. */
     private claimed: ChildNode[] | null = null
+
+    /** The component instance this position is showing, and the cells its props are written into. */
+    private instance: { view: unknown; props: Record<string, unknown> } | null = null
 
     /** The server's opening marker. Outlives the adoption, but not a rebuild. */
     private opened: Comment | null = null
@@ -250,6 +269,10 @@ export class ChildPart {
             this.stream_(value)
             return
         }
+        if (value instanceof Component) {
+            this.component_(value)
+            return
+        }
         if (value instanceof Boundary) {
             // Synchronous, exactly like the `try` it is named after — see `settledBoundary`, which is
             // the same decision the server makes.
@@ -261,7 +284,7 @@ export class ChildPart {
         if (isThenable(value)) {
             // Keep showing what is there until it lands — the server awaits the same value, so a
             // promise in a slot means the same thing on both sides.
-            this.settle(value, null)
+            this.settle(started(value), value, null)
             return
         }
         if (Array.isArray(value)) {
@@ -318,7 +341,7 @@ export class ChildPart {
      * That failure is invisible — the arm still renders, and then re-enters and rebuilds its whole
      * subtree on every re-run of the enclosing effect, per row for a block inside a list.
      *
-     * Callers: the `{#await}` arm of `set` (both settled and in-flight), `settle`'s three landings,
+     * Callers: the `Awaited` arm of `set` (both settled and in-flight), `settle`'s three landings,
      * `await_`'s pending and synchronous arms, and `stream_`'s start and failure arms. `take` does
      * not go through here — it claims rather than paints, and never clears `holding` to begin with.
      */
@@ -341,6 +364,18 @@ export class ChildPart {
             return
         }
 
+        if (value instanceof Component) {
+            // The server ran the view to produce these nodes, so adopting them is the instance's own
+            // FIRST pass with the markup already in place — the same call, claiming instead of
+            // building. Held only once the range checks out: a mismatch falls back to the ordinary
+            // build in `set`, which makes the instance there.
+            const props = cellProps(value.props)
+            const made = untrack(() => value.view(props))
+            this.take(claimed, made)
+            this.instance = { view: value.view, props }
+            return
+        }
+
         if (value instanceof Awaited) {
             // Whatever the server sent for this subtree is ALREADY the settled arm — awaited inline
             // if there was nowhere to patch or no `{:pending}` to send, and otherwise deferred and
@@ -357,7 +392,7 @@ export class ChildPart {
             // an opaque range and let the settle replace them.
             this.owned = claimed
             this.holding = operand
-            this.settle(operand, value.branches)
+            this.settle(started(operand), operand, value.branches)
             return
         }
 
@@ -374,7 +409,7 @@ export class ChildPart {
             // Same shape as the awaited case: the server has the answer, this side does not yet.
             this.owned = claimed
             this.generation++
-            this.settle(value, null)
+            this.settle(started(value), value, null)
             return
         }
 
@@ -435,15 +470,15 @@ export class ChildPart {
      * Paint a promise's result, discarding a load that has been superseded.
      *
      * `branches` null is a bare promise in a slot: what it resolves to IS what renders, and a
-     * rejection has nowhere to go but the microtask queue. With branches it is `{#await}`, so the
+     * rejection has nowhere to go but the microtask queue. With branches it is a deferring block, so the
      * settled arm renders and `holding` is put back — `set` clears it, and this block still owns the
      * slot. The stamp is read on ENTRY and never bumped here: a caller bumps before it gets this far,
-     * so `{#await}` stamps once for the whole block, including the arm it paints synchronously.
+     * so a block stamps once for the whole of itself, including the arm it paints synchronously.
      *
      */
-    private settle(operand: PromiseLike<unknown>, branches: Branches | null): void {
+    private settle(settling: Promise<unknown>, operand: unknown, branches: Branches | null): void {
         const generation = this.generation
-        Promise.resolve(operand).then(
+        settling.then(
             (value) => {
                 if (generation !== this.generation) return
                 // A bare promise in a slot is deliberately NOT recorded — `set` does not put one in
@@ -469,7 +504,7 @@ export class ChildPart {
     }
 
     /**
-     * `{#await}`: show `pending`, then paint the settled arm when it lands.
+     * A deferring block: show `pending`, then paint the settled arm when it lands.
      *
      * The settle writes through `set` DIRECTLY rather than through a reactive read, so the effect
      * that produced this block never wakes — which is what stops the operand being re-evaluated into
@@ -488,12 +523,17 @@ export class ChildPart {
         const branches = block.branches
         const operand = block.value
 
-        this.show(branches.pending?.() ?? null, operand)
-
         if (!isThenable(operand)) {
+            this.show(branches.pending?.() ?? null, operand)
             this.show(settledArms(branches, undefined, operand, false), operand)
             return
         }
+        // STARTED before the pending arm runs, and the promise kept for the settle below — see
+        // `started`. The arm is arbitrary code that may itself probe or read this very operand, which
+        // is exactly what `{#if x.pending()}` compiles to, and a probe on a load nobody has begun
+        // answers `false`.
+        const settling = started(operand)
+        this.show(branches.pending?.() ?? null, operand)
         // A stamp of its OWN, bumped after the pending arm is on screen rather than read off it.
         // That arm may itself be thenable — a cell is, and a cell is ordinary to put in a slot — in
         // which case `show` above started a settle and stamped it with the generation this settle
@@ -502,7 +542,34 @@ export class ChildPart {
         // run at all. The bump also retires that settle on purpose — a placeholder has no business
         // painting over the value it was standing in for.
         this.generation++
-        this.settle(operand, branches)
+        this.settle(settling, operand, branches)
+    }
+
+    /**
+     * A component instance, held HERE — at the position that shows it — for as long as this part is.
+     *
+     * The first pass calls the view once and keeps what it returned; every later pass writes the
+     * props into the cells that view was called with and stops. So the view's `state()` runs once,
+     * the child's own thunks repaint themselves off the prop cells, and re-rendering the parent costs
+     * a write per prop rather than a rebuilt instance.
+     *
+     * A DIFFERENT view at the same position is a different component, not a new pass of this one: the
+     * old instance is dropped, exactly as a keyed row whose key changed is.
+     */
+    private component_(block: Component): void {
+        const held = this.instance
+        if (held !== null && held.view === block.view) {
+            writeProps(held.props, block.props)
+            return
+        }
+        const props = cellProps(block.props)
+        // Untracked: the view's SETUP is not a reactive read. Whatever it reads there it reads once,
+        // and it is the thunks it returns that subscribe — which is the whole of "setup runs once".
+        const made = untrack(() => block.view(props))
+        // AFTER the paint, because painting goes through `clearExcept`, which drops the instance this
+        // position was showing. Assigning first made the first pass throw its own record away.
+        this.set(made)
+        this.instance = { view: block.view, props }
     }
 
     /**
@@ -570,6 +637,11 @@ export class ChildPart {
     }
 
     private clearExcept(keep: 'text' | 'nested' | 'list' | null, detach = true): void {
+        // ABOVE the early returns, and unconditional: reaching here at all is this part painting
+        // something that is not the component it was showing, which is that component leaving the
+        // tree. `component_` assigns the instance AFTER its own `set`, so its first pass through here
+        // is clearing whatever was there before rather than what it just made.
+        this.instance = null
         if (keep === 'text' && this.text !== null) return
         if (keep === 'nested' && this.nested !== null) return
         if (keep === 'list' && this.list !== null) return
@@ -627,7 +699,7 @@ export class ChildPart {
      * placeholder that was standing in for it.
      *
      * The range is snapshotted at `done` rather than at each push, because a patch can change it: a
-     * A deferred `{#await}` at the top level of a page has its placeholder AS a top-level node, and replacing one
+     * A deferred block at the top level of a page has its placeholder AS a top-level node, and replacing one
      * rewrites the very list `claimed` would have held.
      */
     reclaiming(): Reclaiming {
@@ -699,7 +771,7 @@ export class ChildPart {
                 standing.delete(id)
                 // A deferred subtree may defer one of its own, and its placeholder arrives here.
                 index(fragment)
-                // A top-level deferred `{#await}` has its placeholder AS an owned node, and `owned` is the only
+                // A top-level deferred block has its placeholder AS an owned node, and `owned` is the only
                 // reference to what has been painted until `done` re-derives the range. Swapping one
                 // out without handing its entry over left a dispose mid-stream removing a placeholder
                 // that was already detached, and the patched subtree standing in the document in
@@ -716,6 +788,7 @@ export class ChildPart {
                 target.replaceWith(fragment)
                 return true
             },
+            alive: (): boolean => this.generation === generation,
             done: (): void => {
                 if (this.generation !== generation) return
                 const nodes: ChildNode[] = []
@@ -742,6 +815,11 @@ export class ChildPart {
             this.owned = this.claimed
             this.claimed = null
         }
+        // The instance leaves with the position. A part is not always garbage when it is disposed —
+        // `take` disposes one and then goes on using it, and a `{#if}` arm's part is disposed and
+        // re-set — so the record and its cell per prop would otherwise outlive the component that
+        // read them, and nothing about the output says so.
+        this.instance = null
         // Through `clearExcept`, because a nested instance still owns live slot effects and `take`
         // overwrites `nested` without disposing it — a part torn down without this leaves one live
         // effect per reactive slot per navigation, each writing into nodes no longer in the document.
@@ -1593,7 +1671,15 @@ class Instance {
                     continue
                 }
                 const slot = i
-                effects[i] = watchNode(() => binder(unwrap((this.lastValues as readonly unknown[])[slot])))
+                effects[i] = watchNode(() => {
+                    const produced = unwrap((this.lastValues as readonly unknown[])[slot])
+                    // A thunk that CAUGHT a pending read hands back output built from a read that
+                    // never happened. Not painted: `run` throws the signal on its behalf once this
+                    // returns, and the wake that ends the load repaints — which is what keeps the
+                    // client from flashing a fallback the server never wrote.
+                    if (swallowed()) return
+                    binder(produced)
+                })
             } else {
                 // A slot whose value STOPPED being a thunk: its effect is still subscribed and would
                 // paint over this write when one of its old sources moved.
@@ -1624,6 +1710,27 @@ class Instance {
         }
         const children = this.children
         for (let i = 0; i < children.length; i++) (children[i] as ChildPart).dispose(detach)
+    }
+}
+
+/**
+ * The next pass's props, written into the cells the instance already has.
+ *
+ * Identity-deduped by the cell, so a prop that did not move wakes nobody — which is what makes a
+ * parent re-render cost a comparison per prop instead of a rebuilt child. A prop that arrived as a
+ * SOURCE was never wrapped, so there is nothing here to write: the child already reads it.
+ *
+ * A name with no cell can only come from a `...spread` whose key set grew, and the child bound its
+ * locals at setup — so the cell it would be written into does not exist and never will. Reported
+ * rather than skipped, because the output is simply one prop behind and nothing else says so.
+ */
+function writeProps(held: Record<string, unknown>, next: Record<string, unknown>): void {
+    for (const name in next) {
+        const value = next[name]
+        if (passedThrough(value)) continue
+        const cell = held[name] as State<unknown> | undefined
+        if (cell !== undefined) cell.set(value)
+        else componentLog.warning(`a spread added the prop \`${name}\` after setup — it is not read`)
     }
 }
 

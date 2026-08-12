@@ -1,9 +1,13 @@
 // The template runtime: what the COMPILER writes, and what reads what it wrote.
 //
-// Nothing here is a name an author types. Twelve of them are emitted — ten by the template header in
-// `$compiler/internal/emit.ts` and the transport elider in `$compiler/internal/elide.ts`, three by
-// `abide build` into the generated client entry — and the four predicates below are how the two
-// renderers and the test kit read the shapes those calls produce.
+// Nothing here is a name an author types. Fourteen of them are emitted — eleven by the template
+// header in `$compiler/internal/emit.ts`, three by `abide build` into the generated client entry —
+// and the five predicates below are how the two renderers and the test kit read the shapes those
+// calls produce.
+//
+// Each of the eleven is what the compiler writes for a SPELLING, except `start`, which is written for
+// a POSITION: the memos an unconditional plain slot reads, so their loads are in flight before the
+// walk arrives at the slot that renders them.
 //
 // It is on its own specifier so that `abide` holds only what somebody TYPES: a name that appears in
 // generated output and never in a source file is surface an app has to read past.
@@ -27,15 +31,21 @@ export {
     type Boundary,
     boundary,
     type Branches,
+    cellProps,
     classifySlots,
+    type Component,
+    component,
     escape,
+    type Given,
     isKeyed,
     isTemplate,
     type Keyed,
     keyed,
+    propCell,
     type Raw,
     raw,
     type SlotKind,
+    start,
     type Streamed,
     streamed,
 } from './html.ts'
@@ -53,19 +63,12 @@ export {
 } from './router.ts'
 // A compiled `<style>` block registers itself through this.
 export { adopt } from './styles.ts'
-// What a server module elides to in the client lane — the stub, in place of the handler's body — and
-// the shapes that describe one. `WireOptions` is the exception and stays on `abide`: `health()` takes
-// it, so it is the input type of a call an app makes.
-export {
-    type CallOptions,
-    type Kind,
-    type Method,
-    type RemoteOptions,
-    remote,
-    type RemoteSocket,
-    type RemoteSocketOptions,
-    remoteSocket,
-    type Rpc,
-    type RpcHandle,
-    type Wire,
-} from './transport.ts'
+
+// What a server module elides to — `remote` / `remoteSocket` and the shapes describing one — is on
+// `abide/runtime/transport`, NOT here, and the reason is which chunk it ends up in. This module is
+// imported by the generated client entry, so it is in the bundle every page loads; anything
+// re-exported from here that survives shaking is in there too. One lazy route with one rpc put the
+// whole call-and-decode path in front of every page that way — 4,066 bytes of the perf app's shared
+// entry, on a page that calls nothing. Its own specifier makes it the chunk of whoever imports it.
+// `WireOptions` is the exception and stays on `abide`: `health()` takes it, so it is the input type
+// of a call an app makes.

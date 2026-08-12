@@ -10,6 +10,7 @@
 
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from '$shared/channel.ts'
 import { isThenable } from '$shared/internal/probes.ts'
+import { seedKey } from '$shared/internal/seed.ts'
 import type { JsonSchema, Shapes } from '$shared/internal/shapes.ts'
 import { NO_LIMIT, race, timeoutError } from '$shared/internal/timers.ts'
 import {
@@ -28,6 +29,7 @@ import { asRpc, type Method, type Rpc } from '$shared/transport.ts'
 import { knobOf } from './config.ts'
 import { failed, headersFor } from './responses.ts'
 import { type Gate, gate, publishable, type Schema, type SchemaRefusal } from './schema.ts'
+import { recordSeed, seedsTable } from './scopes.ts'
 import { heldStream } from './scopes.ts'
 
 /**
@@ -76,6 +78,16 @@ export interface RpcOptions<Args = unknown, T = unknown> {
     crossOrigin?: string[]
     /** The largest request body this will accept, in bytes. */
     maxBodySize?: number
+    /**
+     * Whether a document render hands what this resolved to the client that hydrates it. Default on.
+     *
+     * On, the browser reads the answer out of the markup it is already adopting: one round trip, and
+     * the handler runs once. Off, the client's slot starts cold and its first read reaches the
+     * network — which is what you want for exactly two shapes. A payload big enough that inlining it
+     * costs more than fetching it, and an answer carrying FIELDS THE PAGE DID NOT RENDER, since
+     * seeding puts the whole value in the document and not just the part the markup showed.
+     */
+    seed?: boolean
 }
 
 /** What `dispatch` needs to know about a declaration and a caller cannot ask it for. */
@@ -324,8 +336,36 @@ function declare<Args, T>(
         return output === null ? settling : (settling.then(output) as Promise<T>)
     }
 
+    /**
+     * Hand what this resolved to the document being rendered, if one is being rendered.
+     *
+     * A STREAM is never seeded: its value is the latest chunk and its transcript is the point, so
+     * there is no one answer to write down. The address is `policy.address`, which the registry set
+     * when it learned where this declaration lives — the same string the client's stub was built
+     * with, which is what makes the two sides agree without either being told about the other.
+     */
+    const seeds = options.seed !== false && !streams
+    function collected(args: Args, produced: Produced<T>): Produced<T> {
+        if (!seeds) return produced
+        const table = seedsTable()
+        if (table === null) return produced
+        if (!isThenable(produced)) {
+            table.set(seedKey(policy.address, args), produced)
+            return produced
+        }
+        // `recordSeed` rather than the table above: `takeSeeds` DETACHES it when the document
+        // serialises, so a load landing after that must find nothing to write to.
+        return (produced as Promise<T>).then((value) => {
+            recordSeed(seedKey(policy.address, args), value)
+            return value
+        }) as Produced<T>
+    }
+
     const cache: MemoOptions<Args> = { ...retention, ttl }
-    const call = memo(load as (args: Args) => T, cache) as KeyedMemo<Args, T>
+    const call = memo(
+        ((args: Args) => collected(args, load(args))) as (args: Args) => T,
+        cache,
+    ) as KeyedMemo<Args, T>
 
     const rpc: Rpc<Args, T> = asRpc(call, {
         method,

@@ -67,6 +67,19 @@ function template(source: string): string {
     return code.slice(start + 'return html`'.length, code.lastIndexOf('`')).trim()
 }
 
+/**
+ * …and the other half of the same file: the setup statements, which run once per instance. Undented,
+ * because the emit indents a `<script>` body into the component function and that is formatting.
+ */
+function setup(source: string): string {
+    const code = compile(source, { filename: 'Case.abide' }).code
+    const start = code.indexOf('): TemplateResult {')
+    const body = code.slice(start + '): TemplateResult {'.length, code.indexOf('return html`'))
+    const lines: string[] = []
+    for (const line of body.split('\n')) if (line.trim() !== '') lines.push(line.replace(/^ {4}/, ''))
+    return lines.join('\n')
+}
+
 export default suite({
     ...META.compiler,
     cases: [
@@ -229,6 +242,61 @@ export default suite({
                     '…and in a hole inside a quoted one',
                     template('<script>const n = state(0)</script><div class="a { n * 100 } b"></div>'),
                     '<div class=${() => `a ${n() * 100} b`}></div>',
+                )
+            },
+        },
+
+        {
+            title: 'a read in setup PEEKS, because nothing would run setup again',
+            note: 'A cold read SIGNALS where re-running is the recovery — a slot thunk, a `memo` body, an effect body — and the type says so: `T`, no narrowing. Setup runs once, so a read among its statements peeks instead and is honestly `T | undefined`. The split is syntactic: statements peek, function bodies read, because nothing separates a `memo` body from an event handler.',
+            run({ is }) {
+                is(
+                    'a statement peeks',
+                    setup('<script>const n = state(0)\nconst v = n + 1</script>'),
+                    'const n = state(0)\nconst v = n.peek() + 1',
+                )
+                is(
+                    '…and the same read in a template reads',
+                    template('<script>const n = state(0)</script><p>{n + 1}</p>'),
+                    '<p>${() => n() + 1}</p>',
+                )
+                // The arm that fails SILENTLY if it goes the other way: a `memo` body emitted with
+                // `peek` subscribes to nothing, so the derivation is built once and never wakes —
+                // and the output is right on the first pass, which is the only pass a correctness
+                // test would look at.
+                is(
+                    'a memo body is a function body, so it reads',
+                    setup('<script>const n = state(0)\nconst d = memo(() => n * 2)</script>'),
+                    'const n = state(0)\nconst d = memo(() => n() * 2)',
+                )
+                is(
+                    '…and so is a declared one, past its return type',
+                    setup('<script>const n = state(0)\nfunction f(): number { return n + 1 }</script>'),
+                    'const n = state(0)\nfunction f(): number { return n() + 1 }',
+                )
+                // `if (…) {` and `for (…) {` are blocks, not bodies — their `(` follows a keyword
+                // rather than a name, which is the whole test and why no keyword list is enumerated.
+                is(
+                    'a control block is still a statement',
+                    setup('<script>const n = state(0)\nlet v = 0\nif (n > 0) { v = n }</script>'),
+                    'const n = state(0)\nlet v = 0\nif (n.peek() > 0) { v = n.peek() }',
+                )
+                // A keyed handle is read by its CALL, and peeks in the same position.
+                is(
+                    'a keyed read peeks too',
+                    setup(
+                        '<script>const m = memo(async ({ id }: { id: number }) => id)\nconst v = m({ id: 1 })</script>',
+                    ),
+                    'const m = memo(async ({ id }: { id: number }) => id)\nconst v = m({ id: 1 }).peek()',
+                )
+                // A branch-local script is NOT setup: it is spliced into the branch's own closure,
+                // which the graph re-runs, so its statements read.
+                is(
+                    'a branch-local script reads',
+                    template(
+                        '<script>const n = state(0)</script>{#if n}<script>const v = n + 1</script><b>{v}</b>{/if}',
+                    ),
+                    '${() => { const $0 = n(); if ($0) return (() => {\nconst v = n() + 1\nreturn html`<b>${v}</b>` })(); return null }}',
                 )
             },
         },
@@ -397,82 +465,43 @@ export default suite({
         },
 
         {
-            title: '{await value} is the short form of {#await value then v}{v}{/await}',
-            note: 'The shortest await there is: no arms, so the settled value IS the body. It compiles to the same `awaited()` call the long form does, with an identity `then` — which means it inherits what the long form means rather than being a second mechanism. In particular it has NO PENDING ARM, and that is what decides a server render BLOCKS on it and writes complete markup: there is nothing to send early, so nothing is deferred and a reader running no scripts still has the content. Adding a `{:pending}` arm is how the other lane is asked for. It used to compile to `() => await value` — a thunk is not async, so that was JavaScript no engine parses, produced silently, with the error arriving from the runtime and nothing pointing back at the line.',
+            title: 'a slot cannot `await`, and the refusal names the two spellings that can',
+            note: 'A slot is a THUNK, and a thunk is not async — so there is no code to emit for an `await` inside one. It used to compile to `() => await value`, which is JavaScript no engine parses, produced silently, with the error arriving from the runtime and nothing pointing back at the line. What replaces it is the thing the sugar was standing in for: a promise in a slot renders what it resolves to, and a load an author wants to say something ABOUT — a placeholder, a failure — goes in a cell, where the probes can be asked and the chain over them is what defers the region.',
             run({ is, throws }) {
-                const short = template('<script>const cell = state(0)</script><p>{await cell}</p>')
-                is(
-                    'no pending arm, and the settled value is the body',
-                    short,
-                    '<p>${() => awaited(cell, { pending: undefined, then: (_awaited) => _awaited, catch: undefined, finally: undefined })}</p>',
+                throws('a whole-expression await', () => template('<p>{await p}</p>'), 'cannot `await`')
+                throws(
+                    'one buried in an expression',
+                    () => template('<p>{x ? await a : b}</p>'),
+                    'cannot `await`',
                 )
-                // The same call the long form makes, which is the claim that it is one mechanism.
-                is(
-                    'the long form differs only in what the arm renders',
-                    template('<script>const cell = state(0)</script><p>{#await cell then c}{c}{/await}</p>'),
-                    '<p>${() => awaited(cell, { pending: undefined, then: (c) => html`${c}`, catch: undefined, finally: undefined })}</p>',
-                )
-                // The operand is the CELL, not a read of it: awaiting `cell()` would await whatever
-                // is there NOW, which for a load that has not landed is `undefined`.
-                is('the operand is the cell itself', short.includes('awaited(cell,'), true)
                 // A name that merely starts with the letters is not an await.
                 is('`awaitable` is an identifier', template('<p>{awaitable}</p>'), '<p>${awaitable}</p>')
-
-                // Awaiting a value and then reaching INTO it, which is the shape a cell actually
-                // wants. Liftable because both halves are CONTIGUOUS in the file — the operand
-                // inside the parentheses and the suffix after them — and that is the whole of what
-                // limits it, since desugaring works on file offsets and cannot see substituted text.
+                // A promise in a slot needs no spelling at all: both substrates render what it
+                // resolves to, which is what the short form was sugar over.
                 is(
-                    'the suffix after (await x) becomes the arm',
-                    template('<script>const user = state(0)</script><p>{(await user).profile.name}</p>'),
-                    '<p>${() => awaited(user, { pending: undefined, then: (_awaited) => _awaited.profile.name, catch: undefined, finally: undefined })}</p>',
+                    'a promise in a slot is just a slot',
+                    template('<p>{load()}</p>'),
+                    '<p>${() => load()}</p>',
                 )
-                // …and the suffix is ordinary template code, so a cell read in it still desugars.
-                is(
-                    'a cell read inside the suffix',
-                    template('<script>const user = state(0)\nconst key = state("a")</script><p>{(await user).items[key]}</p>'),
-                    '<p>${() => awaited(user, { pending: undefined, then: (_awaited) => _awaited.items[key()], catch: undefined, finally: undefined })}</p>',
-                )
-                // `await a.b.c` is `await (a.b.c)` in JavaScript and stays that: the operand is the
-                // whole chain, so a cell is READ before it has landed. That compiles and throws at
-                // render, and it is the author's expression — abide does not second-guess it.
-                is(
-                    'await binds looser than member access, as in JavaScript',
-                    template('<script>const user = state(0)</script><p>{await user.profile.name}</p>').includes(
-                        'awaited(user().profile.name,',
-                    ),
-                    true,
-                )
-                // Two operands and one arm is not a shape this can be. `{#await}` nests.
-                throws(
-                    'two awaits in one slot',
-                    () => template('<p>{(await a).x + (await b).y}</p>'),
-                    'only the whole expression',
-                )
-
-                // WHICH FORM, not whether the pending body is blank. `{#await p}{:then v}` with
-                // nothing before the branch is what an author writes to narrow in `{:then}`, or to
-                // stream one block with no placeholder — so it emits a pending arm and DEFERS. The
-                // compact forms have none by construction and block. Deciding on emptiness instead
-                // would make a stray space the difference between holding a response and streaming
-                // it, which is not a thing a reader of the file could see.
+                // And the chain over a cell's probes, which is what has something to SHOW while the
+                // load runs — the pending arm a document render sends now.
                 const pendingOf = (source: string): string =>
                     /pending: ([^,]+)/.exec(template(source))?.[1] ?? 'none'
-                is('the block form, empty', pendingOf('<p>{#await p()}{:then v}{v}{/await}</p>'), '() => null')
                 is(
-                    'the block form, with a placeholder',
-                    pendingOf('<p>{#await p()}<em>x</em>{:then v}{v}{/await}</p>'),
-                    '() => html`<em>x</em>`',
+                    'a chain that asks about the load defers',
+                    pendingOf('<script>const p = state(0)</script><p>{#if p.pending()}x{:else}y{/if}</p>'),
+                    '$1',
                 )
-                is('the compact form', pendingOf('<p>{#await p() then v}{v}{/await}</p>'), 'undefined')
-                is('the short slot form', pendingOf('<p>{await p()}</p>'), 'undefined')
-                // And the one shape there is no rewrite for: a thunk with an await buried in it is
-                // not expressible as any arrangement of `{#await}`, so it is refused on the line
-                // rather than emitted as source no engine parses.
-                throws(
-                    'an await that is not the whole expression',
-                    () => template('<p>{x ? await a : b}</p>'),
-                    'the whole expression',
+                is(
+                    '…and one that does not is a plain thunk',
+                    pendingOf('<script>const p = state(0)</script><p>{#if p}x{:else}y{/if}</p>'),
+                    'none',
+                )
+                // Only the FIRST test counts: the first arm is what goes out in front of the load.
+                is(
+                    'a probe in a later arm is not the placeholder',
+                    pendingOf('<script>const p = state(0)</script><p>{#if p}x{:else if p.pending()}y{/if}</p>'),
+                    'none',
                 )
             },
         },
@@ -626,24 +655,37 @@ export default suite({
         },
 
         {
-            title: 'components: a tag is a call, children are a prop, {#component} is a value',
-            note: 'A capitalised tag invokes; `<slot/>` renders what was passed — through whatever name the enclosing parameter list bound it under, which for an inline `{#component X(props)}` is `props` and not the outer component’s `args`. A nested `{#component X()}` inside a component’s children becomes that component’s `X` prop, which is how a render-prop is spelled without a second concept.',
+            title: 'components: a tag is a CARRIED call, children are a prop, {#component} is a value',
+            note: 'A capitalised tag emits `component(View, props)` rather than `View(props)`: the call is carried to the position that shows it, which holds the instance across a re-render and writes the props into cells. Calling it in the slot thunk instead meant that anything the parent read rebuilt the child — a keyed list gaining one row rebuilt every instance in it and discarded whatever had been typed into any of them. An INLINE `{#component}` is still called directly, because it has no `<script>` and so nothing to keep. `<slot/>` renders what was passed — through whatever name the enclosing parameter list bound it under, which for an inline `{#component X(props)}` is `props` and not the outer component’s `args`. A nested `{#component X()}` inside a component’s children becomes that component’s `X` prop, which is how a render-prop is spelled without a second concept.',
             run({ is, throws }) {
                 is(
                     'invocation with props',
                     template('<Card title="hi" n={1}/>'),
-                    '${() => Card({ title: "hi", n: 1, children: undefined })}',
+                    '${() => component(Card, { title: "hi", n: 1, children: undefined })}',
                 )
                 is(
                     'children become a prop',
                     template('<Card>hey</Card>'),
-                    '${() => Card({ children: html`hey` })}',
+                    '${() => component(Card, { children: html`hey` })}',
                 )
-                is('a spread', template('<Card {...rest} n={1}/>'), '${() => Card({ ...rest, n: 1 })}')
+                is(
+                    'a spread',
+                    template('<Card {...rest} n={1}/>'),
+                    '${() => component(Card, { ...rest, n: 1 })}',
+                )
                 is(
                     'onclick on a component is an ordinary prop',
                     template('<Card onclick={go}/>'),
-                    '${() => Card({ onclick: go, children: undefined })}',
+                    '${() => component(Card, { onclick: go, children: undefined })}',
+                )
+                // An inline component has no setup to protect and its parameter type is written by
+                // hand, so carrying it would buy nothing and cell props it declared as values.
+                is(
+                    'an inline component is called where it stands',
+                    compile('{#component Row(props: { n: number })}[{props.n}]{/component}<Row n={1}/>', {
+                        filename: 'C.abide',
+                    }).code.includes('${() => Row({ n: 1, children: undefined })}'),
+                    true,
                 )
                 is(
                     'slot renders the children — UNTHUNKED, since the caller built them eagerly',
@@ -794,12 +836,12 @@ export default suite({
                 )
                 is(
                     'a keyed memo is read by its CALL, not by its name',
-                    code.includes('const $0 = details({ title })()'),
+                    code.includes('const $2 = details({ title })()'),
                     true,
                 )
                 is(
                     '…and the branch narrows off that local, so `.pages` needs no `?.`',
-                    code.includes('if ($0) return html`${$0.pages} pages`'),
+                    code.includes('if ($2) return html`${$2.pages} pages`'),
                     true,
                 )
                 is(
@@ -871,9 +913,12 @@ export default suite({
                     true,
                 )
 
-                // The other door to the same answer: a prop's TYPE says which of the two it is, and
-                // the BINDING says what it is called here. Nothing resolves the import, so the names
-                // in that set are the whole test — a type of an app's own that happens to be called
+                // The other door to the same answer, and the rule is shorter here: a prop is a CELL,
+                // whatever it was declared as, because the position showing the component writes each
+                // one into a cell of its own. What the declared type still decides is the two things a
+                // prop cell cannot be — a KEYED handle, which is selected by args, and a FUNCTION,
+                // which is called rather than read. Nothing resolves the import, so the names in that
+                // set are the whole test — a type of an app's own that happens to be called
                 // `KeyedChannel` would be read as this one.
                 const declared = (members: string, bound: string): string =>
                     `<script>\nimport { props } from 'abide'\ntype Props = {\n${members}\n}\nconst { ${bound} } = props<Props>()\n</script>`
@@ -886,17 +931,17 @@ export default suite({
                     true,
                 )
                 is(
-                    '…where one typed as a cell is read by its NAME',
-                    template(`${declared('    note: State<string>', 'note')}<p>{note.length}</p>`).includes(
-                        '${() => note().length}',
+                    '…and one declared as a plain number is read by its NAME, like every other prop',
+                    template(`${declared('    n: number', 'n')}<p>{n + 1}</p>`).includes(
+                        '${() => n() + 1}',
                     ),
                     true,
                 )
-                // The rename, which is the reason the two facts have to MEET. Read off the declared
-                // type alone, the cell was still called `note` and `text` stayed a plain value — so
-                // `text.length` emitted a function's arity, which type-checks and renders `0`.
+                // The rename, which is the reason the pattern is what names them. Read off the
+                // declared type alone, the cell was still called `note` and `text` stayed a plain
+                // value — so `text.length` emitted a function's arity, which type-checks and renders `0`.
                 is(
-                    'a renamed cell prop follows the LOCAL name',
+                    'a renamed prop follows the LOCAL name',
                     template(
                         `${declared('    note: State<string>', 'note: text')}<p>{text.length}</p>`,
                     ).includes('${() => text().length}'),
@@ -909,13 +954,78 @@ export default suite({
                     ).includes('note()'),
                     false,
                 )
-                // `props()` is the parameter, so the call is erased and the import goes with it. The
-                // whole module rather than the template: this claim is about what surrounds it.
-                const erased = compile(`${declared('    note: State<string>', 'note')}<p>{note.length}</p>`, {
+                // A callback is attached, not read. Wrapping one would hand `@click` the cell.
+                is(
+                    'a function prop is left alone',
+                    template(
+                        `${declared('    onpick: (t: string) => void', 'onpick')}` +
+                            '<button @click={onpick}>x</button>',
+                    ).includes('@click=${onpick}'),
+                    true,
+                )
+                // `props()` is the parameter, so the call is erased and the import goes with it — and
+                // each prop local is bound to its cell beside the destructure that renamed it out of
+                // the way. The whole module rather than the template: this is about what surrounds it.
+                const erased = compile(`${declared('    n: number', 'n')}<p>{n + 1}</p>`, {
                     filename: 'Case.abide',
                 }).code
-                is('the call becomes the parameter', erased.includes('const { note } = args'), true)
+                is('the call becomes the parameter', erased.includes('const { n: $n } = args'), true)
+                is('…and the local is the cell', erased.includes('const n = propCell($n)'), true)
                 is('…and `props` is not imported by what was emitted', erased.includes('props'), false)
+            },
+        },
+
+        {
+            title: 'an import from server/rpc IS the keyed declaration, because the file has none',
+            note: '`rpc` = `memo` + transport, so a stub is a keyed memo — but nothing in the FILE says so: the binding walk reads `NAME = memo(…)` out of the file’s own tokens and an rpc is never written there. The import statement is the whole of the evidence, and the directory is the same fact `elide` addresses the endpoint by. Without it a page could still call the rpc and could not defer on it — `deferrable` finds no source in the head — and `{orders({ id }).total}` was a member access on the HANDLE, which type-checks as a `Rpc` and renders nothing. `server/sockets` is deliberately excluded: a socket is keyed only in the room form and an import cannot say which.',
+            async run({ is }) {
+                const page = (body: string, clause = '{ orders }'): string =>
+                    `<script>\nimport ${clause} from '../../server/rpc/orders.ts'\n</script>${body}`
+
+                is(
+                    'the CALL is the cell, so it is read where a name would be',
+                    template(page('<p>{orders({ id: 1 }).total}</p>')).includes(
+                        'orders({ id: 1 })().total',
+                    ),
+                    true,
+                )
+                is(
+                    '…and the reserved surface still reaches the handle',
+                    template(page('<p>{orders({ id: 1 }).peek()}</p>')).includes(
+                        'orders({ id: 1 }).peek()',
+                    ),
+                    true,
+                )
+                is(
+                    'a pending head now DEFERS, which is the point of knowing',
+                    compile(page('{#if orders({ id: 1 }).pending()}<p>wait</p>{:else}<p>ok</p>{/if}'), {
+                        filename: 'Case.abide',
+                    }).code.includes('awaited('),
+                    true,
+                )
+                is(
+                    'a rename binds the LOCAL name',
+                    template(
+                        page('<p>{recent({ id: 1 }).total}</p>', '{ orders as recent }'),
+                    ).includes('recent({ id: 1 })().total'),
+                    true,
+                )
+                is(
+                    'a TYPE import declares nothing — it carries no value',
+                    template(
+                        page('<p>{Orders.length}</p>', 'type { Orders }'),
+                    ).includes('Orders({'),
+                    false,
+                )
+                // The directory is the rule, not the word: a module that merely mentions rpc is an
+                // ordinary import, and its names stay ordinary values.
+                is(
+                    'a module outside server/rpc is not a source',
+                    template(
+                        "<script>\nimport { orders } from '../lib/rpc-helpers.ts'\n</script><p>{orders({ id: 1 }).total}</p>",
+                    ).includes('orders({ id: 1 })().total'),
+                    false,
+                )
             },
         },
 
@@ -956,7 +1066,7 @@ export default suite({
                 // sentence in `pages/streaming`, which is the file this whole mechanism is for.
                 is(
                     'a block marker inside a comment opens nothing',
-                    compile('<!-- an {#await} with a {:pending} arm -->\n<script module>\nconst A = 1\n</script>\n<p>ok</p>\n', {
+                    compile('<!-- an {#if} with an {:else} arm -->\n<script module>\nconst A = 1\n</script>\n<p>ok</p>\n', {
                         filename: 'C.abide',
                     }).code.includes('const A = 1'),
                     true,
@@ -1212,16 +1322,16 @@ export default suite({
         },
 
         {
-            title: '{#await} splits the operand from its branches, so a promise cannot re-make itself',
-            note: 'The thunk evaluates ONLY the operand and hands over four unevaluated closures, so its effect subscribes to what the operand reads and nothing else — the part paints the branches later without ever waking it. Choosing a branch in the thunk instead, by reading `pending()`, makes settling wake the thunk, which re-evaluates the operand into a fresh promise, which settles: an unbounded loop with real requests behind it. Counting the operand evaluations is the only way to see this; the output looks right either way.',
+            title: '{#if x.pending()} defers, and the operand is the CELL — so nothing can re-make it',
+            note: 'The whole chain is ONE arm, handed over three times: `pending` is what a document render sends now, `then`/`catch` is what it patches in, and the probe in the chain’s own head is what picks an arm on each pass. The operand is the cell, so choosing a branch can never make a second load — the shape that loops when a thunk reads `pending()` and re-evaluates an inline promise. Counting the body runs is the only way to see that; the output looks right either way. The handle here is LAZY, which is the other half: a probe starts nothing, so the block asks the operand for its settle first and the pending arm is then asking about a load that exists.',
             async run({ is }) {
-                const emitted = compile('<p>{#await p}a{:then v}b{:catch e}c{/await}</p>', {
+                const emitted = compile('<script>const p = state(0)</script><p>{#if p.pending()}a{:else}b{/if}</p>', {
                     filename: 'A.abide',
                 }).code
                 is(
-                    'the branches are closures, unevaluated',
+                    'one arm for all three, and it is the whole chain',
                     emitted.includes(
-                        'awaited(p, { pending: () => html`a`, then: (v) => html`b`, catch: (e) => html`c`, finally: undefined })',
+                        'awaited(p, { pending: $1, then: $1, catch: $1, finally: undefined })',
                     ),
                     true,
                 )
@@ -1229,18 +1339,23 @@ export default suite({
                 const before = calls()
                 const host = container()
                 mount(host, () => Loader({}) as never)
-                is('the pending branch first', host.textContent?.includes('loading…'), true)
+                is('the pending arm first', host.textContent?.includes('loading…'), true)
+                is('…and the lazy handle was STARTED by the block', calls() - before, 1)
 
                 await sleep(80)
                 is('then the settled one', host.textContent?.includes('ada'), true)
-                is('the operand was evaluated ONCE', calls() - before, 1)
+                is('the body ran ONCE', calls() - before, 1)
 
-                // An unrelated dependency moving must not throw a settled branch back to pending,
-                // and must not re-run the operand.
+                // The settled block is STILL the reactive chain, and a write that changes which ARM
+                // wins is the only thing that can say so — a cell inside an arm has its own slot
+                // effect and repaints either way. That is what the `html` wrapper around the arm
+                // buys: hand the chain over bare and it is called once, inside the block's own
+                // effect, which the `holding` cutoff then never re-enters. And the write must not
+                // throw the chain back to pending or re-run the body.
                 label.set('moved')
                 await tick()
-                is('an unrelated write leaves the branch settled', host.textContent?.includes('ada'), true)
-                is('…and does not re-evaluate the operand', calls() - before, 1)
+                is('a later write can change which arm wins', host.textContent?.trim(), 'moved')
+                is('…and does not re-run the body', calls() - before, 1)
 
                 await sleep(120)
                 is('and it is still settled, not looping', calls() - before, 1)
@@ -1593,14 +1708,14 @@ export default suite({
             note: '`abide` is what an author types and `abide/runtime` is what only the emitter does, so a name appearing in generated output and never in a source file is off the surface an app reads. `html` is the only name on both sides: it is the template TAG a hand-written `.ts` component also writes, so it stays on `abide` and merges with the author’s own import of it — which is why no cross-module dedupe is needed. `raw` and `keyed` read like authoring vocabulary and are not: the escape hatch is spelled `{html(...)}` and a key is spelled `key={...}`, and each of those is a SPELLING the emitter translates.',
             run({ is, log }) {
                 // Every emit-only name in one file: class: → classes, style: → styles, <style> →
-                // adopt, {#await} → awaited, {#try} → boundary, {#for await} → streamed,
+                // adopt, {#if x.pending()} → awaited, {#try} → boundary, {#for await} → streamed,
                 // {html(...)} → raw, `by` → keyed. The author's own `html` import is here to prove
                 // it merges rather than doubling.
                 const code = compile(
-                    '<script module>\nimport { html } from "abide"\n</script>\n' +
+                    '<script module>\nimport { html, state } from "abide"\nconst p = state(0)\n</script>\n' +
                         '<style>.a { color: red }</style>\n' +
                         '<p class:on={f} style:width={w}>{html(s)}</p>\n' +
-                        '{#await p}…{:then v}<b>{v}</b>{/await}\n' +
+                        '{#if p.pending()}…{:else}<b>{p}</b>{/if}\n' +
                         '{#try}<b>{s}</b>{:catch e}<i>{e}</i>{/try}\n' +
                         '{#for await r of feed by r.id}<li>{r}</li>{/for}\n',
                     { filename: 'Everything.abide' },
@@ -1610,9 +1725,9 @@ export default suite({
                     lines.find((line) => line.endsWith(`from '${module}'`)) ?? `no import from ${module}`
 
                 is(
-                    '`html` alone comes from `abide`, and the author’s own import of it merges',
+                    'the author’s own names come from `abide`, and their `html` merges rather than doubling',
                     from('abide'),
-                    "import { html, type TemplateResult } from 'abide'",
+                    "import { html, type TemplateResult, state } from 'abide'",
                 )
                 is(
                     'everything the emitter alone writes comes from `abide/runtime`',

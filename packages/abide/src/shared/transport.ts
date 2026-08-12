@@ -14,6 +14,7 @@
 import { type Channel, type ChannelOptions, channel, type KeyedChannel } from './channel.ts'
 import { markSource } from './internal/BRANDS.ts'
 import { keyOf, matcher } from './internal/keys.ts'
+import { seedKey, takeSeed } from './internal/seed.ts'
 import { RPC_PREFIX, SOCKET_PREFIX } from './internal/PATHS.ts'
 import { hasFile } from './internal/probes.ts'
 import { arm } from './internal/timers.ts'
@@ -32,6 +33,7 @@ import {
     wireError,
 } from './internal/wire.ts'
 import { type KeyedMemo, type MemoHandle, memo } from './memo.ts'
+import { state } from './reactive.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -293,9 +295,22 @@ export function remote<Args, T, F extends Failed = never>(
         for await (const chunk of chunksOf(id, response)) yield chunk as T
     }
 
+    /**
+     * A read, or the answer the server render already put in the document.
+     *
+     * SYNCHRONOUS when it was seeded, which is the whole of what makes it worth doing: a `memo`
+     * settles a sync body in the call, so the slot is warm before hydration reads it — the settled
+     * arm paints straight away rather than showing a `pending()` placeholder for one network round
+     * trip over markup that is already on screen and correct.
+     *
+     * A STREAM is never seeded — see `RpcOptions.seed` — so that arm does not look.
+     */
     const load = streams
         ? (args: Args): AsyncIterable<T> => chunks(args)
-        : (args: Args): Promise<T> => value(args)
+        : (args: Args): Promise<T> | T => {
+              const held = takeSeed(seedKey(id, args))
+              return held === null ? value(args) : (held.value as T)
+          }
     const call = memo(load) as unknown as KeyedMemo<Args, T>
 
     // The refusals are a claim about the TYPE and nothing else — a stub written by hand says what
@@ -422,21 +437,70 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     /** Published before the connection was up. A publish is fire-and-forget, not fire-and-lose. */
     const queued: string[] = []
 
+    /**
+     * The FIRST MESSAGE, as a load — which is the whole of what this adds to a channel.
+     *
+     * A `channel` never loads, so its cold read hands back `undefined` and whoever is standing under
+     * it paints empty. On a server that is right: the room holds what it holds. On a client that has
+     * just adopted server markup it is wrong in a way nothing else in the framework is — a `memo`
+     * whose load is in flight SIGNALS, so its slot is left alone and the server's markup stands,
+     * while the same page over a socket blanked to `<p></p>` and warned, then filled back in. Same
+     * markup, same shape, opposite outcome, and the difference was only which source it came from.
+     *
+     * A connection genuinely is a load: something is in flight and there is nothing to show yet. So
+     * it is spelled as one, and every catcher already knows what to do with it — the slot is not
+     * painted, `settledOf` waits on this cell, and the first message wakes it. No new mechanism.
+     *
+     * Only on `remoteSocket`, never on `channel`: a server walk reading a channel that may never
+     * receive would wait forever, and `socket()`'s server half is `channel()` unchanged.
+     */
+    let arrived: (() => void) | null = null
+    const first = state(
+        new Promise<boolean>((resolve) => {
+            arrived = () => resolve(true)
+        }),
+    )
+
+    /**
+     * Where the wire is, as a CELL, because `refreshing()` has to wake the region asking it.
+     *
+     * One tri-state rather than a `connected` flag beside a `closed` one: every transition then has
+     * exactly one write, so closing a socket that was already down still wakes whoever is showing a
+     * reconnect banner. Two booleans left that one case with nothing to flip.
+     *
+     * `wire !== null` cannot stand in for this. `onclose` nulls it and arms a retry, and `start`
+     * assigns the new connection SYNCHRONOUSLY — before `onopen` — so the field is null only during
+     * the backoff gap and reads as live again the instant a reconnect is attempted rather than when
+     * one succeeds.
+     */
+    const link = state<'idle' | 'live' | 'down'>('idle')
+
     function start(): void {
         if (wire !== null || closed) return
         const connection = open(url)
         wire = connection
         connection.onopen = () => {
             backoff = RECONNECT_FROM
+            link.set('live')
             // Walked and then emptied, not shifted: a burst published while the socket was down
             // would otherwise move what is left of the queue once per message.
             for (let i = 0; i < queued.length; i++) connection.send(queued[i] as string)
             queued.length = 0
         }
-        connection.onmessage = (event) => received.publish(JSON.parse(String(event.data)) as T)
+        connection.onmessage = (event) => {
+            received.publish(JSON.parse(String(event.data)) as T)
+            // After the publish, so a reader woken by the settle finds the message already there.
+            // Nulled rather than re-called: the promise resolves once, so every message after the
+            // first would otherwise pay a call into an already-settled `resolve`.
+            if (arrived !== null) {
+                arrived()
+                arrived = null
+            }
+        }
         connection.onclose = () => {
             if (closed || wire !== connection) return
             wire = null
+            link.set('down')
             // Reconnecting is the whole difference between a socket and a websocket: a subscriber
             // asked for the stream, not for one TCP connection's worth of it.
             arm(start, backoff)
@@ -456,9 +520,31 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     // which is what keeps them questions rather than causes.
     const self = markSource((() => {
         start()
+        // SIGNALS while nothing has arrived — see `first`. A no-op read once it has, and in a
+        // position with no catcher (setup, an event handler) it hands back what is there, exactly as
+        // every other read does.
+        first()
         return read()
     }) as Connection<T>)
     Object.setPrototypeOf(self, received)
+    // `chunks()` deliberately does NOT signal. At `tail: 0` the transcript is empty however many
+    // messages have arrived, so a reader waiting for it to fill would wait forever.
+    self.pending = () => first.pending()
+    /**
+     * A reload in flight over a value still being served — which for a socket is RECONNECTING.
+     *
+     * Connected and idle is not this: nothing is in flight, messages arrive when they arrive, and
+     * `streaming()` already says so. A dropped wire with a retry armed is exactly the definition, and
+     * it is the one thing a subscriber could not otherwise ask — after the first message a healthy
+     * connection and a dead one read identically.
+     *
+     * The `settled` conjunct keeps the two probes disjoint the way they are on a cell: a wire that
+     * drops before anything has ARRIVED has nothing to serve, so it is still `pending`, not
+     * `refreshing`. And this must not be true merely because the socket is up — the server half is
+     * `channel()`, where it is always false, so a region asking it would render one thing on each
+     * side and mismatch on hydration.
+     */
+    self.refreshing = () => link() === 'down' && first.settled()
     self.chunks = () => {
         start()
         return chunks()
@@ -486,6 +572,9 @@ function connect<T>(id: string, args: unknown, options: RemoteSocketOptions): Co
     }
     self.close = () => {
         closed = true
+        // Written even from 'idle', so a banner shown for a wire that was already down clears: a
+        // socket somebody closed is not one that is reconnecting.
+        link.set('idle')
         wire?.close()
         wire = null
     }

@@ -11,7 +11,7 @@
 //
 // Run it directly to watch it: `bun packages/example/test/transport-wire.ts`.
 
-import { remote, remoteSocket } from 'abide/runtime'
+import { remote, remoteSocket } from 'abide/runtime/transport'
 import { abidePlugin } from 'abide/compiler/plugin'
 import { dispatch, registered, websocket } from 'abide/server'
 import { until } from 'abide/tests'

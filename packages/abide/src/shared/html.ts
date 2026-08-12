@@ -7,6 +7,9 @@
 // ACTION they take per kind. The cached form and the two recognisers the substrates share live in
 // `$shared/internal/slots.ts`.
 //
+import { isSource } from './internal/BRANDS.ts'
+import { type Cell, derive, isPending, state } from './internal/graph.ts'
+
 const TEMPLATE_BRAND = Symbol.for('abide.template')
 
 export interface TemplateResult {
@@ -32,9 +35,10 @@ export function isTemplate(value: unknown): value is TemplateResult {
  * keeps the property every other line of it has — every name in scope was imported or declared by
  * the author — and so the same text type-checks as ordinary TypeScript.
  *
- * The destructuring pattern is also where a cell prop is RECOGNISED, which is why the spelling is a
+ * The destructuring pattern is also what NAMES the prop cells, which is why the spelling is a
  * binding rather than an `args` object: `{ note: text }` renames the cell, and a rule that read the
- * declared type alone would keep calling it `note` and leave `text` a plain value.
+ * declared type alone would keep calling it `note` and leave `text` a plain value. Every prop is a
+ * cell — see `Props` — so the declared type decides only whether `bind:` may write it.
  */
 export function props<T = Record<string, unknown>>(): T {
     throw new Error(
@@ -89,20 +93,21 @@ export function isKeyed(value: unknown): value is Keyed {
 
 // --- awaiting -------------------------------------------------------------
 //
-// What `{#await}` becomes. A plain marker in the node tree — like `Raw` and `Keyed`, it says WHAT
-// this is and leaves the substrates to decide what to do about it.
+// What a DEFERRING block becomes — `{#if x.pending()}`, an `{#if}` chain that asks about a load. A
+// plain marker in the node tree: like `Raw` and `Keyed` it says WHAT this is and leaves the
+// substrates to decide what to do about it.
 //
-// The branches are CLOSURES, and that is the entire point. The slot's thunk evaluates the operand
-// and hands over four unevaluated bodies, so the effect around it subscribes to whatever the OPERAND
-// reads and to nothing else. A helper that returned a cell instead could not do this: the thunk
-// would have to read `pending()` to choose a branch, so settling would wake the thunk, which would
-// re-evaluate the operand, which would produce a new promise — forever, with real network requests
-// behind it. Splitting "evaluate the operand" from "render a branch" into two effects is the fix,
-// and passing the branches unevaluated is how the split is expressed.
+// The branches are CLOSURES, and that is the entire point. The slot's thunk evaluates only the
+// operand and hands over four unevaluated bodies, so the effect around it subscribes to whatever the
+// OPERAND reads and to nothing else. A thunk that chose a branch itself — by reading `pending()` —
+// would be woken by the settle, would re-evaluate the operand, and with an inline promise would
+// produce a new one forever, with real network requests behind it. Splitting "evaluate the operand"
+// from "render a branch" into two effects is the fix, and passing the branches unevaluated is how
+// the split is expressed.
 
 // Every field takes an explicit `undefined` as well as being optional: under
 // `exactOptionalPropertyTypes` those are different types, and the compiler emits all four keys —
-// `undefined` included — so that every `{#await}` and `{#try}` in an app reaches `settledArms` and
+// `undefined` included — so that every deferring block and `{#try}` in an app reaches `settledArms` and
 // `ChildPart` as ONE hidden class rather than one per arm combination.
 export interface Branches<T = unknown> {
     pending?: (() => unknown) | undefined
@@ -119,13 +124,184 @@ export class Awaited {
 }
 
 /**
- * Generic in the operand so `{:then v}` gets a REAL type: `v` is what the promise resolves to, and a
+ * Generic in the operand so the settled arm gets a REAL type: the value is what the promise resolves to, and a
  * cell resolves to what it loaded. The cast is the price of storing every block in one field — a
  * `Branches<T>` is not assignable to `Branches<unknown>` under contravariance, and the alternative is
  * making the marker generic all the way through two substrates for no gain at the use site.
  */
 export function awaited<T>(value: PromiseLike<T> | T, branches: Branches<T>): Awaited {
     return new Awaited(value, branches as Branches)
+}
+
+/**
+ * Start every load this template is going to read, before the walk reaches the first of them.
+ *
+ * A cell begins its load on the first READ, and in a server render that read is the WALK ARRIVING at
+ * the slot — so a page holding three independent loads in three sections costs their SUM rather than
+ * their longest. Three 60ms loads rendered in 185ms; started together they render in 63ms, with the
+ * same blocking, the same walk and the same complete markup. The only thing that moves is when they
+ * begin.
+ *
+ * The compiler names the cells whose slots are UNCONDITIONAL, so this is the set of loads the walk was
+ * going to demand anyway — never a load a branch might not have taken.
+ *
+ * A throw is swallowed. A body that fails synchronously fails again at the slot that reads it, which
+ * is where it was always reported, and one failing load must not keep the others from starting.
+ */
+export function start(sources: readonly (() => unknown)[]): void {
+    for (let i = 0; i < sources.length; i++) {
+        try {
+            ;(sources[i] as () => unknown)()
+        } catch {
+            // Reported by the read that renders, exactly as before. Starting is never where a
+            // failure surfaces.
+        }
+    }
+}
+
+/**
+ * Ask a thenable operand for its settle NOW, and hand back the promise of it.
+ *
+ * `await x` and `Promise.resolve(x)` both reach `x.then` from a microtask JOB, and a cell's `then` is
+ * what STARTS a lazy load — a keyed memo slot starts nothing until something asks for its value. So a
+ * block that renders its pending arm before that job runs is asking a probe about a load nobody has
+ * begun, and gets `false`: the arm falls through to a read, which starts the load and signals, to an
+ * effect whose next pass finds the block already claimed. One `then`, made where the ordering
+ * matters, and both substrates await what it returns rather than the operand.
+ */
+export function started<T>(operand: PromiseLike<T>): Promise<T> {
+    return Promise.resolve(operand.then(SAME))
+}
+
+// The extra promise and tick are the point of `started`; a fresh identity closure per call is not.
+function SAME<T>(value: T): T {
+    return value
+}
+
+// --- components -----------------------------------------------------------
+//
+// A component call, CARRIED rather than made. `<Card n={r.n}/>` used to emit `Card({ n: r.n })`, so
+// the call happened wherever the enclosing slot thunk ran — and a thunk re-runs for anything the
+// parent reads, so every re-render built a new `Card` and every `state()` inside it made a new cell.
+// A keyed list gaining one row rebuilt every instance in it, produced output identical to what was
+// already on screen, and discarded whatever the user had typed into any of them.
+//
+// So the call is a marker, exactly as a deferring block and `{#try}` are: the CLIENT holds the instance at
+// the part that shows it and writes the props into cells, and the SERVER — a snapshot, with no later
+// pass to carry — simply calls it. One more arm on a switch that already has five. See
+// docs/COMPONENTS.md.
+
+export class Component {
+    constructor(
+        readonly view: (props: Record<string, unknown>) => unknown,
+        readonly props: Record<string, unknown>,
+    ) {}
+}
+
+/**
+ * What a component's `<script>` receives: the authored prop type, with every prop that is DATA
+ * behind a cell.
+ *
+ * The author writes `props<{ n: number }>()` and means "this component is given a number". What the
+ * position holding the instance hands over is a cell it writes on every pass, so `{n}` re-renders on
+ * a new `n` for the same reason `{own}` re-renders on a write — and `{n + 1}` compiles to `n() + 1`,
+ * because a prop name is a cell like every other name in scope.
+ *
+ * Two things pass through untouched — see `passedThrough`, which is the value-level spelling of the
+ * same rule and the one both substrates test.
+ */
+// `NonNullable` because an OPTIONAL member carries `undefined` into `T[K]`, and `fn | undefined`
+// extends neither arm — so `onpick?: (t: string) => void` mapped to a cell of a callback, and the
+// only thing that said so was the `@click` that attached the cell.
+export type Props<T> = {
+    [K in keyof T]: NonNullable<T[K]> extends ((...args: never[]) => unknown) | Cell<unknown>
+        ? T[K]
+        : Cell<T[K]>
+}
+
+/**
+ * `<Card n={r.n}/>`. The props are PLAIN VALUES, not thunks: what makes them live is the cell the
+ * instance holds for each of them, which the position writes into on every pass. A thunk per prop
+ * would have had to be rebuilt per pass anyway — `rows().map((r) => …)` closes over THAT pass's `r`,
+ * so an instance caching the first one would read a row object since replaced.
+ *
+ * `Given` is the inverse of `Props`: what the CALL SITE may write, which is the value or the cell. It
+ * is what keeps a mistyped prop an error where the mistake is, now that the call goes through a
+ * helper rather than being written out.
+ */
+export type Given<P> = { [K in keyof P]: P[K] extends Cell<infer V> ? Cell<V> | V : P[K] }
+
+export function component<P extends Record<string, unknown>>(
+    view: (props: P) => unknown,
+    props: Given<P>,
+): Component {
+    return new Component(
+        view as unknown as (props: Record<string, unknown>) => unknown,
+        props as Record<string, unknown>,
+    )
+}
+
+/**
+ * One cell per prop, made once, at the instance's first pass — by whichever substrate is showing it.
+ *
+ * A component's props are CELLS, on both sides. The client needs that so a later pass is a write
+ * rather than a rebuilt child; the server has no later pass and makes them anyway, because the other
+ * rule is that a component is written once and runs in both places. A server that handed the plain
+ * values over would work for every compiled `.abide` file — those bind through `propCell`, which
+ * would make the cells — and break every hand-written `.ts` component, which reads `who()` on a
+ * string. One rule is cheaper than that exception.
+ *
+ * What does NOT get a cell is `passedThrough`'s question.
+ */
+export function cellProps(props: Record<string, unknown>): Record<string, unknown> {
+    const made: Record<string, unknown> = {}
+    for (const name in props) {
+        const value = props[name]
+        made[name] = passedThrough(value) ? value : state(value)
+    }
+    return made
+}
+
+/**
+ * Whether a prop reaches the child UNTOUCHED rather than behind a cell.
+ *
+ * Two things do: something ALREADY a source — `bind:note={note}` needs the child to hold the very
+ * cell the parent does, not a copy — and a FUNCTION, which is a callback rather than data and is
+ * called, not read. The two collapse to one test, because a source IS a function — see `isSource`,
+ * whose brand check is what the second arm would otherwise have had to repeat.
+ *
+ * Named rather than spelled at each site: `cellProps` here, `writeProps` in `$ui/internal/parts.ts`
+ * and `Props<T>` above all make exactly these exceptions, and a third one added to one of them
+ * would be silently absent from the others.
+ */
+export function passedThrough(value: unknown): boolean {
+    return typeof value === 'function'
+}
+
+/**
+ * One prop, as the child's `<script>` binds it — emitted by the compiler for every name the
+ * `props<T>()` destructure brought into scope.
+ *
+ * Nearly always a pass-through, because `cellProps` above already made the cell. What it is FOR is
+ * the prop that never arrived: a call site that omits an optional prop emits no key for it, so the
+ * local would be `undefined` where the template is about to call it, and a destructure default would
+ * satisfy it with a plain string — leaving the local `'' | Cell<string>`, only one of which is
+ * callable. So the default is lifted out of the pattern to here, and derived rather than folded in
+ * once, so an `undefined` arriving LATER on a live cell still reads as the default.
+ */
+// A CELL in both overloads, never `Cell<T> | T`: the union would leave `T` inferrable from either
+// arm, and `propCell($class, '')` then read `T` as the cell itself and handed back a cell of a cell.
+// The server's plain value is a fact about the runtime — `emit`'s `Component` arm calls the view with
+// what the caller wrote — and the parameter type describes the CLIENT, which is what an author's
+// `assertType` is checking.
+export function propCell<T>(given: Cell<T> | undefined): Cell<T>
+export function propCell<T, D>(given: Cell<T> | undefined, fallback: D): Cell<NonNullable<T> | D>
+export function propCell(given: unknown, fallback?: unknown): Cell<unknown> {
+    if (isSource(given)) {
+        const cell = given as Cell<unknown>
+        return fallback === undefined ? cell : derive(() => cell() ?? fallback)
+    }
+    return state(given === undefined ? fallback : given)
 }
 
 // --- boundaries and streams -----------------------------------------------
@@ -190,7 +366,9 @@ export function settledBoundary(block: Boundary): unknown {
     try {
         produced = block.body()
     } catch (error) {
-        if (block.branches.catch === undefined) throw error
+        // A read with nothing to serve YET is not a failure, and this is not the boundary that
+        // recovers from it: the signal passes through to whoever will run the body again.
+        if (isPending(error) || block.branches.catch === undefined) throw error
         return settledArms(block.branches, error, undefined, true)
     }
     const settled = block.branches.finally

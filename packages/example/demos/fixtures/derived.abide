@@ -1,0 +1,50 @@
+<!-- Two independent loads that NOTHING in the markup names, which is the shape a real page has.
+
+     A page reads its aggregates, not the rpc under them: `{total}` and `{facets}`, never `{rows}`.
+     Left alone that hides the loads from the walk until it arrives at the first slot that derives
+     from one, so two independent roots cost their sum. Resolving a slot's memo back to the loads
+     beneath it is what makes them start together, however many derivations sit in between.
+
+     As with `concurrent.abide` the markup is identical either way, so the peak in flight is the only
+     thing that can tell the two apart. -->
+<script module>
+import { memo } from 'abide'
+
+let inFlight = 0
+let peak = 0
+
+/** The most loads in flight at any one moment. */
+export const peakInFlight = (): number => peak
+
+export const reset = (): void => {
+    left.invalidate()
+    right.invalidate()
+    inFlight = 0
+    peak = 0
+}
+
+async function load(label: string): Promise<string[]> {
+    inFlight++
+    if (inFlight > peak) peak = inFlight
+    await new Promise((settle) => setTimeout(settle, 10))
+    inFlight--
+    return [label, label]
+}
+
+const left = memo(() => load('LEFT'))
+const right = memo(() => load('RIGHT'))
+
+// Nothing below is a load. Each reads one of the two above and reshapes it, which is why starting one
+// would run its body only as far as that read and throw the rest away.
+const leftCount = memo(() => left().length)
+const leftText = memo(() => left().join('+'))
+const rightCount = memo(() => right().length)
+const rightText = memo(() => right().join('+'))
+</script>
+
+<div>
+    <p>{leftCount}</p>
+    <p>{leftText}</p>
+    <p>{rightCount}</p>
+    <p>{rightText}</p>
+</div>

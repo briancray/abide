@@ -24,15 +24,23 @@ const loaded = memo(async ({ name }: { name: string }): Promise<Suite | null> =>
 })
 </script>
 
-{#await loaded({ name: route().params.suite ?? '' })}
+<!-- Asking about `.pending()` is what makes the shell go out now with the placeholder in it. The
+     call stays in the markup rather than being hoisted into setup: it reads `route()`, so it belongs
+     in the slot's own thunk, where a navigation re-runs it. The branch-local setup block is where the
+     VALUE is read once — a plain binding, so the condition under it narrows a name rather than a
+     call, and the prop below needs no assertion. -->
+{#if loaded({ name: route().params.suite ?? '' }).pending()}
     <p class="mx-auto max-w-5xl px-6 py-16 text-slate-500">loading…</p>
-{:then suite}
-    {#if suite}
-        <Cards suite={suite}/>
+{:else}
+    <script>
+    const found = loaded({ name: route().params.suite ?? '' })
+    </script>
+    {#if found}
+        <Cards suite={found}/>
     {:else}
         <div class="mx-auto max-w-5xl px-6 py-16">
             <h1 class="text-3xl font-semibold text-slate-100">nothing here</h1>
             <p class="mt-2 text-slate-400">There is no suite named “{route().params.suite}”.</p>
         </div>
     {/if}
-{/await}
+{/if}

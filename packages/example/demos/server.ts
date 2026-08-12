@@ -7,7 +7,7 @@
 // substrate split.
 
 import { channel, html, memo, state, type TemplateResult } from 'abide'
-import { awaited, raw, streamed } from 'abide/runtime'
+import { awaited, boundary, raw, streamed } from 'abide/runtime'
 import {
     heldStream,
     isServing,
@@ -22,6 +22,8 @@ import {
 import { container, floorTicks, keep, microtasks, settled, sleep, suite, tick } from 'abide/tests'
 import { hydrate, mount } from 'abide/ui'
 import { button, el, output, row } from './dom.ts'
+import Concurrent, { peakInFlight, reset as resetConcurrent } from './fixtures/concurrent.abide'
+import Derived, { peakInFlight as peakDerived, reset as resetDerived } from './fixtures/derived.abide'
 import { META } from './SUITES.ts'
 import * as vanilla from './vanilla.ts'
 
@@ -127,6 +129,26 @@ export default suite({
                         undefined} .value=${'invisible to SSR'}>go</button>`,
                 )
                 is('markup', markup, '<button class="primary" disabled data-count="0">go</button>')
+
+                // An attribute slot WAITS on a pending read, exactly as a child slot does — and the
+                // asymmetry that fixes is invisible from either side alone: the client binds the
+                // class once the load lands, so a server that let the read serve `undefined` dropped
+                // an attribute the client then had. Nothing compares the two, and the markup is
+                // simply wrong for a reader running no scripts.
+                const tone = state(Promise.resolve('high'))
+                is(
+                    'an attribute reading a cold cell',
+                    await renderToString(html`<p class=${() => tone()}>x</p>`),
+                    '<p class="high">x</p>',
+                )
+
+                // …and a spread, which is the same unwrap with more than one attribute behind it.
+                const attrs = state(Promise.resolve({ id: 'a', lang: 'en' }))
+                is(
+                    'a spread reading a cold cell',
+                    await renderToString(html`<p ...=${() => attrs()}>x</p>`),
+                    '<p id="a" lang="en">x</p>',
+                )
             },
             interact({ host }) {
                 void renderToString(html`
@@ -623,8 +645,68 @@ export default suite({
         },
 
         {
+            title: 'an ARM is a body, so a read inside one waits too',
+            note: 'Every arm a deferring block carries, and the failure arm of a `{#for await}`, are bodies the walk runs rather than values handed to it — so a cold read in one signals to the walk exactly as a slot thunk’s does. Easy to believe already works and easy to test as if it did: with a load that settles in a microtask the arm reads it warm and the case passes for the wrong reason, so every read here is behind a real delay.',
+            async run({ is }) {
+                const late = (): (() => string | undefined) => state(slow(30, '!'))
+
+                const inThen = late()
+                is(
+                    'the settled arm',
+                    await renderToString(
+                        html`<p>${() => awaited(slow(5, 'x'), { pending: undefined, then: (v: string) => html`${v}${inThen()}`, catch: undefined, finally: undefined })}</p>`,
+                    ),
+                    '<p>x!</p>',
+                )
+
+                const inCatch = late()
+                is(
+                    'the failure arm',
+                    await renderToString(
+                        html`<p>${() => awaited(Promise.reject(new Error('down')), { pending: undefined, then: undefined, catch: () => html`failed${inCatch()}`, finally: undefined })}</p>`,
+                    ),
+                    '<p>failed!</p>',
+                )
+
+                const inFinally = late()
+                is(
+                    'the finally arm of a {#try}',
+                    await renderToString(
+                        html`<p>${() => awaited(slow(5, 'x'), { pending: undefined, then: (v: string) => v, catch: undefined, finally: () => html`<i>${inFinally()}</i>` })}</p>`,
+                    ),
+                    '<p>x<i>!</i></p>',
+                )
+
+                // A SETTLED operand takes the arm without ever awaiting, which is a different line
+                // through the walk and had the same hole in it.
+                const inSettled = late()
+                is(
+                    'an operand already in hand',
+                    await renderToString(
+                        html`<p>${() => awaited('x', { pending: undefined, then: (v: string) => html`${v}${inSettled()}`, catch: undefined, finally: undefined })}</p>`,
+                    ),
+                    '<p>x!</p>',
+                )
+
+                const inFailure = late()
+                const boom = (async function* () {
+                    yield 'a'
+                    throw new Error('down')
+                })()
+                is(
+                    'a {#for await} failure arm',
+                    await renderToString(
+                        html`<ul>${() =>
+                            streamed(boom, (item: string) => html`<li>${item}</li>`, () => html`<b>failed${inFailure()}</b>`)}</ul>`,
+                    ),
+                    '<ul><li>a</li><b>failed!</b></ul>',
+                )
+            },
+        },
+
+        {
             title: 'a SETTLED operand is not suspended at all, on either side',
-            note: '`awaited(value, { pending: () => null, then: …, catch: undefined, finally: undefined })` takes a plain value as well as a promise, and there is nothing to defer about one that is already in hand. The server used to spend the whole out-of-order apparatus on it — an id, a placeholder, a fallback, an extra drain turn and a patch — to arrive at markup it could have written straight out; and because the client renders the body IN PLACE for a settled operand, that placeholder was markup no hydration ever expected to adopt. The client half had the matching gap: every re-run of the enclosing effect tore the settled panel down and rebuilt it, which `{#await}` in the same slot has never done.',
+            note: '`awaited(value, { pending: () => null, then: …, catch: undefined, finally: undefined })` takes a plain value as well as a promise, and there is nothing to defer about one that is already in hand. The server used to spend the whole out-of-order apparatus on it — an id, a placeholder, a fallback, an extra drain turn and a patch — to arrive at markup it could have written straight out; and because the client renders the body IN PLACE for a settled operand, that placeholder was markup no hydration ever expected to adopt. The client half had the matching gap: every re-run of the enclosing effect tore the settled panel down and rebuilt it, which a block in the same slot has never done.',
             async run({ is }) {
                 // A document render, which is the lane that HAS somewhere to defer to. Rendered to a
                 // plain string there is nowhere, so that lane could never have shown this.
@@ -865,17 +947,17 @@ export default suite({
 
         {
             title: 'the FORM decides whether a subtree is deferred',
-            note: 'One block form, and the choice is which SPELLING you reach for rather than which call. The block form — `{#await p}…{:then v}` — has a pending branch, so a document render sends it as a placeholder and patches the settled arm in; the shell goes out immediately. The compact forms, `{#await p then v}` and `{await p}`, have no pending branch by construction, so the walk blocks and the markup is complete when it arrives. Deliberately the FORM and not whether the pending body is blank: `{#await p}{:then v}` with nothing before the `{:then}` is what an author writes to narrow in the branch, or to stream one block without a placeholder, and whitespace should not be the difference between holding a response and streaming it. The choice matters because a patch travels in a `<template>` behind a two-line script, so a deferred subtree needs JAVASCRIPT — a crawler, a mail client or `curl` sees the placeholder and nothing else. Blocking is how an author says the content must be IN the html.',
+            note: 'One rule, and the choice is which SPELLING you reach for rather than which call. A chain that ASKS about the load — `{#if x.pending()}…{:else}…{/if}` — has a pending arm, so a document render sends it as a placeholder and patches the settled arm in; the shell goes out immediately. Reading the cell without asking first — `<p>{x}</p>` on its own — has nothing to send, so the walk blocks and the markup is complete when it arrives. Having something to show is the whole test, and asking about `.pending()` IS having something to show. The choice matters because a patch travels in a `<template>` behind a two-line script, so a deferred subtree needs JAVASCRIPT — a crawler, a mail client or `curl` sees the placeholder and nothing else. Blocking is how an author says the content must be IN the html.',
             async run({ is }) {
-                // What the BLOCK form compiles to. An empty pending body is `() => null` rather
-                // than `undefined`, which is what makes `{#await p}{:then v}` stream.
+                // What a chain over the probes compiles to: an arm to send now, and the same arm
+                // again as what to patch in.
                 const withPending = (): TemplateResult => html`<p>shell</p>${awaited(slow(5, 'landed'), {
                     pending: () => html`<em>waiting</em>`,
                     then: (t) => html`<b>${t}</b>`,
                     catch: undefined,
                     finally: undefined,
                 })}`
-                // …and what `{#await p then v}` and `{await p}` compile to: no pending arm at all.
+                // …and what a bare read compiles to: no pending arm at all, so nothing to send.
                 const without = (): TemplateResult => html`<p>shell</p>${awaited(slow(5, 'landed'), {
                     pending: undefined,
                     then: (t) => html`<b>${t}</b>`,
@@ -909,8 +991,8 @@ export default suite({
         },
 
         {
-            title: 'a deferred load that FAILS renders its {:catch}',
-            note: 'The gap the one-marker rewrite closed. `suspend(value, body, fallback)` had no error arm at all, so a deferred load that rejected wrote an HTML comment: the reader got a blank panel and was told nothing. `{#await}` has always had `{:catch}`, and carrying it through the deferred path is most of why there is one block form now rather than two. With no `{:catch}` it is still a comment — the author did not say what to show — but it is reported on abide’s own channel rather than only to somebody viewing source, because by the time a deferred subtree fails the shell is already on the wire and there is nothing left to fail INTO.',
+            title: 'a deferred load that FAILS renders its failure arm',
+            note: 'The gap the one-marker rewrite closed. `suspend(value, body, fallback)` had no error arm at all, so a deferred load that rejected wrote an HTML comment: the reader got a blank panel and was told nothing. A block has always carried a failure arm, and carrying it through the deferred path is most of why there is one marker now rather than two. With no `{:catch}` it is still a comment — the author did not say what to show — but it is reported on abide’s own channel rather than only to somebody viewing source, because by the time a deferred subtree fails the shell is already on the wire and there is nothing left to fail INTO.',
             async run({ is }) {
                 // `renderDocument`, and that is load-bearing rather than incidental: a pending arm
                 // only DEFERS where there is somewhere to patch, so asserting this through
@@ -969,18 +1051,121 @@ export default suite({
         },
 
         {
-            title: 'a PENDING cell renders blank',
-            note: 'The honest answer for a snapshot with nothing to wake later. Warming the slot the component will read — awaiting the same args the render will ask for — is the minimal stand-in for a real SSR data pass.',
+            title: 'a PENDING read makes the walk WAIT',
+            note: 'There is no effect to wake in a snapshot, so the walk recovers the only way it can: it waits out the load the read signalled on and calls the thunk again. No block form names the load, no data pass warms it first, and the markup is complete.',
             async run({ is }) {
                 const search = memo(async ({ q }: { q: string }) =>
                     ['alpha', 'beta', 'gamma'].filter((w) => w.includes(q)),
                 )
                 const view = (): TemplateResult =>
-                    html`<ul>${() => (search({ q: 'a' })() ?? []).map((word) => html`<li>${word}</li>`)}</ul>`
+                    html`<ul>${() => search({ q: 'a' })().map((word) => html`<li>${word}</li>`)}</ul>`
 
-                is('cold', await renderToString(view()), '<ul></ul>')
-                await search({ q: 'a' }) // the data pass
-                is('warm', await renderToString(view()), '<ul><li>alpha</li><li>beta</li><li>gamma</li></ul>')
+                is('cold', await renderToString(view()), '<ul><li>alpha</li><li>beta</li><li>gamma</li></ul>')
+
+                // A keyed memo whose own BODY reads something cold. The slot's `start` catches a
+                // throwing body and settles the slot as FAILED — right for a body that threw, wrong
+                // for one that has not run, and the difference is not a wrong value: the retry finds
+                // the slot loaded, serves the retained error, signals again, and does it again. The
+                // regression is a BUSY retry loop, so it hangs the whole suite rather than failing
+                // this case, and a timeout raced against it never gets a turn to fire.
+                const inner = state(new Promise<string>((resolve) => setTimeout(() => resolve('x'), 30)))
+                const label = memo(({ id }: { id: number }) => `${id}:${inner()}`)
+                is(
+                    'a signal is not the failure a slot settles',
+                    await renderToString(html`<p>${() => label({ id: 1 })()}</p>`),
+                    '<p>1:x</p>',
+                )
+            },
+        },
+
+        {
+            title: 'every PRODUCER in the walk is a catcher, not just the slot thunk',
+            note: 'A `{#try}` body and a `{#for await}` row run HERE, in the walk, rather than in the thunk that handed the block over — so each needs its own catcher or a cold read inside one signals to nobody and the region renders empty on a snapshot that could have waited. `{#try}` in particular must not treat a read that is merely not ready yet as the failure it exists to catch.',
+            async run({ is }) {
+                const user = state(Promise.resolve('ada'))
+                is(
+                    'a cold read inside {#try} — waited for, not caught',
+                    await renderToString(
+                        html`<p>${() => boundary(() => user(), { catch: () => 'CAUGHT' })}</p>`,
+                    ),
+                    '<p>ada</p>',
+                )
+
+                // …and a real failure still reaches the arm, which is what says the line above is a
+                // pending read passing through rather than the boundary having stopped working.
+                const down = state(Promise.reject(new Error('down')))
+                await settled()
+                is(
+                    'a FAILED read still reaches {:catch}',
+                    await renderToString(
+                        html`<p>${() => boundary(() => down(), { catch: () => 'CAUGHT' })}</p>`,
+                    ),
+                    '<p>CAUGHT</p>',
+                )
+
+                const suffix = state(Promise.resolve('!'))
+                is(
+                    'a cold read inside a {#for await} ROW',
+                    await renderToString(
+                        html`<ul>${() =>
+                            streamed(['a', 'b'], (item: string) => html`<li>${item}${suffix()}</li>`)}</ul>`,
+                    ),
+                    '<ul><li>a!</li><li>b!</li></ul>',
+                )
+            },
+        },
+
+        {
+            title: 'catching a pending read cannot change what renders',
+            note: 'A JavaScript `catch` is total — an author’s `try` around a read WILL fire, and no throw can be made to skip it. So the signal is not made invisible, it is made not to MATTER: a body that returns while a read inside it did not is returning output built from a read that never happened, so the boundary throws on its behalf and the output is discarded. The `catch` still runs; the fallback it built is dropped, and both substrates then agree on what the region shows. A real FAILURE is still the author’s to catch — that is the line that says this is a signal travelling through rather than `try` having stopped working.',
+            async run({ is }) {
+                // The shape this is about: a helper in ordinary TypeScript, where `{#try}` is not
+                // available and a bare `catch` is total.
+                const swallowing = (read: () => unknown) => (): unknown => {
+                    try {
+                        return read()
+                    } catch {
+                        return 'loading…'
+                    }
+                }
+
+                const user = state(Promise.resolve('ada'))
+                const host = container()
+                mount(host, () => html`<p>${swallowing(user)}</p>`)
+                is('the fallback is never painted', host.querySelector('p')?.textContent, '')
+                await tick()
+                is('and the value arrives on the wake', host.querySelector('p')?.textContent, 'ada')
+                host.remove()
+
+                // The same helper on the other substrate, and AGREEING with it is the point: before
+                // this the client flashed the fallback and the server froze it into the markup.
+                const other = state(Promise.resolve('ada'))
+                is(
+                    'the server waits rather than writing it',
+                    await renderToString(html`<p>${swallowing(other)}</p>`),
+                    '<p>ada</p>',
+                )
+
+                // …and through a DERIVATION, which relays the signal rather than carrying one of its
+                // own. The `as string` is what step 4 of docs/ASYNC.md deletes: the read cannot
+                // return `undefined` any more, but the TYPE still says it can.
+                const third = state(Promise.resolve('ada'))
+                const shout = memo(() => (third() as string).toUpperCase())
+                is(
+                    'relayed through a memo',
+                    await renderToString(html`<p>${swallowing(shout)}</p>`),
+                    '<p>ADA</p>',
+                )
+
+                // The line that says this is a SIGNAL passing through rather than `try` having
+                // stopped working.
+                const down = state(Promise.reject(new Error('down')))
+                await settled()
+                is(
+                    'a real failure is still the author’s to catch',
+                    await renderToString(html`<p>${swallowing(down)}</p>`),
+                    '<p>loading…</p>',
+                )
             },
         },
 
@@ -1037,6 +1222,26 @@ export default suite({
                     }
                     pane.textContent += '(broke out — a channel is an infinite stream)'
                 })()
+            },
+        },
+        {
+            title: 'a page starts its loads at setup, not when the walk arrives',
+            note: 'A cell begins its load on the first READ, and in a render that read is the walk reaching the slot — so three independent loads in three sections cost their SUM. The compiler starts every cell an unconditional plain slot reads before the walk begins: the same set of loads, a third of the wait. Asserted as the peak in flight AT ONCE, because the markup is identical either way.',
+            async run({ is }) {
+                resetConcurrent()
+                const markup = await renderToString(Concurrent({}) as never)
+                is('every section rendered', /ONE[\s\S]*TWO[\s\S]*THREE/.test(markup), true)
+                is('all three were in flight together', peakInFlight(), 3)
+            },
+        },
+        {
+            title: 'the load under a derivation starts too, however deep',
+            note: 'A page reads its aggregates, never the rpc beneath them — so the loads are invisible to the walk until it reaches a slot that derives from one, and two independent roots cost their sum. Each slot resolves back to the loads under it instead. Starting the DERIVATION would be the wrong half: its body runs only as far as the read it derives from, which signals, and the rest is discarded.',
+            async run({ is }) {
+                resetDerived()
+                const markup = await renderToString(Derived({}) as never)
+                is('both sides rendered', /LEFT\+LEFT[\s\S]*RIGHT\+RIGHT/.test(markup), true)
+                is('both loads were in flight together', peakDerived(), 2)
             },
         },
     ],

@@ -317,8 +317,10 @@ export default suite({
                 await sleep(40)
                 is('a tracked dep moved, so it re-ran', user(), 'user#2')
                 is('body runs', bodyRuns, 2)
-                // undefined → user#1 → user#2. Not one for the re-load STARTING.
-                is('the reader woke once per settle', view.seen.length, 3)
+                // user#1 → user#2, and nothing for the cold pass: that read signalled, so the
+                // reader produced nothing rather than an `undefined`. Not one for the re-load
+                // STARTING either — only a settle moves the value.
+                is('the reader woke once per settle', view.seen.length, 2)
                 view.dispose()
             },
         },
@@ -382,13 +384,73 @@ export default suite({
 
         {
             title: 'derive off an async cell with the ORDINARY sync spelling',
-            note: 'No `.then`, no await, no second kind of memo. Before the load lands `session()` is `undefined`, which the body handles like any other value.',
+            note: 'No `.then`, no await, no second kind of memo — and nothing to narrow, in the types either: `session()` reads as the `{ name: string }` the load resolves to, so the `?.` and the `?? stranger` this used to need cannot be written any more. A read with nothing to serve yet SIGNALS, so the body does not run at all until `session()` can be served, and a reader that cannot be run again — an event handler — gets what is there.',
             async run({ is }) {
                 const session = state(fetchSession('ada'))
-                const greeting = memo(() => `hello ${session()?.name ?? 'stranger'}`)
-                is('greeting() cold', greeting(), 'hello stranger')
+                const greeting = memo(() => `hello ${session().name}`)
+                is('greeting() cold — the body never ran, so nothing was rendered', greeting(), undefined)
                 await sleep(40)
                 is('greeting() warm', greeting(), 'hello ada')
+
+                // `await` is a CATCHER, in the shape the server walk is: it waits out the load the
+                // body could not read and runs the body again, rather than resolving the value the
+                // body never produced.
+                const other = state(fetchSession('grace'))
+                const label = memo(() => `hello ${other().name}`)
+                is('await waits for the body to become runnable', await label, 'hello grace')
+            },
+        },
+
+        {
+            title: 'a derivation is TRANSPARENT to a pending read',
+            note: 'The signal names the CELL it started at, not the derivation it unwound through, because a cell is the only thing that can be waited for. The derivation stays dirty so the next read runs its body again — which costs the wake, since a dirty node swallows the mark that would have travelled through it, so the reader is subscribed to the load itself instead.',
+            async run({ is }) {
+                const account = state(fetchSession('lin'))
+                const shout = memo(() => `HELLO ${account()?.name.toUpperCase() ?? ''}`)
+                const view = reader(() => shout())
+
+                is('the cold pass produced nothing at all', view.seen, [])
+                await sleep(40)
+                is('woken once, with the value', view.seen, ['HELLO LIN'])
+                view.dispose()
+            },
+        },
+
+        {
+            title: '…and it keeps carrying marks after the load it signalled on',
+            note: 'The dirty derivation above swallows the mark, and the reader is subscribed to the LOAD instead — which covers that load and no other. Move the key and the body reads a different cell entirely: the first flip never fires again, so without the mark still travelling from a signalled node the whole fan downstream sits on the previous key’s data forever, rendering perfectly. Only the body-run counts can see it, which is why they are the assertion.',
+            async run({ is }) {
+                let loads = 0
+                const source = memo(async ({ key }: { key: number }) => {
+                    loads++
+                    // A REAL delay: on a resolved promise the slot is read warm, nothing signals at
+                    // all, and every line below passes with the mark swallowed.
+                    await sleep(20)
+                    return `answer ${key}`
+                })
+
+                const key = state(1)
+                let fanRuns = 0
+                const rows = memo(() => source({ key: key() })())
+                // Counted AFTER the read, so this is runs that COMPLETED. A pass that signals has
+                // incremented nothing, which is the honest denominator: it produced no value.
+                const fan = memo(() => {
+                    const shouted = rows().toUpperCase()
+                    fanRuns++
+                    return shouted
+                })
+                const view = reader(() => fan())
+
+                await sleep(60)
+                is('the first key, once it lands', view.seen, ['ANSWER 1'])
+                is('…and the fan ran once for it', fanRuns, 1)
+
+                key.set(2)
+                await sleep(60)
+                is('the second key reached the server', loads, 2)
+                is('…and the fan ran again for it', fanRuns, 2)
+                is('…and the reader has it', view.seen, ['ANSWER 1', 'ANSWER 2'])
+                view.dispose()
             },
         },
 
@@ -815,12 +877,12 @@ export default suite({
 
         {
             title: 'a live read wakes when its slot settles',
-            note: 'A template slot is exactly this reader: it reads the handle, gets `undefined` while the load is cold, and is woken once by the settle.',
+            note: 'A template slot is exactly this reader: the cold read SIGNALS, so the pass produces nothing at all — no `undefined` to narrow, and nothing painted — and the settle wakes it once with the value.',
             async run({ is }) {
                 const get = memo(async ({ id }: { id: number }) => `v${id}`)
                 const view = reader(() => get({ id: 7 })())
                 await tick()
-                is('the reader saw', view.seen, ['undefined', 'v7'])
+                is('the reader saw', view.seen, ['v7'])
                 view.dispose()
             },
         },
@@ -918,9 +980,10 @@ export default suite({
                 await until(() => feed.done() && feed.chunks()[0] === '2.0')
                 is('a new transcript, not a continuation', feed.chunks(), ['2.0', '2.1', '2.2'])
                 is('and the old generator was closed', closed, 2)
-                // One per chunk across both runs, plus the reader's own first run — and NOT one for
-                // the re-stream itself: starting a stream moves no value, so nobody wakes for it.
-                is('the reader woke once per chunk', view.seen.length, 7)
+                // One per chunk across both runs, and NOT one for the reader's own first pass: the
+                // stream is cold there, so that read signals and the pass produces nothing. Nor one
+                // for the re-stream — starting a stream moves no value, so nobody wakes for it.
+                is('the reader woke once per chunk', view.seen.length, 6)
                 log('the reader saw', view.seen.join(' → '))
                 view.dispose()
             },

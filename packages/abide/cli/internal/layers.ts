@@ -10,10 +10,14 @@
 // document or imports a handler for its side effect — every one of those is the same code in every
 // app, and the one an app forgets is the one that matters.
 //
-// So `app.ts` exports HOOKS, and a route only if it wants one. Nothing here is a decision an app has
-// to restate: a pages directory is a route table, a transport directory is the endpoints, the
-// request's own URL is what matched it, and the shell is the file the app already wrote. What is left
-// for an app to say is the part that is actually its own.
+// So `app.ts` exports HOOKS, and a route only if it wants one — and an app with none of either writes
+// no `app.ts` at all. Every export it could hold is optional, so a file holding none of them says
+// nothing, and a convention that can be empty is one an app should not have to write. What makes a
+// directory an app is having something to SERVE: pages, endpoints, or a module that says otherwise.
+//
+// Nothing here is a decision an app has to restate: a pages directory is a route table, a transport
+// directory is the endpoints, the request's own URL is what matched it, and the shell is the file the
+// app already wrote. What is left for an app to say is the part that is actually its own.
 //
 // Four layers, and the ORDER is the whole design:
 //
@@ -41,6 +45,9 @@ import { constants, createGzip } from 'node:zlib'
 // The `.abide` loader, registered by importing the module that owns the registration — the same one
 // `abide run` preloads and `abide repl` makes. An app importing a page compiles it on the way in.
 import '$compiler/preload.ts'
+// The transport directories by their one definition, for the refusal that names them. The globs come
+// from the compiler rather than being written again here, exactly as the boot's own scan takes them.
+import { TRANSPORT_ROOTS } from '$compiler/internal/elide.ts'
 import { type Config, type ConfigDefaults, isPort, onConfig } from '$server/config.ts'
 import { type HealthReporter, onHealth } from '$server/health.ts'
 import { type IdentityResolver, onIdentity } from '$server/identity.ts'
@@ -65,7 +72,7 @@ import type { Shell } from '$server/shell.ts'
 import { outlet, type RouteEntry, route as routeAsked, routes } from '$shared/router.ts'
 import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
 import { isThenable, messageOf } from '$shared/internal/probes.ts'
-import { acceptedEncoding } from '$shared/internal/wire.ts'
+import { acceptedEncoding, JSON_TYPE } from '$shared/internal/wire.ts'
 import { appName } from '$shared/log.ts'
 import { readying } from '$shared/router.ts'
 import { CLI_EXIT_CODES } from '../CLI_EXIT_CODES.ts'
@@ -76,8 +83,12 @@ import { BOLD, colored, DIM, paint, plural } from './paint.ts'
 import { APP_HTML, type AppShell, appShell } from './shell.ts'
 
 /**
- * What an app IS, in the order it is looked for — `app.ts` beside the `app.html` it is served in and
- * the `client.ts` the browser gets. One name for the app, spelled once per lane.
+ * What an app SAYS about itself, in the order it is looked for — `app.ts` beside the `app.html` it is
+ * served in and the `client.ts` the browser gets. One name for the app, spelled once per lane.
+ *
+ * ABSENT is an ordinary app. Every export this file reads is optional, so the file is too: an app of
+ * pages and endpoints that wants no hook and no route of its own has nothing to put in it, and a
+ * module written to hold nothing is a convention that exists to be satisfied.
  *
  * No `.abide` here, where the client list has one: a `.abide` file compiles to a COMPONENT, and this
  * module is asked for hooks. A `.abide` app entry would be a page with nowhere to be served from.
@@ -97,7 +108,7 @@ export interface Assembling {
      * What a refusal is prefixed with — `abide start`, `abide dev`.
      *
      * The messages are written ONCE here rather than per command, because they are all about the
-     * same four conventions: a directory with no `app.ts` is the same mistake whichever command
+     * same four conventions: a directory with nothing to serve is the same mistake whichever command
      * found it, and the two drifting apart is a fix applied to whichever one somebody hit first.
      */
     label: string
@@ -116,7 +127,8 @@ export interface Assembling {
 
 /** The assembled app: what serves it, and the three facts the report is built from. */
 export interface Assembly {
-    entry: string
+    /** `null` for an app that wrote no module of its own — pages and endpoints are the whole of it. */
+    entry: string | null
     paged: Paged | null
     /** The bundle this was assembled WITH, so a report cannot describe a different one. */
     assets: ClientAssets | null
@@ -135,36 +147,37 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
     const { root, label } = asked
 
     const entry = await firstPresent(root, CONVENTIONAL)
-    if (entry === null) {
-        console.error(`${label}: no app here — expected one of ${CONVENTIONAL.join(', ')}`)
-        console.error(`       an app is a module exporting its hooks, beside a ${PAGES}/ directory; ${root}`)
-        return CLI_EXIT_CODES.usage
-    }
 
     // The endpoints FIRST, so everything under `/__abide/` is registered before a line of the app's
     // own module runs — an `onStart` that calls one of its own handlers is calling something that is
     // already there, and no file has to import another for its side effect.
+    let answering: number
     try {
-        await handlers(root)
+        answering = await handlers(root)
     } catch (failure) {
         console.error(`${label}: a handler did not load — ${messageOf(failure)}`)
         return CLI_EXIT_CODES.failed
     }
 
-    let app: AppModule
-    try {
-        app = (await import(Bun.pathToFileURL(entry).href)) as AppModule
-    } catch (failure) {
-        // The import ran the app's module body, so this is as likely to be the app's own top-level
-        // work failing as it is to be a syntax error. Either way it never bound a socket.
-        console.error(`${label}: ${entry} did not load — ${messageOf(failure)}`)
-        return CLI_EXIT_CODES.failed
-    }
-
-    const declared = wire(app)
-    if (typeof declared === 'string') {
-        console.error(`${label}: ${entry} ${declared}`)
-        return CLI_EXIT_CODES.failed
+    // No module is an app that said nothing about itself, which is every default: no route of its
+    // own, no hooks, and the pages and endpoints below unchanged by its absence.
+    let declared: Route | null = null
+    if (entry !== null) {
+        let app: AppModule
+        try {
+            app = (await import(Bun.pathToFileURL(entry).href)) as AppModule
+        } catch (failure) {
+            // The import ran the app's module body, so this is as likely to be the app's own top-level
+            // work failing as it is to be a syntax error. Either way it never bound a socket.
+            console.error(`${label}: ${entry} did not load — ${messageOf(failure)}`)
+            return CLI_EXIT_CODES.failed
+        }
+        const wired = wire(app)
+        if (typeof wired === 'string') {
+            console.error(`${label}: ${entry} ${wired}`)
+            return CLI_EXIT_CODES.failed
+        }
+        declared = wired
     }
 
     // The pages and the document they render in — both read ONCE, here, because neither can change
@@ -182,6 +195,22 @@ export async function assemble(asked: Assembling): Promise<Assembly | number> {
         // the first page view: a shell somebody mistyped should be a process that does not come up.
         console.error(`${label}: ${messageOf(failure)}`)
         return CLI_EXIT_CODES.failed
+    }
+
+    // Nothing to serve, nothing to answer and nothing said: a command pointed at the wrong directory,
+    // which is the case the missing-`app.ts` refusal was really about. Asked of what was FOUND rather
+    // than of the file that used to stand for all three — the scan and the page layer have both run,
+    // so this is the app's own emptiness rather than a stat guessing at it.
+    //
+    // The scan's own count rather than the registry's, which holds this COMMAND's endpoints too:
+    // `abide dev` registers its reload socket before assembling, and an empty directory reading as
+    // "1 socket" is a supervisor watching a tree with nothing in it.
+    if (entry === null && paged === null && answering === 0) {
+        console.error(`${label}: no app here — nothing to serve in ${root}`)
+        const transports = Object.values(TRANSPORT_ROOTS).join(', ')
+        console.error(`       an app is a ${PAGES}/ directory, handlers under ${transports}, or one of`)
+        console.error(`       ${CONVENTIONAL.join(', ')} exporting its hooks`)
+        return CLI_EXIT_CODES.usage
     }
 
     const handled = handle(serving)
@@ -423,12 +452,26 @@ function compressing(
 }
 
 /**
+ * The size at which an answer that is not markup is worth a compressor.
+ *
+ * The rule below used to be markup-only, on the premise that "everything else an endpoint answers is
+ * small enough that a compressor per request is the more expensive half". That is right for the
+ * answers it was written about and WRONG for the one that motivated this: an rpc returning a list a
+ * page then filters in the browser served 637,179 bytes where gzip is 80,464 — 7.9x, on a payload
+ * whose whole purpose is to cross the wire once and be worked on client-side.
+ *
+ * So the premise is kept where it holds and bounded by a number. Below this an answer saves a couple
+ * of KB at best and still pays the compressor; above it the saving grows with the body.
+ */
+const COMPRESSIBLE_BYTES = 4096
+
+/**
  * One response, compressed or handed back as it is.
  *
- * Markup only. The two other streaming shapes on this server must NOT come through here: an SSE feed
- * is framed so a browser can read it as it arrives, and the asset route is in front of this because
- * its bytes were compressed once at build time. Everything else an endpoint answers is small enough
- * that a compressor per request is the more expensive half.
+ * Markup at any size, streamed through a sync-flushed gzip so the parser still gets the head early.
+ * `application/json` when its bytes exceed `COMPRESSIBLE_BYTES`, buffered — it is already a string in
+ * memory, and the compressor is about to read all of it anyway. The asset route is in front of this
+ * because its bytes were compressed once at build time.
  *
  * `vary` goes on even when this hands the bytes back untouched, for the reason the asset route says
  * it: the header describes what the ANSWER depends on, and a shared cache that stored the identity
@@ -436,14 +479,26 @@ function compressing(
  * rebuild on the identity path buys — one `Response` and one header copy per page, against a cache
  * that hands compressed bytes to a caller that cannot read them.
  */
-function compressed(request: Request, response: Response): Response {
+function compressed(request: Request, response: Response): Response | Promise<Response> {
     const type = response.headers.get('content-type')
-    if (type === null || !type.startsWith('text/html')) return response
+    if (type === null) return response
     // Nothing to compress, and nothing a `Vary` would protect: a HEAD, a 204 and a 304 all carry no
     // body, and rebuilding one would be a `Response` per request for no bytes.
     if (response.body === null) return response
     // An app that compressed its own answer means it.
     if (response.headers.get('content-encoding') !== null) return response
+    if (!type.startsWith('text/html')) {
+        // An ALLOW-LIST on purpose: `content-length` cannot decide this, because a handler returns a
+        // `Response` built from a string and the runtime writes the length at the socket, so the
+        // header is absent on the object this sees and every buffered answer reads as a stream. The
+        // type is what distinguishes the two — and naming the one that MAY be buffered is safer than
+        // naming the framed ones to exclude, because a framing added later then defaults to being
+        // left alone. `NDJSON_TYPE`, `JSONL_TYPE` and `text/event-stream` are absent for that
+        // reason: each is framed so a browser can read it as it arrives, and buffering one to
+        // measure it would undo the framing.
+        if (!type.startsWith(JSON_TYPE)) return response
+        return buffered(request, response)
+    }
 
     const headers = new Headers(response.headers)
     // Appended rather than set: the navigation branch above already varies on its own header, and a
@@ -472,6 +527,39 @@ function compressed(request: Request, response: Response): Response {
     // The length described the identity bytes and describes nothing now.
     headers.delete('content-length')
     return new Response(bridged.readable as unknown as ReadableStream<Uint8Array>, init)
+}
+
+/**
+ * A buffered answer, gzipped WHOLE when it is big enough to be worth it.
+ *
+ * Whole rather than streamed, because the size is the decision and the size is not knowable until the
+ * bytes are in hand — and they already are, since this shape is a `Response` built from a string. One
+ * `Bun.gzipSync` beats a stream bridge here for the same reason the document needs the opposite: there
+ * is no parser waiting on an early first byte, so there is nothing to flush for.
+ *
+ * The `vary` goes on both arms. A shared cache that stored the identity form of an answer under this
+ * threshold, unmarked, would hand those bytes to a caller that asked for gzip — which is fine — but
+ * the same URL with different args can land on either side of the threshold, so the header has to
+ * describe the answer rather than the rule.
+ */
+async function buffered(request: Request, response: Response): Promise<Response> {
+    const headers = new Headers(response.headers)
+    headers.append('vary', 'accept-encoding')
+    const init: ResponseInit = { status: response.status, statusText: response.statusText, headers }
+    // Tested BEFORE the body is read: this asks about the REQUEST, so it is settled whatever the
+    // size turns out to be, and a client that cannot read gzip would otherwise pay a full buffer and
+    // copy of every JSON answer to measure something it was never going to act on.
+    if (acceptedEncoding(request.headers.get('accept-encoding'), RESPONSE_ENCODINGS) < 0) {
+        return new Response(response.body, init)
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength <= COMPRESSIBLE_BYTES) return new Response(bytes, init)
+    headers.set('content-encoding', 'gzip')
+    // Set rather than deleted: these bytes are in hand, so the length is known and worth stating —
+    // a caller that can size the body ahead of reading it is what makes a progress bar possible.
+    const zipped = Bun.gzipSync(bytes)
+    headers.set('content-length', String(zipped.byteLength))
+    return new Response(zipped, init)
 }
 
 // --- what an app's module says about itself ----------------------------------
@@ -617,7 +705,10 @@ export function report(url: string, assembly: Assembly, note?: string): void {
     const on = colored()
     console.log(`listening ${paint(url, BOLD, on)}`)
 
-    const parts = [basename(assembly.entry)]
+    // Named only when there is one. An app with no module of its own has nothing to say here, and a
+    // line reading `app.ts` for a file that is not there is the one mistake this line exists to catch.
+    const parts: string[] = []
+    if (assembly.entry !== null) parts.push(basename(assembly.entry))
     const paged = assembly.paged
     if (paged !== null) {
         // The shell is named because it is the one convention an app can have without knowing: a

@@ -3,6 +3,8 @@ const NAV = [
     { href: '/', label: 'simple' },
     { href: '/dashboard', label: 'dashboard' },
     { href: '/complex', label: 'complex' },
+    { href: '/media', label: 'media' },
+    { href: '/data', label: 'data' },
 ]
 </script>
 

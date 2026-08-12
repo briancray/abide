@@ -240,6 +240,20 @@ export interface DesugarOptions {
      * call.
      */
     hoisted?: ReadonlyMap<string, string>
+    /**
+     * The region RUNS ONCE — a component's own `<script module>` and `<script>`, whose statements are
+     * the setup rather than anything the graph re-runs.
+     *
+     * A read there emits `peek()` instead of `()`, and gets the honest `T | undefined` from it: the
+     * signal a cold read throws only helps where re-running is the recovery, and nobody would run
+     * setup a second time. A branch-local `<script>` is NOT this — it lives inside the branch's own
+     * thunk, which is re-run — so it passes nothing and keeps the reading spelling.
+     *
+     * Only at STATEMENT level. A function body in a `<script>` may be a `memo` or `watch` body, and
+     * nothing syntactic separates one from an event handler, so it is treated as re-runnable — the
+     * conservative arm, since the other way round silently unsubscribes a derivation.
+     */
+    once?: boolean
 }
 
 export function desugar(
@@ -266,6 +280,8 @@ export function desugar(
     const regions = typeRegions(tokens, nesting, expression)
     const inType = regions.marks
     const edits: Edit[] = []
+    // Non-null only for a run-once region, so every other caller pays one null check for all of it.
+    const insideFunction = options.once === true ? functionBodies(cursor, inType) : null
 
     // Pass one collects the bindings, because a parameter is written BEFORE the scope it opens:
     // by the time `=>` says `(count) => …` bound `count`, a single-pass walk has already rewritten
@@ -463,7 +479,8 @@ export function desugar(
                     token.start !== (tokens[0] as Token).start ||
                     after !== undefined
                 ) {
-                    edits.push({ start: end, end, replacement: '()' })
+                    const peeks = insideFunction !== null && insideFunction[i] === 0
+                    edits.push({ start: end, end, replacement: peeks ? '.peek()' : '()' })
                 }
             }
             continue
@@ -542,7 +559,7 @@ export function desugar(
             inObjectLiteral(cursor.tokens, cursor.nesting, i, expression)
         reads.push({ key: name, start: token.start, end: token.end, keyed: false })
         const local = hoisted.get(name)
-        const read = local ?? `${name}()`
+        const read = local ?? (insideFunction !== null && insideFunction[i] === 0 ? `${name}.peek()` : `${name}()`)
         edits.push({
             start: token.start,
             end: token.end,
@@ -573,6 +590,56 @@ function opensCall(cursor: Cursor, at: number): boolean {
     const past = closeAngle(tokens, at)
     if (past <= at + 1) return false
     return tokens[past]?.kind === SyntaxKind.OpenParenToken
+}
+
+/**
+ * Which tokens sit inside a FUNCTION BODY — the re-runnable part of a region that otherwise runs once.
+ *
+ * A body is a `{…}` after `=>`, a `{…}` whose head is a parameter list — `function f(a) {`,
+ * `function (a) {`, `m(a) {`, `get x() {` — or the expression an arrow returns without braces. The
+ * parameter-list test is what makes the control forms fall out for free rather than being listed:
+ * `if`, `for`, `while`, `switch` and `catch` all scan as their own keyword kinds, so the `(` in front
+ * of their block is never preceded by an identifier or by `function`.
+ *
+ * Anything already inside a body is skipped rather than re-marked, which is what keeps this linear
+ * over nesting instead of quadratic.
+ */
+function functionBodies(cursor: Cursor, inType: Uint8Array): Uint8Array {
+    const { tokens, nesting } = cursor
+    const inside = new Uint8Array(tokens.length)
+    const mark = (from: number, to: number): void => {
+        for (let j = Math.max(from, 0); j < to && j < tokens.length; j++) inside[j] = 1
+    }
+    for (let i = 0; i < tokens.length; i++) {
+        if (inside[i] === 1 || inType[i] === 1) continue
+        const token = tokens[i] as Token
+        if (token.kind === SyntaxKind.EqualsGreaterThanToken) {
+            const level = nesting[i] as number
+            if (tokens[i + 1]?.kind === SyntaxKind.OpenBraceToken) {
+                const close = matchForwards(cursor, i + 1)
+                mark(i + 1, close < 0 ? tokens.length : close)
+            } else {
+                mark(i + 1, expressionEnd(cursor, i + 1, level))
+            }
+            continue
+        }
+        if (token.kind !== SyntaxKind.OpenBraceToken) continue
+        // Back over a RETURN TYPE, which sits between the parameter list and the body:
+        // `async function run(): Promise<void> {` has a `>` in front of its brace, not a `)`.
+        // The `:` itself is outside the marked region — the mark starts at the type — so it is named
+        // here rather than assumed.
+        let head = i - 1
+        while (head >= 0 && (inType[head] === 1 || (tokens[head] as Token).kind === SyntaxKind.ColonToken)) {
+            head--
+        }
+        if (tokens[head]?.kind !== SyntaxKind.CloseParenToken) continue
+        const open = matchBackwards(cursor, head)
+        const before = open <= 0 ? undefined : tokens[open - 1]
+        if (before?.kind !== SyntaxKind.Identifier && before?.kind !== SyntaxKind.FunctionKeyword) continue
+        const close = matchForwards(cursor, i)
+        mark(i, close < 0 ? tokens.length : close)
+    }
+    return inside
 }
 
 function matchForwards(cursor: Cursor, openIndex: number): number {
@@ -653,6 +720,12 @@ function assignmentEnd(
     if (first === undefined) {
         throw new SyntaxError_('abide: assignment with nothing on the right', limit)
     }
+    const last = cursor.tokens[expressionEnd(cursor, from, level) - 1] as Token
+    return { start: first.start, end: last.end }
+}
+
+/** The same rule as an index, which is what an expression-bodied arrow's extent is measured in. */
+function expressionEnd(cursor: Cursor, from: number, level: number): number {
     let i = from
     while (i < cursor.tokens.length) {
         const token = cursor.tokens[i] as Token
@@ -676,8 +749,7 @@ function assignmentEnd(
         }
         i++
     }
-    const last = cursor.tokens[i - 1] as Token
-    return { start: first.start, end: last.end }
+    return i
 }
 
 // Edits are produced in token order, but a write emits its closing `)` at a position the walk has

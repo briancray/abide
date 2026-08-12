@@ -87,8 +87,8 @@ const SOURCES: [string, string][] = [
         '{#component Row(props: { children?: unknown })}[<slot/>]{/component}<Row><b>s</b></Row>',
     ],
     [
-        'an await with every arm',
-        `${CELLS}{#await p}w{:then v}<i>{v}</i>{:catch e}<b>{e}</b>{:finally}done{/await}`,
+        'a deferring chain over the probes',
+        `${CELLS}{#if p.pending()}w{:else if p.error()}<b>{p.error()}</b>{:else}<i>{p}</i>{/if}`,
     ],
 
     // Attribute vocabulary, each of which emits its own closure shape.

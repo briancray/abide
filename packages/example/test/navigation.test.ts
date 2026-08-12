@@ -21,8 +21,9 @@ import { html, navigate, route } from 'abide'
 import type { Loader, RouteEntry, View } from 'abide/runtime'
 import { isolate } from '$shared/internal/scopes.ts'
 import { awaited, outlet, routes } from 'abide/runtime'
-import { renderFragment } from 'abide/server'
-import { container, sweepContainers, until } from 'abide/tests'
+import { remote, type Rpc } from 'abide/runtime/transport'
+import { GET, register, renderFragment, type SchemaRefusal, serve } from 'abide/server'
+import { container, loopback, sweepContainers, until } from 'abide/tests'
 import { mount } from 'abide/ui'
 
 const NAVIGATION_HEADER = 'x-abide-navigation'
@@ -65,10 +66,63 @@ const User: View = () => {
 const Panels: View = () =>
     html`<b>panels</b>${awaited(panel.promise, { pending: () => html`<em>one</em>`, then: (s: string) => html`<i>${s}</i>`, catch: undefined, finally: undefined })}${awaited(panel.promise, { pending: () => html`<em>two</em>`, then: (s: string) => html`<i>${s}</i>`, catch: undefined, finally: undefined })}${awaited(panel.promise, { pending: () => html`<em>three</em>`, then: (s: string) => html`<i>${s}</i>`, catch: undefined, finally: undefined })}`
 
+// --- the two lanes of one rpc ------------------------------------------------
+//
+// A page's rpc import is the HANDLER on a server and `remote(address)` in a browser — the elision is
+// what makes them the same name. One process here, so the pages below read a binding that
+// `fragmentFor` swaps for the duration of the render, which is the only honest way to have a fragment
+// rendered by the server half and adopted by the client half in the same file.
+//
+// The address is written ONCE for both, because that is what the seed key is built from on each side:
+// `register` names the handler and `remote` is handed the same string. A test that let them drift
+// would assert nothing — every seed would miss and every read would go to the wire.
+
+interface User {
+    id: number
+    name: string
+}
+
+const wire = loopback()
+
+let whoServed = 0
+
+const getUser = GET(({ id }: { id: number }): User => ({ id, name: `user ${id}` }))
+const whoami = GET(({ at }: { at: number }): string => `server ${++whoServed} at ${at}`)
+register('rpc', [['nav/getUser', 'getUser'], ['nav/whoami', 'whoami']], { getUser, whoami })
+
+// The refusal a DECLARATION carries — a handler may refuse what does not match its schema, and a
+// stub written by hand says so too. The two types are then the same one, which is what lets a page
+// hold either in the same binding without a cast standing in for the elision.
+const remoteUser = remote<{ id: number }, User, SchemaRefusal>('nav/getUser', { base: wire.base, fetch: wire.fetch })
+const remoteWho = remote<{ at: number }, string, SchemaRefusal>('nav/whoami', { base: wire.base, fetch: wire.fetch })
+
+/** What the pages below call. The stubs, until a fragment render swaps the handlers in. */
+let userLane: Rpc<{ id: number }, User, SchemaRefusal> = remoteUser
+let whoLane: Rpc<{ at: number }, string, SchemaRefusal> = remoteWho
+
+/** An rpc read in the IN-ORDER walk: its answer is resolved before the first piece is framed. */
+const Seeded: View = () => html`<b>seeded</b><i>${() => userLane({ id: 5 })().name}</i>`
+
+/**
+ * An rpc read inside a DEFERRED subtree, so its answer does not exist until the drain.
+ *
+ * This is the case that says where the seed block goes. Written beside the styles — where a document
+ * writes its own — this value would not be in it, and the arriving page would show a `pending()`
+ * placeholder over markup that already has the answer in it.
+ */
+const Deferred: View = () =>
+    html`<b>deferred</b>${awaited(panel.promise, { pending: () => html`<em>loading</em>`, then: () => html`<i>${() => userLane({ id: 6 })().name}</i>`, catch: undefined, finally: undefined })}`
+
+/** A page that is only ever ABANDONED, so nothing on the client consumes what its render resolved. */
+const Whoami: View = () => html`<b>whoami</b><i>${() => whoLane({ at: 1 })()}</i>`
+
 const TABLE: RouteEntry[] = [
     { path: '/', page: load(Home) },
     { path: '/users/[id]', page: load(User) },
     { path: '/panels', page: load(Panels) },
+    { path: '/seeded', page: load(Seeded) },
+    { path: '/deferred', page: load(Deferred) },
+    { path: '/whoami', page: load(Whoami) },
 ]
 
 /**
@@ -81,17 +135,31 @@ async function fragmentFor(path: string, settledPanel: string): Promise<string[]
     const held = panel
     panel = deferred()
     panel.settle(settledPanel)
+    // The server's lane, for the render only: the handler is in-process, exactly as it is on a real
+    // server, so nothing here reaches a transport and the seeds come off the declaration itself.
+    userLane = getUser
+    whoLane = whoami
     try {
         return await isolate(async () => {
             await navigate(path)
-            const pieces: string[] = []
-            for await (const chunk of renderFragment(() => outlet(), { hydratable: true })) {
-                pieces.push(chunk)
-            }
-            return pieces
+            // Inside a `serve` as well as inside an `isolate`, because the two scopes answer different
+            // questions and the seeds are the request's: `openSeeding` collects into the REQUEST
+            // scope, which is where a real navigation renders — the app's onion is around it. An
+            // isolate alone renders identical markup and seeds nothing, which is a fragment that
+            // works and a claim that quietly does not.
+            const asking = new Request(new URL(path, 'http://localhost').href)
+            return await serve(asking, async () => {
+                const pieces: string[] = []
+                for await (const chunk of renderFragment(() => outlet(), { hydratable: true })) {
+                    pieces.push(chunk)
+                }
+                return pieces
+            })
         })
     } finally {
         panel = held
+        userLane = remoteUser
+        whoLane = remoteWho
     }
 }
 
@@ -478,6 +546,117 @@ test('a sentinel split across two chunks is still found', async () => {
         expect(into.textContent).not.toContain('loading')
         // And no sentinel leaked into the document as text.
         expect(into.textContent).not.toContain('abide:piece')
+    } finally {
+        view.dispose()
+    }
+})
+
+// --- what the render already resolved ----------------------------------------
+//
+// The output is identical either way — the page says `user 5` whether the value came off the wire or
+// out of the response that drew it — so every assertion below is a COUNT of requests the client
+// made. Reverting the seed piece in `renderFragment` turns each of the zeros into a one, which is the
+// only thing that says these test anything.
+
+test('a navigation seeds what the render resolved, so the client does not ask again', async () => {
+    const pieces = await fragmentFor('/seeded', 'the panel')
+    answerWith(pieces)
+    const into = container()
+    const view = mount(into, outlet)
+    try {
+        const asks = wire.requests
+        const navigating = navigate('/seeded')
+        release()
+        await navigating
+
+        expect(into.textContent).toContain('user 5')
+        // The handler ran ONCE, on the server that drew this page. Without the block the browser asks
+        // for a payload that is already on screen — a second round trip, after the commit, for an
+        // answer the response it just read had in it.
+        expect(wire.requests).toBe(asks)
+        // And synchronously, which is the half a request count cannot see: the value was there when
+        // the view ran, so there was never a frame of the empty slot the read would otherwise show.
+        expect(into.querySelector('i')?.textContent).toBe('user 5')
+    } finally {
+        view.dispose()
+    }
+})
+
+test('a value the DRAIN resolved is seeded too — the block is the last piece, not the first', async () => {
+    const pieces = await fragmentFor('/deferred', 'the panel')
+    // Where it is on the wire is the claim: the value read inside the deferred subtree does not exist
+    // until the patch has been written, so a block placed anywhere before that cannot carry it. This
+    // reads the ORDER off the bytes rather than trusting the assertion below to notice.
+    const whole = pieces.join('')
+    expect(whole.indexOf('abide-seed')).toBeGreaterThan(whole.indexOf('id="t0"'))
+
+    answerWith(pieces)
+    const into = container()
+    const view = mount(into, outlet)
+    try {
+        const asks = wire.requests
+        const navigating = navigate('/deferred')
+        release()
+        await navigating
+
+        expect(into.textContent).toContain('user 6')
+        expect(wire.requests).toBe(asks)
+    } finally {
+        view.dispose()
+    }
+})
+
+test('an abandoned navigation’s answers are not merged into the page that replaced it', async () => {
+    const abandoned = await fragmentFor('/whoami', 'the panel')
+    const live = await fragmentFor('/users/9', 'the panel')
+
+    let releaseAbandoned: () => void = () => undefined
+    const held = new Promise<void>((resolve) => {
+        releaseAbandoned = resolve
+    })
+    const bodyFor = (parts: string[], gate: Promise<void> | null): ReadableStream<Uint8Array> => {
+        const whole = parts.join('')
+        const cut = whole.indexOf(PIECE_END) + PIECE_END.length
+        return new ReadableStream<Uint8Array>({
+            async start(controller) {
+                const encoder = new TextEncoder()
+                controller.enqueue(encoder.encode(whole.slice(0, cut)))
+                if (gate !== null) await gate
+                controller.enqueue(encoder.encode(whole.slice(cut)))
+                controller.close()
+            },
+        })
+    }
+    globalThis.fetch = (async (input: RequestInfo | URL): Promise<Response> => {
+        const mine = String(input).includes('/whoami')
+        return new Response(bodyFor(mine ? abandoned : live, mine ? held : null), {
+            status: 200,
+            headers: new Headers({ [NAVIGATION_HEADER]: '1' }),
+        })
+    }) as typeof fetch
+
+    const into = container()
+    const view = mount(into, outlet)
+    try {
+        const overtaken = navigate('/whoami')
+        await until(() => into.textContent?.includes('whoami') === true, 'the first page')
+        await navigate('/users/9')
+        // The abandoned response finishes reading — the router does not cancel it — so its seed block
+        // reaches `apply` with the live page already on screen.
+        releaseAbandoned()
+        await overtaken
+        expect(into.textContent).toContain('user 9')
+
+        // Its answers were for a page nobody is going to see, and nothing on this side will ever
+        // consume them. Merged, they are a table that only grows — one entry per rpc per overtaken
+        // click — and the first later read of any of those keys is served an answer from a render the
+        // reader never arrived at.
+        const asks = wire.requests
+        const answer = await remoteWho({ at: 1 })
+        expect(wire.requests).toBe(asks + 1)
+        // `server 1` is what the abandoned render resolved. This read is the second call there has
+        // ever been to the handler, so the value says which one it got.
+        expect(answer).toBe('server 2 at 1')
     } finally {
         view.dispose()
     }

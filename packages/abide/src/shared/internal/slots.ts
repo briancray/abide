@@ -6,7 +6,7 @@
 // `$server` growing their own idea of a slot.
 
 import { classifySlots, type SlotKind, type TemplateResult } from '../html.ts'
-import { SOURCE } from './BRANDS.ts'
+import { isSource } from './BRANDS.ts'
 
 /** What a call site's `strings` mean, worked out once: the slot kinds, and the text as it is EMITTED. */
 export interface TemplatePlan {
@@ -49,16 +49,6 @@ export function planOf(result: TemplateResult): TemplatePlan {
         scanCache.set(strings, plan)
     }
     return plan
-}
-
-// A SOURCE — `state`, `memo` or `channel` — is callable, so it is recognised by its brand rather
-// than by being a function. The symbol lives in `./BRANDS.ts` because both substrates must recognise
-// one and neither may import the reactive graph to do it: the server has none.
-//
-// `source` is the right question here, not `cell`. A cell is a source you can also `set` and `await`;
-// a channel is a source that is neither. What a slot needs to know is only whether to READ it.
-export function isSource(value: unknown): value is () => unknown {
-    return typeof value === 'function' && SOURCE in value
 }
 
 // A value in any slot may be a thunk. That is the ONE reactivity convention: the server calls it,

@@ -16,8 +16,11 @@
  *
  * Narrower than `Cell`: every cell is a source, but a channel is a source that is not a cell (no
  * `set`, no `refresh`, not awaitable). The slot recogniser wants the wider question.
+ *
+ * Not exported: the two functions below are the whole of what anyone needs of it, and a caller
+ * holding the symbol is a caller who can brand or unbrand one without going through `markSource`.
  */
-export const SOURCE = Symbol.for('abide.source')
+const SOURCE = Symbol.for('abide.source')
 
 /**
  * Stamp a callable as a source. Every maker calls this FIRST, before any other member is assigned,
@@ -30,4 +33,15 @@ export const SOURCE = Symbol.for('abide.source')
 export function markSource<T>(callable: T): T {
     ;(callable as unknown as Record<symbol, true>)[SOURCE] = true
     return callable
+}
+
+/**
+ * Whether this value is one — the reader of the mark, beside the writer of it.
+ *
+ * `source` is the right question rather than `cell`: a cell is a source you can also `set` and
+ * `await`, a channel is a source that is neither, and what a slot or a prop needs to know is only
+ * whether to READ it.
+ */
+export function isSource(value: unknown): value is () => unknown {
+    return typeof value === 'function' && SOURCE in value
 }

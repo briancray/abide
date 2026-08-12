@@ -13,7 +13,8 @@ import { homedir } from 'node:os'
 import { dirname, sep } from 'node:path'
 import { health, html, identity, log, memo, route } from 'abide'
 import type { RouteEntry } from 'abide/runtime'
-import { outlet, ready, remote, routes } from 'abide/runtime'
+import { outlet, ready, routes } from 'abide/runtime'
+import { remote } from 'abide/runtime/transport'
 import {
     appDataDir,
     bag,

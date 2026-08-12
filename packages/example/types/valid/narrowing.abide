@@ -8,14 +8,23 @@ export const shelf = state('fiction')
 export const details = memo(async ({ title }: { title: string }) => ({ pages: title.length }))
 export const mode = state<'compact' | 'full'>('compact')
 
-// A cell read is `T | undefined` and NOT `any`. Everything below is only a claim about narrowing
-// because of this line: narrowing something already `any` narrows nothing and would still compile.
-assertType<Exact<ReturnType<typeof session>, Book | undefined>>()
+// A cell read is the LOADED type and NOT `any` — the load being in flight is not part of it, because
+// a read that cannot answer yet signals rather than handing back `undefined`. Everything below is
+// only a claim about narrowing because of this line: narrowing `any` narrows nothing and compiles.
+assertType<Exact<ReturnType<typeof session>, Book>>()
+// The absence survives on `peek`, which is the one read that never signals — and which is what a
+// `<script>` gets, since nobody would run a setup body a second time.
+assertType<Exact<ReturnType<typeof session.peek>, Book | undefined>>()
 assertType<Exact<ReturnType<typeof shelf>, string>>()
 assertType<Exact<ReturnType<typeof mode>, 'compact' | 'full'>>()
 </script>
 
 <div>
+    <!-- UNGUARDED, and it type-checks: a slot thunk is re-run, so a read that cannot answer yet
+         signals and this region produces nothing until it can. The same access in a setup body is an
+         error, which is what `types/invalid/unnarrowed.abide` beside this one holds. -->
+    <p>{session.title} — {session.author.name}</p>
+
     <!-- The read is a CALL, and TypeScript narrows a const but never a call — so a condition takes
          its read into a local and the branch narrows off that. `.name` needs no `?.` here, and the
          invalid fixture beside this one proves the branch type is real rather than `any`. -->

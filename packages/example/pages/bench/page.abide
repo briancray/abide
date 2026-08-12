@@ -74,10 +74,10 @@ const loaded = memo(async (): Promise<BenchRow[]> => {
  * groups are the suites in order, and a group nobody is showing a row from is not a heading.
  */
 const groups = memo((): { suite: string; rows: BenchRow[] }[] => {
-    const rows = loaded()
-    if (rows === undefined) return []
     const shown: { suite: string; rows: BenchRow[] }[] = []
-    for (const row of rows) {
+    // No cold check: this body is re-run, so a read of a load that has not landed signals out of
+    // here rather than handing back `undefined`.
+    for (const row of loaded()) {
         if (kind !== 'all' && row.kind !== kind) continue
         const last = shown[shown.length - 1]
         if (last !== undefined && last.suite === row.suite) last.rows.push(row)

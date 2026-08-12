@@ -217,9 +217,16 @@ export function stub(modulePath: string, kind: Kind, endpoints: Endpoint[]): str
     const socket = kind === 'socket'
     const build = socket ? '__socket' : '__remote'
     const address = moduleAddress(modulePath, kind)
+    // `abide/runtime/transport` and NOT `abide/runtime`, and the reason is the chunk this lands in
+    // rather than the name. The generated client entry imports `abide/runtime` for `routes` /
+    // `outlet` / `ready`, so that module is in the entry's own chunk — and a re-export from it is in
+    // there too, however few pages reach it. One lazy route with one rpc therefore put the whole
+    // call-and-decode path into the bundle EVERY page loads: 4,066 bytes of the perf app's shared
+    // entry, on `/simple`, which calls nothing. Imported by its own specifier it lands in the chunk
+    // of whatever page imports it, which is the page that has the rpc.
     let out = socket
-        ? `import { remoteSocket as __socket } from "abide/runtime"\n`
-        : `import { remote as __remote } from "abide/runtime"\n`
+        ? `import { remoteSocket as __socket } from "abide/runtime/transport"\n`
+        : `import { remote as __remote } from "abide/runtime/transport"\n`
     for (const endpoint of endpoints) {
         const id = JSON.stringify(joinId(address, endpoint.name))
         // A socket stub takes no options at all: the method is the directory, and a socket never

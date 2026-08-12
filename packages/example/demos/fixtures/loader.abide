@@ -1,23 +1,28 @@
 <script module>
-import { state } from 'abide'
+import { memo, state } from 'abide'
 
 let made = 0
-/** How many times the inline operand has been evaluated. A loop would make this unbounded. */
+/** How many times the BODY has run. A block that re-made its own load would make this unbounded. */
 export const calls = (): number => made
-export const bump = (): void => {
-    made++
-}
 export const label = state('idle')
-export const user = state(new Promise<{ name: string }>((resolve) => setTimeout(() => resolve({ name: 'ada' }), 20)))
+
+/**
+ * A LAZY handle: a keyed slot starts nothing until something asks for its value, and a probe is not
+ * asking. So this is also the case that says a chain over the probes still streams — the block
+ * starts the operand before it renders the arm that asks about it.
+ */
+export const user = memo(async ({ id }: { id: number }) => {
+    made++
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    return { id, name: 'ada' }
+})
 </script>
 
 <div>
-    <!-- The operand is evaluated by THIS thunk; the branches are closures the part calls later. So
-         settling never wakes this effect, and an inline promise cannot re-make itself. -->
-    {#await user}<em>loading…</em>{:then u}<b>{u?.name}</b>{:catch e}<i>{e}</i>{/await}
+    <!-- The chain IS the block, and it is asked twice: once for what to show now, once when the load
+         lands. Choosing an arm can never re-make the load, because the operand is the CELL rather
+         than an expression the thunk evaluates — and the `label` arm is here because only a change
+         of ARM can show that the settled chain is still the live reactive thunk. -->
+    {#if user({ id: 1 }).pending()}<em>loading…</em>{:else if user({ id: 1 }).error()}<i>failed</i>{:else if label === 'moved'}<i>{label}</i>{:else}<b>{user({ id: 1 }).name}</b>{/if}
 
-    <!-- A promise made right here — the shape that loops forever if settling wakes the effect that made it. -->
-    {#await (bump(), new Promise<string>((r) => setTimeout(() => r('made inline'), 10)))}…{:then made}<span>{made}</span>{/await}
-
-    <p>{label}</p>
 </div>

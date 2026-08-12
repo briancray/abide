@@ -9,8 +9,8 @@
 // `classifySlots` is already the one classifier both substrates read, so the marker contract is
 // declared once (`$shared/internal/MARKERS.ts`) rather than kept true by hand in two files.
 
-import { html, state, type TemplateResult } from 'abide'
-import { awaited, keyed } from 'abide/runtime'
+import { html, state, type State, type TemplateResult } from 'abide'
+import { awaited, component, keyed } from 'abide/runtime'
 import { renderToString } from 'abide/server'
 import {
     container,
@@ -505,7 +505,7 @@ export default suite({
         },
 
         {
-            title: '`{#await}` keeps the arm the server painted',
+            title: 'a deferring block keeps the arm the server painted',
             note: 'The server AWAITS its operand and paints the settled arm; this side starts with a promise in flight. Painting `pending` over correct markup would be a flash back to a state the reader never saw, so the range is held as it is and the settle replaces it. It is a rebuild when it lands — the client cannot know which arm those nodes are until then — and that is the honest cost of a value the two sides do not share.',
             async run({ is }) {
                 const arms = { pending: () => 'loading…', then: (v: string) => html`<b>${v}</b>` }
@@ -525,6 +525,37 @@ export default suite({
                 land('from the client')
                 await tick()
                 is('and the settle replaces it', host.textContent, 'from the client')
+                host.remove()
+            },
+        },
+
+        {
+            title: 'a COMPONENT is adopted, and the instance the adoption made is the live one',
+            note: 'A component call is carried rather than made, so the walk that claims the server’s markup has to interpret the marker the same way the build path does — and adopting it IS the instance’s first pass, with the nodes already in place. Missing that arm, the marker fell through to the text arm and hydrated as `[object Object]`: a mismatch, a warning, and every component on the page rebuilt from scratch. The counters are the claim, because the screen is right either way; the write afterwards is the other half, since an adoption that kept no instance would have nothing for the next pass to write into.',
+            async run({ is, log }) {
+                const shout = state('ada')
+                type Props = { who: State<string> }
+                const Greeting = ({ who }: Props): TemplateResult => html`<b>hello ${() => who()}!</b>`
+                const view = (): TemplateResult =>
+                    html`<p>${() => component(Greeting, { who: shout() })}</p>`
+
+                const host = await served(view)
+                const bold = host.querySelector('b')
+                is('the server rendered the component', host.textContent, 'hello ada!')
+
+                const work = measure(() => void hydrate(host, view))
+                is('nothing created', work.createElement, 0)
+                is('nothing removed', work.remove, 0)
+                is('one node inserted — the root anchor', work.insert, 1)
+                is('the element is the one the parser made', host.querySelector('b'), bold)
+                log('work to adopt a component', nonZero(work))
+
+                // The instance is HELD by the position that adopted it, which is what makes the next
+                // pass a write into a prop cell rather than a second call of the view.
+                const wrote = await measureFlush(() => shout.set('grace'))
+                is('a new prop costs one text write', wrote.textWrite, 1)
+                is('…and nothing else', wrote.createElement + wrote.insert + wrote.remove, 0)
+                is('the DOM', host.textContent, 'hello grace!')
                 host.remove()
             },
         },

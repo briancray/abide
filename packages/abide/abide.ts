@@ -34,7 +34,10 @@ export { type Health, health } from './src/shared/health.ts'
 // template tag, and a hand-written `.ts` component writes the same tag. `raw` and `keyed` are NOT
 // here despite reading like they belong — the escape hatch is spelled `{html(...)}` and a key is
 // spelled `by` on a `{#for}`, so each is a SPELLING the emitter translates rather than a name.
-export { html, props, type TemplateResult } from './src/shared/html.ts'
+// `Props` is here for the same reason `props` is: it is the type the emitted parameter is written
+// in, so a `.abide` file's own compiled text names it, and an author reading that text can look it up
+// where the call it belongs to lives.
+export { html, type Props, props, type TemplateResult } from './src/shared/html.ts'
 // Who the server decided this caller is, asked the same way on both sides. `useIdentitySource` is
 // absent for the reason `useHealthSource` is, and the two WRITERS on `identity` throw in a browser
 // rather than being missing from it: a client that could set its own principal is a client that

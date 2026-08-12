@@ -20,6 +20,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { scopeCss, scopeName } from './css.ts'
 import { CLOSERS, desugar, OPENERS, REACTIVE_CONSTRUCTORS, REACTIVE_TYPES } from './desugar.ts'
+import { kindOf } from './elide.ts'
 import { Lexer, type Token, tokensOf } from './lex.ts'
 import { extract, mark, type Segment } from './map.ts'
 import type { Attribute, Blocks, Branch, Expr, Node } from './parse.ts'
@@ -73,6 +74,15 @@ interface Context {
      */
     children: string | null
     /**
+     * Names an inline `{#component X(…)}` in this file bound, which `<X/>` calls DIRECTLY.
+     *
+     * An inline component is a body with a parameter list and no `<script>`, so it has no setup to
+     * run once and nothing to keep between passes — the whole reason a tag is carried rather than
+     * called. Carrying one would also cell its props, and its parameter type is written by hand:
+     * `{#component Row({ n }: { n: number })}` says `n` is a number, and it is.
+     */
+    inline: Set<string>
+    /**
      * Inside a `{#try}`: expressions are emitted UNTHUNKED so the boundary is one unit. An
      * expression that produced its value in a nested effect would throw into that effect's own
      * isolation, past the boundary's try/catch, and the boundary would catch nothing.
@@ -83,10 +93,23 @@ interface Context {
     counter: { n: number }
 }
 
-// Every name here must be an export of `abide`, because that is the import the header writes. A
-// component invocation is NOT in this union: `<Thing/>` emits a direct call of the imported
-// function, so there is no runtime helper behind it to import.
-type Runtime = 'html' | 'raw' | 'keyed' | 'classes' | 'styles' | 'awaited' | 'boundary' | 'streamed' | 'adopt'
+// Every name here must be an export of `abide`, because that is the import the header writes.
+// `component` and `propCell` are the two halves of one rule: `<Thing/>` CARRIES the call rather than
+// making it, so the position that shows it can hold the instance across a re-render, and the props
+// arrive as cells the child binds through `propCell`. See docs/COMPONENTS.md.
+type Runtime =
+    | 'html'
+    | 'raw'
+    | 'keyed'
+    | 'classes'
+    | 'styles'
+    | 'awaited'
+    | 'boundary'
+    | 'component'
+    | 'propCell'
+    | 'streamed'
+    | 'adopt'
+    | 'start'
 
 /**
  * The one of those an author also types, so the header keeps it on `abide`.
@@ -99,6 +122,9 @@ const AUTHORED_RUNTIME: ReadonlySet<string> = new Set<Runtime>(['html'])
 
 /** The absent region — a file with no `<script module>`, or no `<script>`. Shared, never written. */
 const NO_TOKENS: Token[] = []
+
+/** A file with no `props()` at all, which is most of them. Shared, never written. */
+const NO_KINDS: Map<string, PropKind> = new Map()
 
 /**
  * One `<script>` region, scanned ONCE.
@@ -168,7 +194,7 @@ interface Reactive {
  * already has a binding in hand and is only asking whether it declares rather than shadows. Merging
  * them would mean one walk that does both, which is more machinery than the predicate they share.
  */
-function reactiveBindings(tokens: Token[], into: Reactive): void {
+function reactiveBindings(tokens: Token[], into: Reactive, memos?: Map<string, readonly string[]>): void {
     for (let i = 1; i < tokens.length; i++) {
         // `NAME = state(` — or `NAME = state<T>(`, whose type argument list sits between the two.
         if ((tokens[i] as Token).kind !== SyntaxKind.OpenParenToken) continue
@@ -211,9 +237,15 @@ function reactiveBindings(tokens: Token[], into: Reactive): void {
         if (tokens[body]?.kind !== SyntaxKind.OpenParenToken) {
             // `memo(fn)` — a reference, whose shape is not visible here. Read by name, as before.
             into.cells.add(name.text)
+            // Which memos this one reads, so a template naming only a DERIVATION can still be
+            // resolved back to the loads under it — see `rootsOf`.
+            memos?.set(name.text, memosReferenced(tokens, i, memos))
             continue
         }
-        if (tokens[body + 1]?.kind === SyntaxKind.CloseParenToken) into.cells.add(name.text)
+        if (tokens[body + 1]?.kind === SyntaxKind.CloseParenToken) {
+            into.cells.add(name.text)
+            memos?.set(name.text, memosReferenced(tokens, i, memos))
+        }
         else into.keyed.add(name.text)
     }
 }
@@ -286,11 +318,35 @@ function calleeBefore(tokens: Token[], open: number): number {
 interface Props {
     /** The type argument's text, or `null` for a bare `props()`. */
     type: string | null
-    /** Prop name → the local it was bound to. `{ class: name }` is `class` → `name`. */
-    bound: Map<string, string>
+    /** Every identifier the pattern bound, in source order. */
+    bound: Binding[]
     /** The call's extent in the body it was found in, so the emit can splice the parameter in. */
     start: number
     end: number
+}
+
+/**
+ * One entry of that pattern: what the prop is called, what this file calls it, and where both sit.
+ *
+ * The positions are what lets the emit REWRITE the pattern rather than read it. A prop arrives as a
+ * cell, and a destructure default cannot survive that — `class: className = ''` leaves the local
+ * `'' | Cell<string>` when the caller omits it, and only one of those is callable. So the local moves
+ * out of the pattern and the default moves into `propCell` beside it.
+ */
+interface Binding {
+    /** The prop's name on the props object — `class` in `{ class: className }`. */
+    name: string
+    /** The identifier this file bound it to. */
+    local: string
+    /** Whether the pattern SPELLS the rename, so re-emitting it does not double the `name:`. */
+    renamed: boolean
+    /** Where `local` sits in the setup body. */
+    start: number
+    end: number
+    /** The `= …` default's text and extent, or `null` and zeroes. */
+    fallback: string | null
+    fallbackStart: number
+    fallbackEnd: number
 }
 
 /**
@@ -321,7 +377,7 @@ function propsCall(body: string, tokens: Token[], types: TypeReader): Props | nu
         if (tokens[open + 1]?.kind !== SyntaxKind.CloseParenToken) continue
         return {
             type: type === '' ? null : type,
-            bound: destructured(tokens, i),
+            bound: destructured(body, tokens, i),
             start: token.start,
             end: (tokens[open + 1] as Token).end,
         }
@@ -330,14 +386,15 @@ function propsCall(body: string, tokens: Token[], types: TypeReader): Props | nu
 }
 
 /**
- * The pattern to the LEFT of the call, as prop name → local name.
+ * The pattern to the LEFT of the call, one `Binding` per identifier entry.
  *
- * Only identifier-to-identifier entries are collected, because this exists to decide which locals are
- * cells and a prop destructured any further is not one. A default, a rest element and a nested pattern
- * are all left to the emitted TypeScript, which handles them the way it handles any other destructure.
+ * Only identifier-to-identifier entries are collected, because this decides which locals are cells and
+ * a prop destructured any FURTHER is not one. A rest element and a nested pattern are left to the
+ * emitted TypeScript, which handles them the way it handles any other destructure — and neither
+ * becomes a cell, so both keep whatever the caller passed.
  */
-function destructured(tokens: Token[], call: number): Map<string, string> {
-    const bound = new Map<string, string>()
+function destructured(body: string, tokens: Token[], call: number): Binding[] {
+    const bound: Binding[] = []
     if (tokens[call - 1]?.kind !== SyntaxKind.EqualsToken) return bound
     const close = call - 2
     if (tokens[close]?.kind !== SyntaxKind.CloseBraceToken) return bound
@@ -351,27 +408,52 @@ function destructured(tokens: Token[], call: number): Map<string, string> {
     }
     if (open < 0) return bound
 
-    // Where each entry STARTS: the token after the brace, and the token after every comma at the
-    // pattern's own depth.
+    // Where each entry starts AND ends: the token after the brace, and the token on either side of
+    // every comma at the pattern's own depth. The END is what a default runs to.
     const starts = [open + 1]
+    const ends: number[] = []
     depth = 0
     for (let i = open + 1; i < close; i++) {
         const token = tokens[i] as Token
         if (OPENERS.has(token.kind)) depth++
         else if (CLOSERS.has(token.kind)) depth--
-        else if (token.kind === SyntaxKind.CommaToken && depth === 0) starts.push(i + 1)
-    }
-
-    for (const at of starts) {
-        const name = tokens[at]
-        if (name === undefined || at >= close || !IDENTIFIER.test(name.text)) continue
-        if (tokens[at + 1]?.kind !== SyntaxKind.ColonToken) {
-            bound.set(name.text, name.text)
-            continue
+        else if (token.kind === SyntaxKind.CommaToken && depth === 0) {
+            ends.push(i)
+            starts.push(i + 1)
         }
-        // `class: className` — a rename, and the only spelling a reserved word has.
-        const local = tokens[at + 2]
-        if (local !== undefined && IDENTIFIER.test(local.text)) bound.set(name.text, local.text)
+    }
+    ends.push(close)
+
+    for (let entry = 0; entry < starts.length; entry++) {
+        const at = starts[entry] as number
+        const to = ends[entry] as number
+        const name = tokens[at]
+        if (name === undefined || at >= to || !IDENTIFIER.test(name.text)) continue
+
+        let local = name
+        let renamed = false
+        let after = at + 1
+        if (tokens[at + 1]?.kind === SyntaxKind.ColonToken) {
+            // `class: className` — a rename, and the only spelling a reserved word has.
+            const target = tokens[at + 2]
+            if (target === undefined || !IDENTIFIER.test(target.text)) continue
+            local = target
+            renamed = true
+            after = at + 3
+        }
+        const equals = tokens[after]
+        const defaulted = after < to && equals !== undefined && equals.kind === SyntaxKind.EqualsToken
+        const last = tokens[to - 1] as Token
+        bound.push({
+            name: name.text,
+            local: local.text,
+            renamed,
+            start: local.start,
+            end: local.end,
+            fallback: defaulted ? body.slice((tokens[after + 1] as Token).start, last.end) : null,
+            fallbackStart: defaulted ? (equals as Token).start : 0,
+            fallbackEnd: defaulted ? last.end : 0,
+        })
     }
     return bound
 }
@@ -403,7 +485,12 @@ function membersOf(type: string, rest: string, tokens: Token[], types: TypeReade
 }
 
 /**
- * The emitted parameter's type.
+ * The emitted parameter's type, which is the AUTHORED one through `Props<…>`.
+ *
+ * The author writes what a prop IS — `n: number` — and the position holding this component writes
+ * every prop into a cell, so what arrives is `Cell<number>` and `{n + 1}` emits `n() + 1`. `Props` is
+ * that mapping, and it is a TYPE rather than a rewrite here so the author's own type is what appears
+ * in the error when a prop is passed wrongly; `component()` inverts it back at the call site.
  *
  * A component that never calls `props()` accepts none of its own, and the type says so — which is
  * what makes a mistyped prop an error at the CALL site, where the mistake is. `children` is there
@@ -415,11 +502,138 @@ function membersOf(type: string, rest: string, tokens: Token[], types: TypeReade
  */
 function signature(declared: Props | null): string {
     if (declared === null) return CHILDREN
-    if (declared.type === null) return 'Record<string, unknown>'
-    return `${declared.type} & ${CHILDREN}`
+    const authored = declared.type === null ? 'Record<string, unknown>' : declared.type
+    return `${PROPS_TYPE}<${authored}> & ${CHILDREN}`
 }
 
 const CHILDREN = '{ children?: unknown }'
+
+/**
+ * `Props` under a generated name, because `Props` is exactly what an author calls their own prop
+ * type — `types/valid/props.abide` does — and a merged declaration is a compile error at the point the
+ * emitted file is read, not where it was written. `$` is the house mark for a name this emitter made
+ * up, as `$0` is for a hoisted read.
+ */
+const PROPS_TYPE = 'Props$'
+
+/** What a declared prop MEANS to the emit — see `memberKinds`. */
+type PropKind = 'cell' | 'keyed' | 'plain'
+
+/**
+ * What each member of the declared props type IS, read off its own TEXT.
+ *
+ * Syntactic, like every other decision about what counts as a cell: nothing in the emit path may need
+ * a type-checker. Three answers, and the DEFAULT is `cell` — a prop is data the position writes into a
+ * cell, so a member this cannot read at all still gets the common rule.
+ *
+ *   plain  a FUNCTION — `onclick: (e: Event) => void`, or the method shorthand. A callback is called,
+ *          not read, and `@click={onclick}` would attach the cell rather than the handler
+ *   keyed  a `KeyedMemo`/`KeyedChannel` handle, which a prop cell cannot stand in for: it is selected
+ *          by args and its SLOT is the source
+ *   cell   everything else, `State<T>` included — an existing source passes through the wrapping
+ *          rather than being wrapped twice
+ *
+ * A function type reached through a NAME — `onclick: Handler` — reads as `cell` and is the one hole,
+ * for the reason an imported props type has always had one: this file cannot resolve a name it cannot
+ * see. Writing the arrow out is what says it is a callback.
+ */
+function memberKinds(declared: string): Map<string, PropKind> {
+    const kinds = new Map<string, PropKind>()
+    const from = declared.indexOf('{')
+    if (from === -1) return kinds
+
+    let depth = 0
+    let quote = ''
+    let member = ''
+    // Members are separated by `;`, `,` or a newline, and only at the type body's own depth. A
+    // comment between two of them is dropped here rather than confusing the match below.
+    for (let i = from; i < declared.length; i++) {
+        const char = declared[i] as string
+        if (quote !== '') {
+            if (char === '\\') i++
+            else if (char === quote) quote = ''
+            else member += char
+            continue
+        }
+        if (char === '/' && declared[i + 1] === '/') {
+            while (i < declared.length && declared[i] !== '\n') i++
+            continue
+        }
+        if (char === '/' && declared[i + 1] === '*') {
+            const close = declared.indexOf('*/', i + 2)
+            i = close === -1 ? declared.length : close + 1
+            continue
+        }
+        if (char === '"' || char === "'" || char === '`') {
+            quote = char
+            member += char
+            continue
+        }
+        // `<`/`>` count because `Map<string, number>` holds a comma the split must not see. `=>` is
+        // the exception the arrow makes: its `>` closes nothing.
+        if (char === '>' && declared[i - 1] === '=') {
+            member += char
+            continue
+        }
+        if (char === '{' || char === '(' || char === '[' || char === '<') {
+            depth++
+            if (depth > 1) member += char
+            continue
+        }
+        if (char === '}' || char === ')' || char === ']' || char === '>') {
+            depth--
+            if (depth === 0) break
+            member += char
+            continue
+        }
+        if (depth === 1 && (char === ';' || char === ',' || char === '\n')) {
+            classifyMember(member, kinds)
+            member = ''
+            continue
+        }
+        member += char
+    }
+    classifyMember(member, kinds)
+    return kinds
+}
+
+// `readonly` and `?` are noise to this question; an index signature and a call signature bind no name
+// at all, so neither matches. The captured tail is what the member's type STARTS with.
+const MEMBER = /^\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\s*\??\s*([:(<])\s*([\s\S]*)$/
+
+function classifyMember(member: string, into: Map<string, PropKind>): void {
+    const match = MEMBER.exec(member)
+    if (match === null) return
+    const name = match[1] as string
+    // `onclick(e: Event): void` and `identity<T>(v: T): T` — the method shorthands.
+    if (match[2] !== ':') {
+        into.set(name, 'plain')
+        return
+    }
+    const type = match[3] as string
+    // The parenthesised head of an arrow, or a generic one.
+    if (type.startsWith('(') || type.startsWith('<')) {
+        into.set(name, 'plain')
+        return
+    }
+    const constructed = /^([A-Za-z_$][\w$]*)\s*</.exec(type)
+    const reactive = constructed === null ? undefined : REACTIVE_TYPES.get(constructed[1] as string)
+    into.set(name, reactive === 'keyed' ? 'keyed' : 'cell')
+}
+
+/**
+ * What each prop LOCAL is, which is the member's kind under the name the pattern gave it.
+ *
+ * Two facts meet here: the declared type says what a prop is, and the pattern says what it is called
+ * here. Reading the type alone was wrong under a rename — `{ note: text }` left `text` a plain value
+ * and made `text.length` the arity of a function, which type-checks and renders `0`.
+ */
+function propKinds(bound: Binding[], declared: string): Map<string, PropKind> {
+    const members = memberKinds(declared)
+    const kinds = new Map<string, PropKind>()
+    for (const binding of bound) kinds.set(binding.local, members.get(binding.name) ?? 'cell')
+    return kinds
+}
 
 /** `props()` in a `<script module>`: module scope has no instance, so there are no props to bind. */
 function checkNoProps(module: Blocks['module'], filename: string): void {
@@ -464,23 +678,41 @@ function checkPropsImported(imports: string[], at: number, filename: string): vo
 }
 
 /**
- * Props that ARE cells, decided at the BINDING.
+ * The setup body with `props<T>()` replaced by the parameter, and every prop local bound to a cell.
  *
- * Two facts meet here: the declared type says which props are sources, and the pattern says what each
- * one is called here. Reading the type alone was wrong under a rename — `{ note: text }` left `text` a
- * plain value and made `text.length` the arity of a function, which type-checks and renders `0`.
+ * Two edits, and the second is the one the design turns on. The call becomes `args`, as it always
+ * did. And each prop that is DATA moves out of the pattern — `{ class: className = '' }` becomes
+ * `{ class: $className }`, with `const className = propCell($className, '')` after it — because a
+ * prop arrives as a cell and a destructure default cannot survive that: a caller who omits the prop
+ * satisfies the default with a plain string, leaving the local `'' | Cell<string>` where only one of
+ * the two is callable. A default belongs beside the value it stands in for, so it goes to `propCell`.
+ *
+ * A FUNCTION prop and a KEYED handle are left in the pattern untouched, which is what `propKinds`
+ * decided: neither is a cell, and neither may become one.
  */
-function reactiveProps(bound: Map<string, string>, declared: string, into: Reactive): void {
-    const member = /([A-Za-z_$][\w$]*)\s*\??\s*:\s*([A-Za-z_$][\w$]*)\s*</g
-    for (;;) {
-        const match = member.exec(declared)
-        if (match === null) return
-        const local = bound.get(match[1] as string)
-        if (local === undefined) continue
-        const reactive = REACTIVE_TYPES.get(match[2] as string)
-        if (reactive === 'keyed') into.keyed.add(local)
-        else if (reactive === 'cell') into.cells.add(local)
+function bindProps(rest: string, declared: Props, kinds: Map<string, PropKind>): string {
+    let text = ''
+    let cursor = 0
+    let declarations = ''
+    for (const binding of declared.bound) {
+        if (kinds.get(binding.local) !== 'cell') continue
+        text += rest.slice(cursor, binding.start)
+        text += binding.renamed ? `$${binding.local}` : `${binding.name}: $${binding.local}`
+        cursor = binding.end
+        if (binding.fallback !== null) {
+            text += rest.slice(cursor, binding.fallbackStart)
+            cursor = binding.fallbackEnd
+        }
+        const fallback = binding.fallback === null ? '' : `, ${binding.fallback}`
+        declarations += `\nconst ${binding.local} = propCell($${binding.local}${fallback})`
     }
+    // After the statement's own `;` when it has one, so the emitted file does not carry an empty
+    // statement between two declarations.
+    let after = declared.end
+    while (rest[after] === ' ' || rest[after] === '\t') after++
+    if (rest[after] !== ';') after = declared.end
+    else after++
+    return `${text}${rest.slice(cursor, declared.start)}args${rest.slice(declared.end, after)}${declarations}${rest.slice(after)}`
 }
 
 interface Import {
@@ -616,6 +848,48 @@ function live(context: Context): Reactive {
     for (const name of context.reactive.keyed) if (!context.shadow.has(name)) keyed.add(name)
     return { cells, keyed }
 }
+
+/**
+ * A named import from `server/rpc/**` is a KEYED MEMO, and an import statement is the only place that
+ * fact can come from.
+ *
+ * `reactiveBindings` reads `NAME = memo(…)` out of the file's own tokens, and an rpc stub is never
+ * written in the file: the module elides to `remote(id)`, and what comes back is a keyed memo by the
+ * law the whole transport is — `rpc` = `memo` + transport, one slot per args. Without this the
+ * caller's vocabulary is NOT identical on the two sides after all: `{#if orders({ id }).pending()}`
+ * would not defer, because `deferrable` cannot see a source in the head, and `{orders({ id }).total}`
+ * would be a member access on a handle rather than on the value.
+ *
+ * `server/sockets/**` is deliberately not here. A socket is keyed only in the ROOM form, and nothing
+ * in an import statement says which of the two this one is.
+ */
+function rpcImports(statements: string[], into: Reactive): void {
+    for (const statement of statements) {
+        const match = IMPORT_CLAUSE.exec(statement)
+        if (match === null) continue
+        const clause = match[1] as string
+        // `import type { … }` carries no value at all, so nothing it names is a source.
+        if (clause.startsWith('type ')) continue
+        // `kindOf` is the one place that says which transport a module declares, so this cannot
+        // drift from what `elide` does with the same specifier. The leading slash makes a bare
+        // `server/rpc/x.ts` match on the same test a relative `../../server/rpc/x.ts` does. A
+        // socket answers `'socket'` here rather than falling through unnamed — see above for why
+        // that is not keyed.
+        if (kindOf(`/${match[2] as string}`) !== 'rpc') continue
+        const open = clause.indexOf('{')
+        if (open === -1) continue
+        for (const entry of clause.slice(open + 1, clause.lastIndexOf('}')).split(',')) {
+            const trimmed = entry.trim()
+            if (trimmed === '' || trimmed.startsWith('type ')) continue
+            // `a as b` binds `b`; a bare `a` binds itself.
+            const renamed = trimmed.lastIndexOf(' as ')
+            const local = renamed === -1 ? trimmed : trimmed.slice(renamed + 4).trim()
+            if (IDENTIFIER.test(local)) into.keyed.add(local)
+        }
+    }
+}
+
+const IMPORT_CLAUSE = /^\s*import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]\s*$/
 
 function liveCell(context: Context, name: string): boolean {
     return context.reactive.cells.has(name) && !context.shadow.has(name)
@@ -794,10 +1068,10 @@ const EVALUATES = /[(`]|=>|\bfunction\b/
  * `get big() { return n() > 3 }` is call-free text that reads a cell — so an unthunked expression is
  * only as safe as the effect it is evaluated inside. Everywhere a template literal is built that is
  * some enclosing effect, so the wake is wider than it should be and the screen stays right; the
- * exception is a `{:then}`/`{:catch}`/`{:finally}` arm or a `{#for await}` row, which a promise
- * continuation calls with no tracking context at all. That is why BLOCKS keep their thunks whatever
- * their head reads: dropping them was measured, and it made a bare `{#if}` in an `{#await}` arm stop
- * updating, and elsewhere widened the wake enough to throw a settled `{#await}` back to pending.
+ * exception is a `{:catch}`/`{:finally}` arm or a `{#for await}` row, which a promise continuation
+ * calls with no tracking context at all. That is why BLOCKS keep their thunks whatever their head
+ * reads: dropping them was measured, and it made a bare `{#if}` inside a deferred arm stop updating,
+ * and elsewhere widened the wake enough to throw a settled block back to its placeholder.
  * `{a.b.c}` in a slot has always been unthunked, so this limit is the model's, not this rule's.
  *
  * The trade, stated: an unthunked expression is evaluated where the `html` tag is, so a throw inside
@@ -999,8 +1273,6 @@ function child(node: Node, context: Context): string {
             return called(switched(node, context), context)
         case 'for':
             return slot(loop(node, context), context)
-        case 'await':
-            return slot(awaited(node, context), context)
         case 'try':
             return slot(guarded(node, context), context)
         case 'define':
@@ -1418,11 +1690,26 @@ function invoke(node: { name: string; attributes: Attribute[]; children: Node[] 
 
     // A state- or memo-named tag is a REACTIVE component: the cell is read, so a change re-mounts it.
     const callee = liveCell(context, node.name) ? `${node.name}()` : node.name
-    return `${callee}({ ${props.join(', ')} })`
+    // CARRIED, not called — except for an inline component, which has no setup to protect. The call
+    // used to happen wherever the enclosing thunk ran, and that thunk re-runs for anything the parent
+    // reads: a keyed list gaining one row rebuilt every instance in it and discarded whatever the
+    // user had typed into any of them. `component()` hands the view and its props to the position
+    // instead, which holds the instance and writes the props into cells. See docs/COMPONENTS.md.
+    if (context.inline.has(node.name)) return `${callee}({ ${props.join(', ')} })`
+    return `${need(context, 'component')}(${callee}, { ${props.join(', ')} })`
 }
 
 function key(name: string): string {
     return IDENTIFIER.test(name) ? name : JSON.stringify(name)
+}
+
+/** Top level only: a `{#component}` written inside another one's children is a PROP, not a tag. */
+function inlineComponents(template: Node[]): Set<string> {
+    const names = new Set<string>()
+    for (const node of template) {
+        if (node.kind === 'define') names.add(node.name)
+    }
+    return names
 }
 
 function define(node: { name: string; parameters: string; body: Node[] }, context: Context): string {
@@ -1505,6 +1792,163 @@ function bindingsOf(parameters: string): string[] {
  * condition still does not run when an earlier one matched.
  */
 function conditional(branches: Branch[], context: Context): string {
+    const chain = chained(branches, context)
+    const operand = deferrable(branches, context)
+    if (operand === null) return chain
+    // ONE arm handed over three times, and it is the WHOLE chain — the same thunk asked twice.
+    //
+    // `pending` is what a document render sends now, and `then`/`catch` is what it patches in; the
+    // probe in the chain's own head is what picks the arm on each pass, so nothing here has to know
+    // which one that was. On the client the two passes produce the same template from the same call
+    // site with the same value in it, so the settle is a no-op and the chain stays exactly the
+    // reactive thunk it would have been — which is what keeps a later write repainting.
+    //
+    // Wrapped in a template rather than handed over bare: a child slot binds a FUNCTION as a thunk,
+    // and a part paints one as text. The nested template is per REGION, not per row.
+    const chainLocal = `$${context.counter.n++}`
+    const armLocal = `$${context.counter.n++}`
+    return (
+        `() => { const ${chainLocal} = ${chain}; const ${armLocal} = () => ${need(context, 'html')}\`\${${chainLocal}}\`; ` +
+        `return ${need(context, 'awaited')}(${operand}, { pending: ${armLocal}, then: ${armLocal}, catch: ${armLocal}, finally: undefined }) }`
+    )
+}
+
+/**
+ * `{#if <source>.pending()}` — the chain that DEFERS, and the cell it defers on.
+ *
+ * Asking about a load is HAVING SOMETHING TO SHOW while it runs, and having something to show is the
+ * whole of what says defer. Only the chain's FIRST test counts, because only the first arm is what
+ * goes out in front of the load.
+ *
+ * Null for every other chain, which stays the plain thunk it was.
+ */
+function deferrable(branches: Branch[], context: Context): string | null {
+    const test = branches[0]?.test
+    if (test == null) return null
+    const match = PENDING_HEAD.exec(test.source)
+    if (match === null) return null
+    const head = (match[1] as string).trim()
+    // A cell is named; a keyed handle is CALLED, and the call is the cell. Anything else — a probe on
+    // a plain object, a shadowed name — is not a source and does not defer.
+    const plain = IDENTIFIER.test(head)
+    const name = plain ? head : (KEYED_CALL.exec(head)?.[1] ?? '')
+    if (!(plain ? liveCell(context, name) : liveKeyed(context, name))) return null
+    return code({ source: head, start: test.start }, context, 'cell')
+}
+
+const PENDING_HEAD = /^([\s\S]+?)\s*\.\s*pending\(\s*\)$/
+const KEYED_CALL = /^([A-Za-z_$][\w$]*)\s*\(/
+
+/**
+ * The cells an UNCONDITIONAL child slot reads, so setup can start their loads before the walk reaches
+ * the first of them.
+ *
+ * A load begins on its first read, and in a server render that read is the walk ARRIVING at the slot.
+ * So three sections holding three independent loads cost their SUM rather than their longest — three
+ * 60ms loads rendered in 185ms, and in 63ms once they start together, with the same blocking and the
+ * same complete markup. This collects the set the walk was going to read anyway; only the timing moves.
+ *
+ * UNCONDITIONAL is the whole of the rule, and it is why the descent stops at every block and every
+ * component: a load inside a branch nobody takes is work the page never asked for, and a `{#for}`
+ * row's reads belong to the row. A deferring block needs nothing from here — `awaited` already asks
+ * its operand for the settle before the arm runs.
+ *
+ * A PLAIN READ only: a name, or a member path off one, with no call anywhere in it. That excludes
+ * every probe under one condition rather than a list of them, and the exclusion is load-bearing —
+ * `{x.pending() ? … : x}` decides what to show from whether the load has BEGUN, so starting it early
+ * would turn a page that blocks into one showing a placeholder that never leaves. That spelling has
+ * its own problems; they are not this change's to introduce.
+ *
+ * What lands in `into` is the memo the SLOT names; `rootsOf` turns each into the loads under it, so a
+ * page of plain `state` emits nothing at all here and a page of aggregates emits its rpcs.
+ */
+function eagerCells(
+    nodes: readonly Node[],
+    memos: ReadonlyMap<string, readonly string[]>,
+    into: Set<string>,
+): void {
+    for (const node of nodes) {
+        if (node.kind === 'element') eagerCells(node.children, memos, into)
+        else if (node.kind === 'expression' && !node.raw) {
+            const source = node.value.source
+            if (source.includes('(')) continue
+            const name = LEADING_IDENTIFIER.exec(source)?.[0]
+            if (name === undefined) continue
+            // What follows the name must be a member PATH and nothing else, so `{a.b}` is in and
+            // `{a + b}` is out — with no expression parser to run for the answer.
+            if (!MEMBER_PATH.test(source.slice(name.length))) continue
+            if (memos.has(name)) into.add(name)
+        }
+    }
+}
+
+const LEADING_IDENTIFIER = /^[A-Za-z_$][\w$]*/
+const MEMBER_PATH = /^(\??\.[A-Za-z_$][\w$]*)*$/
+
+/**
+ * The memos named inside a `memo(…)`'s own argument list — what this one DERIVES from.
+ *
+ * Empty means a ROOT: a body that loads rather than one that reads another cell and reshapes it. Only
+ * a root is worth starting, because starting a derivation runs its body as far as the read it derives
+ * from, which signals, and the half-run body is discarded — a page fanning five aggregates out of one
+ * rpc paid five aborted body entries and started nothing the first slot's read would not have.
+ *
+ * A KEYED source deliberately does not count. `memo(() => catalogue({ … }))` names an rpc and is the
+ * very root this exists to start, so only a zero-arity memo already declared can appear here — which
+ * is also why one pass in declaration order is enough to build the whole map.
+ */
+function memosReferenced(
+    tokens: Token[],
+    open: number,
+    declared: ReadonlyMap<string, readonly string[]>,
+): readonly string[] {
+    let found: string[] | null = null
+    let depth = 0
+    for (let i = open; i < tokens.length; i++) {
+        const token = tokens[i] as Token
+        if (token.kind === SyntaxKind.OpenParenToken) depth++
+        else if (token.kind === SyntaxKind.CloseParenToken) {
+            depth--
+            if (depth === 0) break
+        } else if (token.kind === SyntaxKind.Identifier && declared.has(token.text)) {
+            if (found === null) found = [token.text]
+            else if (!found.includes(token.text)) found.push(token.text)
+        }
+    }
+    // One shared empty array for every root, which is most of them.
+    return found ?? NO_REFERENCES
+}
+
+const NO_REFERENCES: readonly string[] = []
+
+/**
+ * The loads under a memo the template names, however many derivations sit between.
+ *
+ * A page reading only its aggregates never names the rpc they came from, so without this the roots
+ * start when the walk arrives and cost their SUM: three independent roots behind two derivations each
+ * rendered in 185ms, and in 62ms once resolved — the same 3x the flat case has, and with the same
+ * derived body counts, because what gets started is the load rather than the derivation.
+ *
+ * `seen` is the cycle guard. A cycle cannot typecheck, but this walk runs before anything checks that.
+ */
+function rootsOf(
+    name: string,
+    memos: ReadonlyMap<string, readonly string[]>,
+    seen: Set<string>,
+    into: Set<string>,
+): void {
+    if (seen.has(name)) return
+    seen.add(name)
+    const from = memos.get(name)
+    if (from === undefined) return
+    if (from.length === 0) {
+        into.add(name)
+        return
+    }
+    for (const source of from) rootsOf(source, memos, seen, into)
+}
+
+function chained(branches: Branch[], context: Context): string {
     // The CONDITIONS alone decide the shape, so hoist them all before emitting a single body:
     // `fragment` recurses, so a body emitted for the losing shape would be compiled twice — and
     // exponentially with nesting.
@@ -1631,62 +2075,6 @@ function loop(
     return `${need(context, 'streamed')}(${source}, ${row}${failure})`
 }
 
-function awaited(
-    node: { value: Expr; pending: Node[]; branches: Branch[]; short?: boolean; compact?: boolean; suffix?: Expr | undefined },
-    context: Context,
-): string {
-    const found = (keyword: string): Branch | undefined =>
-        node.branches.find((b) => b.test?.source === keyword)
-    const then = found('then')
-    const failure = found('catch')
-    const settled = found('finally')
-
-    const inner = (branch: Branch | undefined): Context => {
-        if (branch?.binding === undefined || branch.binding === null) return context
-        const scoped: Context = { ...context, shadow: new Set(context.shadow) }
-        scoped.shadow.add(branch.binding)
-        return scoped
-    }
-
-    // Every branch is emitted as a CLOSURE, unevaluated. That is what splits the two effects: this
-    // thunk evaluates only the operand, so the effect around it subscribes to what the operand reads
-    // and to nothing else, and the part paints the branches later without ever waking it. Choosing a
-    // branch here instead — by reading `pending()` — would make settling wake the thunk, which would
-    // re-evaluate the operand into a fresh promise, which would settle, forever.
-    // All four keys, `undefined` included: `Branches` declares four, and an arm omitted here is a
-    // different hidden class reaching the same reads in `settledArms` and `ChildPart`. Sixteen arm
-    // combinations across a page is what turns those shared reads megamorphic, and an `{#await}`
-    // inside a `{#for}` pays it per row.
-    // `{await value}`: no arms were written, so the settled value IS the body. Built here rather than
-    // as a synthesised `{:then}` node, because every `Expr` carries an offset into the original file
-    // and a node whose text is not in that file is sliced back out of it as whatever sat there.
-    // WHICH FORM the author wrote, not whether they left the pending body blank. `{#await p then v}`
-    // and `{await p}` have no pending branch by construction and BLOCK; the block form always has one
-    // — empty if that is what was written, which defers with an empty placeholder. Reaching for the
-    // block form to narrow in `{:then}`, or to stream one block without a placeholder, is ordinary,
-    // and whitespace should not be what decides whether a response is held.
-    const blocking = node.short === true || node.compact === true
-    const arms = [
-        `pending: ${blocking ? 'undefined' : `() => ${fragment(node.pending, context)}`}`,
-        `then: ${node.short === true ? shortArm(node, context) : then === undefined ? 'undefined' : `(${then.binding ?? '_value'}) => ${fragment(then.body, inner(then))}`}`,
-        `catch: ${failure === undefined ? 'undefined' : `(${failure.binding ?? '_error'}) => ${fragment(failure.body, inner(failure))}`}`,
-        `finally: ${settled === undefined ? 'undefined' : `() => ${fragment(settled.body, context)}`}`,
-    ]
-
-    const awaitedValue = code(node.value, context, 'slot')
-    return `${need(context, 'awaited')}(${awaitedValue}, { ${arms.join(', ')} })`
-}
-
-/**
- * The `then` arm of `{await x}` and `{(await x).b.c}`: the settled value, then whatever the author
- * wrote after the parentheses. Built HERE rather than as a parsed node, because a synthesised node
- * has no region of the file to be desugared from — see `code`, which works on offsets.
- */
-function shortArm(node: { suffix?: Expr | undefined }, context: Context): string {
-    if (node.suffix === undefined) return '(_awaited) => _awaited'
-    return `(_awaited) => _awaited${code(node.suffix, context)}`
-}
-
 function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): string {
     const failure = node.branches.find((b) => b.test?.source === 'catch')
     const settled = node.branches.find((b) => b.test?.source === 'finally')
@@ -1695,8 +2083,10 @@ function guarded(node: { body: Node[]; branches: Branch[] }, context: Context): 
             ? context
             : { ...context, shadow: new Set([...context.shadow, failure.binding]) }
 
-    // All four keys, for the reason `awaited` states — and the same four, so a `{#try}`'s branches
-    // are the shape a `{#await}`'s are: `settledArms` is the read both of them land on.
+    // All four keys, `undefined` included: `Branches` declares four, and an arm omitted here is a
+    // different hidden class reaching the same reads in `settledArms` and `ChildPart`. Sixteen arm
+    // combinations across a page is what turns those shared reads megamorphic, and a block inside a
+    // `{#for}` pays it per row. The same four a deferring `{#if}` writes, for the same reason.
     const arms = [
         `pending: undefined`,
         `then: undefined`,
@@ -1754,11 +2144,16 @@ export function emit(
     if (declared !== null) {
         checkPropsImported(setup.imports, blocks.setup?.start ?? 0, options.filename)
     }
-    // `props<T>()` IS the parameter — the call is erased and the type argument becomes its annotation.
-    const replaced =
+    // `props<T>()` IS the parameter — the call is erased and the type argument becomes its annotation —
+    // and every prop local is bound to the cell the position holds for it.
+    const kinds =
         declared === null
-            ? setup.rest
-            : `${setup.rest.slice(0, declared.start)}args${setup.rest.slice(declared.end)}`
+            ? NO_KINDS
+            : propKinds(
+                  declared.bound,
+                  declared.type === null ? '' : membersOf(declared.type, setup.rest, setupTokens, setupTypes),
+              )
+    const replaced = declared === null ? setup.rest : bindProps(setup.rest, declared, kinds)
     // No `props()` is the common shape — most `.abide` files are a page, and a page takes none. The
     // splice never happened, so the text is the text `setupTokens` was scanned from and re-lexing it
     // is a full TypeScript scanner pass per compile for a string that did not change.
@@ -1766,10 +2161,19 @@ export function emit(
     const replacedTypes = declared === null ? setupTypes : new TypeReader(replacedTokens)
 
     const reactive: Reactive = { cells: new Set(), keyed: new Set() }
-    reactiveBindings(moduleTokens, reactive)
-    reactiveBindings(setupRegion, reactive)
-    if (declared !== null && declared.type !== null) {
-        reactiveProps(declared.bound, membersOf(declared.type, setup.rest, setupTokens, setupTypes), reactive)
+    // Every zero-arity memo, mapped to the memos it derives FROM. `memo` alone, and the other two
+    // constructors are not an omission: a `state(promise)` is already running before the cell exists —
+    // the promise was constructed by the argument expression — and a `channel` never loads at all. A
+    // memo is the one source holding a body that has not run.
+    const memos = new Map<string, readonly string[]>()
+    reactiveBindings(moduleTokens, reactive, memos)
+    reactiveBindings(setupRegion, reactive, memos)
+    // The imports were lifted out of both regions above, so the bindings walk never sees them.
+    rpcImports(moduleImports.imports, reactive)
+    rpcImports(setup.imports, reactive)
+    for (const [local, kind] of kinds) {
+        if (kind === 'cell') reactive.cells.add(local)
+        else if (kind === 'keyed') reactive.keyed.add(local)
     }
 
     const context: Context = {
@@ -1783,8 +2187,16 @@ export function emit(
         shadow: new Set(),
         hoisted: new Map(),
         children: 'args.children',
+        inline: inlineComponents(blocks.template),
         used: new Set(),
         counter: { n: 0 },
+    }
+    // `bindProps` already wrote the calls into the setup body; the header only has to import them.
+    for (const kind of kinds.values()) {
+        if (kind === 'cell') {
+            need(context, 'propCell')
+            break
+        }
     }
 
     // A top-level `<style>` block scopes the COMPONENT: every element it emits carries the attribute,
@@ -1799,7 +2211,8 @@ export function emit(
         context.scope = registerSheet(css, context)
     }
 
-    // Inline components are hoisted into the setup body so they can be passed as values.
+    // Inline components are hoisted into the setup body so they can be passed as values. The NAMES
+    // were taken first, above: an inline component's own body may invoke a sibling.
     let defines = ''
     for (const node of blocks.template) {
         if (node.kind === 'define') defines += `    const ${node.name} = ${define(node, context)}\n`
@@ -1811,6 +2224,15 @@ export function emit(
     const markup = children(blocks.template, context).replace(/^\s+/, '\n').replace(/\s+$/, '\n')
     const lifted = liftTypes(replaced, declaredTypes(replacedTokens, replacedTypes))
     const args = `args: ${signature(declared)}`
+
+    // Read off the template rather than the walk's leavings, and BEFORE the header below, which is
+    // built from what the file turned out to need.
+    const named = new Set<string>()
+    eagerCells(blocks.template, memos, named)
+    const eager = new Set<string>()
+    const seen = new Set<string>()
+    for (const name of named) rootsOf(name, memos, seen, eager)
+    const started = eager.size === 0 ? '' : `    ${need(context, 'start')}([${[...eager].join(', ')}])\n`
 
     // `html` and the return type are always needed; everything else is imported only if the file
     // turned out to use it, so a component that never toggles a class does not import `classes`.
@@ -1825,7 +2247,10 @@ export function emit(
     for (const name of [...context.used].sort()) (AUTHORED_RUNTIME.has(name) ? authored : emitted).push(name)
     // Two ENTRIES, not one string with a newline in it: `mergeImports` parses one statement per
     // element, and a two-line element matches nothing and falls through unmerged.
-    const header = [`import { ${authored.join(', ')}, type TemplateResult } from 'abide'`]
+    // `Props` only when there is a props call to map — a component that takes none never names it,
+    // and an unused type import is what `lint` reports.
+    const types = declared === null ? 'type TemplateResult' : `type Props as ${PROPS_TYPE}, type TemplateResult`
+    const header = [`import { ${authored.join(', ')}, ${types} } from 'abide'`]
     if (emitted.length > 0) header.push(`import { ${emitted.join(', ')} } from 'abide/runtime'`)
 
     // Joined only now: `children` above is what discovers a nested block, so the registry is not
@@ -1841,7 +2266,7 @@ export function emit(
         `${desugarBody(blocks.module, moduleImports.rest, reactive)}\n${adopted}` +
         (lifted.declarations === '' ? '' : `${lifted.declarations}\n`) +
         `export default function ${name}(${args}): TemplateResult {\n` +
-        `${setupBody}${defines}` +
+        `${setupBody}${started}${defines}` +
         `    return html\`${markup}\`\n` +
         `}\n`
 
@@ -1917,7 +2342,8 @@ function liftTypes(rest: string, found: Declared[]): { declarations: string; bod
 /**
  * A `<script>` body is desugared too — a write is a statement, so `count = 1` has to work in the
  * same places a person would write it. `expression: false` because a leading `{` there opens a
- * BLOCK, not an object literal.
+ * BLOCK, not an object literal, and `once` because these statements are the setup: a read among them
+ * peeks, and gets the honest possibly-undefined type for it.
  */
 function desugarBody(
     block: { body: string; start: number } | null,
@@ -1926,7 +2352,11 @@ function desugarBody(
 ): string {
     if (block === null || rest.trim() === '') return rest
     // The import-lifted text no longer lines up with the file, so it is desugared as its own region.
-    return desugar(rest, 0, rest.length, reactive.cells, { expression: false, keyed: reactive.keyed }).text
+    return desugar(rest, 0, rest.length, reactive.cells, {
+        expression: false,
+        keyed: reactive.keyed,
+        once: true,
+    }).text
 }
 
 /**

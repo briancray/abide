@@ -50,7 +50,7 @@ const held = running()
 
 watch(() => {
     const node = stage()
-    if (node !== null) enqueue(spec, held, node)
+    if (node !== null) enqueue(spec(), held, node)
 })
 
 /** The console follows its own tail — a case that logs forty lines should show the last one. */

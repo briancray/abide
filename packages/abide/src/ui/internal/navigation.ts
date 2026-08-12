@@ -23,6 +23,7 @@
 
 import { PATCH_FORM, PIECE_END, placeholderId } from '$shared/internal/MARKERS.ts'
 import { NAVIGATION_HEADER } from '$shared/internal/PATHS.ts'
+import { addSeeds, SEED_ELEMENT_ID } from '$shared/internal/seed.ts'
 import { STREAMING } from '$shared/internal/wire.ts'
 import { abideLog } from '$shared/log.ts'
 import { type Entered, type NavigationSink, useNavigationSink } from '$shared/router.ts'
@@ -222,10 +223,19 @@ class DocumentNavigation implements NavigationSink {
             held.insert(parsed.content)
             return
         }
-        // A patch piece is exactly one `<template id="tN">`. Read rather than assumed, because the
-        // id is what says WHICH placeholder this is, and there is no ambient correlation to fall
-        // back on — the walker handed the id out when it reached the marker.
         const carried = parsed.content.firstElementChild
+        // The seed piece, which the server writes LAST. It stays in this template and never enters
+        // the document: what it carries is VALUES, and the slots that want them are on the render
+        // the commit is about to run. A superseded handle drops them — an abandoned navigation's
+        // answers are for a page nobody is going to see, and a table nothing consumes is never
+        // emptied, so merging them would leak one entry per rpc per overtaken click.
+        if (carried instanceof HTMLScriptElement && carried.id === SEED_ELEMENT_ID) {
+            if (held.alive()) addSeeds(carried.textContent ?? '')
+            return
+        }
+        // Every other piece is exactly one `<template id="tN">`. Read rather than assumed, because
+        // the id is what says WHICH placeholder this is, and there is no ambient correlation to fall
+        // back on — the walker handed the id out when it reached the marker.
         if (!(carried instanceof HTMLTemplateElement)) {
             navigateLog.warning('a fragment piece was not a patch')
             return

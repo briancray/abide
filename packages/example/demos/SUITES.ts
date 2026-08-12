@@ -111,10 +111,10 @@ export const META = {
         name: 'server',
         title: 'server',
         blurb:
-            'Streaming SSR: in-order by default, out-of-order for anything suspended. A pending cell renders ' +
-            'blank, because a snapshot has nothing to wake later — `suspend(cell, v => …)` is how a load ' +
-            'reaches SSR, and every cell is thenable, so it can be suspended directly.',
-        tag: 'SSR · streaming · suspend',
+            'Streaming SSR: in-order by default, out-of-order for anything suspended. A snapshot has ' +
+            'nothing to wake later, so a read with nothing to serve yet does not render blank — it ' +
+            'signals, and the walk waits for that load and runs the body again.',
+        tag: 'SSR · streaming · pending reads',
     },
     hydrate: {
         name: 'hydrate',

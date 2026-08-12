@@ -11,7 +11,7 @@
 // all about a real process on a real port.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { CLIENT_ROUTE, type ClientManifest, MANIFEST_FILE } from 'abide/cli'
 import { abide, BINARY, ended, EXAMPLE_ROOT as ROOT, type Running, spawn, started } from './spawned.ts'
@@ -444,7 +444,7 @@ test('a port that is not one, and an option that is not ours, are usage', async 
     expect(unknown.err).toContain('unknown option')
 })
 
-test('a directory with no app, and a client lane with no build, both refuse', async () => {
+test('what makes a directory an app: nothing refuses, pages with no build refuse, endpoints alone come up', async () => {
     const empty = await mkdtemp(`${tmpdir()}/abide-start-`)
     try {
         const nothing = await abide(['start'], { cwd: empty })
@@ -477,6 +477,32 @@ test('a directory with no app, and a client lane with no build, both refuse', as
         } finally {
             endpoints.child.kill('SIGKILL')
         }
+
+        // And the shape with no module at all. Every export `app.ts` can hold is optional, so the
+        // file is: an app of endpoints that wants no hook and no route of its own has nothing to put
+        // in one. What makes this a directory worth serving is that there is something IN it — the
+        // handler is found by the same scan, registered by being where it is, and answers.
+        await rm(`${empty}/app.ts`)
+        await mkdir(`${empty}/server/rpc`, { recursive: true })
+        await Bun.write(
+            `${empty}/server/rpc/ping.ts`,
+            "import { GET } from 'abide/server'\n\nexport const ping = GET((): unknown => ({ pong: true }))\n",
+        )
+        // Through the link the example itself resolves `abide` by, rather than a relative path into
+        // the framework: a fixture is an app, and an app reads the public specifier and its exports
+        // map. `node_modules` because that is where a resolver looks, wherever the fixture landed.
+        await mkdir(`${empty}/node_modules`, { recursive: true })
+        await symlink(`${ROOT}/node_modules/abide`, `${empty}/node_modules/abide`)
+
+        const bare = await started(['start', '--port', '0'], empty)
+        try {
+            const pong = (await (await fetch(`${bare.base}__abide/rpc/ping/ping`)).json()) as {
+                pong?: boolean
+            }
+            expect(pong.pong).toBe(true)
+        } finally {
+            bare.child.kill('SIGKILL')
+        }
     } finally {
         await rm(empty, { recursive: true, force: true })
     }
@@ -502,6 +528,139 @@ test('a document is compressed, and the compression does not hold the stream bac
     })
     expect(plain.headers.get('content-encoding')).toBeNull()
     expect(plain.headers.get('vary')).toContain('accept-encoding')
+})
+
+test('a BIG answer is compressed too, a small one is not, and a framed one is left alone', async () => {
+    // The case this exists for: an rpc that answers a list a page then filters in the browser. The
+    // rule used to be markup-only, on the premise that everything else an endpoint answers is small
+    // — right for a `getUser`, and wrong by 7.9x for a payload whose whole purpose is to cross the
+    // wire once and be worked on client-side.
+    // `add` ECHOES what it was sent, so the size of the answer is this test's to choose rather than a
+    // fixture's to keep — a case body would have done, until somebody shortened it and failed a test
+    // about compression.
+    const echo = (name: string): Promise<Response> =>
+        fetch(`${app.base}__abide/rpc/users/add`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'accept-encoding': 'gzip' },
+            body: JSON.stringify({ name }),
+        })
+
+    const big = await echo('winter harbour '.repeat(1000))
+    expect(big.status).toBe(200)
+    const declared = Number(big.headers.get('content-length'))
+    const body = await big.text()
+    expect(body.length).toBeGreaterThan(4096)
+    expect(big.headers.get('content-encoding')).toBe('gzip')
+    // The RATIO is the claim, not a byte count: whatever the payload is, the wire form is smaller
+    // than the answer, and highly repetitive text is what makes the gap unmistakable.
+    expect(declared).toBeLessThan(body.length)
+    expect(big.headers.get('vary')).toContain('accept-encoding')
+
+    // Under the threshold, where the compressor is the more expensive half and the premise holds.
+    const small = await echo('ada')
+    expect((await small.text()).length).toBeLessThan(4096)
+    expect(small.headers.get('content-encoding')).toBeNull()
+
+    // FRAMED, and the reason the rule is an allow-list on the type rather than a size alone: this one
+    // is read as it arrives, so buffering it to measure would undo what it is for.
+    const framed = await fetch(`${app.base}__abide/rpc/users/countdown?from=3`, {
+        headers: { 'accept-encoding': 'gzip' },
+    })
+    expect(framed.headers.get('content-type')).toContain('ndjson')
+    expect(framed.headers.get('content-encoding')).toBeNull()
+    await framed.text()
+})
+
+/**
+ * The seed block a document or a fragment carries, parsed. One spelling of the element for both —
+ * the two cases below differ in WHERE the block goes, not in what it is.
+ */
+const SEED_BLOCK = /<script type="application\/json" id="abide-seed"[^>]*>([\s\S]*?)<\/script>/
+
+function seedsIn(text: string): Record<string, unknown> {
+    const block = SEED_BLOCK.exec(text)
+    expect(block).not.toBeNull()
+    return JSON.parse((block as RegExpExecArray)[1] as string) as Record<string, unknown>
+}
+
+/**
+ * The key an endpoint's answer is under. Keyed by the endpoint's ADDRESS and the args, which is what
+ * lets the browser find it without either side being told about the other: the address is what the
+ * compiler wrote into the stub, and the args key is what a keyed memo already addresses its slot by.
+ */
+function seedKeyIn(seeded: Record<string, unknown>, prefix: string): string {
+    const key = Object.keys(seeded).find((name) => name.startsWith(prefix))
+    expect(key).toBeDefined()
+    return key as string
+}
+
+test('a document hands the client what the render already resolved', async () => {
+    // The recall this exists to remove: the server calls the handler to build the markup, the client
+    // adopts that markup, and the client's own slot is cold — so its first read fetches an answer that
+    // is already on screen. Measured on the perf app before this: a 254 KB document followed by a
+    // 623 KB fetch, and the handler ran TWICE because a slot is per-caller and the browser is a
+    // different caller.
+    const markup = await (await fetch(`${app.base}users/42`)).text()
+    expect(markup).toContain('id="abide-seed"')
+
+    const seeded = seedsIn(markup)
+    const key = seedKeyIn(seeded, 'users/getUser?')
+    expect(seeded[key]).toEqual({ id: 42, name: expect.any(String), connections: expect.any(Number) })
+
+    // The page RENDERED that name, so the seed is not carrying anything the markup did not already
+    // say — which is the exposure question `RpcOptions.seed` exists to answer when it does.
+    expect(markup).toContain((seeded[key] as { name: string }).name)
+
+    // A CSP nonce, because a policy that reached this render reaches every script element in it —
+    // this one is a data block and is never executed, but a policy does not read `type`.
+    expect(/id="abide-seed" nonce="[^"]+"/.test(markup)).toBe(true)
+
+    // The seeded value is the SAME ANSWER the client would have fetched, which is the failure this
+    // catches and nothing else would: a seed that serialises differently from the wire form — a date,
+    // an `undefined` field, a class instance — leaves a page that hydrates to something subtly other
+    // than what a reload gives it, and every test about the markup still passes.
+    const overTheWire = await (await fetch(`${app.base}__abide/rpc/users/getUser?id=42`)).json()
+    expect(seeded[key]).toEqual(overTheWire)
+})
+
+test('a navigation carries them too, as its last piece', async () => {
+    // The same recall, on every navigation after the first: the fragment is rendered by calling the
+    // handler, the client adopts that markup, and its slot is cold. What differs is WHERE the block
+    // can go — a document writes it before the client hydrates, and a navigation cannot, because the
+    // client is holding the stream. It commits only once the stream ends (`router.ts`'s `enter`
+    // awaits `complete` before `commit`), so the last piece is early enough — and late enough to
+    // carry what the DRAIN resolved, which a document's placement could not.
+    const answered = await fetch(`${app.base}users/42`, { headers: { 'x-abide-navigation': '1' } })
+    expect(answered.headers.get('x-abide-navigation')).toBe('1')
+    const fragment = await answered.text()
+
+    const seeded = seedsIn(fragment)
+    const key = seedKeyIn(seeded, 'users/getUser?')
+
+    // The same answer the client would have fetched, which is the failure nothing else catches.
+    const overTheWire = await (await fetch(`${app.base}__abide/rpc/users/getUser?id=42`)).json()
+    expect(seeded[key]).toEqual(overTheWire)
+
+    // FRAMED like every other piece, and last. The client cuts on the sentinel and parses what it
+    // holds — a block written without one is markup appended to the piece before it, which lands in
+    // the page as a stray element instead of in the seed table.
+    expect(fragment.endsWith('<!--abide:piece-->')).toBe(true)
+    expect(fragment.indexOf('abide-seed')).toBeGreaterThan(fragment.lastIndexOf('id="t'))
+
+    // No nonce, and no need of one: the client parses this out of a `<template>` and reads its text,
+    // so no element of it ever enters the document for a policy to evaluate.
+    expect(/id="abide-seed" nonce=/.test(fragment)).toBe(false)
+})
+
+test('the no-scripts document seeds nothing, because nothing there could read it', async () => {
+    // `renderDocumentToString` is the form for a reader that runs no scripts — mail, a PDF, a fixture
+    // holding an expected document. There the markup is complete when the string is, so a data block
+    // is bytes nobody parses, and the whole point of that form is that nothing is left to run.
+    const answered = await fetch(`${app.base}__abide/rpc/users/getUser?id=7`)
+    expect(answered.status).toBe(200)
+    // An endpoint answering a fetch is not rendering a document either: nothing opened a table, so
+    // there is nothing to record into and no key built to throw away.
+    expect(await answered.text()).not.toContain('abide-seed')
 })
 
 test('the compressed head is on the wire before the slow panel settles', async () => {

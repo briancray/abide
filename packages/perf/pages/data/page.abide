@@ -1,0 +1,317 @@
+<!-- What an app looks like when the data arrives ASYNC and deep: one rpc answering ~10,000 objects,
+     and six derived values hanging off it.
+
+     The other three pages build their rows in the browser from an id, so their graph starts warm and
+     the only question is what a mutation costs. This one starts COLD and over a wire, which is where
+     an app actually starts, and it is the shape the async work is for: a pending arm the server
+     streams, a fan of memos that must not all re-run when one cell moves, and a payload whose cost
+     is in its nesting rather than in its row count.
+
+     WHAT TO WATCH, and each is a control on the page:
+
+     - `sort` re-runs ONE memo. It is read by `visible` and by nothing else, so the four aggregates
+       hanging off `matching` are untouched — the thing a correctness test cannot see, because all
+       four produce the same numbers whether they ran or not.
+     - `query` re-runs five. `facets` is the exception BY CONSTRUCTION: it reads `rows`, not
+       `matching`, so a filter cannot reach it.
+     - CLEARING the query back to what it was re-runs all five again, and this is the honest cost of
+       the shape rather than a bug: `matching` builds a FRESH ARRAY, so its identity moves even when
+       its contents did not, and every reader of it is woken. That is `CLAUDE.md`'s "a freshly built
+       wrapper defeats an identity check", visible as a number.
+     - `refresh` keeps serving what is held — `refreshing()` below goes true, the rows stay on screen,
+       and the whole fan re-runs ONCE when the new answer lands.
+     - `invalidate` drops it. The pending arm comes back, and the fan re-runs cold.
+     - `shard` asks for a DIFFERENT KEY. A new slot, a second request, and the first key stays cached
+       — going back to it is free. This is the row that found a bug: `rows` signalled on the cold
+       slot and stayed DIRTY, and a DIRTY node absorbs `mark`, so every later change stopped there
+       and the whole fan below served the previous shard's data with a perfectly correct-looking
+       render. `demos/memo.ts`, "…and it keeps carrying marks after the load it signalled on".
+
+     The counters are read on a BUTTON rather than rendered live on purpose: a live display would be
+     one more observer on every memo, which changes the graph work it is there to report. -->
+<script module>
+import { memo, route, state } from 'abide'
+import { type CatalogueEntry, OBJECTS_PER_ENTRY } from '../../catalogue.ts'
+import { catalogue } from '../../server/rpc/catalogue.ts'
+
+/** The default. `?size=` overrides it, which is what the n-sweep drives. */
+const DEFAULT_SIZE = 300
+
+/** How many contributors the `people` aggregate keeps. */
+const TOP_PEOPLE = 8
+
+/**
+ * One body run, counted per memo.
+ *
+ * Every field initialised here and none added later — this is read and written on the same paths the
+ * memos are, and a shape that grows a field is two hidden classes for the object every one of them
+ * touches.
+ */
+const RUNS = {
+    /** CUMULATIVE ms inside `runtimes`, which is the only honest way to read it: one run of that body
+        measures ~0.4 ms against a clock a browser coarsens to 100 µs, so a single sample is four
+        ticks and says almost nothing. Summed over runs it is an order of magnitude and not a figure —
+        enough to say the fan is sub-millisecond on 300 rows, and not enough to compare two of them. */
+    runtimesMs: 0,
+    /** A memo NOTHING renders until the panel is opened — the control for "does it run anyway". */
+    runtimes: 0,
+    rows: 0,
+    matching: 0,
+    visible: 0,
+    facets: 0,
+    totals: 0,
+    people: 0,
+    decades: 0,
+}
+
+// The counters are the finding, and a harness driving this page reads them from here rather than off
+// the rendered text. Guarded because this module renders on the server too.
+if (typeof window !== 'undefined') {
+    ;(window as unknown as { __runs: typeof RUNS }).__runs = RUNS
+}
+
+const SORTS: Record<string, (a: CatalogueEntry, b: CatalogueEntry) => number> = {
+    title: (a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : a.id - b.id),
+    added: (a, b) => b.addedAt - a.addedAt,
+    rating: (a, b) => b.ratings.average - a.ratings.average,
+}
+</script>
+
+<script>
+// Read ONCE at setup from the url this render was asked for. A plain const, not a cell: the sweep
+// reloads the page per n rather than navigating, so nothing here has to react to it changing.
+const asked = Number(route().url.searchParams.get('size'))
+const SIZE = Number.isFinite(asked) && asked > 0 ? asked : DEFAULT_SIZE
+
+let shard = state(0)
+let query = state('')
+let kind = state('all')
+let sort = state('title')
+let counts = state('press sample')
+/** OFF on the server too, so the SSR pass never ran `runtimes` either. See it below. */
+let showRuntimes = state(false)
+
+/**
+ * The load itself, as an ordinary derived value.
+ *
+ * `catalogue({…})` SELECTS the slot and starts nothing; the read inside this body is what reaches the
+ * server, and it SIGNALS while the first answer is in flight — so this body does not complete, every
+ * memo below it does not run, and none of them needs to know the value might be missing. `shard` is
+ * read in the args, so asking for another key is an ordinary write to an ordinary cell.
+ */
+const rows = memo(() => {
+    RUNS.rows++
+    return catalogue({ shard, size: SIZE })()
+})
+
+/** The filter. Reads `query` and `kind`; a sort change cannot reach it. */
+const matching = memo(() => {
+    RUNS.matching++
+    const needle = query.toLowerCase()
+    const wanted = kind
+    const found: CatalogueEntry[] = []
+    for (const entry of rows) {
+        if (wanted !== 'all' && entry.kind !== wanted) continue
+        if (needle !== '' && !entry.title.includes(needle)) continue
+        found.push(entry)
+    }
+    return found
+})
+
+/** The order. The ONLY reader of `sort`, which is what makes a sort change one body run. */
+const visible = memo(() => {
+    RUNS.visible++
+    return matching.slice().sort(SORTS[sort] ?? SORTS.title)
+})
+
+/**
+ * The sidebar counts, over `rows` rather than over `matching`.
+ *
+ * A facet count that changed with the filter would be a facet count nobody could use to widen the
+ * filter, so this reads the whole answer — and the graph follows the app's meaning for free: typing
+ * in the query box cannot wake it.
+ */
+const facets = memo(() => {
+    RUNS.facets++
+    const byKind = new Map<string, number>()
+    for (const entry of rows) byKind.set(entry.kind, (byKind.get(entry.kind) ?? 0) + 1)
+    const out: { name: string; count: number }[] = []
+    for (const [name, count] of byKind) out.push({ name, count })
+    out.sort((a, b) => b.count - a.count)
+    return out
+})
+
+/** Three levels down, over the filtered set: every episode of every season of every match. */
+const totals = memo(() => {
+    RUNS.totals++
+    let episodes = 0
+    let minutes = 0
+    let watched = 0
+    let rating = 0
+    for (const entry of matching) {
+        rating += entry.ratings.average
+        for (const season of entry.seasons) {
+            for (const episode of season.episodes) {
+                episodes++
+                minutes += episode.runtimeMinutes
+                if (episode.watched) watched++
+            }
+        }
+    }
+    const count = matching.length
+    return {
+        episodes,
+        hours: Math.round(minutes / 60),
+        watched,
+        rating: count === 0 ? 0 : Math.round((rating / count) * 10) / 10,
+    }
+})
+
+/**
+ * The deepest walk on the page: entry → people → credits, aggregated by person across every match.
+ *
+ * The ids collide across entries on purpose (`catalogue.ts` draws them from a pool of 97), so this is
+ * a real many-to-many rollup rather than a sort of the row count.
+ */
+const people = memo(() => {
+    RUNS.people++
+    const byPerson = new Map<number, { name: string; role: string; episodes: number }>()
+    for (const entry of matching) {
+        for (const person of entry.people) {
+            let held = byPerson.get(person.id)
+            if (held === undefined) {
+                held = { name: person.name, role: person.role, episodes: 0 }
+                byPerson.set(person.id, held)
+            }
+            for (const credit of person.credits) held.episodes += credit.episodes
+        }
+    }
+    const out: { name: string; role: string; episodes: number }[] = []
+    for (const held of byPerson.values()) out.push(held)
+    out.sort((a, b) => b.episodes - a.episodes)
+    return out.slice(0, TOP_PEOPLE)
+})
+
+/** A second aggregate over the same filtered set, so the fan is wider than one reader. */
+const decades = memo(() => {
+    RUNS.decades++
+    const byDecade = new Map<number, number>()
+    for (const entry of matching) {
+        const decade = entry.releaseYear - (entry.releaseYear % 10)
+        byDecade.set(decade, (byDecade.get(decade) ?? 0) + 1)
+    }
+    const out: { decade: number; count: number }[] = []
+    for (const [decade, count] of byDecade) out.push({ decade, count })
+    out.sort((a, b) => a.decade - b.decade)
+    return out
+})
+
+/**
+ * The control for the question the counters are really about: does a memo run because the page has
+ * one, or because something READ it?
+ *
+ * Nothing renders this until `runtimes` is on, and it is off on the server too — so it is the one
+ * body on the page the SSR pass never ran either. After hydration its counter is 0 while every other
+ * memo here reads 1, and opening the panel takes it to 1. A memo is lazy; hydration is not special,
+ * it is simply a reader.
+ */
+const runtimes = memo(() => {
+    const started = performance.now()
+    RUNS.runtimes++
+    const byHour = new Map<number, number>()
+    for (const entry of matching) {
+        let minutes = 0
+        for (const season of entry.seasons) {
+            for (const episode of season.episodes) minutes += episode.runtimeMinutes
+        }
+        const hours = Math.round(minutes / 60)
+        byHour.set(hours, (byHour.get(hours) ?? 0) + 1)
+    }
+    const out: { hours: number; count: number }[] = []
+    for (const [hours, count] of byHour) out.push({ hours, count })
+    out.sort((a, b) => a.hours - b.hours)
+    RUNS.runtimesMs += performance.now() - started
+    return out
+})
+
+const sample = (): void => {
+    counts =
+        `runtimes ${RUNS.runtimes} in ${RUNS.runtimesMs.toFixed(1)}ms · ` +
+        `rows ${RUNS.rows} · matching ${RUNS.matching} · visible ${RUNS.visible} · ` +
+        `facets ${RUNS.facets} · totals ${RUNS.totals} · people ${RUNS.people} · decades ${RUNS.decades}`
+}
+</script>
+
+<h1>data</h1>
+<p>{SIZE} entries over one rpc, about {SIZE * OBJECTS_PER_ENTRY} objects five levels deep, and six
+derived values over them. The counters below are memo BODY RUNS — the work, which is what moving one
+cell is supposed to change and what nothing about the rendered numbers can tell you.</p>
+
+<div class="controls">
+    <input id="query" placeholder="filter titles" bind:value={query}/>
+    <select id="kind" bind:value={kind}>
+        <option value="all">every kind</option>
+        <option value="series">Series</option>
+        <option value="film">Film</option>
+        <option value="documentary">Documentary</option>
+    </select>
+    <select id="sort" bind:value={sort}>
+        <option value="title">Title</option>
+        <option value="added">Recently Added</option>
+        <option value="rating">Rating</option>
+    </select>
+    <button id="shard" onclick={() => { shard = shard + 1 }}>next shard ({shard})</button>
+    <button id="refresh" onclick={() => catalogue.refresh({ shard: shard.peek(), size: SIZE })}>refresh</button>
+    <button id="invalidate" onclick={() => catalogue.invalidate()}>invalidate</button>
+    <button id="sample" onclick={sample}>sample the counters</button>
+    <label><input id="runtimes" type="checkbox" bind:checked={showRuntimes}/> runtimes panel</label>
+    {#if catalogue({ shard, size: SIZE }).refreshing()}<span id="refreshing">refreshing — the rows below are the OLD answer</span>{/if}
+</div>
+
+<pre id="runs">{counts}</pre>
+
+<!-- The PENDING ARM is what makes this a streamed document rather than a blocked one: there is markup
+     to send, so a document render sends it with the shell and patches the settled chain in when the
+     load lands. On the client the same chain is the ordinary reactive thunk — `next shard` selects a
+     cold slot, the pending arm shows, the rows replace it.
+
+     The probe is on the RPC HANDLE and not on `rows`, and that is not a stylistic choice: `pending()`
+     does not propagate through a derivation, so `rows.pending()` reads false throughout and this
+     chain would never defer. The handle is recognised here because an import from `server/rpc/**` is
+     a keyed memo — `rpcImports` in `$compiler/internal/emit.ts`, which is the only place that fact
+     can come from, since the file itself never writes the binding. -->
+
+{#if catalogue({ shard, size: SIZE }).pending()}
+    <p id="pending">loading shard {shard}…</p>
+{:else if catalogue({ shard, size: SIZE }).error()}
+    <p id="failed">the catalogue failed to load</p>
+{:else}
+    <div id="summary">
+        <p>{visible.length} of {rows.length} · {totals.episodes} episodes · {totals.hours} hours ·
+           {totals.watched} watched · mean rating {totals.rating}</p>
+        <p id="facets">{#for facet of facets by facet.name}<span class="facet">{facet.name} {facet.count}</span> {/for}</p>
+        <p id="decades">{#for span of decades by span.decade}<span class="decade">{span.decade}s {span.count}</span> {/for}</p>
+        <p id="people">{#for person of people by person.name}<span class="person">{person.name} ({person.role}) {person.episodes}</span> {/for}</p>
+        <!-- The one region on this page nothing reads until it is asked for. `runtimes` is as heavy as
+             any aggregate above it and its counter is 0 after hydration, because a memo runs when it
+             is READ and nothing has read it — the branch it lives in produced no output on the server
+             and produces none here. Tick the box and it goes to 1. -->
+        {#if showRuntimes}
+            <p id="runtime-spread">{#for span of runtimes by span.hours}<span class="hours">{span.hours}h {span.count}</span> {/for}</p>
+        {/if}
+    </div>
+
+    <div id="rows" class="grid">
+        {#for entry of visible by entry.id}
+            <article class="entry">
+                <!-- The artwork's dominant colour, four levels into the payload — a value that only
+                     exists at runtime, which is what a `style` is for. -->
+                <div class="swatch" style={`background: rgb(${entry.artwork.poster.dominant.r} ${entry.artwork.poster.dominant.g} ${entry.artwork.poster.dominant.b})`}></div>
+                <h3>{entry.title}</h3>
+                <p class="meta">{entry.kind} · {entry.releaseYear} · {entry.ratings.average} ({entry.ratings.count} votes) · {entry.seasons.length} seasons</p>
+                <p class="cast">{#for person of entry.people by person.id}<span class="person">{person.name}</span> {/for}</p>
+                <p class="tags">{#for tag of entry.tags by tag}<span class="tag">{tag}</span> {/for}</p>
+            </article>
+        {/for}
+    </div>
+{/if}

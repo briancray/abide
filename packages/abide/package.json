@@ -6,6 +6,7 @@
     "exports": {
         ".": "./abide.ts",
         "./runtime": "./src/shared/runtime.ts",
+        "./runtime/transport": "./src/shared/transport.ts",
         "./ui": "./src/ui/index.ts",
         "./server": "./src/server/index.ts",
         "./tests": "./tests/index.ts",

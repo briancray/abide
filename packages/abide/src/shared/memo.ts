@@ -23,7 +23,7 @@
 
 import { markSource } from './internal/BRANDS.ts'
 import { admit, Bounded, release, touch } from './internal/ceilings.ts'
-import { derive, internals, type Memo, type State, untrack } from './internal/graph.ts'
+import { type Cell, derive, internals, isPending, type Memo, untrack } from './internal/graph.ts'
 import { keyOf, matcher } from './internal/keys.ts'
 import { isAsyncIterable, isThenable } from './internal/probes.ts'
 import { disposeWith, storeFor } from './internal/scopes.ts'
@@ -34,12 +34,12 @@ import { arm } from './internal/timers.ts'
 // re-run. Everything else — `()`, `peek`, `set`, the probes, `await` — is the ordinary cell surface,
 // which is why there is no `live`/`peek(args)`/`publish(args, v)` vocabulary here any more. The args
 // select the slot ONCE, at the call.
-export interface MemoHandle<T> extends State<T | undefined> {
+export interface MemoHandle<T> extends Cell<T> {
     /** This data may be STALE: re-run the body now, keeping the old value on screen meanwhile. */
     refresh(): void
     /**
-     * Awaiting waits for a settle, so it resolves the loaded type — narrower than `()`, which may
-     * find nothing there yet.
+     * Awaiting waits for a settle, exactly as reading it does — the two differ in HOW they wait, not
+     * in what they can hand back.
      */
     then<Fulfilled = T, Rejected = never>(
         onFulfilled?: ((value: T) => Fulfilled | PromiseLike<Fulfilled>) | null,
@@ -277,6 +277,11 @@ function keyedMemo<Args, T>(
         try {
             produced = untrack(() => body(args))
         } catch (error) {
+            // …but a read with nothing to serve YET is not a throw the slot settles: the body has not
+            // run, so it is not loaded and it has not failed. Recorded as a failure the slot never
+            // recovers — the retry finds it loaded, serves the retained error, and the walk waits on
+            // a load that already ended. The signal goes back to whoever will call this again.
+            if (isPending(error)) throw error
             // A body that throws synchronously settles in the call, exactly as a sync value does.
             slot.loadedAt = Date.now()
             internals.fail(slot.handle, error)
@@ -485,22 +490,23 @@ export function memo<T, Out>(
     body: () => Promise<T>,
     transform: (value: T) => Out,
     options?: MemoOptions,
-): Memo<Out | undefined>
+): Memo<Out>
 export function memo<T, Out>(
     body: () => AsyncIterable<T>,
     transform: (value: T) => Out,
     options?: MemoOptions,
-): Memo<Out | undefined>
+): Memo<Out>
 export function memo<T, Out>(body: () => T, transform: (value: T) => Out, options?: MemoOptions): Memo<Out>
 export function memo<Args, T, Out>(
     body: (args: Args) => T | Promise<T> | AsyncIterable<T>,
     transform: (value: T) => Out,
     options?: MemoOptions<Args>,
 ): KeyedMemo<Args, Out>
-export function memo<T>(body: () => Promise<T>, options?: MemoOptions): Memo<T | undefined>
-// A body that YIELDS is a stream, so what the memo holds is a chunk — the same widening a promise
-// gets, for the same reason: there is nothing there until the first one lands.
-export function memo<T>(body: () => AsyncIterable<T>, options?: MemoOptions): Memo<T | undefined>
+export function memo<T>(body: () => Promise<T>, options?: MemoOptions): Memo<T>
+// A body that YIELDS is a stream, and what the memo holds is a chunk. No widening for either shape:
+// a read that has nothing yet signals rather than reporting `undefined`, so the absence shows up on
+// `peek` and nowhere else.
+export function memo<T>(body: () => AsyncIterable<T>, options?: MemoOptions): Memo<T>
 export function memo<T>(body: () => T, options?: MemoOptions): Memo<T>
 export function memo<Args, T>(
     body: (args: Args) => T | Promise<T> | AsyncIterable<T>,

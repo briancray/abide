@@ -31,13 +31,16 @@ const open = state(false)
 
 const spans = memo((): Painted[] => {
     if (!open) return NOTHING
-    const slot = bodyOf({ suite, title, face })
     try {
-        const answered = slot()
-        return answered === undefined ? NOTHING : painted(answered.source)
+        // The call SELECTS the slot and the read is the fetch, exactly as a local keyed memo reads —
+        // an rpc is one, so there is no handle to hold and nothing to narrow. A body that has not
+        // arrived signals from here, so the pane paints nothing until it does rather than rendering
+        // an empty `<pre>` and then filling it.
+        return painted(bodyOf({ suite: suite(), title: title(), face: face() }).source)
     } catch (failure: unknown) {
         // A body the file does not have, or a server that could not be asked. The pane says so in the
-        // place the code would have been, which is where somebody is already looking.
+        // place the code would have been, which is where somebody is already looking. A SIGNAL lands
+        // here too — a JavaScript catch is total — and what this builds for one is discarded.
         return [{ class: 'text-rose-400', text: String(failure) }]
     }
 })

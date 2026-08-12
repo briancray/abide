@@ -8,8 +8,9 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Specifier | Holds |
 | --- | --- |
-| `abide` | What an author TYPES — **15 values and 20 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props`, `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
-| `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `raw` (`{html(...)}`), `keyed` (`by` on a `{#for}`), `remote` / `remoteSocket` (what a server module elides to in the client lane), and `routes` / `outlet` / `ready` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says. `html` is the one exception and stays on `abide`: it is the template tag, which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
+| `abide` | What an author TYPES — **15 values and 22 types**, and the file behind it is CURATED rather than collected: `./abide.ts`, one line per decision, not a barrel over a directory. `state` / `memo` / `channel`, `watch`, `html` / `props` (with `Props`, the type a compiled component's parameter is written in), `log`, `online()` / `health()` / `identity()`, `route()` / `navigate()` / `url()`, `invalidate` / `refresh`. A VALUE is here because a user-facing app types it — the standard is the example's own pages and server, never its demos, which test the framework rather than use it. A TYPE is here because it is the input or output of one of those values, which is why `Route` is here and `RouteEntry` is not. `scope`, `untrack` and `isolate` are on no entry point at all: nothing an app writes calls one, so the suites that test the graph reach `$shared/*` directly |
+| `abide/runtime` | What only the COMPILER writes, plus the predicates that read what it wrote. Emitted: `classes` / `styles` (a `class:` / `style:` toggle), `adopt` (a `<style>` block), `awaited` / `boundary` / `streamed` (the blocks), `component` / `propCell` (a `<Name/>` tag and the props it binds), `raw` (`{html(...)}`), `keyed` (`by` on a `{#for}`), and `routes` / `outlet` / `ready` (what `abide build` writes into the client entry). Read-back: `isTemplate`, `isKeyed`, `classifySlots`, `escape`, `cellProps`. Each emitted name is what the compiler writes for a SPELLING, never a name a source file says — with one exception, `start`, which is written for a POSITION rather than a spelling: the memos an unconditional plain slot reads, started before the walk reaches any of them. `html` is the one exception and stays on `abide`: it is the template tag, which a hand-written `.ts` component writes too. Nothing here may import a renderer, which is why `hydrate` is on `abide/ui` |
+| `abide/runtime/transport` | What a server module ELIDES TO in the client lane — `remote` / `remoteSocket` and the shapes describing one (`Rpc`, `RpcHandle`, `RemoteOptions`, `RemoteSocket`, `RemoteSocketOptions`, `CallOptions`, `Kind`, `Method`, `Wire`). Split off `abide/runtime` for a BUNDLING reason and no other: that module is what the generated client entry imports for `routes` / `outlet` / `ready`, so anything re-exported from it sits in the chunk every page loads, and one lazy route with one rpc put the whole call-and-decode path in front of every page — 4,066 bytes of the perf app's shared entry, on a page that calls nothing. Reached by its own specifier it lands in the chunk of whatever page imports it |
 | `abide/ui` | The DOM substrate: `mount`, `hydrate` |
 | `abide/server` | The SSR substrate, the request scope and its ambients, `server()`, `appDataDir()`, `config()`, `pages()`, the process lifecycle, and the declaring half of both transports |
 | `abide/tests` | The test kit: the `Case` shape, assertions, DOM counters, bench timing, `loopback()` |
@@ -42,8 +43,8 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 | Name | Type Signature | Description |
 | --- | --- | --- |
 | `state` | `<T>(initial: T, transform?: (v: T) => T) => State<T>` | A cell holding a value you write yourself. |
-| `state` | `<T>(initial: Promise<T>, transform?) => State<T \| undefined>` | The same cell started cold on a LOAD; `pending` until it lands. |
-| `state` | `<T>(initial: AsyncIterable<T>, transform?) => State<T \| undefined>` | The same cell started on a STREAM: it holds the latest chunk, `chunks()` holds the transcript. |
+| `state` | `<T>(initial: Promise<T>, transform?) => Cell<T>` | The same cell started cold on a LOAD; `pending` until it lands. A `Cell` rather than a `State` because it starts with nothing retained, which is the one thing `peek` can see. |
+| `state` | `<T>(initial: AsyncIterable<T>, transform?) => Cell<T>` | The same cell started on a STREAM: it holds the latest chunk, `chunks()` holds the transcript. |
 | `transform` | `(value: T) => T` | Every write passes through it before storage, the `initial` included. Untracked; on a load or stream it sees what LANDED. A throw is a failed write. |
 | `state.shared` | `<T>(key: string, initial: T, transform?) => State<T>` | A cell shared by `key` across component instances, per-caller. The first call decides the value; a later one gets the existing cell. |
 
@@ -51,7 +52,7 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `memo` | `<T>(body: () => T, options?: MemoOptions) => Memo<T>` | A derived value that recomputes whenever anything it read changes. A promise or async iterable body widens to `Memo<T \| undefined>`. |
+| `memo` | `<T>(body: () => T, options?: MemoOptions) => Memo<T>` | A derived value that recomputes whenever anything it read changes. A promise or async iterable body is the same `Memo<T>`: a load that has not landed is not part of the read's type, because the read signals instead. |
 | `memo` | `<Args, T>(body: (args: Args) => T, options?: MemoOptions<Args>) => KeyedMemo<Args, T>` | A value computed per argument key, one independently cached slot per distinct args. Only the key is tracked; the body is untracked. |
 | `memo` | `(body, transform: (v: T) => Out, options?) => Memo<Out>` | The derived value passes through `transform`, untracked, and the memo becomes its return. Options still follow third. |
 | `m` | `(args: Args) => MemoHandle<T>` | SELECTS the slot and hands back its cell. Selecting starts nothing; the read kicks the load. |
@@ -87,6 +88,37 @@ A reference of every public capability, in tables. Three isomorphic primitives �
 A channel never loads, so `pending` / `refreshing` / `error` are always the cold answer, `streaming()`
 is always true and `done()` always false. `settled()` asks whether anything current has arrived.
 
+**A `remoteSocket` is the one exception, for `pending` and `refreshing`.** Its CONNECTION is a load: from the
+first read until the first message arrives, `pending()` is true and the read SIGNALS, exactly as a
+cell whose load is in flight does. That is not a special case for hydration — it is what stops one.
+A client adopting server markup runs each slot's thunk once, and a cold channel handing back
+`undefined` painted empty over a value the server had got right, warned, and filled it back in a
+round trip later; the same slot over a `memo` did not, because a pending read signals and the slot is
+left alone. Spelling the connection as the load it is puts a socket on the path every catcher already
+walks. `chunks()` deliberately does NOT signal — at `tail: 0` the transcript is empty however many
+messages have arrived, so a reader waiting for it to fill would wait forever. The server half is
+untouched: `socket()` is `channel()`, and a walk that waited on a channel which may never receive
+would wait forever too.
+
+`refreshing()` is the same reading carried forward: a reload in flight over a value still being
+served is, for a socket, **RECONNECTING** — the wire dropped, a retry is armed, and the last message
+is still what is on screen. Connected and idle is not it; nothing is in flight there, and
+`streaming()` already says the stream is open. It is the one thing a subscriber could not otherwise
+ask, because after the first message a healthy connection and a dead one read identically. Note which
+way round it goes: true-while-CONNECTED would be false on the server, where `refreshing()` is always
+the cold answer, so a region asking it would render one thing on each side and mismatch on hydration.
+The two probes stay disjoint — a wire that drops before anything ARRIVED has nothing to serve, so it
+is still `pending`.
+
+| the wire | `pending()` | `refreshing()` |
+| --- | --- | --- |
+| never read | false — nothing asked, so nothing is in flight | false |
+| connecting, nothing received | **true** | false |
+| connected, nothing received | **true** | false |
+| connected, message received | false | false |
+| dropped, retry armed | false | **true** |
+| `close()`d | false | false |
+
 ## `watch` — the effect
 
 | Name | Type Signature | Description |
@@ -118,11 +150,42 @@ ITSELF, where they are a pattern.
 
 | Name | Type Signature | Description |
 | --- | --- | --- |
-| `x()` | `() => T` | The current value, filling in on its own once it arrives. THROWS if the last load failed. On a stream, the latest chunk. |
+| `x()` | `() => T` | The current value, filling in on its own once it arrives. THROWS if the last load failed, and SIGNALS if a first load has not landed yet — see below. On a stream, the latest chunk. |
 | `x.chunks` | `() => T[]` | Everything a stream produced, in order — the LIVE transcript, not a copy. The same array across chunks as well as between them; its identity moving means the transcript was replaced (a reset, or an overflow drop), never appended to. A reader wakes on the version and re-reads it; do not hold it across an await expecting it frozen. The same empty array on a source that never streamed. |
 | `for await (… of x)` | `AsyncIterable<T>` | The cursor face of the same transcript, for a consumer that reads each chunk once: everything already produced, then everything that comes next. A second consumer replays the whole of it, because the transcript is retained on the cell. A cell that never streamed yields its value once and ends. |
-| `x.peek` | `() => T` | Exactly what is there now, subscribing to nothing, starting nothing, and never throwing. |
-| `await x` | `PromiseLike<T>` | The settled value — narrower than `x()`, which may find nothing there yet. Awaiting a cold slot starts it. |
+| `x.peek` | `() => T \| undefined` | Exactly what is RETAINED now, subscribing to nothing, starting nothing, never throwing and never signalling — so `undefined` here means nothing has landed yet. `State<T>` narrows it to `T`: a cell handed a value was never cold, which is what keeps `x += 1` from needing a narrowing that cannot fail. |
+| `await x` | `PromiseLike<T>` | The settled value. Its type is the one `x()` has; the two differ in HOW they wait, not in what they hand back. Awaiting a cold slot starts it. |
+
+### A read that is not ready SIGNALS
+
+`x()` on a cell whose first load is still in flight does not hand back `undefined` for a caller to
+narrow. It throws, and whoever is standing under the read produces no output for that region and runs
+again when the load lands. Nothing else in the expression runs, so a member access or an arithmetic
+on a read that is not ready produces nothing rather than `undefined.name` or `NaN`.
+
+It signals only where RE-RUNNING is the recovery, which is where somebody is standing under it:
+
+| position | a pending read |
+| --- | --- |
+| slot thunk · `memo` body · `watch` body | signals — the region paints nothing and repaints on the wake |
+| the server walk | signals — the walk waits for that load and calls the thunk again |
+| `await x` | waits — it is the settled value by definition |
+| `<script>` setup · event handler · module scope | hands back what is there (`undefined`) |
+
+The type follows the position, because the compiler already knows it: a template read is `T` and
+needs no narrowing, and a `<script>` statement is emitted as `peek()` and is honestly
+`T | undefined`. The split inside a `<script>` is STATEMENT vs FUNCTION BODY — a `memo` or `watch`
+body is re-run, and nothing syntactic tells one from an event handler, so a function body there reads
+rather than peeking. Write `x.peek()` for the honest type in a handler.
+
+A `memo` is transparent to it: the signal names the CELL it started at, since that is the only thing
+that can be waited for, and the derivation is left to run its body again on the next read. A
+`refreshing` cell never signals — it has a value to serve.
+
+**Catching one cannot change what renders.** `{#try}` does not catch a signal at all. A hand-written
+`try` in a helper does — a JavaScript `catch` is total — but what it builds is discarded and the
+region waits anyway, so both substrates show the same thing either way. What a `catch` block DOES,
+though, it still does: side effects in one are not undone.
 
 ### Probes — they only observe
 
@@ -163,6 +226,48 @@ Probes never throw and never start work.
 | `timeout` | `number` | ms the call may go without progress before it fails. Per chunk on a handler that yields. |
 | `crossOrigin` | `string[]` | Which other origins may call it, closed unless declared. `'*'` opens it; the websocket upgrade is gated by the same list. |
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. |
+| `seed` | `boolean` | Whether a render hands what this resolved to the client that adopts it. **Default on.** See below. |
+
+### Seeding — the answer travels WITH the markup it produced
+
+A document render resolves a read to build the markup; the client then adopts that markup with a cold
+slot of its own, so its first read of the same call would reach the network for an answer already on
+screen — and the handler would run a SECOND time, because a slot is per-caller and the browser is a
+different caller. On the perf app's `/data` that was a 254 KB document followed by a 623 KB fetch,
+120 ms of handler on each side, and a client-side filter that could not run until the second landed.
+
+So the render collects what it resolved and writes it into the document as a
+`<script type="application/json" id="abide-seed">` — **after every deferred region has settled**,
+which is why it is at the end: a `{#if x.pending()}` region resolves long after the shell is on the
+wire, and a block written with the head would carry only the slots that were already warm. It is a
+data block, never executed, and it carries the request's CSP nonce because a policy does not read
+`type`.
+
+The browser takes its value SYNCHRONOUSLY on the first read of that slot — a `memo` settles a sync
+body in the call — so the settled arm paints immediately rather than showing a placeholder for one
+round trip. A seed is consumed on that first take, so `invalidate` goes back to cold and the next
+read reaches the network, exactly as it would have.
+
+| | |
+| --- | --- |
+| keyed by | the endpoint's ADDRESS and `keyOf(args)` — what the compiler wrote into the stub, and what a keyed memo already addresses its slot by. Neither side is told about the other |
+| never seeded | a handler that YIELDS (its value is the latest chunk and the transcript is the point, so there is no one answer to write down), and `renderDocumentToString`, whose whole reason to exist is a reader that runs no scripts |
+| costs nothing when off | a request that is not rendering a page opens no table, so an endpoint answering a fetch records nothing and builds no key |
+| turn it off for | a payload big enough that inlining costs more than fetching it, and an answer carrying FIELDS THE PAGE DID NOT RENDER — seeding writes the whole value into the document, not just the part the markup showed |
+
+A NAVIGATION is seeded the same way, as its LAST piece. The placement is the opposite of a document's
+and for the same reason — who is doing the parsing. A document's client hydrates as the browser's own
+parser reaches the markup, so the block must precede the reads that consume it; a navigation's client
+is holding the stream and commits only when it ends, so a block written after the drain still lands
+first. That is what lets a navigation seed the DEFERRED half as well: a panel whose load settles
+during the drain is in the table, so the arriving page paints its settled arm rather than a
+`pending()` placeholder over markup that already has the answer in it.
+
+The piece is the same `<script type="application/json" id="abide-seed">`, framed by the same sentinel
+as every other piece, and it carries NO nonce: the client parses it out of a `<template>` and reads
+its text, so no element of it enters the document for a policy to evaluate. An OVERTAKEN navigation's
+seeds are dropped rather than merged — its answers are for a page nobody will see, and nothing would
+ever consume them.
 
 ## `socket` — `channel` + transport
 
@@ -170,7 +275,7 @@ Probes never throw and never start work.
 | --- | --- | --- |
 | `socket` | `<T>(options?: SocketOptions<T, void>) => Channel<T>` | Declares a stream of messages reaching subscribers on both sides of the wire. |
 | `socket` | `<T, Args>(options?: SocketOptions<T, Args>) => KeyedChannel<Args, T>` | The room-addressed form. The server half is `channel()` unchanged. |
-| `remoteSocket` | `<T, Args>(id: string, options?: RemoteSocketOptions) => RemoteSocket<T, Args>` | The client half: an ordinary `Channel`/`KeyedChannel` plus `close()`, reconnecting on its own if the connection drops. |
+| `remoteSocket` | `<T, Args>(id: string, options?: RemoteSocketOptions) => RemoteSocket<T, Args>` | The client half: an ordinary `Channel`/`KeyedChannel` plus `close()`, reconnecting on its own if the connection drops. Its connection is a LOAD — `pending()` until the first message, and the read signals until then, which is what lets a hydrating client keep the value the server rendered. See "`channel` — the subscribed value". |
 | `options.channel` | `ChannelOptions` | The underlying stream's own memory: how many messages it keeps and how long one stays current. |
 | `options.clientPublish` | `false \| ((message: T, room: Args \| undefined, into: Channel<T>) => void \| Promise<void>)` | Whether clients may publish, and what happens to what they send. `false` by default — a socket is a broadcast until an app says otherwise. `into` is the sender's own room, already resolved, so an echoing policy never names the declaration it is inside. |
 | `options.schema` | `Schema<T>` | The declared shape of a message a CLIENT sends — the wire is the only door one arrives through from outside the process. |
@@ -503,20 +608,29 @@ is sugar over it, not a replacement.
 | --- | --- |
 | `{source}` | The identifier IS the whole expression → the **cell** is handed over. A slot renders its value; a prop or a `bind:` receives the cell |
 | `{m(args)}`, `{m(args).pages}` | A **keyed** memo is read by its CALL the way a cell is read by its name — the handle IS the cell, so no trailing `()` |
-| `{source + 1}`, `{source.length}` | Used as part of an expression → a **read** |
+| `{source + 1}`, `{source.length}` | Used as part of an expression → a **read**. In a `<script>`'s own statements it is `peek()` instead — see below |
 | `source = v` | A write |
 | `source += v`, `source++` | Read through `peek` then write — a write must not subscribe. `++`/`--` are statement position only |
 | `source()`, `source.set(v)`, `.peek`, `.pending`, … | Untouched. The shared surface is **reserved**; every other property belongs to the value |
+| `{await p}` | **Refused.** A slot is a thunk and a thunk is not async. A promise in a slot renders what it resolves to; a load to say something ABOUT goes in a cell |
 | shadowing | A `const`/`let`/parameter/`{#for}` binding of the same name shadows, so a loop variable is never read as a cell |
 | narrowing | A `{#if}`/`{:else if}`/`{#switch}` condition reads ONCE into a local and its branch narrows off that. The body's other reads keep their own thunks |
+| position | A read among a `<script>`'s STATEMENTS emits `peek()`, and is typed `T \| undefined` for it. A read inside a FUNCTION body there emits `()` |
 
 What counts as a cell is decided **syntactically**: `const x = state(…)` or `state.shared(key, …)` in
-a `<script>`, or a prop BOUND from `props<T>()` whose member in `T` is
-`State<…>`/`Memo<…>`/`Cell<…>`/`Channel<…>`. The binding is what carries it, so `{ note: text }` makes
-`text` the cell and leaves `note` nobody.
+a `<script>`, or ANY prop bound from `props<T>()` — a component's props are cells, because the
+position showing it holds the instance and writes each one. The two exceptions are read off `T`: a
+FUNCTION member is a callback, and a `KeyedMemo`/`KeyedChannel` is a handle a cell cannot stand in
+for. The binding is what carries it, so `{ note: text }` makes `text` the cell and leaves `note`
+nobody.
 Whether the NAME or the CALL is the source comes from the declaration — `memo(() => …)` vs
-`memo(({ id }) => …)`, `channel<T>()` vs `channel<T, Args>()`. An **imported** source cannot be seen
-that way and keeps the explicit spelling.
+`memo(({ id }) => …)`, `channel<T>()` vs `channel<T, Args>()`. An **imported** source has no
+declaration to read, so it keeps the explicit spelling — with one exception, which is an import
+statement that says as much as a declaration would: a named import from **`server/rpc/**`** is a
+keyed memo, because that is what the directory means and `rpc` = `memo` + transport leaves nothing
+else it could be. So `{orders({ id }).total}` reads, and `{#if orders({ id }).pending()}` defers,
+exactly as a local keyed memo does. `server/sockets/**` is NOT included: a socket is keyed only in
+the room form, and an import cannot say which one it is.
 
 ## Template expressions
 
@@ -527,7 +641,7 @@ that way and keeps the explicit spelling.
 | `name={expr}` | Reactive attribute or property (whole-value expression) |
 | `on<event>={fn}` | Native listener on an ELEMENT. On a **component** the same syntax is an ordinary prop named `onclick` |
 | `name="…{expr}…"` | Quoted values interpolate too, also on component props; a literal brace is `{'{'}` |
-| `bind:value` | Two-way bind — read the property, write back on input/change. On a **component** it is the same as passing the cell: the child declares the prop as one and writes it |
+| `bind:value` | Two-way bind — read the property, write back on input/change. On a **component** it hands over the cell ITSELF rather than a copy, which is what lets the child write back; declaring the prop as a `State<…>` is what says it may |
 | `bind:checked` | Boolean bind — a boolean DOM property mirrored as a boolean attribute, never stringified |
 | a `<select>` | `bind:value` on the SELECT, with a plain `value="…"` on each `<option>`. `bind:selected` on an option is refused: `change` does not fire there, so only the select has both halves |
 | `bind:group` | Radio/checkbox membership, compared against the input's own `value`; never emitted as a `group` attribute |
@@ -542,12 +656,9 @@ that way and keeps the explicit spelling.
 | Block | Branches / notes |
 | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` |
+| `{#if x.pending()}` | An `{#if}` chain whose FIRST test is a `pending()` probe is the DEFERRING form: the first arm is the placeholder a document render sends now, and the rest is patched in when the cell settles. The whole chain is one arm, handed over three times, so the probe picks what shows on each pass and the region stays the ordinary reactive thunk. The block asks the cell for its settle before the arm runs, so a LAZY handle — a keyed memo slot, which starts nothing until something asks for its value — is in flight by the time the probe is asked |
 | `{#for item, i of list by key}` | Keyless → positional (dev-warns if the body is stateful) |
 | `{#for await item of source}` | Streaming list; `{:catch}`. REACTIVE: a `refresh()`/`invalidate()` or a changed dep re-streams it. Rows go to the same list part, so a key still MOVES a row |
-| `{#await p}` | `{:then v}`, `{:catch e}`, `{:finally}`. The operand is evaluated by the slot's own effect and the branches are closures, so settling never re-evaluates it. The BLOCK form always has a pending body — everything before the first `{:then}`, empty if nothing was written — and a document render sends it as a PLACEHOLDER, patching the settled arm in as it lands. So `{#await p}{:then v}…{/await}` streams with an empty placeholder, which is what to write to narrow in `{:then}` or to stream one block without one |
-| `{#await p then v}` / `{#await p catch e}` | Inline shorthand — body = that branch, and no pending branch BY CONSTRUCTION. Nothing to send, so a server render BLOCKS and the markup is complete: what a reader running no scripts needs. The FORM decides, never whether a pending body is blank — whitespace must not be the difference between holding a response and streaming it |
-| `{await p}` | The shortest form — no arms at all, so the settled value IS the body. Exactly `{#await p then v}{v}{/await}`, compiled to the same call with an identity arm, so it blocks for the same reason |
-| `{(await p).b.c}` | The same, with the suffix as the arm: `awaited(p, { then: v => v.b.c })`. Liftable because the operand and the suffix are each CONTIGUOUS in the file, which is what desugaring needs. `{await p.b.c}` is legal too and means what JavaScript means — `await (p.b.c)`, so a cell is READ before it lands; that is the author's expression and abide does not rewrite it. Two awaits in one slot is one arm short of a shape and is refused; `{#await}` nests |
 | `{#switch expr}` | `{:case v}`, `{:default}` |
 | `{#try}` | `{:catch e}`, `{:finally}` — JS-semantics error boundary, so SYNCHRONOUS. The body is one unit rather than one thunk per expression, so a dep inside re-runs the whole body |
 | `{#component Name(pattern)}` | **Inline component** — a reusable builder. TitleCase required. Invoked as `<Name/>`, passable as a value. The parameter is the pattern written in the parens; children arrive through `<slot/>`, which is why one written with no parameter still binds `args`. Nested inside `<Foo>…</Foo>` it becomes Foo's `X` prop |
@@ -556,11 +667,33 @@ that way and keeps the explicit spelling.
 
 | Feature | Notes |
 | --- | --- |
-| `<Name/>` | Capitalised tag = component invocation |
+| `<Name/>` | Capitalised tag = component invocation, CARRIED to the position that shows it rather than called where it stands — see below |
 | `<slot/>` | Renders default children |
 | `<Tag>…</Tag>` | Children passed to the component's `<slot/>` |
 | nested `{#component X()}` | Named component prop (render-prop) |
 | `const C = memo(…)` → `<C/>` | A state- or memo-named tag is a **reactive** component (re-mounts on change) |
+| an inline `{#component}` | Called where it stands. It has no `<script>`, so there is no setup to run once and nothing to keep — and its parameter type is written by hand, so its props stay values |
+
+### Instances
+
+`<Card n={r.n}/>` emits `component(Card, { n: r.n })`, not `Card({ n: r.n })`. The call is a marker
+the position interprets, exactly as a deferring block and `{#try}` are: the part that shows the component
+holds the instance, calls the view ONCE, and writes every later pass's props into the cells that call
+was given. So **setup runs once** — the child's own `state` survives anything the parent re-renders
+for, and a prop that did not move wakes nobody.
+
+That is what the parent re-rendering used to cost. A component call made inside the slot thunk was
+re-made whenever that thunk woke, which is whenever anything the parent reads changes — so a keyed
+list gaining one row rebuilt every instance in it and discarded whatever had been typed into any of
+them. Appending one row to a list of 1000 was 1001 view calls; it is 1.
+
+The instance leaves when the position stops showing it: a slot that paints something else, or a part
+that is disposed, drops the record and its cells. Coming back is a new instance. A keyed row that
+MOVES carries the part, so its state travels with it.
+
+The SERVER makes the cells too and then simply calls the view: a snapshot has no later pass to carry,
+but a component is written once and runs in both places, so what it receives is the same shape either
+way.
 
 ### Props
 
@@ -575,9 +708,16 @@ const { class: className = '', note, count = 0 } = props<Card>()
 ```
 
 `props()` is imported and **compiler-erased**: the call becomes the emitted function's parameter and
-the type argument becomes its type, so the destructure beside it is ordinary TypeScript — renaming, a
-default and a rest element all mean what they mean anywhere else. There is no `args` object, which is
-the point: every name a `<script>` uses was imported or bound by the author.
+the type argument becomes `Props<T>` — the same type with every prop that is data behind a cell. The
+destructure beside it is ordinary TypeScript, and renaming, a default and a rest element all mean what
+they mean anywhere else; a default is lifted out of the pattern and applied to the cell instead, since
+a prop the caller omitted would otherwise satisfy it with a plain value. There is no `args` object,
+which is the point: every name a `<script>` uses was imported or bound by the author.
+
+The author writes what a prop IS — `count?: number` — and reads it the way every other name in a
+template is read. In a `<script>` BODY the explicit spelling applies as it does to any cell: `count()`.
+A caller still passes the value, so `<Card count={3}/>` and `<Card count={n}/>` are both checked
+against `number`.
 
 | Rule | |
 | --- | --- |
@@ -586,8 +726,11 @@ the point: every name a `<script>` uses was imported or bound by the author.
 | no `props()` call | The component accepts no props of its own, and a caller passing one is an error |
 | `props()` with no type | `Record<string, unknown>` — the opt-out, and what `const { ...rest } = props()` is for |
 | `children` | Always accepted, never a name: `<slot/>` renders what is between the tags, and nothing has to declare it |
-| a cell prop | Declared `State<…>`/`Memo<…>`/`Cell<…>`/`Channel<…>` in `T`, recognised at the BINDING — see above |
-| a derived prop | `doubled={n * 2}` reads a cell, so the whole invocation is in a reactive slot and the child RE-RUNS on change, losing its own state. Pass the cell, or a `memo`, to hand over a value that changes without remounting |
+| every prop | A cell. `Props<T>` is the mapping, and the pattern is what names them — see above |
+| a `State<…>` prop | Passed through rather than wrapped twice, so the child holds the very cell the parent does. That is what `bind:` needs, and the only thing the declared type still decides |
+| a function prop | Handed over as written: a callback is called, not read. Recognised from the member's own text — `onpick: (t: string) => void`. One reached through a NAME cannot be, and stays the one hole this spelling has, alongside an imported props type |
+| a derived prop | `doubled={n * 2}` reads a cell, so the enclosing slot wakes on change — and what that costs now is a write into the child's `doubled` cell, not a rebuilt child |
+| a `...spread` | The key set is fixed at setup: the child bound its locals then, so a key the spread ADDS later has no cell to be written into and is reported rather than dropped silently |
 
 A type declared in a `<script>` is lifted to module scope, because the signature that names it is
 written outside the body it was declared in.
@@ -616,12 +759,12 @@ stops being inline. A comment that has to reach the browser is `{html('<!-- … 
 | `toStream` | `(node: Renderable, options?: RenderOptions) => ReadableStream<Uint8Array>` | The same walk as a `ReadableStream`, so the response back-pressures. |
 | `renderDocument` | `(document: string \| Shell, body: () => Renderable, options?) => AsyncGenerator<string>` | A whole document: shell, body in order, then out-of-order patches as they resolve. A `string` is the `<head>`, wrapped in abide's own document. |
 | `documentToStream` | `(document: string \| Shell, body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same document as a `ReadableStream`. What `abide start` answers a page with. |
-| `renderDocumentToString` | `(body: Renderable, document?: string \| Shell, options?) => Promise<string>` | The same document as one string, with every `{#await}` awaited in place — for a reader that runs no scripts, so a deferred subtree in a `<template>` would never arrive. An email, a PDF renderer, a fixture. The document trails and defaults to abide's own; the body is a node, because a plain async function has nothing to delay. |
+| `renderDocumentToString` | `(body: Renderable, document?: string \| Shell, options?) => Promise<string>` | The same document as one string, with every deferring block awaited in place — for a reader that runs no scripts, so a deferred subtree in a `<template>` would never arrive. An email, a PDF renderer, a fixture. The document trails and defaults to abide's own; the body is a node, because a plain async function has nothing to delay. |
 | `renderFragment` | `(body: () => Renderable, options?) => AsyncGenerator<string>` | A `renderDocument` without the shell: the body in order, then its out-of-order patches. What a navigation is answered with — see below. |
 | `fragmentToStream` | `(body: () => Renderable, options?) => ReadableStream<Uint8Array>` | The same fragment as a `ReadableStream`. What `abide start` answers a navigation with. |
 | `shell` | `(html: string) => Shell` | An app's own html as a document with a hole in it. THROWS when it has no `<slot></slot>`. |
 | `Shell` | `{ head: string; open: string; close: string }` | Concatenated as `head` + the scoped styles + `open` + the page + `close`. Cut once, because a document cannot change under a running process. |
-| a deferred `{#await}` | — | THE PENDING ARM IS THE DECISION. `{#await p}…{:then v}…{/await}` has markup to send now, so a `renderDocument` emits it as a placeholder and patches the settled arm in as it lands. `{#await p then v}` has none, so the walk AWAITS inline and the markup is complete when it arrives — which is what a reader running no scripts needs, since a patch travels in a `<template>` behind a script. A render with nowhere to patch awaits inline either way. `{:catch}` renders on the deferred path too; without one a failed deferred subtree is a comment and an `abide:render` error, because by then the shell is already on the wire. |
+| a deferred block | — | THE PENDING ARM IS THE DECISION. `{#if x.pending()}…{/if}` has markup to send now, so a `renderDocument` emits it as a placeholder and patches the settled chain in as it lands. Reading the cell without asking about it first has none, so the walk AWAITS the load and the markup is complete when it arrives — which is what a reader running no scripts needs, since a patch travels in a `<template>` behind a script. A render with nowhere to patch awaits inline either way. A failure arm renders on the deferred path too; without one a failed deferred subtree is a comment and an `abide:render` error, because by then the shell is already on the wire. |
 | `options.hydratable` | `boolean` | Also emit the markers a hydrating client adopts by. Off unless asked for. |
 | `mount` | `(container: Element, view: () => TemplateResult) => Mounted` | Build live DOM and keep it live. Returns `{ dispose }`, which tears the tree down and — for a renderer that was handed `outlet` itself — hands the navigation sink back, so a second `mount` is the live one. |
 | `hydrate` | `(container: Element, view: () => TemplateResult) => Mounted` | The same over markup a hydratable render wrote — every part adopts its range. A divergence rebuilds that subtree and warns. |
@@ -629,6 +772,35 @@ stops being inline. A comment that has to reach the browser is `{html('<!-- … 
 The two-line patch script goes out with the FIRST deferred subtree rather than in the shell: a page
 that defers nothing ships neither the script nor a `<script>` node inside the slot a hydrating
 client adopts.
+
+### When a load starts
+
+A cell begins its load on the first READ, and in a server render that read is the WALK ARRIVING at the
+slot. Left alone, that makes document order the start order: three sections holding three independent
+loads cost their SUM rather than their longest, and a page pays 185ms for three 60ms loads with
+nothing in the source saying so.
+
+So the compiler starts them itself. Every **memo** an **unconditional plain slot** reads is named in
+one `start([…])` call emitted after setup, before the first byte — the same set of loads the walk was
+going to demand, in flight together. The example above renders in 63ms, with the same blocking, the
+same walk and byte-identical markup.
+
+| the rule | why |
+| --- | --- |
+| `memo` only | a `state(promise)` is already running before the cell exists — the promise was constructed by the argument — and a `channel` never loads. A memo is the one source holding a body that has not run |
+| the ROOTS under it | a slot naming a DERIVATION resolves to the loads beneath it, however many derivations deep, deduped and cycle-guarded. Starting the derivation would be the wrong half — its body runs only as far as the read it derives from, which signals, and the rest is discarded. A page reads `{total}` and never `{rows}`, so without this the loads are invisible until the walk reaches the first slot that derives from one: two independent roots behind two derivations each rendered in 124ms, three in 185ms, and both in 62ms once resolved |
+| a KEYED source is a root | `memo(() => catalogue({ … }))` names an rpc rather than another memo, so it is a load and exactly what this starts |
+| UNCONDITIONAL | the descent stops at every block and every component: a load inside a branch nobody takes is work the page never asked for, and a `{#for}` row's reads belong to the row |
+| a PLAIN read | a name or a member path off one, with no call in it. That excludes every probe in one condition — `{x.pending() ? … : x}` decides what to show from whether the load has BEGUN, so starting it early would turn a page that blocks into a placeholder that never leaves |
+| not a prop | a prop is a cell too, but it holds what the parent already resolved |
+| a deferring block needs nothing | `awaited` already asks its operand for the settle before the arm runs |
+
+A failure is swallowed at the start and reported by the read that renders, which is where it was
+always reported. Nothing about what a page renders changes — only when its loads begin — which is why
+the demo asserts the peak number in flight AT ONCE rather than a clock.
+
+What it does NOT reach: a load reached only from inside a block, a component, or an expression with a
+call in it. Those start when the walk arrives, as they always did.
 
 ### Known limits
 
@@ -639,18 +811,18 @@ Two things a server render cannot hand across, both because the markup is the on
 - **A hydrated `{#for await}` re-streams from the top.** The markup does not say how far the server
   got, so the rows are rebuilt rather than adopted. Every other part adopts its range.
 
-A SETTLED operand is not deferred at all. `{#await}` takes a plain value as well as a promise, and
+A SETTLED operand is not deferred at all. `awaited` takes a plain value as well as a promise, and
 there is nothing to defer about one already in hand: both substrates render the settled arm in place,
 so there is no placeholder, no pending arm and no patch. The two have to agree here — a placeholder
 the client never expects to adopt is a hydration mismatch.
 
 An operand that has not MOVED does not restart. The client keeps the operand a block is showing and
 compares it, so a re-run of the enclosing effect for some other reason leaves a settled panel alone
-rather than throwing it back to its fallback and rebuilding it — the same cutoff `{#await}` and
-`{#for await}` have. A body closure that captured newer state is not re-rendered until the operand
+rather than throwing it back to its fallback and rebuilding it — the same cutoff a deferring block
+and `{#for await}` have. A body closure that captured newer state is not re-rendered until the operand
 itself changes.
 
-An `{#await}` NESTED inside a deferred subtree awaits inline rather than deferring again: the subtree
+A block NESTED inside a deferred subtree awaits inline rather than deferring again: the subtree
 is rendered with nowhere to patch, so the inner one delays its parent's patch instead of registering
 a patch of its own. Deferral is one level deep by construction.
 
@@ -692,9 +864,10 @@ dedupe, since the author's own import of it merges into the same statement.
 | `keyed` | `(key: unknown, template: TemplateResult) => Keyed` | `{#for … by key}` | Tags a row with its identity, so a reconcile MOVES it instead of rebuilding it. |
 | `classes` | `(base: string, names: readonly string[], ...conditions: unknown[]) => string \| null` | `class:name={c}` | Merges a static class list and any number of toggles into one value. `null` when nothing survives. The names are static, so the compiler lifts that array to module scope and only the conditions travel per wake. |
 | `styles` | `(base: string, names: readonly string[], ...values: unknown[]) => string \| null` | `style:prop={v}` | The same, one style property at a time, into one `style` attribute. Names lifted the same way. |
-| `awaited` | `<T>(value: PromiseLike<T> \| T, branches: Branches<T>) => Awaited` | `{#await}` | The operand plus the arms to call once it settles. The arms are closures, so settling never re-evaluates the operand. |
+| `awaited` | `<T>(value: PromiseLike<T> \| T, branches: Branches<T>) => Awaited` | `{#if x.pending()}` | The cell plus the arms to call once it settles. The arms are closures, so settling never re-evaluates the operand — and all three are the same one, which is the chain. |
 | `boundary` | `(body: () => unknown, branches: Branches) => Boundary` | `{#try}` | A synchronous error boundary around a body thunk. |
 | `streamed` | `<T>(source, row, catch?) => Streamed` | `{#for await}` | A list fed by an async source, torn down and re-streamed when a reactive dependency of the source changes. |
+| `start` | `(sources: readonly (() => unknown)[]) => void` | the memos an unconditional plain slot reads | Reads each one, so its load is in flight before the walk arrives at the slot that renders it. Written for a POSITION rather than a spelling — see "When a load starts". A throw is swallowed: the read that renders reports it, as it always did. |
 
 | `adopt` | `(scope: string, css: string) => void` | `<style>` | Registers one scoped block by its scope name at MODULE scope. Idempotent. |
 
@@ -746,7 +919,7 @@ list alike. The `<` ambiguity is resolved by speculative parse.
 | narrowing | A `{#if}`/`{#switch}` condition reads once into a `const`, so the branch narrows off a real type — and only the switched cell narrows |
 | imported types | Resolved by the checker across the module boundary, exactly as in a `.ts` |
 | generics | A type argument reaches the read; a type-argument list in an expression is a type |
-| component props | The type argument to `props<T>()` in a `<script>` types them, and a type declared there is lifted to module scope so the signature can name it. Without the call the component accepts none of its own |
+| component props | The type argument to `props<T>()` in a `<script>` types them, through `Props<T>` — the same members with every one that is data behind a cell — and a type declared there is lifted to module scope so the signature can name it. The call site is checked against the AUTHORED type, since `component()` inverts the mapping back. Without the call the component accepts none of its own |
 | writes | `count = v` keeps the cell's type through the `set` it desugars to |
 
 ## The test kit — `abide/tests`
@@ -860,7 +1033,7 @@ every navigation after it.
 ### A navigation streams out of order
 
 `renderFragment` is `renderDocument` without the shell, and a navigation is answered with it — so a
-A pending-armed `{#await}` DEFERS on this path exactly as it does on a page load, rather than being awaited in
+A pending-armed block DEFERS on this path exactly as it does on a page load, rather than being awaited in
 document order. Without it, a fast panel below a slow one waits for the slow one, and so does every
 static byte beneath it; measured on `pages/streaming` at a 600ms/50ms split, that was 654ms for
 content ready at 50ms, and 654ms for a paragraph that was never waiting on anything.
@@ -959,7 +1132,7 @@ it lives, once, for both `abide start` and `abide dev`.
 
 | Convention | What it is |
 | --- | --- |
-| `app.ts` | What this app IS: the hooks below, and a route only if it wants one. `app.tsx` / `app.js` alike |
+| `app.ts` | What this app IS: the hooks below, and a route only if it wants one. `app.tsx` / `app.js` alike. Every export is optional, so the FILE is — an app of pages and endpoints needs none. What makes a directory an app is having something to serve: no `pages/`, no handlers and no module is the one shape refused |
 | `app.html` | The document its pages are served in. `<slot></slot>` is where the page renders; a `src`/`href` naming a build ENTRY is rewritten to what the build wrote, and the css the client graph imported is linked from the build. Absent → abide's own minimal shell |
 | `pages/` | What it serves. The directory IS the route table, installed for you — `pages(dir)` + `routes(...)`, and `route()` already answers off the request |
 | `server/rpc/**` · `server/sockets/**` | What it answers. Imported by the boot before a line of `app.ts` runs, so nothing imports a handler for its side effect |
@@ -1015,7 +1188,7 @@ failure in a line.
 | `abide check [dir…]` | Type-check `.abide` script bodies, reporting every diagnostic on the `.abide` line. The list is stdout; the exit code says it failed. |
 | `abide dev [--port <n>]` | Watch the project and keep the app up: the client bundled into MEMORY, the server restarted on every change, and full live-reload over the socket mux. `--port` (default `3000`) HOPS to the next open port if taken, then PINS what it bound so no restart moves the app. `PORT` and `APP_URL` are written back from the socket and `config()` invalidated, so what the document reports is where it is actually listening and `abide logs` resolves an app a hop moved. |
 | `abide build [entry…]` | Code-split client → content-hashed chunks + `manifest.json` under `.abide/client/`, minified and precompressed. With no entry named it builds the lane generated from `pages/`. |
-| `abide start [--port <n>]` | Boot `app.ts` and serve its `pages/` in its `app.html`, with the bundle in front and `/__abide/**` behind that. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
+| `abide start [--port <n>]` | Boot the app's `app.ts` if it wrote one, and serve its `pages/` in its `app.html`, with the bundle in front and `/__abide/**` behind that. `--port` binds DIRECTLY and fails hard on `EADDRINUSE`, so `APP_URL` cannot drift. |
 | `abide logs` | Tail `GET /__abide/logs`: the ring replayed, then every line as written. Printed by the rules THIS process's stdout answers to, with `+Nms` rebuilt from the record times. |
 | `abide compile [--target] [--out] [--platforms]` | ONE standalone executable, via `bun build --compile`. `--platforms` cross-compiles a release set for the price of one client build, and makes `--out` name a DIRECTORY. |
 | `abide bundle` | A desktop launcher for the host platform: embedded assets and a first-run setup screen. Native windowing is best-effort — a system webview binary, or the default browser. |
