@@ -20,35 +20,25 @@
 //
 // Off by default because it is minutes rather than seconds. `bun run profile` turns it on.
 
+// `BenchHandle` is the page's own declaration of what it hangs on the global — imported rather than
+// re-typed here, because `page.evaluate` erases everything at the boundary and three spellings of one
+// shape type-check on both sides while failing at runtime. Type-only, so nothing enters the runtime graph.
+import type { BenchHandle } from 'abide-kit'
 import { expect, test } from 'abide-kit/e2e'
 
 /** The suites to profile, and how many ops of each arm to bracket. */
 const SUITES = (process.env.ABIDE_PROFILE_SUITES ?? 'hydrate,client').split(',')
 const OPS = Number(process.env.ABIDE_PROFILE_OPS ?? 20)
 
-/** What `exposeBench` hands across the protocol boundary — names only, since closures do not travel. */
-interface Listed {
-    suite: string
-    title: string
-    kind: string
-    arms: string[]
-}
-
-/** The other half of that handle: one arm, `ops` times, untimed. */
-interface Runner {
-    run(title: string, label: string, ops: number): Promise<void>
-}
-
+/** What a reading IS — every field below is one a column reads. See `read`. */
 interface Reading {
     nodes: number
     heap: number
-    listeners: number
     layout: number
     recalc: number
-    script: number
 }
 
-const NAMED = ['LayoutCount', 'RecalcStyleCount', 'ScriptDuration'] as const
+const NAMED = ['LayoutCount', 'RecalcStyleCount'] as const
 
 test.skip(process.env.ABIDE_PROFILE === undefined, 'set ABIDE_PROFILE=1, or run `bun run profile`')
 
@@ -68,17 +58,15 @@ test('what each arm RETAINS, and what it made the engine do', async ({ page }) =
     const read = async (): Promise<Reading> => {
         await cdp.send('HeapProfiler.collectGarbage')
         const perf = (await cdp.send('Performance.getMetrics')) as { metrics: { name: string; value: number }[] }
-        const dom = (await cdp.send('Memory.getDOMCounters')) as { nodes: number; jsEventListeners: number }
+        const dom = (await cdp.send('Memory.getDOMCounters')) as { nodes: number }
         const heap = (await cdp.send('Runtime.getHeapUsage')) as { usedSize: number }
         const named = new Map(perf.metrics.map((m) => [m.name, m.value]))
         for (const name of NAMED) expect(named.has(name), `${name} is not in Performance.getMetrics`).toBe(true)
         return {
             nodes: dom.nodes,
-            listeners: dom.jsEventListeners,
             heap: heap.usedSize,
             layout: named.get('LayoutCount') as number,
             recalc: named.get('RecalcStyleCount') as number,
-            script: named.get('ScriptDuration') as number,
         }
     }
 
@@ -88,7 +76,7 @@ test('what each arm RETAINS, and what it made the engine do', async ({ page }) =
     const runArm = (title: string, label: string): Promise<void> =>
         page.evaluate(
             ([forTitle, forLabel, ops]) => {
-                const held = globalThis as { abideBench?: Runner }
+                const held = globalThis as { abideBench?: BenchHandle }
                 if (held.abideBench === undefined) throw new Error('the page exposed no bench')
                 return held.abideBench.run(forTitle as string, forLabel as string, ops as number)
             },
@@ -105,7 +93,7 @@ test('what each arm RETAINS, and what it made the engine do', async ({ page }) =
         // both, and one of them is a thing the page is required to show.
         await expect(page.locator('[data-bench]').first()).toBeAttached({ timeout: 60_000 })
         const listed = await page.evaluate(
-            () => (globalThis as { abideBench?: { list(): Listed[] } }).abideBench?.list() ?? [],
+            () => (globalThis as { abideBench?: BenchHandle }).abideBench?.list() ?? [],
         )
         expect(listed.length, `/bench/${suite} exposed no arms — is \`exposeBench\` still called?`).toBeGreaterThan(0)
 

@@ -1,15 +1,21 @@
 // The measurement half of a bench: how an arm is timed, and what a ratio is allowed to claim.
 //
 // Nothing here renders. The example package draws the cards; what lives here is the part a claim
-// depends on being right — the batch sizing, the best-of-many estimate, and the noise threshold
+// depends on being right — the batch sizing, the median-of-many estimate, and the noise threshold
 // under which two arms are simply the same.
 //
 // Arms are timed INTERLEAVED, one pass over all of them at a time, and that is the load-bearing
 // decision. Run to completion in turn, an arm inherits whatever the previous one left behind: the
 // same hand-written emitter measured 38.6 ns alone and 8.84 µs after abide's arm had run, which
 // turned "abide 2.21x slower" into "abide 121x faster" on the page. Interleaving spreads that drift
-// across every arm instead of loading it onto whichever ran second, and the per-arm minimum then
-// finds a pass where the tab was quiet. `spread` is what says whether such a pass ever happened.
+// across every arm instead of loading it onto whichever ran second, so whatever polluted one pass
+// polluted every arm in it — which is what lets the estimate be a MEDIAN rather than a minimum.
+//
+// The minimum is one sample and the best one: it describes a window where nothing else on the page
+// interrupted, which is not the window anybody's op actually runs in, and it cannot be reproduced by
+// asking for more passes — more passes only push it further down. The median is what an op costs,
+// and it moves toward an answer as the sample grows rather than away from one. `min` stays beside it
+// as evidence, and the distance between the two is what says whether the passes agreed.
 
 import { measureFlush, nodesMade } from './dom.ts'
 import { isThenable } from './probes.ts'
@@ -23,27 +29,30 @@ export interface Arm {
 }
 
 export interface Timing {
-    /** The MINIMUM across passes — the quietest one, and what every ratio on the page is taken from. */
-    nsPerOp: number
+    /** The MEDIAN across passes — the headline, and what every ratio on the page is taken from. */
+    p50: number
+    /**
+     * How many ops the headline is an average of: `batch × PASSES`, and the sample size behind every
+     * other number here. On the page BESIDE them, because a ns/op with no count under it cannot be
+     * read at all — and because the count is what catches an arm sized against a world that then
+     * changed: `/bench/client`'s first arm calibrated at 125 ns, was 21 µs by the time it ran, and
+     * spent nine passes of 320,000 iterations finding out. Nothing about its ns/op was wrong.
+     */
     ops: number
     /**
-     * Median ÷ best across the passes. 1 is a perfectly quiet run; a large number means most passes
-     * were polluted and only the minimum is worth reading — which is a fact about the RUN, not about
-     * the code, and the page says so rather than quietly reporting the minimum as though it were
-     * representative.
-     */
-    spread: number
-    /**
-     * The rest of the pass distribution, ns per op. `nsPerOp` is the min, so it is not repeated here.
+     * The ENDS of the pass distribution, ns per op. `p50` is the headline, so it is not repeated.
      *
-     * `spread` compressed a distribution into one number and then only warned above a threshold; a
-     * reader who wants to know whether the minimum was a fluke or the shape of the thing had nothing
-     * to look at. p90 is INTERPOLATED between the two passes it falls between, because nine samples
-     * cannot rank a ninetieth percentile exactly — by nearest rank it would be the maximum, printed
-     * twice under two headings.
+     * A `spread` field — median ÷ best — sat here and was dropped rather than kept beside these two:
+     * it is exactly `p50 / min`, so it was a third number to hold consistent with the two it is made
+     * of, and it compressed a distribution into one figure that only ever warned above a threshold.
+     * A reader wanting to know whether the median is the shape of the thing or the shape of a busy
+     * machine had nothing to look at. `min` is the quietest pass — the floor this op reaches when
+     * nothing interrupts — and `max` is the worst the machine did to it. `NOISY_SPREAD` is still the
+     * band, and a caller that wants the warning divides. A p90 sat between them and was dropped too:
+     * at nine samples it is interpolated between the eighth and the ninth, so it moves with `max` and
+     * answers the same question one column to its left already did.
      */
-    p50: number
-    p90: number
+    min: number
     max: number
     /**
      * DOM nodes made per op — the memory-shaped number, and the only honest one a PAGE can take.
@@ -70,12 +79,12 @@ const MAX_GROWTH = 32
 /**
  * How many interleaved passes over the whole arm list. Each pass is one batch per arm.
  *
- * Nine rather than five, and the difference is reproducibility rather than precision. `spread` says
- * whether the passes within ONE run agreed; it cannot say whether the run agrees with the next one,
+ * Nine rather than five, and the difference is reproducibility rather than precision. `p50 ÷ min`
+ * says whether the passes within ONE run agreed; it cannot say whether the run agrees with the next,
  * and a card that reads 2.84× and then 4.77× with nothing changed supports no claim in either
- * direction. At five passes that card swung 68% between runs; at nine it swings 4%. The minimum
- * needs enough attempts to find a window where nothing else on the page interrupted it, and an arm
- * that awaits per op — thirty thousand microtasks in a batch — needs more of them than most.
+ * direction. At five passes that card swung 68% between runs; at nine it swings 4%. A median needs
+ * an odd count and enough of them that one interrupted pass cannot be the middle one, and an arm
+ * that awaits per op — thirty thousand microtasks in a batch — is interrupted more often than most.
  */
 const PASSES = 9
 /**
@@ -115,18 +124,18 @@ async function calibrate(arm: Arm, offset: number): Promise<{ batch: number; off
 }
 
 /**
- * The value at `fraction` through a SORTED list, interpolating between the two it falls between.
+ * The middle of a list, averaging the two middle entries when there is an even count.
  *
- * Interpolated rather than nearest-rank because of how few samples there are: at nine passes the
- * ninetieth percentile by rank IS the maximum, and a table printing one number under two headings
- * invites exactly the reading it cannot support.
+ * Sorts a COPY rather than asking the caller for a sorted one: a "must be sorted" parameter is a
+ * precondition nothing checks, and a caller that forgets it gets a wrong median with no error.
  */
-function percentile(sorted: number[], fraction: number): number {
-    const at = fraction * (sorted.length - 1)
+function median(values: number[]): number {
+    const sorted = values.slice().sort((a, b) => a - b)
+    const at = (sorted.length - 1) / 2
     const below = Math.floor(at)
     const above = Math.ceil(at)
     if (below === above) return sorted[below] as number
-    return (sorted[below] as number) + ((sorted[above] as number) - (sorted[below] as number)) * (at - below)
+    return ((sorted[below] as number) + (sorted[above] as number)) / 2
 }
 
 /**
@@ -143,23 +152,17 @@ export async function timeArms(arms: Arm[], settle: () => Promise<void>): Promis
     for (const entry of state) {
         // One counted op per arm, AFTER the timing and outside it: the counters are patched DOM
         // methods, so counting inside the measured passes would put the tax in the number the passes
-        // exist to take. One op is enough because this is an allocation count, not a sample.
-        const counts = await measureFlush(() => {
-            const produced = entry.arm.run(entry.offset++)
-            if (isThenable(produced)) void produced
-        })
-        await settle()
+        // exist to take. One op is enough because this is an allocation count, not a sample — and
+        // for the same reason no `settle()` follows it: an allocation count is exact whatever the
+        // engine is doing, so quiescing here bought nothing and cost a full `quiesce` per arm.
+        // `measureFlush` ticks either side of the write, which is what drains an async arm's op.
+        const counts = await measureFlush(() => void entry.arm.run(entry.offset++))
 
-        const sorted = entry.samples.slice().sort((a, b) => a - b)
-        const best = sorted[0] as number
-        const middle = percentile(sorted, 0.5)
         timings.push({
-            nsPerOp: best * 1e6,
+            p50: median(entry.samples) * 1e6,
             ops: entry.ops,
-            spread: best === 0 ? 1 : middle / best,
-            p50: middle * 1e6,
-            p90: percentile(sorted, 0.9) * 1e6,
-            max: (sorted[sorted.length - 1] as number) * 1e6,
+            min: Math.min(...entry.samples) * 1e6,
+            max: Math.max(...entry.samples) * 1e6,
             nodes: nodesMade(counts),
         })
     }
@@ -227,12 +230,14 @@ async function measureArms(arms: Arm[], settle: () => Promise<void>, passes: num
  * calibrated to `BATCH_TARGET_MS` here exactly as a bench arm's is, and the arms are interleaved for
  * the same reason — whichever ran second would otherwise inherit what the first left behind.
  *
- * Three passes rather than nine: a `run` asserts a bound loose enough to survive a noisy pass, where
- * a card prints the number itself.
+ * The MEDIAN of three, which is the same metric a bench card quotes — a `run` and the row beside it
+ * must not be two different numbers. Three passes rather than nine because a `run` asserts a bound
+ * loose enough to survive a noisy pass where a card prints the number itself, and a median of three
+ * already rejects one interrupted pass in either direction.
  */
 export async function nsPerOp(arms: Arm[], settle: () => Promise<void> = frame): Promise<number[]> {
     const state = await measureArms(arms, settle, 3)
-    return state.map((entry) => Math.min(...entry.samples) * 1e6)
+    return state.map((entry) => median(entry.samples) * 1e6)
 }
 
 /** The smallest non-zero step this clock will report — the noise floor under every row. */
@@ -302,8 +307,8 @@ export function verdict(abide: number, arm: number): 'faster' | 'same' | 'slower
  * the page, and printing it as `NaN×` or `Infinity×` reads as the measurement having failed.
  */
 export function ratioText(abide: number, arm: number): string {
-    if (abide === arm) return '1.00×'
-    if (arm === 0) return '∞×'
+    // Only the ZERO divisor needs the guard: any other equal pair divides to `1.00×` on its own.
+    if (arm === 0) return abide === 0 ? '1.00×' : '∞×'
     return `${(abide / arm).toFixed(2)}×`
 }
 

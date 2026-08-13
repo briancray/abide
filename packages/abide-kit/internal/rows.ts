@@ -51,10 +51,10 @@ export interface ArmRow {
     /**
      * The number, however it is counted — a duration, or a count. `—` until it has been run.
      *
-     * For a time bench this is the WHOLE op: what somebody actually waits on, and the only number a
-     * frame budget can be read against. It used to be the per-item number whenever a bench declared
-     * `per`, which left the page unable to say whether an op crossed 16 ms — a card reading `4.20 µs`
-     * is either invisible or a dropped frame depending on an `n` printed elsewhere.
+     * For a time bench this is the WHOLE op at the MEDIAN pass: what somebody actually waits on, and
+     * the only number a frame budget can be read against. It used to be the per-item number whenever
+     * a bench declared `per`, which left the page unable to say whether an op crossed 16 ms — a card
+     * reading `4.20 µs` is either invisible or a dropped frame depending on an `n` printed elsewhere.
      */
     value: State<string>
     /**
@@ -65,18 +65,22 @@ export interface ArmRow {
      */
     each: State<string>
     /**
-     * The rest of the pass distribution, and what one op ALLOCATED. Empty for a bench that is counted
-     * rather than timed.
+     * The ends of the pass distribution, how many ops are behind them, and what one op ALLOCATED.
+     * Empty for a bench that is counted rather than timed.
      *
-     * `value` is the minimum, which is the right number for a ratio and the wrong one on its own: a
-     * reader cannot tell a quiet machine from a fluke without seeing where the other passes landed.
-     * `nodes` is the memory-shaped number and it is a COUNT of nodes made per op, not bytes — see
-     * `Timing.nodes` for why no page can honestly report the other thing.
+     * `value` is the median, which is what an op costs and says nothing on its own about how far the
+     * passes were apart: `min` is the floor the op reaches when nothing interrupts, `max` is the
+     * worst the machine did to it, and the distance from `min` is what `noisy` warns about. `ops` is
+     * the sample size all three are taken from — see `Timing.ops`. `nodes` is the memory-shaped
+     * number and it is a COUNT of nodes made per op, not bytes — see `Timing.nodes` for why no page
+     * can honestly report the other thing. `nodesEach` divides it the same way `each` divides
+     * `value`, and is empty for the same reason: no `per`, no per-item number.
      */
-    p50: State<string>
-    p90: State<string>
+    min: State<string>
     max: State<string>
+    ops: State<string>
     nodes: State<string>
+    nodesEach: State<string>
     /** 0 to 1, against the slowest arm in the row. Whether that becomes a bar is the page's business. */
     fill: State<number>
     /** `baseline`, `subtract me`, or the ratio against abide. */
@@ -91,8 +95,8 @@ export interface ArmRow {
  * One measured THING, as the four numbers a reader is actually comparing: what it is, what abide
  * costs, what the hand-written arm costs, and the difference.
  *
- * The arms are still all here — `rest` holds every one that is not those two — but they are no longer
- * the page's top level, and that is the whole point. Forty benches at six arms each is 240 lines of
+ * The arms are still all here — `arms` is every one of them, in order — but they are no longer the
+ * page's top level, and that is the whole point. Forty benches at six arms each is 240 lines of
  * equal weight, and the two numbers anybody came for are buried in it: a page like that is read by
  * hunting rather than by scanning. So the LINE is the claim and the arms are the evidence behind it.
  */
@@ -104,7 +108,7 @@ export interface BenchRow {
     /** What one op IS — `500 slots per op` — so the whole-op number can be read. Empty otherwise. */
     per: string
     status: State<string>
-    /** A run whose passes were far apart. The minimum is then not representative, and the row says so. */
+    /** A run whose passes were far apart. The median then carries what polluted them, and the row says so. */
     noisy: State<boolean>
     /** The subject — always the first arm, by the rule every bench in this repo is written to. */
     abide: ArmRow
@@ -118,8 +122,7 @@ export interface BenchRow {
      * those would be reporting one that was never made.
      */
     handWritten: ArmRow | null
-    /** Every other arm: variants, alternatives, the harness floor. Behind the disclosure. */
-    rest: ArmRow[]
+    /** Every arm in order, the two above included: the evidence behind the line, one row each. */
     arms: ArmRow[]
     run: () => Promise<void>
     /**
@@ -173,10 +176,11 @@ function armRow(label: string, subject: boolean, floor: boolean): ArmRow {
         floor,
         value: state('—'),
         each: state(''),
-        p50: state(''),
-        p90: state(''),
+        min: state(''),
         max: state(''),
+        ops: state(''),
         nodes: state(''),
+        nodesEach: state(''),
         fill: state(0),
         tail: state(''),
         tailVerdict: state<'faster' | 'same' | 'slower' | ''>(''),
@@ -184,13 +188,6 @@ function armRow(label: string, subject: boolean, floor: boolean): ArmRow {
     }
 }
 
-/**
- * Every benched case across these suites, in order, with its rows already built.
- *
- * The rows exist BEFORE anything runs: an unrun bench still says what it measures and against which
- * hand-written arm, which is most of what a reader came for. Suites are handed in rather than reached
- * for, because which suites exist is a fact about an app and not about a bench.
- */
 /**
  * The handle an out-of-process profiler reaches the arms through.
  *
@@ -204,16 +201,16 @@ function armRow(label: string, subject: boolean, floor: boolean): ArmRow {
  * what crosses is the names.
  */
 export function exposeBench(rows: BenchRow[]): void {
-    const held = globalThis as { abideBench?: unknown }
+    const held = globalThis as { abideBench?: BenchHandle }
     held.abideBench = {
-        list: (): { suite: string; title: string; kind: string; arms: string[] }[] =>
+        list: () =>
             rows.map((row) => ({
                 suite: row.suite,
                 title: row.title,
                 kind: row.kind,
                 arms: row.arms.map((arm) => arm.label),
             })),
-        run: async (title: string, label: string, ops: number): Promise<void> => {
+        run: async (title, label, ops) => {
             const row = rows.find((candidate) => candidate.title === title)
             if (row === undefined) throw new Error(`abide-kit: no bench named ${JSON.stringify(title)}`)
             await row.profile(label, ops)
@@ -221,6 +218,28 @@ export function exposeBench(rows: BenchRow[]): void {
     }
 }
 
+/**
+ * What `exposeBench` hangs on the global, as a TYPE the driver on the other side can import.
+ *
+ * Named rather than left inline because `page.evaluate` erases everything at the protocol boundary:
+ * nothing ties the two ends together, so a field added to `list` or a parameter added to `run`
+ * type-checks on both sides and fails at runtime, minutes into a profiling run. Importing this from
+ * the spec is the only thing that makes the contract one declaration instead of three.
+ */
+export interface BenchHandle {
+    /** Names only — a `BenchRow`'s cells and closures do not survive the trip. */
+    list: () => { suite: string; title: string; kind: string; arms: string[] }[]
+    /** One arm, `ops` times, untimed. See `BenchRow.profile`. */
+    run: (title: string, label: string, ops: number) => Promise<void>
+}
+
+/**
+ * Every benched case across these suites, in order, with its rows already built.
+ *
+ * The rows exist BEFORE anything runs: an unrun bench still says what it measures and against which
+ * hand-written arm, which is most of what a reader came for. Suites are handed in rather than reached
+ * for, because which suites exist is a fact about an app and not about a bench.
+ */
 export function benchRowsOf(suites: Suite[]): BenchRow[] {
     const rows: BenchRow[] = []
     for (const suite of suites) {
@@ -251,7 +270,7 @@ export function benchRow(suite: string, spec: Case, bench: Bench): BenchRow {
         arms = timed.map((arm, i) => armRow(arm.label, arm !== FLOOR && i === 0, arm === FLOOR))
         raw = timed
         paint = () => runTime(bench, timed, arms, noisy)
-        done = 'best of many batches'
+        done = 'median of many batches'
     } else {
         arms = bench.arms.map((arm, i) => armRow(arm.label, i === 0, false))
         raw = bench.arms
@@ -259,17 +278,10 @@ export function benchRow(suite: string, spec: Case, bench: Bench): BenchRow {
         done = 'counted, not timed'
     }
 
-    // The line the page reads, and the arms behind it. One pass rather than three filters: this runs
-    // once per benched case at import, and a reader following it should not have to hold three
-    // predicates in their head to know which arm ended up where.
+    // The line the page reads. The arms behind it are `arms` itself, in order — the summary names two
+    // of them and the disclosure shows every one, so there is no third list to keep in step.
     const abide = arms[0] as ArmRow
-    let handWritten: ArmRow | null = null
-    const rest: ArmRow[] = []
-    for (let i = 1; i < arms.length; i++) {
-        const arm = arms[i] as ArmRow
-        if (handWritten === null && arm.label.startsWith(HAND_WRITTEN)) handWritten = arm
-        else rest.push(arm)
-    }
+    const handWritten = arms.slice(1).find((arm) => arm.label.startsWith(HAND_WRITTEN)) ?? null
 
     return {
         suite,
@@ -284,7 +296,6 @@ export function benchRow(suite: string, spec: Case, bench: Bench): BenchRow {
         noisy,
         abide,
         handWritten,
-        rest,
         arms,
         profile: (label, ops) => profileArm(raw, label, ops),
         run: async () => {
@@ -305,7 +316,7 @@ async function runTime(
 ): Promise<void> {
     const timings = await timeArms(timed, quiesce)
     let slowest = 0
-    for (const timing of timings) if (timing.nsPerOp > slowest) slowest = timing.nsPerOp
+    for (const timing of timings) if (timing.p50 > slowest) slowest = timing.p50
     const abide = timings[0] as (typeof timings)[number]
 
     let spread = false
@@ -313,22 +324,30 @@ async function runTime(
         const row = rows[i] as ArmRow
         const timing = timings[i] as (typeof timings)[number]
 
-        row.value.set(duration(timing.nsPerOp))
+        row.value.set(duration(timing.p50))
         row.each.set(
-            bench.per === undefined ? '' : `${duration(timing.nsPerOp / bench.per.n)}/${bench.per.label}`,
+            bench.per === undefined ? '' : `${duration(timing.p50 / bench.per.n)}/${bench.per.label}`,
         )
-        row.p50.set(duration(timing.p50))
-        row.p90.set(duration(timing.p90))
+        row.min.set(duration(timing.min))
         row.max.set(duration(timing.max))
+        row.ops.set(timing.ops.toLocaleString())
         row.nodes.set(timing.nodes.toLocaleString())
-        row.fill.set(slowest === 0 ? 0 : timing.nsPerOp / slowest)
-        row.tail.set(row.floor ? 'subtract me' : row.subject ? 'baseline' : ratioText(abide.nsPerOp, timing.nsPerOp))
-        row.tailVerdict.set(row.floor || row.subject ? '' : verdict(abide.nsPerOp, timing.nsPerOp))
-        if (timing.spread > NOISY_SPREAD) spread = true
+        // One decimal, always: three nodes a row reads `3.0/row` where the op made 30,003 for 10,000
+        // of them, and rounding that to `3` would hide the container the count also carries.
+        row.nodesEach.set(
+            bench.per === undefined ? '' : `${(timing.nodes / bench.per.n).toFixed(1)}/${bench.per.label}`,
+        )
+        row.fill.set(slowest === 0 ? 0 : timing.p50 / slowest)
+        row.tail.set(row.floor ? 'subtract me' : row.subject ? 'baseline' : ratioText(abide.p50, timing.p50))
+        row.tailVerdict.set(row.floor || row.subject ? '' : verdict(abide.p50, timing.p50))
+        // Median ÷ best: 1 is a perfectly quiet run, and above the band the passes disagreed. Taken
+        // here rather than carried on `Timing`, where it was a third field to hold consistent with
+        // the two it is made of.
+        if (timing.min > 0 && timing.p50 / timing.min > NOISY_SPREAD) spread = true
     }
     // A number nothing warns about is a number that gets quoted. The spread is a fact about the RUN —
-    // something else on this page was competing — so the row says so rather than letting the minimum
-    // stand in as though it were representative.
+    // something else on this page was competing — so the row says so rather than letting a median
+    // dragged by that competition stand in as what the op costs.
     noisy.set(spread)
 }
 
@@ -361,8 +380,9 @@ async function runWork(bench: Extract<Bench, { kind: 'work' }>, rows: ArmRow[]):
         const measured = await measureFlush(arm.run)
         // How much the region CHANGED the document, which is the headline a work bench is making a
         // claim about; `of` keeps the breakdown for the reader who opens the row.
-        counts.push(total(measured))
-        row.value.set(String(total(measured)))
+        const changed = total(measured)
+        counts.push(changed)
+        row.value.set(String(changed))
         row.of.set(nonZero(measured))
     }
     countTails(rows, counts)

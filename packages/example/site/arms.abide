@@ -32,11 +32,26 @@ const SMALL = 'rounded border border-slate-800 px-2 py-0.5 text-xs text-slate-40
 /** A bench with no hand-written arm has nothing to put in the column, and says so rather than lying. */
 const NONE = '—'
 
-/** The subject's number, and the hand-written one. `—` where the bench never made that comparison. */
-const armValue = (arm: ArmRow | null): string => (arm === null ? NONE : arm.value())
-const armEach = (arm: ArmRow | null): string => (arm === null ? '' : arm.each())
-/** Nodes made per op. See the memory column below for why this is a count and not bytes. */
-const armNodes = (arm: ArmRow | null): string => (arm === null || arm.nodes() === '' ? NONE : arm.nodes())
+/**
+ * The hand-written column, which is the only one of the two that can be ABSENT — `row.abide` is
+ * always an arm, so it is read directly and needs no guard pretending otherwise.
+ */
+const handWrittenValue = (arm: ArmRow | null): string => (arm === null ? NONE : arm.value())
+const handWrittenEach = (arm: ArmRow | null): string => (arm === null ? '' : arm.each())
+
+/**
+ * The hand-written arm ONCE it carries a ratio: `null` while the row is unrun, and `null` for a
+ * bench that never made the comparison.
+ *
+ * ONE predicate, which the number and its colour both come off. Written as two — one testing
+ * `?.tail()` and the other `!== null && tail() !== ''` — they are two spellings of the same question
+ * and can drift into answering it differently, and what that looks like is a colour saying one thing
+ * and the number under it another.
+ */
+const compared = (row: BenchRow): ArmRow | null => {
+    const arm = row.handWritten
+    return arm !== null && arm.tail() !== '' ? arm : null
+}
 
 /**
  * The difference column, which carries the row's STATUS until there is a difference to report.
@@ -44,9 +59,11 @@ const armNodes = (arm: ArmRow | null): string => (arm === null || arm.nodes() ==
  * An unrun row would otherwise be blank in the one column a reader is scanning, which reads as a
  * measurement that came back empty rather than as one nobody has taken yet.
  */
-const differenceText = (row: BenchRow): string => row.handWritten?.tail() || row.status()
-const differenceTone = (row: BenchRow): string =>
-    row.handWritten !== null && row.handWritten.tail() !== '' ? tailTone(row.handWritten) : `${HEAD} text-right`
+const differenceText = (row: BenchRow): string => compared(row)?.tail() ?? row.status()
+const differenceTone = (row: BenchRow): string => {
+    const arm = compared(row)
+    return arm === null ? `${HEAD} text-right` : tailTone(arm)
+}
 </script>
 
 <script>
@@ -73,22 +90,28 @@ const { rows } = props<{ rows: BenchRow[] }>()
                  own: it is only present on a bench that declared `per`, and an empty column on the
                  other thirty rows is a column that reads as missing data. -->
             <div class="text-right">
-                <div class="{NUMBER} {armTone(row.abide)}">{armValue(row.abide)}</div>
-                {#if armEach(row.abide)}<div class="{NUMBER} text-slate-600">{armEach(row.abide)}</div>{/if}
+                <div class="{NUMBER} {armTone(row.abide)}">{row.abide.value()}</div>
+                {#if row.abide.each()}<div class="{NUMBER} text-slate-600">{row.abide.each()}</div>{/if}
             </div>
             <div class="text-right">
-                <div class="{NUMBER} {row.handWritten ? armTone(row.handWritten) : 'text-slate-600'}">{armValue(row.handWritten)}</div>
-                {#if armEach(row.handWritten)}<div class="{NUMBER} text-slate-600">{armEach(row.handWritten)}</div>{/if}
+                <div class="{NUMBER} {row.handWritten ? armTone(row.handWritten) : 'text-slate-600'}">{handWrittenValue(row.handWritten)}</div>
+                {#if handWrittenEach(row.handWritten)}<div class="{NUMBER} text-slate-600">{handWrittenEach(row.handWritten)}</div>{/if}
             </div>
 
             <!-- The memory column, and it is a COUNT of DOM nodes made per op rather than bytes.
                  `performance.memory` reads 9.5 MB against a renderer holding 2.8 GB — nodes are not
                  on the JS heap — and a net count cannot stand in either, because detaching a subtree
                  of ten thousand is one `remove`. This is exact, is the same in every engine, and is
-                 one of the three numbers this project already budgets emitted code in. -->
+                 one of the three numbers this project already budgets emitted code in.
+
+                 Abide's count over abide's PER-ITEM count, which is the sub-line every other column
+                 on this row already means. It held the hand-written arm's count there instead, and
+                 the two are indistinguishable by eye: `30,003` over `10,001` reads as one op and its
+                 tenth part, so a reader took 10,001 for the per-row figure of the number above it.
+                 The hand-written count is one click away, in the per-arm `nodes` column below. -->
             <div class="text-right">
-                <div class="{NUMBER} {armTone(row.abide)}">{armNodes(row.abide)}</div>
-                {#if row.handWritten}<div class="{NUMBER} text-slate-600">{armNodes(row.handWritten)}</div>{/if}
+                <div class="{NUMBER} {armTone(row.abide)}">{row.abide.nodes() || NONE}</div>
+                {#if row.abide.nodesEach()}<div class="{NUMBER} text-slate-600">{row.abide.nodesEach()}</div>{/if}
             </div>
 
             <span class={differenceTone(row)}>{differenceText(row)}</span>
@@ -103,17 +126,19 @@ const { rows } = props<{ rows: BenchRow[] }>()
         <div class="pb-3 pt-1 bg-slate-950/40">
             {#if row.note}<p class="px-3 pb-2 text-xs text-slate-500 max-w-3xl">{row.note}</p>{/if}
 
-            <!-- The DISTRIBUTION, on its own seven columns. `min` is what the summary and every
-                 ratio use — it is the pass where the tab was quiet — and on its own it cannot say
-                 whether that pass was the shape of the thing or a fluke. p90 is interpolated: nine
-                 passes cannot rank a ninetieth percentile, and by nearest rank it would print the
-                 maximum twice under two headings. -->
+            <!-- The DISTRIBUTION, on its own seven columns, p50 FIRST because p50 is what the summary
+                 and every ratio use — the column a reader is checking the headline against has to be
+                 the one their eye lands on. `min` is the pass where the tab was quiet, which is a
+                 floor rather than a cost, and `max` is the worst the machine did. Then `ops`, which
+                 is the SAMPLE SIZE the three of them are averages of: a ns/op with no count under it
+                 cannot be read, and the count is also what catches an arm sized against a world that
+                 changed before it ran — nine passes of 320,000 iterations, every ns/op correct. -->
             <div class="{ARM} pb-1">
                 <span class={HEAD}>every arm · {row.status()}</span>
-                <span class="{HEAD} text-right">min</span>
                 <span class="{HEAD} text-right">p50</span>
-                <span class="{HEAD} text-right">p90</span>
+                <span class="{HEAD} text-right">min</span>
                 <span class="{HEAD} text-right">max</span>
+                <span class="{HEAD} text-right">ops</span>
                 <span class="{HEAD} text-right">nodes</span>
                 <span class="{HEAD} text-right">abide ÷ arm</span>
             </div>
@@ -134,9 +159,9 @@ const { rows } = props<{ rows: BenchRow[] }>()
                         <div class="{NUMBER} {row.kind === 'time' ? 'text-slate-200' : 'text-emerald-300'}">{arm.value()}</div>
                         {#if arm.each()}<div class="{NUMBER} text-slate-600">{arm.each()}</div>{/if}
                     </div>
-                    <span class="{NUMBER} text-slate-400">{arm.p50() || NONE}</span>
-                    <span class="{NUMBER} text-slate-400">{arm.p90() || NONE}</span>
+                    <span class="{NUMBER} text-slate-400">{arm.min() || NONE}</span>
                     <span class="{NUMBER} text-slate-500">{arm.max() || NONE}</span>
+                    <span class="{NUMBER} text-slate-500">{arm.ops() || NONE}</span>
                     <span class="{NUMBER} text-slate-400">{arm.nodes() || NONE}</span>
                     <span class={tailTone(arm)}>{arm.tail()}</span>
                 </div>

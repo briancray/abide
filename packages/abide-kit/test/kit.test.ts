@@ -130,12 +130,12 @@ describe('Timing.ops — how many operations a number is the average of', () => 
             // that separates the real count from `PASSES` alone or from any small constant, which
             // `> 0` did not.
             expect(timing.ops).toBeGreaterThan(10_000)
-            expect(Number.isFinite(timing.nsPerOp)).toBe(true)
+            expect(Number.isFinite(timing.p50)).toBe(true)
         }
-        // `spread` is deliberately not asserted here. It is `median(samples) / min(samples)`, so
-        // `>= 1` holds for every possible implementation including a hardcoded `1` — it was
-        // arithmetic, not a claim. Making it falsifiable needs pass-to-pass variance a test cannot
-        // schedule, so what guards it is `site/bench.ts`'s NOISY_SPREAD warning, on a real run.
+        // The noisy-run warning is deliberately not asserted here. It is `p50 / min` against
+        // `NOISY_SPREAD`, so `>= 1` holds for every possible implementation including a hardcoded
+        // `1` — arithmetic, not a claim. Making it falsifiable needs pass-to-pass variance a test
+        // cannot schedule, so what guards it is the warning itself, on a real run.
     })
 
     /**

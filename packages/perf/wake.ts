@@ -248,7 +248,7 @@ export async function profileWakePath(attached: boolean): Promise<{ arms: Arm[];
     const arms: Arm[] = rungs.map((rung, at) => ({
         label: rung.label,
         through: rung.through,
-        ms: (timings[at] as { nsPerOp: number }).nsPerOp / 1e6,
+        ms: (timings[at] as { p50: number }).p50 / 1e6,
     }))
 
     if (attached) host.remove()
